@@ -11,7 +11,7 @@ const traceDir = join(outputDir, 'traces');
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['play-session.spec.ts', 'shared-table.spec.ts', 'unified-replay.spec.ts', 'watch.spec.ts', 'experience-proof.spec.ts', 'stops.spec.ts', 'laptop-comfort.spec.ts', 'game-history.spec.ts', 'decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts', 'deck-browser.spec.ts', 'decklist-import.spec.ts', 'trigger-order.spec.ts', 'mana-payment.spec.ts', 'opponent-beats.spec.ts', 'game-explained.spec.ts', 'keyboard-play.spec.ts', 'drag-play.spec.ts', 'swap-sides.spec.ts'],
+  testMatch: ['unified-replay.spec.ts', 'watch.spec.ts', 'experience-proof.spec.ts', 'stops.spec.ts', 'laptop-comfort.spec.ts', 'game-history.spec.ts', 'decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts', 'deck-browser.spec.ts', 'decklist-import.spec.ts', 'trigger-order.spec.ts', 'mana-payment.spec.ts', 'opponent-beats.spec.ts', 'game-explained.spec.ts', 'keyboard-play.spec.ts', 'drag-play.spec.ts', 'swap-sides.spec.ts'],
   outputDir,
   timeout: 120_000,
   fullyParallel: false,
@@ -31,7 +31,13 @@ export default defineConfig({
     {
       command: `uv run --active --no-sync python -m uvicorn trigger_order_server:app --app-dir tests/fixtures --host 127.0.0.1 --port ${apiPort}`,
       cwd: repoRoot,
-      env: { ACADEMY_TRACES_DIR: traceDir, ACADEMY_PLAY_RECORD_ORIGIN: 'automated_validation', ACADEMY_CARD_ART: 'off' },
+      env: {
+        ACADEMY_TRACES_DIR: traceDir,
+        ACADEMY_PLAY_RECORD_ORIGIN: 'automated_validation',
+        ACADEMY_CARD_ART: 'off',
+        ACADEMY_HOSTED_POLICIES: '0',
+        ACADEMY_HOSTED_POOLS: '0',
+      },
       url: `http://127.0.0.1:${apiPort}/api/traces`,
       reuseExistingServer: false,
       timeout: 180_000,

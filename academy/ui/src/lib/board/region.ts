@@ -108,9 +108,10 @@ export function region(node: HTMLElement, options: RegionOptions = {}): { update
 
   function onFocusin(event: FocusEvent): void {
     if (!(event.target instanceof HTMLElement) || event.target === node) return;
+    if (event.target.closest('[data-region]') !== node) return;
     current = event.target;
     rove();
-    held = { element: current, index: controls(node).indexOf(current) };
+    held = current ? { element: current, index: controls(node).indexOf(current) } : null;
   }
 
   function onFocusout(event: FocusEvent): void {

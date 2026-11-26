@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 // Regression test for the frozen-DOM bug: the play page was compiled in Svelte
 // legacy mode, so every read of the runes-based gameStore was untracked and the
 // UI never re-rendered after the initial paint. These assertions are all about
@@ -32,7 +35,7 @@ function collectConsoleErrors(page: Page): string[] {
 test('play page reacts to the full game loop', async ({ page }) => {
   const consoleErrors = collectConsoleErrors(page);
 
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
 
   // 1. Connection badge must leave its initial "connecting"/"disconnected"
   // state. With the frozen DOM it stayed "disconnected" forever.
@@ -48,8 +51,12 @@ test('play page reacts to the full game loop', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Your battlefield' })).toBeVisible();
   await expect(page.getByTestId('turn-number')).toContainText('Turn');
 
-  // That matchup is the next tab's "Play again": one click from home reaches
-  // its first decision, and the rest of the test plays that game.
+  // New game leaves that game unfinished in History and frees Play; its matchup
+  // is the next tab's "Play again": one click from setup reaches its first
+  // decision, and the rest of the test plays that game.
+  await page.getByTestId('game-menu').click();
+  await page.getByTestId('new-game').click();
+  await expect(page.getByTestId('home')).toBeVisible();
   const game = await page.context().newPage();
   const gameErrors = collectConsoleErrors(game);
   await game.goto('/');

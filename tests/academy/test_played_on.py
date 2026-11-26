@@ -56,12 +56,13 @@ def test_playing_on_starts_at_your_decision_with_the_games_moves_before_it(
     assert views.stop is not None and views.stop.status == "complete"
 
 
-def test_only_your_own_finished_games_can_be_played_on(tmp_path: Path) -> None:
+def test_only_a_saved_game_can_be_played_on_at_your_decisions(
+    tmp_path: Path,
+) -> None:
     game, source = played(tmp_path)
     event = decision(source.trace["events"], 0)
-    stranger = server.GameSession(tmp_path)
     with pytest.raises(ValueError, match="played_from_unavailable"):
-        stranger.new_game({"played_from": {"trace_id": game.match_id, "event": event}})
+        game.new_game({"played_from": {"trace_id": "not-saved", "event": event}})
     opponent_step = next(
         i for i, e in enumerate(source.trace["events"]) if e["actor"] == "villain"
     )
@@ -69,45 +70,55 @@ def test_only_your_own_finished_games_can_be_played_on(tmp_path: Path) -> None:
         game.new_game(
             {"played_from": {"trace_id": game.match_id, "event": opponent_step}}
         )
+
+
+def test_an_unfinished_game_can_be_played_on(tmp_path: Path) -> None:
     live = server.GameSession(tmp_path)
-    live.new_game({"hero_deck": BOLT, "villain_deck": BOLT, "seed": 2})
-    with pytest.raises(ValueError, match="played_from_active"):
-        live.new_game({"played_from": {"trace_id": live.match_id, "event": 0}})
+    live.new_game(
+        {"hero_deck": BOLT, "villain_deck": BOLT, "seed": 2, "auto_pass": False}
+    )
+    play(live, random.Random(3), commands=6)
+    source_id = live.match_id
+    source = live.attempt_store.load_attempt(source_id)
+    assert source is not None and source.trace["end_reason"] == "active"
+    event = decision(source.trace["events"], 3)
+
+    frame = live.new_game({"played_from": {"trace_id": source_id, "event": event}})[
+        "frame"
+    ]
+
+    assert frame["match_id"] != source_id
+    assert [offer["label"] for offer in frame["offers"]] == [
+        action["description"] for action in source.trace["events"][event]["actions"]
+    ]
+    # The game played on from is untouched and still unfinished.
+    assert live.attempt_store.unfinished(source_id)
+    assert live.attempt_store.load_attempt(source_id).trace == source.trace
 
 
-def test_a_game_played_on_is_left_out_of_my_record(tmp_path: Path) -> None:
+def test_a_game_played_on_records_the_decision_it_started_from(tmp_path: Path) -> None:
     game, source = played(tmp_path)
-    owners = {game.attempt_owner}
-    (before,) = game.attempt_store.record(owners)
     event = decision(source.trace["events"], 0)
     game.new_game({"played_from": {"trace_id": game.match_id, "event": event}})
     play(game, random.Random(6))
     numbers = game.attempt_store.numbers(game.match_id)
     assert numbers is not None and numbers[1] is not None
     assert json.loads(numbers[1])["played_from"] == event
-    assert game.attempt_store.record(owners) == [before]
 
 
 def test_recording_index_handles_played_on_game_before_first_new_move(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
-    token = "p" * 36
-    game, source = played(tmp_path, player_token=token)
+    game, source = played(tmp_path)
     event = decision(source.trace["events"], 2)
     source_id = game.match_id
-    game.new_game(
-        {
-            "played_from": {"trace_id": source_id, "event": event},
-            "player_token": token,
-        }
-    )
+    game.new_game({"played_from": {"trace_id": source_id, "event": event}})
     # Stop before committing a move at `event`: len(events) == event.
     game.close(end_reason="new_game")
     client = TestClient(server.app)
     response = client.get(
         f"/api/traces/{game.match_id}/recording",
-        headers={"x-etude-player-token": token},
     )
     assert response.status_code == 200, response.text
     played_from = response.json()["played_from"]

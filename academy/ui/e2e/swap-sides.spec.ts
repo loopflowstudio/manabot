@@ -7,7 +7,7 @@ test('swapping sides mid-game flips seat, hand, and deck names, keeps move log, 
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
 
-  await page.goto('/?setup=1');
+  await page.goto('/?hero=ur_lessons&villain=gw_allies');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('combobox', { name: 'Deal mode', exact: true }).selectOption('repeat');
@@ -40,12 +40,11 @@ test('swapping sides mid-game flips seat, hand, and deck names, keeps move log, 
   // Capture seat 0's hand before swapping.
   const handBefore = await page.getByRole('region', { name: /Your hand/ }).innerText();
 
-  // Open Settings → Game, verify This game / Next game grouping and Swap play/draw rename, then press Swap sides.
+  // Open Settings → Game, verify This game section, then press Swap sides.
   await page.getByTestId('game-menu').click();
   const thisGame = page.getByRole('region', { name: 'This game', exact: true });
   await expect(thisGame).toBeVisible();
-  const nextGame = page.getByRole('region', { name: 'Next game', exact: true });
-  await expect(nextGame.getByRole('button', { name: 'Swap play/draw', exact: true })).toBeVisible();
+  await expect(thisGame.getByTestId('swap-sides')).toBeVisible();
 
   const revBeforeSwap = await page.locator('main').getAttribute('data-frame-revision');
   await thisGame.getByTestId('swap-sides').click();

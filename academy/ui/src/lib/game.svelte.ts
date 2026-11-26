@@ -1,5 +1,3 @@
-import { seedError, type PlaySession } from './play-session';
-import { playerToken } from './records';
 import { parseSearchConfigs, type SearchConfig, type PendingSearch } from './search';
 import {
   loadStoredDeckSelection,
@@ -10,18 +8,13 @@ import {
 } from './decks';
 import { mergeBoards, type SeqRange, type StepBoard } from './board/boards';
 import type { HistoryNote } from './board/history';
-import { findKeptDeck, isKeptDeckChoice } from './kept-decks';
+import type { ResumeRefusal } from './resume-refusal';
+import { findKeptDeck } from './kept-decks';
 import { LIVE_ANALYSIS_OFF, type LiveAnalysis } from './analysis';
 import type { LiveDecisionGroup } from './decision-group';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
 import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
-import type { RestoredReplayDecision } from './replay-index';
-import type {
-  BranchRetryPayload,
-  TableCapability,
-  TableSnapshot,
-} from './shared-table-protocol';
 import type {
   ActionOption,
   WorkStatus,
@@ -30,6 +23,7 @@ import type {
   DeckNames,
   Decklists,
   ExperienceFrame,
+  GameOpponent,
   StepBoardPatch,
   Observation,
   OpponentConfig,
@@ -71,22 +65,28 @@ export function buildOpponentConfig(choice: PlayerChoice): OpponentConfig {
   return { villain_type: 'search', villain_sims: sims };
 }
 
+/** A repeat-deal seed is a decimal unsigned 64-bit integer, kept as text so it never rounds. */
+export function seedError(value: string): string | null {
+  if (!/^\d+$/.test(value) || BigInt(value) > 18446744073709551615n) return 'Enter a decimal unsigned 64-bit seed (0–18446744073709551615).';
+  return null;
+}
+
+/** What every `/ws/play` reply says about the game it belongs to. */
+export interface GameReply {
+  game?: string;
+  opponent?: GameOpponent | null;
+  opponent_label?: string | null;
+  setup?: Record<string, unknown>;
+}
+
+/** Both players' imported lists, as setup sends them. */
+type DeckImportSelection = {
+  hero: { source: string; filename: string; name?: string };
+  villain: { source: string; filename: string; name?: string };
+};
+
 export class GameStore {
-  constructor(private readonly persistPreferences = true) {}
-
-  /** An isolated editor: nested source/search values must not mutate live setup. */
-  editableSetup(draft: Record<string, unknown> = this.setupConfig()): GameStore {
-    const editor = new GameStore(false);
-    editor.applySetupDraft(JSON.parse(JSON.stringify(draft)));
-    editor.watchMode = this.watchMode;
-    editor.watchPlayerChoice = this.watchPlayerChoice;
-    editor.watchSearchConfig = this.watchSearchConfig ? {...this.watchSearchConfig} : null;
-    return editor;
-  }
-
-  playSession = $state<PlaySession | null>(null);
   storageWarning = $state('');
-  tableUnavailable = $state(false);
   manaPayment = $state<'auto' | 'manual'>('manual');
   manaFloats = $state<'off' | 'usable' | 'all'>('off');
   humanSeat = $state<0 | 1>(0);
@@ -97,14 +97,6 @@ export class GameStore {
   dealMode = $state<'fresh' | 'repeat'>('fresh');
   seed = $state('0');
   seedError = $derived(this.dealMode === 'repeat' ? seedError(this.seed) : null);
-
-  applyPlaySession(session: PlaySession): void {
-    const changed = session.game_number !== this.playSession?.game_number || session.id !== this.playSession?.id;
-    this.playSession = session;
-    if (!changed) return;
-    this.watchMode = false;
-    this.applySetupDraft(session.draft);
-  }
 
   applySetupDraft(draft: Record<string, unknown>): void {
     const payment = draft.mana_payment === undefined ? 'manual' : draft.mana_payment;
@@ -117,10 +109,14 @@ export class GameStore {
     this.turnOrder = draft.human_seat === 1 ? 'draw' : 'play';
     this.dealMode = draft.seed == null ? 'fresh' : 'repeat';
     this.seed = String(draft.seed ?? '0');
-    this.deckImport = (draft.deck_import as typeof this.deckImport) ?? null;
+    // A draft carries both imported lists or none to select: a side dealt
+    // from a pool is its pool, and a closed opponent's list is not sent until
+    // the game is over (the opponent deck chosen here then stays as it is).
+    const imported = draft.deck_import as { hero?: unknown; villain?: unknown } | undefined;
+    this.deckImport = imported?.hero && imported.villain ? (imported as DeckImportSelection) : null;
     const named = sanitizeDeckSelection({
       hero: draft.hero_deck_pool ?? draft.hero_deck,
-      villain: draft.villain_deck_pool ?? draft.villain_deck,
+      villain: draft.villain_deck_pool ?? draft.villain_deck ?? this.decks.villain,
     });
     if (named) { this.setHeroDeck(named.hero); this.setVillainDeck(named.villain); }
     this.decklists = draft.decklists === 'closed' ? 'closed' : 'open';
@@ -132,15 +128,16 @@ export class GameStore {
     else if (draft.villain_type === 'random' || draft.villain_type === 'passive') this.opponentChoice = draft.villain_type;
   }
 
-  table = $state<TableSnapshot | null>(null);
+  /** The game on the board, named by its id: also its History row and its Replay. */
+  gameId = $state<string | null>(null);
+  opponent = $state.raw<GameOpponent | null>(null);
+  opponentLabel = $state<string | null>(null);
+  /** The setup the game on the board was started with: what Rematch, Swap play/draw and Play again send back. */
+  setup = $state.raw<Record<string, unknown> | null>(null);
   // Frames and projections are the authority's immutable values, replaced
   // whole on every update: raw state, so reading one is a plain property
   // read rather than a deep proxy's (the board reads them thousands of times
-  // a frame, and the resume record serializes the frame on every update).
-  restoredDecision = $state.raw<RestoredReplayDecision | null>(null);
-  branchAttemptId = $state<string | null>(null);
-  branchProjection = $state.raw<Observation | null>(null);
-  tableAnnouncement = $state('');
+  // a frame, and the tab record serializes the frame on every update).
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
   /** The active live grouped-decision descriptor for `protocolFrame`, or null. */
   liveDecisionGroup = $state.raw<LiveDecisionGroup | null>(null);
@@ -163,20 +160,19 @@ export class GameStore {
   activeSearchConfig = $state<SearchConfig | null>(null);
   connection = $state<ConnectionState>('disconnected');
   focusIds = $state<Set<number>>(new Set());
-  sessionId = $state<string | null>(null);
-  resumeToken = $state<string | null>(null);
-  resumeFailed = $state(false);
-  recordingId = $state<string | null>(null);
+  /** The game broke while a request ran: its last board stays readable and takes no input. */
+  stopped = $state(false);
+  /** A game the server would not take up again, and why; its Replay still opens. */
+  resumeRefused = $state<ResumeRefusal | null>(null);
+  /** The game a configured launch already started, which it would not start again; Play opens its address. */
+  launchedGame = $state<string | null>(null);
   selectedTargetId = $state<number | null>(null);
   opponentChoice = $state<PlayerChoice>('random');
   decklists = $state<Decklists>('open');
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.
   decks = $state<DeckSelection>(loadStoredDeckSelection());
-  deckImport = $state<{
-    hero: { source: string; filename: string; name?: string };
-    villain: { source: string; filename: string; name?: string };
-  } | null>(null);
+  deckImport = $state<DeckImportSelection | null>(null);
   // Display names for the live matchup, echoed by the server on every
   // payload — what the game header renders.
   deckNames = $state<DeckNames | null>(null);
@@ -191,7 +187,6 @@ export class GameStore {
   fastForwarding = $state(false);
   commandPending = $state(false);
   work = $state<WorkStatus | null>(null);
-  interruptedIdentity = $state<Pick<TableSnapshot, 'opponent' | 'opponent_label'> | null>(null);
   submissionAccepted = $state(false);
   newGamePending = $state(false);
   swapPending = $state(false);
@@ -201,8 +196,7 @@ export class GameStore {
   updateSeq = $state(0);
 
   get decisionStatus(): string {
-    if (this.resumeFailed) return 'Interrupted — the live session is unavailable.';
-    if (this.restoredDecision) return 'Study position — return to live to play.';
+    if (this.stopped) return 'Stopped — this game takes no more decisions.';
     if (this.gameOver) return 'Game over — no next decision.';
     if (this.connection !== 'connected') return 'Waiting for connection — play is unavailable.';
     if (this.work?.state === 'running') return this.submissionAccepted ? 'Your choice was accepted. The game is working.' : 'The game is working.';
@@ -210,56 +204,22 @@ export class GameStore {
     const prompt = this.protocolFrame?.prompt;
     if (!prompt) return 'Waiting for the next decision.';
     const hero = prompt.actor === this.observation?.agent.player_index;
-    const actor = hero
-      ? (this.hasCapability('submit_live_command') ? 'Your decision' : "Pilot's decision")
-      : "Opponent's decision";
-    return `${actor} — ${prompt.instruction || prompt.title}`;
+    return `${hero ? 'Your decision' : "Opponent's decision"} — ${prompt.instruction || prompt.title}`;
   }
 
   private logSequence = 0;
 
-  applyTable(table: TableSnapshot | null | undefined): void {
-    if (!table) return;
-    const previousRole = this.table?.access.role;
-    if (table.opponent && table.attempt_id !== this.table?.attempt_id) {
-      this.opponentChoice = policyChoice(table.opponent.base_sha256 ?? table.opponent.sha256);
+  /** Take the game a reply names; a new game selects its registered opponent in setup. */
+  applyGame(reply: GameReply): void {
+    if (!reply.game) return;
+    if (reply.opponent && reply.game !== this.gameId) {
+      this.opponentChoice = policyChoice(reply.opponent.base_sha256 ?? reply.opponent.sha256);
     }
-    this.table = table;
-    this.recordingId = table.attempt_id ?? null;
-    if (previousRole && previousRole !== table.access.role) {
-      this.tableAnnouncement = `You are now the ${table.access.role}.`;
-    }
-  }
-
-  hasCapability(capability: TableCapability): boolean {
-    return this.table?.access.capabilities.includes(capability) ?? true;
-  }
-
-  restoreDecision(restored: RestoredReplayDecision): void {
-    this.restoredDecision = restored;
-    this.branchAttemptId = null;
-    this.branchProjection = null;
-    this.tableAnnouncement = `Decision ${restored.ordinal + 1} restored for isolated Study.`;
-  }
-
-  applyBranchRetry(payload: BranchRetryPayload): void {
-    this.branchAttemptId = payload.attempt_id;
-    this.branchProjection = payload.retry.projection;
-    this.tableAnnouncement = 'Isolated line updated. The live game was not changed.';
-  }
-
-  returnBranch(restored: RestoredReplayDecision): void {
-    this.restoredDecision = restored;
-    this.branchAttemptId = null;
-    this.branchProjection = null;
-    this.tableAnnouncement = `Returned to recorded decision ${restored.ordinal + 1}.`;
-  }
-
-  returnToLive(): void {
-    this.restoredDecision = null;
-    this.branchAttemptId = null;
-    this.branchProjection = null;
-    this.tableAnnouncement = 'Returned to the live game.';
+    this.gameId = reply.game;
+    this.opponent = reply.opponent ?? null;
+    this.opponentLabel = reply.opponent_label ?? null;
+    this.setup = reply.setup ?? null;
+    this.resumeRefused = null;
   }
 
   setConnection(next: ConnectionState): void {
@@ -318,25 +278,24 @@ export class GameStore {
         : this.turnOrder === 'draw'
           ? 1
           : this.humanSeat;
-    return {
-      ...base,
-      human_seat: resolvedSeat,
-      request_id: crypto.randomUUID(),
-      player_token: playerToken(),
-    };
+    return { ...base, human_seat: resolvedSeat };
   }
 
-  /** Setup data has no request identity or participant credential. */
+  /**
+   * The lists setup sends as `deck_import`: the imported pair, or the saved
+   * list behind each `kept:<id>` side. Null when both sides are named decks.
+   */
+  resolveDeckImport(): Record<string, unknown> | null {
+    if (this.deckImport) return { ...this.deckImport };
+    const sides = Object.fromEntries((['hero', 'villain'] as const).flatMap(side => {
+      const kept = findKeptDeck(this.decks[side]);
+      return kept ? [[side, { source: kept.source, filename: kept.filename, name: kept.name }]] : [];
+    }));
+    return Object.keys(sides).length > 0 ? sides : null;
+  }
+
   setupConfig(): Record<string, unknown> {
-    let resolvedImport: Record<string, unknown> | null = this.deckImport ? { ...this.deckImport } : null;
-    if (!resolvedImport && (isKeptDeckChoice(this.decks.hero) || isKeptDeckChoice(this.decks.villain))) {
-      const partial: Record<string, unknown> = {};
-      const heroKept = findKeptDeck(this.decks.hero);
-      const villainKept = findKeptDeck(this.decks.villain);
-      if (heroKept) partial.hero = { source: heroKept.source, filename: heroKept.filename, name: heroKept.name };
-      if (villainKept) partial.villain = { source: villainKept.source, filename: villainKept.filename, name: villainKept.name };
-      if (partial.hero || partial.villain) resolvedImport = partial;
-    }
+    const resolvedImport = this.resolveDeckImport();
     return {
       ...this.opponentConfig(),
       human_seat: this.turnOrder === 'draw' ? 1 : this.humanSeat,
@@ -462,8 +421,6 @@ export class GameStore {
   applyObservation(
     observation: Observation,
     actions: ActionOption[],
-    sessionId?: string,
-    resumeToken?: string,
     stops?: StopsConfig,
     deckNames?: DeckNames,
     actionSpaceKind = '',
@@ -475,7 +432,7 @@ export class GameStore {
     this.gameOver = observation.game_over;
     this.winner = null;
     this.errorMessage = null;
-    this.resumeFailed = false;
+    this.stopped = false;
     this.fastForwarding = false;
     this.commandPending = false;
     this.swapPending = false;
@@ -484,13 +441,6 @@ export class GameStore {
     this.clearSelectedTarget();
     this.applyServerStops(stops);
     this.applyDeckNames(deckNames);
-
-    if (sessionId) {
-      this.sessionId = sessionId;
-    }
-    if (resumeToken) {
-      this.resumeToken = resumeToken;
-    }
   }
 
   /**
@@ -521,11 +471,7 @@ export class GameStore {
         : null;
   }
 
-  applyFrame(
-    frame: ExperienceFrame,
-    sessionId?: string,
-    resumeToken?: string,
-  ): void {
+  applyFrame(frame: ExperienceFrame): void {
     this.lastCommandRejection = null;
     this.protocolFrame = frame;
     if (this.liveDecisionGroup && (this.liveDecisionGroup.frame_hash !== frame.frame_hash || this.liveDecisionGroup.match_id !== frame.match_id)) {
@@ -548,8 +494,6 @@ export class GameStore {
       this.applyObservation(
         frame.projection,
         actions,
-        sessionId,
-        resumeToken,
         frame.stops,
         frame.deck_names,
         frame.action_space,
@@ -571,7 +515,7 @@ export class GameStore {
     this.liveDecisionGroup = null;
     this.winner = winner;
     this.errorMessage = null;
-    this.resumeFailed = false;
+    this.stopped = false;
     this.fastForwarding = false;
     this.swapPending = false;
     this.swapError = null;
@@ -584,11 +528,23 @@ export class GameStore {
   prepareForNewGame(): void {
     this.resetMatchState();
     this.errorMessage = null;
-    this.resumeFailed = false;
+    this.stopped = false;
   }
 
-  markResumeFailed(message: string): void {
-    // Keep the last confirmed board readable, but retire every input authority.
+  /** Leave the board for setup: the game it showed stays unfinished in History. */
+  leaveGame(): void {
+    this.resetMatchState();
+    this.gameId = null;
+    this.opponent = null;
+    this.opponentLabel = null;
+    this.setup = null;
+    this.stopped = false;
+    this.errorMessage = null;
+    this.newGamePending = false;
+  }
+
+  markStopped(message: string): void {
+    // Keep the last confirmed board readable, but retire every input.
     this.fastForwarding = false;
     this.commandPending = false;
     this.newGamePending = false;
@@ -600,15 +556,8 @@ export class GameStore {
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
     this.liveDecisionGroup = null;
-    if (this.table?.opponent || this.table?.opponent_label) this.interruptedIdentity = {opponent: this.table.opponent, opponent_label: this.table.opponent_label};
-    this.table = null;
-    this.restoredDecision = null;
-    this.branchProjection = null;
-    this.branchAttemptId = null;
-    this.resumeFailed = true;
+    this.stopped = true;
     this.errorMessage = message;
-    this.sessionId = null;
-    this.resumeToken = null;
   }
 
   selectTarget(objectId: number): void {
@@ -629,19 +578,19 @@ export class GameStore {
 
   private updateStops(next: StopsConfig, persist = true): void {
     this.stops = next;
-    if (persist && this.persistPreferences) saveStoredStops(next);
+    if (persist) saveStoredStops(next);
     const once = pruneOnce(this.onceStops, next);
     if (once.my.length !== this.onceStops.my.length || once.opponent.length !== this.onceStops.opponent.length) this.updateOnce(once);
   }
 
   private updateOnce(next: OnceStops): void {
     this.onceStops = next;
-    if (this.persistPreferences) saveStoredOnce(next);
+    saveStoredOnce(next);
   }
 
   private updateDecks(next: DeckSelection): void {
     this.decks = next;
-    if (this.persistPreferences) saveStoredDeckSelection(next);
+    saveStoredDeckSelection(next);
   }
 
   private applyDeckNames(deckNames: DeckNames | undefined): void {
@@ -651,7 +600,6 @@ export class GameStore {
   }
 
   private resetMatchState(): void {
-    this.interruptedIdentity = null;
     this.liveAnalysis = LIVE_ANALYSIS_OFF;
     this.searchRetry = null;
     this.work = null;
@@ -674,9 +622,6 @@ export class GameStore {
     this.clearFocus();
     this.clearSelectedTarget();
     this.logSequence = 0;
-    this.restoredDecision = null;
-    this.branchAttemptId = null;
-    this.branchProjection = null;
   }
 }
 

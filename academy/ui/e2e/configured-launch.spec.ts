@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 const proof = new URL('../test-results/launch/addresses.json', import.meta.url);
 
 test('starting and reopening an unfinished bot game keeps its live replay position', async ({ page }) => {
@@ -9,7 +12,7 @@ test('starting and reopening an unfinished bot game keeps its live replay positi
   const position = page.getByTestId('position-counter');
   const status = page.getByTestId('recording-status');
   const continuation = page.getByRole('button', { name: 'Continue', exact: true });
-  await page.goto('/replay?watch=1');
+  await page.goto('/?watch=1');
   await expect(start).toBeEnabled();
   await page.getByRole('combobox', { name: 'Seat 1 bot', exact: true }).selectOption('random');
   await page.getByRole('combobox', { name: 'Seat 2 bot', exact: true }).selectOption('random');
@@ -27,11 +30,7 @@ test('starting and reopening an unfinished bot game keeps its live replay positi
   await expect(continuation).toBeEnabled();
   expect(new URL(page.url()).searchParams.get('trace')).toBe(recording);
   await expect(heading).toBeVisible();
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Current game', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(start).toBeHidden();
-  await page.getByTestId('game-menu').click();
-  await page.getByText('Watch another matchup', { exact: true }).click();
-  await expect(start).toBeVisible();
 });
 
 test('launch replaces unrelated resume, reloads pending game and opens selected replay', async ({ page, context }) => {
@@ -44,7 +43,7 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
     const frame = message.recovery?.frame ?? message.frame;
     if (frame) frames.push(frame);
   }));
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
@@ -59,13 +58,17 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
   expect(frames.at(-1)!.match_id).toBe(launched.match_id);
   expect(frames.at(-1)!.projection).toEqual(launched.projection);
-  // Another tab has its own resume credentials and launches its own game.
+  // A launch starts one game however often its address is opened: another tab takes the same game up.
   const second = await context.newPage();
   await second.goto(addresses.game);
   await expect(second.getByTestId('action-option').first()).toBeEnabled();
+  await expect(second.locator('main')).toHaveAttribute('data-game', (await page.locator('main').getAttribute('data-game'))!);
   await second.close();
+  // This tab lost the game to that one; a reload takes it back.
+  await page.reload();
+  await expect(page.getByTestId('action-option').first()).toBeEnabled();
   await page.getByTestId('game-menu').click();
-  await page.getByTestId('game').getByRole('link', {name:'New game',exact:true}).click();
+  await page.getByTestId('new-game').click();
   await expect(page.getByTestId('opponent-select')).toHaveValue('passive');
   await expect(page.getByRole('combobox',{name:'Seat 1 deck',exact:true})).toHaveValue('gw_allies_jeong');
   page.on('dialog',dialog => dialog.accept());
@@ -81,7 +84,6 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeVisible();
   await expect(page.getByTestId('game-board')).toContainText('first-legal-a');
   await expect(page.getByTestId('game-board')).toContainText('first-legal-b');
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Current game', exact: true })).toHaveAttribute('href', '/');
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeHidden();
   await expect(page.getByTestId('deck-browser')).toBeHidden();
   await expect(page.getByTestId('game-board')).toBeVisible();
@@ -91,9 +93,6 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await expect(step).toBeInViewport();
   await expect(step).toBeEnabled();
   await page.screenshot({ path: 'test-results/launch/replay-landing.png' });
-  await page.getByTestId('game-menu').click();
-  await page.getByText('Watch another matchup', { exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Start watching' })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -102,7 +101,7 @@ test('imported launch setup shows selected sources and switches back to bundled 
   await page.goto(addresses.imported_game);
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
   await page.getByTestId('game-menu').click();
-  await page.getByTestId('game').getByRole('link',{name:'New game',exact:true}).click();
+  await page.getByTestId('new-game').click();
   page.on('dialog',dialog => dialog.accept());
   const imports = page.getByRole('checkbox', { name: 'Use imported decks for the next game' });
   await expect(imports).toBeVisible();

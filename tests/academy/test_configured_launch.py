@@ -27,6 +27,7 @@ from managym.academy.launch import (
 from managym.academy.opponent import policy_registry
 from managym.search import SearchConfig
 from tests.academy.socket_messages import settled_message
+from tests.academy.test_play_modes import finish
 from tests.academy.test_policy_search_play import SearchFactory
 
 
@@ -90,7 +91,7 @@ def test_game_launch_preserves_config_pending_decision_and_identity(
         assert frame["prompt"] and frame["offers"]
         assert message["launch_setup"]["hero_deck"] == "gw_allies"
         assert "seed" not in message["launch_setup"]
-        session = server.SESSION_REGISTRY[message["session_id"]].game
+        session = server.LIVE_GAMES[message["game"]].game
         assert session.trace is not None
         assert session.trace.config.seed == 7
         assert session.trace.config.villain_type == "passive"
@@ -99,7 +100,9 @@ def test_game_launch_preserves_config_pending_decision_and_identity(
         assert again["frame"]["match_id"] == frame["match_id"]
 
 
-def test_unseeded_launch_preserves_setup_in_two_sessions(academy: Academy) -> None:
+def test_a_launch_starts_one_game_however_often_it_is_opened(
+    academy: Academy,
+) -> None:
     launched = academy.new_game(
         deck="gw_allies",
         opponent_deck="ur_lessons",
@@ -107,7 +110,7 @@ def test_unseeded_launch_preserves_setup_in_two_sessions(academy: Academy) -> No
         decklists="closed",
     )
     launch_id = _launch_id(launched.url)
-    session_ids: list[str] = []
+    games: list[str] = []
     for _ in range(2):
         with _play_socket(academy) as ws:
             message = _start_launch(ws, launch_id)
@@ -116,8 +119,8 @@ def test_unseeded_launch_preserves_setup_in_two_sessions(academy: Academy) -> No
             assert message["launch_setup"]["hero_deck"] == "gw_allies"
             assert message["launch_setup"]["villain_deck"] == "ur_lessons"
             assert "seed" not in message["launch_setup"]
-            session_ids.append(message["session_id"])
-            session = server.SESSION_REGISTRY[message["session_id"]].game
+            games.append(message["game"])
+            session = server.LIVE_GAMES[message["game"]].game
             assert session.trace is not None
             config = session.trace.config
             assert config.seed is not None
@@ -126,7 +129,31 @@ def test_unseeded_launch_preserves_setup_in_two_sessions(academy: Academy) -> No
             assert config.villain_deck_name == "ur_lessons"
             assert config.villain_type == "passive"
             assert config.decklists == "closed"
-    assert session_ids[0] != session_ids[1]
+    assert games[0] == games[1]
+    assert server.LAUNCH_GAMES == {launch_id: games[0]}
+
+
+def test_a_launch_whose_game_is_over_names_that_game(
+    academy: Academy, tmp_path: Path
+) -> None:
+    islands, mountains = tmp_path / "islands.txt", tmp_path / "mountains.txt"
+    islands.write_text("8 Island\n")
+    mountains.write_text("8 Mountain\n")
+    launched = academy.new_game(
+        deck=islands, opponent_deck=mountains, opponent="passive", seed=3
+    )
+    launch_id = _launch_id(launched.url)
+    with _play_socket(academy) as ws:
+        game = _start_launch(ws, launch_id)["game"]
+    finish(server.LIVE_GAMES[game].game)
+    with _play_socket(academy) as ws:
+        refused = _start_launch(ws, launch_id)
+    # The browser opens the game's own address, which for a finished game is
+    # its Replay; the launch never starts a second game.
+    assert refused["type"] == "error"
+    assert refused["message"].startswith("game_finished: ")
+    assert refused["game"] == game
+    assert server.LAUNCH_GAMES == {launch_id: game}
 
 
 def test_mixed_file_and_bundled_decks_admit_sideboards(
@@ -135,7 +162,7 @@ def test_mixed_file_and_bundled_decks_admit_sideboards(
     deck = tmp_path / "deck.txt"
     deck.write_text("20 Mountain\n20 Gray Ogre\nSideboard\n2 Lightning Bolt\n")
     launched = academy.new_game(deck=deck, opponent="random", seed=11)
-    config = server._parse_game_config(server.LAUNCH_CONFIGS[_launch_id(launched.url)])
+    config = server._parse_game_config(server.LAUNCHES[_launch_id(launched.url)].config)
     assert config.hero_deck_name == config.villain_deck_name == "imported"
     assert config.hero_sideboard == {"Lightning Bolt": 2}
     assert config.villain_sideboard
@@ -315,7 +342,7 @@ def test_recording_id_rejects_game_selection_after_missing_check(
     launch_id = _launch_id(academy.new_game(opponent="passive", seed=7).url)
     with _play_socket(academy) as ws:
         message = _start_launch(ws, launch_id)
-        trace_id = message["table"]["attempt_id"]
+        trace_id = message["game"]
     assert academy.replay(trace_id).url.endswith(f"trace={trace_id}")
     for selection in (0, 3, "3"):
         with pytest.raises(AcademyLaunchError) as error:
@@ -386,7 +413,7 @@ def test_cli_selects_decimal_digest(
         for line in capsys.readouterr().out.splitlines()
         if line.startswith("ACADEMY_PLAY_READY ")
     )
-    assert json.loads(ready)["open"] == f"{academy.url}/replay?watch=1&trace=1"
+    assert json.loads(ready)["open"] == f"{academy.url}/replay?trace=1"
 
 
 def test_replay_needs_optional_manabot(
@@ -475,42 +502,45 @@ def test_launch_setup_stays_with_initiator_and_shutdown_keeps_history(
     first = _launch_id(
         academy.new_game(opponent="passive", seed=7, decklists="closed").url
     )
-    with _play_socket(academy) as pilot, _play_socket(academy) as watcher:
+    with _play_socket(academy) as pilot, _play_socket(academy) as other:
         initial = _start_launch(pilot, first)
-        invite = parse_qs(urlparse(initial["table"]["watcher_invite"]).fragment)
-        watcher.send(
-            json.dumps(
-                {
-                    "type": "join_table",
-                    "table_id": invite["table"][0],
-                    "invite_token": invite["watch"][0],
-                }
-            )
-        )
-        watched = _settled_reply(watcher)
-        assert "launch" not in watched and "launch_setup" not in watched
-        second = _launch_id(
-            academy.new_game(opponent="passive", seed=8, decklists="closed").url
-        )
-        pilot.send(
-            json.dumps(
-                {
-                    "type": "new_game",
-                    "grant_revision": initial["table"]["access"]["grant_revision"],
-                    "config": {"launch": second},
-                }
-            )
-        )
-        changed = _settled_reply(watcher)
-        assert changed["type"] == "observation", changed
-        assert "launch" not in changed and "launch_setup" not in changed
-        trace_id = changed["table"]["attempt_id"]
+        # Another tab that resumes the game is not told the launch's setup.
+        other.send(json.dumps({"type": "resume", "game": initial["game"]}))
+        resumed = _settled_reply(other)
+        assert resumed["type"] == "observation", resumed
+        assert "launch" not in resumed and "launch_setup" not in resumed
+        trace_id = initial["game"]
     academy.close()
     store = AttemptStore(academy.traces_dir / "play.sqlite")
     retained = store.load(trace_id)
     assert retained is not None
-    assert retained["end_reason"] == "server_restart"
+    # Shutting down ends nothing: the game is unfinished and resumable.
+    assert retained["end_reason"] == "active"
+    assert store.unfinished(trace_id)
     assert retained["winner"] is None
+
+
+def test_a_game_rebuilt_from_its_record_answers_with_no_work_running(
+    academy: Academy,
+) -> None:
+    launch = _launch_id(academy.new_game(opponent="passive", seed=7).url)
+    with _play_socket(academy) as pilot:
+        initial = _start_launch(pilot, launch)
+    # As idle eviction and a restart leave it: recorded, and not in memory.
+    server.LIVE_GAMES.pop(initial["game"]).game.release()
+    with _play_socket(academy) as returned:
+        returned.send(json.dumps({"type": "resume", "game": initial["game"]}))
+        resumed = _settled_reply(returned)
+    assert resumed["type"] == "observation", resumed
+    assert resumed["game"] == initial["game"]
+    # Taking it up advanced its revision, so a Command held from before is stale.
+    assert (
+        resumed["recovery"]["frame"]["revision"]
+        > initial["recovery"]["frame"]["revision"]
+    )
+    # The rebuild is finished when its reply is sent: a board that read it as
+    # work in progress would wait for a completion that never comes.
+    assert (resumed["work"] or {}).get("state") != "running", resumed["work"]
 
 
 def test_exported_game_source_label_and_import_rejection_messages(
@@ -557,14 +587,14 @@ def test_watch_launch_registers_policy_spec_without_starting(
     _write_tiny_checkpoint(path)
     spec = tmp_path / "challenger.json"
     spec.write_text(json.dumps({"provider": "manabot", "artifact": str(path)}))
-    before = set(server.SESSION_REGISTRY)
+    before = set(server.LIVE_GAMES)
     launched = academy.watch(players=(spec, "random"))
     query = parse_qs(urlparse(launched.url).query)
     key = query["seat1"][0].removeprefix("policy:")
     assert policy_registry().descriptor(key).artifacts["actor"]
     assert query["seat2"] == ["random"]
-    assert set(server.SESSION_REGISTRY) == before
-    configured = server.LAUNCH_CONFIGS[_launch_id(academy.new_game(opponent=spec).url)]
+    assert set(server.LIVE_GAMES) == before
+    configured = server.LAUNCHES[_launch_id(academy.new_game(opponent=spec).url)].config
     assert configured["opponent_sha256"] == key
     with pytest.raises(AcademyLaunchError):
         academy.watch(players=(tmp_path / "missing.json", "random"))
@@ -575,9 +605,9 @@ def test_launch_uses_the_same_explicit_search_spec_for_play_and_watch(
 ) -> None:
     key = policy_registry().register(SearchFactory(), name="search-launch")
     search = SearchConfig(worlds=4, depth=2)
-    configured = server.LAUNCH_CONFIGS[
+    configured = server.LAUNCHES[
         _launch_id(academy.new_game(opponent="search-launch", search=search).url)
-    ]
+    ].config
     assert configured["opponent_sha256"] == key
     assert configured["mirror"] == asdict(search)
     query = parse_qs(
@@ -622,7 +652,7 @@ def test_cli_search_specs_reach_the_shared_python_launch_api(
         )
         == 0
     )
-    config = server.LAUNCH_CONFIGS[_launch_id(targets[-1])]
+    config = server.LAUNCHES[_launch_id(targets[-1])].config
     assert config["mirror"] == asdict(SearchConfig(worlds=4, depth=2))
     assert (
         cli.main(

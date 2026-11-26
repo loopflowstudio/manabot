@@ -49,7 +49,7 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     seed = 165
     config = {
         "hero_deck": {
@@ -77,7 +77,7 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
 
             socket.send_json({"type": "new_game", "config": config})
             initial = settled_message(socket)
-            game = server.SESSION_REGISTRY[initial["session_id"]].game
+            game = server.LIVE_GAMES[initial["game"]].game
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             bolted = False
             # Reach the response with ordinary Commands; nothing is injected.
@@ -140,8 +140,7 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             recovered = ExperienceFrame.model_validate(

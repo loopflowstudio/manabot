@@ -1,25 +1,20 @@
 <script lang="ts">
   import { region } from './region';
   /**
-   * The rail beside the board: the stack and what happened since your last
-   * move, the prompt in one plain line with its buttons, every legal choice by
-   * number, and the log as a move list. The list is the guarantee that the
-   * board hides nothing: it holds every offer of the frame, in order.
-   *
-   * One rule divides the rail's height. What you must read to act (notices,
-   * the stack with its recap, the decision) keeps its whole height; its long
-   * lists scroll inside their own bounds. The two reference lists (every
-   * legal choice, then the moves) share what is left, each above a floor, and
-   * scroll inside. No block is cut by its neighbour; on a window too short
-   * for the floors the rail itself scrolls.
+   * The Live Score rail beside the board: a single chronological tape from
+   * top to bottom. Past moves fill History from the top, unresolved spells and
+   * abilities appear inline at the live tip of History as "On the stack", and
+   * the unified Decision dock sits pinned at the bottom right beside the hand
+   * (with the full numbered legal-choices list expanded by default and
+   * collapsible in one click).
    */
-  import type { Snippet } from 'svelte';
+  import { tick, type Snippet } from 'svelte';
   import { decisionGroupDisclosureCopy, type DecisionGroupKind } from '$lib/decision-group';
   import type { ExperienceFrame } from '$lib/types';
-  import type { HistoryLine, HistoryTurn, RecentHistoryItem } from './history';
+  import type { HistoryLine, HistoryTurn } from './history';
   import type { Segment } from './tell';
   import { committed, offerChoiceLabel, offerText, type PrimaryLabel } from './prompt';
-  import { targetNames, type ResolvedSpell } from './recent';
+  import { targetNames } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
   import { formatScore, markText, type DecisionMark } from '$lib/analysis';
   import ManaText from './ManaText.svelte';
@@ -48,10 +43,6 @@
     workStarted: number | null;
     interrupted: boolean;
     canPassTurn: boolean;
-    /** Unread history tail derived from `history` (empty whenever a cursor is active). */
-    recentFacts: readonly RecentHistoryItem[];
-    /** Spells cast since your last move that left the stack, for lingering target arrows. */
-    resolvedSpells: readonly ResolvedSpell[];
     history: HistoryTurn[];
     opponentName: string;
     onact: (placed: PlacedOffer) => void;
@@ -73,8 +64,6 @@
     moveMarks?: ReadonlyMap<string, DecisionMark>;
     /** Your moves chosen with a live analysis shown, by move id. */
     shownMoves?: ReadonlySet<string>;
-    /** The recap's heading. */
-    recapTitle?: string;
     /** Moves jump to their position when set (Review). */
     onjump?: (id: string, boardSeq: number | null) => void;
     /** Read-only (a recording, or a policy's line): no empty stack and no answer buttons beside the list. */
@@ -93,9 +82,9 @@
   }
 
   let {
-    view, stack: stackGiven, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recentFacts, resolvedSpells, history, opponentName,
+    view, stack: stackGiven, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, history, opponentName,
     stackSources, drop, onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false,
-    evidence = null, moveMarks = new Map(), shownMoves = new Set(), recapTitle = 'Since your last move', onjump, recording = false, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, groupKind = null,
+    evidence = null, moveMarks = new Map(), shownMoves = new Set(), onjump, recording = false, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, groupKind = null,
   }: Props = $props();
 
   const stack = $derived(stackGiven ?? view.stack);
@@ -114,13 +103,6 @@
   const detail = $derived(context?.instruction ?? frame.prompt?.instruction ?? '');
   const secondary = $derived(view.buttons.filter(placed => placed !== view.primary));
   const mine = (controller: number): boolean => controller === frame.projection.agent.player_index;
-  const resolved = $derived(new Map(resolvedSpells.map(spell => [spell.id, spell])));
-
-  // The recap shows its first lines; the rest open on demand and fold again when the recap changes.
-  const RECAP_LINES = 3;
-  let recapOpen = $state(false);
-  $effect(() => { void recentFacts; recapOpen = false; });
-  const facts = $derived(recapOpen ? recentFacts : recentFacts.slice(0, RECAP_LINES));
 
   // Seconds the opponent or the server has been working, beside "… is choosing".
   let elapsed = $state(0);
@@ -135,6 +117,8 @@
 
   let logList = $state<HTMLElement | null>(null);
   let expanded = $state<Set<string>>(new Set());
+  let choicesOpen = $state(true);
+  const hasChoicesBlock = $derived((!over && !recording) || frame.offers.length > 0);
   const hasCursor = $derived((cursorLineIds?.size ?? 0) > 0);
   function isLineCurrent(entry: HistoryLine, fallbackId = false): boolean {
     if (hasCursor) return cursorLineIds!.has(entry.id);
@@ -148,18 +132,39 @@
     expanded = next;
   }
   // The list follows the active cursor / walk stop, the shown Review position, or the newest line live.
+  // Tracking `stack.length` and `choicesOpen` (plus observing `logList` resizes) ensures that when the
+  // stack or decision dock grows, older history scrolls off the top rather than hiding the newest lines.
+  function pinLogBottom(): void {
+    if (logList) logList.scrollTop = logList.scrollHeight;
+  }
   $effect(() => {
     void history.length;
     void history.at(-1)?.lines.length;
     void history.at(-1)?.lines.at(-1)?.children.length;
+    void stack.length;
+    void choicesOpen;
+    void frame.offers.length;
     void cursorLineIds;
     const current = currentMove;
     // Only the list scrolls: scrolling an element into view would also move a rail that is taller than a short window.
-    if (!hasCursor && current === null && !onjump) { if (logList) logList.scrollTop = logList.scrollHeight; return; }
+    if (!hasCursor && current === null && !onjump) {
+      pinLogBottom();
+      void tick().then(pinLogBottom);
+      return;
+    }
     const row = logList?.querySelector<HTMLElement>('[aria-current="true"]');
     if (!row || !logList) return;
     const top = row.offsetTop - logList.offsetTop;
     if (top < logList.scrollTop || top + row.offsetHeight > logList.scrollTop + logList.clientHeight) logList.scrollTop = top - logList.clientHeight / 2;
+  });
+  $effect(() => {
+    const el = logList;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (!hasCursor && currentMove === null && !onjump) pinLogBottom();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   });
 
   function anchorText(placed: PlacedOffer): string {
@@ -198,182 +203,7 @@
   <span class="what">{#if entry.who !== '' && prevWho !== entry.who}<span class="who">{entry.who}</span>{/if}{@render lineSegments(entry.segments, focusable)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
 {/snippet}
 
-<aside class="rail" class:recording aria-label="Stack, decision and legal choices">
-  {#if notices}<div class="notices">{@render notices()}</div>{/if}
-
-  <!-- A recording draws the stack only while something is on it. -->
-  {#if !recording || stack.length || recentFacts.length}
-  <section use:region={{ across: !onjump }} class="block stack" aria-label="Stack">
-    {#if stack.length === 0 && !recording}
-      <h2><span class="type-heading text-ink-2">Stack</span></h2>
-      <p class="type-caption text-ink-3">Empty</p>
-    {:else if stack.length}
-      <h2><span class="type-heading text-ink-2">Stack · {stack.length}</span></h2>
-      <ol>
-        {#each stack as item, index (item.entry.id)}
-          {@const hitPlayers = item.entry.combat_damage_to_players?.map(seat => mine(seat) ? 'you' : opponentName).join(' and ')}
-          {@const damageHistory = hitPlayers ? `Source dealt combat damage to ${hitPlayers} this turn` : ''}
-          {@const provenance = stackProvenance(item.entry)}
-          {@const targets = targetNames(item.entry, frame, { you: 'You', opponent: opponentName })}
-          <li>
-            <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
-              data-testid="stack-entry" data-stack-entry={item.entry.id} data-connect-source={stackSources?.has(item.entry.id) || undefined} data-drop={drop === item.entry.id || undefined}
-              data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : item.entry.id)}
-              data-announcing={item.announcing}
-              data-travel-id={item.card ? `card:${item.card.id}` : `stack:${item.entry.id}`}
-              data-travel-source={item.entry.source_permanent !== undefined ? `perm:${item.entry.source_permanent}` : undefined}
-              data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'}
-              data-travel-name={item.card?.name ?? item.entry.label.split(' — ')[0]}
-              aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}${targets.length ? `, targeting ${targets.join(' and ')}` : ''}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
-              onclick={event => onstack(item, event.currentTarget)}
-              {...hover(item.card?.name ?? item.entry.label)}>
-              <Thumb name={item.card?.name ?? item.entry.label} />
-              <span class="entry-text">
-                <span class="entry-title">
-                  <span class="truncate entry-name">{stackName(item.entry)}</span>
-                  {#each provenance as tag (tag)}<span class="tag type-caption" data-testid="stack-provenance">{tag}</span>{/each}
-                </span>
-                {#if targets.length}<span class="type-caption targets" data-testid="stack-targets">→ {targets.join(', ')}</span>{/if}
-                {#if damageHistory}<span class="type-caption text-ink-3">{damageHistory}</span>{/if}
-                <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{item.announcing ? ` · ${item.announcing === 'spell' ? 'casting' : 'activating'}` : index === 0 ? ' · resolves next' : ''}</span>
-              </span>
-            </button>
-          </li>
-        {/each}
-      </ol>
-    {/if}
-    {#if recentFacts.length}
-      <div class="recent" data-testid="recent">
-        <h3><span class="type-heading text-ink-2">{recapTitle}</span></h3>
-        <ol>
-          {#each facts as fact (fact.seq)}
-            {@const spell = fact.spell === null ? undefined : resolved.get(fact.spell)}
-            {@const isFactJump = Boolean(onjump && fact.line.jumpKey)}
-            {@const isFactSelectable = Boolean(onselectline && fact.line.boardSeq !== null)}
-            <li class="type-caption fact" class:theirs={fact.by === 'opponent'} data-testid="recent-fact">
-              {#if spell}
-                <span class="resolved" data-stack-card={spell.id} tabindex="-1" {...hover(spell.name)}><Thumb name={spell.name} /></span>
-              {/if}
-              {#if isFactJump || isFactSelectable}
-                <button type="button" class="fact-btn" title={fact.text}
-                  onclick={() => (isFactJump ? onjump!(fact.line.jumpKey!, fact.line.boardSeq) : onselectline!(fact.line))}>
-                  <span class="fact-text">{@render lineSegments(fact.segments, false)}</span>
-                </button>
-              {:else}
-                <span class="fact-text" title={fact.text}>{@render lineSegments(fact.segments, true)}</span>
-              {/if}
-            </li>
-          {/each}
-        </ol>
-        {#if recentFacts.length > RECAP_LINES}
-          <button type="button" class="more type-caption" data-testid="recent-more" aria-expanded={recapOpen} onclick={() => (recapOpen = !recapOpen)}>
-            {recapOpen ? 'Fewer' : `${recentFacts.length - RECAP_LINES} more`}
-          </button>
-        {/if}
-      </div>
-    {/if}
-  </section>
-  {/if}
-
-  <section use:region={{ across: !onjump }} class="block prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
-    <p class="type-heading whose" class:yours={live}>
-      {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed">{` · ${elapsed} s`}</span>{/if}</span>{:else}{whose}{/if}
-    </p>
-    {#if !over}
-      {#if interrupted}
-        <p class="type-body text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>
-      {:else if frame.prompt}
-        <p class="type-prompt text-ink" data-testid="decision-prompt" data-kind={frame.action_space}><ManaText text={line} size={16} /></p>
-        {#if paid.length}
-          <div class="committed" data-testid="decision-committed">
-            <h3 class="type-caption text-ink-3">Committed to this cost</h3>
-            <ol>{#each paid as phrase, at (at)}<li class="type-body text-ink">{phrase}</li>{/each}</ol>
-          </div>
-        {/if}
-        {#if hint}<p class="type-caption text-ink-3 hint" data-testid="decision-hint">{hint}</p>{/if}
-      {/if}
-      {#if evidence}
-        <div class="evidence" data-testid="recorded-decision-evidence" aria-label="Recorded at this decision">
-          {#each evidence.summary as fact (fact)}<p class="type-caption text-ink-2">{fact}</p>{/each}
-          {#if evidence.search || evidence.provenance.length}
-            <details class="search-detail" data-testid="search-detail">
-              <summary class="type-caption text-ink-3">Search detail</summary>
-              {#if evidence.search}
-                <table class="type-caption">
-                  <thead><tr><th>Offer</th>{#if evidence.search.some(row => row.prior !== null)}<th>Raw policy</th>{/if}<th>Search value</th><th>Updated policy</th></tr></thead>
-                  <tbody>
-                    {#each evidence.search as row (row.id)}
-                      <tr class:chosen={row.id === evidence.chosen}>
-                        <td>{row.id === evidence.chosen ? '✓ ' : ''}{row.label}</td>
-                        {#if evidence.search.some(candidate => candidate.prior !== null)}<td>{row.prior === null ? '—' : formatProbability(row.prior)}</td>{/if}
-                        <td>{row.score === null ? '—' : row.score.toFixed(3)}</td>
-                        <td>{row.updated === null ? '—' : formatProbability(row.updated)}</td>
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              {/if}
-              {#each evidence.provenance as line (line)}<p class="type-caption text-ink-3 provenance">{line}</p>{/each}
-            </details>
-          {/if}
-        </div>
-      {/if}
-      {#if draft}
-        {@render draft()}
-      {:else if !recording}
-      <!-- A recording's answers are the list below; buttons here would repeat them, disabled. -->
-      {#if view.primary}
-        <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
-          disabled={!live} onclick={() => onact(view.primary!)}>
-          <span>{#if isChosen(view.primary)}✓ {/if}<ManaText text={primaryText?.text ?? offerText(view.primary.offer)} /></span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
-        </button>
-        {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
-      {/if}
-      {#each secondary as placed (placed.offer.id)}
-        <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
-          disabled={!live} onclick={() => onact(placed)}>
-          <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={offerText(placed.offer)} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
-        </button>
-      {/each}
-      {/if}
-      {#if canPassTurn}
-        <button type="button" class="pass-turn type-caption" data-testid="pass-turn" onclick={onpassturn}
-          title="Pass every priority window until the turn ends (Shift+Enter or F6)">Pass turn <kbd>⇧↵</kbd></button>
-      {/if}
-      <!-- The engine's own words stay one click away, under the answers. -->
-      {#if detail && frame.prompt && !interrupted}
-        <details class="detail">
-          <summary class="type-caption text-ink-3">Rules detail</summary>
-          <p class="type-caption text-ink-2">{detail}</p>
-        </details>
-      {/if}
-    {/if}
-    <!-- While you may act, once the game is over, or when status is blank, nothing needs space here. -->
-    <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null || frame.status === 'game_over' || !status} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
-  </section>
-
-  <!-- A finished game has no choices to list; the result card says what happened. Read-only, a position without a decision lists none. -->
-  {#if (!over && !recording) || frame.offers.length}
-  <section use:region={{ across: !onjump }} class="block choices" aria-label="All legal choices">
-    <h2 class="heading type-heading text-ink-2">
-      <span data-testid="choices-heading">{evidence?.heading ?? (interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices')}</span>
-      {#if !waitingFor}<span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>{/if}
-    </h2>
-    {#if waitingFor}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
-    <!-- An open live group folds raw single-step offers under a collapsed disclosure. -->
-    {#if draft}
-      {@const disclosure = decisionGroupDisclosureCopy(groupKind ?? 'declare_attackers')}
-      <details class="raw" data-testid="per-creature-choices" data-group-kind={groupKind ?? undefined}>
-        <summary class="type-caption text-ink-3">{disclosure.summary}</summary>
-        <p class="type-caption text-ink-3">{disclosure.caption}</p>
-        {@render choiceList()}
-      </details>
-    {:else}
-      {@render choiceList()}
-    {/if}
-  </section>
-  {/if}
-
+<aside class="rail" class:recording aria-label="History, stack and decision">
   <section use:region={{ across: false }} class="block log" aria-label="History">
     <h2><span class="type-heading text-ink-2">History</span></h2>
     <ol class="turns" data-testid="game-log" bind:this={logList}>
@@ -470,7 +300,155 @@
         </li>
       {/each}
     </ol>
+    {#if stack.length}
+      <section use:region={{ across: !onjump }} class="stack" aria-label="Stack">
+        <h3><span class="type-heading stack-heading">On the stack · {stack.length}</span></h3>
+        <ol>
+          {#each stack as item, index (item.entry.id)}
+            {@const hitPlayers = item.entry.combat_damage_to_players?.map(seat => mine(seat) ? 'you' : opponentName).join(' and ')}
+            {@const damageHistory = hitPlayers ? `Source dealt combat damage to ${hitPlayers} this turn` : ''}
+            {@const provenance = stackProvenance(item.entry)}
+            {@const targets = targetNames(item.entry, frame, { you: 'You', opponent: opponentName })}
+            <li>
+              <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
+                data-testid="stack-entry" data-stack-entry={item.entry.id} data-connect-source={stackSources?.has(item.entry.id) || undefined} data-drop={drop === item.entry.id || undefined}
+                data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : item.entry.id)}
+                data-announcing={item.announcing}
+                data-travel-id={item.card ? `card:${item.card.id}` : `stack:${item.entry.id}`}
+                data-travel-source={item.entry.source_permanent !== undefined ? `perm:${item.entry.source_permanent}` : undefined}
+                data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'}
+                data-travel-name={item.card?.name ?? item.entry.label.split(' — ')[0]}
+                aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}${targets.length ? `, targeting ${targets.join(' and ')}` : ''}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
+                onclick={event => onstack(item, event.currentTarget)}
+                {...hover(item.card?.name ?? item.entry.label)}>
+                <Thumb name={item.card?.name ?? item.entry.label} />
+                <span class="entry-text">
+                  <span class="entry-title">
+                    <span class="truncate entry-name"><ManaText text={stackName(item.entry)} size={13} /></span>
+                    {#each provenance as tag (tag)}<span class="tag type-caption" data-testid="stack-provenance">{tag}</span>{/each}
+                  </span>
+                  {#if targets.length}<span class="type-caption targets" data-testid="stack-targets">→ {targets.join(', ')}</span>{/if}
+                  {#if damageHistory}<span class="type-caption text-ink-3">{damageHistory}</span>{/if}
+                  <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{item.announcing ? ` · ${item.announcing === 'spell' ? 'casting' : 'activating'}` : index === 0 ? ' · resolves next' : ''}</span>
+                </span>
+              </button>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
   </section>
+
+  {#if notices}<div class="notices">{@render notices()}</div>{/if}
+
+  <div class="decision-dock">
+    <section use:region={{ across: !onjump }} class="prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
+      <div class="dock-head">
+        <p class="type-heading whose" class:yours={live}>
+          {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed">{` · ${elapsed} s`}</span>{/if}</span>{:else}{whose}{/if}
+        </p>
+        {#if hasChoicesBlock && !waitingFor}
+          <button type="button" class="choices-toggle type-caption" data-testid="choices-toggle" aria-expanded={choicesOpen} onclick={() => (choicesOpen = !choicesOpen)}>
+            <span data-testid="choices-heading">{evidence?.heading ?? (interrupted || (!live && evidence) ? 'Recorded choices' : 'Choices')}</span>
+            <span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>
+            <span aria-hidden="true">{choicesOpen ? '▾' : '▴'}</span>
+          </button>
+        {:else if hasChoicesBlock && waitingFor}
+          <span class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</span>
+        {/if}
+      </div>
+      {#if !over}
+        {#if interrupted}
+          <p class="type-body text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>
+        {:else if frame.prompt}
+          <p class="type-prompt text-ink" data-testid="decision-prompt" data-kind={frame.action_space}><ManaText text={line} size={16} /></p>
+          {#if paid.length}
+            <div class="committed" data-testid="decision-committed">
+              <h3 class="type-caption text-ink-3">Committed to this cost</h3>
+              <ol>{#each paid as phrase, at (at)}<li class="type-body text-ink"><ManaText text={phrase} size={13} /></li>{/each}</ol>
+            </div>
+          {/if}
+          {#if hint}<p class="type-caption text-ink-3 hint" data-testid="decision-hint">{hint}</p>{/if}
+        {/if}
+        {#if evidence}
+          <div class="evidence" data-testid="recorded-decision-evidence" aria-label="Recorded at this decision">
+            {#each evidence.summary as fact (fact)}<p class="type-caption text-ink-2">{fact}</p>{/each}
+            {#if evidence.search || evidence.provenance.length}
+              <details class="search-detail" data-testid="search-detail">
+                <summary class="type-caption text-ink-3">Search detail</summary>
+                {#if evidence.search}
+                  <table class="type-caption">
+                    <thead><tr><th>Offer</th>{#if evidence.search.some(row => row.prior !== null)}<th>Raw policy</th>{/if}<th>Search value</th><th>Updated policy</th></tr></thead>
+                    <tbody>
+                      {#each evidence.search as row (row.id)}
+                        <tr class:chosen={row.id === evidence.chosen}>
+                          <td>{row.id === evidence.chosen ? '✓ ' : ''}<ManaText text={row.label} size={12} /></td>
+                          {#if evidence.search.some(candidate => candidate.prior !== null)}<td>{row.prior === null ? '—' : formatProbability(row.prior)}</td>{/if}
+                          <td>{row.score === null ? '—' : row.score.toFixed(3)}</td>
+                          <td>{row.updated === null ? '—' : formatProbability(row.updated)}</td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                {/if}
+                {#each evidence.provenance as line (line)}<p class="type-caption text-ink-3 provenance">{line}</p>{/each}
+              </details>
+            {/if}
+          </div>
+        {/if}
+        {#if hasChoicesBlock && choicesOpen && !waitingFor}
+          <div use:region={{ across: !onjump }} class="choices" aria-label="All legal choices">
+            <!-- An open live group folds raw single-step offers under a collapsed disclosure. -->
+            {#if draft}
+              {@const disclosure = decisionGroupDisclosureCopy(groupKind ?? 'declare_attackers')}
+              <details class="raw" data-testid="per-creature-choices" data-group-kind={groupKind ?? undefined}>
+                <summary class="type-caption text-ink-3">{disclosure.summary}</summary>
+                <p class="type-caption text-ink-3">{disclosure.caption}</p>
+                {@render choiceList()}
+              </details>
+            {:else}
+              {@render choiceList()}
+            {/if}
+          </div>
+        {/if}
+
+        {#if draft}
+          {@render draft()}
+        {:else if !recording}
+          {#if view.primary || canPassTurn}
+            <div class="action-row">
+              {#if view.primary}
+                <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
+                  disabled={!live} onclick={() => onact(view.primary!)}>
+                  <span>{#if isChosen(view.primary)}✓ {/if}<ManaText text={primaryText?.text ?? offerText(view.primary.offer)} /></span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
+                </button>
+              {/if}
+              {#if canPassTurn}
+                <button type="button" class="btn btn-secondary pass-turn type-caption" data-testid="pass-turn" onclick={onpassturn}
+                  title="Pass every priority window until the turn ends (Shift+Enter or F6)">Pass <kbd>⇧↵</kbd></button>
+              {/if}
+            </div>
+            {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
+          {/if}
+          {#each secondary as placed (placed.offer.id)}
+            <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
+              disabled={!live} onclick={() => onact(placed)}>
+              <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={offerText(placed.offer)} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
+            </button>
+          {/each}
+        {/if}
+
+        {#if detail && frame.prompt && !interrupted}
+          <details class="detail">
+            <summary class="type-caption text-ink-3">Rules detail</summary>
+            <p class="type-caption text-ink-2"><ManaText text={detail} size={12} /></p>
+          </details>
+        {/if}
+      {/if}
+      <!-- While you may act, once the game is over, or when status is blank, nothing needs space here. -->
+      <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null || frame.status === 'game_over' || !status} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
+    </section>
+  </div>
   {#snippet choiceList()}
     <ol class="list" aria-label="Legal choices">
       {#each view.list as placed (placed.offer.id)}
@@ -499,18 +477,21 @@
 
 <style>
   .rail { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow-y: auto; border-left: 1px solid var(--border); background: var(--bg-surface); }
-  .block { padding: 10px 14px; border-bottom: 1px solid var(--border); }
-  .notices { padding: 8px 14px 0; display: grid; gap: 6px; }
+  .block { padding: 10px 14px; }
+  .notices { flex: none; padding: 8px 14px; display: grid; gap: 6px; border-top: 1px solid var(--border); background: var(--bg-surface); }
+  .notices:empty { display: none; }
   h2 { margin-bottom: 4px; line-height: 16px; }
-  .stack { flex: none; }
+  .stack { flex: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-strong); }
+  .stack h3 { margin-bottom: 4px; line-height: 16px; }
+  .stack-heading { color: var(--warning-text); }
   .stack ol { display: grid; gap: 3px; }
   /* Three entries show (a spell, its answer and the answer to that); a deeper stack scrolls. The padding keeps a legal entry's ring inside the scroll box. */
   .stack > ol { max-height: 150px; overflow-y: auto; margin: -2px; padding: 2px; }
   .stack-entry {
     width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 3px 6px; border-radius: var(--radius-sm);
-    border: 1px solid var(--border); background: var(--bg-field); font-size: 14px; line-height: 20px; color: var(--text);
+    border: 1px dashed var(--planned); background: var(--bg-field); font-size: 14px; line-height: 20px; color: var(--text);
   }
-  .stack-entry.top { border-color: var(--border-strong); }
+  .stack-entry.top { border-color: var(--planned); }
   /* Being cast or activated: on the stack by the rules, its costs still being chosen. */
   .stack-entry[data-announcing] { border-style: dashed; border-color: var(--planned); }
   .stack-entry.legal { box-shadow: 0 0 0 2px var(--legal); }
@@ -519,42 +500,35 @@
   .targets { color: var(--text); overflow-wrap: anywhere; }
   .entry-title { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
   .tag { flex: none; padding: 0 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); }
-  .recent { margin-top: 8px; }
-  .recent h3 { margin-bottom: 3px; }
-  .recent ol { display: grid; gap: 3px; }
-  /* Folded, the recap is three lines; opened, it scrolls within a quarter of the window. */
-  .recent ol { max-height: 25vh; overflow-y: auto; }
-  .fact { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
-  .fact.theirs { color: var(--text); }
-  .fact-btn {
-    flex: 1 1 auto; min-width: 0; min-height: 0; padding: 1px 4px; margin: 0 -4px; border-radius: var(--radius-sm);
-    text-align: left; color: inherit; background: none; cursor: pointer;
-  }
-  .fact-btn:hover { background: var(--bg-field); }
-  .fact-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-  .resolved { display: inline-flex; border-radius: var(--radius-sm); outline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
-  .prompt { flex: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .decision-dock { flex: none; padding: 10px 14px; border-top: 1px solid var(--border-strong); background: var(--bg-field); }
+  .prompt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .dock-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .whose { color: var(--text-secondary); }
   .whose.yours { color: var(--text); }
+  .choices-toggle {
+    display: inline-flex; align-items: baseline; gap: 5px; padding: 1px 5px; margin: -1px -5px;
+    border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer;
+  }
+  .choices-toggle:hover, .choices-toggle:focus-visible { color: var(--text); background: var(--bg-muted); }
+  .choices-toggle .count { font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
   .detail summary, .raw summary { cursor: pointer; width: max-content; }
   .detail p { margin-top: 2px; max-height: 6em; overflow-y: auto; }
+  .action-row { display: flex; align-items: stretch; gap: 6px; }
   /* One line at any rail width: the full text is the accessible name and the title. */
-  .primary { height: 40px; padding-block: 6px; width: 100%; font-size: 14px; justify-content: center; white-space: nowrap; text-align: center; }
+  .primary { flex: 1 1 auto; min-width: 0; height: 38px; padding-block: 6px; font-size: 14px; justify-content: center; white-space: nowrap; text-align: center; }
   .primary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .primary kbd { flex: none; opacity: 1; }
-  .payment-note { margin-top: -4px; }
-  /* Two caption lines are kept so a hint that rewords on hover moves nothing below it. */
-  .hint { min-height: 32px; }
+  .payment-note { margin-top: -2px; }
+  /* Keep hint compact without jumping when absent. */
+  .hint { min-height: 16px; }
   .committed ol { list-style: none; margin: 2px 0 0; padding: 0; }
   .committed li { padding-left: 10px; border-left: 2px solid var(--planned); line-height: 20px; }
   .committed li + li { margin-top: 2px; }
   .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
   .secondary { width: 100%; height: auto; min-height: 32px; padding-block: 5px; justify-content: flex-start; text-align: left; white-space: normal; }
-  .pass-turn { justify-self: center; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); padding: 2px 6px; border-radius: var(--radius-sm); }
-  .pass-turn:hover { color: var(--text); background: var(--bg-field); }
+  .pass-turn { flex: none; display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; padding: 0 8px; height: 38px; }
   .status { min-height: 16px; }
-  .choices { flex: 0 1 auto; min-height: 0; max-height: 40%; display: flex; flex-direction: column; }
-  .heading { display: flex; justify-content: space-between; }
+  .choices { min-height: 0; max-height: 28vh; display: flex; flex-direction: column; }
   .raw { min-height: 0; display: flex; flex-direction: column; gap: 4px; }
   .raw[open] { flex: 1; }
   /* A draft's per-creature answers are not numbered keys. */
@@ -564,7 +538,7 @@
     width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 2px 6px; border-radius: var(--radius-sm); text-align: left;
     border: 1px solid transparent; font-size: 14px; line-height: 20px; color: var(--text); background: none;
   }
-  .row:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-field); }
+  .row:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-surface); }
   .row:disabled { color: var(--text-secondary); cursor: default; }
   /* A choice's words are the game's face, and its row grows to fit them wrapped. */
   .row .label { flex: 1; min-width: 0; font: 16px/24px var(--font-serif); overflow-wrap: break-word; }
@@ -572,10 +546,10 @@
   .recording .row .label { font-size: 14px; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .recording .row .who-chose { flex: none; margin-left: 0; }
   .hidden-key { visibility: hidden; }
-  .log { flex: 1 1 220px; min-height: 120px; display: flex; flex-direction: column; border-bottom: 0; }
+  .log { flex: 1 1 220px; min-height: 120px; display: flex; flex-direction: column; }
   /* Reviewing, the moves are what you read: they take the remaining height, and the choices list keeps a bounded share. */
   .recording .log { flex: 1 1 0; min-height: 200px; }
-  .recording .choices { flex: 0 1 auto; min-height: 0; max-height: 26%; }
+  .recording .choices { max-height: 24vh; }
   .turns { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; }
   .turn { min-width: 0; }
   .turn ol { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
@@ -590,8 +564,6 @@
   .move.you .who { color: var(--info-text); }
   .move.auto { color: var(--text-tertiary); }
   .move.quiet { color: var(--text-tertiary); }
-  .more { min-height: 0; color: var(--text-secondary); padding: 1px 4px; border-radius: var(--radius-sm); text-decoration: underline dotted; }
-  .more:hover { color: var(--text); }
   .elapsed { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
   .card-name { font-family: var(--font-serif); font-weight: 600; text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: help; }
   .card-name:hover, .card-name:focus-visible { color: var(--accent-text); }

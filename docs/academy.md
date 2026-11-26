@@ -18,42 +18,57 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Previewing payments](#previewing-payments)
 - [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 - [Choosing priority stops](#choosing-priority-stops)
-- [Playing a series against a model](#playing-a-series-against-a-model)
+- [Rematch, swap sides and resuming](#rematch-swap-sides-and-resuming)
 - [Reading the history](#reading-the-history)
 - [Inspect a replay](#inspect-a-replay): timeline, live Watch, perspectives and recovery
 - [Choice navigation](#choice-navigation)
 - [Presentation runtime](#presentation-runtime)
 - [Playing a trained challenger](#playing-a-trained-challenger)
-- [Attempts and shared history](#attempts-and-shared-history)
+- [Attempts and history](#attempts-and-history)
 - [Experience proof gate](#experience-proof-gate)
 
 ## One game, from setup to its recorded decisions
 
-**New game** and **Games** are the main destinations. **Current game** returns
-this tab to its last live or watched game. Existing launch, replay and Watch
-links continue to open their intended games.
+Academy has a single top bar (**Academy**, **Play**, **History**, theme) and
+three views:
 
-**New game** opens setup for a separate session, starting from retained choices.
-Edits here do not save into your current session; **Cancel** returns without
-committing them. Setup shows two native seats. For each seat, choose a **Controller** (**You**
-or **Bot**) and a **Deck**. A bot seat also has a player picker: choose a
-built-in bot or a **Registered policy**, with optional **Search** for a compatible
-policy. Built-in **Search 16/64/256** runs that many random playouts per
-legal action without a policy; **Random** chooses uniformly among legal actions;
-**Passive** passes when possible and otherwise takes the first legal action.
-One controller can be you; choosing bots in both seats starts a
-watched game through the same setup. Seat 1 plays first; seat 2 draws first.
-Policies are chosen directly by name and execution identity. Their provider,
-artifacts and runner remain available in details. **Browse decks and cards**
-opens the full deck browser; imported sources and disclosure use the same
-admission checks for played and watched games.
+- **`/` (Play).** If you have an unfinished played game in progress, `/` opens
+  straight onto its board at the pending decision. Otherwise it shows one setup
+  screen: **Play vs Bot** or **Watch Bot vs Bot**, decks, opponent, **Start**,
+  and **Play again** for the last matchup.
+- **`/games` (History).** Every game in `traces_dir`, newest first, with search,
+  filters, and **Open a recorded game file**. Every row has **Replay**
+  (`/replay?trace=<id>`), and every unfinished played game has **Resume**
+  (`/?game=<id>`).
+- **`/replay?trace=<id>` (Replay).** Step through any saved game — finished or
+  unfinished — with analysis, **See its line**, **Try another line**, and
+  **Play on from here**. Bare `/replay` redirects to `/games`.
+
+On setup, choose **Play vs Bot** or **Watch Bot vs Bot** and configure two
+native seats. For each seat, choose a **Deck** and, for a bot seat, pick a
+built-in bot or a **Registered policy** with optional **Search** for a
+compatible policy. Built-in **Search 16/64/256** runs that many random playouts
+per legal action without a policy; **Random** chooses uniformly among legal
+actions; **Passive** passes when possible and otherwise takes the first legal
+action. Seat 1 plays first; seat 2 draws first. Policies are chosen directly by
+name and execution identity; their provider, artifacts and runner remain
+available in details. **Browse decks and cards** opens the full deck browser;
+imported sources and disclosure use the same admission checks for played and
+watched games.
+
+Closing the tab, quitting the browser, or restarting the server loses nothing:
+`/` and History's **Resume** return to the same game, with the same game id and
+recorded history, at the exact decision that was pending. Clicking **New game**
+from a board opens setup in place with no confirmation dialog, leaving the
+unfinished game resumable in History.
 
 Hover or focus any visible card to read it; reading never sends an action.
-**Open a recorded game file** in Games opens any recorded game, from your own
-loop, training or evaluation, without changing its original evidence. Games links back to recorded positions, their legal
-choices and available recorded policy/search evidence. Trying another line
-creates a separate Study branch with an explicit return to the source decision.
-There is no live example Advice panel or example-scenario read selector.
+**Open a recorded game file** in History opens any recorded game, from your own
+loop, training or evaluation, without changing its original evidence. Replay
+links back to recorded positions, their legal choices and available recorded
+policy/search evidence. Trying another line creates a separate Study branch
+with an explicit return to the source decision. There is no live example Advice
+panel or example-scenario read selector.
 
 ## Running Academy
 
@@ -75,8 +90,9 @@ ACADEMY_PLAY_READY {"open": "http://127.0.0.1:8000", "traces_dir": "/home/you/ac
   Ctrl-C stops the server
 ```
 
-Your browser opens on the board at `http://127.0.0.1:8000`, with a game ready
-against the Search 64 opponent. That is the whole installation: no manabot,
+Your browser opens at `http://127.0.0.1:8000` — straight onto the board of your
+unfinished game if one is in progress, or onto setup with a game ready to start
+against the default opponent. That is the whole installation: no manabot,
 Torch, Node or Rust, and no checkout of this repository. The wheel carries the
 compiled engine, the server and the built client. Cards show their Scryfall
 art, which the server fetches the first time a card is shown and keeps on
@@ -142,17 +158,19 @@ These options go after `academy`, `academy play`, `academy watch` or
 `academy replay` alike. Policy specifications name installed providers
 ([registering policies](#play-and-watch-a-trained-checkpoint)).
 
-The default address is reachable only from your own machine. Academy has no
-accounts: a browser's stored credential is its player identity. Listen on
-another address (`--host 0.0.0.0`) only on a network where you would share
-your games with everyone on it.
+The default address is reachable only from your own machine. Academy is a local
+tool with no accounts, no credentials and no per-browser privacy walls: every
+game in `traces_dir` is readable and resumable from any browser that reaches
+the server. Listen on another address (`--host 0.0.0.0`) only on a network
+where you intend to share your local game store with everyone on it.
 
 ### Stop
 
 Press Ctrl-C in the terminal that runs it. The server finishes its writes,
-exits with status 0 and frees the port. A game in progress is kept: it is
-listed as interrupted, with no winner, the next time you start Academy from
-the same traces directory.
+exits with status 0 and frees the port. An unfinished game stays unfinished,
+with no winner invented: the next time you start Academy on the same
+`--traces-dir`, opening `/` resumes it at its pending decision, and **History**
+lists it with both **Resume** and **Replay**.
 
 ### Start in a chosen game
 
@@ -196,22 +214,23 @@ Search needs open decklists. Every registered policy admits the selected decks
 before loading; a baseline bound to specific decks refuses another matchup.
 Missing or changed policy artifacts are refused with the provider's reason.
 
-Reloading the page returns to the same game and its pending decision; it does
-not deal again. To continue the series, use
-[Rematch or Swap play/draw](#playing-a-series-against-a-model). **New game** opens a separate session setup with the launched decks, opponent
-and decklist mode selected.
-For imported matchups, setup shows
-both selected source files and their editable lists. Uncheck **Use imported
-decks for the next game** to choose bundled decks instead.
+Once the game starts, the browser address updates to `/?game=<id>`, so
+reloading the page returns to the same game and its pending decision — even
+after an idle timeout or a server restart — and never deals again. To play
+again with the same setup or reversed seats, use
+[Rematch, Swap play/draw or Deal new decks](#rematch-swap-sides-and-resuming).
+**New game** opens setup in place with the launched decks, opponent and
+decklist mode selected, leaving the current game unfinished in **History**.
+For imported matchups, setup shows both selected source files and their
+editable lists; uncheck **Use imported decks for the next game** to choose
+bundled decks instead.
 
-The launch address is good for as long as that server runs. Opened in another
-browser it starts that browser's own game with the same decks and opponent.
-With `--seed`, each opening deals the same game; without it, each opening
-deals afresh.
-After the server stops, the address cannot restore its live game. A tab that
-already started it shows **Interrupted**; choose **New game** explicitly to
-play again. Opening an unknown launch without a retained game shows ordinary
-setup; run the command again to create a new launch.
+The `?launch=<id>` address is good for as long as that server runs and starts
+its game once (reloading before attach reconciles the same game). Opening
+`/?launch=<id>` while another game is unfinished starts the launch and leaves
+the earlier game resumable in **History**. Opening an unknown launch (for
+example, an unstarted `?launch=` link after a server restart) clears it and
+shows ordinary setup; run the command again to create a new launch.
 
 ### Open a replay directly
 
@@ -223,7 +242,7 @@ uv run --no-project managym academy replay <recording-id>
 
 The first command opens a file of recorded games; the second opens one game
 from a directory of them, here a training run's; the third reopens a game
-already in **Games**, by the id shown there. All land in **Replay**, ready to
+already in **History** (`/games`), by the id shown there. All land in **Replay**, ready to
 step from the first recorded choice or resume a saved position
 ([replay controls](#inspect-a-replay)). The heading says which kind of game
 it is: **Training game**, one the training loop itself
@@ -260,18 +279,15 @@ A game does not have to be whole to open:
 | **Stopped at decision N · saved recording only** | This engine did not reproduce the game from decision N: the digest differed, the recorded action was not offered, or the engine raised. Decisions before N are shown with the message; nothing after N is. |
 
 Neither can be continued, and no later board is invented. An opened recording
-is closed: it only plays saved data, even when its game never finished.
+from a file is read-only: it only plays saved data, even when its game never
+finished.
 
-A recording id keeps the recording's existing access rules: open it in the
-same browser and at the same address (including port) where **Games** lists
-it, or open a shared, finished recording. Another browser or address cannot
-open a private or unfinished game without its participant credential. The
-launcher checks that the id exists; access is checked when the browser opens
-it. Opened game files are shared recordings and can open in any browser that
-can reach the server. A file holds the deal seed and so both players' hidden
-cards; share it as you would share both hands. The viewer still shows each
-seat only what it could see, and the file's run labels and build identities
-stay on the server.
+Any recording id in this `traces_dir` opens in any browser that can reach the
+server, finished or unfinished, with no credential. Opened game files are saved
+in `traces_dir` and open at `/replay?trace=<id>`. A file holds the deal seed
+and so both players' hidden cards; share it as you would share both hands. The
+viewer still shows each seat only what it could see, and the file's run labels
+and build identities stay on the server.
 
 `.json`, `.jsonl` and gzipped files are accepted, and a directory stands for
 the games in all its files. `--game` takes either the game's zero-based
@@ -322,7 +338,7 @@ with serve(port=0) as academy:
     )
     replay = academy.replay(Path(".runs/demo/games"), game=3)
     print(game.url)      # http://127.0.0.1:52114/?launch=3f9c2a7be1d04c58
-    print(replay.url)    # http://127.0.0.1:52114/replay?watch=1&trace=8b1e…
+    print(replay.url)    # http://127.0.0.1:52114/replay?trace=8b1e…
     academy.open(game.url)
     academy.wait()       # block until Ctrl-C
 ```
@@ -333,12 +349,13 @@ with serve(port=0) as academy:
   `academy.traces_dir` report what is in use. It opens no browser.
 - `academy.new_game(...)` takes the options of `managym academy play`. A deck
   given as `str` is a bundled deck name; a `pathlib.Path` is a decklist file.
-  With `seed`, each opening of its address deals the same game; without it,
-  each opening deals afresh. Reloading in the same tab resumes its game either way.
+  Opening `game.url` starts the game once and updates the page to `/?game=<id>`,
+  so reloading resumes that game even across a server restart.
   `opponent` also takes a policy specification JSON as a `pathlib.Path`.
-- `academy.watch(players=("challenger", "random"))` opens Watch setup with
-  exact seats selected and leaves **Start** to you. A string is a registered
-  alias, `policy:<id>` or a built-in player; a `Path` names a saved specification.
+- `academy.watch(players=("challenger", "random"))` opens Play setup in
+  **Watch Bot vs Bot** mode with exact seats selected and leaves **Start** to
+  you. A string is a registered alias, `policy:<id>` or a built-in player; a
+  `Path` names a saved specification.
 - `serve(..., policies={"challenger": factory})` registers an already constructed
   policy factory directly. It needs no manifest or installed entry point.
   Each factory must create a fresh mutable session per game and seat.
@@ -357,11 +374,12 @@ with serve(port=0) as academy:
   `deal_seed`, `leg`, `decks` and `game_trace_sha256` properties warn and are
   removed in 0.3.0.
 - `new_game`, `watch` and `replay` return a `Launched` whose `url` opens that
-  game, setup or replay, subject to the recording access rules above. `academy.open(url)`
-  opens it in the default browser; `academy.open()` opens Academy with no game.
+  game, setup or replay. `academy.open(url)`
+  opens it in the default browser; `academy.open()` opens Academy at `/`.
 
 Leaving the `with` block, or calling `academy.close()`, stops the server and
-frees the port; unfinished games are kept as interrupted, as with Ctrl-C.
+frees the port; unfinished played games remain unfinished and resumable the
+next time you open Academy on the same `traces_dir`.
 `academy.wait()` blocks until Ctrl-C and then returns, for scripts that
 should stay up while someone plays. One Academy runs per Python process:
 a second `serve` before the first is closed raises `server.running`.
@@ -430,29 +448,43 @@ exported games they already wrote keep opening.
 
 ### Play a game
 
-Open Academy (`/`) in a tab with no game and it offers your last matchup:
-**Play again** starts the same opponent, decks, play/draw seat, deal mode and
-stops as the last game this browser started, in one click. The first time, it
-offers **Play** with the default matchup, UR Lessons (you) against Search 64 ·
-search with GW Allies. **Set up a different game** opens the setup. Play again
-always starts a new session; it never resumes another tab's game. The last
-matchup is a browser preference (`academy.last-matchup` in local storage) and
-holds no credential.
+Open Academy (`/`): if this browser remembers an unfinished played game
+(`localStorage['academy.game']`), `/` opens straight onto its board at the
+pending decision. Otherwise `/` shows the setup screen:
 
-Open **New game**
-to use the [two-seat setup](#one-game-from-setup-to-its-recorded-decisions):
-choose controllers, decks and bot players, then select **Start game** to start
-a separate session. Replacing an active game requires confirmation that it
-will be stopped. To keep games together, use
-[Rematch, Swap play/draw or Change opponent](#playing-a-series-against-a-model).
+- **Play again** starts the same opponent, decks, play/draw seat, deal mode and
+  stops as your last matchup in one click (or **Play** with the default matchup
+  the first time). The last matchup is a browser preference
+  (`academy.last-matchup` in local storage).
+- Choose **Play vs Bot** or **Watch Bot vs Bot**, pick decks, an opponent,
+  decklist disclosure, deal mode and priority stops, then click **Start**.
 
-To use your own decks, open **New game**, expand **Import decklist files**
+Before a first matchup, setup proposes the default opponent and, where a deck
+pool is installed, a dealt held-out deck for each seat. A matchup named by the
+address, or the one just played, is never replaced by those defaults.
+
+With closed decklists, the opponent's deck reads **Closed decklist** on the
+board, in **History** (where the Deck filter does not find it) and in Replay
+until the rules end the game; a finished game names both decks everywhere. A
+side dealt from a deck pool is remembered as its pool, so **Play again** and
+**New game** deal fresh decks, while **Rematch** keeps the decks just played;
+"Your last matchup" names that side by its pool, never by the deck it dealt.
+
+A deck saved from an import starts **Watch Bot vs Bot** as it starts a played
+game, on either seat, against a named deck, a pool or another saved deck.
+
+From a live board, clicking **New game** opens setup in place, with the matchup
+just played selected and no confirmation dialog; the game you left stays
+unfinished in **History** with a **Resume** link. Until it is resumed, `/`
+opens setup rather than that game.
+
+To use your own decks, open setup, expand **Import decklist files**
 and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
 `.dek` file for both **Your deck** and **Opponent deck**, or paste each list
 into its source box. Write one `count card name` per line, with optional
 `Main` and `Sideboard` headings. Select **Check decklists**, correct any
 reported lines, choose a built-in opponent such as **Search 64**, then select
-**Start game**. Imported decks use the development format and supported cards;
+**Start**. Imported decks use the development format and supported cards;
 this is not tournament legality validation. Registered policies check the complete
 setup, including imported lists, against their own admission requirements. Uncheck
 the import option to return to bundled decks.
@@ -466,20 +498,23 @@ single action commits it ([controls below](#playing-on-the-board)). Decisions wi
 legal action are taken for you and never shown. Reloading the page restores the
 pending decision.
 
-### Playing a series against a model
+### Rematch, swap sides and resuming
 
-Choose **Registered policy**, select the intended policy, and import your decks
-through **New game**. Check the matchup, decklist disclosure, priority stops
-and deal mode, then select **Start game**. When the game ends, a result card
-sits over the board, which stays visible around it (**Look at the board**
-folds the card to a corner). It says who won and how ("Heuristic · scripted
-went to −2 life on turn 9"), the final life totals, and one line from the
-history: turns, and each player's spells cast and attacks. Select **Rematch** to
-play again with that setup. After the next game, select **Swap play/draw**: you
-keep your deck and move from playing first to drawing first, or the reverse.
-**Change opponent** opens only the opponent settings, and **Review this game**
-opens the game in Replay from its first position. Both games and the next one belong to the same
-session.
+Start a game against a registered policy or built-in opponent. When the game
+ends, a result card sits over the board, which stays visible around it
+(**Look at the board** folds the card to a corner). It says who won and how
+("Heuristic · scripted went to −2 life on turn 9"), the final life totals, and
+one line from the history: turns, and each player's spells cast and attacks.
+
+| Action on the result card | What carries forward |
+|---|---|
+| **Rematch** | Both decks (including imported lists), exact opponent configuration, disclosure, priority stops and your seat from the game just played |
+| **Swap play/draw** | The rematch setup with your native play/draw seat reversed; your deck stays yours |
+| **Deal new decks** | Same deck pools and opponent configuration, drawing fresh decks from the pools |
+| **Review this game** | Opens `/replay?trace=<id>` from the first recorded position |
+
+Priority-stop changes made during play are saved into the game's setup and
+carry forward into **Rematch** and **Swap play/draw**.
 
 Academy names every opponent with how it decides: **Search 64 · search**,
 **Heuristic · scripted**, **Passive · scripted**, a checkpoint by its name and
@@ -494,104 +529,68 @@ server; see [Play and watch a trained checkpoint](#play-and-watch-a-trained-chec
 The provider checks that it can play the selected decks and configuration.
 Built-in opponents need no registration.
 
-In **Settings → Game**, **Next game** holds the session strip (separate from
-**This game**, which holds [Swap sides](#swapping-sides-mid-game)): the game
-number, matchup, your play/draw seat and deal mode. Open its configuration
-details with a pointer or Tab and
-Enter to check the full Policy ID, model artifacts, runner and available search
-configuration. A familiar model name alone does not identify the execution.
-Each game's recording keeps the exact configuration used to start it, including
-its admitted decks, disclosure, actual seed and native seats.
-
-| Next action | What carries forward |
-|---|---|
-| **Rematch** | Both decks and imported source lists, exact opponent configuration, disclosure, stops and your seat |
-| **Swap play/draw** | The rematch setup, with your native play/draw seat reversed; your deck stays yours |
-| **Change opponent** | Your decks, disclosure, stops and seat/deal plan; only the explicitly edited opponent settings change |
-| **Start game** | Starts a separate session from setup |
-
-To exchange decks within the series, choose **Edit next game** in the session strip.
-**Change opponent** opens only the opponent settings. Both editors show that
-edits belong to this session's next game. **Save next setup** retains the draft
-without starting or admitting a game; **Start next game** admits it and starts
-one continuation in the same session. **Cancel** discards unsaved edits.
-Earlier recordings keep their original setup. Stop edits during play also carry
-into the next game.
-
-If both controllers become bots in **Edit next game**, choose **Start new
-watched game**. This creates a separate Watch game and preserves the Play
-session and current attempt. **Current game** then returns to that watched game;
-reading another session's history does not change that destination.
-Admission refusal keeps the editor, edits, current game and saved draft usable.
-Reload discards unsaved edits and restores committed setup and the actual
-pending game; it never silently starts another game. Replacing an unfinished
-game warns that it will be stopped; inspecting setup or opening a recording does not stop it.
-
 #### Choose the deal deliberately
 
-**Fresh deal** is the default when no seed was supplied. Each successfully
-started game gets a new random seed, recorded with that game. **Repeat seed**
-keeps an explicitly supplied seed, including one supplied with CLI `--seed` or
-Python `seed=`. Enter a seed as a decimal unsigned 64-bit integer, from `0` to
+**Fresh deal** is the default when no seed was supplied. Each started game gets
+a new random seed, recorded with that game. **Repeat seed** keeps an explicitly
+supplied seed, including one supplied with CLI `--seed` or Python `seed=`.
+Enter a seed as a decimal unsigned 64-bit integer, from `0` to
 `18446744073709551615`. The selected mode is visible before starting.
 
 Rematching or swapping play/draw preserves this mode. Repeating a seed does not
 repeat policy decisions, and swapping native seats changes which player gets
 each seat's deal. These controls do not establish a paired evaluation.
 
-#### Read results and return from a recording
+#### Automatic resume across closes, idle timeouts and restarts
 
-Open session history from the board to see its games in **Games**. Each entry
-links to its recording. Use Replay's return link to return to the filtered
-history, then return to Play in the same tab to continue the current game.
-Opening an earlier recording does not replace the live game.
+Suppose you start a game against a registered policy, make three decisions,
+close the browser tab, stop the server with Ctrl-C, and start it again on the
+same `--traces-dir`:
 
-Results count wins, draws and losses from your seat only among completed games,
-with the completed-game denominator. Active, stopped and interrupted games are
-counted separately. For example, two wins, one loss and one stopped game means
-**2 wins / 0 draws / 1 loss out of 3 completed**, plus **1 stopped**. Counts cover
-the full authorized session selection, including games on other history pages.
+1. Open `http://127.0.0.1:8000` (`/`), or open **History** (`/games`) and
+   click **Resume** (`/?game=<id>`).
+2. Academy steps the engine through the stored record (rebuilding opponent
+   memory and Study roots without re-recording), installs the stored history
+   unchanged, and lands on the board at your fourth decision — same game id,
+   same recorded history. If the server stopped while the bot was replying to
+   your last move, the bot finishes its reply on resume.
+3. Make the fourth decision, then open `/replay?trace=<id>` to step through
+   every decision before and after the restart in one unbroken record.
 
-Breakdowns keep exact policy/search configuration, matchup, disclosure, native
-seat and evidence origin distinct. Changing opponent stays in the session and
-creates a separate breakdown. Human exploratory play, automated validation,
-training and evaluation recordings retain their declared origins; unknown
-origin stays unknown. An evaluation label alone does not establish a controlled
-study. These counts describe recorded games, not a strength estimate or rating.
+Every unfinished played game in **History** is resumable, not only the latest
+one. Starting another game, closing the tab, 15 minutes of idle eviction from
+server memory, and stopping/restarting the server never end a game; only rules
+completion (`game_over`) or a replay error (`record_diverged`) does.
 
-Each collapsed breakdown names its recorded opponent and policy identity, where
-available. Expand it for decks and the full execution configuration.
-
-Wall elapsed time includes pauses and appears only when start/end times were
-recorded. Response measurements appear only when recorded by the provider,
-with their measured sample count; otherwise they are unavailable.
-
-#### Reloads, failures and privacy
-
-Reload in the same tab to recover the session and its actual pending decision.
-Independent tabs and launches start independently. Opening session history in
-another tab is read access and does not resume that session's live game. Keep
-using the same browser address, including its port. Session history requires
-the owner credential stored in that browser; copying its link does not grant
-access. If access is denied, open the link in the original browser and address,
-or browse Games outside that session. Cleared owner credentials cannot be
-recovered from the link. Temporary loading failures still offer **Try again**.
-If browser session storage
-is unavailable, Academy explains that reload continuity is unavailable; the
-current in-memory game remains usable.
-
-If the next policy or decks cannot be admitted or loaded, Academy shows the
-reason and preserves the existing game and setup for correction and retry. A
-missing or changed policy is never silently replaced. Restore its pinned
-artifacts, or deliberately select the replacement offered by the picker.
-Retrying a continuation after a lost reply recovers the game already started
-by that request. After a backend restart, the unfinished game is interrupted;
-start the next game explicitly rather than expecting its live state to resume.
-
-Session setup, imported source lists and seeds remain owner-private. Sharing a
-completed recording follows the existing replay rules; it grants neither session
-configuration access nor control of the live game. Earlier ungrouped games stay
-in **Games** without being assigned to a session retroactively.
+- **Explicit addresses take precedence.** Opening `/` with `?launch=`, `?demo=`,
+  `?played_from=`, a Watch launch address (`managym academy watch`), or
+  `?hero`/`?villain`/`?opponent` opens what the address asked for; any
+  unfinished game remembered in `academy.game` stays resumable in **History**.
+- **A game with nothing to resume.** The server refuses a resume with a code:
+  `game_finished`, `game_is_watch`, `game_stopped` or `game_not_found`.
+  Opening `/?game=<id>` for a finished or watched game redirects to its Replay
+  (`/replay?trace=<id>`), always: reloading a result card opens the game's
+  Replay, and the next game starts from setup's **Play again** or **History**.
+  For a stopped one it shows setup with the reason and a link to its Replay. An unknown game id, or a game `/` remembered that is
+  finished or stopped, clears `academy.game` and opens setup without comment.
+- **Two tabs on the same game.** Opening `/` while another tab holds the game
+  in progress opens setup with a **Play it here instead** link and leaves the
+  other tab playing. Opening `/?game=<id>` (that link, or **Resume** in
+  History) takes the game over and closes the older tab's socket.
+  `localStorage['academy.game']` stores only the current game id, while each
+  tab keeps its own in-flight Command envelope and last frame in
+  `sessionStorage['academy.tab.<game>']`, so two tabs never overwrite each
+  other's pending input.
+- **Missing policy vs engine divergence.** If the stored opponent policy cannot
+  be loaded (for example, the server restarted without `--policy` or a
+  checkpoint was moved), Academy refuses resume with the load error, links to
+  the game's Replay, clears `academy.game`, and leaves the game unfinished so
+  restarting with the policy resumes it. If the engine no longer reproduces the
+  stored steps (such as a rules change), Academy refuses with
+  `"no longer plays as recorded at step N"`, marks the game `record_diverged`
+  (no winner invented), clears `academy.game`, and links to Replay.
+- **Unfinished Watch games.** Eviction or server restart stops live Watch
+  production; the saved Watch game stays openable in Replay.
 
 ### Playing on the board
 
@@ -657,8 +656,9 @@ sick, active restrictions and statuses (`Can't be blocked`, `Can't block`,
 `No abilities` / `Lost base abilities`), counters (`+1/+1`, `Charge ×2`), and
 the effective battlefield keywords and keyword abilities it has now (evergreen
 keywords plus `Prowess`, `Ward`, and active `Firebending N`; anything granted
-by an effect or another permanent is edged in green). Mana symbols carry their
-letter, and ◇ for colourless. A tapped permanent turns a quarter onto its side,
+by an effect or another permanent is edged in green). Coloured mana symbols draw
+their mana icons, tap and untap draw their arrows, generic and hybrid draw
+circular pips, and colourless draws ◇. A tapped permanent turns a quarter onto its side,
 in room its row keeps for it so it never covers a neighbour; its name bar stays
 across the top.
 
@@ -728,51 +728,46 @@ with its cost on the line beneath in place of the type line, so a nine-card
 hand reads every card's name and cost. Pointing at or focusing a covered card lifts it whole. An empty hand is a
 label.
 
-The rail holds:
+The rail flows from the past into the present:
 
-- **Stack**, top first, each entry with its card and who controls it; a stack
-  entry an action applies to is outlined. A line joins every spell or ability
-  on the stack to each of its targets. A spell you are casting, or an ability
-  you are activating, is on top of the stack with a dashed border (**casting**,
-  **activating**) from the moment you choose it, through its targets and
-  payment, with lines to the targets already chosen; the card leaves your hand.
-- **Since your last move**: the unread tail of the history from your last
-  choice to now (hidden while walking or looking back so it never contradicts a
-  historical stack). Hovering a card name inspects it and clicking a line seeks
-  the board to it. The first three show; the rest open with **more**. A spell
-  that already resolved keeps its card here, and its line to a target that is
-  still on the board, until your next move or the turn ends. Cards that
-  attacked, blocked, were targeted or were dealt damage this turn are ringed on
-  the board at now, and damage dealt this turn shows in the card's corner (while
-  still marked on it) or on the player's plate ("−2"); transient board marks
-  clear when the turn ends.
-- **The decision** shows who decides, what they are deciding ("Pay {1}{U} for
-  Accumulate Wisdom"), and the buttons. For mana payments the hint below the
-  prompt says how to pay. It stays steady as different previews appear.
-  Mana in the prompt, the buttons and the choices is drawn as pips.
-  **Rules detail** holds the engine's full instruction.
-  Passing priority and paying a cost are the primary button (Space), labelled
-  with what it does next: **Resolve** and the spell on top of the stack, the
-  step it moves to ("To combat", "To blockers"), or the cost ("Pay {1}{U}",
-  with the lands it taps dashed on the board and named in the button's
-  accessible name; see [Previewing payments](#previewing-payments)). The label
-  stays on one line; a long one is shortened and its full text is the
-  button's accessible name and tooltip. Declining,
-  and a combat answer that does not name another creature, are separate
-  buttons, so a click on a card never declines.
-- **All legal choices**: every offer of the decision, numbered, with the total
-  count. It is the complete list; press a number key to choose one of the first
-  nine. During a live grouped decision (combat or card arrangement) the raw
-  single-step offers fold under a closed disclosure (see
-  [Grouped decisions](#grouped-decisions)).
 - **History**: everything that happened, in the order it happened, grouped by
-  turn. A move names the player who made it, and what followed from it is
-  indented beneath it with the rule that did it. Select a line to see the
-  board as it was after it; see [Reading the history](#reading-the-history).
+  turn, filling the upper rail. A move names the player who made it, and what
+  followed from it is indented beneath it with the rule that did it. Select a
+  line to see the board as it was after it; see [Reading the history](#reading-the-history).
   Priority-stop automation is marked **auto** and never counts as your move.
   A run of the opponent's and automation's priority passes folds into one
   quiet **passed** line that counts each one's passes; your own passes stay
-  moves. Hover or focus a card name to see the card.
+  moves. Hover or focus a card name to see the card. Cards that attacked,
+  blocked, were targeted or were dealt damage this turn are ringed on the board
+  at now, and damage dealt this turn shows in the card's corner (while still
+  marked on it) or on the player's plate ("−2"); transient board marks clear
+  when the turn ends.
+- **On the stack**: when spells or abilities are on the stack, they appear
+  inline at the live tip of History (top first, pushing older history upward so
+  the latest moves stay visible), each entry with its card and who controls it;
+  a stack entry an action applies to is outlined. A line joins every spell or
+  ability on the stack to each of its targets. A spell you are casting, or an
+  ability you are activating, sits at the top with a dashed border (**casting**,
+  **activating**) from the moment you choose it, through its targets and
+  payment, with lines to the targets already chosen; the card leaves your hand.
+- **The decision** is pinned at the bottom of the rail beside your hand: who
+  decides, what they are deciding ("Pay {1}{U} for Accumulate Wisdom"), the
+  complete **Choices** list (expanded by default and collapsible from its count
+  toggle; press a number key to choose one of the first nine), and the action
+  buttons. For mana payments the hint below the prompt says how to pay. It stays
+  steady as different previews appear. Mana and tap symbols in rules text, the
+  prompt, the stack, buttons, menus and choices render as symbols rather than
+  braced text. **Rules detail** holds the engine's full instruction. Passing
+  priority and paying a cost are the primary button (Space), labelled with what
+  it does next: **Resolve** and the spell on top of the stack, the step it moves
+  to ("To combat", "To blockers"), or the cost ("Pay {1}{U}", with the lands it
+  taps dashed on the board and named in the button's accessible name; see
+  [Previewing payments](#previewing-payments)). The label stays on one line; a
+  long one is shortened and its full text is the button's accessible name and
+  tooltip. Declining, and a combat answer that does not name another creature,
+  are separate buttons, so a click on a card never declines. During a live
+  grouped decision (combat or card arrangement) the raw single-step offers fold
+  under a closed disclosure (see [Grouped decisions](#grouped-decisions)).
 
 While the opponent decides, the rail and the opponent's plate say so, with
 the seconds it has taken ("Search 64 is searching · 3 s"), and the rail's
@@ -840,23 +835,23 @@ frame, disconnect or looking back cancels a drag with nothing sent, and
 read-only recordings and Watch never start a drag. With reduced motion, dragged
 cards, lines and selection boxes still follow the pointer directly, without the
 return-to-hand or post-drop travel transitions.
-**Menu** holds the session controls, priority stops, the sharing and Study
-tools and feedback.
+**Settings** holds game controls, priority stops, live analysis, view options
+(including **Card art credits**), and **New game**.
 
 While disconnected or waiting for a submitted choice, the board remains
-readable and actions are unavailable. Reconnect or reload in the same tab to
-recover the actual pending decision. If a choice is rejected because the game
-has advanced, read the refreshed prompt and choose again. A submitted action
-cannot be cancelled; after commitment, costs and revealed information remain
-committed. Reloading a configured launch in its tab resumes that game while its
-server session remains available; a separate tab or another launch has its own
-game. See [Pending input, waits and recovery](#pending-input-waits-and-recovery)
+readable and actions are unavailable. Reconnect or reload to recover the actual
+pending decision. If a choice is rejected because the game has advanced, read
+the refreshed prompt and choose again. A submitted action cannot be cancelled;
+after commitment, costs and revealed information remain committed. Reloading a
+configured launch resumes that game even after a server restart (`/?game=<id>`).
+See [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 if recovery fails.
 
-For bot inspection, open **Watch** or a recording in **Replay**. Their decision
-surface shows the acting seat's permitted view and the complete legal choices
-for that decision. Recorded policy outputs appear only when available; missing
-outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
+For bot inspection, switch setup to **Watch Bot vs Bot** or open any recording
+in **Replay**. Their decision surface shows the acting seat's permitted view
+and the complete legal choices for that decision. Recorded policy outputs
+appear only when available; missing outputs are not reconstructed. See
+[Inspect a replay](#inspect-a-replay).
 
 ### Grouped decisions
 
@@ -940,11 +935,6 @@ items in the group.
   checks the pending `decision_group_command` against the server's accepted commands and
   either settles it or resends the exact submission — never applying it twice
   and never leaving a half-committed group.
-- **Watchers and pilot transfer.** Live grouped descriptors are sent only to
-  the active pilot; watchers never receive private Scry, Surveil or
-  PartitionPiles cards. When
-  pilot control transfers to another participant, any active group is delivered
-  with the role change without reloading.
 - **Identical recordings, Replay and Study.** Applying a group executes the
   exact sequential native actions in order and records one decision per native
   step, byte-for-byte equivalent to submitting one Command at a time. Replay,
@@ -990,21 +980,18 @@ dialog; press **Swap sides** again at any time to swap back.
 | **Auto-tap and priority stops** | Stay with you; an active **Pass turn** (F6) yield clears for the new seat. |
 | **Native mana payment and floats** | Stay with each seat as the game started. |
 | **Show analysis** | If on, stays on and follows you to your new seat without holding play; earlier choices keep their **analysis shown** mark. |
-| **Next game** (`Rematch`, `Swap play/draw`, `Edit next game`) | Unchanged, and the session's game number stays the same. **Swap play/draw** is separate: it starts the next game keeping your deck and reversing play/draw. |
+| **Next game** (`Rematch`, `Swap play/draw`, `Deal new decks`) | Unchanged: the game's saved starting setup is untouched. **Swap play/draw** starts the next game keeping your deck and reversing play/draw. |
 
 **Swap sides** is unavailable once the game is over, in **Watch**, while a
-**Study** branch is active, while a bot retry (**Retry bot decision** / **Retry
-search**) is pending, or when you are watching a shared table rather than
-piloting it. If loading the bot for the seat you are leaving fails, Academy
+**Study** branch is active, or while a bot retry (**Retry bot decision** / **Retry
+search**) is pending. If loading the bot for the seat you are leaving fails, Academy
 shows the reason under the button and leaves the live game untouched so you can
 keep playing.
 
 The game remains one game through the end:
 
-- **Games and My record**: it appears once in **Games** with each player in
-  their final seat and deck, and counts once in **My record** by how it ends (a
-  win if the seat you finished in won). A game started via **Play on from here**
-  stays out of **My record** even if you swap sides during it.
+- **History**: it appears once in **History** with each player in their final
+  seat and deck.
 - **Review and Analysis**: **Review** defaults **Perspective** to **Follow the
   chooser** so the bottom seat follows you across each swap (fixed Seat 1 and
   Seat 2 perspectives remain selectable, labelled by native seat and deck), names
@@ -1161,29 +1148,34 @@ position and names the revision it belongs to.
 
 **Recovering a submitted choice.** If the connection drops just after you act,
 reconnect or reload in the same tab and wait for recovery before choosing again.
-Academy keeps the unresolved submission with that tab's game identity and
-checks whether it was accepted. If it must resend, it resends that exact
-submission so an accepted choice is not applied twice. If the decision or your
-permission changed, Academy reports the stale or unknown outcome and refreshes
-the board. Going back or clearing a selection cannot cancel a submission.
+Academy keeps the unresolved submission in that tab's
+`sessionStorage['academy.tab.<game>']` and checks whether it was accepted. If it
+must resend, it resends that exact submission so an accepted choice is not
+applied twice. If the decision has moved on (including across a server restart,
+where prompt ids advance past every stored prompt id), Academy reports the
+stale outcome and refreshes the board. Going back or clearing a selection
+cannot cancel a submission.
 In live Watch, recovery checks the recorded position before another step;
 do not repeat a step just because its reply was lost. If that read fails,
 **Refresh saved head** must establish the frontier before production is available.
 After a bot failure, recorded navigation remains available, but playback stops
 at the live edge. Only **Retry bot decision** or **Retry search** retries it.
 
-**When recovery is impossible.** A server restart or an expired live session
-shows **Interrupted**, retaining the last known board and a recording link
-when available. Saved recordings preserve available evidence; they cannot
-restore the live game. A read-only snapshot of the last published board,
-opponent identity and interruption reason survives further reloads in the same
-tab. The header reads **Interrupted** and the choices are labeled **Last recorded
-choices**; they do not invite live input, even when the server returns. The snapshot
-contains no resume credential and cannot submit actions. Choose
-**New game** explicitly to return to setup and retire that snapshot.
-Academy never silently deals a replacement or replays your submissions into
-a new game. Keep the original tab open for temporary connection failures:
-resume credentials and unresolved input belong to that tab's session storage.
+**Across idle eviction and server restarts.** A game with an open board never
+idles out, however long you think. A game nobody has open leaves server memory
+after 15 minutes, and neither that nor a server restart ends it. Reloading the
+page, opening `/`, or pressing **Resume** in **History** rebuilds the live game
+by stepping the engine through the stored record and resumes at the exact
+pending decision with the same game id and history. Rebuilding a game advances
+its revision, so a choice submitted before the game left memory is refused as
+stale and the board shows the recovered decision to choose again. Academy never
+silently deals a replacement or replays a stale submission into a newer state. If the opponent's policy
+cannot be loaded on resume, Academy shows the error with a link to **Replay**
+and leaves the game unfinished so you can restart with the policy and resume.
+If the engine contradicts the stored steps, Academy refuses with
+`"no longer plays as recorded at step N"`, marks `record_diverged` (no winner
+invented), and links to **Replay**. Unfinished Watch games are not rebuilt
+after eviction or restart; they stay readable in Replay.
 
 Back, Escape and clear controls discard only unsubmitted local selections.
 Once an action commits, its costs and revealed information remain committed.
@@ -1216,7 +1208,9 @@ or **Blockers** waits for a combat with attacking creatures before spending
 itself. The Menu shows a once stop as checked. The stops are one Tab stop: arrow
 keys move between them, up and down between the two turns, and Space or Enter
 presses one. Stops are a setting of live play: a recording's bar shows only the
-steps of the turn, with the current one marked.
+steps of the turn, with the current one marked. A stops change on a finished
+game's result card is this browser's preference for the next game; the finished
+game and its record do not change.
 
 **Your turn** and **Opponent turn** say whose turn contains the window. The
 available steps are upkeep, draw, first main, beginning of combat, declare
@@ -1450,34 +1444,30 @@ Art is requested only for cards your view already shows. An opponent's closed
 decklist causes no request, so the cache and its timing say nothing about
 cards you have not seen.
 
-**Card art credits** in the page footer lists the artist, source and copyright
-of every image shown so far. The package itself contains no card images, and
-deleting the cache directory is safe.
+**Card art credits** in the Board's **Settings → View** and on the setup screen
+lists the artist, source and copyright of every image shown so far. The package
+itself contains no card images, and deleting the cache directory is safe.
 
 ### Inspect a replay
 
-A recording opens on the same board as live play, read-only. Open **Games**,
-choose a game, and step through it; human games, watched bot games and
-imported training or evaluation games all use these controls. At the end of a
-game you played, **Review this game** on the result card opens it from the
-first position.
+A recording opens on the same board as live play, read-only. Open **History**
+(`/games`), choose a game, and press **Replay** (`/replay?trace=<id>`). Human
+games (finished or unfinished), watched bot games, and imported training or
+evaluation games all use these controls. At the end of a game you played,
+**Review this game** on the result card opens it from the first position. Bare
+`/replay` redirects to `/games`.
 
-Every game you start is recorded as you play. **Games** (`/games`) lists them,
-newest first, with filters for player, deck, status, result and date. Player 1
-is always on the play. A finished game you played shows its turns and how long
-it took, and how many of your choices were made with
-[analysis shown](#analysis-while-you-play). **My games** narrows the list to
-this browser, under **My record**: your completed games across sessions,
-grouped by opponent and by the two decks, with wins, losses and draws, the win
-rate with its 95% Wilson interval, and **With analysis**, the games among them
-with a choice made while analysis was shown. A game
-[played on](#analysis) from another is listed but not counted there.
-Draws count as games, not wins. Rows that differ only in seat or disclosure are
-combined. These are counts of recorded games, not a rating. A trained bot appears under its
-[short name and digest](#how-a-trained-opponent-is-named). Open any recorded
-game file through **Watch → Open a game file**, or
-[launch a replay directly](#open-a-replay-directly). `/replay` alone lists
-recent recordings.
+Every game you start is recorded as you play. **History** (`/games`) lists
+every game in `traces_dir`, newest first, with search, **Open a recorded game
+file**, and filters for pairing (**Human vs Bot**, **Bot vs Bot**), status
+(**In progress**, **Completed**, **Stopped**), bot, deck and date. Player 1 is
+always on the play; the human seat is recorded as **You**. Every row has
+**Replay**, and every unfinished played game also has **Resume** (`/?game=<id>`).
+Played games show their turns, duration, recorded steps, and how many of your
+choices were made with [analysis shown](#analysis-while-you-play). A trained
+bot appears under its [short name and digest](#how-a-trained-opponent-is-named).
+You can also [launch a replay directly](#open-a-replay-directly) from the
+command line.
 
 #### Follow the timeline
 
@@ -1485,7 +1475,7 @@ recent recordings.
 |---|---|
 | Choice | The chooser's recorded board and every legal offer, on its card and in the rail's numbered list, read-only. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). |
 | Consequences | The board after the action, with what it did, and why, in the rail's history; selecting a line inside the transition shows its per-line board. In a game you played this is your own view, your hand included, whoever acts next. |
-| Result or latest state | The final board under a result card, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner, and one opened from a file says why and where it stops. |
+| Result or latest state | The final board under a result card, or the latest retained state of an unfinished recording. An unfinished or stopped recording has no invented winner, and one opened from a file says why and where it stops. |
 
 The transport bar sits where live play has your hand's input:
 
@@ -1497,11 +1487,12 @@ The transport bar sits where live play has your hand's input:
 | Scrubber | arrows when focused | Any position; turns are ticked and choices marked under it |
 | | Home / End | The first or last position |
 
-Under it, the **Decisions** strip draws the game as one line: each choice is a
+Opened from its toggle in the bottom bar, the **Decisions** strip floats as an
+overlay over the lower board (dismissible with **×** or `Esc`): each choice is a
 tick, coloured by whose it was, or a point on that chooser's value line where
-a value was recorded; turns are ruled and numbered. Click it to jump. It is
-open in Replay and folded in live play, where it counts decisions; positions
-from before a reload open only in Review after the game. A line of the rail's
+a value was recorded; turns are ruled and numbered. Click it to jump. It starts
+folded in both Replay and live play so the board and hand stay unobstructed;
+positions from before a reload open only in Review after the game. A line of the rail's
 history jumps to its transition position and per-line board, with what it is
 about raised; in Review each move is numbered by turn in its gutter, with the
 whole move in its tooltip, and the history takes the rail's remaining height.
@@ -1511,8 +1502,7 @@ answers only in the choices list. Keys never act while you type in a field.
 The replay address keeps the position, the perspective and the information
 view. Reloading restores them, with a saved position in this tab as a
 fallback. A position that is no longer available is explained so you can
-select another. Opening a recording still requires its normal access
-permissions; copying an address does not copy a participant credential.
+select another.
 
 #### Perspective
 
@@ -1524,16 +1514,16 @@ fixed seat (the default for an unswapped game you played).
 Turning the board never reveals a hand or changes the recorded policy inputs.
 
 At bot choices, the acting view shows what that bot was allowed to see.
-**Show both hands** appears where spectator reveal is authorized: at Watch
-choices that captured a spectator view, and at every position of a game you
-played once it has finished. It does not enrich the bot's recorded evidence or
-acting-view history. In Watch and imported games, consequences and result
-boards use the recorded view of the seat named in the menu's perspective line
-when a private post-action view was not captured.
+**Show both hands** appears at Watch choices that captured a spectator view and
+at every position of a played game once it has finished (`game_over`). It does
+not enrich the bot's recorded evidence or acting-view history. In Watch and
+imported games, consequences and result boards use the recorded view of the
+seat named in the menu's perspective line when a private post-action view was
+not captured.
 
-**Menu** holds the recording's kind and status, each seat's identity (policy
-ID, runner, provenance), **Refresh saved head**, a note for the position,
-**Watch another matchup** for a Watch, and feedback for your own games.
+**Settings** holds the recording's kind and status, each seat's identity
+(policy ID, runner, provenance), **Refresh saved head**, analysis controls, and
+game numbers.
 
 A live decision already being produced may finish saving while you read; your
 selected board stays put. A pending Search timeout is retained across reload
@@ -1542,16 +1532,19 @@ retries that decision; browsing saved positions never retries it.
 
 #### Analysis
 
-An analysis reads a game you played against a policy: at each of your
-decisions with more than one legal action, what that policy would have done
-in your seat. If you [swapped sides mid-game](#swapping-sides-mid-game), it
-reads all of your deliberate decisions across both seats, and **See its line**
-and **Play on from here** act from the seat you piloted at that decision. Academy replays the game with the policy in your seat; it sees
-only what your seat saw, and the game follows the moves you made. Opening
-Review of your own game starts an analysis when the game has none yet: by your
+An analysis reads a played game against a policy: at each of your decisions
+with more than one legal action, what that policy would have done in your
+seat. If you [swapped sides mid-game](#swapping-sides-mid-game), it reads all
+of your deliberate decisions across both seats, and **See its line** and
+**Play on from here** act from the seat you piloted at that decision. Academy
+replays the game with the policy in your seat; it sees only what your seat saw,
+and the game follows the moves you made. Opening Replay on a finished played
+game starts an analysis automatically when the game has none yet: by your
 opponent's policy when it is a registered trained policy, otherwise by
-Academy's recommended policy, the one Setup offers first. Review is usable at
-once; **Analysing 34 of 81** counts up while the marks fill in.
+Academy's recommended policy, the one setup offers first. On an unfinished
+played game, analysis runs only when you click **Analyse** (never
+automatically). Replay is usable at once; **Analysing 34 of 81** counts up
+while the marks fill in.
 
 At one of your choices the heading reads **Analysis by** the policy, and every
 legal option carries its probability and the policy's estimate after it, 0 to
@@ -1583,42 +1576,41 @@ Differs · 62% on its first choice, 8% on yours** or **Its expected score moved
 48 → 71 by your next decision**. A reading that barely moves, as an untrained
 policy's does, has none.
 
-**See its line**, at any analysed decision of your own game, plays the
-policy's first choice there and carries on: the policy's first choice at each
-of your decisions and your opponent's own choice at theirs, to the end of the
-next turn or the end of the game. The board shows each move from your seat;
-**Previous** and **Next**, or the arrow keys, step through it, and **Return to
-the game**, or Escape, goes back to the decision. The line is one play-out of
-the real game's cards, not a forecast, and nothing about it is saved. Your
-opponent's moves are named once the game is over; in a game that stopped
-early they read **Opponent's move**. Priority passes fold into the move
-before them.
+**See its line**, at any analysed decision of a played game (finished or
+unfinished), plays the policy's first choice there and carries on: the policy's
+first choice at each of your decisions and your opponent's own choice at theirs,
+to the end of the next turn or the end of the game. The board shows each move
+from your seat; **Previous** and **Next**, or the arrow keys, step through it,
+and **Return to the game**, or Escape, goes back to the decision. The line is
+one play-out of the real game's cards, not a forecast, and nothing about it is
+saved. Your opponent's moves are named once the game is over; in an unfinished
+or stopped game they read **Opponent's move**. Priority passes fold into the
+move before them.
 
-**Play on from here**, at any of your decisions of a finished game you played,
-opens Play with that game's decks, cards and opponent and replays its moves up
-to the decision; **Play on** starts it, and from there you choose and the
-opponent plays as in any game. It is a new game in your history: Review names
-the game it came from, its row in Games reads **played on from another game**,
-and **My record** leaves it out, since its opening moves were not played in it.
-The moves before the decision are not listed in the new game's live move list;
-its Review lists them all. If this build no longer plays the old game the same
-way, Play says which step differs and nothing starts.
+**Play on from here**, at any of your deliberate decisions of any saved played
+game (finished or unfinished), opens Play with that game's decks, cards and
+opponent and replays its moves up to the decision; **Play on** starts it, and
+from there you choose and the opponent plays as in any game. It is a new game
+in History: Replay names the game it came from and its row in History reads
+**played on from another game**. The moves before the decision are not listed
+in the new game's live move list; its Replay lists them all. If this build no
+longer plays the old game the same way, Play says which step differs and
+nothing starts.
 
 **Analyse with…** in **Settings** runs any other registered trained policy; each
 run is saved beside the game, and **Shown** switches between them. Analyses
-are never part of the game's recording or its exports. Readers of a shared
-finished game see its saved analyses; only you can start one.
+are never part of the game's recording or its exports.
 
 | You see | Why | What to do |
 |---|---|---|
-| **No analysis yet · Analyse with… in Settings** | Your opponent was Random, Passive, Heuristic or Search, and the recommended policy cannot read these decks. | Choose a policy under **Analyse with…**. |
+| **No analysis yet · Analyse with… in Settings** | Your opponent was Random, Passive, Heuristic or Search, and the recommended policy cannot read these decks, or the game is unfinished. | Choose a policy under **Analyse with…** (or click **Analyse**). |
 | **No analysis: no registered policy can read this game** | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
 | **Analysis stopped after 12 of 81 decisions**, with a reason | The policy failed there, the game stopped replaying as recorded, or Academy restarted. Earlier decisions keep their readings. | **Analyse again**. |
 | A line naming another build | The game was recorded by another world or card set and cannot be replayed here. | Open it with that build. |
 
 A policy with Search is not offered: Search plays out from the real hidden
-cards. One analysis runs per game at a time; a stopped or interrupted game is
-analysed up to its last recorded position.
+cards. One analysis runs per game at a time; an unfinished or stopped game is
+analysed up to its latest recorded position.
 
 #### Analysis while you play
 
@@ -1632,7 +1624,7 @@ heading reads **Analysis by** the policy, and each option on its card and row
 carries the policy's probability and its estimate after it. Nothing is
 chosen, raised or reordered for you, and no key plays the policy's choice.
 
-Turning it on also opens the strip under the board, which draws the policy's
+Turning it on also opens the Decisions overlay over the lower board, which draws the policy's
 estimate from your seat at each of your decisions this game, those made
 before you turned it on included (read after the fact, so they mark nothing), on Review's
 fixed 0–100 axis; hovering it names the nearest point by the move before it
@@ -1645,8 +1637,8 @@ The board never waits for a reading: it arrives in its own message after the
 decision, and a choice you make before it arrives reads as made without it.
 
 Each choice you commit after its reading reached you is saved as made with
-analysis shown. Review marks that move **analysis shown**, **This game**
-counts them, and Games shows them on the game's row and in **My record**.
+analysis shown. Replay marks that move **analysis shown**, **This game**
+counts them, and **History** shows them on the game's row.
 Turning **Show analysis** off stops the marking from your next decision; it
 never unmarks a choice. If you [swap sides mid-game](#swapping-sides-mid-game)
 while it is on, analysis follows you to your new seat and earlier choices keep
@@ -1681,30 +1673,32 @@ chose as Reader would: 8 of 20**, where the policy's first choice was yours,
 and (for games without a mid-game swap) the policy's estimate from your seat at
 the start, at its highest and at the end. A game with choices made while [analysis was
 shown](#analysis-while-you-play) reads **Chosen with analysis shown: 3
-decisions**. A game that stopped early is counted to where it stopped. Academy
-counts each game once, by replaying it when it ends. An older game is counted
-the first time you open it. A game recorded by another build has no counts.
+decisions**. An unfinished or stopped game is counted up to its latest recorded
+step, and the cached counts clear automatically when a resumed game appends new
+moves so the next read recounts fresh numbers. An older game is counted the
+first time you open it. A game recorded by another build has no counts.
 
 #### Continue a live Watch
 
-Open **Watch** (`/replay?watch=1`), select both seats, decks and a seed, then
-press **Start watching**. Each seat uses the same player menu as Play's **Opponent**.
-A managym-only install offers Random and Search; manabot adds Greedy, Heuristic
-and trained checkpoints. The game opens on the replay board and is saved in
-**Games**. **Watch another matchup** in the menu opens setup for another bot game.
+Open Play setup (`/`), switch to **Watch Bot vs Bot** (or launch with
+`managym academy watch --player X --player Y`), select both seats, decks and a
+seed, then press **Start**. Each seat uses the same player menu as Play's
+**Opponent**. A managym-only install offers Random and Search; manabot adds
+Greedy, Heuristic and trained checkpoints. The game opens in **Replay**
+(`/replay?trace=<id>`) and is saved in **History**.
 
 Browsing earlier positions reads the recording. At the latest position of a live
 Watch, **Continue** requests the next bot decision; **Play** can keep producing
 and presenting decisions from there. The status distinguishes reading saved
-data, producing a decision, waiting, finished and interrupted. Imported and
+data, producing a decision, waiting, finished and stopped. Imported and
 completed recordings only play saved data and never run a policy.
 
 If production fails, the recorded choice remains available. After a lost reply,
 refresh the saved latest state before explicitly retrying; the action may already
-have been recorded. Resume credentials stay in this tab's session storage.
-Reload in the same tab to recover a live Watch while its server session exists.
-After a server restart or session expiry, the saved recording remains readable
-subject to its access rules, but the original live producer cannot be resumed.
+have been recorded. Reloading the page recovers a live Watch while its server
+state is still in memory. After a server restart or 15-minute idle eviction,
+the saved Watch recording remains readable in Replay, though live Watch
+production cannot be resumed.
 
 #### Study and older recordings
 
@@ -1712,10 +1706,14 @@ At an eligible choice, **Try another line** pauses playback and live production
 and opens an isolated branch on the same board: the historical offers become
 live, and choosing one plays it against the branch. **Return to recorded decision** restores that
 exact choice and its history; the original recording and result stay unchanged.
-A fresh branch requires the server's retained Study state, so the button
-appears only while that state exists; once it has expired, recorded playback
-remains available, and in your own games **Play on from here** starts a new
-game from the decision instead.
+Study roots live in server memory only, so **Try another line** appears only
+while that game's roots are in memory. Starting a rematch or a new game leaves
+the game just played in memory until it idles out, so its lines stay open to
+Study. After idle eviction or a server restart,
+**Resume** (or **Play on from here**) on a played game rebuilds Study roots for
+every recorded decision; on a game nobody has resumed yet, recorded playback
+and **Play on from here** remain available while **Try another line** waits
+until the game is resumed.
 
 Older recordings use the same viewer with the frames they retained. Missing
 legal offers, Study support, consequences or policy outputs are explicitly
@@ -1745,8 +1743,8 @@ holds private deal seeds; keep it private.
 2. Open one from the command line with
    `uv run --no-project managym academy replay <file> --game <n>`
    ([Open a replay directly](#open-a-replay-directly)) and skip to step 4, or
-   launch `uv run --no-project managym academy`, open **Watch** at
-   `http://127.0.0.1:8000/replay?watch=1` and use **Open a game file**.
+   launch `uv run --no-project managym academy`, open **History**
+   (`http://127.0.0.1:8000/games`) and use **Open a game file**.
 3. If it contains several games, select a **Recorded game** and click
    **Open selected game**. A single game opens automatically.
 4. Use **Next**, **Previous**, or **Play** to follow choices, consequences and
@@ -1803,9 +1801,9 @@ The live board does not load example analysis from a repository checkout.
 
 Academy shows the first and last parts of a long checkpoint name, followed by
 its identity's first ten characters. For example, `run/checkpoints/step_8`
-appears as `run/…/step_8 · 7ac5d442da`. Human names are never shortened this way.
+appears as `run/…/step_8 · 7ac5d442da`. The human seat is recorded as **You**.
 
-The same compact identity appears on the board, in Games, Replay and Watch.
+The same compact identity appears on the board, in History, Replay and Watch.
 Open **status** on the player's bar with a mouse or Tab and Enter to
 read the full recorded name, identity, producer and available provenance.
 Registered policies also retain the runner, artifact digests and configuration.
@@ -1815,8 +1813,8 @@ player even with the same checkpoint. Artifact digests remain available separate
 for grouping recordings by weights. Missing provenance stays absent.
 
 Shortening is display only. Recordings, exported games and filter links keep
-the full name and identity. Search Games by either; the Bot version filter uses
-the full recorded identity.
+the full name and identity. Search **History** by either, or filter with the
+**Bot** filter.
 
 ### Play and watch a trained checkpoint
 
@@ -1831,7 +1829,8 @@ uv run --no-project managym academy --policy challenger.json watch \
     --player challenger --player random
 ```
 
-Watch opens at setup with both seats selected. Choose decks and press **Start watching**.
+Play opens at setup in **Watch Bot vs Bot** mode with both seats selected.
+Choose decks and press **Start**.
 Either seat can use a registered policy. **Registered policy** and **Policy**
 use the same direct selection in Play and Watch; provider and runner details
 remain available as provenance. They preserve an
@@ -1924,9 +1923,8 @@ raw-policy fallback.
 
 On a timeout, no bot action commits. The pending decision remains on the board
 with **Retry search**. Only an explicit retry tries it again; reconnecting or
-changing priority stops does not. The retry checks the match, revision and
-pilot authority. Other search failures report their reason without substituting
-another policy.
+changing priority stops does not. The retry checks the match and revision.
+Other search failures report their reason without substituting another policy.
 
 Watch shows **Raw policy**, **Search values** and **Updated policy**, alongside
 belief, budget, elapsed/ceiling seconds, rollouts, regularization, the exact
@@ -2018,11 +2016,12 @@ matches its provider, artifacts and config with a different runner, it explains
 that change and offers **Reselect**. Nothing is selected automatically. Unknown
 or ambiguous old IDs stay unavailable. The browser
 selects that opaque identity and never submits an import path or model path.
-Recordings retain the complete descriptor and genuine outputs once. Finished
-replays need no policy reload, original checkpoint or installed provider.
-Live objects survive browser reload with their server; a backend restart needs
-the factory or saved specification again. Arbitrary Python objects are never
-pickled into recordings. Historical checkpoint recordings remain readable.
+Recordings retain the complete descriptor and genuine outputs once. Replays
+need no policy reload, original checkpoint or installed provider.
+Unfinished played games survive browser reload, idle eviction and server
+restart as long as the factory or saved specification is registered on the
+restarted server. Arbitrary Python objects are never pickled into recordings.
+Historical checkpoint recordings remain readable.
 
 ### Troubleshooting
 
@@ -2042,7 +2041,8 @@ and a message, and exits with status 2. From Python the same `code` and
 | `setup.invalid` | The combination is not allowed, for example `--opponent search` with `--decklists closed`, or a policy bound to different deck setups. The message says which. |
 | `policy.unavailable`, `opponent.unavailable`, `player.unavailable` | The policy or provider is missing, its specification is invalid, or its artifacts cannot run in this engine. The message says which. See [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint). |
 | `replay.missing` | No such trace file, and no recording with that id in this traces directory. Check the path (use `pathlib.Path` for files in Python), or pass the `--traces-dir` the game was recorded in. |
-| `participant_credential_required` in the browser after READY | The recording is private or unfinished and this browser at this address has no participant credential. Use the same browser and address (including port) where **Games** lists it, or open a shared, finished recording. |
+| Resume refuses because a policy cannot be loaded | The opponent policy is missing or not registered on this server (for example, restarted without `--policy`). The game stays unfinished in **History**; restart with the policy and click **Resume**, or open **Replay** to inspect what was played. |
+| Resume refuses with `no longer plays as recorded at step N` | This engine build contradicts the stored moves. The game is marked `record_diverged` (no winner invented) and stays openable in **Replay**. |
 | `replay.unreadable` | The file is not a game file: not JSON, JSONL or gzip of either, or it holds no game records. Use a run's `games/` directory or one of its files, not a metrics or summary file. |
 | `replay.ambiguous` | The file or directory holds several games and none was selected. Select one by index or digest: `--game` in the CLI, or `game=` in Python. |
 | `replay.game_unknown` | The selection is past the end of the file, or matches no digest or more than one. A recording id already names one game; omit `--game` (Python `game=`) when opening it. Selection applies only within a file or directory. |
@@ -2059,7 +2059,7 @@ and a message, and exits with status 2. From Python the same `code` and
 | A checkpoint shows **not recorded** for its update | No `run.json` in the listed directories records those bytes. List the run directory rather than the file alone. A run that recorded no counts for its checkpoints stays **not recorded**. |
 | `The selected opponent checkpoint is unavailable.` | The file was moved or deleted after it was listed. Restore it or choose another; Academy does not pick a replacement. |
 | `The selected policy changed; restore the pinned artifact and runner, or restart Academy and explicitly reselect the policy.` | The artifact or runner differs from the pinned Policy ID. Restore the original execution, or restart Academy and deliberately select the new entry. |
-| Earlier games are missing from **Games** | Academy was launched from another directory. Launch from the original one or pass its `--traces-dir`. |
+| Earlier games are missing from **History** | Academy was launched from another directory. Launch from the original one or pass its `--traces-dir`. |
 | `No matching distribution found for managym` | No wheel exists for this Python or platform. See [supported platforms](engine-python.md). |
 
 ### From a checkout
@@ -2320,58 +2320,44 @@ bytes before play, refuses an incompatible or replaced file with the sentence
 the menu shows, and records the identity as the trace's `opponent_checkpoint`
 in Play and in each seat's recorded player in Watch.
 
-To serve the same SPA/ASGI entrypoint as the hosted app:
-
-```sh
-npm --prefix academy/ui ci
-ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
-ACADEMY_FRONTEND_BUILD="$PWD/academy/ui/build" \
-ACADEMY_TRACES_DIR="$PWD/.runs/human-play" \
-ACADEMY_PLAY_RECORD_ORIGIN=human_exploratory \
-OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-uv run uvicorn deploy.play.asgi:app --host 127.0.0.1 --port 8000
-```
-
-For a parallel preview, give it a fresh absolute `ACADEMY_FRONTEND_BUILD`, its
-own `ACADEMY_TRACES_DIR` and port. Scored candidate evaluation on the selected
-matchup (`uv run python -m manabot.eval.evaluate`) is described in
+Scored candidate evaluation on the selected matchup (`uv run python -m manabot.eval.evaluate`) is described in
 [evaluation.md](evaluation.md).
 
-## Attempts and shared history
+## Attempts and history
 
-`managym/academy/attempts.py` stores attempts in SQLite at
+`managym/academy/attempts.py` stores games in SQLite at
 `$ACADEMY_TRACES_DIR/play.sqlite` (default `academy/traces/`); new traces and
-attempt metadata commit in one transaction, and legacy JSON traces are
-read-only. Attempts are saved at start and at each surfaced revision.
-Replacement, expiry, runtime error and authoritative completion have distinct
-ending reasons; a disconnect leaves the attempt active, and after a server
-restart it becomes `interrupted` with no invented winner.
+attempt metadata commit in one transaction, and legacy JSON traces remain
+read-only. Each game is keyed by its id (`attempts.id`) and saved at start and
+at each surfaced revision. Disconnecting, starting another game, 15-minute idle
+eviction and server restart do not end a game — only authoritative rules
+completion (`game_over`) or a runtime/divergence error (`record_diverged`) does.
+History and Replay name three statuses: `active` (in progress), `completed`
+and `stopped`. Existing databases keep legacy `interrupted` rows and legacy
+`stopped` rows (`server_restart`, `server_shutdown`, `session_expired`,
+`new_game`) readable and resumable without rewriting them; they read as
+`active`, and leave legacy tables/columns unread so
+an older binary can still open the file.
 
-Record version 2 tables: `attempts`, `attempt_players` (both seats: public
+Fresh databases create `attempts`, `attempt_players` (both seats: public
 `player_id`, `kind` human/bot, name, deck, `version` = exact checkpoint digest
-for bots), `players` (private browser credential hash to public human ID) and
-`feedback` (note, author, optional validated decision address).
-`attempts.participant_id` is private table authorization. `deal_seed` is
-hexadecimal text to keep all 64 bits. The file holds private seeds and
-canonical Commands: keep it private and query it with
-`sqlite3 -readonly`, never a public endpoint. Do not run old and new server
-processes against one database during a schema migration.
+for bots; the human seat is recorded as `"You"`, `human:local`), `analyses`,
+and `analysed_decisions`. `deal_seed` is hexadecimal text to keep all 64 bits.
+The file holds private seeds and canonical Commands: keep it private and query
+it with `sqlite3 -readonly`, never a public endpoint.
 
 `ACADEMY_PLAY_RECORD_ORIGIN` declares provenance: `human_exploratory`,
 `automated_validation`, `bot_evaluation` or `training` (default `unknown`). It
 is operator-supplied, not detection; never run automated proofs against a
 human-labelled server.
 
-`/games` lists games across players or **My games**, filterable by name,
-fingerprint, pairing, deck, status, result and date, with filters and cursors
-in the URL. `GET /api/traces` takes `scope=all|mine`, `q`, `player`, `other`,
-`pairing`, `version`, `deck`, `status`, `result`, `after`, `before`, `cursor`
-and `limit` (1–100, default 50), newest first, with `X-Etude-Next-Cursor` for
-the next page and `x-etude-player-token` for the browser player. Permissions
-apply in SQL before filtering. Only authoritatively completed games are
-replayable by non-participants and enable the post-game reveal; unfinished
-replays and feedback remain participant-only. Identity is a browser credential
-with no account recovery.
+`/games` lists every game in `traces_dir`, newest first, with search and
+filters for pairing (`human-bot`, `bot-bot`), status (In progress, Completed,
+Stopped), bot, deck and date, with filters and cursors in the URL.
+`GET /api/traces` returns those summaries newest first (`limit` 1–100, default
+50) with `resumable` and `X-Etude-Next-Cursor` pagination, with no player
+credential headers and no 403 wall. Every saved game, finished or unfinished,
+is readable in Replay.
 
 ## Experience proof gate
 

@@ -22,7 +22,7 @@ from managym.academy.analysis import (
     analysing_policies,
     policy_admissions,
 )
-from managym.academy.attempts import AttemptStore, RetainedAttempt, participant_id
+from managym.academy.attempts import AttemptStore, RetainedAttempt
 from managym.academy.opponent import set_policy_registry
 from managym.academy.recording import record_of
 from managym.academy.trace import academy_actions
@@ -38,8 +38,6 @@ from managym.replay import walk
 from managym.search import SearchConfig, search_descriptor
 from tests.academy.socket_messages import settled_message
 from tests.academy.test_played_replay import BOLT, play
-
-TOKEN = "t" * 36
 
 
 @dataclass
@@ -141,8 +139,6 @@ def finished(tmp_path: Path, **config: Any) -> RetainedAttempt:
         }
     )
     play(game, random.Random(3))
-    with sqlite3.connect(tmp_path / "play.sqlite") as db:
-        db.execute("UPDATE attempts SET participant_id=?", (participant_id(TOKEN),))
     attempt = game.attempt_store.load_attempt(game.match_id)
     assert attempt is not None and attempt.trace["end_reason"] == "game_over"
     return attempt
@@ -206,10 +202,6 @@ def test_a_policy_failure_keeps_the_decisions_before_it(
     assert len(read) == 3
 
 
-def headers() -> dict[str, str]:
-    return {"x-etude-participant-token": TOKEN}
-
-
 def wait_complete(client: TestClient, trace_id: str) -> dict[str, Any]:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
@@ -246,15 +238,7 @@ def test_review_analyses_a_game_and_saves_it_beside_the_game(
     # The opponent's own policy opens by default.
     assert choices["default"] == key
     assert client.get(f"/api/traces/{trace_id}/analyses").json()["analyses"] == []
-    assert (
-        client.post(
-            f"/api/traces/{trace_id}/analyses", json={"policy": key}
-        ).status_code
-        == 403
-    )
-    started = client.post(
-        f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
-    )
+    started = client.post(f"/api/traces/{trace_id}/analyses", json={"policy": key})
     assert started.status_code == 200, started.text
     body = wait_complete(client, trace_id)
     analysis = body["analyses"][-1]
@@ -263,16 +247,14 @@ def test_review_analyses_a_game_and_saves_it_beside_the_game(
     assert [d["event"] for d in analysis["decisions"]] == choices["events"]
     assert analysis["total"] == len(choices["events"])
     # A second analysis of the same game is its own row.
-    client.post(
-        f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
-    )
+    client.post(f"/api/traces/{trace_id}/analyses", json={"policy": key})
     assert len(wait_complete(client, trace_id)["analyses"]) == 2
     # The game's own row is untouched.
     with store.connect() as db:
         (after,) = db.execute("SELECT trace_json FROM attempts").fetchone()
     assert after == before
     assert "analys" not in json.dumps(
-        client.get(f"/api/traces/{trace_id}", headers=headers()).json()
+        client.get(f"/api/traces/{trace_id}").json()
     ).replace("analysis_observation", "")
 
 
@@ -311,9 +293,7 @@ def test_analysis_by_search_is_refused(
             "policies"
         ]
     )
-    refused = client.post(
-        f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
-    )
+    refused = client.post(f"/api/traces/{trace_id}/analyses", json={"policy": key})
     assert refused.status_code == 409
     assert refused.json()["detail"] == "analysis_by_search_refused"
 
@@ -343,9 +323,7 @@ def test_see_its_line_plays_the_policys_first_choice_on_from_a_decision(
     with store.connect() as db:
         trace_id, before = db.execute("SELECT id, trace_json FROM attempts").fetchone()
     client = TestClient(server.app)
-    client.post(
-        f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
-    )
+    client.post(f"/api/traces/{trace_id}/analyses", json={"policy": key})
     analysis = wait_complete(client, trace_id)["analyses"][-1]
     # A decision where the person did not play the Reader's first choice (its last offer).
     decision = next(
@@ -354,8 +332,7 @@ def test_see_its_line_plays_the_policys_first_choice_on_from_a_decision(
         if d["played"] != len(d["annotation"]["probabilities"]) - 1
     )
     path = f"/api/traces/{trace_id}/analyses/{analysis['id']}/line"
-    assert client.post(path, json={"event": decision["event"]}).status_code == 403
-    line = client.post(path, json={"event": decision["event"]}, headers=headers())
+    line = client.post(path, json={"event": decision["event"]})
     assert line.status_code == 200, line.text
     body = line.json()
     first = len(decision["annotation"]["probabilities"]) - 1
@@ -380,7 +357,7 @@ def test_see_its_line_plays_the_policys_first_choice_on_from_a_decision(
         (after,) = db.execute("SELECT trace_json FROM attempts").fetchone()
     assert after == before
     assert len(client.get(f"/api/traces/{trace_id}/analyses").json()["analyses"]) == 1
-    unanalysed = client.post(path, json={"event": -1}, headers=headers())
+    unanalysed = client.post(path, json={"event": -1})
     assert unanalysed.status_code == 404
 
 
@@ -444,7 +421,7 @@ def test_shown_analysis_reads_each_decision_live_and_marks_it(
     commit_first(game, 0)
     commit_first(game, 1)
     delivered = Delivered()
-    with pytest.raises(server.TableDispatchError, match="cannot read"):
+    with pytest.raises(server.PlayRequestError, match="cannot read"):
         game.show_analysis(True, "0" * 64, delivered)
     state = game.show_analysis(True, None, delivered)
     assert state["shown"] and state["policy"]["sha256"] == key
@@ -530,7 +507,7 @@ class CountedFactory(ReadingFactory):
 
     def admit(self, setup: Sequence[managym.PlayerConfig]) -> None:
         self.admitted_under_lock.append(
-            any(record.lock.locked() for record in server.SESSION_REGISTRY.values())
+            any(record.lock.locked() for record in server.LIVE_GAMES.values())
         )
 
 
@@ -550,9 +527,7 @@ def test_reviewing_a_game_again_admits_no_policy_again(
         assert [p["sha256"] for p in body["policies"]] == [key]
     # Two games with the same decks: one admission between them.
     assert len(factory.admitted_under_lock) == 1
-    started = client.post(
-        f"/api/traces/{ids[0]}/analyses", json={"policy": key}, headers=headers()
-    )
+    started = client.post(f"/api/traces/{ids[0]}/analyses", json={"policy": key})
     assert started.status_code == 200, started.text
     # Only loading the runner admits again.
     assert len(factory.admitted_under_lock) == 2
@@ -569,7 +544,7 @@ def test_showing_analysis_admits_policies_off_the_game_lock(
 ) -> None:
     factory = CountedFactory()
     key = registry.register(factory)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     config = {
         "hero_deck": BOLT,
         "villain_deck": BOLT,
@@ -587,7 +562,7 @@ def test_showing_analysis_admits_policies_off_the_game_lock(
                     message = settled_message(websocket)
                 assert message["shown"] is shown
                 assert [p["sha256"] for p in message["policies"]] == [key]
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     # Listed once for the game, while its lock was free; the other admissions
     # are each shown analysis's own load, on its worker.
     assert factory.admitted_under_lock[0] is False
@@ -613,14 +588,10 @@ def test_failed_analysis_load_releases_game_slot(
     with store.connect() as db:
         (trace_id,) = db.execute("SELECT id FROM attempts").fetchone()
     client = TestClient(server.app)
-    first = client.post(
-        f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
-    )
+    first = client.post(f"/api/traces/{trace_id}/analyses", json={"policy": key})
     assert first.status_code == 409
     assert trace_id not in server._ANALYSING
     factory.fail_load = False
-    second = client.post(
-        f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
-    )
+    second = client.post(f"/api/traces/{trace_id}/analyses", json={"policy": key})
     assert second.status_code == 200, second.text
     wait_complete(client, trace_id)

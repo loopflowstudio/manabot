@@ -1,6 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { Command, ExperienceFrame } from '../src/lib/types';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 // Payment on the board: the automatic payer's plan is drawn on the lands it
 // would tap, the primary button reads it, and tapping a land yourself is the
 // authority's own offer. Previewing never sends a Command.
@@ -56,7 +59,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
   test(`pay through the plan drawn on the lands at ${width}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
     await track(page);
-    await page.goto('/?setup=1');
+    await page.goto(SETUP);
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
@@ -150,5 +153,33 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     }
     await expect(page.getByTestId('stack-entry').filter({ hasText: 'Lightning Strike' })).toHaveCount(1);
     await expect(planned(page)).toHaveCount(0);
+  });
+}
+
+for (const [mode, deck] of [
+  ['All', '16 Island'],
+  ['Only when usable', '4 Island\n4 Consider'],
+]) {
+  test(`a human can float mana from the chosen land at priority with ${mode}`, async ({page}) => {
+    await page.goto(SETUP);
+    const taps = page.getByRole('combobox', {name: 'Mana floats'});
+    await expect(taps.locator('option:checked')).toHaveText('Off');
+    await taps.selectOption({label: mode});
+    const payment = page.getByRole('combobox', {name: 'Mana payment'});
+    await expect(payment.locator('option:checked')).toHaveText('Manual');
+    await payment.selectOption('auto');
+    await page.getByText('Import decklist files', {exact: true}).click();
+    await page.getByLabel('Use imported decks for the next game').check();
+    await page.getByLabel('Your deck source', {exact: true}).fill(deck);
+    await page.getByLabel('Opponent deck source', {exact: true}).fill('16 Mountain');
+    await page.getByRole('button', {name: 'Start game', exact: true}).click();
+    await page.getByTestId('action-option').filter({ hasText: 'Keep hand' }).click();
+    const actions = page.getByTestId('action-option');
+    await actions.filter({hasText: 'Play Island'}).first().click();
+    const tap = actions.filter({hasText: 'Tap Island for mana'});
+    await expect(tap).toBeEnabled();
+    await page.reload();
+    await tap.click();
+    await expect(tap).toHaveCount(0);
   });
 }

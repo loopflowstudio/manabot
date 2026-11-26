@@ -1,4 +1,3 @@
-import { recordFetch } from './records';
 import type { WorkStatus } from './types';
 import type { RecordedPosition, RecordingIndex } from './recording';
 
@@ -27,10 +26,7 @@ export class ReplayStore {
   private stopWorkPoll = (): void => {};
 
   request(path: string, init: RequestInit = {}): Promise<Response> {
-    const token = sessionStorage.getItem(`etude.watch.${this.id}`);
-    const headers = new Headers(init.headers);
-    if (token) headers.set('x-etude-participant-token', token);
-    return recordFetch(path, {...init, headers});
+    return fetch(path, init);
   }
 
   async api<T>(path: string, body?: unknown): Promise<T> {

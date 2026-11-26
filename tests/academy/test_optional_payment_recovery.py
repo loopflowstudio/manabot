@@ -29,7 +29,7 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     config = {
         "hero_deck": {"Island": 20, "Waterbending Lesson": 8, "Prophetic Prism": 8},
         "villain_deck": {"Plains": 40},
@@ -94,7 +94,7 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
             )
             command = _command(frame, activation, "optional-lost-activation")
 
-        record = server.SESSION_REGISTRY[initial["session_id"]]
+        record = server.LIVE_GAMES[initial["game"]]
         accepted = record.game.hero_command(command)
         assert accepted["status"] == "accepted"
         assert accepted["update"]["frame"]["action_space"] == "MODAL"
@@ -105,8 +105,7 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
             resumed.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             recovery = settled_message(resumed)["recovery"]

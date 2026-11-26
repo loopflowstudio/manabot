@@ -27,3 +27,27 @@ def settled_message(socket: WebSocketTestSession) -> dict[str, Any]:
         ):
             continue
         return message
+
+
+def make_command(
+    frame: dict[str, Any], offer: dict[str, Any], command_id: str
+) -> dict[str, Any]:
+    return {
+        "command_id": command_id,
+        "match_id": frame["match_id"],
+        "expected_revision": frame["revision"],
+        "prompt_id": frame["prompt"]["id"],
+        "offer_id": offer["id"],
+        "answers": [],
+    }
+
+
+def find_offer(
+    frame: dict[str, Any], *, action_type: str, label: str | None = None
+) -> dict[str, Any]:
+    return next(
+        offer
+        for offer in frame["offers"]
+        if offer["action_type"] == action_type
+        and (label is None or offer["label"] == label)
+    )

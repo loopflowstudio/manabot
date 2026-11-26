@@ -30,13 +30,6 @@ SURVEIL_CONFIG: dict[str, Any] = {
 }
 
 
-def _invite(table: dict[str, Any]) -> tuple[str, str]:
-    fragment = str(table["watcher_invite"])
-    assert fragment.startswith("#table=")
-    table_part, token_part = fragment[1:].split("&")
-    return table_part.split("=", 1)[1], token_part.split("=", 1)[1]
-
-
 def _step_command(
     game: server.GameSession,
     frame: ExperienceFrame,
@@ -79,17 +72,14 @@ def _advance_session_to_three_ogres_attack(
 
 def _advance_ws_to_surveil(
     pilot_socket: Any,
-    watcher_socket: Any,
     initial_msg: dict[str, Any],
-    grant_revision: int,
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> dict[str, Any]:
     """Play lands and cast Esper Origins over the socket until Surveil surfaces."""
     pilot_msg = initial_msg
-    watcher_msg: dict[str, Any] = initial_msg
     for step in range(80):
         group = pilot_msg.get("decision_group")
         if isinstance(group, dict) and group.get("kind") == "surveil":
-            return pilot_msg, watcher_msg
+            return pilot_msg
         frame = (
             pilot_msg["update"]["frame"]
             if pilot_msg["type"] == "command_outcome"
@@ -115,7 +105,6 @@ def _advance_ws_to_surveil(
         pilot_socket.send_json(
             {
                 "type": "command",
-                "grant_revision": grant_revision,
                 "command": {
                     "command_id": f"surveil-setup-{step}",
                     "match_id": frame["match_id"],
@@ -127,7 +116,6 @@ def _advance_ws_to_surveil(
             }
         )
         pilot_msg = settled_message(pilot_socket)
-        watcher_msg = settled_message(watcher_socket)
         assert pilot_msg["status"] == "accepted", pilot_msg
     raise AssertionError("did not reach Esper Origins Surveil")
 
@@ -207,21 +195,21 @@ def test_decision_group_command_records_identical_canonical_decisions_and_digest
     assert [row.source for row in grouped_rows] == ["client", "client", "client"]
 
 
-def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
+def test_group_preview_is_read_only_hides_steps_and_enforces_staleness(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": COMBAT_CONFIG})
             initial = settled_message(websocket)
-            record = server.SESSION_REGISTRY[initial["session_id"]]
+            game_id = initial["game"]
+            record = server.LIVE_GAMES[game_id]
             game = record.game
             assert game.env is not None
-            headers = {"x-etude-participant-token": initial["resume_token"]}
-            endpoint = f"/api/sessions/{record.session_id}/decision-group-preview"
+            endpoint = f"/api/games/{game_id}/decision-group-preview"
 
             # Legacy /combat-preview endpoint is removed and returns 404 even with SPA mounted.
             static_dir = tmp_path / "spa"
@@ -236,9 +224,8 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
                 )
                 assert (
                     client.post(
-                        f"/api/sessions/{record.session_id}/combat-preview",
+                        f"/api/games/{game_id}/combat-preview",
                         json={},
-                        headers=headers,
                     ).status_code
                     == 404
                 )
@@ -258,7 +245,6 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
                     "frame_hash": init_frame.frame_hash,
                     "plan": {"kind": "declare_attackers", "attackers": []},
                 },
-                headers=headers,
             )
             assert no_group_resp.status_code == 409
             assert (
@@ -289,15 +275,12 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
                 "plan": {"kind": "declare_attackers", "attackers": ogres[:2]},
             }
 
-            # Missing participant token is forbidden.
-            assert client.post(endpoint, json=plan_body).status_code == 403
-
             before_witness = game.env.search_witness_json()
             before_digest = game.env.state_digest()
             before_prompts = game._next_prompt_id
             before_decisions = len(game.canonical_decisions)
 
-            response = client.post(endpoint, json=plan_body, headers=headers)
+            response = client.post(endpoint, json=plan_body)
             assert response.status_code == 200, response.text
             body = response.json()
             assert set(body) == {
@@ -331,9 +314,7 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
                 {"frame_hash": "0" * 64},
                 {"plan": {"kind": "scry", "top": [], "bottom": []}},
             ):
-                stale = client.post(
-                    endpoint, json={**plan_body, **mutation}, headers=headers
-                )
+                stale = client.post(endpoint, json={**plan_body, **mutation})
                 assert stale.status_code == 409
                 assert stale.json()["detail"] == "decision_group_preview_stale"
 
@@ -343,12 +324,12 @@ def test_websocket_decision_group_command_commits_atomically_with_early_commit_a
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": COMBAT_CONFIG})
             initial = settled_message(websocket)
-            record = server.SESSION_REGISTRY[initial["session_id"]]
+            record = server.LIVE_GAMES[initial["game"]]
             game = record.game
             frame = _advance_session_to_three_ogres_attack(game)
             assert frame.prompt is not None
@@ -585,31 +566,18 @@ def test_decision_group_refused_menace_and_decision_group_incomplete_leave_game_
     assert len(surveil_game.canonical_decisions) == order_decisions
 
 
-def test_decision_group_command_duplicate_id_across_pilot_transfer_and_cross_participant_denial(
+def test_decision_group_command_duplicate_id_is_idempotent(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
-        with (
-            client.websocket_connect("/ws/play") as pilot_socket,
-            client.websocket_connect("/ws/play") as watcher_socket,
-        ):
+        with client.websocket_connect("/ws/play") as pilot_socket:
             pilot_socket.send_json({"type": "new_game", "config": COMBAT_CONFIG})
             initial = settled_message(pilot_socket)
-            table_id, invite_token = _invite(initial["table"])
-            watcher_socket.send_json(
-                {
-                    "type": "join_table",
-                    "table_id": table_id,
-                    "invite_token": invite_token,
-                }
-            )
-            joined = settled_message(watcher_socket)
-            settled_message(pilot_socket)
 
-            record = server.SESSION_REGISTRY[initial["session_id"]]
+            record = server.LIVE_GAMES[initial["game"]]
             game = record.game
             assert game.env is not None
             frame = _advance_session_to_three_ogres_attack(game)
@@ -620,7 +588,6 @@ def test_decision_group_command_duplicate_id_across_pilot_transfer_and_cross_par
 
             group_payload = {
                 "type": "decision_group_command",
-                "grant_revision": 1,
                 "command": {
                     "command_id": "grp-dup-1",
                     "match_id": frame.match_id,
@@ -632,7 +599,6 @@ def test_decision_group_command_duplicate_id_across_pilot_transfer_and_cross_par
             }
             pilot_socket.send_json(group_payload)
             accepted = settled_message(pilot_socket)
-            settled_message(watcher_socket)
             assert accepted["status"] == "accepted"
             receipt = accepted["update"]["receipt"]
             decisions_after = len(game.canonical_decisions)
@@ -648,141 +614,30 @@ def test_decision_group_command_duplicate_id_across_pilot_transfer_and_cross_par
             assert len(game.canonical_decisions) == decisions_after
             assert game.env.state_digest() == digest_after
 
-            # Transfer pilot to watcher.
-            watcher_id = joined["table"]["access"]["identity"]["viewer_id"]
-            pilot_socket.send_json(
-                {
-                    "type": "transfer_pilot",
-                    "grant_revision": 1,
-                    "target_viewer_id": watcher_id,
-                }
-            )
-            settled_message(pilot_socket)
-            settled_message(watcher_socket)
 
-            # Original submitter (now watcher with old grant_revision) still gets duplicate.
-            pilot_socket.send_json(group_payload)
-            dup_after_transfer = settled_message(pilot_socket)
-            assert dup_after_transfer["type"] == "command_outcome"
-            assert dup_after_transfer["status"] == "duplicate"
-            assert dup_after_transfer["receipt"] == receipt
-            assert len(game.canonical_decisions) == decisions_after
-            assert game.env.state_digest() == digest_after
-
-            # Another participant (the new pilot) reusing that command_id gets forbidden.
-            watcher_socket.send_json({**group_payload, "grant_revision": 2})
-            denied = settled_message(watcher_socket)
-            assert denied["type"] == "control_error"
-            assert denied["code"] == "forbidden"
-            assert len(game.canonical_decisions) == decisions_after
-            assert game.env.state_digest() == digest_after
-
-
-def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_group(
+def test_surveil_then_order_library_decision_group_over_websocket(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
-        with (
-            client.websocket_connect("/ws/play") as pilot_socket,
-            client.websocket_connect("/ws/play") as watcher_socket,
-        ):
+        with client.websocket_connect("/ws/play") as pilot_socket:
             pilot_socket.send_json({"type": "new_game", "config": SURVEIL_CONFIG})
             initial = settled_message(pilot_socket)
-            table_id, invite_token = _invite(initial["table"])
-            watcher_socket.send_json(
-                {
-                    "type": "join_table",
-                    "table_id": table_id,
-                    "invite_token": invite_token,
-                }
-            )
-            joined = settled_message(watcher_socket)
-            settled_message(pilot_socket)
 
-            pilot_surveil, watcher_surveil = _advance_ws_to_surveil(
-                pilot_socket, watcher_socket, initial, grant_revision=1
-            )
+            pilot_surveil = _advance_ws_to_surveil(pilot_socket, initial)
             surveil_group = pilot_surveil["decision_group"]
             assert surveil_group is not None
             assert surveil_group["kind"] == "surveil"
             assert len(surveil_group["items"]) == 2
-            assert watcher_surveil["decision_group"] is None
 
-            # Watcher is forbidden from /decision-group-preview and decision_group_command.
-            record = server.SESSION_REGISTRY[initial["session_id"]]
-            assert record.game.env is not None
-            before_digest = record.game.env.state_digest()
-            watcher_headers = {
-                "x-etude-participant-token": joined["resume_token"],
-            }
-            preview_denied = client.post(
-                f"/api/sessions/{record.session_id}/decision-group-preview",
-                json={
-                    "match_id": surveil_group["match_id"],
-                    "revision": surveil_group["revision"],
-                    "prompt_id": surveil_group["prompt_id"],
-                    "frame_hash": surveil_group["frame_hash"],
-                    "plan": {"kind": "surveil", "graveyard": []},
-                },
-                headers=watcher_headers,
-            )
-            assert preview_denied.status_code == 403
-            assert preview_denied.json()["detail"] == "decision_group_preview_forbidden"
-
-            watcher_socket.send_json(
-                {
-                    "type": "decision_group_command",
-                    "grant_revision": 1,
-                    "command": {
-                        "command_id": "watcher-surveil-attempt",
-                        "match_id": surveil_group["match_id"],
-                        "expected_revision": surveil_group["revision"],
-                        "prompt_id": surveil_group["prompt_id"],
-                        "frame_hash": surveil_group["frame_hash"],
-                        "plan": {"kind": "surveil", "graveyard": []},
-                    },
-                }
-            )
-            denied_ws = settled_message(watcher_socket)
-            assert denied_ws["type"] == "control_error"
-            assert denied_ws["code"] == "forbidden"
-            # Drain work_status updates delivered to pilot for the failed watcher request.
-            for expected_state in ("running", "failed"):
-                ws_status = pilot_socket.receive_json()
-                assert ws_status["type"] == "work_status"
-                assert ws_status["work"]["state"] == expected_state
-            assert record.game.env.state_digest() == before_digest
-
-            # Transfer pilot to watcher: role_changed immediately delivers the live group to
-            # the new pilot and null to the former pilot without any reload.
-            watcher_id = joined["table"]["access"]["identity"]["viewer_id"]
+            # Confirm Surveil keeping both on top -> OrderLibrary Top surfaces.
             pilot_socket.send_json(
                 {
-                    "type": "transfer_pilot",
-                    "grant_revision": 1,
-                    "target_viewer_id": watcher_id,
-                }
-            )
-            former_pilot_role = settled_message(pilot_socket)
-            new_pilot_role = settled_message(watcher_socket)
-            assert former_pilot_role["type"] == "role_changed"
-            assert former_pilot_role["table"]["access"]["role"] == "watcher"
-            assert former_pilot_role["decision_group"] is None
-
-            assert new_pilot_role["type"] == "role_changed"
-            assert new_pilot_role["table"]["access"]["role"] == "pilot"
-            assert new_pilot_role["decision_group"] == surveil_group
-
-            # New pilot confirms Surveil keeping both on top -> OrderLibrary Top surfaces only for new pilot.
-            watcher_socket.send_json(
-                {
                     "type": "decision_group_command",
-                    "grant_revision": 2,
                     "command": {
-                        "command_id": "new-pilot-surveil",
+                        "command_id": "pilot-surveil",
                         "match_id": surveil_group["match_id"],
                         "expected_revision": surveil_group["revision"],
                         "prompt_id": surveil_group["prompt_id"],
@@ -791,23 +646,20 @@ def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_gr
                     },
                 }
             )
-            new_pilot_order = settled_message(watcher_socket)
-            former_pilot_order = settled_message(pilot_socket)
-            assert new_pilot_order["status"] == "accepted"
-            assert former_pilot_order["decision_group"] is None
-            order_group = new_pilot_order["decision_group"]
+            pilot_order = settled_message(pilot_socket)
+            assert pilot_order["status"] == "accepted"
+            order_group = pilot_order["decision_group"]
             assert order_group is not None
             assert order_group["kind"] == "order_library"
             assert order_group["end"] == "top"
             assert len(order_group["items"]) == 2
 
-            # New pilot confirms OrderLibrary Top with reversed order.
-            watcher_socket.send_json(
+            # Confirm OrderLibrary Top with reversed order.
+            pilot_socket.send_json(
                 {
                     "type": "decision_group_command",
-                    "grant_revision": 2,
                     "command": {
-                        "command_id": "new-pilot-order",
+                        "command_id": "pilot-order",
                         "match_id": order_group["match_id"],
                         "expected_revision": order_group["revision"],
                         "prompt_id": order_group["prompt_id"],
@@ -822,8 +674,7 @@ def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_gr
                     },
                 }
             )
-            order_done = settled_message(watcher_socket)
-            settled_message(pilot_socket)
+            order_done = settled_message(pilot_socket)
             assert order_done["status"] == "accepted"
             assert order_done["decision_group"] is None
 
@@ -917,56 +768,23 @@ def test_partition_piles_decision_group_command_parity_watcher_privacy_and_choos
         f"authority.decision_group.grp-partition-1.{idx}" for idx in range(5)
     ]
 
-    # Watcher privacy: watchers never receive private PartitionPiles cards.
+    # Submit the whole 5-card split in one atomic decision_group_command over WebSocket.
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
-        with (
-            client.websocket_connect("/ws/play") as pilot_socket,
-            client.websocket_connect("/ws/play") as watcher_socket,
-        ):
+        with client.websocket_connect("/ws/play") as pilot_socket:
             pilot_socket.send_json({"type": "new_game", "config": CURATOR_CONFIG})
             initial = settled_message(pilot_socket)
-            table_id, invite_token = _invite(initial["table"])
-            watcher_socket.send_json(
-                {
-                    "type": "join_table",
-                    "table_id": table_id,
-                    "invite_token": invite_token,
-                }
-            )
-            settled_message(watcher_socket)
-            settled_message(pilot_socket)
 
-            record = server.SESSION_REGISTRY[initial["session_id"]]
+            record = server.LIVE_GAMES[initial["game"]]
             ws_frame = _advance_session_to_curator_partition(record.game)
             assert ws_frame.prompt is not None
             pilot_group = record.game.live_decision_group()
             assert pilot_group is not None and pilot_group["kind"] == "partition_piles"
 
-            # Watcher receives group=None on role_changed; new pilot receives full PartitionPiles group.
-            watcher_participant = next(
-                p for p in record.participants.values() if p.role.value == "watcher"
-            )
             pilot_socket.send_json(
                 {
-                    "type": "transfer_pilot",
-                    "grant_revision": 1,
-                    "target_viewer_id": watcher_participant.viewer_id,
-                }
-            )
-            former_pilot_role = settled_message(pilot_socket)
-            new_pilot_role = settled_message(watcher_socket)
-            assert former_pilot_role["type"] == "role_changed"
-            assert former_pilot_role["decision_group"] is None
-            assert new_pilot_role["type"] == "role_changed"
-            assert new_pilot_role["decision_group"] == pilot_group
-
-            # New pilot submits the whole 5-card split in one atomic decision_group_command.
-            watcher_socket.send_json(
-                {
                     "type": "decision_group_command",
-                    "grant_revision": 2,
                     "command": {
                         "command_id": "ws-partition-1",
                         "match_id": pilot_group["match_id"],
@@ -980,7 +798,6 @@ def test_partition_piles_decision_group_command_parity_watcher_privacy_and_choos
                     },
                 }
             )
-            split_done = settled_message(watcher_socket)
-            settled_message(pilot_socket)
+            split_done = settled_message(pilot_socket)
             assert split_done["status"] == "accepted"
             assert split_done["decision_group"] is None

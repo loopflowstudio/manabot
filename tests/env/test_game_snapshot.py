@@ -522,11 +522,9 @@ print(json.dumps([before, position_evidence(env)]))
     imported = import_game(json.loads(raw))
     assert (imported["stop"], imported["count"]) == ("interrupted", committed)
     for ordinal in range(committed):
-        shown = inspect_watch(imported["id"], ordinal, imported["token"])
+        shown = inspect_watch(imported["id"], ordinal)
         assert shown["observation"]["opponent"]["hand"] == []
-        revealed = inspect_watch(
-            imported["id"], ordinal, imported["token"], reveal=True
-        )
+        revealed = inspect_watch(imported["id"], ordinal, reveal=True)
         assert revealed["observation"]["opponent"]["hand"]
         assert revealed["decision"] == shown["decision"]
         for view in (shown, revealed):
@@ -650,7 +648,7 @@ def test_watch_publishes_the_determinized_offers(
     assert len(offers) != len(original.action_space.actions)
     branch.step(len(offers) - 1)
     imported = import_game(json.loads(branch.snapshot().to_replay_json()))
-    shown = inspect_watch(imported["id"], imported["count"] - 1, imported["token"])
+    shown = inspect_watch(imported["id"], imported["count"] - 1)
     assert len(shown["decision"]["frame"]["offers"]) == len(offers)
     assert shown["decision"]["offer"]["label"] == "Pass priority"
     # Review marks the re-dealt decision, and only it, without the seed.
