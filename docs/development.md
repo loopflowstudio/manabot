@@ -696,7 +696,7 @@ increase a known expensive cell just to make it run longer.
 the harness, not here. They come in four families: many copies of one thing
 (`duplicate-lands`, `duplicate-creatures`, `duplicate-tokens`), many different
 things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
-`diverse-statics`, `attachments`, `mixed`), one mechanic at size (`herbalist`,
+`diverse-statics`, `attachments`, `mixed`), one mechanic at size (`control-auras`, `herbalist`,
 `paid-filter`, `counted-tap`, `waterbend-x`, `triggers`, `zones`, `choices`,
 `names`, `face-down`, `graveyard-routes`, `profile-hand`, `prepared-copies` with its
 zero-link control `unprepared-copies`) and one way of paying at size

@@ -466,6 +466,7 @@ impl Game {
                 departed,
                 to,
                 controller,
+                discarded: _,
                 face_down: false,
             } => {
                 if from.is_none() && *to == ZoneType::Battlefield {

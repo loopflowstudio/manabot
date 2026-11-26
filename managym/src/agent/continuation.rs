@@ -1153,7 +1153,9 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::SelectCards { .. } => 28,
         Decision::Scry { .. } => 8,
         Decision::LookAndSelect { .. } => 9,
-        Decision::Modal { .. } | Decision::NameCard { .. } => 10,
+        Decision::ChooseCreatureType { .. }
+        | Decision::Modal { .. }
+        | Decision::NameCard { .. } => 10,
         Decision::Learn { .. } => 11,
         Decision::Discard { .. } => 12,
         Decision::LegendRule { .. } => 13,

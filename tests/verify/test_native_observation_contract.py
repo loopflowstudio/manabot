@@ -409,7 +409,7 @@ def test_encodes_every_observed_permanent_and_card_field() -> None:
     mine.dealt_damage_this_turn = True
     obs.agent_permanents = [mine]
     agent = obs.agent
-    agent.keeps_red_mana = agent.no_maximum_hand_size = True
+    agent.keeps_red_mana = agent.no_maximum_hand_size = agent.hexproof = True
     agent.extra_turns = 2
     agent.additional_combats = 1
     history = agent.turn_history
@@ -445,7 +445,7 @@ def test_encodes_every_observed_permanent_and_card_field() -> None:
     assert not actual["effects"].any()
     np.testing.assert_allclose(
         actual["agent_player"][0, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX:],
-        [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2, 0, 0, 0, 0, 2, 1, 1, 0],
+        [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2, 0, 0, 0, 0, 2, 1, 1, 0, 1],
     )
     assert actual["agent_cards"][0, CARD_DIM - 1] == 1
 

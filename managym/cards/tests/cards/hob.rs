@@ -185,7 +185,7 @@ fn bilbo_graveyard_adventure_replacement_owns_the_exile_permission() {
         offer_labels(&s),
         [
             "Spew Flame: Exile on Adventure",
-            "Spew Flame: Exile without Adventure permission"
+            "Spew Flame: Exile instead"
         ]
     );
     for (index, label) in offer_labels(&s).iter().enumerate() {

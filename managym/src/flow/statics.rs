@@ -13,9 +13,11 @@ use crate::{
     state::{
         ability::{AbilityOrigin, Condition, EffectValue, PaymentCost},
         card::{
-            ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
-            SpellProfile, StaticAbility, StaticRestriction, StaticScope,
+            ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, LayerCount, LayerValue,
+            PrintedCharacteristics, Restriction, SpellProfile, StaticAbility, StaticRestriction,
+            StaticScope,
         },
+        effect::Modification,
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
@@ -23,7 +25,10 @@ use crate::{
         zone::ZoneType,
     },
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 /// Stop as soon as the threshold is met. Ordinary counts never read a name.
 pub(super) fn controlled_threshold<T, N: AsRef<str> + Ord>(
     matching: impl Iterator<Item = T>,
@@ -130,28 +135,33 @@ impl Characteristics {
         (self.power, self.toughness)
     }
 
+    #[inline]
     pub fn is_creature(&self) -> bool {
         self.types.is_creature()
     }
 
     /// Whether it has every creature type. Mid-pass, `CreatureTypes::All`
-    /// only marks the grant, which counts for a creature alone (CR 205.3d).
+    /// marks the grant, which requires a corresponding card type (CR 205.3d).
+    #[inline]
     pub fn has_all_creature_types(&self) -> bool {
-        self.is_creature() && self.creature_types.is_all()
+        self.creature_types.is_all() && self.types.has_creature_subtypes()
     }
 
     /// Whether a summoning-sick permanent with these characteristics can't
     /// attack or pay {T} (CR 302.6): it is a creature without haste.
+    #[inline]
     pub fn restricted_by_summoning_sickness(&self) -> bool {
         self.is_creature() && !self.keywords.has(Keyword::Haste)
     }
 
     /// Printed or granted land.
+    #[inline]
     pub fn is_land(&self) -> bool {
         self.types.is_land()
     }
 
     /// Whether it has this subtype, counting all creature types.
+    #[inline]
     pub fn has_subtype(&self, subtype: &str) -> bool {
         self.subtypes.iter().any(|s| s == subtype)
             || (self.has_all_creature_types() && is_creature_type(subtype))
@@ -227,6 +237,8 @@ pub(super) struct StaticPlayPermissions {
 
 #[derive(Debug, PartialEq)]
 pub(super) struct LayerBoard {
+    pub(super) player_modifications: [Vec<Modification>; 2],
+    control_changes: Vec<(PermanentId, PlayerId)>,
     objects: Vec<Option<Arc<Characteristics>>>,
     /// Layered permissions for both seats, computed during the board's scan.
     pub play_permissions: [StaticPlayPermissions; 2],
@@ -290,17 +302,25 @@ impl Game {
         let context = Context::evaluate(self, sources);
         let mut objects = vec![None; self.state.permanents.len()];
         let mut restrictions = Vec::new();
+        let mut control_changes = Vec::new();
+        let mut player_modifications: [Vec<Modification>; 2] = Default::default();
         let mut land_plays_each_player = 0;
         let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
         let mut dynamic_activations = false;
         for (id, object) in context.objects {
+            let permanent = self.state.permanents[id].as_ref().unwrap();
+            if object.controller != permanent.controller && !self.is_phased_out(id) {
+                control_changes.push((id, object.controller));
+            }
             dynamic_activations = dynamic_activations || object.view.has_dynamic_activations();
             if !object.view.static_abilities.is_empty() && !self.is_phased_out(id) {
-                let permanent = self.state.permanents[id].as_ref().unwrap();
-                let controller = permanent.controller;
+                let controller = object.controller;
                 let permissions = &mut play_permissions[controller.0];
                 for ability in &object.view.static_abilities {
                     match ability {
+                        StaticAbility::ControllerHas(grant) => {
+                            player_modifications[controller.0].push((**grant).clone())
+                        }
                         StaticAbility::Restriction(rule) => {
                             restrictions.push((id, controller, rule.clone()))
                         }
@@ -340,6 +360,8 @@ impl Game {
             permissions.extra_land_plays += land_plays_each_player;
         }
         LayerBoard {
+            player_modifications,
+            control_changes,
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
             reads_life: context.reads_life,
@@ -392,6 +414,56 @@ impl Game {
         self.derived.borrow_mut().at(revisions).board = Some(board.clone());
         board
     }
+    /// Commit layer 2 before subsequent instructions, triggers or choices.
+    /// A change can end an effect lasting while its source is controlled.
+    pub(crate) fn refresh_control(&mut self) {
+        self.refresh_control_with(None, None);
+    }
+
+    pub(crate) fn refresh_control_with(
+        &mut self,
+        returned: Option<bool>,
+        rule: Option<crate::experience::PresentationRule>,
+    ) {
+        loop {
+            let cached = self
+                .derived
+                .borrow_mut()
+                .at(self.state.revisions())
+                .board
+                .clone();
+            // Most games have no layer-2 instruction. When another write
+            // invalidated the board, scan permanents directly before rebuilding
+            // every layer solely to check control. A phased-out control source
+            // conservatively falls through to `layer_board`, which handles
+            // phasing accurately. Granted statics start in layer 6, after
+            // control has been determined.
+            if cached.is_none()
+                && !self
+                    .state
+                    .effects
+                    .iter()
+                    .any(|e| e.modification == Modification::Control)
+                && !self.state.permanents.iter().flatten().any(|p| {
+                    p.control_differs_from_entry
+                        || self.state[p.object].statics.iter().any(|ability| {
+                            matches!(ability, StaticAbility::Continuous(effect)
+                                if effect.modifications.contains(&Modification::Control))
+                        })
+                })
+            {
+                return;
+            }
+            let board = cached.unwrap_or_else(|| self.layer_board());
+            if board.control_changes.is_empty() {
+                return;
+            }
+            for &(id, controller) in &board.control_changes {
+                self.commit_control_change(id, controller, returned, rule);
+            }
+        }
+    }
+
     pub(super) fn layer_view(&self, id: PermanentId) -> Arc<Characteristics> {
         self.layer_board()
             .objects
@@ -441,11 +513,15 @@ impl Game {
             .get(id.0)
             .and_then(Clone::clone);
         if let Some(view) = cached {
-            debug_assert_eq!(
-                view,
-                self.finalize_characteristics(id, raw()),
-                "stale characteristics"
-            );
+            #[cfg(debug_assertions)]
+            {
+                let _scan = self.board_scan();
+                debug_assert_eq!(
+                    view,
+                    self.finalize_characteristics(id, raw()),
+                    "stale characteristics"
+                );
+            }
             return view;
         }
         let view = self.finalize_characteristics(id, raw());
@@ -512,7 +588,7 @@ impl Game {
         for (_, source) in self.layer_views(self.iter_battlefield_permanents(controller)) {
             for ability in &source.static_abilities {
                 if let StaticAbility::ActivatedAbilitiesCostLess { predicate, generic } = ability {
-                    if matches_view(self, id, predicate, view, None) {
+                    if matches_view(self, id, predicate, view, None, None) {
                         total = total.saturating_add(*generic);
                     }
                 }
@@ -557,15 +633,21 @@ impl Game {
             .object(object_id)
             .unwrap_or_else(|_| self.state.entry_object(object_id));
         let printed = (object.power.unwrap_or(0), object.toughness.unwrap_or(0));
-        let Some((cda, sets_toughness)) = object.pt_cda() else {
+        let Some((power, toughness)) = object.pt_cda() else {
             return printed;
         };
         let controller = self
             .spell_on_stack(object_id)
             .map(|spell| spell.controller)
             .unwrap_or(object.owner);
-        let value = self.cda_value(cda, controller);
-        (value, if sets_toughness { value } else { printed.1 })
+        (
+            power.map_or(printed.0, |v| {
+                self.off_battlefield_layer_value(v, object, controller)
+            }),
+            toughness.map_or(printed.1, |v| {
+                self.off_battlefield_layer_value(v, object, controller)
+            }),
+        )
     }
 
     /// Contextual predicates must read CDA power rather than a printed star's
@@ -787,34 +869,60 @@ impl Game {
 
     /// Power as printed, with a characteristic-defining ability evaluated
     /// for `you` (CR 604.3) instead of the printed star's placeholder.
-    fn printed_power(
-        &self,
-        printing: &crate::state::card::PrintedCharacteristics,
-        you: PlayerId,
-    ) -> i32 {
-        printing.pt_cda().map_or_else(
+    fn printed_power(&self, printing: &PrintedCharacteristics, you: PlayerId) -> i32 {
+        printing.pt_cda().and_then(|(power, _)| power).map_or_else(
             || printing.power.unwrap_or(0),
-            |(cda, _)| self.cda_value(cda, you),
+            |value| self.off_battlefield_layer_value(value, printing, you),
         )
     }
 
-    fn cda_value(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
-        match cda {
-            PowerCda::CountersOnLandsYouControl => self
-                .layer_views(self.iter_battlefield_permanents(controller))
-                .filter(|(_, view)| view.is_land())
-                .filter_map(|(id, _)| self.state.permanents[id].as_ref())
-                .map(|p| p.counter_count(CounterKind::PlusOnePlusOne))
-                .sum(),
-            PowerCda::CreaturesYouControl => self.creature_count(controller) as i32,
-            PowerCda::GraveyardMatching(predicate) => {
-                self.count_graveyard_matching(controller, predicate) as i32
-            }
-            PowerCda::GraveyardMatchingBy { who, predicate } => (0..self.state.players.len())
-                .map(PlayerId)
-                .filter(|player| who.includes(controller, *player))
-                .map(|player| self.count_graveyard_matching(player, predicate) as i32)
-                .sum(),
+    pub(super) fn graveyard_card_types(&self) -> i32 {
+        (0..self.state.players.len())
+            .map(PlayerId)
+            .flat_map(|player| self.state.zone_cards(ZoneType::Graveyard, player))
+            .flat_map(|card| self.state[self.state.object_of(card)].types.types.iter())
+            .collect::<BTreeSet<_>>()
+            .len() as i32
+    }
+
+    fn off_battlefield_layer_value(
+        &self,
+        value: &LayerValue,
+        printing: &PrintedCharacteristics,
+        controller: PlayerId,
+    ) -> i32 {
+        let controlled = |predicate| {
+            self.layer_views(self.iter_battlefield_permanents(controller))
+                .filter(move |(id, view)| matches_view(self, *id, predicate, view, None, None))
+        };
+        match value {
+            LayerValue::Fixed(n) => *n,
+            LayerValue::ManaValue => i32::from(
+                printing
+                    .mana_cost
+                    .as_ref()
+                    .map_or(0, |cost| cost.mana_value),
+            ),
+            LayerValue::GraveyardCardTypes { offset } => self.graveyard_card_types() + offset,
+            LayerValue::Count(count) => match count.as_ref() {
+                LayerCount::YouControl(predicate) => controlled(predicate).count() as i32,
+                LayerCount::Graveyard { who, predicate } => (0..self.state.players.len())
+                    .map(PlayerId)
+                    .filter(|player| who.includes(controller, *player))
+                    .map(|player| self.count_graveyard_matching(player, predicate) as i32)
+                    .sum(),
+                LayerCount::ColorsAmong(predicate) => controlled(predicate)
+                    .fold(BTreeSet::new(), |mut colors, (_, view)| {
+                        colors.extend(view.colors.iter().copied());
+                        colors
+                    })
+                    .len() as i32,
+                LayerCount::CountersOn { kind, predicate } => controlled(predicate)
+                    .filter_map(|(id, _)| self.state.permanents[id].as_ref())
+                    .map(|p| p.counter_count(*kind))
+                    .sum(),
+                LayerCount::CreatureTypes { .. } | LayerCount::SourceCounters(_) => 0,
+            },
         }
     }
 
@@ -1138,7 +1246,16 @@ impl Game {
                 let source_name = source_view.as_ref().map(|view| view.name.as_str());
                 let matching = self
                     .layer_views(self.iter_battlefield_permanents(controller))
-                    .filter(|(id, view)| matches_view(self, *id, predicate, view, source_name));
+                    .filter(|(id, view)| {
+                        matches_view(
+                            self,
+                            *id,
+                            predicate,
+                            view,
+                            source_name,
+                            self.chosen_type_for(predicate, source_id()),
+                        )
+                    });
                 controlled_threshold(matching, *count, *distinct_names, |(_, view)| {
                     view.name.clone()
                 })
@@ -1156,7 +1273,16 @@ impl Game {
                         .into_iter()
                         .flat_map(|player| self.iter_battlefield_permanents(player)),
                 )
-                .filter(|(id, view)| matches_view(self, *id, predicate, view, source_name))
+                .filter(|(id, view)| {
+                    matches_view(
+                        self,
+                        *id,
+                        predicate,
+                        view,
+                        source_name,
+                        self.chosen_type_for(predicate, source_id()),
+                    )
+                })
                 .take(*count)
                 .count()
                     == *count
@@ -1222,9 +1348,19 @@ impl Game {
             Condition::Not(condition) => {
                 !self.condition_holds(condition, controller, frame, source, triggering)
             }
-            Condition::CastFromGraveyard => source
+            Condition::CastFrom { zone, owner } => source
                 .and_then(|object| self.spell_on_stack(object))
-                .is_some_and(|spell| self.was_cast_from_graveyard(spell)),
+                .is_some_and(|spell| {
+                    self.state[spell.object].is_card()
+                        && spell.controller == controller
+                        && self.cast_from_matches(
+                            spell.object,
+                            controller,
+                            spell.cast_from,
+                            *zone,
+                            *owner,
+                        )
+                }),
             Condition::Kicked => frame.map_or_else(
                 || {
                     source
@@ -1340,6 +1476,34 @@ impl Game {
     ) -> bool {
         self.permanent_matches_with_source(id, predicate, None)
     }
+    pub(super) fn cast_from_matches(
+        &self,
+        object: ObjectId,
+        controller: PlayerId,
+        from: ZoneType,
+        required: Option<ZoneType>,
+        owner: Option<crate::state::ability::Actor>,
+    ) -> bool {
+        required.is_none_or(|zone| zone == from)
+            && owner
+                .is_none_or(|who| who.includes(controller, self.state.entry_object(object).owner))
+    }
+
+    pub(super) fn chosen_type_for(
+        &self,
+        predicate: &CardPredicate,
+        source: Option<PermanentId>,
+    ) -> Option<&str> {
+        if !predicate.reads_chosen_type() {
+            return None;
+        }
+        self.effects_on(source?)
+            .find_map(|record| match &record.modification {
+                Modification::ChosenCreatureType(name) => Some(name.as_str()),
+                _ => None,
+            })
+    }
+
     pub(super) fn permanent_matches_with_source(
         &self,
         id: PermanentId,
@@ -1347,7 +1511,7 @@ impl Game {
         source: Option<PermanentId>,
     ) -> bool {
         let view = self.layer_view(id);
-        let source = source
+        let source_view = source
             .filter(|_| predicate.reads_source())
             .map(|id| self.layer_view(id));
         matches_view(
@@ -1355,7 +1519,8 @@ impl Game {
             id,
             predicate,
             &view,
-            source.as_ref().map(|s| s.name.as_str()),
+            source_view.as_ref().map(|s| s.name.as_str()),
+            self.chosen_type_for(predicate, source),
         )
     }
 
@@ -1424,16 +1589,9 @@ mod cache_tests {
     /// revisions, as a write that advanced no revision would leave it.
     #[cfg(debug_assertions)]
     fn with_stale_board(game: &Game) {
-        let board = game.layer_board();
-        game.derived.borrow_mut().board = Some(Arc::new(LayerBoard {
-            play_permissions: board.play_permissions.clone(),
-            restrictions: board.restrictions.clone(),
-            objects: board.objects.clone(),
-            reads_mana: !board.reads_mana,
-            reads_tapped: board.reads_tapped,
-            reads_life: board.reads_life,
-            dynamic_activations: board.dynamic_activations,
-        }));
+        let mut board = game.compute_board(None);
+        board.reads_mana = !board.reads_mana;
+        game.derived.borrow_mut().at(game.state.revisions()).board = Some(Arc::new(board));
     }
 
     #[cfg(debug_assertions)]

@@ -118,7 +118,13 @@ def test_full_game_vs_search_villain(isolated_traces):
     with TestClient(app) as client:
         payload = _play_full_game(
             client,
-            {"villain_type": "search", "villain_sims": 8, "seed": 3},
+            {
+                "villain_type": "search",
+                "villain_sims": 8,
+                "hero_deck": {"Mountain": 8, "Lightning Bolt": 4, "Gray Ogre": 4},
+                "villain_deck": {"Mountain": 8, "Gray Ogre": 8},
+                "seed": 3,
+            },
             hero_seed=1,
         )
     assert payload["type"] == "game_over"

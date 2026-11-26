@@ -1,16 +1,44 @@
 //! Urza's Saga.
 use managym_state::{
-    ability::{Effect, TargetSpec},
+    ability::{Actor, Effect, TargetRequirement, TargetSpec},
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
-        ReplacementEffect,
+        CardDefinition, CardType, CardTypes, DamageRecipient, DamageSource, DamageTransform,
+        Keyword, Keywords, LayerCount, LayerValue, PrintedCharacteristics, ReplacementEffect,
+        StaticAbility, StaticScope,
     },
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![duress(), fog_bank()]
+    vec![blanchwood_armor(), confiscate(), duress(), fog_bank()]
+}
+
+fn confiscate() -> CardDefinition {
+    let permanent = TargetSpec::Permanent {
+        predicate: CardPredicate::default(),
+    };
+    CardDefinition {
+        key: "usg.confiscate",
+        scryfall_id: "7cba6d4a-58d0-42d6-b49b-65c72b86007f",
+        printed: PrintedCharacteristics {
+            name: "Confiscate".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::Control],
+            )],
+            spell_effects: vec![Effect::enchant(permanent.clone())],
+            targeting: vec![TargetRequirement::one(permanent)],
+            text_box: "Enchant permanent\nYou control enchanted permanent.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn fog_bank() -> CardDefinition {
@@ -25,7 +53,20 @@ fn fog_bank() -> CardDefinition {
             power: Some(0),
             toughness: Some(2),
             keywords: Keywords::of(&[Keyword::Defender, Keyword::Flying]),
-            replacement_effects: vec![ReplacementEffect::PreventCombatDamageToOrFromSelf],
+            replacement_effects: vec![
+                ReplacementEffect::ModifyDamage {
+                    source: DamageSource::any(Actor::AnyPlayer),
+                    recipient: DamageRecipient::this(),
+                    combat: Some(true),
+                    transform: DamageTransform::PreventAll,
+                },
+                ReplacementEffect::ModifyDamage {
+                    source: DamageSource::this(),
+                    recipient: DamageRecipient::any(Actor::AnyPlayer),
+                    combat: Some(true),
+                    transform: DamageTransform::PreventAll,
+                },
+            ],
             text_box: "Defender (This creature can't attack.)\nFlying\nPrevent all combat damage that would be dealt to and dealt by this creature.".into(),
             ..Default::default()
         },
@@ -49,6 +90,34 @@ fn duress() -> CardDefinition {
             name: "Duress".into(),
             types: CardTypes::new([CardType::Sorcery]),
             mana_cost: Some(ManaCost::parse("{B}")),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn blanchwood_armor() -> CardDefinition {
+    let text_box = "Enchant creature\nEnchanted creature gets +1/+1 for each Forest you control.";
+    let bonus = LayerValue::count(LayerCount::YouControl(CardPredicate::subtype("Forest")));
+    CardDefinition {
+        key: "usg.blanchwood_armor",
+        scryfall_id: "9b5f3776-74f4-4626-833b-e1b0921d3cbc",
+        printed: PrintedCharacteristics {
+            name: "Blanchwood Armor".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::ModifyPt {
+                    power: bonus.clone(),
+                    toughness: bonus,
+                }],
+            )],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
             text_box: text_box.into(),
             ..Default::default()
         },

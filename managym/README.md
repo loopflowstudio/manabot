@@ -811,6 +811,16 @@ their index bases. A `None` column means every element is a reference.
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.
 
+Confiscate changes control for as long as it enchants the permanent. Harmless
+Offering targets both the opponent and the permanent being given away. Control
+effects apply in layer 2. When one ends, the remaining effects determine who
+controls the permanent. A change removes it from combat and preserves its tapped
+state. Observations and wire projections carry `entry_controller_id` when a
+permanent's current controller differs from its CR 110.2 entry controller, and
+the v11 permanent row derives its `control_differs_from_entry` flag from it. A
+blocked attacker keeps its `blocked` flag even if its last blocker changes
+control or phases out and leaves combat.
+
 `Game::object_pt` reads contextual power and toughness in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's
 controller or card's owner elsewhere (including outside the game). Zone
@@ -1083,6 +1093,14 @@ This is an inspection API for Academy and tools. It adds no action,
 observation field or encoder column, and nothing in `Env.step`, `VectorEnv`,
 search or training calls it.
 
+When choosing targets, a spell uses the colors and card types of the face being
+cast. An ability uses its source’s current characteristics, or its last known
+characteristics if the source has left. The engine checks each target again
+on resolution. Knight of Grace therefore permits its controller’s black
+spells and excludes an opponent’s black spells and abilities from black
+sources. Academy and the text observation show effective protection and
+qualified hexproof on permanents and hexproof on players.
+
 ### Previewing a whole combat declaration
 
 The engine declares attackers and blockers one creature at a time. Ask how a
@@ -1111,8 +1129,10 @@ step, as in play. A block plan names blocker → attacker pairs
 (`PlannedBlock`), and a blocker's `can_block` lists the attackers it may block
 from here. The plan is refused, with a reason, when a planned creature is
 never asked, a planned answer is not offered (a required block) or the
-finished declaration differs from the plan (a lone block of a creature with
-menace, which the engine removes once every blocker is declared).
+finished declaration differs from the plan through a forced answer.
+Each offered block or decline can still complete a
+legal declaration satisfying the greatest possible number of requirements
+(CR 509.1b–c). Blocking a creature with menace commits at least two blockers.
 `declared_attackers` and `declared_blocks` are the declaration as the engine
 would finish it. During attacker selection both viewers can see the attackers
 chosen so far. Raid becomes true for the attacking player when a nonempty
@@ -1139,6 +1159,19 @@ step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAM
 followed by the regular `StepKind::CombatDamage` (`COMBAT_DAMAGE`) step. Each
 permanent's `first_strike_participant` remembers whether it had first strike or
 double strike when the first step began, including after its abilities change.
+
+### Reading creature types and counted bonuses
+
+Taurean Mauler has every creature type in every zone. Master Piandao can
+reveal it as an Ally from the library. On the battlefield Dwynen counts it
+as an Elf, and Crossway Troublemakers grants it deathtouch and lifelink
+while it attacks. A type-setting effect can replace its creature types in
+layer 4. Removing its abilities in layer 6 leaves those types in place.
+
+Counted bonuses read the source's controller. Blanchwood Armor counts that
+player's Forests even when another player controls the enchanted creature.
+Tempest Djinn counts each basic Island its current controller controls.
+
 ### Reading power during combat
 
 Courageous Goblin and Ruby, Daring Tracker check for a creature with power
@@ -1156,3 +1189,29 @@ card returns. Bulk Up similarly reads the target's power at resolution. A
 creature at −2 power goes to −4, and flashback uses the same calculation.
 Bite Down uses the power of the creature dealing damage at resolution.
 If either target leaves and returns first, it deals no damage.
+
+### Ordering graveyard replacements
+
+With two Dryad Militants on the battlefield, discarding Lightning Bolt to pay
+for Seize the Spoils pauses before the card leaves the hand. Choose which
+Militant applies. The Bolt goes to exile and the same payment continues.
+A spell whose targets have all become illegal stays on the stack until its
+controller chooses the replacement. For a card in hand or library, its owner
+makes that choice.
+
+Progenitus and Darksteel Colossus reveal and shuffle into their owner's
+library when they would go to a graveyard. A milled Colossus stays in its
+library, and both viewers lose their knowledge of its position when the
+library is shuffled. Its old object reference expires. On the battlefield,
+losing all abilities removes the replacement.
+
+When Myojin of Night's Reach makes an opponent discard their hand, all its
+cards remain in hand until the replacement choices are complete. Wilt-Leaf
+Liege enters from that hand and still counts as discarded. Discarding the
+Liege to pay for your own spell puts it in the graveyard.
+
+Banner of Kinship asks for a creature type before it enters. Choose the
+alphabetical group, then the type. Both players can inspect the chosen type
+after entry. A changeling counts toward the fellowship counters and receives
+the bonus. Giada and Prime Speaker Zegana likewise count creatures already on
+the battlefield before a simultaneous entry.

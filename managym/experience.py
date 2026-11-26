@@ -494,12 +494,22 @@ class LegacyPermanentView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     is_granted_land: bool = Field(default=False, exclude_if=lambda value: not value)
+    blocked: bool = Field(default=False, exclude_if=lambda value: not value)
+    entry_controller_id: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     first_strike_participant: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
     attacking: bool = Field(default=False, exclude_if=lambda value: not value)
     blocking: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
+    )
+    hexproof_from: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    protection_from: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
     )
     abilities_lost: bool = Field(default=False, exclude_if=lambda value: not value)
     face_down: bool = Field(default=False, exclude_if=lambda value: not value)
@@ -622,6 +632,7 @@ class LegacyPlayerView(ProtocolModel):
     spells_cast: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     extra_turns: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     additional_combats: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    hexproof: bool = Field(default=False, exclude_if=lambda value: not value)
     no_maximum_hand_size: bool = Field(
         default=False, exclude_if=lambda value: not value
     )

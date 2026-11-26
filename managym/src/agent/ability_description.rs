@@ -634,7 +634,26 @@ fn condition_text_in(triggering: TriggerText, condition: &Condition) -> String {
             .map(|condition| condition_text_in(triggering, condition))
             .collect::<Vec<_>>()
             .join(" or "),
-        Condition::CastFromGraveyard => "this spell was cast from a graveyard".into(),
+        Condition::CastFrom { zone, owner } => match (zone, owner) {
+            (None, None) => "you cast it".into(),
+            (None, Some(Actor::You)) => "you cast it from a zone you own".into(),
+            (None, Some(Actor::Opponent)) => "you cast it from an opponent's zone".into(),
+            (None, Some(Actor::AnyPlayer)) => "it was cast".into(),
+            (Some(zone), None | Some(Actor::AnyPlayer)) => {
+                format!("this spell was cast from {}", zone_phrase(*zone))
+            }
+            (Some(zone), Some(who @ (Actor::You | Actor::Opponent))) => {
+                let owner = if *who == Actor::You {
+                    "your"
+                } else {
+                    "an opponent's"
+                };
+                format!(
+                    "you cast it from {owner} {}",
+                    format!("{zone:?}").to_lowercase()
+                )
+            }
+        },
         Condition::Not(condition) => match condition.as_ref() {
             Condition::YourTurn => "it's an opponent's turn".into(),
             condition => format!("not ({})", condition_text_in(triggering, condition)),
@@ -714,6 +733,7 @@ fn color_word(color: Color) -> &'static str {
 
 pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
+        chosen_type_of_source,
         namesake,
         named,
         flying,
@@ -744,6 +764,9 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         max_mana_value,
     } = p;
     let mut terms = Vec::new();
+    if *chosen_type_of_source {
+        terms.push("of the chosen creature type".into());
+    }
     if *tapped {
         terms.push("tapped".into());
     }
@@ -932,6 +955,7 @@ fn player_description(player: &PlayerSelector) -> String {
         PlayerSelector::TriggeringPlayer => "that player".into(),
         PlayerSelector::TriggeringPlayersOpponents => "each of that player's opponents".into(),
         PlayerSelector::TargetController => "its controller".into(),
+        PlayerSelector::TargetClause(_) => "target player".into(),
         PlayerSelector::Target(target) => target_description(target),
         PlayerSelector::Owner => "its owner".into(),
     }
@@ -1419,6 +1443,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         MillUntil { player, predicate } => format!("{} reveals cards from the top of their library until they reveal {}, then puts those cards into their graveyard", player_description(player), predicate_description(predicate, "card")),
         SelectCards { from, predicate, min, max, effects, if_declined } => format!("Choose {min}–{} {} from {}: {}. If none chosen: {}", value_description(triggering, max), predicate_description(predicate, "cards"), selector_description(triggering, from), effects_description_in(triggering, effects), effects_description_in(triggering, if_declined)),
         TargetClause { requirement, effects } => format!("Choose {}–{} {}{} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),if requirement.same_graveyard { " from a single graveyard" } else { "" },effects_description_in(triggering, effects)),
+        DiscardHand { who } => format!("Discard the entire hand of {}", player_description(who)),
         Discard { what: ObjectSelector::You, count: 1 } => "Discard a card".into(),
         Discard { what, count } => format!("{} discards {count} card{}", selector_subject(triggering, what), if *count == 1 { "" } else { "s" }),
         Destroy { what } => format!("Destroy {}",selector_description(triggering, what)),
@@ -1752,6 +1777,7 @@ fn continuous_description_in(
         Modification::CantActivateAbilities => {
             format!("{subject}'s activated abilities can't be activated{until}")
         }
+        Modification::MustBeBlocked => format!("{subject} must be blocked if able{until}"),
         Modification::MustBeBlockedByAllAble => {
             format!(
                 "All creatures able to block {}{until} do so",
@@ -1796,13 +1822,15 @@ fn continuous_description_in(
         Modification::LifeTotalCantChange => {
             format!("{subject}: life total can't change{until}")
         }
+        Modification::Hexproof => format!("{subject} has hexproof{until}"),
         Modification::ProtectionFromEverything => {
             format!("{subject}: protection from everything{until}")
         }
         Modification::PhasedOut => format!("{subject} phase out{until}"),
-        Modification::ControlChanged { .. } => {
+        Modification::Control => {
             format!("You control {}{until}", subject.to_lowercase())
         }
+        Modification::ChosenCreatureType(name) => format!("chosen type: {name}"),
         Modification::ModeChosen { mode } => format!("{subject} has chosen mode {}", mode + 1),
         Modification::HasAbilitiesOfSource => {
             format!("{subject} has all activated and triggered abilities of the chosen card")
