@@ -1,36 +1,24 @@
 # Fly deploy
 
-Manabot's public surfaces run on Fly.io behind Cloudflare DNS,
+Manabot's public website runs on Fly.io behind Cloudflare DNS,
 following the kata/loopflow deployment pattern:
 
 - **fantasia-website** — the manabot.gg site (`website/`), a FastHTML app serving the blog.
   Serves `manabot.gg` (canonical); `etude.gg`, `etudefantasia.com`,
   `etudefantasia.gg`, and all `www.` variants 301 onto it.
-- **academy-play** — hosted play at `play.manabot.gg` and `academy.manabot.gg`:
-  the experience server (`managym/academy/server.py` + the managym engine) serving the built Svelte
-  frontend as a same-origin SPA (`deploy/play/`). One machine, because
-  game state lives in process memory.
+
+Academy runs locally (`./scripts/play`, `managym academy`) and has no hosted deployment.
 
 ```bash
-deploy/academy-fly.sh deploy                        # manabot.gg site
-ACADEMY_FLY_APP=academy-play deploy/academy-fly.sh deploy   # hosted play
-deploy/academy-fly.sh dns                           # sync Cloudflare records
-deploy/academy-fly.sh health                        # check every domain
+deploy/academy-fly.sh deploy   # manabot.gg site
+deploy/academy-fly.sh dns      # sync Cloudflare records
+deploy/academy-fly.sh health   # check every domain
 ```
 
-Both Fly apps belong to the `loopflow-studio` organization. Jack Heart approved
-the live service rename on 2026-10-14: `academy-play` serves the web app and
-`fantasia-website` serves the project site (manabot.gg). Jack Heart subsequently
-selected Manabot and `manabot.gg` on the same day. Existing Fly app identifiers remain operational names; the Doppler project
-was renamed to `manabot` at Jack Heart's request on 2026-10-14. Legacy website hosts redirect to
-`manabot.gg`; `play.etude.gg` redirects HTTP to `play.manabot.gg` with status 308
-to preserve request methods. Both preserve encoded paths and query strings.
-Existing legacy WebSocket clients remain supported.
-
-Jack Heart selected `play.manabot.gg` and `academy.manabot.gg` as equivalent
-addresses on 2026-10-14. Both serve the same SPA, API and WebSocket endpoints
-directly from the single `academy-play` machine. Browser storage remains
-separate for each origin.
+The Fly app belongs to the `loopflow-studio` organization. `fantasia-website`
+serves the project site (`manabot.gg`) and keeps its existing Fly app
+identifier; legacy website hosts redirect to `manabot.gg` with status 301,
+preserving encoded paths and query strings. The Doppler project is `manabot`.
 
 ## DNS and certificates
 
@@ -58,7 +46,7 @@ S3 receipts and wandb history retain their existing names.
 
 ## Cost
 
-Both apps ride shared-cpu machines with `auto_stop_machines` — idle cost
+The app rides shared-cpu machines with `auto_stop_machines` — idle cost
 is minimal. Keep total spend inside the studio's existing $100/month
 automation budget (see kata/deploy/COSTS.md).
 
@@ -72,6 +60,6 @@ For `manabot.gg`, store `CLOUDFLARE_ZONE_ID_MANABOT_GG` in `manabot/prd`.
 
 Add Fly certificates and publish the new DNS records before deploying the
 redirects. Verify Cloudflare reports an active zone, HTTPS works on the new
-website and play hosts, and Fly certificates are ready. Only then deploy both
-apps and verify legacy nested URLs and query strings, plus gameplay on the new
-host. Keep the old domains and their certificates for redirects.
+website host, and Fly certificates are ready. Only then deploy the app and
+verify legacy nested URLs and query strings. Keep the old domains and their
+certificates for redirects.

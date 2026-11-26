@@ -28,12 +28,11 @@ infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config vars)
 keeps manabot names. Frozen evidence — experiment IDs, contracts,
 receipts, wandb history — is never renamed, and neither are the compatibility
 surfaces that predate the Academy name: the `x-etude-*` wire headers,
-`etude.*` browser storage keys and schema identifiers. Hosted services are
-`academy-play` and `fantasia-website`, with deployment secrets in Doppler
-`manabot/prd` (Jack Heart, 2026-10-14). `etude.gg` and its legacy aliases
-redirect to `manabot.gg`, preserving paths and queries; hosted play is
-available at both `play.manabot.gg` and `academy.manabot.gg` (equivalent
-addresses selected by Jack Heart, 2026-10-14). Namecheap is the registrar and
+`etude.*` browser storage keys and schema identifiers. The hosted website is
+`fantasia-website` (`manabot.gg`), with deployment secrets in Doppler
+`manabot/prd` (Jack Heart, 2026-10-14); `etude.gg` and its legacy aliases
+redirect to `manabot.gg`, preserving paths and queries. Academy runs locally
+and has no hosted play service. Namecheap is the registrar and
 Cloudflare manages DNS. "Sepia Etude" remains the name of the visual language.
 
 Name a thing for what it is where it is produced (`catalog_tokens`,

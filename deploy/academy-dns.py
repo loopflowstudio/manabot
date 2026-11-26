@@ -28,17 +28,12 @@ ZONES = {
 }
 
 # hostname -> (fly app, DNS alias prefix printed by `flyctl certs setup`).
-# Every zone's apex and www point at the website; play is its own app.
+# Every zone's apex and www point at the website.
 WEBSITE = ("fantasia-website", "z30p6om")
 HOSTS = {
-    **{
-        host: WEBSITE
-        for zone in ZONES
-        for host in (zone, f"www.{zone}")
-    },
-    "play.etude.gg": ("academy-play", "nw3xznd"),
-    "play.manabot.gg": ("academy-play", "nw3xznd"),
-    "academy.manabot.gg": ("academy-play", "nw3xznd"),
+    host: WEBSITE
+    for zone in ZONES
+    for host in (zone, f"www.{zone}")
 }
 
 

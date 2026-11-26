@@ -2163,21 +2163,7 @@ bytes before play, refuses an incompatible or replaced file with the sentence
 the menu shows, and records the identity as the trace's `opponent_checkpoint`
 in Play and in each seat's recorded player in Watch.
 
-To serve the same SPA/ASGI entrypoint as the hosted app:
-
-```sh
-npm --prefix academy/ui ci
-ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
-ACADEMY_FRONTEND_BUILD="$PWD/academy/ui/build" \
-ACADEMY_TRACES_DIR="$PWD/.runs/human-play" \
-ACADEMY_PLAY_RECORD_ORIGIN=human_exploratory \
-OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-uv run uvicorn deploy.play.asgi:app --host 127.0.0.1 --port 8000
-```
-
-For a parallel preview, give it a fresh absolute `ACADEMY_FRONTEND_BUILD`, its
-own `ACADEMY_TRACES_DIR` and port. Scored candidate evaluation on the selected
-matchup (`uv run python -m manabot.eval.evaluate`) is described in
+Scored candidate evaluation on the selected matchup (`uv run python -m manabot.eval.evaluate`) is described in
 [evaluation.md](evaluation.md).
 
 ## Attempts and history

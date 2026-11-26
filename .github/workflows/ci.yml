@@ -127,7 +127,7 @@ jobs:
         run: |
           uv run --python 3.13 --no-default-groups --group play-runtime \
             --extra dev pytest tests/infra/ \
-            tests/academy/test_clean_machine_verifier.py deploy/play/tests/
+            tests/academy/test_clean_machine_verifier.py
 
       - name: Website routing tests
         working-directory: website

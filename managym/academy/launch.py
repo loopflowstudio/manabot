@@ -707,7 +707,7 @@ def serve(
                 registry.register(policy, name=name)
         except (ImportError, OSError, ValueError) as exc:
             raise AcademyLaunchError("policy.unavailable", str(exc)) from exc
-        # Keep the hosted app and its routes; replace only this launcher's mount.
+        # Keep the API routes; replace only this launcher's frontend mount.
         server.app.router.routes[:] = [
             route
             for route in server.app.router.routes

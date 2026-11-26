@@ -57,7 +57,7 @@ else
       tests/academy/test_qwen_policy.py)
         select_jobs integration ;;
       tests/academy/*) select_jobs academy_integration protocol_v1 ;;
-      scripts/play|scripts/play.py|scripts/verify-clean-machine|deploy/play/*)
+      scripts/play|scripts/play.py|scripts/verify-clean-machine)
         select_jobs python_unit protocol_v1 clean_machine_play ;;
       manabot/sim/table_bots.py|manabot/env/*|manabot/model/world.py|manabot/sim/search/flat.py|manabot/sim/search/flat_mc.py|manabot/sim/action/structured.py)
         select_jobs integration academy_integration protocol_v1 frontend ;;

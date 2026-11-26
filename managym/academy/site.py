@@ -13,8 +13,8 @@ class SpaStaticFiles(StaticFiles):
     """Serve the SPA fallback for client-routed paths (/replay).
 
     Vite emits hashed filenames under _app/immutable (card art included), so
-    those get a year-long immutable Cache-Control — browsers and the
-    Cloudflare edge fetch each asset once. The fallback shell revalidates.
+    those get a year-long immutable Cache-Control — the browser fetches each
+    asset once. The fallback shell revalidates.
     """
 
     async def get_response(self, path: str, scope: Scope) -> Response:

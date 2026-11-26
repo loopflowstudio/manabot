@@ -295,7 +295,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Job | Runs |
 |---|---|
 | Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests`; JUnit timings uploaded |
-| Python Unit Tests | `tests/infra/`, clean-machine verifier, `deploy/play/tests/`, website |
+| Python Unit Tests | `tests/infra/`, clean-machine verifier, website |
 | Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (two matrix groups: world bindings, Elemental admission, replay/study contracts, play, recovery, game records and card art) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
@@ -373,7 +373,7 @@ neither skipped nor succeeded.
 | Academy server, presentation, demo, pack or villain modules, `managym/academy/fixtures/` | Academy integration, protocol, UI |
 | Other `managym/academy/`, `tests/academy/` | Academy integration, protocol |
 | `tests/model/test_world.py`, `tests/semantic/test_elemental_world.py`, `tests/semantic/test_decklist_import.py`, `tests/semantic/fixtures/elemental/` | Academy integration |
-| `scripts/play`, `scripts/play.py`, `tests/academy/test_play_launcher.py`, `scripts/verify-clean-machine`, `deploy/play/` | Python unit, protocol, clean-machine |
+| `scripts/play`, `scripts/play.py`, `tests/academy/test_play_launcher.py`, `scripts/verify-clean-machine` | Python unit, protocol, clean-machine |
 | `tests/academy/test_clean_machine_verifier.py` | Python unit, clean-machine |
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
 | `manabot/README.md` (published API table), other `manabot/`, other training/eval/sim/belief/semantic/model/verify/config tests, `tests/academy/test_qwen_policy.py`, `tests/test_public_api_contract.py`, `tests/public_api.json`, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
