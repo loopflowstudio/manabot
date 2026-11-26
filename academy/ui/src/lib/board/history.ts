@@ -40,14 +40,16 @@ export interface PassCount {
   count: number;
 }
 
-/** A client-local automation or yield note anchored to a point on the track. */
+/** A client-local automation, yield, or divider note anchored to a point on the track. */
 export interface HistoryNote {
   id: string;
-  actor: 'you' | 'auto';
+  actor: 'you' | 'auto' | 'note';
   turn: number | null;
   /** Emitted after the event with `seq <= afterSeq` (or at turn start when -1). */
   afterSeq: number;
   text: string;
+  /** Review position key this note jumps to, when set. */
+  jumpKey?: string | null;
 }
 
 export interface HistoryLine {
@@ -106,6 +108,10 @@ export interface HistoryOptions {
   initialOwner?: 'you' | 'opponent' | null;
   /** Maps an event to a Review position key for jumping. */
   jumpKeyFor?: (event: PresentationEvent, isMove: boolean) => string | null;
+  /** Per-event pilot mapping when mid-game seat swaps change who piloted each seat. */
+  playersFor?: (event: PresentationEvent) => TellPlayers;
+  /** Override automatic-action detection when reading a cross-swap track in Review. */
+  isAutomatic?: (event: PresentationEvent) => boolean;
 }
 
 /** More consequences than this in one turn collapse under their moves by default. */
@@ -192,15 +198,19 @@ function actorForMove(
   event: PresentationEvent,
   players: TellPlayers,
   turnOwner: 'you' | 'opponent' | null,
+  isAutomatic?: (event: PresentationEvent) => boolean,
 ): HistoryActor {
   if (event.kind.kind === 'blocked') {
-    if (event.caused_by !== null) return 'you';
+    if (!isAutomatic && event.caused_by !== null) return 'you';
     return turnOwner === 'opponent' ? 'you' : 'opponent';
   }
   const seat = eventSeat(event);
   if (seat === null) return event.kind.kind === 'attack_group' ? 'opponent' : 'note';
   if (seat === players.youSeat) {
-    return event.caused_by === null || event.caused_by.startsWith('authority.auto.') ? 'auto' : 'you';
+    const auto = isAutomatic
+      ? isAutomatic(event)
+      : (event.caused_by === null || event.caused_by.startsWith('authority.auto.'));
+    return auto ? 'auto' : 'you';
   }
   return 'opponent';
 }
@@ -412,23 +422,28 @@ export function buildHistory(
   const turns: HistoryTurn[] = [];
   let currentTurn: number | null = options.initialTurn ?? null;
   let currentOwner: 'you' | 'opponent' | null = options.initialOwner ?? null;
+  let currentTurnPlayer: number | null = null;
   let openBlock: { line: HistoryLine; seqs: Set<number>; castSeq: number | null; resolvedSeq: number | null } | null = null;
 
   const pendingNotes = options.notes ?? [];
   let noteCursor = 0;
 
-  const ensureTurn = (turnNum: number | null, owner: 'you' | 'opponent' | null): HistoryTurn => {
+  const ensureTurn = (
+    turnNum: number | null,
+    owner: 'you' | 'opponent' | null,
+    turnPlayers: TellPlayers = players,
+  ): HistoryTurn => {
     const existing = turns.at(-1);
     if (existing && existing.turn === turnNum) {
       if (existing.owner === null && owner !== null) {
-        existing.owner = players[owner];
+        existing.owner = turnPlayers[owner];
         existing.ownerSide = owner;
       }
       return existing;
     }
     const created: HistoryTurn = {
       turn: turnNum,
-      owner: owner ? players[owner] : null,
+      owner: owner ? turnPlayers[owner] : null,
       ownerSide: owner,
       lines: [],
       consequences: 0,
@@ -457,6 +472,7 @@ export function buildHistory(
       who: whoForActor(note.actor, players),
       segments: [{ text: note.text, card: null }],
       sentence: note.text,
+      jumpKey: note.jumpKey ?? null,
     }));
   };
 
@@ -474,24 +490,30 @@ export function buildHistory(
     flushNotesUpTo(event.seq);
     if (consumed.has(i)) continue;
 
+    const eventPlayers = options.playersFor ? options.playersFor(event) : players;
+
     if (event.kind.kind === 'turn_started') {
       closeBlock();
       currentTurn = event.kind.turn_number;
-      currentOwner = playerSide(event.kind.player, players.youSeat);
-      ensureTurn(currentTurn, currentOwner);
+      currentTurnPlayer = event.kind.player;
+      currentOwner = playerSide(event.kind.player, eventPlayers.youSeat);
+      ensureTurn(currentTurn, currentOwner, eventPlayers);
       continue;
     }
 
-    const turn = ensureTurn(currentTurn, currentOwner);
+    const eventOwner = currentTurnPlayer !== null
+      ? playerSide(currentTurnPlayer, eventPlayers.youSeat)
+      : currentOwner;
+    const turn = ensureTurn(currentTurn, eventOwner, eventPlayers);
     const labels = labelsAt(i);
     const move = isMoveEvent(event);
 
     if (event.kind.kind === 'passed') {
       closeBlock();
-      const actor = actorForMove(event, players, currentOwner);
+      const actor = actorForMove(event, eventPlayers, eventOwner, options.isAutomatic);
       const jumpKey = options.jumpKeyFor?.(event, true) ?? null;
       if (actor === 'opponent' || actor === 'auto') {
-        pushPassRun(turn, actor, whoForActor(actor, players), {
+        pushPassRun(turn, actor, whoForActor(actor, eventPlayers), {
           id: `seq-${event.seq}`,
           seq: event.seq,
           fromRevision: event.from_revision,
@@ -506,9 +528,9 @@ export function buildHistory(
         seqs: [event.seq],
         fromRevision: event.from_revision,
         actor: 'you',
-        who: players.you,
-        segments: tell(event, labels, players, { form: 'move' }),
-        sentence: segmentText(tell(event, labels, players, { form: 'sentence' })),
+        who: eventPlayers.you,
+        segments: tell(event, labels, eventPlayers, { form: 'move' }),
+        sentence: segmentText(tell(event, labels, eventPlayers, { form: 'sentence' })),
         jumpKey,
       }));
       continue;
@@ -536,14 +558,14 @@ export function buildHistory(
         : null;
     const isTrigger = (event.kind.kind === 'ability_resolved' || event.kind.kind === 'countered') && origin?.kind === 'triggered';
     const isAbility = event.kind.kind === 'countered' && origin?.kind === 'activated';
-    const segments = tell(event, labels, players, {
+    const segments = tell(event, labels, eventPlayers, {
       form: 'move',
       indented,
       trigger: isTrigger,
       ability: isAbility,
       targets,
     });
-    const sentenceSegments = tell(event, labels, players, {
+    const sentenceSegments = tell(event, labels, eventPlayers, {
       form: 'sentence',
       indented: false,
       trigger: isTrigger,
@@ -553,7 +575,7 @@ export function buildHistory(
     const sentence = segmentText(sentenceSegments);
 
     const sourceSeq = origin?.seq ?? null;
-    const actor: HistoryActor = move ? actorForMove(event, players, currentOwner) : 'note';
+    const actor: HistoryActor = move ? actorForMove(event, eventPlayers, eventOwner, options.isAutomatic) : 'note';
     const line = makeLine({
       id: `seq-${event.seq}`,
       seq: event.seq,
@@ -562,8 +584,8 @@ export function buildHistory(
       sourceSeq,
       fromRevision: event.from_revision,
       actor,
-      who: whoForActor(actor, players),
-      side: sideForEvent(event, players, actor),
+      who: whoForActor(actor, eventPlayers),
+      side: sideForEvent(event, eventPlayers, actor),
       castStackId: event.kind.kind === 'cast' ? event.kind.stack : null,
       segments,
       sentenceSegments,

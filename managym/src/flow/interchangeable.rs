@@ -19,14 +19,17 @@ use crate::{
     agent::action::{Action, ActionSpace},
     flow::{
         cast_permission::{CastPermissions, PlayGrant, PlayRoute},
-        combat::CombatState,
+        combat::{AttackTarget, CombatState},
         decision::{
             AfterNaming, Decision, EffectFrame, FrameCompletion, ManaProduction, PendingManaBonus,
             ResolutionCastOffer, ResolutionTarget, SpendCompletion, SuspendedResolution,
             TargetIteration,
         },
         event::{CombatPlayerHit, DamageTarget, GameEvent},
-        game::{ActivationSource, CastChoices, Game, GameProcedure, GameState, PendingChoice},
+        game::{
+            ActivatedTargeting, ActivationSource, CastChoices, DivisionParent, Game, GameProcedure,
+            GameState, PendingChoice, SpellTargeting,
+        },
         payment::{AnnouncedSpell, CostComponent, Help, Operation, Payment, PaymentProgress},
         priority::PriorityState,
         proposed_event::{
@@ -40,7 +43,7 @@ use crate::{
         turn::{RecordedCast, TurnState},
     },
     state::{
-        ability::Effect,
+        ability::{AbilitySet, Effect, GrantKey, LinkedAbilitySource},
         binding::ObjectBinding,
         card::{AbilityGrant, CardDefId, CardType, SpellProfile, StaticAbility},
         effect::{Affected, ContinuousEffect, Modification},
@@ -168,6 +171,43 @@ impl<'a> ReferenceCensus<'a> {
         }
     }
 
+    #[inline]
+    fn mark_opt_grant_key(&mut self, key: Option<GrantKey>) {
+        if let Some(grantor) = key.and_then(GrantKey::grantor) {
+            self.mark_permanent(grantor);
+        }
+    }
+
+    #[inline]
+    fn mark_ability_set(&mut self, set: AbilitySet) {
+        match set {
+            AbilitySet::Printed(_) => {}
+            AbilitySet::Acquired(key) => self.mark_opt_grant_key(Some(key)),
+        }
+    }
+
+    #[inline]
+    fn mark_linked_ability_source(&mut self, linked: LinkedAbilitySource) {
+        let LinkedAbilitySource { creator, set } = linked;
+        self.mark_object(creator);
+        self.mark_ability_set(set);
+    }
+
+    #[inline]
+    fn mark_attack_target(&mut self, target: AttackTarget) {
+        match target {
+            AttackTarget::Player(_) => {}
+            AttackTarget::Permanent(object) => self.mark_object(object),
+        }
+    }
+
+    #[inline]
+    fn mark_opt_attack_target(&mut self, target: Option<AttackTarget>) {
+        if let Some(target) = target {
+            self.mark_attack_target(target);
+        }
+    }
+
     fn walk_game(&mut self, game: &Game) {
         if let Some(choice) = &game.pending_choice {
             self.walk_pending_choice(choice);
@@ -251,6 +291,7 @@ impl<'a> ReferenceCensus<'a> {
                 attached_to,
                 spent_abilities: _,
                 activated_this_turn: _,
+                loyalty_activated_this_turn: _,
             } = permanent;
             self.mark_opt_object(*attached_to);
         }
@@ -319,10 +360,12 @@ impl<'a> ReferenceCensus<'a> {
         for link in exile_links {
             let ExileLink {
                 source,
+                ability_set,
                 exiled_object,
                 returns: _,
             } = link;
             self.mark_object(*source);
+            self.mark_ability_set(*ability_set);
             self.mark_object(*exiled_object);
         }
 
@@ -341,7 +384,7 @@ impl<'a> ReferenceCensus<'a> {
                 source_object,
             } = effect;
             match affected {
-                Affected::Player(_) => {}
+                Affected::Player(_) | Affected::NextSpell(_) => {}
                 Affected::Object(object) => self.mark_object(*object),
             }
             self.mark_opt_object(*source_object);
@@ -402,7 +445,7 @@ impl<'a> ReferenceCensus<'a> {
         let CombatState {
             first_strikers,
             regular_damage_step: _,
-            attackers,
+            attack_targets,
             attacker_to_blockers,
             already_attacking,
             blocked,
@@ -418,8 +461,13 @@ impl<'a> ReferenceCensus<'a> {
         // `AttackersDeclared` triggers at the end of declaration; mark them so
         // they never fold with newly declared attackers. Unblocked attackers
         // with no blockers yet compare by combat role in `same_combat_role`.
-        for &id in attackers.iter().take(*already_attacking) {
+        for &(id, _) in attack_targets.iter().take(*already_attacking) {
             self.mark_permanent(id);
+        }
+        // Any permanent currently being attacked (a planeswalker) is referenced
+        // by combat state and must not fold with unattacked copies.
+        for &(_, target) in attack_targets {
+            self.mark_opt_attack_target(target);
         }
         for &id in blocked {
             self.mark_permanent(id);
@@ -568,6 +616,7 @@ impl<'a> ReferenceCensus<'a> {
             targets,
             target_shares: _,
             target_req_indices: _,
+            target_divisions: _,
             kicked: _,
             x: _,
             mode: _,
@@ -608,6 +657,7 @@ impl<'a> ReferenceCensus<'a> {
                     spent,
                     chosen_modes: _,
                     inline_effects: _,
+                    acquired,
                 } = trigger;
                 for binding in remembered {
                     self.walk_object_binding(binding);
@@ -621,6 +671,7 @@ impl<'a> ReferenceCensus<'a> {
                 }
                 self.mark_opt_target(*context);
                 spent.visit_referenced_objects(|obj| self.mark_object(obj));
+                self.mark_opt_grant_key(*acquired);
             }
         }
     }
@@ -638,9 +689,12 @@ impl<'a> ReferenceCensus<'a> {
             ability_index: _,
             targets,
             target_req_indices: _,
+            target_divisions: _,
             attached,
             x: _,
+            loyalty_change: _,
             granted_by,
+            acquired,
             paid,
         } = ability;
         self.mark_object(*source_object);
@@ -651,6 +705,7 @@ impl<'a> ReferenceCensus<'a> {
         if let Some(AbilityGrant { grantor, index: _ }) = granted_by {
             self.mark_object(*grantor);
         }
+        self.mark_opt_grant_key(*acquired);
         paid.visit_referenced_objects(|obj| self.mark_object(obj));
     }
 
@@ -677,6 +732,7 @@ impl<'a> ReferenceCensus<'a> {
             chosen_modes: _,
             modes_chosen: _,
             inline_effects: _,
+            acquired,
         } = trigger;
         for binding in remembered {
             self.walk_object_binding(binding);
@@ -691,6 +747,7 @@ impl<'a> ReferenceCensus<'a> {
         self.mark_opt_target(*context);
         spent.visit_referenced_objects(|obj| self.mark_object(obj));
         self.mark_opt_permanent(*attacker);
+        self.mark_opt_grant_key(*acquired);
     }
 
     fn walk_delayed_trigger(&mut self, delayed: &DelayedTrigger) {
@@ -714,7 +771,8 @@ impl<'a> ReferenceCensus<'a> {
             DelayedTriggerEvent::CreatureDies
             | DelayedTriggerEvent::EndStep { .. }
             | DelayedTriggerEvent::YouCastSpell(_)
-            | DelayedTriggerEvent::Upkeep => {}
+            | DelayedTriggerEvent::Upkeep
+            | DelayedTriggerEvent::Whenever(_) => {}
         }
         self.mark_object(source_identity.object());
     }
@@ -798,6 +856,11 @@ impl<'a> ReferenceCensus<'a> {
                 self.mark_object(*source_object);
                 self.mark_opt_permanent(*attacker);
             }
+            GameEvent::LoyaltyAbilityActivated {
+                player: _,
+                source_object,
+                counters_removed: _,
+            } => self.mark_object(*source_object),
             GameEvent::PermanentTapped {
                 permanent,
                 for_mana: _,
@@ -815,9 +878,16 @@ impl<'a> ReferenceCensus<'a> {
             GameEvent::AttackersDeclared {
                 player: _,
                 attackers,
+                permanent_defenders,
             } => {
                 for &id in attackers {
                     self.mark_permanent(id);
+                }
+                if let Some(defenders) = permanent_defenders.as_deref() {
+                    for &(attacker, defender) in defenders {
+                        self.mark_permanent(attacker);
+                        self.mark_attack_target(defender);
+                    }
                 }
             }
             GameEvent::CombatDamageToPlayers { hits } => {
@@ -843,21 +913,45 @@ impl<'a> ReferenceCensus<'a> {
         }
     }
 
+    fn walk_activated_targeting(&mut self, targeting: &ActivatedTargeting) {
+        let ActivatedTargeting {
+            player: _,
+            source,
+            ability_index: _,
+            chosen,
+            target_req_indices: _,
+            target_divisions: _,
+            requirement: _,
+            x: _,
+        } = targeting;
+        self.walk_activation_source(*source);
+        for &target in chosen {
+            self.mark_target(target);
+        }
+    }
+
+    fn walk_spell_targeting(&mut self, targeting: &SpellTargeting) {
+        let SpellTargeting {
+            player: _,
+            object,
+            cast,
+            mode: _,
+            requirement_index: _,
+            chosen,
+            chosen_req_indices: _,
+            target_divisions: _,
+        } = targeting;
+        self.mark_object(*object);
+        self.walk_cast_choices(cast);
+        for &target in chosen {
+            self.mark_target(target);
+        }
+    }
+
     fn walk_pending_choice(&mut self, choice: &PendingChoice) {
         match choice {
             PendingChoice::Pay { player: _, payment } => self.walk_payment(payment),
-            PendingChoice::ActivatedTarget {
-                player: _,
-                source,
-                ability_index: _,
-                chosen,
-                requirement: _,
-            } => {
-                self.walk_activation_source(*source);
-                for &target in chosen {
-                    self.mark_target(target);
-                }
-            }
+            PendingChoice::ActivatedTarget(targeting) => self.walk_activated_targeting(targeting),
             PendingChoice::AnnounceX {
                 player: _,
                 object,
@@ -885,21 +979,19 @@ impl<'a> ReferenceCensus<'a> {
                 self.walk_announced_spell(spell);
             }
             PendingChoice::ChooseTargets {
-                player: _,
-                object,
-                cast,
-                mode: _,
-                requirement_index: _,
-                chosen,
-                chosen_req_indices: _,
+                targeting,
                 legal_targets: _, // vouched candidate list for the current decision
-            } => {
-                self.mark_object(*object);
-                self.walk_cast_choices(cast);
-                for &target in chosen {
-                    self.mark_target(target);
-                }
-            }
+            } => self.walk_spell_targeting(targeting),
+            PendingChoice::DivideAmount {
+                player: _,
+                slots: _,
+                next: _,
+                remaining: _,
+                parent,
+            } => match parent.as_ref() {
+                DivisionParent::Spell(targeting) => self.walk_spell_targeting(targeting),
+                DivisionParent::Activation(targeting) => self.walk_activated_targeting(targeting),
+            },
         }
     }
 
@@ -911,6 +1003,7 @@ impl<'a> ReferenceCensus<'a> {
             targets,
             target_req_indices: _,
             target_shares: _,
+            target_divisions: _,
         } = spell;
         self.mark_object(*object);
         self.walk_cast_choices(cast);
@@ -931,6 +1024,8 @@ impl<'a> ReferenceCensus<'a> {
                 source,
                 ability_index: _,
                 targets,
+                target_req_indices: _,
+                target_divisions: _,
                 x: _,
             } => {
                 self.walk_activation_source(*source);
@@ -1040,6 +1135,7 @@ impl<'a> ReferenceCensus<'a> {
             grantor,
             ability: _,
             ability_face: _,
+            acquired,
             queue: _,
             completion,
         } = frame;
@@ -1057,6 +1153,7 @@ impl<'a> ReferenceCensus<'a> {
                 requirement: _,
                 legal: _,
                 share: _,
+                division: _,
             } in remaining
             {
                 self.mark_target(*target);
@@ -1093,6 +1190,7 @@ impl<'a> ReferenceCensus<'a> {
             requirement: _,
             legal: _,
             share: _,
+            division: _,
         } in targets
         {
             self.mark_target(*target);
@@ -1100,6 +1198,7 @@ impl<'a> ReferenceCensus<'a> {
         self.mark_opt_target(*context);
         self.mark_opt_object(*attached);
         self.mark_opt_object(*grantor);
+        self.mark_opt_grant_key(*acquired);
         self.walk_frame_completion(completion);
     }
 
@@ -1214,8 +1313,8 @@ impl<'a> ReferenceCensus<'a> {
                 library_end: _,
                 reveal: _,
             } => {
-                if let Some((object, _)) = linked {
-                    self.mark_object(*object);
+                if let Some((linked_source, _)) = linked {
+                    self.mark_linked_ability_source(*linked_source);
                 }
             }
             EventBinding::ExileLinked {
@@ -1245,6 +1344,7 @@ impl<'a> ReferenceCensus<'a> {
             face,
             entry_copy: _,
             attached_to,
+            attack_target,
             library_top_departure: _,
             inspected_library_departure: _,
         } = entry;
@@ -1275,6 +1375,7 @@ impl<'a> ReferenceCensus<'a> {
             EntryFace::Melded { partner, result: _ } => self.mark_card(*partner),
         }
         self.mark_opt_object(*attached_to);
+        self.mark_opt_attack_target(*attack_target);
     }
 
     fn walk_decision(&mut self, decision: &Decision, is_current: bool) {
@@ -1303,6 +1404,18 @@ impl<'a> ReferenceCensus<'a> {
             } => {
                 for candidate in candidates {
                     self.mark_object(candidate.source());
+                }
+            }
+            Decision::EnterAttacking {
+                player: _,
+                object,
+                defenders,
+            } => {
+                self.mark_object(*object);
+                if !is_current {
+                    for &defender in defenders {
+                        self.mark_attack_target(defender);
+                    }
                 }
             }
             Decision::EnterAsCopy {
@@ -1533,8 +1646,12 @@ impl<'a> ReferenceCensus<'a> {
                     ResolutionCastOffer::ExiledWith {
                         source,
                         predicate: _,
-                    } => self.mark_object(*source),
-                    ResolutionCastOffer::AmongExiled { objects } => {
+                    } => self.mark_linked_ability_source(*source),
+                    ResolutionCastOffer::AmongExiled { objects }
+                    | ResolutionCastOffer::ChooseExiled {
+                        objects,
+                        if_declined: _,
+                    } => {
                         if !is_current {
                             for &object in objects {
                                 self.mark_object(object);
@@ -1670,6 +1787,7 @@ fn same_permanent_record_cheap(left: &Permanent, right: &Permanent) -> bool {
         attached_to,
         spent_abilities,
         activated_this_turn,
+        loyalty_activated_this_turn,
     } = left;
     let Permanent {
         chosen: r_chosen,
@@ -1693,6 +1811,7 @@ fn same_permanent_record_cheap(left: &Permanent, right: &Permanent) -> bool {
         attached_to: r_attached_to,
         spent_abilities: r_spent,
         activated_this_turn: r_activated,
+        loyalty_activated_this_turn: r_loyalty_activated,
     } = right;
 
     // Keyword counters carry timestamps that order layer 6 effects (CR 613.7c).
@@ -1716,6 +1835,7 @@ fn same_permanent_record_cheap(left: &Permanent, right: &Permanent) -> bool {
         && attached_to == r_attached_to
         && spent_abilities == r_spent
         && activated_this_turn == r_activated
+        && loyalty_activated_this_turn == r_loyalty_activated
 }
 
 fn can_become_creature(view: &Characteristics) -> bool {
@@ -2172,7 +2292,14 @@ impl Game {
         let Some(combat) = self.state.combat.as_deref() else {
             return true;
         };
-        if combat.attackers.contains(&left) != combat.attackers.contains(&right) {
+        let attacker_role = |id: PermanentId| {
+            combat
+                .attack_targets
+                .iter()
+                .find(|&&(a, _)| a == id)
+                .map(|&(_, target)| target)
+        };
+        if attacker_role(left) != attacker_role(right) {
             return false;
         }
         let is_blocked = |id: PermanentId| {
@@ -2340,7 +2467,8 @@ impl Game {
                 | PendingChoice::ActivationX { .. }
                 | PendingChoice::SpellMode { .. }
                 | PendingChoice::DivideAmongTargets { .. }
-                | PendingChoice::ChooseTargets { .. } => false,
+                | PendingChoice::ChooseTargets { .. }
+                | PendingChoice::DivideAmount { .. } => false,
             };
         }
         let Some(suspended) = &self.state.suspended_decision else {
@@ -2361,6 +2489,7 @@ impl Game {
             | Decision::ChooseToExile { .. }
             | Decision::LegendRule { .. } => true,
             Decision::OrderEntryChoices { .. }
+            | Decision::EnterAttacking { .. }
             | Decision::ChooseEntryValue { .. }
             | Decision::OrderMeldedCards { .. }
             | Decision::AssignCombatDamage { .. }

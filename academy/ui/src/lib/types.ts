@@ -17,6 +17,7 @@ export interface CardPreview {
 }
 
 export interface CardState {
+  printed_loyalty?: number | null;
   text_box?: string;
   id: number;
   registry_key: number;
@@ -121,6 +122,9 @@ export interface RestrictionView {
 }
 
 export interface PermanentState {
+  printed_loyalty?: number | null;
+  loyalty_activated_this_turn?: boolean;
+  attacked_permanent?: number;
   /** Effective evergreen grants, keyed by keyword: granting permanent, effect timestamp, or counter. */
   keyword_grants?: Record<string, AbilityGrantView>;
   keyword_abilities?: KeywordAbilityView[];
@@ -218,6 +222,7 @@ export interface PlayerTurnHistory {
   permanents_left?: number;
   nonland_permanents_left?: number;
   warped_this_turn?: boolean;
+  loyalty_abilities_activated?: number;
   mana_spent_casting?: number;
 }
 
@@ -270,6 +275,7 @@ export interface PlayerState {
   hand: CardState[];
   graveyard: CardState[];
   exile: CardState[];
+  command?: CardState[];
   stack: CardState[];
   battlefield: PermanentState[];
 }
@@ -827,9 +833,9 @@ export interface CommandRejection {
   current_prompt: number | null;
 }
 
-/** One line of the server's narration: either player's move or an automated action, in the turn it was taken. */
+/** One line of the server's narration: either player's move, an automated action, or a system note, in the turn it was taken. */
 export interface LogLine {
-  actor: 'hero' | 'villain' | 'auto';
+  actor: 'hero' | 'villain' | 'auto' | 'system';
   turn: number;
   text: string;
 }

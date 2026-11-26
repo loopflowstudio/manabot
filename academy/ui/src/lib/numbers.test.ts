@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AnalysedDecision, Analysis } from './analysis';
-import { agreement, duration, estimateArc, numberRows, numbersLine, winRate, type GameNumbers, type RecordRow } from './numbers';
+import { agreement, duration, estimateArc, numberRows, numbersLine, playOrDraw, seatColumnLabel, winRate, type GameNumbers, type RecordRow } from './numbers';
 
 const seat = (index: number, spells: number, attacks: number, damage: number | null = 3) => ({
   seat: index, lands_played: 4, spells_cast: spells, attacks, cards_drawn: 5, damage_dealt: damage, damage_taken: damage,
@@ -32,6 +32,17 @@ describe('the game in numbers', () => {
     const read = analysis([decided(1, [0.2, 0.8], 0), decided(0, [0.3, 0.7], 0.5), decided(0, [], null)]);
     expect(agreement(read)).toEqual({ same: 1, of: 2 });
     expect(estimateArc(read)).toEqual({ start: '50', peak: '75', end: '75' });
+    expect(estimateArc(read, [{ event: 1, turn: 2 }])).toBeNull();
+  });
+
+  it('describes swapped play/draw order and seat-total column headings', () => {
+    expect(playOrDraw(0)).toBe('On the play');
+    expect(playOrDraw(1, 0)).toBe('Started on the play · finished on the draw');
+    expect(playOrDraw(0, 1)).toBe('Started on the draw · finished on the play');
+    expect(playOrDraw(0, 0)).toBe('On the play');
+    expect(seatColumnLabel(0, 'Reader', 'UR Lessons', true)).toBe('Seat 1 · UR Lessons (Reader at end)');
+    expect(seatColumnLabel(1, 'You', null, true)).toBe('Seat 2 (You at end)');
+    expect(seatColumnLabel(0, 'You', 'UR Lessons', false)).toBe('You');
   });
 
   it('says how long a game took', () => {

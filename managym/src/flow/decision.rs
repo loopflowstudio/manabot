@@ -117,6 +117,9 @@ pub struct ResolutionTarget {
     pub target: Target,
     pub requirement: usize,
     pub legal: bool,
+    /// Announced divided share for this slot (CR 601.2d, 602.2b); 0 when undivided.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub division: i32,
 }
 
 /// Everything a resolving spell/ability needs while its effects execute,
@@ -159,7 +162,7 @@ pub struct EffectFrame {
     /// Kicker choice of the resolving spell or the spell that became the trigger source.
     pub kicked: bool,
     /// The resolving spell's or ability's announced X; 0 without one.
-    pub x: u8,
+    pub x: i32,
     /// What was paid to cast the resolving spell, to cast the permanent whose
     /// entering triggered the resolving ability, or to activate the
     /// resolving ability; empty otherwise.
@@ -244,6 +247,10 @@ pub struct EffectFrame {
     pub ability: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ability_face: Option<crate::state::card::CardDefId>,
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited the
+    /// resolving ability, or `None` for printed / Layer-1 copied abilities.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acquired: Option<crate::state::ability::GrantKey>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
     pub completion: FrameCompletion,
@@ -322,6 +329,7 @@ impl EffectFrame {
             grantor: None,
             ability: None,
             ability_face: None,
+            acquired: None,
             queue: effects.into(),
             completion: FrameCompletion::Priority,
         }
@@ -352,6 +360,7 @@ impl EffectFrame {
             grantor: self.grantor,
             ability: self.ability,
             ability_face: self.ability_face,
+            acquired: self.acquired,
             ..Self::new(self.controller, effects)
         }
     }
@@ -429,6 +438,11 @@ pub enum ResolutionCastOffer {
         object: ObjectId,
         below: i32,
     },
+    ChooseExiled {
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        objects: Vec<ObjectId>,
+        if_declined: Vec<Effect>,
+    },
     /// The top card of the deciding player's library, which they have looked
     /// at and which stays there if not cast (Planetarium of Wan Shi Tong).
     LibraryTop {
@@ -436,10 +450,9 @@ pub enum ResolutionCastOffer {
         object: ObjectId,
     },
     /// Cards matching `predicate` the deciding player owns that are exiled
-    /// with the exact `source` (Boiling Rock Rioter).
+    /// with the exact linked `source` (Boiling Rock Rioter, CR 607).
     ExiledWith {
-        #[serde(serialize_with = "crate::state::game_object::exact")]
-        source: ObjectId,
+        source: crate::state::ability::LinkedAbilitySource,
         predicate: CardPredicate,
     },
     /// Exact appearances exiled together, cast in the chooser's order.
@@ -594,6 +607,12 @@ pub enum Decision {
         #[serde(rename = "card")]
         object_id: ObjectId,
         candidates: Vec<PermanentId>,
+    },
+    /// CR 508.4: choose the defender of one entering creature before the simultaneous entries.
+    EnterAttacking {
+        player: PlayerId,
+        object: ObjectId,
+        defenders: Vec<super::combat::AttackTarget>,
     },
     /// Choose a name from the immutable installed vocabulary, one ordinary
     /// decision per level: a scope larger than `NAME_BRANCHING` offers its
@@ -868,6 +887,7 @@ impl Decision {
             Decision::OrderMeldedCards { player, .. }
             | Decision::AssignCombatDamage { player, .. }
             | Decision::OrderReplacement { player, .. }
+            | Decision::EnterAttacking { player, .. }
             | Decision::OrderEntryChoices { player, .. }
             | Decision::ChooseEntryValue { player, .. }
             | Decision::EnterAsCopy { player, .. }
@@ -1000,6 +1020,7 @@ impl Decision {
             Decision::OrderMeldedCards { .. }
             | Decision::AssignCombatDamage { .. }
             | Decision::OrderReplacement { .. }
+            | Decision::EnterAttacking { .. }
             | Decision::OrderEntryChoices { .. }
             | Decision::ChooseEntryValue { .. }
             | Decision::EnterAsCopy { .. }
@@ -1567,10 +1588,21 @@ impl Game {
                             Target::StackAbility(ability.id),
                             ability.controller,
                         );
+                        let loyalty = ability.loyalty_change.map(|change| {
+                            GameEvent::LoyaltyAbilityActivated {
+                                player: ability.controller,
+                                source_object: ability.source_object,
+                                counters_removed: (-change).max(0) as u32,
+                            }
+                        });
                         let ability =
                             crate::state::stack_object::StackObject::ActivatedAbility(ability);
                         self.presentation_activated(&ability);
                         self.push_to_stack(ability);
+                        // CR 602.2i: the ability is activated once on the stack and paid for.
+                        if let Some(event) = loyalty {
+                            self.emit(event);
+                        }
                     }
                     FrameCompletion::TurnFaceUp(object) => {
                         if self.state.permanent_of(object).is_some() {
@@ -1592,7 +1624,7 @@ impl Game {
                             let (to, entry) = if self.state[object].types.is_permanent() {
                                 let spell = SpellEntry {
                                     kicked: frame.kicked,
-                                    x: frame.x,
+                                    x: frame.x.try_into().expect("spell X fits in cast units"),
                                     payment: self.state[object]
                                         .is_card()
                                         .then(|| frame.spent.clone()),
@@ -1754,12 +1786,7 @@ impl Game {
                     self.place_library_arrivals(result, second_from_top);
                 }
             }
-            EventBinding::Created { attacking } => {
-                frame.created = moved.collect();
-                for &object in &frame.created {
-                    self.finish_created_token(object, attacking);
-                }
-            }
+            EventBinding::Created { .. } => frame.created = moved.collect(),
             EventBinding::Damage { result: measured } => {
                 // Each damage instruction measures its own excess: prevented
                 // or redirected damage leaves none, never an earlier one's.
@@ -1864,6 +1891,24 @@ impl Game {
                     })
                     .collect(),
                 focus: source_focus,
+            },
+            Decision::EnterAttacking {
+                player,
+                object,
+                defenders,
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::ChooseTarget,
+                focus: vec![self.state.entry_object(*object).id],
+                actions: defenders
+                    .iter()
+                    .map(|defender| Action::ChooseTarget {
+                        player: *player,
+                        target: self
+                            .attack_target_subject(*defender)
+                            .expect("offered defender"),
+                    })
+                    .collect(),
             },
             Decision::EnterAsCopy {
                 player,
@@ -2458,6 +2503,25 @@ impl Game {
         }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
+            (Decision::EnterAttacking { defenders, .. }, Action::ChooseTarget { target, .. })
+                if let Some(defender) = defenders
+                    .iter()
+                    .copied()
+                    .find(|&d| self.attack_target_subject(d) == Some(*target)) =>
+            {
+                let batch = suspended
+                    .frame
+                    .batch
+                    .as_mut()
+                    .expect("attacking token entry batch");
+                if let crate::flow::proposed_event::ProposedEvent::ZoneMove { entry, .. } =
+                    &mut batch.events[batch.cursor].event
+                {
+                    entry.attack_target = Some(defender);
+                }
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::EnterAsCopy { candidates, .. }, choice) => {
                 let of = match choice {
                     Action::ChooseTarget {
@@ -2583,7 +2647,7 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("unpayable X".into()));
                 };
-                suspended.frame.x = x;
+                suspended.frame.x = i32::from(x);
                 let payment = PaymentProgress::new(
                     *player,
                     vec![CostComponent::mana(ManaCost::default().with_generic(x))],
@@ -3351,6 +3415,9 @@ impl Game {
             }
             (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
                 match offer {
+                    ResolutionCastOffer::ChooseExiled { if_declined, .. } => {
+                        suspended.frame.prepend_effects(if_declined.iter().cloned())
+                    }
                     ResolutionCastOffer::Exiled {
                         object: object_id, ..
                     } => {
@@ -3790,7 +3857,8 @@ impl Game {
             ResolutionCastOffer::Hand { .. } => {
                 self.state.zone_cards(ZoneType::Hand, *player).collect()
             }
-            ResolutionCastOffer::AmongExiled { objects } => objects
+            ResolutionCastOffer::ChooseExiled { objects, .. }
+            | ResolutionCastOffer::AmongExiled { objects } => objects
                 .iter()
                 .filter(|object| self.state.zones.zone_of(**object) == Some(ZoneType::Exile))
                 .filter_map(|object| self.state.card_of(*object))
@@ -3857,6 +3925,7 @@ impl Game {
                             < *below
                     }
                     ResolutionCastOffer::AmongExiled { .. }
+                    | ResolutionCastOffer::ChooseExiled { .. }
                     | ResolutionCastOffer::LibraryTop { .. } => true,
                 };
                 if eligible && self.castable_mana_value(*player, object, cast).is_some() {
@@ -4136,11 +4205,17 @@ impl Game {
     }
 
     /// Reveal cards from the top of `player`'s library until one matches
-    /// `predicate`; it goes to their hand and the cards revealed before it to
-    /// the bottom in a random order. The cards never leave the library while
+    /// `predicate`; it moves to `to` (hand immediately, or battlefield as a
+    /// returned entry proposal) and the cards revealed before it go to the
+    /// bottom in a random order. The cards never leave the library while
     /// revealed, so the match leaves a public position and a single passed
     /// card keeps every fact below it and is publicly known on the bottom.
-    pub(crate) fn reveal_until_to_hand(&mut self, player: PlayerId, predicate: &CardPredicate) {
+    pub(crate) fn reveal_until(
+        &mut self,
+        player: PlayerId,
+        predicate: &CardPredicate,
+        to: ZoneType,
+    ) -> Option<crate::flow::proposed_event::ProposedEvent> {
         let from_top: Vec<ObjectId> = self.library_from_top(player).collect();
         let hit = from_top
             .iter()
@@ -4152,15 +4227,31 @@ impl Game {
                 definition: self.state[*object].definition_id,
             });
         }
+        let mut battlefield_move = None;
         if let Some(index) = hit {
-            self.reveal_object_to_hand(
-                from_top[index],
-                player,
-                ZoneEntry {
-                    inspected_library_departure: true,
-                    ..ZoneEntry::default()
-                },
-            );
+            let found = from_top[index];
+            let entry = ZoneEntry {
+                inspected_library_departure: true,
+                ..ZoneEntry::default()
+            };
+            match to {
+                ZoneType::Battlefield => {
+                    self.emit(GameEvent::CardRevealed {
+                        owner: player,
+                        definition: self.state[found].definition_id,
+                    });
+                    battlefield_move = Some(self.zone_move_proposal(
+                        found,
+                        ZoneType::Battlefield,
+                        ZoneEntry {
+                            controller: Some(player),
+                            ..entry
+                        },
+                    ));
+                }
+                ZoneType::Hand => self.reveal_object_to_hand(found, player, entry),
+                other => unreachable!("RevealUntil expects Hand or Battlefield, got {other:?}"),
+            }
         }
         match passed.as_slice() {
             [] => {}
@@ -4181,6 +4272,7 @@ impl Game {
                 }
             }
         }
+        battlefield_move
     }
 
     /// Put the top card of its owner's library on the bottom ("on the bottom
@@ -4246,7 +4338,10 @@ mod learn_tests {
     fn distinct_card_names(count: usize) -> Vec<String> {
         let pack = crate::cards::content_pack::default_content_pack();
         pack.definitions()
-            .filter(|def| !def.is_token && pack.definition_id(&def.printed.name).is_some())
+            .filter(|def| {
+                def.kind == crate::state::game_object::ObjectKind::Card
+                    && pack.definition_id(&def.printed.name).is_some()
+            })
             .map(|def| def.printed.name.clone())
             .take(count)
             .collect()
@@ -4256,7 +4351,7 @@ mod learn_tests {
     fn card_choices_exclude_transient_tokens_without_removing_them() {
         let mut game = game(&[]);
         let player = PlayerId(0);
-        let permanent = game.create_token("token.spirit", player, false).unwrap();
+        let permanent = game.create_token("token.spirit", player).unwrap();
         let token = game.state.permanents[permanent].as_ref().unwrap().object;
         let token = game.move_object(token, ZoneType::Hand);
         learn(&mut game);

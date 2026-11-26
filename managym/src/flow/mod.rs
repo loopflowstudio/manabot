@@ -9,6 +9,7 @@ pub mod damage;
 pub mod decision;
 pub mod effects;
 pub mod event;
+pub mod functioning_abilities;
 pub mod game;
 pub mod identity;
 pub mod interchangeable;

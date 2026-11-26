@@ -1349,7 +1349,7 @@ mod tests {
         let land_names: Vec<String> = crate::cards::content_pack::default_content_pack()
             .definitions()
             .filter(|def| {
-                !def.is_token
+                def.kind == crate::state::game_object::ObjectKind::Card
                     && def.printed.types.is_land()
                     && crate::cards::content_pack::default_content_pack()
                         .definition_id(&def.printed.name)

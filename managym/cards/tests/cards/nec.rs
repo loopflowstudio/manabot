@@ -81,7 +81,6 @@ fn release_to_memory_spirits_block_and_are_blocked_by_nonspirits() {
             .create_token(
                 "token.plain_spirit",
                 PlayerId(usize::from(!spirit_attacking)),
-                false,
             )
             .unwrap();
         let ogre = s.force_permanent_on_battlefield(usize::from(spirit_attacking), "Gray Ogre");

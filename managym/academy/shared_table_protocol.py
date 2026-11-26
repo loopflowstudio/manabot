@@ -159,7 +159,9 @@ class JoinTableMessage(ProtocolModel):
 
 class ResumeMessage(ProtocolModel):
     type: Literal["resume"]
-    play_session_id: str | None = None
+    play_session_id: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     session_id: str
     resume_token: str
     presentation_cursor: UInt64 | None = None
@@ -179,6 +181,14 @@ class RematchMessage(ProtocolModel):
     setup_revision: UInt64 | None = None
     intent: Literal["rematch", "swap_sides", "change_opponent"] = "rematch"
     config: dict[str, object] = Field(default_factory=dict)
+
+
+class SwapSidesMessage(ProtocolModel):
+    type: Literal["swap_sides"]
+    grant_revision: UInt64
+    request_id: str = Field(min_length=1, max_length=128)
+    match_id: str
+    expected_revision: UInt64
 
 
 class CommandMessage(ProtocolModel):
@@ -284,6 +294,7 @@ SharedTableRequest: TypeAlias = Annotated[
     | ResumeMessage
     | NewGameMessage
     | RematchMessage
+    | SwapSidesMessage
     | CommandMessage
     | ActionMessage
     | PassTurnMessage
@@ -308,6 +319,7 @@ REQUEST_TYPES = (
     "resume",
     "new_game",
     "rematch",
+    "swap_sides",
     "command",
     "action",
     "pass_turn",

@@ -81,7 +81,7 @@ impl Scenario {
             ActionSpaceKind::DeclareAttacker => space
                 .actions
                 .iter()
-                .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+                .position(|action| matches!(action, Action::DeclareAttacker { attack: None, .. }))
                 .unwrap_or(space.actions.len().saturating_sub(1)),
             ActionSpaceKind::DeclareBlocker => space
                 .actions
@@ -247,7 +247,15 @@ impl Scenario {
             .action_space()
             .actions
             .iter()
-            .position(|action| matches!(action, Action::DeclareAttacker { attack: true, .. }))
+            .position(|action| {
+                matches!(
+                    action,
+                    Action::DeclareAttacker {
+                        attack: Some(_),
+                        ..
+                    }
+                )
+            })
             .expect("attack action should exist");
         self.step_action(attack_index);
     }
@@ -258,7 +266,7 @@ impl Scenario {
             .action_space()
             .actions
             .iter()
-            .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+            .position(|action| matches!(action, Action::DeclareAttacker { attack: None, .. }))
             .expect("decline-attack action should exist");
         self.step_action(decline_index);
     }
@@ -304,7 +312,7 @@ pub fn attack_with_group(s: &mut Scenario, attackers: &[PermanentId]) {
     let mut declared = 0;
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         let index = s.action_space().actions.iter().position(|action| {
-            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if attackers.contains(permanent))
+            matches!(action, Action::DeclareAttacker { permanent, attack: Some(_), .. } if attackers.contains(permanent))
         });
         match index {
             Some(index) => {

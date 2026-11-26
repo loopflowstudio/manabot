@@ -1145,6 +1145,13 @@
           "type": "integer",
           "format": "int32"
         },
+        "printed_loyalty": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
         "registry_key": {
           "type": "integer",
           "format": "uint32",
@@ -1383,6 +1390,15 @@
           "format": "uint32",
           "minimum": 0
         },
+        "attacked_permanent": {
+          "description": "The permanent this creature is attacking.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "attacked_this_turn": {
           "type": "boolean"
         },
@@ -1562,6 +1578,9 @@
             "type": "string"
           }
         },
+        "loyalty_activated_this_turn": {
+          "type": "boolean"
+        },
         "name": {
           "$ref": "#/$defs/RequiredNullable3"
         },
@@ -1578,6 +1597,13 @@
         },
         "power": {
           "$ref": "#/$defs/RequiredNullable5"
+        },
+        "printed_loyalty": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
         },
         "protection_from": {
           "type": "array",
@@ -1670,6 +1696,12 @@
             "null"
           ],
           "format": "int32"
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          }
         },
         "counters": {
           "type": "object",
@@ -2171,6 +2203,12 @@
         },
         "life_lost": {
           "description": "Life this player lost (CR 119.3; damage, payment or a set life total\nlower than before), summed over every loss this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "loyalty_abilities_activated": {
+          "description": "Loyalty abilities this player activated (CR 606), wherever their\nsources are now.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0

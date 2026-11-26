@@ -758,7 +758,7 @@ fn lunar_insight_counts_distinct_controlled_nonland_values_at_resolution() {
         *s.game_mut() = pending.clone();
         for _ in 0..foods {
             s.game_mut()
-                .create_token("token.food", PlayerId(0), false)
+                .create_token("token.food", PlayerId(0))
                 .unwrap();
         }
         for creature in creatures {
@@ -1005,7 +1005,7 @@ fn high_society_hunter_can_sacrifice_a_token_or_decline() {
     let prowler = s.force_permanent_on_battlefield(0, "Cackling Prowler");
     let token = s
         .game_mut()
-        .create_token("token.cat_1_1_w", PlayerId(0), false)
+        .create_token("token.cat_1_1_w", PlayerId(0))
         .unwrap();
     let cat = card_of(&s, token);
     clear_summoning_sickness(&mut s, hunter);
@@ -1423,7 +1423,14 @@ fn linden_and_chart_read_the_completed_attack_declaration() {
 
     *s.game_mut() = partial;
     assert_eq!(s.action_space(), &offer);
-    let chosen = &s.game().state.combat.as_ref().unwrap().attackers;
+    let chosen: Vec<_> = s
+        .game()
+        .state
+        .combat
+        .as_ref()
+        .unwrap()
+        .attackers()
+        .collect();
     assert_eq!(chosen.len(), 1);
     assert_eq!(
         crate::support::inspect::permanent(&s, chosen[0]).tapped,
@@ -1479,7 +1486,11 @@ fn linden_and_chart_ignore_entry_attacking_and_empty_declarations() {
     s.force_permanent_on_battlefield(1, "Gray Ogre");
     s.advance_to_active_step(1, StepKind::BeginningOfCombat);
     s.game_mut()
-        .create_token("token.soldier", PlayerId(1), true)
+        .create_token_attacking(
+            "token.soldier",
+            PlayerId(1),
+            managym::flow::combat::AttackTarget::Player(PlayerId(0)),
+        )
         .unwrap();
     s.advance_to_active_step(1, StepKind::DeclareAttackers);
     let root = s.game().clone();
@@ -1667,7 +1678,7 @@ fn attack_batch_midnight_snack_reads_total_after_sacrifice() {
     s.force_permanent_on_battlefield(0, "Ancestor Dragon");
     let food = s
         .game_mut()
-        .create_token("token.food", PlayerId(0), false)
+        .create_token("token.food", PlayerId(0))
         .unwrap();
     s.set_player_mana_pool(0, "2");
     activate(&mut s, food, 0);
@@ -2356,7 +2367,7 @@ fn eat_food(s: &mut crate::support::game::Scenario) {
     use managym::agent::action::Action;
     let food = s
         .game_mut()
-        .create_token("token.food", PlayerId(0), false)
+        .create_token("token.food", PlayerId(0))
         .unwrap();
     if s.game().state.players[0].mana_pool.total() < 2 {
         s.set_player_mana_pool(0, "2");
@@ -2551,7 +2562,7 @@ fn exemplar_of_light_counts_one_gain_per_lifelink_source() {
     crate::support::play::pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         match s.action_space().actions.iter().position(|a| {
-            matches!(a, Action::DeclareAttacker { permanent, attack: true, .. }
+            matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. }
                 if hawks.contains(permanent))
         }) {
             Some(index) => s.step_action(index),
@@ -2831,6 +2842,7 @@ fn modal_trigger_rechecks_its_intervening_if_on_resolution() {
             }),
             effects: vec![Effect::TriggerModes {
                 modes: vec![vec![Effect::gain_life(2)], vec![Effect::gain_life(5)]],
+                min: 0,
                 up_to: None,
                 unchosen: false,
             }],
@@ -3114,7 +3126,7 @@ fn ingenious_leonin_grows_another_attacker_and_gives_a_cat_first_strike() {
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         let index = s.action_space().actions.iter().position(|action| {
             matches!(action, Action::DeclareAttacker { permanent, attack, .. }
-                if *attack == [leonin, cat, ogre].contains(permanent))
+                if attack.is_some() == [leonin, cat, ogre].contains(permanent))
         });
         s.step_action(index.unwrap());
     }
@@ -3956,7 +3968,7 @@ fn anthem_bonuses_parent_and_its_cat_while_in_play() {
     let mut s = five_color_setup(&["Anthem of Champions", "Prideful Parent"]);
     let opponent = s
         .game_mut()
-        .create_token("token.cat_1_1_w", PlayerId(1), false)
+        .create_token("token.cat_1_1_w", PlayerId(1))
         .unwrap();
     enter_and_settle(&mut s, "Prideful Parent");
     let parent = permanent_named(&s, "Prideful Parent");
@@ -7041,7 +7053,13 @@ fn quilled_greatwurm_counts_each_creatures_combat_damage_on_your_turn() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |a| {
-            matches!(a, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                a,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
@@ -7129,7 +7147,13 @@ fn quilled_greatwurm_triggers_name_their_creature_and_damage_on_the_stack() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |a| {
-            matches!(a, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                a,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     let mut placement = Vec::new();
@@ -7639,13 +7663,13 @@ fn named_coil_copies_inherit_electroduplicate_but_only_the_recipient_gains_life(
     s.game_mut().mana_payment[0] = ManaPayment::Auto;
     let original = s
         .game_mut()
-        .create_token("token.komas_coil", PlayerId(0), false)
+        .create_token("token.komas_coil", PlayerId(0))
         .unwrap();
     let opponent = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let land = s.force_permanent_on_battlefield(1, "Island");
     let clue = s
         .game_mut()
-        .create_token("token.clue", PlayerId(1), false)
+        .create_token("token.clue", PlayerId(1))
         .unwrap();
     s.force_permanent_on_battlefield(1, "Doubling Season");
     cast(&mut s, "Electroduplicate");
@@ -7787,11 +7811,11 @@ fn named_coil_upkeep_copies_only_another_controlled_nonland() {
     s.force_permanent_on_battlefield(0, "Extravagant Replication");
     let coil = s
         .game_mut()
-        .create_token("token.komas_coil", PlayerId(0), false)
+        .create_token("token.komas_coil", PlayerId(0))
         .unwrap();
     let clue = s
         .game_mut()
-        .create_token("token.clue", PlayerId(0), false)
+        .create_token("token.clue", PlayerId(0))
         .unwrap();
     s.force_permanent_on_battlefield(0, "Island");
     s.force_permanent_on_battlefield(1, "Gray Ogre");
@@ -8290,7 +8314,7 @@ fn departure_granted_returns_follow_owner_controller_and_one_incarnation() {
     s.restore(&root);
     let token = s
         .game_mut()
-        .create_token("token.flying_spirit", PlayerId(0), false)
+        .create_token("token.flying_spirit", PlayerId(0))
         .unwrap();
     let token_object = card_of(&s, token);
     cast(&mut s, "Fake Your Own Death");
@@ -8456,6 +8480,7 @@ fn source_power_limits_trigger_modes_and_is_rechecked_after_savor() {
                 vec![return_creature(None)],
                 vec![Effect::gain_life(1)],
             ],
+            min: 0,
             up_to: None,
             unchosen: false,
         }],
@@ -8775,6 +8800,204 @@ fn celestial_armor_entry_protection_stays_when_the_armor_moves() {
     }
     s.advance_to_active_step(1, StepKind::Upkeep);
     assert!(!has(&s, first, Keyword::Hexproof), "until end of turn");
+}
+
+#[test]
+fn chandra_flameshaper_loyalty_abilities() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup, pin_top, set_counters},
+        inspect::{counters_of, has_action, keywords},
+        play::{activate, cast, choose, choose_mode, pass_until, select_card, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::turn::StepKind,
+        state::{card::Keyword, game_object::PlayerId, permanent::CounterKind, target::Target},
+    };
+
+    // +2 adds {R}{R}{R}, exiles top 3, chooses one playable this turn; others stay unplayable.
+    let mut s = five_color_setup(&[
+        "Chandra, Flameshaper",
+        "Gray Ogre",
+        "Lightning Bolt",
+        "Plains",
+    ]);
+    let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
+    assert_eq!(counters_of(&s, chandra, CounterKind::Loyalty), 6);
+    let pinned = pin_top(
+        &mut s,
+        &["Lightning Bolt", "Gray Ogre", "Plains", "Lightning Bolt"],
+    );
+    let bolt = pinned[0];
+    let fourth_def = s.game().state[pinned[3]].definition_id;
+    s.game_mut().state.players[0]
+        .known_library
+        .public
+        .insert(3, fourth_def);
+    s.set_player_mana_pool(0, "0");
+    activate(&mut s, chandra, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 3);
+    assert_eq!(
+        s.game().state.players[0].known_library.public.get(&0),
+        Some(&fourth_def),
+        "library_top_departure shifts known library facts beneath the 3 exiled cards"
+    );
+    assert_eq!(
+        s.action_space().actions.len(),
+        3,
+        "choose 1 of 3 exiled cards"
+    );
+    // Choose Lightning Bolt from among the three exiled cards.
+    select_card(&mut s, bolt);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert!(
+        has_action(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, .. } if s.game().state[*object].name == "Lightning Bolt")
+        ),
+        "chosen exiled card is playable this turn"
+    );
+    assert!(
+        !has_action(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, .. } if s.game().state[*object].name == "Gray Ogre")
+        ),
+        "unchosen exiled creature is not playable"
+    );
+    assert!(
+        !has_action(
+            &s,
+            |a| matches!(a, Action::PlayLand { object, .. } if s.game().state[*object].name == "Plains")
+        ),
+        "unchosen exiled land is not playable"
+    );
+
+    // +1 creates a hasty token copy that sacrifices itself at the beginning of the end step.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    activate(&mut s, chandra, 1);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    let ogres = s.battlefield_permanents_named(0, "Gray Ogre");
+    assert_eq!(ogres.len(), 2);
+    let copy = ogres.into_iter().find(|&id| id != ogre).unwrap();
+    assert!(keywords(&s, copy).has(Keyword::Haste));
+    s.advance_to_step(StepKind::End);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre"), vec![ogre]);
+
+    // -4 divided damage: 8 divided among 2 targets (6 and 2), linear sequential offers,
+    // and CR 608.2b: if one target becomes illegal before resolution, the other still gets only its assigned share.
+    let mut s = five_color_setup(&["Chandra, Flameshaper", "Hill Giant", "Lightning Bolt"]);
+    let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
+    let g1 = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let g2 = s.force_permanent_on_battlefield(1, "Hill Giant");
+    activate(&mut s, chandra, 2);
+    assert!(s.choose_target(Target::Permanent(g1)));
+    assert!(s.choose_target(Target::Permanent(g2)));
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    // Sequential division: 1..=7 offered for g1 (linear: 7 choices), g2 gets remainder automatically.
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    assert_eq!(s.action_space().actions.len(), 7);
+    let div_obs = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
+    let div_frame = div_obs.continuation.iter().find(|f| f.kind == 4).unwrap();
+    assert_eq!(div_frame.x, 0);
+    assert_eq!(div_frame.division_remaining, 8);
+    assert!(div_obs
+        .action_space
+        .actions
+        .iter()
+        .enumerate()
+        .all(|(i, a)| !a.announces_x && a.division_amount == Some((i + 1) as i32)));
+    choose_mode(&mut s, 6); // 6 to g1, 2 to g2.
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    // Before Chandra -4 resolves, destroy g1 with Lightning Bolt so g1 becomes illegal.
+    s.set_player_mana_pool(0, "R");
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Permanent(g1)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[g1].is_none(), "g1 died to Bolt");
+    assert_eq!(
+        s.game().state.permanents[g2].as_ref().unwrap().damage,
+        2,
+        "CR 608.2b: g2 still takes only its assigned 2 damage, not 8"
+    );
+
+    // -4 stress state: 8 damage across 8 legal targets stays linear and auto-assigns 1 each.
+    let mut s = five_color_setup(&["Chandra, Flameshaper"]);
+    let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
+    set_counters(&mut s, chandra, CounterKind::Loyalty, 6);
+    let beasts: Vec<_> = (0..8)
+        .map(|_| {
+            s.game_mut()
+                .create_token("token.beast_4_4_g_trample", PlayerId(1))
+                .unwrap()
+        })
+        .collect();
+    activate(&mut s, chandra, 2);
+    for (i, &beast) in beasts.iter().enumerate() {
+        assert_eq!(
+            s.action_space().actions.len(),
+            (9 - i) + 1, // 8 Beasts + Chandra herself + decline
+            "linear target offers at step {i}"
+        );
+        assert!(s.choose_target(Target::Permanent(beast)));
+    }
+    // Choosing 8 targets for 8 damage leaves only 1 each -> auto-assigned without combinatorial choices.
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    settle(&mut s);
+    for &beast in &beasts {
+        assert_eq!(s.game().state.permanents[beast].as_ref().unwrap().damage, 1);
+    }
+
+    // +2 with 1 card in library offers the forced 1-card choice (no decline); with 0 cards offers none.
+    let exile_library_except = |s: &mut Scenario, keep: Option<&str>| {
+        let lib: Vec<_> = s
+            .game()
+            .state
+            .zones
+            .zone_objects(managym::state::zone::ZoneType::Library, PlayerId(0))
+            .to_vec();
+        let kept = keep.map(|name| {
+            *lib.iter()
+                .find(|&&obj| s.game().state[obj].name == name)
+                .unwrap()
+        });
+        for obj in lib {
+            if Some(obj) != kept {
+                s.game_mut().state.place_object(
+                    obj,
+                    PlayerId(0),
+                    managym::state::zone::ZoneType::Exile,
+                );
+            }
+        }
+    };
+    let mut s = five_color_setup(&["Chandra, Flameshaper", "Lightning Bolt"]);
+    let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
+    exile_library_except(&mut s, Some("Lightning Bolt"));
+    activate(&mut s, chandra, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.action_space().actions.len(), 1, "forced 1-card choice");
+    let chosen = match &s.action_space().actions[0] {
+        Action::SelectCard { object, .. } => *object,
+        other => panic!("expected SelectCard, got {other:?}"),
+    };
+    select_card(&mut s, chosen);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert!(has_action(
+        &s,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == chosen)
+    ));
+    // Empty library: +2 resolves straight to priority with no selection prompt.
+    let mut s = five_color_setup(&["Chandra, Flameshaper"]);
+    let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
+    exile_library_except(&mut s, None);
+    activate(&mut s, chandra, 0);
+    settle(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
 }
 
 #[test]

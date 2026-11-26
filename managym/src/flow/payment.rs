@@ -40,6 +40,8 @@ pub struct AnnouncedSpell {
     pub targets: Vec<Target>,
     pub target_req_indices: Vec<usize>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_divisions: Vec<i32>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub target_shares: Vec<u8>,
 }
 
@@ -67,9 +69,15 @@ pub enum Operation {
         source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
+        /// The clause of each target (`ActivatedTargeting::target_req_indices`).
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        target_req_indices: Vec<usize>,
+        /// Announced divided amounts aligned with `targets` (CR 602.2b).
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        target_divisions: Vec<i32>,
         /// The announced value of X (CR 602.2b, 601.2b).
         #[serde(skip_serializing_if = "crate::state::is_zero")]
-        x: u8,
+        x: i32,
     },
 }
 
@@ -138,7 +146,7 @@ pub enum CostComponent {
     /// paid rather than its other cost.
     Life(u32),
     #[serde(rename = "RemoveCounters")]
-    RemoveSourceCounters(CounterKind, u16),
+    RemoveSourceCounters(CounterKind, i32),
     /// "Put N [kind] counters on this" (CR 118.3): always payable while the
     /// source is on the battlefield.
     AddCounters(CounterKind, u16),
@@ -794,14 +802,34 @@ impl Game {
                 if let Some(cost) = ability.sacrifice {
                     owed.push(CostComponent::Sacrifice(cost, Toward::Printed));
                 }
-                let cost = ability.mana_cost.with_x(*x);
+                let cost = if ability.mana_cost.x == 0 {
+                    ability.mana_cost
+                } else {
+                    ability
+                        .mana_cost
+                        .with_x(u8::try_from(*x).expect("payable mana X"))
+                };
                 let help = Help {
                     waterbend: if ability.waterbend { cost.generic() } else { 0 },
                     ..Default::default()
                 };
                 owed.push(CostComponent::Mana { cost, help });
+                if let Some(loyalty) = ability.loyalty {
+                    let delta = loyalty.counter_change(*x);
+                    if delta < 0 {
+                        owed.push(CostComponent::RemoveSourceCounters(
+                            CounterKind::Loyalty,
+                            -delta,
+                        ));
+                    } else if delta > 0 {
+                        owed.push(CostComponent::AddCounters(
+                            CounterKind::Loyalty,
+                            delta as u16,
+                        ));
+                    }
+                }
                 if let Some((kind, count)) = ability.remove_counters {
-                    owed.push(CostComponent::RemoveSourceCounters(kind, count));
+                    owed.push(CostComponent::RemoveSourceCounters(kind, i32::from(count)));
                 }
                 if let Some((kind, count)) = ability.add_counters {
                     owed.push(CostComponent::AddCounters(kind, count));
@@ -1362,9 +1390,11 @@ impl Game {
                 source,
                 ability_index,
                 targets,
+                target_req_indices,
+                target_divisions,
                 x,
             } => {
-                let ability = match *source {
+                let mut ability = match *source {
                     ActivationSource::Permanent(permanent) => self.prepare_activated_ability(
                         player,
                         permanent,
@@ -1380,6 +1410,8 @@ impl Game {
                         targets.clone(),
                     )?,
                 };
+                ability.target_req_indices = target_req_indices.clone();
+                ability.target_divisions = target_divisions.clone();
                 let source_object = ability.source_object;
                 let counter_cost = |kind, delta| ProposedEvent::CounterChange {
                     provenance: CounterProvenance::new(EventCause::Cost),
@@ -1396,10 +1428,10 @@ impl Game {
                                 .permanent_of(source_object)
                                 .and_then(|id| self.state.permanents[id].as_ref())
                                 .map_or(0, |permanent| permanent.counter_count(kind));
-                            if available < i32::from(count) {
+                            if available < count {
                                 return Err(AgentError("cannot pay counter cost".into()));
                             }
-                            source_costs.push(counter_cost(kind, -i32::from(count)));
+                            source_costs.push(counter_cost(kind, -count));
                         }
                         CostComponent::AddCounters(kind, count) => {
                             source_costs.push(counter_cost(kind, i32::from(count)));

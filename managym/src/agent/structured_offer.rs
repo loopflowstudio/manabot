@@ -259,8 +259,9 @@ enum InternalOffer {
         attackers: BTreeMap<CandidateId, ObjectId>,
         declaration_order: Vec<ObjectId>,
     },
-    DeclareBlockers {
-        choices: Vec<BlockerChoice>,
+    CombatAssignments {
+        kind: ActionSpaceKind,
+        choices: Vec<CombatChoice>,
     },
     Waterbend {
         player: PlayerId,
@@ -276,7 +277,7 @@ enum InternalOffer {
 }
 
 #[derive(Clone, Debug)]
-struct BlockerChoice {
+struct CombatChoice {
     role: RoleId,
     targets: BTreeMap<CandidateId, Action>,
     decline: Action,
@@ -318,9 +319,25 @@ impl StructuredOfferSet {
                         (*offer_id, *role, *candidate_id, *object_ref)
                     }));
                 }
+                InternalOffer::CombatAssignments {
+                    kind: ActionSpaceKind::DeclareAttacker,
+                    choices,
+                } => {
+                    for choice in choices {
+                        for (candidate_id, action) in &choice.targets {
+                            if let Action::DeclareAttacker {
+                                attack: Some(crate::flow::combat::AttackTarget::Permanent(defender)),
+                                ..
+                            } = action
+                            {
+                                bindings.push((*offer_id, choice.role, *candidate_id, *defender));
+                            }
+                        }
+                    }
+                }
                 // Compound-only bindings lower through exact canonical actions;
                 // they are not projected into canonical DecisionFrame offers.
-                InternalOffer::DeclareBlockers { .. }
+                InternalOffer::CombatAssignments { .. }
                 | InternalOffer::Waterbend { .. }
                 | InternalOffer::PassPriority { .. }
                 | InternalOffer::SearchAction { .. } => {}
@@ -426,7 +443,7 @@ impl StructuredOfferSet {
                     attackers: selected_attackers,
                 })
             }
-            InternalOffer::DeclareBlockers { choices } => {
+            InternalOffer::CombatAssignments { kind, choices } => {
                 let mut answers = BTreeMap::new();
                 for ChoiceAnswer::Candidates { role, candidates } in &submission.answers {
                     if answers.insert(*role, candidates).is_some() {
@@ -461,7 +478,7 @@ impl StructuredOfferSet {
                 }
                 Ok(AtomicCommand::DeclarationSequence {
                     binding: self.binding,
-                    kind: ActionSpaceKind::DeclareBlocker,
+                    kind: *kind,
                     actions,
                 })
             }
@@ -761,9 +778,8 @@ impl Game {
             .as_ref()
             .ok_or(StructuredOfferError::WrongDecision)?;
         if combat
-            .attackers
-            .iter()
-            .any(|&attacker| self.blocks_are_coupled(attacker))
+            .attackers()
+            .any(|attacker| self.blocks_are_coupled(attacker))
         {
             return Ok(None);
         }
@@ -832,7 +848,7 @@ impl Game {
                 ordered: false,
                 distinct: true,
             });
-            bound.push(BlockerChoice {
+            bound.push(CombatChoice {
                 role,
                 targets: actions,
                 decline: Action::DeclareBlocker {
@@ -862,7 +878,10 @@ impl Game {
             binding: OfferSetBinding(self.decision_epoch),
             internal: BTreeMap::from([(
                 OfferId(0),
-                InternalOffer::DeclareBlockers { choices: bound },
+                InternalOffer::CombatAssignments {
+                    kind: ActionSpaceKind::DeclareBlocker,
+                    choices: bound,
+                },
             )]),
         }))
     }
@@ -1259,8 +1278,9 @@ impl Game {
         if self.is_game_over() {
             return Err(StructuredOfferError::GameOver);
         }
-        // `Select` cannot require one candidate or forbid a creature suppressed
-        // by an earlier interchangeable decline, so keep the sequential path.
+        // `Select` cannot require one candidate, honor a dependent defender
+        // restriction, or forbid a creature suppressed by an earlier
+        // interchangeable decline, so keep the sequential path.
         if self.attacker_declaration_is_constrained() {
             return Err(StructuredOfferError::WrongDecision);
         }
@@ -1270,6 +1290,15 @@ impl Game {
                 .and_then(|space| space.player)
                 .ok_or(StructuredOfferError::MissingActor)?,
         )?;
+        let defenders: Vec<_> = self.declaration_targets(player).collect();
+        if defenders.len() > 1 {
+            return self.structured_attack_assignments(
+                player,
+                wire_actor,
+                &declaration_order,
+                &defenders,
+            );
+        }
         let role = RoleId(1);
 
         let mut candidates = Vec::with_capacity(declaration_order.len());
@@ -1342,6 +1371,108 @@ impl Game {
                                 .ok_or(StructuredOfferError::InvalidCurrentTarget)
                         })
                         .collect::<Result<Vec<_>, _>>()?,
+                },
+            )]),
+        })
+    }
+
+    /// Each attacker chooses at most one defender. Dependent restrictions
+    /// (Tomik) keep the sequential choices, as do dependent blocks.
+    fn structured_attack_assignments(
+        &self,
+        player: PlayerId,
+        actor: u8,
+        attackers: &[PermanentId],
+        defenders: &[crate::flow::combat::AttackTarget],
+    ) -> Result<StructuredOfferSet, StructuredOfferError> {
+        use crate::flow::combat::AttackTarget;
+        let mut choices = Vec::new();
+        let mut bound = Vec::new();
+        for &permanent in attackers {
+            let role = RoleId(
+                u16::try_from(bound.len()).map_err(|_| StructuredOfferError::IdentityOverflow)?,
+            );
+            let mut candidates = Vec::new();
+            let mut targets = BTreeMap::new();
+            for &defender in defenders {
+                let id = next_candidate_id(candidates.len())?;
+                let candidate = match defender {
+                    AttackTarget::Player(seat) => Candidate {
+                        id,
+                        value: CandidateValue::Subject {
+                            subject: SubjectRef::Player {
+                                id: wire_player_id(seat)?,
+                            },
+                        },
+                        label: format!("Seat {}", seat.0 + 1),
+                        help: None,
+                        preview: None,
+                    },
+                    AttackTarget::Permanent(object) => self.compound_permanent_candidate(
+                        self.lookup_current_permanent(object)
+                            .map_err(|_| StructuredOfferError::InvalidCurrentTarget)?,
+                        id,
+                    )?,
+                };
+                candidates.push(candidate);
+                targets.insert(
+                    id,
+                    Action::DeclareAttacker {
+                        player,
+                        permanent,
+                        attack: Some(defender),
+                    },
+                );
+            }
+            let object = self
+                .permanent_object(permanent)
+                .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+            choices.push(ChoiceStep::Select {
+                role,
+                label: format!("Attack with {}", self.observed_object_name(object)),
+                candidates: CandidateSource {
+                    id: CandidateSourceId(u32::from(role.0)),
+                    depends_on: vec![],
+                    initial: Some(candidates),
+                },
+                min: 0,
+                max: 1,
+                ordered: false,
+                distinct: true,
+            });
+            bound.push(CombatChoice {
+                role,
+                targets,
+                decline: Action::DeclareAttacker {
+                    player,
+                    permanent,
+                    attack: None,
+                },
+            });
+        }
+        let id = OfferId(0);
+        Ok(StructuredOfferSet {
+            projection: StructuredOfferProjection {
+                actor,
+                kind: PromptKind::DeclareAttackers,
+                offers: vec![InteractionOffer {
+                    id,
+                    actor,
+                    verb: OfferVerb::DeclareAttackers,
+                    public_commitment: None,
+                    source: None,
+                    label: "Declare attackers".into(),
+                    help: None,
+                    choices,
+                    confirm_label: "Declare attackers".into(),
+                }],
+            },
+            binding: OfferSetBinding(self.decision_epoch),
+            internal: BTreeMap::from([(
+                id,
+                InternalOffer::CombatAssignments {
+                    kind: ActionSpaceKind::DeclareAttacker,
+                    choices: bound,
                 },
             )]),
         })
@@ -1508,8 +1639,16 @@ impl Game {
                         "attacker declaration contains a duplicate or unoffered permanent".into(),
                     ));
                 }
-                let planned: Vec<(PermanentId, bool)> =
-                    selected.into_iter().map(|perm| (perm, false)).collect();
+                let defender = crate::flow::combat::AttackTarget::Player(self.non_active_player());
+                let planned: Vec<crate::flow::combat_preview::PlannedAttackEntry> = selected
+                    .into_iter()
+                    .map(|attacker| crate::flow::combat_preview::PlannedAttackEntry {
+                        attacker,
+                        defender,
+                        raw_defender: None,
+                        committed: false,
+                    })
+                    .collect();
                 let mut normalizer = crate::flow::combat_preview::AttackPlanNormalizer::new(
                     declaration_order,
                     planned,
@@ -1539,6 +1678,7 @@ impl Game {
                 Ok((done, actions))
             }
             AtomicCommand::DeclarationSequence { kind, actions, .. } => match *kind {
+                ActionSpaceKind::DeclareAttacker => self.lower_attacker_sequence(actions, commands),
                 ActionSpaceKind::DeclareBlocker => self.lower_blocker_sequence(actions, commands),
                 ActionSpaceKind::Waterbend => self.lower_waterbend_sequence(actions, commands),
                 _ => {
@@ -1661,6 +1801,56 @@ impl Game {
         // One canonical choice sequence for ordinary and compound commits.
         self.apply_legacy_command_inner(command, &mut None)
             .map(|(done, _)| done)
+    }
+
+    fn lower_attacker_sequence(
+        &mut self,
+        actions: &[Action],
+        commands: &mut Option<Vec<crate::decision::Command>>,
+    ) -> Result<(bool, usize), StructuredOfferError> {
+        let player = actions
+            .first()
+            .map(Action::player)
+            .ok_or(StructuredOfferError::WrongDecision)?;
+        let mut order = Vec::with_capacity(actions.len());
+        let mut planned = Vec::new();
+        for action in actions {
+            match *action {
+                Action::DeclareAttacker {
+                    player: action_player,
+                    permanent,
+                    attack,
+                } if action_player == player => {
+                    order.push(permanent);
+                    if let Some(defender) = attack {
+                        planned.push(crate::flow::combat_preview::PlannedAttackEntry {
+                            attacker: permanent,
+                            defender,
+                            raw_defender: None,
+                            committed: false,
+                        });
+                    }
+                }
+                _ => return Err(StructuredOfferError::WrongDecision),
+            }
+        }
+        let mut normalizer = crate::flow::combat_preview::AttackPlanNormalizer::new(order, planned);
+        let mut done = false;
+        let mut executed = 0;
+        while let Some(step) = normalizer.next_step(self, player) {
+            let index = step
+                .action_index
+                .ok_or(StructuredOfferError::WrongDecision)?;
+            done = self.record_compound_step(index, commands)?;
+            executed += 1;
+        }
+        if executed == 0
+            || (!self.skip_trivial && !normalizer.all_asked())
+            || !normalizer.all_committed()
+        {
+            return Err(StructuredOfferError::WrongDecision);
+        }
+        Ok((done, executed))
     }
 
     fn lower_blocker_sequence(
@@ -1804,9 +1994,23 @@ impl Game {
         Ok((done, executed))
     }
 
-    /// Whether a creature still to be declared in this combat must attack or
-    /// is forced to decline because an interchangeable creature declined earlier.
+    /// Whether a creature still to be declared in this combat has a dependent
+    /// attack target restriction, must attack, or is forced to decline because
+    /// an interchangeable creature declined earlier.
     fn attacker_declaration_is_constrained(&self) -> bool {
+        if self.attack_targets(self.active_player()).any(|t| match t {
+            crate::flow::combat::AttackTarget::Permanent(object) => {
+                self.state.permanent_of(object).is_some_and(|id| {
+                    self.has_restriction(
+                        id,
+                        crate::state::card::Restriction::CantBeAttackedByMoreThanOne,
+                    )
+                })
+            }
+            _ => false,
+        }) {
+            return true;
+        }
         let current = self
             .action_space()
             .into_iter()
@@ -1882,7 +2086,7 @@ impl Game {
                     "declare-attacker prompt names multiple permanents".to_string(),
                 ));
             }
-            attacks.insert(*attack);
+            attacks.insert(attack.is_some());
         }
         let current = current.ok_or_else(|| {
             StructuredOfferError::Invariant("declare-attacker prompt is empty".to_string())

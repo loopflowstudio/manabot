@@ -96,7 +96,7 @@ impl Game {
     ) -> Vec<Option<PermanentId>> {
         let _scan = self.board_scan();
         let combat = self.state.combat.as_ref().expect("declaring blockers");
-        let attackers = &combat.attackers;
+        let attackers: Vec<_> = combat.attackers().collect();
         let rules: Vec<_> = attackers
             .iter()
             .map(|&id| self.block_requirements(id))

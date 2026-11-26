@@ -599,8 +599,7 @@ fn ward_offers_per_source_taps_on_real_choice_and_skips_when_forced() {
         let target = game
             .scenario_force_battlefield(PlayerId(1), "Waterfall Aerialist", true)
             .unwrap();
-        let treasure =
-            with_treasure.then(|| game.create_token("token.treasure", player, false).unwrap());
+        let treasure = with_treasure.then(|| game.create_token("token.treasure", player).unwrap());
         game.state.players[0].mana_pool = Mana::parse("R").into();
         game.scenario_refresh_priority().unwrap();
         cast(&mut game);
@@ -888,7 +887,7 @@ fn granted_mana_does_not_double_count_a_forest_and_treasure_stays_explicit() {
     game.scenario_refresh_priority().unwrap();
     let mut with_treasure = game.clone();
     let treasure = with_treasure
-        .create_token("token.treasure", PlayerId(0), false)
+        .create_token("token.treasure", PlayerId(0))
         .unwrap();
     with_treasure.scenario_refresh_priority().unwrap();
     cast(&mut game);

@@ -361,10 +361,16 @@ class PlayerTurnHistoryView(ProtocolModel):
         default=0, exclude_if=lambda value: not value
     )
     warped_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    loyalty_abilities_activated: UInt32 = Field(
+        default=0, exclude_if=lambda value: not value
+    )
     life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
 class LegacyCardView(ProtocolModel):
+    printed_loyalty: Int32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
     registry_key: UInt32
@@ -449,6 +455,9 @@ class RestrictionView(ProtocolModel):
 
 
 class LegacyPermanentView(ProtocolModel):
+    printed_loyalty: Int32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     keyword_grants: dict[str, AbilityGrantView] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -474,6 +483,9 @@ class LegacyPermanentView(ProtocolModel):
     )
     transforms: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     exhausted_abilities: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    loyalty_activated_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     once_each_turn_used: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     granted_firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     text_box: str = Field(default="", exclude_if=lambda value: not value)
@@ -506,6 +518,9 @@ class LegacyPermanentView(ProtocolModel):
         default=False, exclude_if=lambda value: not value
     )
     attacking: bool = Field(default=False, exclude_if=lambda value: not value)
+    attacked_permanent: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     blocking: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -648,6 +663,9 @@ class LegacyPlayerView(ProtocolModel):
     )
     hand: list[LegacyCardView]
     graveyard: list[LegacyCardView]
+    command: list[LegacyCardView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     exile: list[LegacyCardView]
     stack: list[LegacyCardView]
     battlefield: list[LegacyPermanentView]

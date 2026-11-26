@@ -89,7 +89,7 @@ struct CanonicalTurn<'a> {
         skip_serializing_if = "Vec::is_empty",
         serialize_with = "crate::state::game_object::exact"
     )]
-    attacks_this_turn: Vec<(ObjectId, u32)>,
+    attacks_this_turn: &'a Vec<(ObjectId, u32)>,
 
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(
@@ -128,7 +128,7 @@ impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
             damage_pairs: &turn.damage_pairs,
-            attacks_this_turn: turn.attacks_this_turn.clone(),
+            attacks_this_turn: &turn.attacks_this_turn,
 
             history: turn.history,
             graveyard_arrivals: turn.graveyard_arrivals.clone(),
@@ -163,6 +163,9 @@ struct CanonicalCombat {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     regular_damage_step: bool,
     attackers: Vec<PermanentId>,
+    /// Omitted when every attacker attacks a player, preserving v31 player-only hashes.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    non_player_defenders: Vec<(PermanentId, Option<crate::flow::combat::AttackTarget>)>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     blocked: Vec<PermanentId>,
@@ -181,7 +184,13 @@ impl From<&CombatState> for CanonicalCombat {
         Self {
             first_strikers: combat.first_strikers.clone(),
             regular_damage_step: combat.regular_damage_step,
-            attackers: combat.attackers.clone(),
+            attackers: combat.attackers().collect(),
+            non_player_defenders: combat
+                .attack_targets
+                .iter()
+                .copied()
+                .filter(|(_, t)| !matches!(t, Some(crate::flow::combat::AttackTarget::Player(_))))
+                .collect(),
             blocked: combat.blocked.clone(),
             attacker_to_blockers: combat
                 .attacker_to_blockers

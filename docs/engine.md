@@ -1052,6 +1052,86 @@ graveyard restores Monica Rambeau.
   printed characteristic, so copy effects copy `printed` and never token
   status; a token copy of a card is a token because it was created as one.
 
+### Loyalty abilities
+
+The Theorist, Jace Beleren enters with three loyalty counters. Doubling Season
+changes that to six. Activating his [+1] adds one loyalty counter immediately.
+The Illusion appears when the ability resolves. Once a player activates a
+loyalty ability, every loyalty ability of that permanent is spent for the
+turn, even if control changes. The normal activation window is its
+controller’s main phase with an empty stack.
+An effect can grant instant timing for matching permanents. The turn limit
+still applies.
+
+For a [−X] ability, choose X before choosing targets. The offers run from
+zero through the loyalty available to pay the cost, including 256 when the
+permanent has 256 loyalty. Declining an optional target keeps the announced X.
+The ability uses that value on resolution even if paying the cost took the
+planeswalker’s last loyalty counter.
+
+| Rule | State on the permanent | What the player does |
+| --- | --- | --- |
+| Loyalty (CR 306, 606) | Loyalty counters | Pay the signed cost and put an ability on the stack |
+| Class (CR 717) | Class level | Pay mana to activate the next level ability at sorcery timing |
+| Room (CR 709) | Which doors are unlocked | Pay a door’s mana cost as a special action |
+
+Input v11 exposes the face’s starting value in `printed_loyalty`, the current
+loyalty among its counter facts, and the per-turn limit in
+`loyalty_activated_this_turn`. Each available loyalty activation names its
+cost and effect in the shared offer.
+
+Empower Jace first creates a blue Jace planeswalker token if you control
+none. You choose one Jace planeswalker token you control and put the stated
+number of loyalty counters on it. A nontoken Jace does not satisfy the
+instruction. With Doubling Season, two tokens enter and one receives twice
+the stated counters. The other goes to the graveyard when state-based
+actions next run. The chosen token has two loyalty abilities, −1 to surveil
+1 and −3 to draw a card. Jace’s Machinations lets you activate a Jace’s
+loyalty ability on another player’s turn and still uses its one activation
+for that turn.
+
+An ultimate that gives you an emblem puts it in your command zone. If paying
+the loyalty cost sends Vivien Reid to the graveyard, her ultimate still
+resolves. Your creatures get +2/+2, vigilance, trample and indestructible
+from the emblem. A second copy gives them another +2/+2. Kaito’s emblem
+creates a Ninja for its controller when either player casts a spell. Both
+players can inspect each emblem and its rules text under **Emblems** on the
+controller’s player plate in Academy.
+
+A Way such as Way of the Wildspeaker gives each planeswalker you control
+another loyalty ability, listed after its own. A holder that uses the granted
+ability has spent its activation for the turn, and the ability is gone as soon
+as the Way leaves the battlefield. Way of the Warlord’s ability has two target
+choices: you may skip the creature or planeswalker and still deal 2 damage to
+the player. While you control Sanctum Lurker, your planeswalkers stay on the
+battlefield with no loyalty counters. Destruction and the legend rule still
+remove them.
+
+Each loyalty activation is an event once its cost is paid. Way of the Paradox
+and Gideon the Oathless trigger on any activation. Way of the Mind Sculptor
+triggers only when the cost removed two or more loyalty counters.
+Kiora of Salt and Sand reads how many loyalty abilities you activated this
+turn. Input v11 shows that count in the `loyalty_abilities_activated` column
+of `player_turn_state`, and the text observation lists it under the player's
+turn.
+
+### Attacking a planeswalker
+
+Each attacker can attack the defending player or one of that player’s
+planeswalkers. In v11 a planeswalker attack puts the defending permanent in the
+action’s second `action_focus` slot, and `attacked_permanent` on an attacking
+permanent joins its current defender (a one-based object reference; 0 for a
+player attack). The first two ordinary declaration offers still attack the
+player and decline, respectively.
+
+Combat damage removes loyalty from the planeswalker. Ordinary trample can
+assign excess damage to that planeswalker. If it leaves combat before damage,
+the creature stays attacking and can still deal damage to its blockers.
+Tomik, Orzhov Lawmage limits declarations to one attacker per planeswalker
+its controller controls. A token entering tapped and attacking chooses its
+own defender as it enters. This can include a planeswalker already under
+attack, and multiple tokens entering together choose independently.
+
 ## Objects and zones
 
 The engine's runtime types and their names come from the Comprehensive Rules.
@@ -1171,7 +1251,7 @@ it:
 | Permanent | CR 110 | `Permanent`, named by `PermanentId`, beside the object it is | battlefield state: tapped, damage, attachment |
 | Spell | CR 112 | `StackObject::Spell`, beside the object it is | cast choices: targets, X, modes, kicker |
 | Ability on the stack | CR 113, 602, 603 | `StackObject::ActivatedAbility`, `StackObject::TriggeredAbility` | source, effects and choices; not an `Object` |
-| Emblem | CR 114 | none yet; no defined card creates one | no card |
+| Emblem | CR 114 | `Object` with `ObjectKind::Emblem`, from an `EmblemDefinition` | its own abilities in its controller’s command zone |
 
 `Card` is a small `Copy` value written once at setup: `owner`, `definition`
 and the `PublicId` observations show for it. `GameState::cards` holds both
@@ -1179,9 +1259,8 @@ main decks and both sideboards and never grows.
 
 An object's kind is fixed when the object is made. A copy of a permanent spell
 resolves into a token (CR 111.12, 608.3f): the permanent is a new object of
-kind `Token`, and neither it nor the copy has a `CardId`. A definition's
-`is_token` says only that its catalog row is a token definition's; an object's
-kind is the authority for what it is.
+kind `Token`, and neither it nor the copy has a `CardId`. The catalog row records the kind of
+object it creates.
 
 Cast Sun-Blessed Healer with kicker and its entry trigger lets you choose a
 nonland permanent card with mana value two or less in your graveyard. Nullpriest
@@ -1486,7 +1565,7 @@ lists hold `ObjectId`s, and card-only readers narrow them through
 | Exile | CR 406 | cards, transient non-card objects | `ObjectId` |
 | Battlefield | CR 403 | permanents: cards and tokens | `ObjectId` |
 | Stack | CR 405 | spells (cards and copies) and abilities | `ObjectId` for spells; `GameState::stack_objects` includes abilities and owns stack order |
-| Command | CR 408 | cards (commanders, CR 903.6) and emblems (CR 114.1); empty until a format or card puts something there | `ObjectId` |
+| Command | CR 408 | emblems (CR 114.1) and cards placed there by a format (CR 903.6) | `ObjectId` |
 
 Decklists and sideboards are outside the game and hold cards alone.
 

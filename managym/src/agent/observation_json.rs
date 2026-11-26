@@ -161,6 +161,9 @@ impl Serialize for ActionJson<'_> {
         if value.announces_x {
             map.serialize_entry("announces_x", &true)?;
         }
+        if let Some(amount) = value.division_amount {
+            map.serialize_entry("division_amount", &amount)?;
+        }
         if value.pays_directly {
             map.serialize_entry("pays_directly", &true)?;
         }
@@ -223,6 +226,9 @@ impl Serialize for CardJson<'_> {
         map.serialize_entry("name", &value.name)?;
         map.serialize_entry("owner_id", &value.owner_id)?;
         map.serialize_entry("power", &value.power)?;
+        if let Some(loyalty) = value.printed_loyalty {
+            map.serialize_entry("printed_loyalty", &loyalty)?;
+        }
         if value.put_into_graveyard_this_turn {
             map.serialize_entry("put_into_graveyard_this_turn", &true)?;
         }
@@ -757,6 +763,8 @@ pub(super) struct WireCardData {
     pub text_box: String,
     pub power: i32,
     pub toughness: i32,
+    #[serde(default)]
+    pub printed_loyalty: Option<i32>,
     /// Set for an object that is no card: a token or a copy of a spell.
     pub is_token: bool,
     pub is_legendary: bool,
@@ -855,6 +863,8 @@ pub(super) struct WirePermanentData {
     /// each turn" options taken.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: i32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub loyalty_activated_this_turn: bool,
     /// Firebending granted until end of turn, summed over grants.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_firebending: i32,
@@ -882,6 +892,8 @@ pub(super) struct WirePermanentData {
     /// The attacking creature this one blocks (CR 509.1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attacked_permanent: Option<i32>,
     /// It has lost all abilities (CR 613.1f), until end of turn or while an
     /// Aura sets its characteristics.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -1005,6 +1017,7 @@ impl From<WireCardData> for CardData {
                 text_box: w.text_box,
                 power: w.power,
                 toughness: w.toughness,
+                printed_loyalty: w.printed_loyalty,
                 is_legendary: w.is_legendary,
                 is_ally: w.is_ally,
                 is_lesson: w.is_lesson,
@@ -1046,6 +1059,7 @@ impl From<WirePermanentData> for PermanentData {
             attacking: w.attacking,
             exhausted_abilities: w.exhausted_abilities,
             once_each_turn_used: w.once_each_turn_used,
+            loyalty_activated_this_turn: w.loyalty_activated_this_turn,
             granted_firebending: w.granted_firebending,
             temp_subtypes: w.temp_subtypes,
             counters: w.counters,
@@ -1054,6 +1068,7 @@ impl From<WirePermanentData> for PermanentData {
             creature_types: w.creature_types,
             is_granted_land: w.is_granted_land,
             blocking: w.blocking,
+            attacked_permanent: w.attacked_permanent,
             abilities_lost: w.abilities_lost,
             hexproof_from: w.hexproof_from,
             protection_from: w.protection_from,
@@ -1128,6 +1143,7 @@ impl Serialize for PermanentData {
             attacking: self.attacking,
             exhausted_abilities: self.exhausted_abilities,
             once_each_turn_used: self.once_each_turn_used,
+            loyalty_activated_this_turn: self.loyalty_activated_this_turn,
             granted_firebending: self.granted_firebending,
             temp_subtypes: self.temp_subtypes.clone(),
             counters: self.counters.clone(),
@@ -1136,6 +1152,7 @@ impl Serialize for PermanentData {
             creature_types: self.creature_types.clone(),
             is_granted_land: self.is_granted_land,
             blocking: self.blocking,
+            attacked_permanent: self.attacked_permanent,
             abilities_lost: self.abilities_lost,
             hexproof_from: self.hexproof_from.clone(),
             protection_from: self.protection_from.clone(),

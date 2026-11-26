@@ -824,7 +824,10 @@ def train_bounded_population(
     schema: BeliefEncodingSchema,
     *,
     steps: int = 16,
-    learning_rate: float = 0.01,
+    # Candidate counts span the full catalog while only a hand's cards are
+    # nonzero, so default Linear init shrinks as 1/sqrt(card_count); 0.02
+    # keeps 16-step convergence reliable as the catalog grows.
+    learning_rate: float = 0.02,
     seed: int = 197,
     hidden_dim: int = 4,
 ) -> BoundedPopulationTrainingResult:

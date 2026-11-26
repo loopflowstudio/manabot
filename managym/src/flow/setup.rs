@@ -100,10 +100,11 @@ impl Game {
                     .definition_id(name)
                     .unwrap_or_else(|| panic!("unknown card in sideboard: {name}"));
                 assert!(
-                    !content
+                    content
                         .definition(definition_id)
                         .expect("resolved definition")
-                        .is_token,
+                        .kind
+                        == crate::state::game_object::ObjectKind::Card,
                     "token cannot be a sideboard card: {name}"
                 );
                 for _ in 0..*qty {

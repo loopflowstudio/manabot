@@ -104,6 +104,12 @@ impl<T: ExactIds> ExactIds for Option<T> {
     }
 }
 
+impl<T: ExactIds + ?Sized> ExactIds for &T {
+    fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        (**self).serialize_exact(serializer)
+    }
+}
+
 impl<T: ExactIds> ExactIds for [T] {
     fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.collect_seq(self.iter().map(Exact))
@@ -604,6 +610,8 @@ pub enum ObjectKind {
     /// A copy of a spell (CR 707.10), made on the stack. It ceases to exist
     /// in any zone but the stack (CR 704.5e).
     SpellCopy,
+    /// An emblem in the command zone (CR 114).
+    Emblem,
 }
 
 /// A raw face: a catalog row id and its printed characteristics, before any
@@ -694,15 +702,11 @@ impl Object {
         owner: PlayerId,
         definition_id: CardDefId,
         definition: Arc<PrintedCharacteristics>,
-        is_token: bool,
+        kind: ObjectKind,
     ) -> Self {
         Self {
             id,
-            kind: if is_token {
-                ObjectKind::Token
-            } else {
-                ObjectKind::Card
-            },
+            kind,
             definition_id,
             registry_key: PublicId(definition_id.0),
             owner,
@@ -734,7 +738,7 @@ impl Object {
             owner,
             values.definition_id.unwrap_or(CardDefId::ANONYMOUS),
             Arc::clone(&values.definition.printed),
-            values.definition.is_token,
+            values.definition.kind,
         );
         if values.faces.is_some() || values.copy.is_some() {
             object.form = Some(Box::new(ObjectForm {

@@ -135,10 +135,13 @@ impl Game {
                             | Action::ActivateAbility { .. }
                             | Action::ActivateCardAbility { .. }
                             | Action::TurnFaceUp { .. }
-                            | Action::Foretell { .. }
-                            // The creature an attack declaration sends in acts;
-                            // its decline names the same creature as a choice.
-                            | Action::DeclareAttacker { attack: true, .. } => "source",
+                            | Action::Foretell { .. } => "source",
+                            Action::DeclareAttacker {
+                                attack: Some(_), ..
+                            } if index == 0 => "source",
+                            Action::DeclareAttacker {
+                                attack: Some(_), ..
+                            } => "target",
                             Action::DeclareBlocker { .. } if index > 0 => "target",
                             Action::ChooseTarget { .. } => "target",
                             _ => "choice",
@@ -500,8 +503,10 @@ impl Game {
                 CostComponent::TapPower { .. } =>
                     ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             },
-            Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
+            Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget(_)) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
+            Some(PendingChoice::DivideAmount { .. }) =>
+                ("divide", "Assign damage to this target; each target receives at least 1, and the last target receives the remainder."),
             Some(PendingChoice::DivideAmongTargets { .. }) => ("target_shares", "Assign the indicated target its share. Every target must receive at least one."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
@@ -518,6 +523,7 @@ impl Game {
         view.instruction = instruction.into();
         if let Some(suspended) = &self.state.suspended_decision {
             let (stage, instruction) = match &suspended.decision {
+                Decision::EnterAttacking { .. } => ("resolution_choice", "Choose who or what the entering creature attacks."),
                 Decision::OrderEntryChoices { .. } => ("order_entry_choices", "Choose the entering permanent whose choice you want to make next."),
                 Decision::ChooseEntryValue { .. } => ("entry_choice", "Choose for the entering permanent."),
                 Decision::EnterAsCopy { .. } => ("resolution_choice", "Choose a creature for the entering permanent to enter as a copy of, or decline so it enters as itself."),

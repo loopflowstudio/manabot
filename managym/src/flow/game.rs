@@ -210,12 +210,15 @@ impl GameState {
         self.zones.latest().zip(self.objects.iter())
     }
 
-    /// Cards still in the exile appearances produced by this source's moves.
-    pub(crate) fn exiled_with(&self, source: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
+    /// Cards still in the exile appearances linked to `source` (CR 607.1a, 607.5).
+    pub(crate) fn exiled_with(
+        &self,
+        source: crate::state::ability::LinkedAbilitySource,
+    ) -> impl Iterator<Item = ObjectId> + '_ {
         self.exile_links
             .iter()
             .filter(move |link| {
-                link.source == source
+                link.linked_source() == source
                     && self.zones.zone_of(link.exiled_object) == Some(ZoneType::Exile)
             })
             .map(|link| link.exiled_object)
@@ -395,6 +398,133 @@ pub struct CastChoices {
     pub resolving: bool,
 }
 
+/// An activation between announcement and payment. Its controller and X
+/// stay fixed while either player chooses targets for successive clauses.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct ActivatedTargeting {
+    pub player: PlayerId,
+    pub source: ActivationSource,
+    pub ability_index: usize,
+    pub chosen: Vec<Target>,
+    /// The clause of each chosen target; empty while every target is clause
+    /// 0. Clauses are chosen in order, but an optional clause can be left
+    /// empty, so a target's position does not name its clause.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_req_indices: Vec<usize>,
+    /// Announced divided amounts aligned with `chosen` (CR 602.2b); empty while undivided.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_divisions: Vec<i32>,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub requirement: usize,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub x: i32,
+}
+
+/// A spell between mode/X announcement and payment while its targets and any
+/// divided amounts are chosen (CR 601.2c-d).
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct SpellTargeting {
+    pub player: PlayerId,
+    #[serde(rename = "card")]
+    pub object: ObjectId,
+    #[serde(flatten)]
+    pub cast: CastChoices,
+    pub mode: Option<usize>,
+    pub requirement_index: usize,
+    pub chosen: Vec<Target>,
+    pub chosen_req_indices: Vec<usize>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_divisions: Vec<i32>,
+}
+
+impl SpellTargeting {
+    pub fn new(player: PlayerId, object: ObjectId, cast: CastChoices, mode: Option<usize>) -> Self {
+        Self {
+            player,
+            object,
+            cast,
+            mode,
+            requirement_index: 0,
+            chosen: Vec::new(),
+            chosen_req_indices: Vec::new(),
+            target_divisions: Vec::new(),
+        }
+    }
+
+    /// Add `target` to the clause now being chosen.
+    pub fn choose(&mut self, target: Target) {
+        self.chosen.push(target);
+        self.chosen_req_indices.push(self.requirement_index);
+    }
+
+    /// Indices into `chosen` belonging to clause `requirement`.
+    pub fn clause_slots(&self, requirement: usize) -> impl Iterator<Item = usize> + Clone + '_ {
+        self.chosen_req_indices
+            .iter()
+            .enumerate()
+            .filter_map(move |(slot, &req)| (req == requirement).then_some(slot))
+    }
+
+    /// The targets already chosen for clause `requirement`.
+    pub fn clause_targets(&self, requirement: usize) -> impl Iterator<Item = Target> + Clone + '_ {
+        self.clause_slots(requirement).map(|slot| self.chosen[slot])
+    }
+}
+
+/// The spell or activation awaiting sequential target-division assignment (CR 601.2d, 602.2b).
+#[derive(Clone, Debug, serde::Serialize)]
+pub enum DivisionParent {
+    Spell(SpellTargeting),
+    Activation(ActivatedTargeting),
+}
+
+impl DivisionParent {
+    pub(crate) fn player(&self) -> PlayerId {
+        match self {
+            Self::Spell(targeting) => targeting.player,
+            Self::Activation(targeting) => targeting.player,
+        }
+    }
+
+    pub(crate) fn chosen(&self) -> &[Target] {
+        match self {
+            Self::Spell(targeting) => &targeting.chosen,
+            Self::Activation(targeting) => &targeting.chosen,
+        }
+    }
+
+    pub(crate) fn divisions_mut(&mut self) -> &mut Vec<i32> {
+        match self {
+            Self::Spell(targeting) => &mut targeting.target_divisions,
+            Self::Activation(targeting) => &mut targeting.target_divisions,
+        }
+    }
+}
+
+impl ActivatedTargeting {
+    /// Add `target` to clause `requirement`, the clause now being chosen.
+    pub fn choose(&mut self, target: Target, requirement: usize) {
+        self.chosen.push(target);
+        if requirement > 0 || !self.target_req_indices.is_empty() {
+            // Every earlier target without a recorded clause is clause 0.
+            self.target_req_indices.resize(self.chosen.len() - 1, 0);
+            self.target_req_indices.push(requirement);
+        }
+    }
+
+    /// Indices into `chosen` belonging to clause `requirement`.
+    pub fn clause_slots(&self, requirement: usize) -> impl Iterator<Item = usize> + Clone + '_ {
+        (0..self.chosen.len()).filter(move |slot| {
+            self.target_req_indices.get(*slot).copied().unwrap_or(0) == requirement
+        })
+    }
+
+    /// The targets already chosen for clause `requirement`.
+    pub fn clause_targets(&self, requirement: usize) -> impl Iterator<Item = Target> + Clone + '_ {
+        self.clause_slots(requirement).map(|slot| self.chosen[slot])
+    }
+}
+
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
 /// AnnounceX? -> KickerChoice? -> SpellMode? -> ChooseTargets (per requirement) -> Pay; activating an
 /// ability walks ActivationX? -> ActivatedTarget? -> Pay.
@@ -407,18 +537,7 @@ pub enum PendingChoice {
         player: PlayerId,
         payment: Box<Payment>,
     },
-    /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
-    /// `chosen` holds those already selected, clause by clause, and
-    /// `requirement` is the clause being chosen. `player` activates; a
-    /// clause the opponent chooses is offered to them.
-    ActivatedTarget {
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        chosen: Vec<Target>,
-        #[serde(skip_serializing_if = "crate::state::is_zero")]
-        requirement: usize,
-    },
+    ActivatedTarget(ActivatedTargeting),
     /// Announcing X (CR 601.2b): the chosen value is offered as a mode index.
     AnnounceX {
         player: PlayerId,
@@ -454,20 +573,25 @@ pub enum PendingChoice {
         player: PlayerId,
         spell: Box<crate::flow::payment::AnnouncedSpell>,
     },
-    /// Choosing targets for requirement `requirement_index` of the card's
-    /// `target_requirements()` (CR 601.2c).
+    /// Choosing targets for requirement `targeting.requirement_index` of the
+    /// card's `target_requirements()` (CR 601.2c).
     ChooseTargets {
-        player: PlayerId,
-        #[serde(rename = "card")]
-        object: ObjectId,
         #[serde(flatten)]
-        cast: CastChoices,
-        mode: Option<usize>,
-        requirement_index: usize,
-        chosen: Vec<Target>,
-        chosen_req_indices: Vec<usize>,
+        targeting: SpellTargeting,
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
+    },
+    /// Sequential assignment of a divided total across a clause's chosen
+    /// targets (CR 601.2d, 602.2b). Each target receives at least 1.
+    DivideAmount {
+        player: PlayerId,
+        /// Indices into the parent's `chosen` targets belonging to this clause.
+        slots: Vec<usize>,
+        /// Next index within `slots` to assign (`next + 1 < slots.len()`).
+        next: usize,
+        /// Remaining amount to divide across `slots[next..]`.
+        remaining: i32,
+        parent: Box<DivisionParent>,
     },
 }
 
@@ -485,12 +609,16 @@ pub enum PendingChoice {
 /// - `tapped`: tap/untap state. Layers follow it only when a scope,
 ///   condition or value predicate reads it. Dynamic activation finalization
 ///   refreshes independently; trigger kinds follow the raw board. Removing a
-///   stun counter also advances
-///   `characteristics`.
+///   stun counter advances `counters`.
 /// - `triggers`: the trigger-source index (`TriggerIndex`): which battlefield
 ///   permanents have triggered abilities, printed or granted.
-/// - `life`: both life totals, which a static condition may read ("as long
-///   as you have 25 or more life"); compared like `mana_pools`.
+/// - `life`: both life totals and this turn's life gain/loss totals, which a
+///   static condition may read ("as long as you have 25 or more life");
+///   compared like `mana_pools`.
+/// - `counters`: non-P/T, non-keyword counters (loyalty, stun, quest, charge,
+///   soul, etc.). Layers follow it only when a scope, condition, or value
+///   inspects counters; `+1/+1`, `-1/-1`, and keyword counters advance
+///   `characteristics` directly.
 ///
 /// `DerefMut` on `TrackedState` advances every counter. Its typed accessors
 /// write fields no derivation reads, or advance only the counters their
@@ -499,11 +627,12 @@ pub enum PendingChoice {
 /// rather than serving stale data.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Revisions {
-    pub characteristics: u64,
-    pub mana_pools: u64,
-    pub tapped: u64,
-    pub triggers: u64,
-    pub life: u64,
+    pub characteristics: u32,
+    pub mana_pools: u32,
+    pub tapped: u32,
+    pub triggers: u32,
+    pub life: u32,
+    pub counters: u32,
 }
 
 /// `GameState` with the `Revisions` its derived caches key on. State can
@@ -639,6 +768,29 @@ impl TrackedState {
             .map(|player| &mut player.life)
     }
 
+    /// Record a committed life change in turn history, advancing `life` only.
+    /// Returns the turn's 1-based gain ordinal when life increased.
+    pub(crate) fn record_life_change(
+        &mut self,
+        player: PlayerId,
+        old: i32,
+        new: i32,
+    ) -> Option<u32> {
+        if new == old {
+            return None;
+        }
+        self.revisions.life += 1;
+        let history = &mut self.state.turn.history[player.0];
+        if new > old {
+            history.life_gained += old.abs_diff(new);
+            history.life_gains += 1;
+            Some(history.life_gains)
+        } else {
+            history.life_lost += old.abs_diff(new);
+            None
+        }
+    }
+
     /// Step progress flags, which only the game loop reads.
     pub(crate) fn set_step_initialized(&mut self, value: bool) {
         self.state.turn.step_initialized = value;
@@ -663,9 +815,9 @@ impl TrackedState {
         }
     }
 
-    // Permanent fields no cached derivation reads: damage,
-    // summoning sickness and activation limits. Counters, control,
-    // attachment, animation and combat status go through `DerefMut`.
+    // Permanent fields with narrow or no cached readers: damage,
+    // summoning sickness, activation limits, tap state, and counters.
+    // Control, attachment, animation and combat status go through `DerefMut`.
 
     fn permanent_untracked(&mut self, permanent_id: PermanentId) -> Option<&mut Permanent> {
         self.state
@@ -686,7 +838,7 @@ impl TrackedState {
         }
     }
 
-    /// Untap (CR 122.1d): a removed stun counter is a characteristics change.
+    /// Untap (CR 122.1d): a removed stun counter advances `counters`.
     /// Returns whether the permanent went from tapped to untapped.
     pub(crate) fn untap(&mut self, permanent_id: PermanentId) -> bool {
         self.revisions.tapped += 1;
@@ -696,7 +848,7 @@ impl TrackedState {
         let removes_stun = permanent.tapped && permanent.counter_count(CounterKind::Stun) > 0;
         let untapped = permanent.untap();
         if removes_stun {
-            self.revisions.characteristics += 1;
+            self.revisions.counters += 1;
         }
         untapped
     }
@@ -714,6 +866,47 @@ impl TrackedState {
                 permanent.deathtouch_damage = true;
             }
         }
+    }
+
+    pub(crate) fn mark_dealt_damage(&mut self, permanent_id: PermanentId) {
+        if let Some(permanent) = self.permanent_untracked(permanent_id) {
+            permanent.dealt_damage_this_turn = true;
+        }
+    }
+
+    /// Change `kind` counters on `permanent_id` by `delta`. Returns the new
+    /// total when the count changed. `+1/+1`, `-1/-1`, and keyword counters
+    /// feed characteristics directly; every other kind feeds `counters` only.
+    pub(crate) fn change_counters(
+        &mut self,
+        permanent_id: PermanentId,
+        kind: CounterKind,
+        delta: i32,
+    ) -> Option<i32> {
+        let is_keyword = kind.keyword().is_some();
+        let timestamp = (delta > 0 && is_keyword).then(|| self.state.id_gen.next_id());
+        let permanent = self.permanent_untracked(permanent_id)?;
+        if !permanent.change_counters(kind, delta) {
+            return None;
+        }
+        if let Some(timestamp) = timestamp {
+            permanent.keyword_counter_timestamps.insert(kind, timestamp);
+        }
+        let total = permanent.counter_count(kind);
+        if total == 0 {
+            permanent.keyword_counter_timestamps.remove(&kind);
+        }
+        if is_keyword
+            || matches!(
+                kind,
+                CounterKind::PlusOnePlusOne | CounterKind::MinusOneMinusOne
+            )
+        {
+            self.revisions.characteristics += 1;
+        } else {
+            self.revisions.counters += 1;
+        }
+        Some(total)
     }
 
     pub(crate) fn clear_damage(&mut self, permanent_id: PermanentId) {
@@ -734,14 +927,16 @@ impl TrackedState {
         }
     }
 
-    /// Record an activation against its once-per-object or once-each-turn
-    /// limit; an unlimited ability records nothing.
+    /// Record an activation against the ability's use limits.
     pub(crate) fn record_activation(
         &mut self,
         permanent_id: PermanentId,
         ability_index: usize,
         ability: &ActivatedAbilityDefinition,
     ) {
+        if !ability.is_use_limited() {
+            return;
+        }
         if let Some(permanent) = self.permanent_untracked(permanent_id) {
             permanent.record_activation(ability_index, ability);
         }
@@ -823,6 +1018,8 @@ impl DerefMut for TrackedState {
         self.revisions.mana_pools += 1;
         self.revisions.tapped += 1;
         self.revisions.triggers += 1;
+        self.revisions.life += 1;
+        self.revisions.counters += 1;
         &mut self.state
     }
 }
@@ -921,8 +1118,8 @@ pub struct Game {
 
 // Inline footprint on 64-bit hosts. Remeasure heap traffic and live banks
 // with bench_footprint before raising a ceiling. Object and Permanent repeat
-// for each occupied row. TrackedState allows 40 bytes for its five
-// revision counters in addition to the GameState ceiling.
+// for each occupied row. TrackedState holds six u32 revision counters (24 bytes)
+// beside GameState.
 #[cfg(target_pointer_width = "64")]
 const _: () = {
     use crate::state::game_object::Object;

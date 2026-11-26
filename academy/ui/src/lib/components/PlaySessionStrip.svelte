@@ -30,7 +30,7 @@
       {#if gameStore.hasCapability('configure_match') && !gameStore.resumeFailed}
         {#if hasDeckPool}<button data-testid="deal-new-decks" class="btn btn-primary btn-sm" disabled={gameStore.newGamePending} onclick={dealNewDecks}>Deal new decks</button>{/if}
         <button class={hasDeckPool ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'} disabled={gameStore.newGamePending} onclick={() => continueGame('rematch')}>Rematch</button>
-        <button class="btn btn-secondary btn-sm" disabled={gameStore.newGamePending} onclick={() => continueGame('swap_sides')}>Swap sides</button>
+        <button class="btn btn-secondary btn-sm" disabled={gameStore.newGamePending} onclick={() => continueGame('swap_sides')}>Swap play/draw</button>
         <button class="btn btn-secondary btn-sm" disabled={gameStore.newGamePending} onclick={onEditNext}>Edit next game</button>
         <button class="btn btn-secondary btn-sm" disabled={gameStore.newGamePending} onclick={onChangeOpponent}>Change opponent</button>
       {/if}

@@ -2468,6 +2468,13 @@
           "title": "Power",
           "type": "integer"
         },
+        "printed_loyalty": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
         "registry_key": {
           "maximum": 4294967295,
           "minimum": 0,
@@ -2787,6 +2794,20 @@
           "default": null,
           "title": "Attached To"
         },
+        "attacked_permanent": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attacked Permanent"
+        },
         "attacked_this_turn": {
           "default": false,
           "title": "Attacked This Turn",
@@ -3043,6 +3064,9 @@
           "title": "Keywords",
           "type": "array"
         },
+        "loyalty_activated_this_turn": {
+          "type": "boolean"
+        },
         "name": {
           "anyOf": [
             {
@@ -3079,6 +3103,13 @@
             }
           ],
           "title": "Power"
+        },
+        "printed_loyalty": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
         },
         "protection_from": {
           "items": {
@@ -3201,6 +3232,13 @@
           ],
           "default": null,
           "title": "Combat Mana"
+        },
+        "command": {
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          },
+          "title": "Command",
+          "type": "array"
         },
         "counters": {
           "additionalProperties": {
@@ -4165,6 +4203,11 @@
           "minimum": 0,
           "title": "Life Lost",
           "type": "integer"
+        },
+        "loyalty_abilities_activated": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "mana_spent_casting": {
           "default": 0,

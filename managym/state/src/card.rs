@@ -44,6 +44,18 @@ pub enum CardType {
     Battle,
 }
 
+impl CardType {
+    /// Permanent types (CR 205.2a), in alphabetical order.
+    pub const PERMANENT_TYPES: [CardType; 6] = [
+        CardType::Artifact,
+        CardType::Battle,
+        CardType::Creature,
+        CardType::Enchantment,
+        CardType::Land,
+        CardType::Planeswalker,
+    ];
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardTypes {
     pub types: BTreeSet<CardType>,
@@ -457,6 +469,8 @@ pub enum Restriction {
     CantBeBlocked,
     /// "Can't be blocked by more than one creature" (CR 509.1b).
     CantBeBlockedByMoreThanOne,
+    /// No more than one declared creature can attack this permanent each combat.
+    CantBeAttackedByMoreThanOne,
     /// "Attacks each combat if able" (CR 508.1d): a requirement on the
     /// attack declaration, obeyed whenever the creature can attack.
     AttacksEachCombat,
@@ -585,6 +599,12 @@ pub enum ReplacementEffect {
         look_at_opponent_hand: bool,
     },
     AdventureExile,
+    /// "If a [predicate] [controlled_by] controls would die, exile it instead"
+    /// (CR 614.6): applies while this permanent is on the battlefield.
+    ExileIfWouldDie {
+        controlled_by: super::ability::Actor,
+        predicate: CardPredicate,
+    },
     GraveyardInstead {
         what: GraveyardMover,
         to: Redirect,
@@ -768,6 +788,18 @@ fn is_mana_output(effect: &Effect) -> bool {
 }
 
 impl ActivatedAbilityDefinition {
+    pub fn loyalty(cost: i16, effects: Vec<Effect>) -> Self {
+        Self {
+            loyalty: Some(LoyaltyCost::Fixed(cost)),
+            effects,
+            ..Default::default()
+        }
+    }
+
+    pub fn announces_x(&self) -> bool {
+        self.mana_cost.x > 0 || self.loyalty == Some(LoyaltyCost::MinusX)
+    }
+
     /// Each object may activate this ability only once (exhaust, power-up
     /// or "activate only once").
     pub fn once_per_object(&self) -> bool {
@@ -776,7 +808,7 @@ impl ActivatedAbilityDefinition {
 
     /// Whether activating the ability spends one of its uses on the object.
     pub fn is_use_limited(&self) -> bool {
-        self.once_per_object() || self.once_each_turn
+        self.once_per_object() || self.once_each_turn || self.loyalty.is_some()
     }
 
     /// Equip attaches the Equipment to a creature its controller controls (CR 702.6).
@@ -797,6 +829,9 @@ impl ActivatedAbilityDefinition {
     /// may still depend on the game ([`Self::has_dynamic_mana_output`]); a
     /// mana ability never uses the stack.
     pub fn is_mana_ability(&self) -> bool {
+        if self.loyalty.is_some() {
+            return false;
+        }
         let Some((effect, suffix)) = self.effects.split_first() else {
             return false;
         };
@@ -807,6 +842,9 @@ impl ActivatedAbilityDefinition {
     /// control", a conditional branch, X mana of one color). Characteristics
     /// finalize it to concrete [`Self::mana_choices`] when they are read.
     pub fn has_dynamic_mana_output(&self) -> bool {
+        if self.loyalty.is_some() {
+            return false;
+        }
         let Some((effect, suffix)) = self.effects.split_first() else {
             return false;
         };
@@ -840,6 +878,9 @@ impl ActivatedAbilityDefinition {
     /// ability whose output has not been finalized against the game
     /// (`Game::characteristics` finalizes every dynamic output it returns).
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
+        if self.loyalty.is_some() {
+            return None;
+        }
         let (effect, suffix) = self.effects.split_first()?;
         if !suffix.iter().all(is_mana_suffix_effect) {
             return None;
@@ -937,32 +978,8 @@ impl ActivatedAbilityDefinition {
     }
 
     /// The activation's targeting clauses (CR 602.2b, 601.2c), in order.
-    /// Of several clauses each names a fixed number of targets, so a target's
-    /// position names its clause (`target_clause_indices`).
     pub fn target_requirements(&self) -> Vec<TargetRequirement> {
-        if self.target_spec().is_none() {
-            return Vec::new();
-        }
         effect_target_requirements(&self.effects)
-    }
-
-    /// The clause of each of the first `count` chosen targets; empty for a
-    /// single clause, whose targets are all clause 0.
-    pub fn target_clause_indices(&self, count: usize) -> Vec<usize> {
-        let requirements = self.target_requirements();
-        if requirements.len() < 2 {
-            return Vec::new();
-        }
-        requirements
-            .iter()
-            .enumerate()
-            .flat_map(|(index, requirement)| std::iter::repeat_n(index, requirement.max))
-            .take(count)
-            .collect()
-    }
-
-    pub fn target_spec(&self) -> Option<&TargetSpec> {
-        self.effects.iter().find_map(Effect::target_spec)
     }
 }
 
@@ -1028,8 +1045,37 @@ impl serde::Serialize for TapCost {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LoyaltyCost {
+    Fixed(i16),
+    MinusX,
+}
+
+impl LoyaltyCost {
+    pub fn counter_change(self, x: i32) -> i32 {
+        match self {
+            Self::Fixed(n) => i32::from(n),
+            Self::MinusX => -x,
+        }
+    }
+}
+
+impl std::fmt::Display for LoyaltyCost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Self::MinusX => write!(f, "[−X]"),
+            Self::Fixed(0) => write!(f, "[0]"),
+            Self::Fixed(n) if n < 0 => write!(f, "[−{}]", n.unsigned_abs()),
+            Self::Fixed(n) => write!(f, "[+{n}]"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
+    /// A loyalty symbol in the activation cost (CR 606.2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loyalty: Option<LoyaltyCost>,
     /// Omitted for battlefield abilities so existing definition digests hold.
     #[serde(skip_serializing_if = "is_battlefield")]
     pub zone: ActivationZone,
@@ -1132,6 +1178,11 @@ pub struct ActivatedAbilityDefinition {
     /// from a grantor; printed abilities have none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub granted_by: Option<AbilityGrant>,
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited this
+    /// ability on a permanent, or `None` for printed / Layer-1 copied abilities.
+    /// Omitted from catalog serialization.
+    #[serde(skip)]
+    pub acquired: Option<crate::ability::GrantKey>,
     /// Resolution effects in printed order ("draw a card, then discard a card").
     pub effects: Vec<Effect>,
 }
@@ -1380,8 +1431,6 @@ pub enum StaticAbility {
     /// "You may play an additional land on each of your turns" (CR 305.2):
     /// one more land play per such permanent, for its controller.
     AdditionalLandPlay,
-    /// "The legend rule doesn't apply to permanents you control" (CR 704.5j).
-    LegendRuleDoesntApply,
     CantLoseAndOpponentsCantWin,
     /// "Activated abilities of [predicate] you control cost {generic} less to
     /// activate. This effect can't reduce the mana in that cost to less than
@@ -1454,6 +1503,40 @@ pub enum StaticAbility {
         predicate: crate::predicate::CardPredicate,
         cost: AdditionalCost,
     },
+    /// "[Scope] aren't subject to [action]": that state-based action stops
+    /// applying to permanents `scope` covers; every other state-based action
+    /// and destruction still do.
+    StateBasedActionDoesntApply {
+        action: StateBasedAction,
+        scope: StaticScope,
+    },
+}
+
+/// A state-based action a static ability can exempt permanents from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[repr(u8)]
+pub enum StateBasedAction {
+    /// A planeswalker with 0 loyalty is put into its owner's graveyard
+    /// (CR 704.5i).
+    ZeroLoyalty = 0,
+    /// A player who controls two or more legendary permanents with the same
+    /// name chooses one and puts the rest into their owners' graveyards
+    /// (CR 704.5j).
+    LegendRule = 1,
+}
+
+/// Bitset of state-based actions a permanent is exempt from via layer 6.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StateBasedActions(u8);
+
+impl StateBasedActions {
+    pub fn insert(&mut self, action: StateBasedAction) {
+        self.0 |= 1u8 << (action as u8);
+    }
+
+    pub fn contains(self, action: StateBasedAction) -> bool {
+        (self.0 & (1u8 << (action as u8))) != 0
+    }
 }
 
 impl StaticAbility {
@@ -1623,6 +1706,8 @@ impl InsetSpell {
 /// objects, so a copy effect copies these values and nothing else.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PrintedCharacteristics {
+    /// Printed starting loyalty (CR 306.5b), including zero.
+    pub loyalty: Option<i32>,
     /// The other catalog face can be cast in its own right (CR 712.11).
     pub modal_back: bool,
     pub inset: Option<InsetSpell>,
@@ -1685,31 +1770,47 @@ pub struct TokenDefinition {
     pub printed: PrintedCharacteristics,
 }
 
+/// An emblem's catalog identity and its abilities (CR 114).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EmblemDefinition {
+    /// Public label of the emblem printing, separate from its rules name.
+    pub label: &'static str,
+    pub key: &'static str,
+    pub printed: PrintedCharacteristics,
+}
+
 /// A registered row of the engine's catalog, the definition a [`CardDefId`]
-/// names: a card face, a back face, a token or a rules fixture. Token status
-/// is not a printed characteristic, so it lives here and on game objects.
+/// names: a card face, token, emblem or rules fixture. The kind of object the
+/// row creates is separate from its copiable characteristics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectDefinition {
-    /// The card's or token's key; empty for a back face or rules fixture.
+    /// Display label for an unnamed catalog object.
+    pub label: Option<&'static str>,
+    /// The definition key, empty for a back face or rules fixture.
     pub key: &'static str,
     pub scryfall_id: Option<&'static str>,
     /// Shared with every object instantiated from this row.
     pub printed: Arc<PrintedCharacteristics>,
-    /// Token status (CR 111.1): rows from a [`TokenDefinition`].
-    pub is_token: bool,
+    /// The kind of object instantiated from this row.
+    pub kind: crate::game_object::ObjectKind,
     /// The printed name of this front face's back face, registered as the
     /// next row.
     pub back_face: Option<String>,
 }
 
 impl ObjectDefinition {
+    pub fn registry_name(&self) -> &str {
+        self.label.unwrap_or(&self.printed.name)
+    }
+
     /// The front face of `card` as a row; its back face is registered apart.
     pub fn card(card: &CardDefinition) -> Self {
         Self {
+            label: None,
             key: card.key,
             scryfall_id: (!card.scryfall_id.is_empty()).then_some(card.scryfall_id),
             printed: Arc::new(card.printed.clone()),
-            is_token: false,
+            kind: crate::game_object::ObjectKind::Card,
             back_face: card.back_face.as_ref().map(|face| face.name.clone()),
         }
     }
@@ -1717,20 +1818,22 @@ impl ObjectDefinition {
     /// A row with no identity of its own: a back face.
     pub fn face(printed: PrintedCharacteristics) -> Self {
         Self {
+            label: None,
             key: "",
             scryfall_id: None,
             printed: Arc::new(printed),
-            is_token: false,
+            kind: crate::game_object::ObjectKind::Card,
             back_face: None,
         }
     }
 
     pub fn token(token: &TokenDefinition) -> Self {
         Self {
+            label: None,
             key: token.key,
             scryfall_id: token.scryfall_id,
             printed: Arc::new(token.printed.clone()),
-            is_token: true,
+            kind: crate::game_object::ObjectKind::Token,
             back_face: None,
         }
     }
@@ -1770,11 +1873,15 @@ struct DefinitionWire<'a> {
     keywords: &'a Keywords,
     color_override: &'a Option<Colors>,
     is_token: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    is_emblem: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     replacement_effects: &'a Vec<ReplacementEffect>,
     text_box: &'a String,
     power: &'a Option<i32>,
     toughness: &'a Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    loyalty: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     back_face: Option<&'a str>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -1817,7 +1924,11 @@ impl PrintedCharacteristics {
             .map(InsetSpell::characteristics)
     }
 
-    fn wire<'a>(&'a self, is_token: bool, back_face: Option<&'a str>) -> DefinitionWire<'a> {
+    fn wire<'a>(
+        &'a self,
+        kind: crate::game_object::ObjectKind,
+        back_face: Option<&'a str>,
+    ) -> DefinitionWire<'a> {
         DefinitionWire {
             adventure: self
                 .inset_definition(SpellProfile::Adventure)
@@ -1843,11 +1954,16 @@ impl PrintedCharacteristics {
             additional_costs: &self.additional_costs,
             keywords: &self.keywords,
             color_override: &self.color_override,
-            is_token,
+            is_token: matches!(
+                kind,
+                crate::game_object::ObjectKind::Token | crate::game_object::ObjectKind::SpellCopy
+            ),
+            is_emblem: kind == crate::game_object::ObjectKind::Emblem,
             replacement_effects: &self.replacement_effects,
             text_box: &self.text_box,
             power: &self.power,
             toughness: &self.toughness,
+            loyalty: self.loyalty,
             back_face,
             modal_back: self.modal_back,
         }
@@ -1857,7 +1973,7 @@ impl PrintedCharacteristics {
 impl serde::Serialize for ObjectDefinition {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.printed
-            .wire(self.is_token, self.back_face.as_deref())
+            .wire(self.kind, self.back_face.as_deref())
             .serialize(serializer)
     }
 }
@@ -1865,7 +1981,8 @@ impl serde::Serialize for ObjectDefinition {
 /// Copiable values alone, in the row's shape: not a token, no back face.
 impl serde::Serialize for PrintedCharacteristics {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.wire(false, None).serialize(serializer)
+        self.wire(crate::game_object::ObjectKind::Card, None)
+            .serialize(serializer)
     }
 }
 

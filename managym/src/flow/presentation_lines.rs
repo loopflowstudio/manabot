@@ -367,16 +367,55 @@ impl Game {
             CombatAttackersDeclared {
                 attackers,
                 defender,
+                permanent_defenders,
                 ..
-            } => Kind::AttackGroup {
-                attackers: attackers
-                    .iter()
-                    .map(|r| self.named_permanent(*r, &mut labels))
-                    .collect(),
-                defender: SubjectRef::Player {
-                    id: seat(*defender),
-                },
-            },
+            } => {
+                if let Some(overrides) = permanent_defenders.as_deref().filter(|v| !v.is_empty()) {
+                    let mut groups: Vec<(Option<ObjectEventRef>, Vec<ObjectEventRef>)> = Vec::new();
+                    for attacker in attackers {
+                        let target = overrides
+                            .iter()
+                            .find(|(a, _)| a == attacker)
+                            .map(|(_, pw)| *pw);
+                        if let Some((_, list)) = groups.iter_mut().find(|(t, _)| *t == target) {
+                            list.push(*attacker);
+                        } else {
+                            groups.push((target, vec![*attacker]));
+                        }
+                    }
+                    return groups
+                        .into_iter()
+                        .map(|(target, group)| {
+                            let mut labels = PresentationLabels::default();
+                            let attackers = group
+                                .iter()
+                                .map(|r| self.named_permanent(*r, &mut labels))
+                                .collect();
+                            let defender = match target {
+                                Some(pw) => SubjectRef::Object {
+                                    id: self.named_permanent(pw, &mut labels),
+                                },
+                                None => SubjectRef::Player {
+                                    id: seat(*defender),
+                                },
+                            };
+                            labels.line(Kind::AttackGroup {
+                                attackers,
+                                defender,
+                            })
+                        })
+                        .collect();
+                }
+                Kind::AttackGroup {
+                    attackers: attackers
+                        .iter()
+                        .map(|r| self.named_permanent(*r, &mut labels))
+                        .collect(),
+                    defender: SubjectRef::Player {
+                        id: seat(*defender),
+                    },
+                }
+            }
             BlockersDeclared { assignments } => {
                 return assignments
                     .iter()

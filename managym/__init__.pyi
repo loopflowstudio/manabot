@@ -1024,6 +1024,7 @@ class PlayerTurnHistory:
     permanents_left: int
     nonland_permanents_left: int
     warped_this_turn: bool
+    loyalty_abilities_activated: int
     life_lost: int
 
 class RestrictedMana:
@@ -1075,6 +1076,7 @@ class ObservationCharacteristics:
     text_box: str
     power: int
     toughness: int
+    printed_loyalty: int | None
     is_legendary: bool
     is_ally: bool
     is_lesson: bool
@@ -1205,6 +1207,8 @@ class Permanent:
     entry_controller_id: int | None
     first_strike_participant: bool
     exhausted_abilities: int
+    attacked_permanent: int | None
+    loyalty_activated_this_turn: bool
     once_each_turn_used: int
     granted_firebending: int
     chosen: str | None
@@ -1277,6 +1281,7 @@ class Action:
     # The permission a play uses (play_route_code); None for an ordinary hand play.
     play_route: int | None
     announces_x: bool
+    division_amount: int | None
 
 class ActionSpace:
     action_space_type: ActionSpaceEnum
@@ -1392,6 +1397,7 @@ class ClauseTarget:
     legal_at_resolution_start: bool | None
     reference: VisibleReference
     clause: int
+    division: int
 
 class ContinuationFrame:
     effect_execution: list[tuple[int, int]]
@@ -1428,9 +1434,11 @@ class ContinuationFrame:
     triggering_amount: int
     resolutions_this_turn: int
     x: int
+    division_remaining: int
     granted_keywords: list[bool]
     delayed_frequency: int | None
     this_turn: bool
+    until_next_turn: bool
 
 def validate_observation_json(text: str, *, schema_version: int = 8) -> None: ...
 def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...

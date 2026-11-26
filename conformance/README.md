@@ -18,10 +18,11 @@ Current-world (w17) corpora with executable consumers:
 - `public-commitment-parity-w17-v2/` — Academy public-commitment parity
   (`scripts/verify-public-commitment-parity`).
 
-The current catalog binds `evidence-battlefield-history-v1.json` and the
+The current catalog binds `evidence-interchangeable-v1.json` and the
 authored-match authority and parity receipts ending in
-`-battlefield-history.json`. The battlefield-forms, casting-history, casting
-and opening-hand receipts retain their recording revisions.
+`-planeswalkers.json`. The planeswalkers evidence and the battlefield-history,
+battlefield-forms, casting-history, casting and opening-hand receipts retain
+their recording revisions.
 The authored trace
 takes two explicit keep Commands, then follows the seeded priority line.
 Generate its authority with `scripts/generate_authored_match_receipt.py`

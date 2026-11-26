@@ -218,7 +218,7 @@ fn convoke_with_four_identical_tokens_folds_to_one_waterbend_tap() {
     let player = PlayerId(0);
     let mut tokens = Vec::new();
     for _ in 0..4 {
-        let id = game.create_token("token.ally", player, false).unwrap();
+        let id = game.create_token("token.ally", player).unwrap();
         game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         tokens.push(game.permanent_object(id).unwrap());
     }
@@ -570,7 +570,7 @@ fn target_three_identical_opponent_tokens_folds_to_one_and_compound_lowers_alias
     let opponent = PlayerId(1);
     let mut tokens = Vec::new();
     for _ in 0..3 {
-        let id = game.create_token("token.ally", opponent, false).unwrap();
+        let id = game.create_token("token.ally", opponent).unwrap();
         tokens.push(game.permanent_object(id).unwrap());
     }
     game.scenario_refresh_priority().unwrap();
@@ -810,10 +810,10 @@ fn cost_component_sacrifice_and_delve_fold_with_aliases() {
     let mut game = position(&["Swamp"], &sac_entries, "Deadly Precision");
     let player = PlayerId(0);
     let opponent = PlayerId(1);
-    let opp_token = game.create_token("token.ally", opponent, false).unwrap();
+    let opp_token = game.create_token("token.ally", opponent).unwrap();
     let mut my_tokens = Vec::new();
     for _ in 0..3 {
-        let id = game.create_token("token.ally", player, false).unwrap();
+        let id = game.create_token("token.ally", player).unwrap();
         my_tokens.push(game.permanent_object(id).unwrap());
     }
     game.skip_trivial = false;
@@ -983,9 +983,7 @@ fn distinguishing_card_and_selection_cases_stay_separate() {
     multi_game.skip_trivial = false;
     let mut tokens = Vec::new();
     for _ in 0..3 {
-        let id = multi_game
-            .create_token("token.ally", player, false)
-            .unwrap();
+        let id = multi_game.create_token("token.ally", player).unwrap();
         tokens.push(multi_game.permanent_object(id).unwrap());
     }
     multi_game.scenario_refresh_priority().unwrap();
@@ -1137,7 +1135,7 @@ fn select_card_decision_and_zone_gates_block_disallowed_folding() {
     let mut wave_game = position(&["Island", "Island"], &wave_entries, "Crashing Wave");
     let opp = PlayerId(1);
     for _ in 0..2 {
-        let id = wave_game.create_token("token.ally", opp, false).unwrap();
+        let id = wave_game.create_token("token.ally", opp).unwrap();
         wave_game.state.permanents[id].as_mut().unwrap().tapped = true;
     }
     wave_game.scenario_refresh_priority().unwrap();
@@ -1831,7 +1829,7 @@ fn declare_attackers_three_identical_tokens_yields_four_outcomes_not_eight() {
         let player = PlayerId(0);
         let mut tokens = Vec::new();
         for _ in 0..3 {
-            let id = game.create_token("token.ally", player, false).unwrap();
+            let id = game.create_token("token.ally", player).unwrap();
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
             tokens.push(id);
         }
@@ -1874,9 +1872,7 @@ fn declare_attackers_three_identical_tokens_yields_four_outcomes_not_eight() {
     let player = PlayerId(0);
     let mut tokens = Vec::new();
     for _ in 0..3 {
-        let id = distinguished
-            .create_token("token.ally", player, false)
-            .unwrap();
+        let id = distinguished.create_token("token.ally", player).unwrap();
         distinguished.state.permanents[id]
             .as_mut()
             .unwrap()
@@ -1914,7 +1910,13 @@ fn declare_all_attackers_and_advance_to_blockers(game: &mut Game, active: Player
         .is_some_and(|s| s.kind == ActionSpaceKind::DeclareAttacker)
     {
         step_matching(game, |a| {
-            matches!(a, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                a,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     advance_to_step(game, active, managym::flow::turn::StepKind::DeclareBlockers);
@@ -1927,11 +1929,11 @@ fn declare_blockers_folds_identical_attackers_and_declined_blockers() {
     let p0 = PlayerId(0);
     let p1 = PlayerId(1);
     for _ in 0..3 {
-        let id = game.create_token("token.ally", p0, false).unwrap();
+        let id = game.create_token("token.ally", p0).unwrap();
         game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
     }
     for _ in 0..2 {
-        game.create_token("token.ally", p1, false).unwrap();
+        game.create_token("token.ally", p1).unwrap();
     }
     declare_all_attackers_and_advance_to_blockers(&mut game, p0);
     assert_eq!(
@@ -1987,14 +1989,14 @@ fn declare_blockers_folds_identical_attackers_and_declined_blockers() {
     // Distinction check: an attacker that entered attacking (attacks_this_turn == 0)
     // does not fold with declared attackers (attacks_this_turn == 1).
     let mut mixed = game.clone();
-    let first_attacker = mixed.state.combat.as_ref().unwrap().attackers[0];
+    let first_attacker = mixed.state.combat.as_ref().unwrap().attack_targets[0].0;
     let first_obj = mixed.permanent_object(first_attacker).unwrap();
     mixed
         .state
         .turn
         .attacks_this_turn
         .retain(|&(obj, _)| obj != first_obj);
-    let other_attacker = mixed.state.combat.as_ref().unwrap().attackers[1];
+    let other_attacker = mixed.state.combat.as_ref().unwrap().attack_targets[1].0;
     let other_obj = mixed.permanent_object(other_attacker).unwrap();
     assert!(!mixed.interchangeable(first_obj, other_obj));
 }
@@ -2009,7 +2011,7 @@ fn declare_blockers_menace_and_must_block_never_empty_after_decline() {
         .scenario_force_battlefield(p0, "Boggart Brute", true)
         .unwrap();
     for _ in 0..3 {
-        game.create_token("token.ally", p1, false).unwrap();
+        game.create_token("token.ally", p1).unwrap();
     }
     grant_must_be_blocked(&mut game, p0, brute);
     declare_all_attackers_and_advance_to_blockers(&mut game, p0);
@@ -2041,7 +2043,7 @@ fn declare_blockers_must_be_blocked_and_menace_have_no_duplicate_branches() {
             .scenario_force_battlefield(p0, "Gray Ogre", true)
             .unwrap();
         for _ in 0..blocker_count {
-            game.create_token("token.ally", p1, false).unwrap();
+            game.create_token("token.ally", p1).unwrap();
         }
         grant_must_be_blocked(&mut game, p0, ogre);
         declare_all_attackers_and_advance_to_blockers(&mut game, p0);
@@ -2068,7 +2070,7 @@ fn declare_blockers_must_be_blocked_and_menace_have_no_duplicate_branches() {
         game.scenario_force_battlefield(p0, "Boggart Brute", true)
             .unwrap();
         for _ in 0..3 {
-            game.create_token("token.ally", p1, false).unwrap();
+            game.create_token("token.ally", p1).unwrap();
         }
         declare_all_attackers_and_advance_to_blockers(&mut game, p0);
 
@@ -2093,12 +2095,12 @@ fn declare_blockers_must_be_blocked_and_menace_have_no_duplicate_branches() {
         let attacker = game
             .scenario_force_battlefield(p0, "Gray Ogre", true)
             .unwrap();
-        let _tok_b = game.create_token("token.ally", p1, false).unwrap();
+        let _tok_b = game.create_token("token.ally", p1).unwrap();
         let ogre_blk = game
             .scenario_force_battlefield(p1, "Gray Ogre", true)
             .unwrap();
         let ogre_blk_render = render_perm(&game, ogre_blk);
-        let _tok_a = game.create_token("token.ally", p1, false).unwrap();
+        let _tok_a = game.create_token("token.ally", p1).unwrap();
         grant_must_be_blocked(&mut game, p0, attacker);
         declare_all_attackers_and_advance_to_blockers(&mut game, p0);
 
@@ -2193,7 +2195,7 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
         let p1 = PlayerId(1);
         let mut tokens = Vec::new();
         for _ in 0..3 {
-            let id = game.create_token("token.ally", p0, false).unwrap();
+            let id = game.create_token("token.ally", p0).unwrap();
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
             tokens.push(id);
         }
@@ -2208,7 +2210,7 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
         let frame = game.semantic_decision_frame().unwrap();
         let events_from = game.state.observation_events.len();
         let plan_one = CombatPlan {
-            attackers: vec![render_perm(&game, tokens[0])],
+            attackers: vec![render_perm(&game, tokens[0]).into()],
             blocks: Vec::new(),
         };
         let preview_one = game
@@ -2228,7 +2230,10 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
 
         // Preview drafting tokens[0] and tokens[1] (2nd & 3rd asked).
         let plan_two = CombatPlan {
-            attackers: vec![render_perm(&game, tokens[0]), render_perm(&game, tokens[1])],
+            attackers: vec![
+                render_perm(&game, tokens[0]).into(),
+                render_perm(&game, tokens[1]).into(),
+            ],
             blocks: Vec::new(),
         };
         let preview_two = game
@@ -2265,13 +2270,13 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
         bgame.skip_trivial = skip_trivial;
         let mut att = Vec::new();
         for _ in 0..2 {
-            let id = bgame.create_token("token.ally", p0, false).unwrap();
+            let id = bgame.create_token("token.ally", p0).unwrap();
             bgame.state.permanents[id].as_mut().unwrap().summoning_sick = false;
             att.push(id);
         }
         let mut blk = Vec::new();
         for _ in 0..3 {
-            blk.push(bgame.create_token("token.ally", p1, false).unwrap());
+            blk.push(bgame.create_token("token.ally", p1).unwrap());
         }
         declare_all_attackers_and_advance_to_blockers(&mut bgame, p0);
 
@@ -2401,8 +2406,8 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
     let _m1 = mgame
         .scenario_force_battlefield(p0, "Boggart Brute", true)
         .unwrap();
-    let b0 = mgame.create_token("token.ally", p1, false).unwrap();
-    let b1 = mgame.create_token("token.ally", p1, false).unwrap();
+    let b0 = mgame.create_token("token.ally", p1).unwrap();
+    let b1 = mgame.create_token("token.ally", p1).unwrap();
     declare_all_attackers_and_advance_to_blockers(&mut mgame, p0);
     // m1 was declared first, so m0 is the folded Menace attacker.
     let mframe = mgame.semantic_decision_frame().unwrap();
