@@ -551,7 +551,7 @@
 {/snippet}
 
 <main
-  class="play-page mx-auto w-full max-w-[1600px] px-4 py-4"
+  class="play-page mx-auto w-full max-w-[1600px] px-4 py-2"
   data-update-seq={gameStore.updateSeq}
   data-frame-revision={gameStore.protocolFrame?.revision ?? -1}
   data-game={gameStore.gameId ?? ''}
@@ -611,30 +611,41 @@
           <button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startGame}>{gameStore.newGamePending ? 'Preparing game…' : 'Start game'}</button>
         </div>
       {:else}
-        <div class="last-strip">
-          <div>
-            <p class="type-label text-ink-3">{lastMatchup ? 'Your last matchup' : 'The default matchup'}</p>
-            <p class="home-matchup type-title" data-testid="home-matchup">
-              <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">{', '}{matchupSeat(homeMatchup.config)}</span>
-              <span class="text-ink-3">{' vs '}</span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.villain}</span>{/if}
-            </p>
+        {#if lastMatchup}
+          <div class="last-strip">
+            <div>
+              <p class="type-label text-ink-3">Your last matchup</p>
+              <p class="home-matchup type-title" data-testid="home-matchup">
+                <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">{', '}{matchupSeat(homeMatchup.config)}</span>
+                <span class="text-ink-3">{' vs '}</span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.villain}</span>{/if}
+              </p>
+            </div>
+            <button class="btn btn-primary btn-sm" data-testid="play-again" disabled={gameStore.newGamePending}
+              onclick={playAgain}>{gameStore.newGamePending ? 'Preparing the game…' : 'Play again'}</button>
           </div>
-          <button class="btn btn-primary" data-testid="play-again" disabled={gameStore.newGamePending}
-            onclick={playAgain}>{gameStore.newGamePending ? 'Preparing the game…' : lastMatchup ? 'Play again' : 'Play'}</button>
-        </div>
+        {/if}
         <GameSetup setup={gameStore} onStart={startGame} disabled={gameStore.newGamePending} applySmartDefaults={!lastMatchup && !addressed} />
-        <details>
-          <summary class="type-caption cursor-pointer text-ink-2">Priority stops</summary>
-          <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
-            onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
-        </details>
+        <div class="setup-extras">
+          <details>
+            <summary class="type-caption cursor-pointer text-ink-2">Priority stops</summary>
+            <div class="mt-2">
+              <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
+                onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
+            </div>
+          </details>
+          <ArtCredits />
+          {#if gameStore.newGamePending}<span class="type-caption text-ink-2" role="status">Preparing the game. This may take a moment…</span>{/if}
+          <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
+            aria-label={`Connection status: ${gameStore.connection}`} class="type-label ml-auto uppercase text-ink-3" class:sr-only={gameStore.connection === 'connected'}>{gameStore.connection}</span>
+        </div>
       {/if}
-      <p class="type-caption text-ink-2" role="status">{gameStore.newGamePending ? 'Preparing the game. This may take a moment…' : ''}</p>
-      <p class="type-caption text-ink-2">
-        <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
-          aria-label={`Connection status: ${gameStore.connection}`} class="type-label uppercase text-ink-3">{gameStore.connection}</span>
-      </p>
-      <ArtCredits />
+      {#if demoName}
+        <div class="setup-extras">
+          {#if gameStore.newGamePending}<span class="type-caption text-ink-2" role="status">Preparing the game. This may take a moment…</span>{/if}
+          <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
+            aria-label={`Connection status: ${gameStore.connection}`} class="type-label ml-auto uppercase text-ink-3" class:sr-only={gameStore.connection === 'connected'}>{gameStore.connection}</span>
+        </div>
+      {/if}
     </section>
   {/if}
 </main>
@@ -647,11 +658,12 @@
   .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
   .result-links { color: var(--text-secondary); }
   /* One shrinkable column: a wide control inside never widens the page. */
-  .home-table { max-width: 960px; margin: 16px auto 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px;
-    padding: 16px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
-  .last-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .home-table { max-width: 960px; margin: 4px auto 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px;
+    padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
+  .last-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
   .last-strip > div { min-width: 0; }
-  .home-matchup { line-height: 1.35; overflow-wrap: anywhere; }
+  .home-matchup { line-height: 1.3; overflow-wrap: anywhere; }
+  .setup-extras { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 16px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
   .pace-setting { display: grid; gap: 6px; }
   .pace-options { display: flex; flex-wrap: wrap; gap: 6px; }
   .live-analysis { display: grid; gap: 6px; }

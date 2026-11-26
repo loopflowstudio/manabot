@@ -667,8 +667,9 @@ sick, active restrictions and statuses (`Can't be blocked`, `Can't block`,
 `No abilities` / `Lost base abilities`), counters (`+1/+1`, `Charge ×2`), and
 the effective battlefield keywords and keyword abilities it has now (evergreen
 keywords plus `Prowess`, `Ward`, and active `Firebending N`; anything granted
-by an effect or another permanent is edged in green). Mana symbols carry their
-letter, and ◇ for colourless. A tapped permanent turns a quarter onto its side,
+by an effect or another permanent is edged in green). Coloured mana symbols draw
+their mana icons, tap and untap draw their arrows, generic and hybrid draw
+circular pips, and colourless draws ◇. A tapped permanent turns a quarter onto its side,
 in room its row keeps for it so it never covers a neighbour; its name bar stays
 across the top.
 
@@ -738,50 +739,46 @@ with its cost on the line beneath in place of the type line, so a nine-card
 hand reads every card's name and cost. Pointing at or focusing a covered card lifts it whole. An empty hand is a
 label.
 
-The rail holds:
+The rail flows from the past into the present:
 
-- **Stack**, top first, each entry with its card and who controls it; a stack
-  entry an action applies to is outlined. A line joins every spell or ability
-  on the stack to each of its targets. A spell you are casting, or an ability
-  you are activating, is on top of the stack with a dashed border (**casting**,
-  **activating**) from the moment you choose it, through its targets and
-  payment, with lines to the targets already chosen; the card leaves your hand.
-- **Since your last move**: the unread tail of the history from your last
-  choice to now (hidden while walking or looking back so it never contradicts a
-  historical stack). Hovering a card name inspects it and clicking a line seeks
-  the board to it. The first three show; the rest open with **more**. A spell
-  that already resolved keeps its card here, and its line to a target that is
-  still on the board, until your next move or the turn ends. Cards that
-  attacked, blocked, were targeted or were dealt damage this turn are ringed on
-  the board at now, and damage dealt this turn shows in the card's corner (while
-  still marked on it) or on the player's plate ("−2"); transient board marks
-  clear when the turn ends.
-- **The decision** shows who decides, what they are deciding ("Pay {1}{U} for
-  Accumulate Wisdom"), and the buttons. For mana payments the hint below the
-  prompt says how to pay. It stays steady as different previews appear.
-  Mana in the prompt, the buttons and the choices is drawn as pips.
-  **Rules detail** holds the engine's full instruction.
-  Passing priority and paying a cost are the primary button (Space), labelled
-  with what it does next: **Resolve** and the spell on top of the stack, the
-  step it moves to ("To combat", "To blockers"), or the cost ("Pay {1}{U}",
-  with the lands it taps dashed on the board and named in the button's
-  accessible name; see [Previewing payments](#previewing-payments)). The label
-  stays on one line; a long one is shortened and its full text is the
-  button's accessible name and tooltip. Declining,
-  and a combat answer that does not name another creature, are separate
-  buttons, so a click on a card never declines.
-- **All legal choices**: every offer of the decision, numbered, with the total
-  count. It is the complete list; press a number key to choose one of the first
-  nine. During a live combat draft the per-creature answers fold under a closed
-  disclosure (see combat below).
 - **History**: everything that happened, in the order it happened, grouped by
-  turn. A move names the player who made it, and what followed from it is
-  indented beneath it with the rule that did it. Select a line to see the
-  board as it was after it; see [Reading the history](#reading-the-history).
+  turn, filling the upper rail. A move names the player who made it, and what
+  followed from it is indented beneath it with the rule that did it. Select a
+  line to see the board as it was after it; see [Reading the history](#reading-the-history).
   Priority-stop automation is marked **auto** and never counts as your move.
   A run of the opponent's and automation's priority passes folds into one
   quiet **passed** line that counts each one's passes; your own passes stay
-  moves. Hover or focus a card name to see the card.
+  moves. Hover or focus a card name to see the card. Cards that attacked,
+  blocked, were targeted or were dealt damage this turn are ringed on the board
+  at now, and damage dealt this turn shows in the card's corner (while still
+  marked on it) or on the player's plate ("−2"); transient board marks clear
+  when the turn ends.
+- **On the stack**: when spells or abilities are on the stack, they appear
+  inline at the live tip of History (top first, pushing older history upward so
+  the latest moves stay visible), each entry with its card and who controls it;
+  a stack entry an action applies to is outlined. A line joins every spell or
+  ability on the stack to each of its targets. A spell you are casting, or an
+  ability you are activating, sits at the top with a dashed border (**casting**,
+  **activating**) from the moment you choose it, through its targets and
+  payment, with lines to the targets already chosen; the card leaves your hand.
+- **The decision** is pinned at the bottom of the rail beside your hand: who
+  decides, what they are deciding ("Pay {1}{U} for Accumulate Wisdom"), the
+  complete **Choices** list (expanded by default and collapsible from its count
+  toggle; press a number key to choose one of the first nine), and the action
+  buttons. For mana payments the hint below the prompt says how to pay. It stays
+  steady as different previews appear. Mana and tap symbols in rules text, the
+  prompt, the stack, buttons, menus and choices render as symbols rather than
+  braced text. **Rules detail** holds the engine's full instruction. Passing
+  priority and paying a cost are the primary button (Space), labelled with what
+  it does next: **Resolve** and the spell on top of the stack, the step it moves
+  to ("To combat", "To blockers"), or the cost ("Pay {1}{U}", with the lands it
+  taps dashed on the board and named in the button's accessible name; see
+  [Previewing payments](#previewing-payments)). The label stays on one line; a
+  long one is shortened and its full text is the button's accessible name and
+  tooltip. Declining, and a combat answer that does not name another creature,
+  are separate buttons, so a click on a card never declines. During a live
+  combat draft the per-creature answers fold under a closed disclosure (see
+  combat below).
 
 While the opponent decides, the rail and the opponent's plate say so, with
 the seconds it has taken ("Search 64 is searching · 3 s"), and the rail's
@@ -1353,11 +1350,12 @@ The transport bar sits where live play has your hand's input:
 | Scrubber | arrows when focused | Any position; turns are ticked and choices marked under it |
 | | Home / End | The first or last position |
 
-Under it, the **Decisions** strip draws the game as one line: each choice is a
+Opened from its toggle in the bottom bar, the **Decisions** strip floats as an
+overlay over the lower board (dismissible with **×** or `Esc`): each choice is a
 tick, coloured by whose it was, or a point on that chooser's value line where
-a value was recorded; turns are ruled and numbered. Click it to jump. It is
-open in Replay and folded in live play, where it counts decisions; positions
-from before a reload open only in Review after the game. A line of the rail's
+a value was recorded; turns are ruled and numbered. Click it to jump. It starts
+folded in both Replay and live play so the board and hand stay unobstructed;
+positions from before a reload open only in Review after the game. A line of the rail's
 history jumps to its transition position and per-line board, with what it is
 about raised; in Review each move is numbered by turn in its gutter, with the
 whole move in its tooltip, and the history takes the rail's remaining height.
@@ -1510,7 +1508,7 @@ heading reads **Analysis by** the policy, and each option on its card and row
 carries the policy's probability and its estimate after it. Nothing is
 chosen, raised or reordered for you, and no key plays the policy's choice.
 
-Turning it on also opens the strip under the board, which draws the policy's
+Turning it on also opens the Decisions overlay over the lower board, which draws the policy's
 estimate from your seat at each of your decisions this game, those made
 before you turned it on included (read after the fact, so they mark nothing), on Review's
 fixed 0–100 axis; hovering it names the nearest point by the move before it

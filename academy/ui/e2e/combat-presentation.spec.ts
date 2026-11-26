@@ -162,11 +162,9 @@ test('after combat, the block stays drawn and damage shows on the cards it lande
   await expect(card(page, 84).getByTestId('damage-dealt')).toHaveText('−2');
   await expect(card(page, 83).getByTestId('damage-dealt')).toHaveText('−1');
   await expect(card(page, 84)).toHaveAccessibleName(/dealt 2 since your last move/);
-  await expect(page.getByTestId('recent-fact')).toHaveText([
-    'Otter-Penguin blocked Badgermole Cub',
-    'Badgermole Cub dealt 1 to Otter-Penguin',
-    'Otter-Penguin dealt 2 to Badgermole Cub',
-  ]);
+  await expect(page.getByTestId('game-log')).toContainText('Otter-Penguin blocked Badgermole Cub');
+  await expect(page.getByTestId('game-log')).toContainText('Badgermole Cub dealt 1');
+  await expect(page.getByTestId('game-log')).toContainText('Otter-Penguin dealt 2');
   await page.screenshot({ path: testInfo.outputPath('after-combat.png') });
   // Passing is the person's next move: the marks of the last one go.
   await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');

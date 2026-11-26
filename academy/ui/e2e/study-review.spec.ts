@@ -106,7 +106,8 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   expect(await shownIn(page.getByTestId('game-log'), '[data-testid=log-entry], [data-testid=pass-run]')).toBeGreaterThanOrEqual(8);
   expect(await shownIn(page.getByRole('list', { name: 'Legal choices' }), '[data-testid=action-option]')).toBeGreaterThanOrEqual(Math.min(3, options));
 
-  // (d) One line on a fixed 0–100 scale, a point per analysed decision.
+  // (d) One line on a fixed 0–100 scale, a point per analysed decision (opened as an overlay).
+  await page.getByTestId('strip-toggle').click();
   const value = page.getByTestId('strip-value');
   await expect(page.getByTestId('strip-midline')).toHaveCount(1);
   const points = Number(await value.getAttribute('data-points'));
@@ -115,6 +116,7 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   await page.getByTestId('decision-strip').locator('.lane').hover({ position: { x: 4, y: 20 } });
   await expect(page.getByTestId('strip-readout')).toHaveText(/^Turn \d+ · .+ · \d+%$/);
   await page.screenshot({ path: shot('review-chart-hover') });
+  await page.getByTestId('strip-toggle').click();
 
   // (f) The summary's agreement is the count of "same" marks, and nothing grades you.
   await page.getByTestId('game-menu').click();

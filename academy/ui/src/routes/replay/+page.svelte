@@ -48,7 +48,7 @@
   const presentation = createPresentationPlayer();
   let studyButton = $state<HTMLButtonElement | null>(null);
   let perspective = $state<Perspective>(0);
-  let stripOpen = $state(true);
+  let stripOpen = $state(false);
   let loaded = '';
   let lastHistoryKey = '';
   /** Sub-step cursor (event seq) inside a recorded `consequences` transition's kept `boards`. */
@@ -762,7 +762,6 @@
     interrupted={false}
     onact={offer => void retryStudyOffer(offer)}
     {since}
-    recapTitle={studying ? 'This line' : line ? 'Its line' : current?.kind === 'consequences' ? 'This move' : 'Since the last decision'}
     heading={branched || !current ? null : positionHeading(current, saidOf, frame.projection.game_over, index?.winner ?? null)}
     {history}
     onjump={locked ? undefined : jump}

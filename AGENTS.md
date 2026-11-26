@@ -110,12 +110,14 @@ Game-file imports send original JSON source spans: JS numeric re-encoding can
 round u64 identities and invalidate digests. Watch history is the selected
 acting viewer's recorded track strictly before that decision's
 `presentation_cursor`; spectator reveal never supplies history labels. Event
-emphasis stays separate from choice focus and lane navigation; board marks at
-now must be true now—show transient deltas (damage, life changes, touched
-outlines) on the stop and turn they happen, then clear them at now and across
-turn boundaries. Frame policy comparisons neutrally—never grade disagreements
-as mistakes. Default trained policies to `PolicyDescriptor.recommended` before
-the first eligible one. Reserve preview space so hover never shifts layout.
+emphasis stays separate from choice focus and lane navigation; show transient
+board deltas (damage, life changes, touched outlines) only on the stop and turn
+they happen, clearing them at now and across turns. Frame policy comparisons
+neutrally. Default trained policies to `PolicyDescriptor.recommended` before the
+first eligible one. Reserve preview space so hover never shifts layout, render
+braced mana/tap symbols (`{W}`–`{G}`, `{T}`, `{Q}`) through `ManaText`/`Pips`
+rather than raw text, and fit primary views into one 1280×800 screen with
+floating board overlays closed by default.
 
 ## Style
 
