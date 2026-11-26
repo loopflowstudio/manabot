@@ -33,3 +33,13 @@ questions are in that Task's branch history.
 - **Concept review options 1a–5a** were taken headless as recommended; see
   the plan's concept-review section. 4a (combat in this Task, hash v32) is
   the one with the largest cost.
+- **`autotapper` tie-breaking by `PermanentId` order (Pass 1 oracle finding).**
+  When `PayCost` or a `Waterbend` remainder auto-taps among equal-reluctance,
+  equal-followup lands of different colors (e.g. `[Plains(7), Forest(12),
+  Plains(19)]`), `autotapper` breaks ties by battlefield `PermanentId` order
+  (documented and tested in `flow/mana/autotapper.rs`). Tapping `Plains(7)` vs
+  `Plains(19)` earlier can therefore change whether a later automatic payment
+  taps `Forest(12)` or the remaining `Plains`. Kept `autotapper`'s documented
+  tiebreak untouched (not a Magic rules difference) and stopped oracle
+  continuations before `autotapper` shortcuts fire; worth confirming whether
+  `autotapper` should instead tie-break by color/output before `PermanentId`.

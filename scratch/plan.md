@@ -305,25 +305,7 @@ aligned:
 
 ## Passes
 
-1. **Predicate, oracle, permanents.** The census (live references only,
-   settled `spell_entry` rule, face-down exclusion) and
-   `Game::interchangeable`; `fold_action_space` + `publish_action_space(space,
-   aliases)` at every publish site, aliases in `step` rollback and
-   `GameSnapshot`; folding for `TapForMana`,
-   `ActivateAbility`, `WaterbendTap`, `TurnFaceUp`; the mana module moved
-   onto it; alias pairs stored. Two proofs this pass exists to produce:
-   - *Soundness.* A debug-build oracle test: over seeded Academy-matchup
-     games, at every space where folding removed an action, play the kept
-     action and the removed one on clones, continue both with a policy that
-     picks by sorted id-free action description, and compare id-free traces
-     (action labels, life, zone contents by name, winner) for a fixed
-     horizon. Any difference fails. No id-free state digest exists (every
-     digest includes ids, generations and timestamps), so the oracle is
-     behavioral.
-   - *Cost.* `bench_steps` and `bench_search` against the MTG-439 baseline,
-     with the share of decisions folded and mean actions per decision. If
-     the census costs more than the smaller spaces save, the bucketing
-     prefilter is tightened before any further pass.
+1. **Predicate, oracle, permanents** — done (`e698958617`): fail-closed exhaustive census + `Game::interchangeable` in `flow/interchangeable.rs`, `fold_action_space` + `publish_folded_action_space` across publish sites (`tick`, `search`, `scenario`, `possible_worlds`), aliases in `step` rollback and `GameSnapshot`, permanent folding (`TapForMana`, `ActivateAbility`, `WaterbendTap`, `TurnFaceUp`), `flow/mana/interchangeable.rs` moved onto the shared predicate (old scans + `names_mana_source` / `may_name_mana_source` deleted). Oracle verified 133 folded pairs (and 542 in full sweep) with zero rules divergences (noted `autotapper` `PermanentId`-order tiebreak in `scratch/questions.md`). Default-mode fold share: 10.30% (115/1116 decisions), mean actions 3.298 -> 2.968. Release `bench_steps`: 115,115 steps in 7.61s user CPU (15.1k steps/user-s; host load ~585 precluded wall-time comparison against baseline), `bench_search`: 23,296 total sims across seeds 1–3.
 2. **Cards and selections.** Hand and graveyard objects: `PlayLand`,
    `CastSpell`, card abilities, `Foretell`, targets, `SelectCard`, discard,
    Learn (sideboard via `entry_object`), cost components, delve, with the
