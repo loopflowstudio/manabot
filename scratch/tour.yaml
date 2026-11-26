@@ -1,4 +1,4 @@
-at: 57f07018df
+at: daf95ef5e96f3843065c4b728aa2cb11c8d59b0f
 first:
   - path: docs/engine.md
     why: Planeswalker, loyalty, attack-target, empower and emblem contracts
@@ -11,7 +11,7 @@ first:
   - path: managym/src/flow/game.rs
     why: SpellTargeting, ActivatedTargeting, DivisionParent and counter/life revisions
   - path: managym/src/flow/functioning_abilities.rs
-    why: Single CR 113.6/114.4/702.26b authority gating statics, triggers, replacements and emblems
+    why: Single CR 113.6/114.4/702.26b gate and unified static/replacement visitors
   - path: managym/src/flow/play.rs
     why: Loyalty X filtering, sorcery/instant timing and sequential target division
   - path: managym/src/flow/combat.rs
