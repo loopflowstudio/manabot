@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { OrderLibraryGroup, ScryGroup, SurveilGroup } from '$lib/group';
+import type { OrderLibraryDecisionGroup, ScryDecisionGroup, SurveilDecisionGroup } from '$lib/decision-group';
 import {
   arrangePlanOf,
   arrangeWords,
@@ -16,21 +16,21 @@ import {
 
 const card = (entity: number, label: string) => ({ item: { entity, incarnation: 1 }, label });
 
-const scryGroup: ScryGroup = {
+const scryGroup: ScryDecisionGroup = {
   match_id: 'm', revision: 1, prompt_id: 1, frame_hash: 'h',
   kind: 'scry',
   items: [card(10, 'Island'), card(11, 'Opt'), card(12, 'Bolt')],
   committed_top: [], committed_bottom: [],
 };
 
-const surveilGroup: SurveilGroup = {
+const surveilGroup: SurveilDecisionGroup = {
   match_id: 'm', revision: 2, prompt_id: 2, frame_hash: 'h2',
   kind: 'surveil',
   items: [card(20, 'Forest'), card(21, 'Esper Origins')],
   committed_graveyard: [],
 };
 
-const orderTopGroup: OrderLibraryGroup = {
+const orderTopGroup: OrderLibraryDecisionGroup = {
   match_id: 'm', revision: 3, prompt_id: 3, frame_hash: 'h3',
   kind: 'order_library', end: 'top',
   items: [card(30, 'Forest'), card(31, 'Mountain')],

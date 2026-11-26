@@ -21,7 +21,15 @@ from typing_extensions import deprecated
 from managym.disclosure import DecklistDisclosure, DecklistSampling
 
 from . import format as format
-from .group import Choice, Decision, DecisionAddress, DecisionPreview
+from .decision_group import (
+    Choice,
+    Decision,
+    DecisionAddress,
+    DecisionCard,
+    DecisionGroup,
+    DecisionGroupChoice,
+    DecisionPreview,
+)
 from .statistics import GameStatistics
 
 NATIVE_ALLOCATOR: Literal["system", "mimalloc"]
@@ -336,7 +344,7 @@ class Env:
     def combat_preview_json(
         self, viewer: int, revision: int, fingerprint: str, plan_json: str
     ) -> str: ...
-    # Unified interactive decision surface over sequential Actions (managym.group).
+    # Unified interactive decision surface over sequential Actions (managym.decision_group).
     def decision(self, viewer: int | None = None) -> Decision | None: ...
     def preview(
         self, choice: Choice, *, at: DecisionAddress | None = None

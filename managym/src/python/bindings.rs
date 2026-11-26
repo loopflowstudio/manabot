@@ -4571,7 +4571,7 @@ impl PyEnv {
     }
 
     /// Active decision for `viewer` (defaults to the current actor), or `None`
-    /// if the game is over or `viewer` is not the acting player. See `managym.group`.
+    /// if the game is over or `viewer` is not the acting player. See `managym.decision_group`.
     #[pyo3(signature = (viewer=None))]
     fn decision(&self, py: Python<'_>, viewer: Option<usize>) -> PyResult<PyObject> {
         let decision = {
@@ -4588,7 +4588,7 @@ impl PyEnv {
     }
 
     /// Read-only preview of a single offer id (`int`) or grouped `Choice`.
-    /// Pass `at=decision.address` for optimistic concurrency. See `managym.group`.
+    /// Pass `at=decision.address` for optimistic concurrency. See `managym.decision_group`.
     #[pyo3(signature = (choice, *, at=None))]
     fn preview(
         &self,
@@ -5955,7 +5955,7 @@ fn to_group_model<T: serde::Serialize>(
     let raw =
         serde_json::to_string(value).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
     Ok(py
-        .import_bound("managym.group")?
+        .import_bound("managym.decision_group")?
         .getattr(parser_name)?
         .call1((raw,))?
         .unbind())
@@ -5977,10 +5977,10 @@ fn parse_choice_and_address(
     choice: Bound<'_, PyAny>,
     at: Option<Bound<'_, PyAny>>,
 ) -> PyResult<(
-    crate::flow::group::DecisionChoice,
-    Option<crate::flow::group::DecisionAddress>,
+    crate::flow::decision_group::DecisionChoice,
+    Option<crate::flow::decision_group::DecisionAddress>,
 )> {
-    let group_mod = py.import_bound("managym.group")?;
+    let group_mod = py.import_bound("managym.decision_group")?;
     let parsed_choice = parse_group_json(&group_mod, "dump_choice", choice)?;
     let parsed_at = match at {
         Some(value) if !value.is_none() => {

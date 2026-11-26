@@ -1,10 +1,10 @@
 /**
  * Typed grouped-input descriptors, plans, previews and unified draft storage.
  *
- * Mirrors `managym.group` (`managym/group.py`) and the live `group` payload
+ * Mirrors `managym.decision_group` (`managym/decision_group.py`) and the live `decision_group` payload
  * attached by `managym/academy/server.py`. The browser never infers rules or
- * compiles steps: it reads `LiveGroup` from the server, previews drafted plans
- * via `/group-preview`, and submits one atomic `group_command` on Confirm.
+ * compiles steps: it reads `LiveDecisionGroup` from the server, previews drafted plans
+ * via `/decision-group-preview`, and submits one atomic `decision_group_command` on Confirm.
  */
 import type { ObjectRenderId } from './types';
 
@@ -19,7 +19,7 @@ export interface PlannedBlock {
   attacker: ObjectRenderId;
 }
 
-export interface GroupCard {
+export interface DecisionCard {
   item: ObjectRenderId;
   label: string;
 }
@@ -38,56 +38,56 @@ export interface BlockerItem {
   must_block: boolean;
 }
 
-export interface GroupAddress {
+export interface DecisionGroupAddress {
   match_id: string;
   revision: number;
   prompt_id: number;
   frame_hash: string;
 }
 
-export interface DeclareAttackersGroup extends GroupAddress {
+export interface DeclareAttackersDecisionGroup extends DecisionGroupAddress {
   kind: 'declare_attackers';
   declarable: AttackerItem[];
   committed: PlannedAttack[];
 }
 
-export interface DeclareBlockersGroup extends GroupAddress {
+export interface DeclareBlockersDecisionGroup extends DecisionGroupAddress {
   kind: 'declare_blockers';
   declarable: BlockerItem[];
   committed: PlannedBlock[];
 }
 
-export interface ScryGroup extends GroupAddress {
+export interface ScryDecisionGroup extends DecisionGroupAddress {
   kind: 'scry';
-  items: GroupCard[];
-  committed_top: GroupCard[];
-  committed_bottom: GroupCard[];
+  items: DecisionCard[];
+  committed_top: DecisionCard[];
+  committed_bottom: DecisionCard[];
 }
 
-export interface SurveilGroup extends GroupAddress {
+export interface SurveilDecisionGroup extends DecisionGroupAddress {
   kind: 'surveil';
-  items: GroupCard[];
-  committed_graveyard: GroupCard[];
+  items: DecisionCard[];
+  committed_graveyard: DecisionCard[];
 }
 
-export interface OrderLibraryGroup extends GroupAddress {
+export interface OrderLibraryDecisionGroup extends DecisionGroupAddress {
   kind: 'order_library';
   end: LibraryEnd;
-  items: GroupCard[];
-  committed: GroupCard[];
+  items: DecisionCard[];
+  committed: DecisionCard[];
 }
 
-export interface PartitionPilesGroup extends GroupAddress {
+export interface PartitionPilesDecisionGroup extends DecisionGroupAddress {
   kind: 'partition_piles';
-  items: GroupCard[];
-  committed_face_up: GroupCard[];
-  committed_face_down: GroupCard[];
+  items: DecisionCard[];
+  committed_face_up: DecisionCard[];
+  committed_face_down: DecisionCard[];
 }
 
-export type CombatGroup = DeclareAttackersGroup | DeclareBlockersGroup;
-export type ArrangeGroup = ScryGroup | SurveilGroup | OrderLibraryGroup;
-export type LiveGroup = CombatGroup | ArrangeGroup | PartitionPilesGroup;
-export type GroupKind = LiveGroup['kind'];
+export type CombatDecisionGroup = DeclareAttackersDecisionGroup | DeclareBlockersDecisionGroup;
+export type ArrangeDecisionGroup = ScryDecisionGroup | SurveilDecisionGroup | OrderLibraryDecisionGroup;
+export type LiveDecisionGroup = CombatDecisionGroup | ArrangeDecisionGroup | PartitionPilesDecisionGroup;
+export type DecisionGroupKind = LiveDecisionGroup['kind'];
 
 export interface DeclareAttackersPlan {
   kind: 'declare_attackers';
@@ -120,7 +120,7 @@ export interface PartitionPilesPlan {
   face_up: ObjectRenderId[];
 }
 
-export type GroupPlan =
+export type DecisionGroupPlan =
   | DeclareAttackersPlan
   | DeclareBlockersPlan
   | ScryPlan
@@ -128,13 +128,13 @@ export type GroupPlan =
   | OrderLibraryPlan
   | PartitionPilesPlan;
 
-export interface GroupRefusal {
+export interface DecisionGroupRefusal {
   item: ObjectRenderId | null;
   label: string;
   reason: string;
 }
 
-export type GroupOutcome =
+export type DecisionGroupOutcome =
   | { kind: 'declare_attackers'; attackers: PlannedAttack[] }
   | { kind: 'declare_blockers'; blocks: PlannedBlock[] }
   | { kind: 'scry'; top: ObjectRenderId[]; bottom: ObjectRenderId[] }
@@ -142,40 +142,40 @@ export type GroupOutcome =
   | { kind: 'order_library'; end: LibraryEnd; order: ObjectRenderId[] }
   | { kind: 'partition_piles'; face_up: ObjectRenderId[]; face_down: ObjectRenderId[] };
 
-export interface GroupPreviewRequest extends GroupAddress {
-  plan: GroupPlan;
+export interface DecisionGroupPreviewRequest extends DecisionGroupAddress {
+  plan: DecisionGroupPlan;
 }
 
-export interface GroupPreviewResponse extends GroupAddress {
+export interface DecisionGroupPreviewResponse extends DecisionGroupAddress {
   viewer: number;
   complete: boolean;
-  refused: GroupRefusal | null;
-  outcome: GroupOutcome | null;
+  refused: DecisionGroupRefusal | null;
+  outcome: DecisionGroupOutcome | null;
 }
 
-export type GroupPreviewFetcher = (
-  request: GroupPreviewRequest,
+export type DecisionGroupPreviewFetcher = (
+  request: DecisionGroupPreviewRequest,
   signal: AbortSignal,
-) => Promise<GroupPreviewResponse>;
+) => Promise<DecisionGroupPreviewResponse>;
 
-export interface GroupCommand {
+export interface DecisionGroupCommand {
   command_id: string;
   match_id: string;
   expected_revision: number;
   prompt_id: number;
   frame_hash: string;
-  plan: GroupPlan;
+  plan: DecisionGroupPlan;
 }
 
-export function isCombatGroup(group: LiveGroup | null): group is CombatGroup {
+export function isCombatDecisionGroup(group: LiveDecisionGroup | null): group is CombatDecisionGroup {
   return group !== null && (group.kind === 'declare_attackers' || group.kind === 'declare_blockers');
 }
 
-export function isArrangeGroup(group: LiveGroup | null): group is ArrangeGroup {
+export function isArrangeDecisionGroup(group: LiveDecisionGroup | null): group is ArrangeDecisionGroup {
   return group !== null && (group.kind === 'scry' || group.kind === 'surveil' || group.kind === 'order_library');
 }
 
-export function isPartitionGroup(group: LiveGroup | null): group is PartitionPilesGroup {
+export function isPartitionDecisionGroup(group: LiveDecisionGroup | null): group is PartitionPilesDecisionGroup {
   return group !== null && group.kind === 'partition_piles';
 }
 
@@ -184,7 +184,7 @@ function renderIdKey(id: ObjectRenderId): string {
 }
 
 /** Canonical comparison key for preview deduplication. Preserves order where order matters. */
-export function groupPlanKey(plan: GroupPlan): string {
+export function decisionGroupPlanKey(plan: DecisionGroupPlan): string {
   switch (plan.kind) {
     case 'declare_attackers':
       return JSON.stringify([
@@ -219,7 +219,7 @@ function validRenderIdList(value: unknown): value is ObjectRenderId[] {
   return Array.isArray(value) && value.every(validRenderId);
 }
 
-export function validGroupPlan(value: unknown): value is GroupPlan {
+export function validDecisionGroupPlan(value: unknown): value is DecisionGroupPlan {
   if (!value || typeof value !== 'object') return false;
   const plan = value as Record<string, unknown>;
   switch (plan.kind) {
@@ -249,13 +249,13 @@ export function validGroupPlan(value: unknown): value is GroupPlan {
   }
 }
 
-export interface GroupDisclosureCopy {
+export interface DecisionGroupDisclosureCopy {
   summary: string;
   caption: string;
 }
 
 /** Rail disclosure wording for the collapsed raw single-step offers of a live group. */
-export function groupDisclosureCopy(kind: GroupKind): GroupDisclosureCopy {
+export function decisionGroupDisclosureCopy(kind: DecisionGroupKind): DecisionGroupDisclosureCopy {
   if (kind === 'declare_attackers' || kind === 'declare_blockers') {
     return {
       summary: "Each creature's choice",
@@ -276,12 +276,12 @@ export function groupDisclosureCopy(kind: GroupKind): GroupDisclosureCopy {
 
 // ———————————————————————————————————————— Unified draft persistence
 
-const GROUP_DRAFT_KEY = 'academy.table.group-draft';
+const DECISION_GROUP_DRAFT_KEY = 'academy.table.decision-group-draft';
 
-export interface GroupDraftScope {
+export interface DecisionGroupDraftScope {
   match_id: string;
   frame_hash: string;
-  kind: GroupKind;
+  kind: DecisionGroupKind;
 }
 
 /** Keep only distinct numeric entity ids present in `allowed`, preserving order. */
@@ -302,19 +302,19 @@ export function sanitizeEntityIds(
 }
 
 /** Persist a live grouped draft scoped to `(match_id, frame_hash, kind)`. */
-export function saveGroupDraft<T>(scope: GroupDraftScope, draft: T): void {
+export function saveDecisionGroupDraft<T>(scope: DecisionGroupDraftScope, draft: T): void {
   try {
     sessionStorage.setItem(
-      GROUP_DRAFT_KEY,
+      DECISION_GROUP_DRAFT_KEY,
       JSON.stringify({ match_id: scope.match_id, frame_hash: scope.frame_hash, kind: scope.kind, draft }),
     );
   } catch { /* A draft is presentation; losing it loses nothing committed. */ }
 }
 
 /** Restore a saved draft only when it matches the exact decision scope. */
-export function loadGroupDraft<T>(scope: GroupDraftScope): T | null {
+export function loadDecisionGroupDraft<T>(scope: DecisionGroupDraftScope): T | null {
   try {
-    const saved = JSON.parse(sessionStorage.getItem(GROUP_DRAFT_KEY) ?? 'null') as
+    const saved = JSON.parse(sessionStorage.getItem(DECISION_GROUP_DRAFT_KEY) ?? 'null') as
       | { match_id?: unknown; frame_hash?: unknown; kind?: unknown; draft?: unknown }
       | null;
     if (

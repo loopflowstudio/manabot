@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { groupPlanKey, type DeclareAttackersGroup, type DeclareBlockersGroup } from '$lib/group';
+import { decisionGroupPlanKey, type DeclareAttackersDecisionGroup, type DeclareBlockersDecisionGroup } from '$lib/decision-group';
 import type { ExperienceFrame, ObjectRenderId } from '$lib/types';
 import {
   addAttackers, combatPlanOf, committedFromGroup, drawDraft, draftWords, EMPTY_DRAFT, pileCounts,
@@ -25,17 +25,17 @@ const blockerItem = (entity: number, label: string, canBlock: number[] = [], mus
 });
 
 const attackersGroup = (
-  declarable: DeclareAttackersGroup['declarable'],
+  declarable: DeclareAttackersDecisionGroup['declarable'],
   committed: number[] = [],
-): DeclareAttackersGroup => ({
+): DeclareAttackersDecisionGroup => ({
   match_id: 'm', revision: 1, prompt_id: 1, frame_hash: 'h',
   kind: 'declare_attackers', declarable, committed: committed.map(entity => id(entity)),
 });
 
 const blockersGroup = (
-  declarable: DeclareBlockersGroup['declarable'],
+  declarable: DeclareBlockersDecisionGroup['declarable'],
   committed: [number, number][] = [],
-): DeclareBlockersGroup => ({
+): DeclareBlockersDecisionGroup => ({
   match_id: 'm', revision: 1, prompt_id: 1, frame_hash: 'h',
   kind: 'declare_blockers', declarable,
   committed: committed.map(([blocker, attacker]) => ({ blocker: id(blocker), attacker: id(attacker, 3) })),
@@ -116,7 +116,7 @@ describe('drafting', () => {
       blocks: [{ blocker: { entity: otter, incarnation: 2 }, attacker: { entity: lieutenant, incarnation: 3 } }],
     });
     if (plan.kind !== 'declare_blockers') throw new Error('expected declare_blockers plan');
-    expect(groupPlanKey(plan)).toBe(groupPlanKey({ kind: 'declare_blockers', blocks: [...plan.blocks] }));
+    expect(decisionGroupPlanKey(plan)).toBe(decisionGroupPlanKey({ kind: 'declare_blockers', blocks: [...plan.blocks] }));
   });
 
   it('sanitizes restored drafts against declarable creatures', () => {
@@ -154,7 +154,7 @@ describe('drafting', () => {
       { entity: 1, incarnation: 2, defender: jace },
       { entity: 2, incarnation: 2 },
     ]);
-    expect(groupPlanKey(retargetedPlan)).not.toBe(groupPlanKey(defaultPlan));
+    expect(decisionGroupPlanKey(retargetedPlan)).not.toBe(decisionGroupPlanKey(defaultPlan));
     expect(draftWords(group, retargeted, new Map([...names, [7, 'Jace']])).plan)
       .toBe('Tiger-Seal attacks Jace · Otter-Penguin attacks the defending player');
     expect(setAttackerDefender(retargeted, 1, null).defenders).toBeUndefined();

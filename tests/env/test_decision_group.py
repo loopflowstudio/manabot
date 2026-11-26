@@ -8,7 +8,7 @@ import pytest
 
 import managym
 from managym.combat import CombatPlan, preview_combat
-from managym.group import (
+from managym.decision_group import (
     Decision,
     DecisionAddress,
     DeclareAttackersChoice,

@@ -74,7 +74,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   const sent: string[] = [];
   page.on('websocket', socket => socket.on('framesent', frame => {
     const payload = String(frame.payload);
-    if (payload.includes('"type":"command"') || payload.includes('"type":"group_command"')) sent.push(payload);
+    if (payload.includes('"type":"command"') || payload.includes('"type":"decision_group_command"')) sent.push(payload);
   }));
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
@@ -133,7 +133,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
     if (target && await reach(page, target[0], target[1])) {
       await page.keyboard.press('Enter');
       byEnter += 1;
-      // An attack is drafted on the board; Space confirms it in one atomic group_command.
+      // An attack is drafted on the board; Space confirms it in one atomic decision_group_command.
       if (space === 'DECLARE_ATTACKER') {
         await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
         await page.keyboard.press('Space');

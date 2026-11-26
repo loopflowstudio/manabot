@@ -5,11 +5,11 @@ use std::collections::{HashMap, HashSet};
 use crate::agent::action::{Action, AgentError};
 use crate::experience::ObjectRenderId;
 use crate::flow::decision::Decision;
-use crate::flow::game::Game;
-use crate::flow::group::{
-    ChoiceCheck, DecisionChoice, DecisionOutcome, DecisionRefusal, DecisionSpec, GroupCard,
-    GroupKind, LibraryEnd, NextStep,
+use crate::flow::decision_group::{
+    ChoiceCheck, DecisionCard, DecisionChoice, DecisionGroupKind, DecisionOutcome, DecisionRefusal,
+    DecisionSpec, LibraryEnd, NextStep,
 };
+use crate::flow::game::Game;
 use crate::state::game_object::{ObjectId, PlayerId};
 
 fn card_render_id(game: &Game, object: ObjectId) -> ObjectRenderId {
@@ -18,10 +18,10 @@ fn card_render_id(game: &Game, object: ObjectId) -> ObjectRenderId {
         .into()
 }
 
-fn group_cards(game: &Game, objects: impl IntoIterator<Item = ObjectId>) -> Vec<GroupCard> {
+fn group_cards(game: &Game, objects: impl IntoIterator<Item = ObjectId>) -> Vec<DecisionCard> {
     objects
         .into_iter()
-        .map(|object| GroupCard {
+        .map(|object| DecisionCard {
             item: card_render_id(game, object),
             label: game.observed_object_name(object),
         })
@@ -55,8 +55,8 @@ struct CardChoiceReasons {
 
 fn validate_card_choice<'a>(
     game: &Game,
-    items: &[GroupCard],
-    committed: impl IntoIterator<Item = &'a GroupCard>,
+    items: &[DecisionCard],
+    committed: impl IntoIterator<Item = &'a DecisionCard>,
     chosen: impl IntoIterator<Item = &'a ObjectRenderId>,
     require_all: bool,
     reasons: CardChoiceReasons,
@@ -227,7 +227,7 @@ impl LibraryProgress {
 
 pub(crate) struct ScryGroup;
 
-impl GroupKind for ScryGroup {
+impl DecisionGroupKind for ScryGroup {
     type Progress = LibraryProgress;
 
     fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
@@ -391,7 +391,7 @@ impl GroupKind for ScryGroup {
 
 pub(crate) struct SurveilGroup;
 
-impl GroupKind for SurveilGroup {
+impl DecisionGroupKind for SurveilGroup {
     type Progress = LibraryProgress;
 
     fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
@@ -555,7 +555,7 @@ impl GroupKind for SurveilGroup {
 
 pub(crate) struct OrderLibraryGroup;
 
-impl GroupKind for OrderLibraryGroup {
+impl DecisionGroupKind for OrderLibraryGroup {
     type Progress = LibraryProgress;
 
     fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
@@ -706,7 +706,7 @@ impl GroupKind for OrderLibraryGroup {
 
 pub(crate) struct PartitionPilesGroup;
 
-impl GroupKind for PartitionPilesGroup {
+impl DecisionGroupKind for PartitionPilesGroup {
     type Progress = LibraryProgress;
 
     fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {

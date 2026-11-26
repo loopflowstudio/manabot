@@ -861,6 +861,114 @@
       "title": "ControlErrorEvent",
       "type": "object"
     },
+    "DecisionGroupChoice": {
+      "discriminator": {
+        "mapping": {
+          "declare_attackers": "#/$defs/DeclareAttackersChoice",
+          "declare_blockers": "#/$defs/DeclareBlockersChoice",
+          "order_library": "#/$defs/OrderLibraryChoice",
+          "partition_piles": "#/$defs/PartitionPilesChoice",
+          "scry": "#/$defs/ScryChoice",
+          "surveil": "#/$defs/SurveilChoice"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DeclareAttackersChoice"
+        },
+        {
+          "$ref": "#/$defs/DeclareBlockersChoice"
+        },
+        {
+          "$ref": "#/$defs/ScryChoice"
+        },
+        {
+          "$ref": "#/$defs/SurveilChoice"
+        },
+        {
+          "$ref": "#/$defs/OrderLibraryChoice"
+        },
+        {
+          "$ref": "#/$defs/PartitionPilesChoice"
+        }
+      ]
+    },
+    "DecisionGroupCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "title": "Command Id",
+          "type": "string"
+        },
+        "expected_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "frame_hash": {
+          "title": "Frame Hash",
+          "type": "string"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/DecisionGroupChoice"
+        },
+        "prompt_id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Prompt Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "match_id",
+        "expected_revision",
+        "prompt_id",
+        "frame_hash",
+        "plan"
+      ],
+      "title": "DecisionGroupCommand",
+      "type": "object"
+    },
+    "DecisionGroupCommandMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/DecisionGroupCommand"
+        },
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "type": {
+          "const": "decision_group_command",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command"
+      ],
+      "title": "DecisionGroupCommandMessage",
+      "type": "object"
+    },
     "DecisionRestoredEvent": {
       "additionalProperties": false,
       "properties": {
@@ -936,114 +1044,6 @@
         }
       },
       "title": "DeclareBlockersChoice",
-      "type": "object"
-    },
-    "GroupChoice": {
-      "discriminator": {
-        "mapping": {
-          "declare_attackers": "#/$defs/DeclareAttackersChoice",
-          "declare_blockers": "#/$defs/DeclareBlockersChoice",
-          "order_library": "#/$defs/OrderLibraryChoice",
-          "partition_piles": "#/$defs/PartitionPilesChoice",
-          "scry": "#/$defs/ScryChoice",
-          "surveil": "#/$defs/SurveilChoice"
-        },
-        "propertyName": "kind"
-      },
-      "oneOf": [
-        {
-          "$ref": "#/$defs/DeclareAttackersChoice"
-        },
-        {
-          "$ref": "#/$defs/DeclareBlockersChoice"
-        },
-        {
-          "$ref": "#/$defs/ScryChoice"
-        },
-        {
-          "$ref": "#/$defs/SurveilChoice"
-        },
-        {
-          "$ref": "#/$defs/OrderLibraryChoice"
-        },
-        {
-          "$ref": "#/$defs/PartitionPilesChoice"
-        }
-      ]
-    },
-    "GroupCommand": {
-      "additionalProperties": false,
-      "properties": {
-        "command_id": {
-          "title": "Command Id",
-          "type": "string"
-        },
-        "expected_revision": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Expected Revision",
-          "type": "integer"
-        },
-        "frame_hash": {
-          "title": "Frame Hash",
-          "type": "string"
-        },
-        "match_id": {
-          "title": "Match Id",
-          "type": "string"
-        },
-        "plan": {
-          "$ref": "#/$defs/GroupChoice"
-        },
-        "prompt_id": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Prompt Id",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "command_id",
-        "match_id",
-        "expected_revision",
-        "prompt_id",
-        "frame_hash",
-        "plan"
-      ],
-      "title": "GroupCommand",
-      "type": "object"
-    },
-    "GroupCommandMessage": {
-      "additionalProperties": false,
-      "properties": {
-        "command": {
-          "$ref": "#/$defs/GroupCommand"
-        },
-        "grant_revision": {
-          "anyOf": [
-            {
-              "maximum": 18446744073709551615,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Grant Revision"
-        },
-        "type": {
-          "const": "group_command",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "type",
-        "command"
-      ],
-      "title": "GroupCommandMessage",
       "type": "object"
     },
     "JoinTableMessage": {
@@ -2411,7 +2411,7 @@
             "branch_preview": "#/$defs/BranchPreviewMessage",
             "branch_reveal": "#/$defs/BranchRevealMessage",
             "command": "#/$defs/CommandMessage",
-            "group_command": "#/$defs/GroupCommandMessage",
+            "decision_group_command": "#/$defs/DecisionGroupCommandMessage",
             "join_table": "#/$defs/JoinTableMessage",
             "new_game": "#/$defs/NewGameMessage",
             "pass_turn": "#/$defs/PassTurnMessage",
@@ -2450,7 +2450,7 @@
             "$ref": "#/$defs/CommandMessage"
           },
           {
-            "$ref": "#/$defs/GroupCommandMessage"
+            "$ref": "#/$defs/DecisionGroupCommandMessage"
           },
           {
             "$ref": "#/$defs/ActionMessage"

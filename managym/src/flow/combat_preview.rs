@@ -1,4 +1,4 @@
-//! Deprecated combat-preview wrapper over `flow::group` (removed in 0.3.0).
+//! Deprecated combat-preview wrapper over `flow::decision_group` (removed in 0.3.0).
 //!
 //! Preserves the `0.2.6` `CombatPlan` / `CombatPreview` surface by delegating
 //! to [`Game::preview`]. New callers should use [`Game::decision`],
@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::agent::action::{ActionSpaceKind, AgentError};
 use crate::experience::ObjectRenderId;
+use crate::flow::decision_group::{DecisionAddress, DecisionChoice, DecisionOutcome, DecisionSpec};
 use crate::flow::game::Game;
-use crate::flow::group::{DecisionAddress, DecisionChoice, DecisionOutcome, DecisionSpec};
 use crate::state::game_object::PlayerId;
 
-pub use crate::flow::group::{PlannedAttack, PlannedBlock};
+pub use crate::flow::decision_group::{PlannedAttack, PlannedBlock};
 
 /// The whole declaration a person drafts. An attack plan lists attackers;
 /// a block plan lists blocks. A creature left out declines.

@@ -9,7 +9,7 @@ async function press(page: Page, mode: 'pointer' | 'keyboard', id: number): Prom
 }
 
 for (const mode of ['pointer', 'keyboard'] as const) {
-  test(`combat is drafted on the board by ${mode} and submitted in one group_command on confirm`, async ({ page }) => {
+  test(`combat is drafted on the board by ${mode} and submitted in one decision_group_command on confirm`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     const authority = await startCombat(page);
@@ -37,7 +37,7 @@ for (const mode of ['pointer', 'keyboard'] as const) {
     expect(authority.commands).toEqual([]);
     expect(authority.groupCommands).toEqual([]);
 
-    // Confirm sends exactly one atomic group_command.
+    // Confirm sends exactly one atomic decision_group_command.
     if (mode === 'pointer') await page.getByTestId('primary-action').click();
     else await page.keyboard.press('Space');
     await expect.poll(() => authority.groupCommands.length).toBe(1);
@@ -75,7 +75,7 @@ for (const mode of ['pointer', 'keyboard'] as const) {
   });
 }
 
-test('a confirmed attack stays drafted and disabled while the group_command is pending', async ({ page }) => {
+test('a confirmed attack stays drafted and disabled while the decision_group_command is pending', async ({ page }) => {
   const work = Promise.withResolvers<void>();
   const authority = await startCombat(page, { finishWork: work.promise });
   await card(page, 85).click();
@@ -94,7 +94,7 @@ test('a confirmed attack stays drafted and disabled while the group_command is p
   await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'DECLARE_BLOCKER');
 });
 
-test('a group_refused rejection keeps the draft for editing with the engine reason shown', async ({ page }) => {
+test('a decision_group_refused rejection keeps the draft for editing with the engine reason shown', async ({ page }) => {
   const authority = await startCombat(page, {
     refuseGroupOnce: {
       item: { entity: 83, incarnation: 0 },
@@ -146,7 +146,7 @@ test('a reload mid-draft keeps the draft and commits nothing', async ({ page }) 
   await expect(card(page, 83)).toHaveAttribute('data-draft', 'can');
   await expect(page.getByTestId('decision-prompt')).toHaveText('Attack with Tiger-Seal · not with Otter-Penguin');
   expect(authority.groupCommands).toEqual([]);
-  // The restored draft is sent in one group_command.
+  // The restored draft is sent in one decision_group_command.
   await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
   await page.keyboard.press('Space');
   await expect.poll(() => authority.groupCommands.length).toBe(1);

@@ -81,7 +81,7 @@ pub struct PlannedBlock {
 
 /// A card item in a library arrangement group (remaining or already committed).
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct GroupCard {
+pub struct DecisionCard {
     pub item: ObjectRenderId,
     pub label: String,
 }
@@ -145,23 +145,23 @@ pub enum DecisionSpec {
         committed: Vec<PlannedBlock>,
     },
     Scry {
-        items: Vec<GroupCard>,
-        committed_top: Vec<GroupCard>,
-        committed_bottom: Vec<GroupCard>,
+        items: Vec<DecisionCard>,
+        committed_top: Vec<DecisionCard>,
+        committed_bottom: Vec<DecisionCard>,
     },
     Surveil {
-        items: Vec<GroupCard>,
-        committed_graveyard: Vec<GroupCard>,
+        items: Vec<DecisionCard>,
+        committed_graveyard: Vec<DecisionCard>,
     },
     OrderLibrary {
         end: LibraryEnd,
-        items: Vec<GroupCard>,
-        committed: Vec<GroupCard>,
+        items: Vec<DecisionCard>,
+        committed: Vec<DecisionCard>,
     },
     PartitionPiles {
-        items: Vec<GroupCard>,
-        committed_face_up: Vec<GroupCard>,
-        committed_face_down: Vec<GroupCard>,
+        items: Vec<DecisionCard>,
+        committed_face_up: Vec<DecisionCard>,
+        committed_face_down: Vec<DecisionCard>,
     },
 }
 
@@ -342,7 +342,7 @@ pub(crate) enum NextStep {
     Refuse(DecisionRefusal),
 }
 
-pub(crate) trait GroupKind {
+pub(crate) trait DecisionGroupKind {
     type Progress;
 
     fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec>;
@@ -462,7 +462,7 @@ fn crossed_hidden_boundary(
     visible_now.iter().any(|id| !visible_at_start.contains(id))
 }
 
-fn drive_preview<K: GroupKind>(
+fn drive_preview<K: DecisionGroupKind>(
     live: &Game,
     kind: &K,
     viewer: PlayerId,

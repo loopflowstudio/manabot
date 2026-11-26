@@ -51,7 +51,7 @@
       }
     },
     {
-      "type": "group_command",
+      "type": "decision_group_command",
       "grant_revision": 1,
       "command": {
         "command_id": "group.command.example",

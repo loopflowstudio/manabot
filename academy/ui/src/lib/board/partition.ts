@@ -2,13 +2,13 @@
  * Pure drafting helpers for a live `partition_piles` group (e.g., Curator of
  * Destinies).
  *
- * The authority supplies the `PartitionPilesGroup` descriptor (`items`,
+ * The authority supplies the `PartitionPilesDecisionGroup` descriptor (`items`,
  * `committed_face_up`, `committed_face_down`), validates the drafted split via
- * `/group-preview`, and executes all sequential steps atomically on one
- * `group_command`. Draft persistence uses the unified `academy.table.group-draft`
+ * `/decision-group-preview`, and executes all sequential steps atomically on one
+ * `decision_group_command`. Draft persistence uses the unified `academy.table.decision-group-draft`
  * store in `group.ts`.
  */
-import { sanitizeEntityIds, type GroupCard, type PartitionPilesGroup, type PartitionPilesPlan } from '$lib/group';
+import { sanitizeEntityIds, type DecisionCard, type PartitionPilesDecisionGroup, type PartitionPilesPlan } from '$lib/decision-group';
 
 export interface PartitionWords {
   /** Primary button label: "Confirm split (2 up, 3 down)". */
@@ -20,7 +20,7 @@ export interface PartitionWords {
 /** Keep only valid, distinct remaining entity ids from a restored draft. */
 export function sanitizePartitionDraft(
   saved: readonly number[] | null | undefined,
-  group: PartitionPilesGroup,
+  group: PartitionPilesDecisionGroup,
 ): number[] {
   return sanitizeEntityIds(saved, new Set(group.items.map(card => card.item.entity)));
 }
@@ -31,7 +31,7 @@ export function toggleCardPile(faceUp: readonly number[], cardId: number): numbe
 }
 
 /** Swap every undecided card between the face-up and face-down piles. */
-export function swapPiles(items: readonly GroupCard[], faceUp: readonly number[]): number[] {
+export function swapPiles(items: readonly DecisionCard[], faceUp: readonly number[]): number[] {
   const up = new Set(faceUp);
   return items.filter(card => !up.has(card.item.entity)).map(card => card.item.entity);
 }
@@ -39,7 +39,7 @@ export function swapPiles(items: readonly GroupCard[], faceUp: readonly number[]
 /** Convert the drafted face-up entity ids into a wire `PartitionPilesPlan`. */
 export function partitionPlanOf(
   faceUp: readonly number[],
-  group: PartitionPilesGroup,
+  group: PartitionPilesDecisionGroup,
 ): PartitionPilesPlan {
   const up = new Set(faceUp);
   return {
@@ -55,7 +55,7 @@ function counted(names: string[]): string[] {
 }
 
 export function partitionWords(
-  group: PartitionPilesGroup,
+  group: PartitionPilesDecisionGroup,
   faceUp: readonly number[],
 ): PartitionWords {
   const upSet = new Set(faceUp);

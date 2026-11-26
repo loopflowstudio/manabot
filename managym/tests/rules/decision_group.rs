@@ -1,6 +1,6 @@
 //! Native unified decision API tests covering `Game::decision` / `preview` /
 //! `submit` across single offers, combat declarations, and library arrangements
-//! (Scry, Surveil, OrderLibrary Top/Bottom), `GroupCard` committed labels,
+//! (Scry, Surveil, OrderLibrary Top/Bottom), `DecisionCard` committed labels,
 //! purity boundary behavior, mid-group raw steps, and digest parity between
 //! `submit` and step-by-step execution (including mixed `[Agent, Heuristic]` `Env`).
 use managym::{
@@ -13,9 +13,9 @@ use managym::{
     experience::{ObjectRenderId, SubjectRef},
     flow::{
         decision::Decision,
-        group::{
-            ActiveDecision, DecisionAddress, DecisionChoice, DecisionOutcome, DecisionPreview,
-            DecisionSpec, GroupCard, LibraryEnd, PlannedBlock,
+        decision_group::{
+            ActiveDecision, DecisionAddress, DecisionCard, DecisionChoice, DecisionOutcome,
+            DecisionPreview, DecisionSpec, LibraryEnd, PlannedBlock,
         },
         turn::StepKind,
     },
@@ -581,7 +581,7 @@ fn scry_three_bottom_order_incomplete_refusal_and_mid_group_raw_step() {
         "c0 (Forest) must sit directly above c1 on the bottom"
     );
 
-    // Mid-group raw step: put c1 on bottom via raw step, verify committed_bottom carries GroupCard label.
+    // Mid-group raw step: put c1 on bottom via raw step, verify committed_bottom carries DecisionCard label.
     let raw_idx = mid_raw
         .action_space()
         .unwrap()
@@ -606,17 +606,17 @@ fn scry_three_bottom_order_incomplete_refusal_and_mid_group_raw_step() {
         after_one.spec,
         DecisionSpec::Scry {
             items: vec![
-                GroupCard {
+                DecisionCard {
                     item: c0,
                     label: "Forest".into()
                 },
-                GroupCard {
+                DecisionCard {
                     item: c2,
                     label: "Island".into()
                 },
             ],
             committed_top: vec![],
-            committed_bottom: vec![GroupCard {
+            committed_bottom: vec![DecisionCard {
                 item: c1,
                 label: "Mountain".into()
             }],
@@ -874,7 +874,7 @@ fn surveil_three_mid_group_raw_step_exposes_committed_graveyard() {
             assert_eq!(items.len(), 2);
             assert_eq!(
                 committed_graveyard,
-                &vec![GroupCard {
+                &vec![DecisionCard {
                     item: c0,
                     label: "Forest".into(),
                 }]
@@ -969,7 +969,7 @@ fn order_library_bottom_two_and_three_cards_including_mid_group_raw_step() {
         assert_eq!(lib[1], pinned[2], "Island must sit directly above Mountain");
     }
 
-    // 2. 3-card OrderLibrary Bottom with mid-group raw step -> committed carries GroupCard label.
+    // 2. 3-card OrderLibrary Bottom with mid-group raw step -> committed carries DecisionCard label.
     let (mut s, pinned) = setup_library_effect(
         &["Forest", "Mountain", "Island", "Swamp"],
         vec![Effect::LookAndSelect {
@@ -1021,7 +1021,7 @@ fn order_library_bottom_two_and_three_cards_including_mid_group_raw_step() {
             assert_eq!(items.len(), 2);
             assert_eq!(
                 committed,
-                &vec![GroupCard {
+                &vec![DecisionCard {
                     item: i,
                     label: "Island".into(),
                 }]
@@ -1307,24 +1307,24 @@ fn partition_piles_full_mid_group_threshold_refusal_and_choose_pile_transition()
         mid_decision.spec,
         DecisionSpec::PartitionPiles {
             items: vec![
-                GroupCard {
+                DecisionCard {
                     item: ids[2],
                     label: "Mountain".into(),
                 },
-                GroupCard {
+                DecisionCard {
                     item: ids[3],
                     label: "Island".into(),
                 },
-                GroupCard {
+                DecisionCard {
                     item: ids[4],
                     label: "Swamp".into(),
                 },
             ],
-            committed_face_up: vec![GroupCard {
+            committed_face_up: vec![DecisionCard {
                 item: ids[0],
                 label: "Gray Ogre".into(),
             }],
-            committed_face_down: vec![GroupCard {
+            committed_face_down: vec![DecisionCard {
                 item: ids[1],
                 label: "Forest".into(),
             }],

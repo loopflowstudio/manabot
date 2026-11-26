@@ -830,7 +830,7 @@ export interface CommandRejection {
   message: string;
   current_revision: number;
   current_prompt: number | null;
-  refused?: import('./group').GroupRefusal | null;
+  refused?: import('./decision-group').DecisionGroupRefusal | null;
 }
 
 /** One line of the server's narration: either player's move, an automated action, or a system note, in the turn it was taken. */
@@ -1118,7 +1118,7 @@ export type ServerMessage = (
   mirror_retry?: import('./search').PendingSearch | null;
   mirror?: import('./search').SearchConfig | null;
   table?: import('./shared-table-protocol').TableSnapshot;
-  group?: import('./group').LiveGroup | null;
+  decision_group?: import('./decision-group').LiveDecisionGroup | null;
   session_id?: string;
   resume_token?: string;
   participant_id?: string;

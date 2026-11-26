@@ -24,6 +24,10 @@
 7. Outcome:
    > ok i guess lets build it
 
+8. Follow-up naming direction (2026-11-26):
+   > i feel like group should be called DecisionGroup or something
+   > do all of these (in reply to renaming across managym Python+Rust and Academy wire/UI)
+
 ## Reading (separate from verbatim quotes)
 
 - Send MTG-483 back to `build` for Pass 4 before delivery.

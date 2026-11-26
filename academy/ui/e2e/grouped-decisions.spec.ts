@@ -2,10 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 
 import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type {
-  GroupCommand,
-  GroupPlan,
-  LiveGroup,
-} from '../src/lib/group';
+  DecisionGroupCommand,
+  DecisionGroupPlan,
+  LiveDecisionGroup,
+} from '../src/lib/decision-group';
 import type {
   CardState,
   Command,
@@ -68,13 +68,13 @@ function makeFrame(
 
 interface MockState {
   frame: ExperienceFrame;
-  group: LiveGroup | null;
+  group: LiveDecisionGroup | null;
 }
 
 interface RecordedMessages {
   commands: Command[];
-  groupCommands: GroupCommand[];
-  previews: GroupPlan[];
+  groupCommands: DecisionGroupCommand[];
+  previews: DecisionGroupPlan[];
 }
 
 async function mountScenario(
@@ -82,15 +82,15 @@ async function mountScenario(
   initial: MockState,
   handlers: {
     onCommand?: (command: Command, current: MockState) => MockState;
-    onGroupCommand?: (command: GroupCommand, current: MockState) => MockState;
+    onDecisionGroupCommand?: (command: DecisionGroupCommand, current: MockState) => MockState;
   },
 ): Promise<RecordedMessages> {
   const recorded: RecordedMessages = { commands: [], groupCommands: [], previews: [] };
   let state = initial;
 
-  await page.route('**/api/sessions/*/group-preview', async route => {
+  await page.route('**/api/sessions/*/decision-group-preview', async route => {
     const request = route.request().postDataJSON() as {
-      match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: GroupPlan;
+      match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: DecisionGroupPlan;
     };
     recorded.previews.push(request.plan);
     const outcome = (() => {
@@ -148,28 +148,28 @@ async function mountScenario(
       replay_cursor: frame.revision,
     });
     socket.onMessage(raw => {
-      const message = JSON.parse(String(raw)) as { type?: string; command?: Command | GroupCommand };
+      const message = JSON.parse(String(raw)) as { type?: string; command?: Command | DecisionGroupCommand };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
           type: 'observation',
           table: tableSnapshot(),
           data: state.frame.projection,
           actions: [],
-          group: state.group,
+          decision_group: state.group,
           session_id: 'grouped-session',
           resume_token: 'grouped-resume-token',
           recovery: recovery(state.frame),
         }));
         return;
       }
-      if (message.type === 'group_command' && message.command) {
-        const command = message.command as GroupCommand;
+      if (message.type === 'decision_group_command' && message.command) {
+        const command = message.command as DecisionGroupCommand;
         recorded.groupCommands.push(command);
-        state = handlers.onGroupCommand ? handlers.onGroupCommand(command, state) : state;
+        state = handlers.onDecisionGroupCommand ? handlers.onDecisionGroupCommand(command, state) : state;
         socket.send(JSON.stringify({
           type: 'command_outcome',
           status: 'accepted',
-          group: state.group,
+          decision_group: state.group,
           update: {
             base_revision: command.expected_revision,
             frame: state.frame,
@@ -192,7 +192,7 @@ async function mountScenario(
         socket.send(JSON.stringify({
           type: 'command_outcome',
           status: 'accepted',
-          group: state.group,
+          decision_group: state.group,
           update: {
             base_revision: command.expected_revision,
             frame: state.frame,
@@ -218,7 +218,7 @@ async function mountScenario(
 }
 
 for (const count of [3, 1] as const) {
-  test(`drafting ${count} attacker${count > 1 ? 's' : ''} and confirming sends one group_command`, async ({ page }) => {
+  test(`drafting ${count} attacker${count > 1 ? 's' : ''} and confirming sends one decision_group_command`, async ({ page }) => {
     const ids = Array.from({ length: count }, (_, i) => 50 + i);
     const frame = makeFrame(
       10,
@@ -233,7 +233,7 @@ for (const count of [3, 1] as const) {
         obs.agent.battlefield = ids.map((id, i) => creature(id, `Ogre ${i + 1}`));
       },
     );
-    const group: LiveGroup = {
+    const group: LiveDecisionGroup = {
       match_id: frame.match_id,
       revision: frame.revision,
       prompt_id: frame.prompt!.id,
@@ -247,7 +247,7 @@ for (const count of [3, 1] as const) {
     ]);
 
     const recorded = await mountScenario(page, { frame, group }, {
-      onGroupCommand: () => ({ frame: nextFrame, group: null }),
+      onDecisionGroupCommand: () => ({ frame: nextFrame, group: null }),
     });
 
     await expect(page.getByTestId('combat-draft')).toHaveAttribute('data-kind', 'attackers');
@@ -268,7 +268,7 @@ for (const count of [3, 1] as const) {
   });
 }
 
-test('Scry 2 opens ArrangePanel, requires placing both cards, and confirms in one group_command', async ({ page }) => {
+test('Scry 2 opens ArrangePanel, requires placing both cards, and confirms in one decision_group_command', async ({ page }) => {
   const frame = makeFrame(
     20,
     'SCRY',
@@ -283,7 +283,7 @@ test('Scry 2 opens ArrangePanel, requires placing both cards, and confirms in on
       obs.agent.inspected = [inspectedCard(71, 'Opt'), inspectedCard(72, 'Island')];
     },
   );
-  const group: LiveGroup = {
+  const group: LiveDecisionGroup = {
     match_id: frame.match_id,
     revision: frame.revision,
     prompt_id: frame.prompt!.id,
@@ -298,7 +298,7 @@ test('Scry 2 opens ArrangePanel, requires placing both cards, and confirms in on
   ]);
 
   const recorded = await mountScenario(page, { frame, group }, {
-    onGroupCommand: () => ({ frame: after, group: null }),
+    onDecisionGroupCommand: () => ({ frame: after, group: null }),
   });
 
   const panel = page.getByTestId('arrange-panel');
@@ -322,7 +322,7 @@ test('Scry 2 opens ArrangePanel, requires placing both cards, and confirms in on
   await expect(confirm).toBeEnabled();
   await expect(confirm).toHaveText(/Confirm \(1 top, 1 bottom\)/);
 
-  // Confirm sends exactly one group_command.
+  // Confirm sends exactly one decision_group_command.
   await confirm.click();
   await expect.poll(() => recorded.groupCommands.length).toBe(1);
   expect(recorded.commands).toEqual([]);
@@ -348,7 +348,7 @@ test('opening the rail disclosure lets a player take one raw Scry step and updat
       obs.agent.inspected = [inspectedCard(71, 'Opt'), inspectedCard(72, 'Island'), inspectedCard(73, 'Bolt')];
     },
   );
-  const group0: LiveGroup = {
+  const group0: LiveDecisionGroup = {
     match_id: step0.match_id,
     revision: step0.revision,
     prompt_id: step0.prompt!.id,
@@ -375,7 +375,7 @@ test('opening the rail disclosure lets a player take one raw Scry step and updat
       obs.agent.inspected = [inspectedCard(71, 'Opt'), inspectedCard(72, 'Island'), inspectedCard(73, 'Bolt')];
     },
   );
-  const group1: LiveGroup = {
+  const group1: LiveDecisionGroup = {
     match_id: step1.match_id,
     revision: step1.revision,
     prompt_id: step1.prompt!.id,
@@ -420,7 +420,7 @@ test('Surveil 2 transitions cleanly into OrderLibrary across two grouped Confirm
       obs.agent.inspected = [inspectedCard(81, 'Forest'), inspectedCard(82, 'Esper Origins')];
     },
   );
-  const surveilGroup: LiveGroup = {
+  const surveilGroup: LiveDecisionGroup = {
     match_id: surveilFrame.match_id,
     revision: surveilFrame.revision,
     prompt_id: surveilFrame.prompt!.id,
@@ -442,7 +442,7 @@ test('Surveil 2 transitions cleanly into OrderLibrary across two grouped Confirm
       obs.agent.inspected = [inspectedCard(81, 'Forest'), inspectedCard(82, 'Esper Origins')];
     },
   );
-  const orderGroup: LiveGroup = {
+  const orderGroup: LiveDecisionGroup = {
     match_id: orderFrame.match_id,
     revision: orderFrame.revision,
     prompt_id: orderFrame.prompt!.id,
@@ -458,7 +458,7 @@ test('Surveil 2 transitions cleanly into OrderLibrary across two grouped Confirm
   ]);
 
   const recorded = await mountScenario(page, { frame: surveilFrame, group: surveilGroup }, {
-    onGroupCommand: (command) => {
+    onDecisionGroupCommand: (command) => {
       if (command.plan.kind === 'surveil') return { frame: orderFrame, group: orderGroup };
       return { frame: doneFrame, group: null };
     },
@@ -478,7 +478,7 @@ test('Surveil 2 transitions cleanly into OrderLibrary across two grouped Confirm
   await expect(confirm).toHaveText(/Keep all 2 on top/);
   await expect(confirm).toHaveAttribute('data-draft-ready', 'true');
 
-  // Confirm Surveil -> sends 1 group_command and opens OrderLibrary.
+  // Confirm Surveil -> sends 1 decision_group_command and opens OrderLibrary.
   await confirm.click();
   await expect.poll(() => recorded.groupCommands.length).toBe(1);
   expect(recorded.groupCommands[0].plan).toEqual({ kind: 'surveil', graveyard: [] });

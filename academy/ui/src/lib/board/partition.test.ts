@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { PartitionPilesGroup } from '$lib/group';
+import type { PartitionPilesDecisionGroup } from '$lib/decision-group';
 import {
   partitionPlanOf,
   partitionWords,
@@ -19,7 +19,7 @@ const FIVE_ITEMS = [
   { item: rid(14), label: 'Swamp' },
 ];
 
-function partitionGroup(committed = 0): PartitionPilesGroup {
+function partitionGroup(committed = 0): PartitionPilesDecisionGroup {
   return {
     match_id: 'curator-match',
     revision: 20 + committed,

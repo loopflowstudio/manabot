@@ -28,7 +28,7 @@ class PlannedBlock(ProtocolModel):
     attacker: ObjectRenderId
 
 
-class GroupCard(ProtocolModel):
+class DecisionCard(ProtocolModel):
     item: ObjectRenderId
     label: str
 
@@ -87,30 +87,40 @@ class DeclareBlockersDecision(DecisionBase):
 
 class ScryDecision(DecisionBase):
     kind: Literal["scry"] = "scry"
-    items: list[GroupCard]
-    committed_top: list[GroupCard]
-    committed_bottom: list[GroupCard]
+    items: list[DecisionCard]
+    committed_top: list[DecisionCard]
+    committed_bottom: list[DecisionCard]
 
 
 class SurveilDecision(DecisionBase):
     kind: Literal["surveil"] = "surveil"
-    items: list[GroupCard]
-    committed_graveyard: list[GroupCard]
+    items: list[DecisionCard]
+    committed_graveyard: list[DecisionCard]
 
 
 class OrderLibraryDecision(DecisionBase):
     kind: Literal["order_library"] = "order_library"
     end: LibraryEnd
-    items: list[GroupCard]
-    committed: list[GroupCard]
+    items: list[DecisionCard]
+    committed: list[DecisionCard]
 
 
 class PartitionPilesDecision(DecisionBase):
     kind: Literal["partition_piles"] = "partition_piles"
-    items: list[GroupCard]
-    committed_face_up: list[GroupCard]
-    committed_face_down: list[GroupCard]
+    items: list[DecisionCard]
+    committed_face_up: list[DecisionCard]
+    committed_face_down: list[DecisionCard]
 
+
+type DecisionGroup = Annotated[
+    DeclareAttackersDecision
+    | DeclareBlockersDecision
+    | ScryDecision
+    | SurveilDecision
+    | OrderLibraryDecision
+    | PartitionPilesDecision,
+    Field(discriminator="kind"),
+]
 
 type Decision = Annotated[
     SingleDecision
@@ -163,7 +173,7 @@ class PartitionPilesChoice(ProtocolModel):
     face_up: list[ObjectRenderId] = Field(default_factory=list)
 
 
-type GroupChoice = Annotated[
+type DecisionGroupChoice = Annotated[
     DeclareAttackersChoice
     | DeclareBlockersChoice
     | ScryChoice
@@ -173,7 +183,7 @@ type GroupChoice = Annotated[
     Field(discriminator="kind"),
 ]
 
-type Choice = int | GroupChoice
+type Choice = int | DecisionGroupChoice
 
 
 class DecisionStep(ProtocolModel):
@@ -251,7 +261,10 @@ class DecisionPreview(ProtocolModel):
 
 
 DECISION_ADAPTER: TypeAdapter[Decision] = TypeAdapter(Decision)
-GROUP_CHOICE_ADAPTER: TypeAdapter[GroupChoice] = TypeAdapter(GroupChoice)
+DECISION_GROUP_ADAPTER: TypeAdapter[DecisionGroup] = TypeAdapter(DecisionGroup)
+DECISION_GROUP_CHOICE_ADAPTER: TypeAdapter[DecisionGroupChoice] = TypeAdapter(
+    DecisionGroupChoice
+)
 
 
 def parse_decision(raw: str) -> Decision:
@@ -264,13 +277,15 @@ def parse_preview(raw: str) -> DecisionPreview:
 
 def dump_choice(choice: Choice) -> str:
     if isinstance(choice, bool):
-        raise TypeError("choice must be an int offer id or a grouped Choice, not bool")
+        raise TypeError(
+            "choice must be an int offer id or a DecisionGroupChoice, not bool"
+        )
     if isinstance(choice, int):
         if choice < 0:
             raise ValueError(f"offer id must be non-negative, got {choice}")
         return json.dumps({"kind": "single", "offer_id": choice})
-    validated = GROUP_CHOICE_ADAPTER.validate_python(choice)
-    return GROUP_CHOICE_ADAPTER.dump_json(validated).decode()
+    validated = DECISION_GROUP_CHOICE_ADAPTER.validate_python(choice)
+    return DECISION_GROUP_CHOICE_ADAPTER.dump_json(validated).decode()
 
 
 def dump_address(at: DecisionAddress) -> str:

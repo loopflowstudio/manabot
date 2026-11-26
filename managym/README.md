@@ -1205,10 +1205,10 @@ Multi-part decisions such as combat declarations and library arrangements still
 execute as sequential native `Action`s (`Game::step`, `Env.step(action: int)`),
 keeping RL/search action spaces, observations and replay digests unchanged.
 Above `Env.step`, `Env` exposes one unified interactive decision surface
-(`managym/src/flow/group/`, typed models in `managym.group`):
+(`managym/src/flow/decision_group/`, typed models in `managym.decision_group`):
 
 ```python
-from managym.group import DeclareAttackersChoice, ScryChoice
+from managym.decision_group import DeclareAttackersChoice, ScryChoice
 
 decision = env.decision()  # defaults to current actor; None if terminal
 if decision is not None:
@@ -1239,10 +1239,10 @@ Supported `Decision` kinds and grouped activation thresholds:
 | `single` | any other decision, or below threshold | — | `int` (raw offer id) | `offer_id` |
 | `declare_attackers` | `>= 1` declarable creature | `declarable` (`AttackerItem`: `item`, `label`, `can_attack`, `must_attack`), `committed` (`PlannedAttack`) | `DeclareAttackersChoice(attackers)` (`PlannedAttack`: `entity`, `incarnation`, optional `defender`) | `attackers` (`PlannedAttack`) |
 | `declare_blockers` | `>= 1` declarable creature | `declarable` (`BlockerItem`: `item`, `label`, `can_block`, `must_block`), `committed` (`PlannedBlock`) | `DeclareBlockersChoice(blocks)` (`PlannedBlock`) | `blocks` |
-| `scry` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_top` (`GroupCard`), `committed_bottom` (`GroupCard`) | `ScryChoice(top, bottom)` | `top`, `bottom` |
-| `surveil` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_graveyard` (`GroupCard`) | `SurveilChoice(graveyard)` | `graveyard`, `kept` |
-| `order_library` | `>= 2` remaining cards | `end` (`"top"` or `"bottom"`), `items` (`GroupCard`), `committed` (`GroupCard`) | `OrderLibraryChoice(order)` | `end`, `order` |
-| `partition_piles` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_face_up` (`GroupCard`), `committed_face_down` (`GroupCard`) | `PartitionPilesChoice(face_up)` | `face_up`, `face_down` |
+| `scry` | `>= 2` remaining cards | `items` (`DecisionCard`), `committed_top` (`DecisionCard`), `committed_bottom` (`DecisionCard`) | `ScryChoice(top, bottom)` | `top`, `bottom` |
+| `surveil` | `>= 2` remaining cards | `items` (`DecisionCard`), `committed_graveyard` (`DecisionCard`) | `SurveilChoice(graveyard)` | `graveyard`, `kept` |
+| `order_library` | `>= 2` remaining cards | `end` (`"top"` or `"bottom"`), `items` (`DecisionCard`), `committed` (`DecisionCard`) | `OrderLibraryChoice(order)` | `end`, `order` |
+| `partition_piles` | `>= 2` remaining cards | `items` (`DecisionCard`), `committed_face_up` (`DecisionCard`), `committed_face_down` (`DecisionCard`) | `PartitionPilesChoice(face_up)` | `face_up`, `face_down` |
 
 - **`env.decision(viewer=None)`** returns the active `Decision` for `viewer`
   (defaulting to the current acting player), or `None` when the game is over or

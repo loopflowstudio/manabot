@@ -1,4 +1,4 @@
-"""Authority tests for Academy grouped decisions (`live_group`, `/group-preview`, `group_command`)."""
+"""Authority tests for Academy grouped decisions (`live_group`, `/decision-group-preview`, `decision_group_command`)."""
 
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ def _advance_ws_to_surveil(
     pilot_msg = initial_msg
     watcher_msg: dict[str, Any] = initial_msg
     for step in range(80):
-        group = pilot_msg.get("group")
+        group = pilot_msg.get("decision_group")
         if isinstance(group, dict) and group.get("kind") == "surveil":
             return pilot_msg, watcher_msg
         frame = (
@@ -132,7 +132,7 @@ def _advance_ws_to_surveil(
     raise AssertionError("did not reach Esper Origins Surveil")
 
 
-def test_group_command_records_identical_canonical_decisions_and_digest_as_single_commands(
+def test_decision_group_command_records_identical_canonical_decisions_and_digest_as_single_commands(
     tmp_path: Path,
 ) -> None:
     single = server.GameSession(
@@ -148,7 +148,7 @@ def test_group_command_records_identical_canonical_decisions_and_digest_as_singl
     grouped_frame = _advance_session_to_three_ogres_attack(grouped)
     assert single_frame == grouped_frame
 
-    active_group = grouped.live_group()
+    active_group = grouped.live_decision_group()
     assert active_group is not None
     assert active_group["kind"] == "declare_attackers"
     ogres = [entry["item"] for entry in active_group["declarable"]]
@@ -164,9 +164,9 @@ def test_group_command_records_identical_canonical_decisions_and_digest_as_singl
         )
         frame_a = _step_command(single, frame_a, offer.id, command_id=f"single-{idx}")
 
-    # Session B: submit 1 group_command with the same 2 attackers.
+    # Session B: submit 1 decision_group_command with the same 2 attackers.
     assert grouped_frame.prompt is not None
-    outcome = grouped.hero_group(
+    outcome = grouped.hero_decision_group(
         {
             "command_id": "grp-attack-1",
             "match_id": grouped_frame.match_id,
@@ -200,9 +200,9 @@ def test_group_command_records_identical_canonical_decisions_and_digest_as_singl
 
     grouped_rows = grouped.canonical_decisions[before_count : before_count + 3]
     assert [row.command_id for row in grouped_rows] == [
-        "authority.group.grp-attack-1.0",
-        "authority.group.grp-attack-1.1",
-        "authority.group.grp-attack-1.2",
+        "authority.decision_group.grp-attack-1.0",
+        "authority.decision_group.grp-attack-1.1",
+        "authority.decision_group.grp-attack-1.2",
     ]
     assert [row.source for row in grouped_rows] == ["client", "client", "client"]
 
@@ -221,7 +221,7 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
             game = record.game
             assert game.env is not None
             headers = {"x-etude-participant-token": initial["resume_token"]}
-            endpoint = f"/api/sessions/{record.session_id}/group-preview"
+            endpoint = f"/api/sessions/{record.session_id}/decision-group-preview"
 
             # Legacy /combat-preview endpoint is removed and returns 404 even with SPA mounted.
             static_dir = tmp_path / "spa"
@@ -246,7 +246,7 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
                 server.app.router.routes[:] = original_routes
 
             # On a non-group prompt (mulligan / priority), live_group is None and preview returns 409 no_group.
-            assert initial["group"] is None
+            assert initial["decision_group"] is None
             init_frame = ExperienceFrame.model_validate(initial["frame"])
             assert init_frame.prompt is not None
             no_group_resp = client.post(
@@ -261,11 +261,11 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
                 headers=headers,
             )
             assert no_group_resp.status_code == 409
-            assert no_group_resp.json()["detail"] == "group_preview_no_group"
+            assert no_group_resp.json()["detail"] == "decision_group_preview_unavailable"
 
             frame = _advance_session_to_three_ogres_attack(game)
             assert frame.prompt is not None
-            live_group = game.live_group()
+            live_group = game.live_decision_group()
             assert live_group is not None
             assert live_group["kind"] == "declare_attackers"
             assert live_group["match_id"] == frame.match_id
@@ -323,7 +323,7 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
             assert game._next_prompt_id == before_prompts
             assert len(game.canonical_decisions) == before_decisions
 
-            # Stale revision, frame_hash, or mismatched plan kind -> 409 group_preview_stale.
+            # Stale revision, frame_hash, or mismatched plan kind -> 409 decision_group_preview_stale.
             for mutation in (
                 {"revision": frame.revision + 1},
                 {"frame_hash": "0" * 64},
@@ -333,10 +333,10 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
                     endpoint, json={**plan_body, **mutation}, headers=headers
                 )
                 assert stale.status_code == 409
-                assert stale.json()["detail"] == "group_preview_stale"
+                assert stale.json()["detail"] == "decision_group_preview_stale"
 
 
-def test_websocket_group_command_commits_atomically_with_early_commit_and_no_intermediate_frames(
+def test_websocket_decision_group_command_commits_atomically_with_early_commit_and_no_intermediate_frames(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -350,14 +350,14 @@ def test_websocket_group_command_commits_atomically_with_early_commit_and_no_int
             game = record.game
             frame = _advance_session_to_three_ogres_attack(game)
             assert frame.prompt is not None
-            live_group = game.live_group()
+            live_group = game.live_decision_group()
             assert live_group is not None
             ogres = [c["item"] for c in live_group["declarable"]]
             base_revision = frame.revision
 
             websocket.send_json(
                 {
-                    "type": "group_command",
+                    "type": "decision_group_command",
                     "command": {
                         "command_id": "ws-grp-attack",
                         "match_id": frame.match_id,
@@ -403,7 +403,7 @@ def test_websocket_group_command_commits_atomically_with_early_commit_and_no_int
             assert settled["update"]["frame"]["projection"]["opponent"]["life"] == 16
 
 
-def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
+def test_decision_group_refused_menace_and_decision_group_incomplete_leave_game_untouched(
     tmp_path: Path,
 ) -> None:
     def attack_with_everything(context: server.DecisionContext) -> int:
@@ -449,7 +449,7 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
         frame = _step_command(menace_game, frame, offer.id)
     assert frame.prompt is not None
 
-    block_group = menace_game.live_group()
+    block_group = menace_game.live_decision_group()
     assert block_group is not None
     assert block_group["kind"] == "declare_blockers"
     first_elf = block_group["declarable"][0]
@@ -459,8 +459,8 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
     before_decisions = len(menace_game.canonical_decisions)
     before_revision = menace_game.revision
 
-    # Lone blocker on Boggart Brute (menace) -> group_refused, no recovery, no mutation.
-    refused = menace_game.hero_group(
+    # Lone blocker on Boggart Brute (menace) -> decision_group_refused, no recovery, no mutation.
+    refused = menace_game.hero_decision_group(
         {
             "command_id": "grp-menace-lone",
             "match_id": frame.match_id,
@@ -475,7 +475,7 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
     )
     assert refused["status"] == "rejected"
     assert "recovery" not in refused
-    assert refused["rejection"]["code"] == "group_refused"
+    assert refused["rejection"]["code"] == "decision_group_refused"
     reason = refused["rejection"]["refused"]["reason"]
     assert "block" in reason and "Boggart Brute" in reason, reason
     assert refused["rejection"]["message"] == refused["rejection"]["refused"]["reason"]
@@ -484,7 +484,7 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
     assert menace_game.revision == before_revision
 
     # Reserved command_id and stale frame_hash checks.
-    reserved = menace_game.hero_group(
+    reserved = menace_game.hero_decision_group(
         {
             "command_id": "authority.spoof",
             "match_id": frame.match_id,
@@ -498,7 +498,7 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
     assert reserved["rejection"]["code"] == "reserved_command_id"
     assert "recovery" not in reserved
 
-    stale = menace_game.hero_group(
+    stale = menace_game.hero_decision_group(
         {
             "command_id": "grp-stale-hash",
             "match_id": frame.match_id,
@@ -512,13 +512,13 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
     assert stale["rejection"]["code"] == "stale_revision"
     assert "recovery" in stale
 
-    # Incomplete OrderLibrary plan -> group_incomplete naming the unplaced card, 0 rows written.
+    # Incomplete OrderLibrary plan -> decision_group_incomplete naming the unplaced card, 0 rows written.
     surveil_game = server.GameSession(tmp_path / "surveil")
     surveil_game.new_game(SURVEIL_CONFIG)
     assert surveil_game.env is not None
     s_frame = ExperienceFrame.model_validate(surveil_game._wire_message()["frame"])
     for step in range(80):
-        active = surveil_game.live_group()
+        active = surveil_game.live_decision_group()
         if active is not None and active["kind"] == "surveil":
             break
         offer = next(
@@ -541,7 +541,7 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
         pytest.fail("did not reach Surveil")
 
     assert s_frame.prompt is not None
-    surveil_done = surveil_game.hero_group(
+    surveil_done = surveil_game.hero_decision_group(
         {
             "command_id": "grp-surveil-keep",
             "match_id": s_frame.match_id,
@@ -554,7 +554,7 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
     assert surveil_done["status"] == "accepted", surveil_done
     order_frame = ExperienceFrame.model_validate(surveil_done["update"]["frame"])
     assert order_frame.prompt is not None
-    order_group = surveil_game.live_group()
+    order_group = surveil_game.live_decision_group()
     assert order_group is not None
     assert order_group["kind"] == "order_library"
     assert order_group["end"] == "top"
@@ -562,7 +562,7 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
 
     order_digest = surveil_game.env.state_digest()
     order_decisions = len(surveil_game.canonical_decisions)
-    incomplete = surveil_game.hero_group(
+    incomplete = surveil_game.hero_decision_group(
         {
             "command_id": "grp-order-incomplete",
             "match_id": order_frame.match_id,
@@ -577,13 +577,13 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
     )
     assert incomplete["status"] == "rejected"
     assert "recovery" not in incomplete
-    assert incomplete["rejection"]["code"] == "group_incomplete"
+    assert incomplete["rejection"]["code"] == "decision_group_incomplete"
     assert order_group["items"][1]["label"] in incomplete["rejection"]["message"]
     assert surveil_game.env.state_digest() == order_digest
     assert len(surveil_game.canonical_decisions) == order_decisions
 
 
-def test_group_command_duplicate_id_across_pilot_transfer_and_cross_participant_denial(
+def test_decision_group_command_duplicate_id_across_pilot_transfer_and_cross_participant_denial(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -612,12 +612,12 @@ def test_group_command_duplicate_id_across_pilot_transfer_and_cross_participant_
             assert game.env is not None
             frame = _advance_session_to_three_ogres_attack(game)
             assert frame.prompt is not None
-            live_group = game.live_group()
+            live_group = game.live_decision_group()
             assert live_group is not None
             ogres = [c["item"] for c in live_group["declarable"]]
 
             group_payload = {
-                "type": "group_command",
+                "type": "decision_group_command",
                 "grant_revision": 1,
                 "command": {
                     "command_id": "grp-dup-1",
@@ -703,13 +703,13 @@ def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_gr
             pilot_surveil, watcher_surveil = _advance_ws_to_surveil(
                 pilot_socket, watcher_socket, initial, grant_revision=1
             )
-            surveil_group = pilot_surveil["group"]
+            surveil_group = pilot_surveil["decision_group"]
             assert surveil_group is not None
             assert surveil_group["kind"] == "surveil"
             assert len(surveil_group["items"]) == 2
-            assert watcher_surveil["group"] is None
+            assert watcher_surveil["decision_group"] is None
 
-            # Watcher is forbidden from /group-preview and group_command.
+            # Watcher is forbidden from /decision-group-preview and decision_group_command.
             record = server.SESSION_REGISTRY[initial["session_id"]]
             assert record.game.env is not None
             before_digest = record.game.env.state_digest()
@@ -717,7 +717,7 @@ def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_gr
                 "x-etude-participant-token": joined["resume_token"],
             }
             preview_denied = client.post(
-                f"/api/sessions/{record.session_id}/group-preview",
+                f"/api/sessions/{record.session_id}/decision-group-preview",
                 json={
                     "match_id": surveil_group["match_id"],
                     "revision": surveil_group["revision"],
@@ -728,11 +728,11 @@ def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_gr
                 headers=watcher_headers,
             )
             assert preview_denied.status_code == 403
-            assert preview_denied.json()["detail"] == "group_preview_forbidden"
+            assert preview_denied.json()["detail"] == "decision_group_preview_forbidden"
 
             watcher_socket.send_json(
                 {
-                    "type": "group_command",
+                    "type": "decision_group_command",
                     "grant_revision": 1,
                     "command": {
                         "command_id": "watcher-surveil-attempt",
@@ -768,16 +768,16 @@ def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_gr
             new_pilot_role = settled_message(watcher_socket)
             assert former_pilot_role["type"] == "role_changed"
             assert former_pilot_role["table"]["access"]["role"] == "watcher"
-            assert former_pilot_role["group"] is None
+            assert former_pilot_role["decision_group"] is None
 
             assert new_pilot_role["type"] == "role_changed"
             assert new_pilot_role["table"]["access"]["role"] == "pilot"
-            assert new_pilot_role["group"] == surveil_group
+            assert new_pilot_role["decision_group"] == surveil_group
 
             # New pilot confirms Surveil keeping both on top -> OrderLibrary Top surfaces only for new pilot.
             watcher_socket.send_json(
                 {
-                    "type": "group_command",
+                    "type": "decision_group_command",
                     "grant_revision": 2,
                     "command": {
                         "command_id": "new-pilot-surveil",
@@ -792,8 +792,8 @@ def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_gr
             new_pilot_order = settled_message(watcher_socket)
             former_pilot_order = settled_message(pilot_socket)
             assert new_pilot_order["status"] == "accepted"
-            assert former_pilot_order["group"] is None
-            order_group = new_pilot_order["group"]
+            assert former_pilot_order["decision_group"] is None
+            order_group = new_pilot_order["decision_group"]
             assert order_group is not None
             assert order_group["kind"] == "order_library"
             assert order_group["end"] == "top"
@@ -802,7 +802,7 @@ def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_gr
             # New pilot confirms OrderLibrary Top with reversed order.
             watcher_socket.send_json(
                 {
-                    "type": "group_command",
+                    "type": "decision_group_command",
                     "grant_revision": 2,
                     "command": {
                         "command_id": "new-pilot-order",
@@ -823,7 +823,7 @@ def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_gr
             order_done = settled_message(watcher_socket)
             settled_message(pilot_socket)
             assert order_done["status"] == "accepted"
-            assert order_done["group"] is None
+            assert order_done["decision_group"] is None
 
 
 CURATOR_CONFIG: dict[str, Any] = {
@@ -850,7 +850,7 @@ def _advance_session_to_curator_partition(
     game.published_prompt = None
     frame = ExperienceFrame.model_validate(game._wire_message()["frame"])
     for step in range(40):
-        live = game.live_group()
+        live = game.live_decision_group()
         if live is not None and live["kind"] == "partition_piles":
             return frame
         offer = next(
@@ -863,7 +863,7 @@ def _advance_session_to_curator_partition(
     raise AssertionError("did not reach Curator of Destinies PartitionPiles")
 
 
-def test_partition_piles_group_command_parity_watcher_privacy_and_choose_pile(
+def test_partition_piles_decision_group_command_parity_watcher_privacy_and_choose_pile(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -880,7 +880,7 @@ def test_partition_piles_group_command_parity_watcher_privacy_and_choose_pile(
     grouped_frame = _advance_session_to_curator_partition(grouped)
     assert single_frame == grouped_frame
 
-    active_group = grouped.live_group()
+    active_group = grouped.live_decision_group()
     assert active_group is not None
     assert active_group["kind"] == "partition_piles"
     assert len(active_group["items"]) == 5
@@ -893,10 +893,10 @@ def test_partition_piles_group_command_parity_watcher_privacy_and_choose_pile(
     for idx, offer_id in enumerate((0, 1, 0, 1, 1)):
         frame_a = _step_command(single, frame_a, offer_id, command_id=f"part-{idx}")
 
-    # Session B: submit 1 group_command with cards 0 and 2 face-up.
+    # Session B: submit 1 decision_group_command with cards 0 and 2 face-up.
     assert grouped_frame.prompt is not None
     face_up = [active_group["items"][0]["item"], active_group["items"][2]["item"]]
-    outcome = grouped.hero_group(
+    outcome = grouped.hero_decision_group(
         {
             "command_id": "grp-partition-1",
             "match_id": grouped_frame.match_id,
@@ -912,7 +912,7 @@ def test_partition_piles_group_command_parity_watcher_privacy_and_choose_pile(
     assert len(single.canonical_decisions) == len(grouped.canonical_decisions)
     grouped_rows = grouped.canonical_decisions[before_count : before_count + 5]
     assert [row.command_id for row in grouped_rows] == [
-        f"authority.group.grp-partition-1.{idx}" for idx in range(5)
+        f"authority.decision_group.grp-partition-1.{idx}" for idx in range(5)
     ]
 
     # Watcher privacy: watchers never receive private PartitionPiles cards.
@@ -939,7 +939,7 @@ def test_partition_piles_group_command_parity_watcher_privacy_and_choose_pile(
             record = server.SESSION_REGISTRY[initial["session_id"]]
             ws_frame = _advance_session_to_curator_partition(record.game)
             assert ws_frame.prompt is not None
-            pilot_group = record.game.live_group()
+            pilot_group = record.game.live_decision_group()
             assert pilot_group is not None and pilot_group["kind"] == "partition_piles"
 
             # Watcher receives group=None on role_changed; new pilot receives full PartitionPiles group.
@@ -956,14 +956,14 @@ def test_partition_piles_group_command_parity_watcher_privacy_and_choose_pile(
             former_pilot_role = settled_message(pilot_socket)
             new_pilot_role = settled_message(watcher_socket)
             assert former_pilot_role["type"] == "role_changed"
-            assert former_pilot_role["group"] is None
+            assert former_pilot_role["decision_group"] is None
             assert new_pilot_role["type"] == "role_changed"
-            assert new_pilot_role["group"] == pilot_group
+            assert new_pilot_role["decision_group"] == pilot_group
 
-            # New pilot submits the whole 5-card split in one atomic group_command.
+            # New pilot submits the whole 5-card split in one atomic decision_group_command.
             watcher_socket.send_json(
                 {
-                    "type": "group_command",
+                    "type": "decision_group_command",
                     "grant_revision": 2,
                     "command": {
                         "command_id": "ws-partition-1",
@@ -981,4 +981,4 @@ def test_partition_piles_group_command_parity_watcher_privacy_and_choose_pile(
             split_done = settled_message(watcher_socket)
             settled_message(pilot_socket)
             assert split_done["status"] == "accepted"
-            assert split_done["group"] is None
+            assert split_done["decision_group"] is None

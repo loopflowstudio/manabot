@@ -95,7 +95,7 @@ undo requires an explicit shared action and cannot erase committed costs or
 revealed information. Keep priority-stop automation distinct from deliberate
 human decisions. Live grouped decisions (combat declarations on the board,
 Scry, Surveil, and OrderLibrary in `ArrangePanel`, and `PartitionPiles` in the
-two-pile partition panel) are drafted whole and committed in one `group_command`
+two-pile partition panel) are drafted whole and committed in one `decision_group_command`
 compiled to sequential native `Action`s with no engine action-space change:
 fold raw single-step offers under a collapsed disclosure while drafting (not
 beside the draft), and keep them listed in Replay and Study where recorded
@@ -489,7 +489,7 @@ Native `semantic_decision_frame_json` and `execute_semantic_command_json`
 use action-aligned `structured_search_offers`: these offers have no choices
 and reject nonempty `Command.answers`. Compound submissions belong to the
 separate `compound_offers` / `step_structured` API. Grouped input
-(`flow/group/`, `managym.group`, Academy `group_command`) compiles a typed plan
+(`flow/decision_group/`, `managym.decision_group`, Academy `decision_group_command`) compiles a typed choice
 to sequential native `Action`s on a clone before stepping the live game and
 never widens an action space, observation, or digest. Do not infer supported
 atomic answers from the `Command` field alone, or pass compound offer ids to

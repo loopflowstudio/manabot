@@ -2,13 +2,13 @@ import { expect, type Page } from '@playwright/test';
 import { tableSnapshot } from './table';
 import boltFixtureJson from '../../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type {
-  DeclareAttackersGroup,
-  DeclareBlockersGroup,
-  GroupCommand,
-  GroupPlan,
-  GroupRefusal,
-  LiveGroup,
-} from '../../src/lib/group';
+  DeclareAttackersDecisionGroup,
+  DeclareBlockersDecisionGroup,
+  DecisionGroupCommand,
+  DecisionGroupPlan,
+  DecisionGroupRefusal,
+  LiveDecisionGroup,
+} from '../../src/lib/decision-group';
 import type {
   Command,
   ExperienceFrame,
@@ -110,7 +110,7 @@ function frameAt(stage: Stage, moreTigers = 0): ExperienceFrame {
 
 const id = (entity: number) => ({ entity, incarnation: 0 });
 
-function liveGroupFor(frame: ExperienceFrame, moreTigers = 0): LiveGroup | null {
+function liveDecisionGroupFor(frame: ExperienceFrame, moreTigers = 0): LiveDecisionGroup | null {
   if (!frame.prompt) return null;
   const address = {
     match_id: frame.match_id,
@@ -119,7 +119,7 @@ function liveGroupFor(frame: ExperienceFrame, moreTigers = 0): LiveGroup | null 
     frame_hash: frame.frame_hash,
   };
   if (frame.action_space === 'DECLARE_ATTACKER') {
-    const declarable: DeclareAttackersGroup['declarable'] = [
+    const declarable: DeclareAttackersDecisionGroup['declarable'] = [
       { item: id(83), label: 'Otter-Penguin', must_attack: false },
       { item: id(85), label: 'Tiger-Seal', must_attack: false },
       ...Array.from({ length: moreTigers }, (_, i) => ({
@@ -132,7 +132,7 @@ function liveGroupFor(frame: ExperienceFrame, moreTigers = 0): LiveGroup | null 
     return { ...address, kind: 'declare_attackers', declarable, committed };
   }
   if (frame.action_space === 'DECLARE_BLOCKER') {
-    const group: DeclareBlockersGroup = {
+    const group: DeclareBlockersDecisionGroup = {
       ...address,
       kind: 'declare_blockers',
       declarable: [{ item: id(83), label: 'Otter-Penguin', can_block: [id(84)], must_block: false }],
@@ -173,20 +173,20 @@ function acceptedUpdate(
 
 export interface CombatAuthority {
   commands: Command[];
-  groupCommands: GroupCommand[];
-  previews: { revision: number; plan: GroupPlan }[];
+  groupCommands: DecisionGroupCommand[];
+  previews: { revision: number; plan: DecisionGroupPlan }[];
 }
 
 interface CombatScenario {
   moreTigers?: number;
-  refuseGroupOnce?: GroupRefusal;
+  refuseGroupOnce?: DecisionGroupRefusal;
   finishWork?: Promise<void>;
 }
 
 /**
  * A combat authority: sends live `group` descriptors, previews drafts on
- * `/group-preview` (without steps), and executes whole declarations on one
- * atomic `group_command`. Raw single-step `command`s still work too.
+ * `/decision-group-preview` (without steps), and executes whole declarations on one
+ * atomic `decision_group_command`. Raw single-step `command`s still work too.
  */
 export async function startCombat(
   page: Page,
@@ -196,9 +196,9 @@ export async function startCombat(
   let current = frameAt('otter', moreTigers);
   let pendingRefusal = refuseGroupOnce ?? null;
 
-  await page.route('**/api/sessions/*/group-preview', async route => {
+  await page.route('**/api/sessions/*/decision-group-preview', async route => {
     const request = route.request().postDataJSON() as {
-      match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: GroupPlan;
+      match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: DecisionGroupPlan;
     };
     authority.previews.push({ revision: request.revision, plan: request.plan });
     const outcome = request.plan.kind === 'declare_blockers'
@@ -224,13 +224,13 @@ export async function startCombat(
     socket.onMessage(async raw => {
       const message = JSON.parse(String(raw)) as {
         type?: string;
-        command?: Command | GroupCommand;
+        command?: Command | DecisionGroupCommand;
       };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
           type: 'observation', table: tableSnapshot(), data: current.projection, actions: [],
           session_id: 'combat-session', resume_token: 'combat-resume-token',
-          group: liveGroupFor(current, moreTigers),
+          decision_group: liveDecisionGroupFor(current, moreTigers),
           recovery: {
             ...structuredClone(boltFixture.recovery),
             reason: 'initial_connect',
@@ -244,8 +244,8 @@ export async function startCombat(
         return;
       }
 
-      if (message.type === 'group_command' && message.command) {
-        const command = message.command as GroupCommand;
+      if (message.type === 'decision_group_command' && message.command) {
+        const command = message.command as DecisionGroupCommand;
         authority.groupCommands.push(command);
         const revision = command.expected_revision;
         if (pendingRefusal) {
@@ -254,10 +254,10 @@ export async function startCombat(
           socket.send(JSON.stringify({
             type: 'command_outcome',
             status: 'rejected',
-            group: liveGroupFor(current, moreTigers),
+            decision_group: liveDecisionGroupFor(current, moreTigers),
             rejection: {
               command_id: command.command_id,
-              code: 'group_refused',
+              code: 'decision_group_refused',
               message: refused.reason,
               current_revision: revision,
               current_prompt: current.prompt!.id,
@@ -282,7 +282,7 @@ export async function startCombat(
         });
         socket.send(JSON.stringify({
           type: 'command_outcome', status: 'accepted', update, work: work('complete'),
-          group: liveGroupFor(next, moreTigers),
+          decision_group: liveDecisionGroupFor(next, moreTigers),
         }));
         return;
       }
@@ -297,7 +297,7 @@ export async function startCombat(
         const update = acceptedUpdate(command, next);
         socket.send(JSON.stringify({
           type: 'command_outcome', status: 'accepted', update,
-          group: liveGroupFor(next, moreTigers),
+          decision_group: liveDecisionGroupFor(next, moreTigers),
         }));
       }
     });

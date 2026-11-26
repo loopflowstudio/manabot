@@ -2,11 +2,11 @@
  * A whole combat declaration, drafted on the board before any of it is sent.
  *
  * The engine asks about one creature at a time. The authority sends a live
- * `CombatGroup` descriptor (`declare_attackers` or `declare_blockers`) naming
+ * `CombatDecisionGroup` descriptor (`declare_attackers` or `declare_blockers`) naming
  * every declarable creature and already-committed declarations. As a person
- * drafts on the board, Academy asks `/group-preview` (read-only) to validate
+ * drafts on the board, Academy asks `/decision-group-preview` (read-only) to validate
  * the whole plan against the real rules, and Confirm submits one atomic
- * `group_command`. Nothing here is a rules solver.
+ * `decision_group_command`. Nothing here is a rules solver.
  *
  * A draft names creatures by their display ids (`PermanentState.id`, the
  * group descriptor's `ObjectRenderId.entity`).
@@ -14,11 +14,11 @@
 import {
   sanitizeEntityIds,
   type AttackerItem,
-  type CombatGroup,
+  type CombatDecisionGroup,
   type DeclareAttackersPlan,
   type DeclareBlockersPlan,
-  type GroupAddress,
-} from '$lib/group';
+  type DecisionGroupAddress,
+} from '$lib/decision-group';
 import type { ExperienceFrame, ObjectRenderId } from '$lib/types';
 import { PRIMARY_CHARS } from './prompt';
 
@@ -33,7 +33,7 @@ export interface Draft {
 
 export const EMPTY_DRAFT: Draft = { attackers: [], blocks: [] };
 
-export function addressOf(frame: ExperienceFrame): GroupAddress | null {
+export function addressOf(frame: ExperienceFrame): DecisionGroupAddress | null {
   return frame.prompt
     ? {
         match_id: frame.match_id,
@@ -93,7 +93,7 @@ export function setPileCount(draft: Draft, pile: number[], count: number): Draft
 }
 
 /** Filter a restored draft so it names only creatures currently declarable in `group`. */
-export function sanitizeCombatDraft(saved: unknown, group: CombatGroup): Draft {
+export function sanitizeCombatDraft(saved: unknown, group: CombatDecisionGroup): Draft {
   if (!saved || typeof saved !== 'object') return EMPTY_DRAFT;
   const candidate = saved as Partial<Draft>;
   if (group.kind === 'declare_attackers') {
@@ -143,7 +143,7 @@ export function sanitizeCombatDraft(saved: unknown, group: CombatGroup): Draft {
 /** The typed group plan to send, using the descriptor's own exact identities. */
 export function combatPlanOf(
   draft: Draft,
-  group: CombatGroup,
+  group: CombatDecisionGroup,
 ): DeclareAttackersPlan | DeclareBlockersPlan {
   const ids = new Map<number, ObjectRenderId>();
   const id = (entity: number): ObjectRenderId => ids.get(entity) ?? { entity, incarnation: 0 };
@@ -171,7 +171,7 @@ export function combatPlanOf(
 }
 
 /** What the engine already committed before this step (must-attack, skip_trivial, or raw single-step). */
-export function committedFromGroup(group: CombatGroup): Draft {
+export function committedFromGroup(group: CombatDecisionGroup): Draft {
   if (group.kind === 'declare_attackers') {
     const defenders = Object.fromEntries(
       group.committed.flatMap(item => (item.defender == null ? [] : [[item.entity, item.defender.entity]])),
@@ -236,7 +236,7 @@ export interface DraftWords {
 
 /** Words for the declaration as it will stand: already committed plus the draft. */
 export function draftWords(
-  group: CombatGroup,
+  group: CombatDecisionGroup,
   drafted: Draft,
   names: Map<number, string>,
 ): DraftWords {

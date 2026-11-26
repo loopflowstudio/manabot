@@ -24,18 +24,18 @@
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
   import {
-    groupPlanKey,
-    isArrangeGroup,
-    isCombatGroup,
-    isPartitionGroup,
-    loadGroupDraft,
-    saveGroupDraft,
-    type GroupPlan,
-    type GroupPreviewFetcher,
-    type GroupPreviewResponse,
-    type GroupRefusal,
-    type LiveGroup,
-  } from '$lib/group';
+    decisionGroupPlanKey,
+    isArrangeDecisionGroup,
+    isCombatDecisionGroup,
+    isPartitionDecisionGroup,
+    loadDecisionGroupDraft,
+    saveDecisionGroupDraft,
+    type DecisionGroupPlan,
+    type DecisionGroupPreviewFetcher,
+    type DecisionGroupPreviewResponse,
+    type DecisionGroupRefusal,
+    type LiveDecisionGroup,
+  } from '$lib/decision-group';
   import type { CardState, CommandRejection, ConnectionState, ExperienceFrame, InteractionOffer, ObjectRenderId, StopsConfig, StopSide } from '$lib/types';
   import ArrangePanel from './ArrangePanel.svelte';
   import {
@@ -158,12 +158,12 @@
     chips?: readonly { key: string; label: string; clear: () => void }[];
     historyHref?: string;
     /** The active live grouped-decision descriptor for this frame, when piloting live. */
-    group?: LiveGroup | null;
+    group?: LiveDecisionGroup | null;
     /** The native grouped preview endpoint, when this table may draft grouped decisions. */
-    groupPreview?: GroupPreviewFetcher;
-    /** Commit a whole validated grouped plan in one atomic `group_command`. */
-    ongroupact?: (plan: GroupPlan) => void;
-    /** Latest grouped rejection (`group_refused` / `group_incomplete`) for this frame, if any. */
+    groupPreview?: DecisionGroupPreviewFetcher;
+    /** Commit a whole validated grouped plan in one atomic `decision_group_command`. */
+    ongroupact?: (plan: DecisionGroupPlan) => void;
+    /** Latest grouped rejection (`decision_group_refused` / `decision_group_incomplete`) for this frame, if any. */
     groupRejection?: CommandRejection | null;
     /** Clear a dismissed group rejection banner owned by the caller. */
     ondismissgrouprejection?: (rejection: CommandRejection) => void;
@@ -242,24 +242,24 @@
   // ———————————————— Grouped decisions (combat, library arrangement & pile partition)
 
   // Live grouped decisions come directly from the authority (`group`), bound
-  // to `(match_id, frame_hash)`. Draft edits preview through `/group-preview`
-  // (read-only), and Confirm submits one atomic `group_command`.
+  // to `(match_id, frame_hash)`. Draft edits preview through `/decision-group-preview`
+  // (read-only), and Confirm submits one atomic `decision_group_command`.
   let draft = $state.raw<Draft>(EMPTY_DRAFT);
   /** The blocker being placed (blockers), or the drafted attacker last touched (attackers). */
   let armed = $state<number | null>(null);
   let arrangeDraft = $state.raw<ArrangeDraft | null>(null);
   let partitionFaceUp = $state.raw<number[]>([]);
   let partitionFolded = $state(false);
-  let previewed = $state.raw<{ frameHash: string; planKey: string; response: GroupPreviewResponse } | null>(null);
+  let previewed = $state.raw<{ frameHash: string; planKey: string; response: DecisionGroupPreviewResponse } | null>(null);
   let dismissedRejectionId = $state<string | null>(null);
   let draftScopeKey = '';
 
   const activeGroup = $derived(
     group && group.frame_hash === frame.frame_hash && group.match_id === frame.match_id ? group : null,
   );
-  const combatGroup = $derived(isCombatGroup(activeGroup) ? activeGroup : null);
-  const arrangeGroup = $derived(isArrangeGroup(activeGroup) ? activeGroup : null);
-  const partitionGroup = $derived(isPartitionGroup(activeGroup) ? activeGroup : null);
+  const combatGroup = $derived(isCombatDecisionGroup(activeGroup) ? activeGroup : null);
+  const arrangeGroup = $derived(isArrangeDecisionGroup(activeGroup) ? activeGroup : null);
+  const partitionGroup = $derived(isPartitionDecisionGroup(activeGroup) ? activeGroup : null);
   const activeArrangeDraft = $derived(
     arrangeGroup && arrangeDraft?.kind === arrangeGroup.kind ? arrangeDraft : null,
   );
@@ -279,13 +279,13 @@
       armed = null;
       previewed = null;
       partitionFolded = false;
-      draft = combatGroup ? sanitizeCombatDraft(loadGroupDraft<Draft>(combatGroup), combatGroup) : EMPTY_DRAFT;
-      arrangeDraft = arrangeGroup ? sanitizeArrangeDraft(loadGroupDraft<ArrangeDraft>(arrangeGroup), arrangeGroup) : null;
-      partitionFaceUp = partitionGroup ? sanitizePartitionDraft(loadGroupDraft<number[]>(partitionGroup), partitionGroup) : [];
+      draft = combatGroup ? sanitizeCombatDraft(loadDecisionGroupDraft<Draft>(combatGroup), combatGroup) : EMPTY_DRAFT;
+      arrangeDraft = arrangeGroup ? sanitizeArrangeDraft(loadDecisionGroupDraft<ArrangeDraft>(arrangeGroup), arrangeGroup) : null;
+      partitionFaceUp = partitionGroup ? sanitizePartitionDraft(loadDecisionGroupDraft<number[]>(partitionGroup), partitionGroup) : [];
     });
   });
 
-  const activePlan = $derived.by((): GroupPlan | null => {
+  const activePlan = $derived.by((): DecisionGroupPlan | null => {
     if (combatGroup) return combatPlanOf(draft, combatGroup);
     if (arrangeGroup && activeArrangeDraft && isArrangeComplete(activeArrangeDraft, arrangeGroup)) {
       return arrangePlanOf(activeArrangeDraft, arrangeGroup);
@@ -293,9 +293,9 @@
     if (partitionGroup) return partitionPlanOf(partitionFaceUp, partitionGroup);
     return null;
   });
-  const activePlanKey = $derived(activePlan ? groupPlanKey(activePlan) : null);
+  const activePlanKey = $derived(activePlan ? decisionGroupPlanKey(activePlan) : null);
 
-  // Every complete draft asks `/group-preview` (read-only); stale answers are dropped.
+  // Every complete draft asks `/decision-group-preview` (read-only); stale answers are dropped.
   $effect(() => {
     const fetcher = groupPreview;
     const address = addressOf(frame);
@@ -323,9 +323,9 @@
 
   // Persist the active draft in tab sessionStorage, scoped to `(match_id, frame_hash, kind)`.
   $effect(() => {
-    if (combatGroup) saveGroupDraft(combatGroup, draft);
-    else if (arrangeGroup && activeArrangeDraft) saveGroupDraft(arrangeGroup, activeArrangeDraft);
-    else if (partitionGroup) saveGroupDraft(partitionGroup, partitionFaceUp);
+    if (combatGroup) saveDecisionGroupDraft(combatGroup, draft);
+    else if (arrangeGroup && activeArrangeDraft) saveDecisionGroupDraft(arrangeGroup, activeArrangeDraft);
+    else if (partitionGroup) saveDecisionGroupDraft(partitionGroup, partitionFaceUp);
   });
 
   /** The preview answers this exact draft, not an earlier one. */
@@ -334,7 +334,7 @@
       ? previewed.response
       : null,
   );
-  const activeRefusal = $derived.by((): GroupRefusal | null => {
+  const activeRefusal = $derived.by((): DecisionGroupRefusal | null => {
     if (exactPreview?.refused) return exactPreview.refused;
     if (
       groupRejection
@@ -1106,7 +1106,7 @@
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
 
-  function previewGroupCard(entityId: number | null, label: string | null, element: HTMLElement | null): void {
+  function previewDecisionCard(entityId: number | null, label: string | null, element: HTMLElement | null): void {
     if (entityId === null || label === null || !element) { show(null, null); return; }
     const card = cards.get(entityId) ?? null;
     show({ name: card?.name ?? label, text: card?.text_box ?? null, permanent: null, card: card?.id ?? null }, element);
@@ -1745,7 +1745,7 @@
                         <BoardCard name={card?.name ?? entry.label} width={104} {card} live={live && !pending} draft={pile.draft}
                           note={pile.note}
                           onactivate={() => togglePartitionCard(entry.item.entity)}
-                          onpreview={element => previewGroupCard(element ? entry.item.entity : null, element ? entry.label : null, element)} />
+                          onpreview={element => previewDecisionCard(element ? entry.item.entity : null, element ? entry.label : null, element)} />
                       </div>
                     {/each}
                   </div>
@@ -1781,7 +1781,7 @@
         refused={activeRefusal}
         onchange={updateArrangeDraft}
         onconfirm={confirmGroup}
-        onpreviewcard={previewGroupCard}
+        onpreviewcard={previewDecisionCard}
       />
     {/if}
 

@@ -68,10 +68,10 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
-from managym.group import (
+from managym.decision_group import (
     DecisionAddress,
+    DecisionGroupChoice,
     DecisionPreview,
-    GroupChoice,
     OrderLibraryChoice,
     OrderLibraryDecision,
     ScryChoice,
@@ -183,8 +183,8 @@ from .shared_table_protocol import (
     BranchPreviewMessage,
     BranchRevealMessage,
     CommandMessage,
-    GroupCommand,
-    GroupCommandMessage,
+    DecisionGroupCommand,
+    DecisionGroupCommandMessage,
     JoinTableMessage,
     NewGameMessage,
     PassTurnMessage,
@@ -1141,7 +1141,7 @@ class GameSession:
         self.revision = 0
         self._next_prompt_id = 1
         self.published_prompt: PublishedPrompt | None = None
-        self._live_group_cache: (
+        self._live_decision_group_cache: (
             tuple[tuple[int, int, str], dict[str, Any] | None] | None
         ) = None
         self.accepted_commands: dict[str, dict[str, Any]] = {}
@@ -1389,7 +1389,7 @@ class GameSession:
         self.revision = 0
         self._next_prompt_id = 1
         self.published_prompt = None
-        self._live_group_cache = None
+        self._live_decision_group_cache = None
         self.accepted_commands = {}
         self._swap_receipts = {}
         self._live_analysis_publish = None
@@ -1979,7 +1979,7 @@ class GameSession:
             command_id, base_revision, batch_cursor, committed=committed
         )
 
-    def live_group(self) -> dict[str, Any] | None:
+    def live_decision_group(self) -> dict[str, Any] | None:
         """Return the active grouped-decision descriptor for the published prompt."""
         if (
             self.watch_mode
@@ -2001,13 +2001,13 @@ class GameSession:
             str(context.frame["frame_hash"]),
         )
         if (
-            self._live_group_cache is not None
-            and self._live_group_cache[0] == cache_key
+            self._live_decision_group_cache is not None
+            and self._live_decision_group_cache[0] == cache_key
         ):
-            return deepcopy(self._live_group_cache[1])
+            return deepcopy(self._live_decision_group_cache[1])
         active = self.env.decision(viewer=self.human_seat)
         if active is None or isinstance(active, SingleDecision):
-            self._live_group_cache = (cache_key, None)
+            self._live_decision_group_cache = (cache_key, None)
             return None
         descriptor: dict[str, Any] = {
             "match_id": self.match_id,
@@ -2018,10 +2018,10 @@ class GameSession:
                 mode="json", exclude={"address", "offers"}, exclude_none=True
             ),
         }
-        self._live_group_cache = (cache_key, descriptor)
+        self._live_decision_group_cache = (cache_key, descriptor)
         return deepcopy(descriptor)
 
-    def hero_group(
+    def hero_decision_group(
         self, raw: Any, *, committed: Callable[[dict[str, Any]], None] | None = None
     ) -> dict[str, Any]:
         """Validate a grouped plan on a clone, then execute its sequential steps."""
@@ -2045,7 +2045,7 @@ class GameSession:
             return self._reject_command(raw, "not_actor", recover=False)
 
         try:
-            group_command = GroupCommand.model_validate(raw)
+            group_command = DecisionGroupCommand.model_validate(raw)
         except Exception:
             return self._reject_command(raw, "invalid_command", recover=False)
 
@@ -2058,7 +2058,7 @@ class GameSession:
         if preview.refused is not None:
             return self._reject_command(
                 raw,
-                "group_refused",
+                "decision_group_refused",
                 message=preview.refused.reason,
                 refused=preview.refused.model_dump(mode="json"),
                 recover=False,
@@ -2066,8 +2066,8 @@ class GameSession:
         if not preview.complete or not preview.steps:
             return self._reject_command(
                 raw,
-                "group_incomplete",
-                message=_incomplete_group_message(preview, group_command.plan),
+                "decision_group_incomplete",
+                message=_incomplete_decision_group_message(preview, group_command.plan),
                 recover=False,
             )
 
@@ -2093,7 +2093,7 @@ class GameSession:
                     f"Grouped step {step_index} diverged from compiled native preview."
                 )
             step_command = {
-                "command_id": f"authority.group.{command_id}.{step_index}",
+                "command_id": f"authority.decision_group.{command_id}.{step_index}",
                 "match_id": self.match_id,
                 "expected_revision": step_context.revision,
                 "prompt_id": step_context.prompt_id,
@@ -2707,7 +2707,7 @@ class GameSession:
         if self.mirror_retry is not None:
             self.mirror_retry["expected_revision"] = self.revision
         self.published_prompt = None
-        self._live_group_cache = None
+        self._live_decision_group_cache = None
         self._pending_decision = None
 
     def _commit_step_presentation(
@@ -3941,8 +3941,8 @@ def _response_with_participant(
     payload["table"] = _table_snapshot(
         record, participant, watcher_invite=watcher_invite
     )
-    payload["group"] = (
-        record.game.live_group()
+    payload["decision_group"] = (
+        record.game.live_decision_group()
         if TableCapability.SUBMIT_LIVE_COMMAND in ROLE_CAPABILITIES[participant.role]
         else None
     )
@@ -4012,7 +4012,7 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
     "rematch": TableCapability.CONFIGURE_MATCH,
     "swap_sides": TableCapability.CONFIGURE_MATCH,
     "command": TableCapability.SUBMIT_LIVE_COMMAND,
-    "group_command": TableCapability.SUBMIT_LIVE_COMMAND,
+    "decision_group_command": TableCapability.SUBMIT_LIVE_COMMAND,
     "action": TableCapability.SUBMIT_LIVE_COMMAND,
     "pass_turn": TableCapability.SUBMIT_LIVE_COMMAND,
     "retry_mirror": TableCapability.SUBMIT_LIVE_COMMAND,
@@ -4135,7 +4135,7 @@ def _dispatch_table_request(
 
     `publish_analysis` delivers a live analysis's readings to the pilot
     without waiting (`_send_live_analysis`)."""
-    if isinstance(request, (CommandMessage, GroupCommandMessage)):
+    if isinstance(request, (CommandMessage, DecisionGroupCommandMessage)):
         command_id = request.command.command_id
         if command_id in record.game.accepted_commands:
             submitter = record.accepted_command_submitters.get(command_id)
@@ -4147,8 +4147,8 @@ def _dispatch_table_request(
                     "forbidden", "Command id belongs to another participant."
                 )
             raw_command = request.command.model_dump(mode="json")
-            if isinstance(request, GroupCommandMessage):
-                return record.game.hero_group(raw_command), False
+            if isinstance(request, DecisionGroupCommandMessage):
+                return record.game.hero_decision_group(raw_command), False
             return record.game.hero_command(raw_command), False
 
     _authorize_table_request(record, participant, request)
@@ -4194,13 +4194,13 @@ def _dispatch_table_request(
         if not bumped:
             record.table_revision += 1
         return response, True
-    if isinstance(request, (CommandMessage, GroupCommandMessage)):
+    if isinstance(request, (CommandMessage, DecisionGroupCommandMessage)):
         command_id = request.command.command_id
         record.accepted_command_submitters[command_id] = participant.viewer_id
         try:
             raw_command = request.command.model_dump(mode="json")
-            if isinstance(request, GroupCommandMessage):
-                response = record.game.hero_group(raw_command, committed=committed)
+            if isinstance(request, DecisionGroupCommandMessage):
+                response = record.game.hero_decision_group(raw_command, committed=committed)
             else:
                 response = record.game.hero_command(raw_command, committed=committed)
         finally:
@@ -5857,7 +5857,9 @@ def _pending_decision_address(
     )
 
 
-def _incomplete_group_message(preview: DecisionPreview, plan: GroupChoice) -> str:
+def _incomplete_decision_group_message(
+    preview: DecisionPreview, plan: DecisionGroupChoice
+) -> str:
     """Describe what remains unplaced when a grouped preview is incomplete."""
     decision = preview.decision
     if isinstance(decision, ScryDecision) and isinstance(plan, ScryChoice):
@@ -5879,7 +5881,7 @@ def _incomplete_group_message(preview: DecisionPreview, plan: GroupChoice) -> st
     return "Grouped plan is incomplete."
 
 
-class GroupPreviewRequest(BaseModel):
+class DecisionGroupPreviewRequest(BaseModel):
     """A drafted grouped choice at the current prompt's authority address."""
 
     model_config = ConfigDict(extra="forbid")
@@ -5887,13 +5889,13 @@ class GroupPreviewRequest(BaseModel):
     revision: int
     prompt_id: int
     frame_hash: str
-    plan: GroupChoice
+    plan: DecisionGroupChoice
 
 
-@app.post("/api/sessions/{session_id}/group-preview")
-async def get_group_preview(
+@app.post("/api/sessions/{session_id}/decision-group-preview")
+async def get_decision_group_preview(
     session_id: str,
-    payload: GroupPreviewRequest,
+    payload: DecisionGroupPreviewRequest,
     x_etude_participant_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
     """Preview a whole grouped decision without committing any of it.
@@ -5909,15 +5911,15 @@ async def get_group_preview(
             TableCapability.SUBMIT_LIVE_COMMAND
             not in ROLE_CAPABILITIES[participant.role]
         ):
-            raise HTTPException(403, "group_preview_forbidden")
+            raise HTTPException(403, "decision_group_preview_forbidden")
         game = record.game
         context = game.published_prompt
         pending = game._pending_decision
         if context is None or pending is None or game.env is None:
-            raise HTTPException(409, "group_preview_stale")
+            raise HTTPException(409, "decision_group_preview_stale")
         frame = pending.frame
         if game.watch_mode or context.viewer != game.human_seat:
-            raise HTTPException(403, "group_preview_forbidden")
+            raise HTTPException(403, "decision_group_preview_forbidden")
         if (
             game.match_id != payload.match_id
             or frame.revision != payload.revision
@@ -5926,14 +5928,14 @@ async def get_group_preview(
             or frame.frame_hash != payload.frame_hash
             or frame.frame_hash != context.frame["frame_hash"]
         ):
-            raise HTTPException(409, "group_preview_stale")
-        if game.live_group() is None:
-            raise HTTPException(409, "group_preview_no_group")
+            raise HTTPException(409, "decision_group_preview_stale")
+        if game.live_decision_group() is None:
+            raise HTTPException(409, "decision_group_preview_unavailable")
         address = _pending_decision_address(context, pending)
         try:
             preview = game.env.preview(payload.plan, at=address)
         except managym.AgentError as exc:
-            raise HTTPException(409, "group_preview_stale") from exc
+            raise HTTPException(409, "decision_group_preview_stale") from exc
         if preview.steps and (
             context.action_by_offer.get(preview.steps[0].action_index)
             != preview.steps[0].action_index

@@ -14,7 +14,7 @@
    * for the floors the rail itself scrolls.
    */
   import type { Snippet } from 'svelte';
-  import { groupDisclosureCopy, type GroupKind } from '$lib/group';
+  import { decisionGroupDisclosureCopy, type DecisionGroupKind } from '$lib/decision-group';
   import type { ExperienceFrame } from '$lib/types';
   import type { HistoryLine, HistoryTurn, RecentHistoryItem } from './history';
   import type { Segment } from './tell';
@@ -89,7 +89,7 @@
     /** A live group's or draft's controls, in place of the single-step buttons. */
     draft?: Snippet;
     /** Active group kind, for the collapsed raw-offer disclosure wording. */
-    groupKind?: GroupKind | null;
+    groupKind?: DecisionGroupKind | null;
   }
 
   let {
@@ -362,7 +362,7 @@
     {#if waitingFor}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
     <!-- An open live group folds raw single-step offers under a collapsed disclosure. -->
     {#if draft}
-      {@const disclosure = groupDisclosureCopy(groupKind ?? 'declare_attackers')}
+      {@const disclosure = decisionGroupDisclosureCopy(groupKind ?? 'declare_attackers')}
       <details class="raw" data-testid="per-creature-choices" data-group-kind={groupKind ?? undefined}>
         <summary class="type-caption text-ink-3">{disclosure.summary}</summary>
         <p class="type-caption text-ink-3">{disclosure.caption}</p>

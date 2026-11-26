@@ -509,7 +509,7 @@ it('ignores work from another table, revision or earlier operation', () => {
 });
 
 describe('grouped decisions in GameSocketController', () => {
-  it('tracks liveGroup on observation, role_changed, and frame hash changes', () => {
+  it('tracks liveDecisionGroup on observation, role_changed, and frame hash changes', () => {
     gameStore.prepareForNewGame();
     const controller = new GameSocketController();
     const recovery = structuredClone(boltProtocolFixture.recovery);
@@ -529,9 +529,9 @@ describe('grouped decisions in GameSocketController', () => {
       data: frame.projection,
       actions: [],
       recovery,
-      group: null,
+      decision_group: null,
     });
-    expect(gameStore.liveGroup).toBeNull();
+    expect(gameStore.liveDecisionGroup).toBeNull();
 
     // TransferPilot delivers the active group on role_changed without reloading.
     deliver(controller, {
@@ -553,26 +553,26 @@ describe('grouped decisions in GameSocketController', () => {
         opponent_label: null,
         watcher_invite: null,
       },
-      group: scryGroup,
+      decision_group: scryGroup,
     } as ServerMessage | SharedTableControlEvent);
-    expect(gameStore.liveGroup).toEqual(scryGroup);
+    expect(gameStore.liveDecisionGroup).toEqual(scryGroup);
 
     // Mismatched frame hash is ignored.
     deliver(controller, {
       type: 'role_changed',
       table: gameStore.table!,
-      group: { ...scryGroup, frame_hash: 'wrong-hash' },
+      decision_group: { ...scryGroup, frame_hash: 'wrong-hash' },
     } as ServerMessage | SharedTableControlEvent);
-    expect(gameStore.liveGroup).toBeNull();
+    expect(gameStore.liveDecisionGroup).toBeNull();
   });
 
-  it('reconciles a pending group_command by accepted_commands and frame_hash', () => {
+  it('reconciles a pending decision_group_command by accepted_commands and frame_hash', () => {
     const controller = new GameSocketController();
     const sent: string[] = [];
     const recovery = structuredClone(boltProtocolFixture.recovery);
     const frame = recovery.frame;
     const request = {
-      type: 'group_command' as const,
+      type: 'decision_group_command' as const,
       command: {
         command_id: 'grp-pending-1',
         match_id: frame.match_id,

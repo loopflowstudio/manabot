@@ -1,16 +1,16 @@
 /**
  * Pure draft model for library arrangement groups (Scry, Surveil, OrderLibrary).
  *
- * Driven strictly by the authority's `ArrangeGroup` descriptor (`items` and
+ * Driven strictly by the authority's `ArrangeDecisionGroup` descriptor (`items` and
  * `committed*` lists) — no prompt-text or label scraping.
  */
 import {
   sanitizeEntityIds,
-  type ArrangeGroup,
+  type ArrangeDecisionGroup,
   type OrderLibraryPlan,
   type ScryPlan,
   type SurveilPlan,
-} from '$lib/group';
+} from '$lib/decision-group';
 import type { ObjectRenderId } from '$lib/types';
 
 export interface ScryDraft {
@@ -35,7 +35,7 @@ export interface OrderLibraryDraft {
 
 export type ArrangeDraft = ScryDraft | SurveilDraft | OrderLibraryDraft;
 
-export function emptyArrangeDraft(group: ArrangeGroup): ArrangeDraft {
+export function emptyArrangeDraft(group: ArrangeDecisionGroup): ArrangeDraft {
   switch (group.kind) {
     case 'scry':
       return { kind: 'scry', top: [], bottom: [] };
@@ -46,7 +46,7 @@ export function emptyArrangeDraft(group: ArrangeGroup): ArrangeDraft {
   }
 }
 
-export function sanitizeArrangeDraft(saved: unknown, group: ArrangeGroup): ArrangeDraft {
+export function sanitizeArrangeDraft(saved: unknown, group: ArrangeDecisionGroup): ArrangeDraft {
   if (!saved || typeof saved !== 'object') return emptyArrangeDraft(group);
   const candidate = saved as Record<string, unknown>;
   if (candidate.kind !== group.kind) return emptyArrangeDraft(group);
@@ -106,7 +106,7 @@ export function orderMove(draft: OrderLibraryDraft, id: number, delta: -1 | 1): 
   return { kind: 'order_library', order: moveInList(draft.order, id, delta) };
 }
 
-export function isArrangeComplete(draft: ArrangeDraft, group: ArrangeGroup): boolean {
+export function isArrangeComplete(draft: ArrangeDraft, group: ArrangeDecisionGroup): boolean {
   if (draft.kind !== group.kind) return false;
   switch (draft.kind) {
     case 'scry':
@@ -131,7 +131,7 @@ export function arrangeHasChanges(draft: ArrangeDraft): boolean {
 
 export function arrangePlanOf(
   draft: ArrangeDraft,
-  group: ArrangeGroup,
+  group: ArrangeDecisionGroup,
 ): ScryPlan | SurveilPlan | OrderLibraryPlan {
   const ids = new Map<number, ObjectRenderId>(group.items.map(card => [card.item.entity, card.item]));
   const id = (entity: number): ObjectRenderId => ids.get(entity) ?? { entity, incarnation: 0 };
@@ -151,7 +151,7 @@ export interface ArrangeWords {
   bucketTitle?: string;
 }
 
-export function arrangeWords(draft: ArrangeDraft, group: ArrangeGroup): ArrangeWords {
+export function arrangeWords(draft: ArrangeDraft, group: ArrangeDecisionGroup): ArrangeWords {
   const total = group.items.length;
   if (group.kind === 'scry' && draft.kind === 'scry') {
     const hasCommitted = group.committed_top.length > 0 || group.committed_bottom.length > 0;

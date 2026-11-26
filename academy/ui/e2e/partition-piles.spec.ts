@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
-import type { GroupCommand, GroupPlan, LiveGroup, PartitionPilesGroup } from '../src/lib/group';
+import type { DecisionGroupCommand, DecisionGroupPlan, LiveDecisionGroup, PartitionPilesDecisionGroup } from '../src/lib/decision-group';
 import { tableSnapshot } from './fixtures/table';
 import type { CardState, Command, ExperienceFrame, FrameUpdate, InteractionOffer, RecoveryEnvelope } from '../src/lib/types';
 
@@ -101,7 +101,7 @@ function partitionFrame(cursor = 0): ExperienceFrame {
   };
 }
 
-function partitionGroup(frame: ExperienceFrame, committedUp = 0, committedDown = 0): PartitionPilesGroup {
+function partitionGroup(frame: ExperienceFrame, committedUp = 0, committedDown = 0): PartitionPilesDecisionGroup {
   const offset = committedUp + committedDown;
   return {
     match_id: frame.match_id,
@@ -171,8 +171,8 @@ interface PartitionOptions {
 
 interface PartitionAuthority {
   commands: Command[];
-  groupCommands: GroupCommand[];
-  previews: GroupPlan[];
+  groupCommands: DecisionGroupCommand[];
+  previews: DecisionGroupPlan[];
 }
 
 async function installPartitionAuthority(
@@ -181,12 +181,12 @@ async function installPartitionAuthority(
 ): Promise<PartitionAuthority> {
   const authority: PartitionAuthority = { commands: [], groupCommands: [], previews: [] };
   let current = partitionFrame(0);
-  let currentGroup: LiveGroup | null = partitionGroup(current);
+  let currentGroup: LiveDecisionGroup | null = partitionGroup(current);
   let rejectNext = options.rejectFirstGroup ?? false;
 
-  await page.route('**/api/sessions/*/group-preview', async (route) => {
+  await page.route('**/api/sessions/*/decision-group-preview', async (route) => {
     const request = route.request().postDataJSON() as {
-      match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: GroupPlan;
+      match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: DecisionGroupPlan;
     };
     authority.previews.push(request.plan);
     const faceUp = request.plan.kind === 'partition_piles' ? request.plan.face_up : [];
@@ -210,14 +210,14 @@ async function installPartitionAuthority(
 
   await page.routeWebSocket('**/ws/play', (socket) => {
     socket.onMessage((raw) => {
-      const message = JSON.parse(String(raw)) as { type?: string; command?: Command | GroupCommand };
+      const message = JSON.parse(String(raw)) as { type?: string; command?: Command | DecisionGroupCommand };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
           type: 'observation',
           table: tableSnapshot(),
           data: current.projection,
           actions: [],
-          group: currentGroup,
+          decision_group: currentGroup,
           session_id: 'curator-session',
           resume_token: 'curator-resume-token',
           recovery: {
@@ -232,18 +232,18 @@ async function installPartitionAuthority(
         }));
         return;
       }
-      if (message.type === 'group_command' && message.command) {
-        const command = message.command as GroupCommand;
+      if (message.type === 'decision_group_command' && message.command) {
+        const command = message.command as DecisionGroupCommand;
         authority.groupCommands.push(command);
         if (rejectNext) {
           rejectNext = false;
           socket.send(JSON.stringify({
             type: 'command_outcome',
             status: 'rejected',
-            group: currentGroup,
+            decision_group: currentGroup,
             rejection: {
               command_id: command.command_id,
-              code: 'group_refused',
+              code: 'decision_group_refused',
               message: 'Curator split was refused by the authority.',
               current_revision: current.revision,
               refused: {
@@ -260,7 +260,7 @@ async function installPartitionAuthority(
         socket.send(JSON.stringify({
           type: 'command_outcome',
           status: 'accepted',
-          group: null,
+          decision_group: null,
           update: acceptedUpdate(command, current),
         }));
         return;
@@ -273,7 +273,7 @@ async function installPartitionAuthority(
         socket.send(JSON.stringify({
           type: 'command_outcome',
           status: 'accepted',
-          group: currentGroup,
+          decision_group: currentGroup,
           update: acceptedUpdate(command, current),
         }));
       }
@@ -298,12 +298,12 @@ const partitionCard = (page: Page, id: number) =>
   page.locator(`[data-testid=partition-card][data-object-id="${id}"] [data-testid=board-card]`);
 
 for (const mode of ['pointer', 'keyboard'] as const) {
-  test(`Curator pile partition is drafted holistically by ${mode} and submitted in one atomic group_command`, async ({ page }) => {
+  test(`Curator pile partition is drafted holistically by ${mode} and submitted in one atomic decision_group_command`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     const authority = await startPartition(page);
 
-    // All 5 cards start in face-down pile, previewed via /group-preview, with 0 commands sent.
+    // All 5 cards start in face-down pile, previewed via /decision-group-preview, with 0 commands sent.
     await expect(page.getByTestId('partition-panel')).toHaveAttribute('data-group-kind', 'partition_piles');
     await expect(page.locator('[data-testid=partition-pile-up] [data-testid=partition-card]')).toHaveCount(0);
     await expect(page.locator('[data-testid=partition-pile-down] [data-testid=partition-card]')).toHaveCount(5);
@@ -323,7 +323,7 @@ for (const mode of ['pointer', 'keyboard'] as const) {
     expect(authority.commands).toEqual([]);
     expect(authority.groupCommands).toEqual([]);
 
-    // Confirm sends one atomic group_command instead of a 5-step browser send loop.
+    // Confirm sends one atomic decision_group_command instead of a 5-step browser send loop.
     if (mode === 'pointer') await page.getByTestId('primary-action').click();
     else await page.keyboard.press('Space');
     await expect.poll(() => authority.groupCommands.length).toBe(1);
@@ -345,7 +345,7 @@ test('group rejection banner and inline refusal clear together on draft edit, an
   const authority = await startPartition(page, { rejectFirstGroup: true });
   await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
 
-  // Confirm triggers a simulated group_refused rejection -> both rail notice and inline refusal show.
+  // Confirm triggers a simulated decision_group_refused rejection -> both rail notice and inline refusal show.
   await page.getByTestId('primary-action').click();
   await expect(page.getByTestId('partition-refusal')).toContainText('Curator split was refused by the authority.');
   await expect(page.locator('.notices .notice.error')).toContainText('Curator split was refused by the authority.');

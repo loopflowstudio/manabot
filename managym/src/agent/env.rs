@@ -898,7 +898,7 @@ impl Env {
     pub fn decision(
         &self,
         viewer: Option<usize>,
-    ) -> Result<Option<crate::flow::group::ActiveDecision>, AgentError> {
+    ) -> Result<Option<crate::flow::decision_group::ActiveDecision>, AgentError> {
         if let Some(seat) = viewer {
             if seat >= 2 {
                 return Err(AgentError("viewer out of bounds".into()));
@@ -914,9 +914,9 @@ impl Env {
     /// Read-only preview of a single or grouped choice; see [`Game::preview`].
     pub fn preview(
         &self,
-        at: Option<&crate::flow::group::DecisionAddress>,
-        choice: &crate::flow::group::DecisionChoice,
-    ) -> Result<crate::flow::group::DecisionPreview, AgentError> {
+        at: Option<&crate::flow::decision_group::DecisionAddress>,
+        choice: &crate::flow::decision_group::DecisionChoice,
+    ) -> Result<crate::flow::decision_group::DecisionPreview, AgentError> {
         if let Some(address) = at {
             if address.viewer >= 2 {
                 return Err(AgentError("viewer out of bounds".into()));
@@ -933,8 +933,8 @@ impl Env {
     /// policies so mixed-policy envs match manual `Env::step` identically.
     pub fn submit(
         &mut self,
-        at: Option<&crate::flow::group::DecisionAddress>,
-        choice: &crate::flow::group::DecisionChoice,
+        at: Option<&crate::flow::decision_group::DecisionAddress>,
+        choice: &crate::flow::decision_group::DecisionChoice,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
         self.require_external_chooser()?;
         let preview = self.preview(at, choice)?;

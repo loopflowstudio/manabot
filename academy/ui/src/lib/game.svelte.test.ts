@@ -427,7 +427,7 @@ describe('dismissCommandRejection', () => {
     const store = createGameStore();
     store.lastCommandRejection = {
       command_id: 'cmd-1',
-      code: 'group_refused',
+      code: 'decision_group_refused',
       message: 'Boggart Brute requires at least two blockers.',
       current_revision: 12,
       current_prompt: null,
@@ -447,7 +447,7 @@ describe('dismissCommandRejection', () => {
     // Unrelated error message is preserved when dismissing a rejection.
     store.lastCommandRejection = {
       command_id: 'cmd-2',
-      code: 'group_incomplete',
+      code: 'decision_group_incomplete',
       message: 'Place remaining cards before confirming.',
       current_revision: 13,
       current_prompt: null,

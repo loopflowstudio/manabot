@@ -2,10 +2,10 @@
   /**
    * Arrangement panel for Scry, Surveil and OrderLibrary live groups.
    *
-   * Driven solely by the authority's `ArrangeGroup` descriptor and preview
+   * Driven solely by the authority's `ArrangeDecisionGroup` descriptor and preview
    * response; nothing commits until the user presses Confirm once.
    */
-  import type { ArrangeGroup, GroupCard, GroupRefusal } from '$lib/group';
+  import type { ArrangeDecisionGroup, DecisionCard, DecisionGroupRefusal } from '$lib/decision-group';
   import Thumb from './Thumb.svelte';
   import {
     arrangeHasChanges,
@@ -20,12 +20,12 @@
   } from './arrange';
 
   interface Props {
-    group: ArrangeGroup;
+    group: ArrangeDecisionGroup;
     draft: ArrangeDraft;
     live: boolean;
     pending: boolean;
     ready: boolean;
-    refused: GroupRefusal | null;
+    refused: DecisionGroupRefusal | null;
     onchange: (next: ArrangeDraft) => void;
     onconfirm: () => void;
     onpreviewcard: (entityId: number | null, label: string | null, element: HTMLElement | null) => void;
@@ -43,12 +43,12 @@
     onpreviewcard,
   }: Props = $props();
 
-  const byId = $derived(new Map<number, GroupCard>(group.items.map(card => [card.item.entity, card])));
+  const byId = $derived(new Map<number, DecisionCard>(group.items.map(card => [card.item.entity, card])));
   const words = $derived(arrangeWords(draft, group));
   const disabled = $derived(!live || pending);
   const hasChanges = $derived(arrangeHasChanges(draft));
 
-  const unplaced = $derived.by((): GroupCard[] => {
+  const unplaced = $derived.by((): DecisionCard[] => {
     if (draft.kind === 'scry') {
       const placed = new Set([...draft.top, ...draft.bottom]);
       return group.items.filter(card => !placed.has(card.item.entity));
@@ -60,7 +60,7 @@
     return [];
   });
 
-  const surveilKept = $derived.by((): GroupCard[] => {
+  const surveilKept = $derived.by((): DecisionCard[] => {
     if (draft.kind !== 'surveil') return [];
     const gy = new Set(draft.graveyard);
     return group.items.filter(card => !gy.has(card.item.entity));
@@ -83,7 +83,7 @@
       : null;
   });
 
-  function hoverCard(card: GroupCard) {
+  function hoverCard(card: DecisionCard) {
     return {
       onmouseenter: (event: MouseEvent) => onpreviewcard(card.item.entity, card.label, event.currentTarget as HTMLElement),
       onmouseleave: () => onpreviewcard(null, null, null),
@@ -93,7 +93,7 @@
   }
 </script>
 
-{#snippet cardIdentity(card: GroupCard)}
+{#snippet cardIdentity(card: DecisionCard)}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus previews the card) -->
   <span class="card-id" tabindex="0" {...hoverCard(card)}>
     <Thumb name={card.label} />

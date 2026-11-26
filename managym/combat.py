@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict
 
 import managym
 from managym.experience import ObjectRenderId
-from managym.group import PlannedAttack, PlannedBlock
+from managym.decision_group import PlannedAttack, PlannedBlock
 
 
 class CombatPlan(BaseModel):

@@ -2,11 +2,11 @@ import { currentGame, rememberCurrentGame } from './current-game.svelte';
 import type { PlaySession } from './play-session';
 import type { PreviewAddress, PreviewResponse } from './payment-preview';
 import {
-  validGroupPlan,
-  type GroupPlan,
-  type GroupPreviewRequest,
-  type GroupPreviewResponse,
-} from './group';
+  validDecisionGroupPlan,
+  type DecisionGroupPlan,
+  type DecisionGroupPreviewRequest,
+  type DecisionGroupPreviewResponse,
+} from './decision-group';
 import { browser } from '$app/environment';
 
 import { sanitizeDeckSelection } from './decks';
@@ -63,7 +63,7 @@ interface InterruptedSnapshot {
   identity: typeof gameStore.interruptedIdentity;
 }
 
-type PendingSubmission = Extract<SharedTableRequest, { type: 'command' | 'group_command' }>;
+type PendingSubmission = Extract<SharedTableRequest, { type: 'command' | 'decision_group_command' }>;
 const VALID_SERVER_TYPES = new Set([
   'work_status',
   'analysis_state',
@@ -81,7 +81,7 @@ const VALID_SERVER_TYPES = new Set([
   'control_error',
 ]);
 
-type TableServerMessage = (ServerMessage | SharedTableControlEvent) & Pick<ServerMessage, 'mirror_retry' | 'mirror' | 'group'>;
+type TableServerMessage = (ServerMessage | SharedTableControlEvent) & Pick<ServerMessage, 'mirror_retry' | 'mirror' | 'decision_group'>;
 
 interface ResumeCredentials {
   session_id: string;
@@ -167,14 +167,14 @@ function validPendingCommand(value: unknown): value is PendingSubmission {
       && Number.isSafeInteger(command.expected_revision) && Number.isSafeInteger(command.prompt_id)
       && Number.isSafeInteger(command.offer_id) && Array.isArray(command.answers) && command.answers.length === 0;
   }
-  if (request.type === 'group_command') {
+  if (request.type === 'decision_group_command') {
     const command = request.command;
     return !!command
       && typeof command.command_id === 'string' && command.command_id.length > 0
       && typeof command.match_id === 'string'
       && Number.isSafeInteger(command.expected_revision) && Number.isSafeInteger(command.prompt_id)
       && typeof command.frame_hash === 'string'
-      && validGroupPlan(command.plan);
+      && validDecisionGroupPlan(command.plan);
   }
   return false;
 }
@@ -423,12 +423,12 @@ export class GameSocketController {
     });
   }
 
-  sendGroupCommand(plan: GroupPlan): boolean {
+  sendDecisionGroupCommand(plan: DecisionGroupPlan): boolean {
     const frame = gameStore.protocolFrame;
     const prompt = frame?.prompt;
     if (!frame || !prompt) return false;
     return this.submitCommand({
-      type: 'group_command',
+      type: 'decision_group_command',
       command: {
         command_id: crypto.randomUUID(),
         match_id: frame.match_id,
@@ -676,7 +676,7 @@ export class GameSocketController {
       this.pendingResume = false;
       gameStore.endCommand();
       this.persistControlCredentials(message);
-      if ('group' in message) gameStore.applyLiveGroup(message.group);
+      if ('decision_group' in message) gameStore.applyLiveDecisionGroup(message.decision_group);
       if (this.pendingCommand) {
         this.clearPendingCommand();
         gameStore.endCommand();
@@ -693,7 +693,7 @@ export class GameSocketController {
     }
 
     if (message.type === 'role_changed') {
-      if ('group' in message) gameStore.applyLiveGroup(message.group);
+      if ('decision_group' in message) gameStore.applyLiveDecisionGroup(message.decision_group);
       gameStore.tableAnnouncement = `You are now the ${message.table.access.role}.`;
       return;
     }
@@ -815,7 +815,7 @@ export class GameSocketController {
       if (message.session_id && message.resume_token) {
         this.persistResumeState(message.session_id, message.resume_token);
       }
-      gameStore.applyLiveGroup('group' in message ? message.group : null);
+      gameStore.applyLiveDecisionGroup('decision_group' in message ? message.decision_group : null);
       // A first/replacement recovery resets match state. Its runner metadata
       // and live-analysis flag belong to the recovered frame and must survive that reset.
       if (message.type === 'observation') gameStore.liveAnalysis = followShown(gameStore.liveAnalysis, message.analysis?.policy ?? null);
@@ -847,18 +847,18 @@ export class GameSocketController {
       if (message.status === 'accepted') {
         gameStore.submissionAccepted = true;
         this.applyUpdate(message.update);
-        gameStore.applyLiveGroup('group' in message ? message.group : null);
+        gameStore.applyLiveDecisionGroup('decision_group' in message ? message.decision_group : null);
       } else if (message.status === 'duplicate') {
         this.applyRecovery(message.recovery);
-        gameStore.applyLiveGroup('group' in message ? message.group : null);
+        gameStore.applyLiveDecisionGroup('decision_group' in message ? message.decision_group : null);
       } else {
         if (message.recovery) {
           this.applyRecovery(message.recovery);
         }
-        if ('group' in message) {
-          gameStore.applyLiveGroup(message.group);
+        if ('decision_group' in message) {
+          gameStore.applyLiveDecisionGroup(message.decision_group);
         } else if (message.recovery) {
-          gameStore.applyLiveGroup(null);
+          gameStore.applyLiveDecisionGroup(null);
         }
         gameStore.lastCommandRejection = message.rejection;
         gameStore.setError(message.rejection.message);
@@ -948,7 +948,7 @@ export class GameSocketController {
     }
     const frame = recovery.frame;
     const sameGrant = request.grant_revision === gameStore.table?.access.grant_revision;
-    const sameHash = request.type !== 'group_command' || frame.frame_hash === request.command.frame_hash;
+    const sameHash = request.type !== 'decision_group_command' || frame.frame_hash === request.command.frame_hash;
     if (frame.match_id === command.match_id && frame.revision === command.expected_revision
       && frame.prompt?.id === command.prompt_id && sameHash && sameGrant
       && gameStore.hasCapability('submit_live_command')) {
@@ -1164,8 +1164,8 @@ export function sendAction(offerId: number): boolean {
   return controller.sendAction(offerId);
 }
 
-export function sendGroupCommand(plan: GroupPlan): boolean {
-  return controller.sendGroupCommand(plan);
+export function sendDecisionGroupCommand(plan: DecisionGroupPlan): boolean {
+  return controller.sendDecisionGroupCommand(plan);
 }
 
 
@@ -1217,13 +1217,13 @@ export async function fetchPaymentPreview(address: PreviewAddress, signal: Abort
 }
 
 /** Read-only native preview for a drafted grouped plan; never mutates the live game. */
-export async function fetchGroupPreview(
-  request: GroupPreviewRequest,
+export async function fetchDecisionGroupPreview(
+  request: DecisionGroupPreviewRequest,
   signal: AbortSignal,
-): Promise<GroupPreviewResponse> {
+): Promise<DecisionGroupPreviewResponse> {
   const credentials = loadResumeCredentials();
   if (!credentials) throw new Error('No live session');
-  const response = await fetch(`/api/sessions/${encodeURIComponent(credentials.session_id)}/group-preview`, {
+  const response = await fetch(`/api/sessions/${encodeURIComponent(credentials.session_id)}/decision-group-preview`, {
     method: 'POST',
     signal,
     headers: { 'Content-Type': 'application/json', 'x-etude-participant-token': credentials.resume_token },

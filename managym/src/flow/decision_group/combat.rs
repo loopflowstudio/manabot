@@ -5,12 +5,12 @@ use std::collections::HashSet;
 use crate::agent::action::{Action, ActionSpace, AgentError};
 use crate::experience::ObjectRenderId;
 use crate::flow::combat::AttackTarget;
+use crate::flow::decision_group::{
+    AttackerItem, BlockerItem, ChoiceCheck, DecisionChoice, DecisionGroupKind, DecisionOutcome,
+    DecisionRefusal, DecisionSpec, NextStep, PlannedAttack, PlannedBlock,
+};
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
-use crate::flow::group::{
-    AttackerItem, BlockerItem, ChoiceCheck, DecisionChoice, DecisionOutcome, DecisionRefusal,
-    DecisionSpec, GroupKind, NextStep, PlannedAttack, PlannedBlock,
-};
 use crate::state::game_object::{PermanentId, PlayerId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -49,7 +49,7 @@ enum Answer {
     Block(Option<PermanentId>),
 }
 
-impl GroupKind for CombatGroup {
+impl DecisionGroupKind for CombatGroup {
     type Progress = CombatProgress;
 
     fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
