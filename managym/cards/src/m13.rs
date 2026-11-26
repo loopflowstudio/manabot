@@ -2,9 +2,10 @@
 use managym_state::{
     ability::{Effect, ObjectSelector},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PowerCda,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, LayerCount, LayerValue,
         PrintedCharacteristics, StaticAbility,
     },
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -15,6 +16,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
 
 fn crusader_of_odric() -> CardDefinition {
     let text_box = "Crusader of Odric's power and toughness are each equal to the number of creatures you control.";
+    let count = LayerValue::count(LayerCount::YouControl(CardPredicate::creature()));
     CardDefinition {
         key: "m13.crusader_of_odric",
         scryfall_id: "295096bb-1857-4224-bc7b-307b38cfd338",
@@ -23,9 +25,10 @@ fn crusader_of_odric() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{2}{W}")),
             types: CardTypes::new([CardType::Creature]),
             subtypes: vec!["Human".into(), "Soldier".into()],
-            statics: vec![StaticAbility::CharacteristicPt(
-                PowerCda::CreaturesYouControl,
-            )],
+            statics: vec![StaticAbility::cda(vec![Modification::SetBasePt {
+                power: Some(count.clone()),
+                toughness: Some(count),
+            }])],
             text_box: text_box.into(),
             ..Default::default()
         },

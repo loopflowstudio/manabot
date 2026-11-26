@@ -24,6 +24,7 @@ impl Game {
         let cleanup = self.state.turn.current_step_kind() == StepKind::Cleanup;
 
         loop {
+            self.refresh_control();
             // CR 603.3b: finish this placement round before another SBA or
             // collection pass, including after an ordering/target suspension.
             if self.state.trigger_placement.is_some() {

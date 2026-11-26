@@ -45,6 +45,7 @@ KEYWORD_NAMES = (
     "menace",
     "hexproof",
     "indestructible",
+    "changeling",
 )
 
 ACTION_LABELS = {
@@ -220,9 +221,13 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "attached_to": permanent.attached_to,
         "creature_types": permanent.creature_types,
         "is_granted_land": bool(permanent.is_granted_land) or None,
+        "blocked": bool(permanent.blocked) or None,
+        "entry_controller_id": permanent.entry_controller_id,
         "first_strike_participant": bool(permanent.first_strike_participant) or None,
         "attacking": bool(permanent.attacking) or None,
         "blocking": permanent.blocking,
+        "hexproof_from": list(permanent.hexproof_from) or None,
+        "protection_from": list(permanent.protection_from) or None,
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "face_down": bool(permanent.face_down) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
@@ -450,6 +455,7 @@ def _serialize_player(
             if (spent := player.spent_graveyard_types)
             else {}
         ),
+        **({"hexproof": True} if player.hexproof else {}),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         **({"effects": _effects(player.effects)} if player.effects else {}),
         "hand": grouped_cards["HAND"],

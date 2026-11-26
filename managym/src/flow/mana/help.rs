@@ -183,6 +183,7 @@ impl Game {
         candidates: &[PermanentId],
         also_tapped: Option<PermanentId>,
     ) -> Vec<(PermanentId, Vec<TapPayment>)> {
+        let _scan = self.board_scan();
         let model_for = |tapped: Option<PermanentId>| {
             let mut model = self.payment_model(player, None);
             for permanent in also_tapped.into_iter().chain(tapped) {
