@@ -50,6 +50,9 @@ test('play page reacts to the full game loop', async ({ page }) => {
   await expect(page.getByTestId('game')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('region', { name: 'Your battlefield' })).toBeVisible();
   await expect(page.getByTestId('turn-number')).toContainText('Turn');
+  // The opponent's hand is the board's top edge: one back per hidden card, and your own hand keeps its row.
+  await expect(page.getByTestId('hand-ribbon')).toHaveCount(1);
+  await expect(page.locator('[data-testid="hand-ribbon"][data-ribbon="top"]').getByTestId('card-back')).toHaveCount(7);
 
   // New game leaves that game unfinished in History and frees Play; its matchup
   // is the next tab's "Play again": one click from setup reaches its first

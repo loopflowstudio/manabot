@@ -47,8 +47,10 @@ test('watch reads choices and consequences on the board, then returns from Study
   await expect(page.locator('[data-testid="hand-ribbon"][data-out="true"]')).toHaveCount(2);
   await page.getByTestId('hand-toggle').first().click();
   await page.getByRole('button', {name: 'Previous', exact: true}).click();
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
   await expect(rows).toHaveCount(0);
   await page.getByRole('button', {name: 'Previous', exact: true}).click();
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
   await page.getByRole('button', {name: 'Try another line', exact: true}).click();
   await page.getByTestId('action-option').first().click();
   await expect(page.getByText('Your line is committed')).toBeVisible();

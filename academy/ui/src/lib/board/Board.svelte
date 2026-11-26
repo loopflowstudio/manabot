@@ -1925,7 +1925,7 @@
     {@const height = footprint(lay.card, true)}
     {@const out = ribbonOut(side, sideView.hand)}
     {#if count}
-      <div class={`ribbon ${edge}`} class:out data-testid="hand-ribbon" data-ribbon={edge} data-out={out}
+      <div class={`ribbon at-${edge}`} class:out data-testid="hand-ribbon" data-ribbon={edge} data-out={out}
         style:height={`${height + 16}px`} style:--card-height={`${height}px`} style:--peek-face={`${PEEK_FACE}px`} style:--peek-back={`${PEEK_BACK}px`}>
         <div class="ribbon-cards" style:width={`${lay.card + (count - 1) * lay.step}px`}>
           {#if sideView.hand.length}
@@ -2239,13 +2239,13 @@
    * shows its name bar; pointing at or focusing one brings that card alone out.
    */
   .ribbon { position: absolute; left: var(--plate); right: 0; isolation: isolate; overflow: hidden; display: flex; justify-content: center; pointer-events: none; }
-  .ribbon.top { top: 0; }
-  .ribbon.bottom { bottom: 0; }
+  .ribbon.at-top { top: 0; }
+  .ribbon.at-bottom { bottom: 0; }
   .ribbon-cards { position: relative; height: 100%; }
   .ribbon-faces { position: absolute; inset: 0; }
   .ribbon-card { position: absolute; pointer-events: auto; transition: transform var(--motion-move) var(--motion-move-ease); }
-  .ribbon.top .ribbon-card { top: 0; transform: translateY(calc(var(--peek) - var(--card-height))); }
-  .ribbon.bottom .ribbon-card { bottom: 0; transform: translateY(calc(var(--card-height) - var(--peek))); }
+  .ribbon.at-top .ribbon-card { top: 0; transform: translateY(calc(var(--peek) - var(--card-height))); }
+  .ribbon.at-bottom .ribbon-card { bottom: 0; transform: translateY(calc(var(--card-height) - var(--peek))); }
   .ribbon-card.face { --peek: var(--peek-face); }
   .ribbon-card.back {
     --peek: var(--peek-back); pointer-events: none; border: 1px solid var(--border-strong); border-radius: var(--radius-card);
