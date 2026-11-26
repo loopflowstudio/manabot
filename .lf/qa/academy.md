@@ -328,6 +328,34 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `GameSession` with the recorded `config` (drop `hero_source`,
   `villain_source`, `seed_was_requested`). Rebuild the static SPA
   after any `academy/ui` change; a configured launch serves the stale build silently.
+- Folded offers over identical objects in a real game: the offer's
+  `subjects[0]` is the copy the engine acts on and `aliases[].display_id`
+  are the other copies; a click or drag on any copy sends the one offer and
+  the engine plays, taps, targets or blocks the canonical copy. Read frames
+  from the WebSocket (`payload.recovery?.frame ?? payload.update?.frame ??
+  payload.frame`) and click rows by `[data-testid=action-option][data-offer-id=N]`
+  rather than text. Reached with configured launches (`--order play` unless
+  noted): `kyoshi` (14 Kyoshi Village / 10 Plains / 16 Youthful Knight)
+  against `40 Plains` passive, seed 11: three Plains fold into one Play
+  Plains on turn 1, five Knights into one cast, and Village + 3 Plains at
+  `{1}{W}` by turn 7 with Auto-tap off. `22 Mountain / 30 Raging Goblin /
+  8 Burst Lightning` against `60 Plains` passive, seed 5: three-to-four goblin
+  attack drafts by turn 3. The same deck mirrored against `heuristic`,
+  `--order draw`, seed 5: a block stop on turn 3 with one blocker against
+  three attackers (two fold). `22 Mountain / 8 Raging Goblin / 30 Burst
+  Lightning` against that goblin deck (heuristic, draw, seed 5): Burst
+  Lightning targets on turn 3 with two folded attackers. Creatures that
+  entered on different turns stay separate. Hand cards lose `.playable`
+  during the turn read-out: wait for `[data-testid=walk-now]` to disappear
+  before clicking or dragging board cards. After game over the captured
+  frame may still show the last decision; detect the end by the "Rematch"
+  button. Which goblin each prompt named is in `attempts.trace_json`
+  `events[].actions[].focus`. To record a game on the pre-change engine,
+  `git worktree add --detach /private/tmp/<x> <base>`, build its wheel with
+  this checkout's `.venv/bin/maturin build --release` and `CARGO_TARGET_DIR`
+  under `.runs/` (about 10 minutes), place its `.so` there and run the CLI
+  from `/tmp` with `PYTHONPATH=/private/tmp/<x>`; the main checkout's `.so`
+  may not match its Python.
 - Board drags and combat drafts in a real game: import `22 Mountain / 30 Raging
   Goblin / 8 Burst Lightning` against `60 Plains` with Passive and Automatic
   payment; haste goblins give a multi-creature attack draft by turn 3 and

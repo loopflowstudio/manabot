@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MTG-487 QA — one offer per class of identical objects</title>
+<style>
+  :root { --paper: #f7f5f0; --ink: #1d1b18; --ink2: #5b564d; --rule: #ddd6c8; --ok: #2f6b3a; --warn: #9a5b12; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.55 ui-sans-serif, system-ui, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1, h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; }
+  h1 { font-size: 30px; margin: 0 0 4px; }
+  h2 { font-size: 22px; margin: 40px 0 8px; border-top: 1px solid var(--rule); padding-top: 20px; }
+  .sub { color: var(--ink2); margin: 0 0 24px; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; margin-left: 8px; vertical-align: middle; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); }
+  code { background: #ece7dc; padding: 0 4px; border-radius: 3px; font-size: 13px; }
+  pre { background: #ece7dc; padding: 10px 12px; border-radius: 4px; overflow-x: auto; font-size: 12.5px; }
+  img { width: 100%; border: 1px solid var(--rule); border-radius: 4px; margin: 8px 0 4px; }
+  figcaption { color: var(--ink2); font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  td, th { text-align: left; border-bottom: 1px solid var(--rule); padding: 6px 8px; vertical-align: top; }
+</style>
+</head>
+<body><main>
+<h1>MTG-487 QA</h1>
+<p class="sub">Folded offers over indistinguishable objects, driven through real Academy launches (<code>managym academy play</code> / <code>replay</code>) with Playwright at 1440×900, on the release extension rebuilt from <code>e18cd33dbc</code>. Every click went to a board card or an offer row a person would press.</p>
+
+<table>
+<tr><th>Scenario</th><th>Result</th></tr>
+<tr><td>Three Plains in hand → one “Play Plains”; click or drag the last copy</td><td class="ok">works</td></tr>
+<tr><td>Five Youthful Knights in hand → one cast; all five copies playable, click on the last sends the one offer</td><td class="ok">works</td></tr>
+<tr><td>Manual payment, Kyoshi Village + 3 Plains at {1}{W}</td><td class="ok">3 offers as planned</td></tr>
+<tr><td>Tap an alias Plains; reload mid-payment; tap the remaining alias</td><td class="ok">works, Knight resolves</td></tr>
+<tr><td>Attack drafts of 1, 2, 0, 3 identical goblins, clicking copies the engine was not asking</td><td class="ok">exact counts attack, no refusals</td></tr>
+<tr><td>Block onto an alias attacker (drag)</td><td class="ok">works</td></tr>
+<tr><td>Burst Lightning target on an alias goblin</td><td class="ok">works</td></tr>
+<tr><td>Review of a finished game with folded choices</td><td class="ok">replays to the end, final board = recorded</td></tr>
+<tr><td>Elemental self-play training (2 updates, recorded games) and Academy replay of one recorded game</td><td class="ok">721/721 positions</td></tr>
+<tr><td>Returning user: a record written by the pre-change engine</td><td class="warn">stops at decision 0 (expected: hash v32); its message ran off the panel → fixed</td></tr>
+</table>
+
+<h2>1 · Hand copies <span class="tag ok">works</span></h2>
+<p><code>kyoshi</code> deck (14 Kyoshi Village / 10 Plains / 16 Youthful Knight) against 40 Plains, passive, seed 11. After keeping, offers were <code>["Play Plains", "Play Kyoshi Village", "Pass priority"]</code> with the Plains offer on copy 16 and aliases <code>[21, 19]</code>. Clicking copy 19 sent offer 0 and a Plains was played; dragging copy 19 onto the battlefield did the same (the engine plays copy 16). On turn 7, five Knights in hand were one “Cast Youthful Knight” offer; every hand card was <code>.playable</code>, and clicking the fifth (alias 27) sent offer 0.</p>
+<p>A driver note, not a defect: while the opponent's turn read-out plays, hand cards are not playable and a click only ends the read-out.</p>
+
+<h2>2 · Manual payment <span class="tag ok">works</span></h2>
+<p>With Auto-tap off, casting the Knight with Village + 3 Plains untapped stopped with exactly three offers: <code>Tap Kyoshi Village for {G}/{W}</code>, <code>Tap Plains for {W}</code> (subject 82, aliases 84, 85), <code>Pay the cost</code>.</p>
+<figure><img src="qa-img/a-payment-stop.jpg"><figcaption>Payment stop: three rows; the three Plains are drawn separately and each one is clickable.</figcaption></figure>
+<p>Clicking Plains 85 sent offer 1; the engine tapped 82 and committed {W}. The space stayed a payment stop for the remaining {1} (Village vs Plains is a real choice). After a page reload the frame came back with the Plains offer now on 84, alias 85; clicking 85 finished the payment and the Knight resolved. No rejections.</p>
+<figure><img src="qa-img/a-after-alias-tap.jpg"><figcaption>After clicking the rightmost Plains: the leftmost (canonical) copy is the committed one.</figcaption></figure>
+
+<h2>3 · Attack drafts <span class="tag ok">works</span></h2>
+<p>22 Mountain / 30 Raging Goblin / 8 Burst Lightning against 60 Plains, passive, seed 5. Each draft clicked copies other than the one the engine was asking, then confirmed. Read from <code>attempts.trace_json</code> (<code>actions[].focus</code>):</p>
+<pre>turn 3  draft 1 (clicked 127)       129 attack · 127 no · 124 no         → 1 damage
+turn 5  draft 2 (clicked 127,124)   129 attack · 127 attack · 124 no     → 2 damage
+turn 7  draft 0                     133 no · 129 no  (127, 124 never asked)
+turn 9  draft 3 (clicked 129,127,124) 133 attack · 129 attack · 127 attack · 124 no</pre>
+<p>Marks move to the creature being asked, a decline prunes the identical goblins after it (turn 7: two prompts for four goblins), and a goblin that entered this turn stays its own class. Opponent life went 20 → 19 → 17 across the first two attacks, as drafted.</p>
+<figure><img src="qa-img/b-draft-3.jpg"><figcaption>“Attack with 3 · not with Raging Goblin” — the pile counter and draft read naturally.</figcaption></figure>
+
+<h2>4 · Blocks and targets <span class="tag ok">works</span></h2>
+<p>Goblins mirrored against the <code>heuristic</code> opponent (draw, seed 5): turn 3 block stop with one blocker against attackers 124, 130, 132 offered <code>Block … (132, alias 130)</code>, <code>Block … (124)</code>, <code>do not block</code>. Dragging the blocker onto alias 130 drafted “Raging Goblin on Raging Goblin” and sent offer 0; the engine declared the block on 132, drawn above the blocker.</p>
+<figure><img src="qa-img/c-block-draft-alias.jpg"><figcaption>Block drafted onto the alias attacker.</figcaption></figure>
+<p>22 Mountain / 8 Raging Goblin / 30 Burst Lightning against the goblin deck: Burst Lightning on turn 3 offered two goblin targets for three attackers (128 with alias 130; 124 had entered on an earlier turn). Clicking 130 sent offer 3; 128 died.</p>
+<figure><img src="qa-img/c-target-stop.jpg"><figcaption>Target list: “(attacking #2)” stands for the two identical goblins.</figcaption></figure>
+
+<h2>5 · Records <span class="tag ok">works</span></h2>
+<p>The block game ran to game over; “Review this game” replayed it to position 110/110 and its final board (you 0 / opponent 18, hand 6, graveyard 4, one goblin) equals the trace's <code>final_observation</code>.</p>
+<p><code>etude train manabot/recipes/elemental.py --config '{"updates": 2, "streams": 4, "record_games": 1, "statistics": true}'</code> finished (<code>outcome.json</code> state <code>finished</code>, 0 dropped) and recorded 12 games; <code>managym academy replay … --game 3</code> walked all 721 positions (360 decisions) with no divergence.</p>
+<figure><img src="qa-img/e-replay-end.jpg"><figcaption>A recorded training game at its last position.</figcaption></figure>
+
+<h2>6 · Records from before this change <span class="tag warn">fixed display</span></h2>
+<p>A random-policy game recorded with the base engine (<code>f4b272349b</code>, built in a temporary worktree) opened in this build stops at decision 0 with “pre-decision digest differs; recorded … engine 9d40…; running … engine c987…”. That is the planned consequence of <code>MATCH_STATE_HASH_VERSION</code> 31 → 32; such records replay only at their own revision.</p>
+<p>The reason text is unbroken hex, and it ran past the right edge of the replay panel. <code>academy/ui/src/routes/replay/+page.svelte</code> now wraps it (<code>overflow-wrap: anywhere</code>):</p>
+<figure><img src="qa-img/f-old-record.jpg"><figcaption>After the fix: the whole reason is readable.</figcaption></figure>
+
+<h2>Not reached</h2>
+<ul>
+<li>Discarding from a hand of identical cards (no prompt): the passive opponent discarded, not the person. The base engine's trace showed five identical “Discard Plains” offers for that seat; covered by engine tests.</li>
+<li>Convoke/waterbend taps and cost-component picks: no real deck in these runs reached them.</li>
+<li>Reviewing a play-table game recorded before this change: Review needs the original browser's participant credential. Recorded-game files show the same digest stop (section 6).</li>
+</ul>
+</main></body></html>

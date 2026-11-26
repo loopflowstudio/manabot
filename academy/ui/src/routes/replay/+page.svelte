@@ -600,7 +600,7 @@
   {#if listError}<p role="alert" class="notice error">{listError}</p>{/if}
   {#if index?.mirror_retry && !replayStore.error}<p role="alert" class="notice">{index.mirror_retry.message}</p>{/if}
   {#if replayStore.error}<p role="alert" class="notice error">{replayStore.error}</p>{/if}
-  {#if index?.record_stop?.reason}<p class="type-caption text-ink-2">{index.record_stop.reason}</p>{/if}
+  {#if index?.record_stop?.reason}<p class="type-caption text-ink-2" style:overflow-wrap="anywhere">{index.record_stop.reason}</p>{/if}
   {#if index?.played_from}
     <p class="type-caption text-ink-2" data-testid="played-from">Played on from <a href={`/replay?trace=${encodeURIComponent(index.played_from.trace_id)}&review=1`}>an earlier game</a>{index.played_from.turn === null ? '' : ` at turn ${index.played_from.turn}`}: the moves before it are that game's.</p>
   {/if}
