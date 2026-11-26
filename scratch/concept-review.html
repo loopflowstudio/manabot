@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>MTG-483 Concept Review (Post-Build) — Grouped Input at HEAD</title>
+<title>MTG-483 Concept Review (Post-Pass 4 at HEAD) — Unified Decisions &amp; Grouped Input</title>
 <style>
   :root {
     --bg: #faf8f4;
@@ -69,7 +69,7 @@
     color: var(--ink);
   }
   main {
-    max-width: 1080px;
+    max-width: 1100px;
     margin: 0 auto;
     padding: 36px 24px 80px;
   }
@@ -105,9 +105,9 @@
   }
   p { margin: 0 0 12px; }
   .lead {
-    font-size: 16px;
+    font-size: 15.5px;
     color: var(--muted);
-    max-width: 84ch;
+    max-width: 88ch;
   }
   .meta-strip {
     display: flex;
@@ -141,17 +141,17 @@
     margin: 18px 0;
     box-shadow: var(--shadow);
   }
-  .callout.aligned {
-    border-left-color: var(--yes-ink);
-    background: linear-gradient(to right, var(--yes-bg), var(--surface) 22%);
-  }
   .callout.mismatch {
-    border-left-color: var(--warn-ink);
-    background: linear-gradient(to right, var(--warn-bg), var(--surface) 22%);
+    border-left-color: var(--no-ink);
+    background: linear-gradient(to right, var(--no-bg), var(--surface) 24%);
   }
   .callout.choice {
     border-left-color: var(--proposed-ink);
-    background: linear-gradient(to right, var(--proposed-bg), var(--surface) 22%);
+    background: linear-gradient(to right, var(--proposed-bg), var(--surface) 24%);
+  }
+  .callout.aligned {
+    border-left-color: var(--yes-ink);
+    background: linear-gradient(to right, var(--yes-bg), var(--surface) 24%);
   }
 
   table {
@@ -179,7 +179,7 @@
     color: var(--muted);
   }
   tr:last-child td { border-bottom: none; }
-  .col-verdict { width: 92px; white-space: nowrap; }
+  .col-verdict { width: 96px; white-space: nowrap; }
 
   .grid-2 {
     display: grid;
@@ -246,10 +246,7 @@
     color: var(--accent);
     margin-bottom: 4px;
   }
-  .step-title {
-    font-weight: 700;
-    margin-bottom: 6px;
-  }
+  .step-title { font-weight: 700; margin-bottom: 6px; }
 
   .ui-mock {
     background: var(--surface-2);
@@ -262,13 +259,15 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
     font-size: 13px;
     font-weight: 700;
     margin-bottom: 10px;
   }
   .ui-cols {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
     gap: 10px;
   }
   .ui-col {
@@ -297,10 +296,6 @@
     background: var(--surface-2);
     font-size: 12.5px;
   }
-  .card-chip.committed {
-    opacity: 0.72;
-    border-style: dotted;
-  }
   .btn-mock {
     display: inline-block;
     padding: 5px 11px;
@@ -311,15 +306,7 @@
     background: var(--accent-soft);
     color: var(--ink);
   }
-  .btn-mock.disabled {
-    opacity: 0.45;
-    border-color: var(--line);
-    background: var(--surface);
-  }
-
-  ol.questions {
-    padding-left: 20px;
-  }
+  ol.questions { padding-left: 20px; }
   ol.questions > li {
     margin-bottom: 18px;
     background: var(--surface);
@@ -328,46 +315,47 @@
     padding: 14px 16px;
     box-shadow: var(--shadow);
   }
-  .opts {
-    list-style: none;
-    padding-left: 0;
-    margin: 8px 0 0;
-  }
-  .opts li {
-    margin: 5px 0;
-    padding-left: 4px;
-  }
+  .opts { list-style: none; padding-left: 0; margin: 8px 0 0; }
+  .opts li { margin: 5px 0; padding-left: 4px; }
   .muted { color: var(--muted); }
   ul.tight { margin: 6px 0 10px; padding-left: 18px; }
-  ul.tight li { margin-bottom: 5px; }
+  ul.tight li { margin-bottom: 6px; }
 </style>
 </head>
 <body>
 <main>
   <header>
-    <p class="eyebrow">MTG-483 · Concept Review (Post-Build at HEAD)</p>
-    <h1>Do the product's concepts and the built code's concepts line up for grouped input?</h1>
+    <p class="eyebrow">MTG-483 · Concept Review (Post-Pass 4 at HEAD)</p>
+    <h1>Do the product's concepts and the built code's concepts line up across <code>Env.decision()</code> and Academy?</h1>
     <p class="lead">
-      <strong>Area reviewed:</strong> Grouped human input end-to-end across the full branch diff against base <code>34e0cb7919</code> &rarr; <code>HEAD</code> (<code>7e860ccfb3</code>) — from <code>managym</code>'s native grouped-input compiler (<code>managym/src/flow/group/{mod,combat,library}.rs</code>, <code>Env::{group,preview_group,apply_group}</code>, <code>managym/group.py</code>, and the <code>0.3.0</code>-deprecated <code>combat_preview</code> wrapper) through Academy's authority and protocol (<code>managym/academy/server.py</code>, <code>shared_table_protocol.py</code>, <code>protocol/testing-house-v1.schema.json</code>) to the browser table (<code>group.ts</code>, <code>arrange.ts</code>, <code>ArrangePanel.svelte</code>, <code>combat.ts</code>, <code>Board.svelte</code>, <code>Rail.svelte</code>, <code>game.svelte.ts</code>, <code>socket.svelte.ts</code>).
+      <strong>Area reviewed:</strong> The unified interactive decision and grouped-input surface end-to-end against base <code>d90b900337</code> &rarr; <code>HEAD</code> (<code>dda8c2d532</code>) — from <code>managym</code>'s native decision/group compiler (<code>managym/src/flow/group/{mod,combat,library}.rs</code>, <code>Env::{decision,preview,submit}</code>, <code>managym/group.py</code>, <code>managym/__init__.pyi</code>, and the <code>0.3.0</code>-deprecated <code>structured_offer</code> / <code>combat_preview</code> wrappers), through Academy's authority and protocol (<code>managym/academy/server.py</code>, <code>shared_table_protocol.py</code>, <code>protocol/testing-house-v1.schema.json</code>), to the browser table (<code>group.ts</code>, <code>arrange.ts</code>, <code>ArrangePanel.svelte</code>, <code>combat.ts</code>, <code>partition.ts</code>, <code>Board.svelte</code>, <code>Rail.svelte</code>, <code>socket.svelte.ts</code>).
       <br />
-      <strong>Why this area:</strong> Every line of MTG-483 exists to let a human draft a multi-part decision whole and submit it atomically while keeping core engine <code>Action</code>s flat, sequential, and shared with RL, search, Replay, and Study. Reviewing the entire built pipeline from Rust to Svelte tests whether the design actually survived implementation, compression, and live QA without leaking hidden state or splitting concepts.
+      <strong>Why this area:</strong> Pass 4 promoted grouped input from a side-channel (<code>group()</code>/<code>preview_group()</code>/<code>apply_group()</code>) into <code>managym</code>'s single unified interactive decision surface (<code>env.decision()</code> / <code>env.preview()</code> / <code>env.submit()</code>) and aligned Academy on it. Reviewing the whole area as it stands at <code>HEAD</code> tests whether both Python callers and Academy players actually experience one coherent decision model without blind spots or leftover parallel pipelines.
     </p>
     <div class="meta-strip">
-      <span class="pill existing">Base on main: 34e0cb7919</span>
-      <span class="pill yes">Built at HEAD: 7e860ccfb3</span>
-      <span class="pill proposed">Optional follow-up tweaks marked separately</span>
-      <span class="pill yes">Outcome: Nothing to change in plan — model holds</span>
+      <span class="pill existing">Existing at HEAD: dda8c2d532</span>
+      <span class="pill existing">Base on main: d90b900337</span>
+      <span class="pill proposed">Proposed Pass 5 fixes marked in blue</span>
+      <span class="pill no">Outcome: Plan updated for Pass 5 (2 real mismatches)</span>
     </div>
   </header>
 
-  <div class="callout aligned">
-    <strong>Verdict:</strong> The built architecture aligns cleanly with the product's concepts across all three layers. Every mismatch caught before Pass 1 was resolved in the implementation, the browser send loop and <code>/combat-preview</code> are completely gone, <code>experience-v1</code> stays frozen, and live QA confirmed single-message <code>group_command</code> commits, byte-identical per-step recordings, reload recovery, and raw-offer fallback. Two narrow edge cases turned up on post-build inspection (Section 2); neither breaks the model, and both are listed as review questions below.
+  <div class="callout mismatch">
+    <strong>Verdict — two real conceptual mismatches remain at <code>HEAD</code> (plan updated for Pass 5):</strong>
+    <ol style="margin: 8px 0 0; padding-left: 20px;">
+      <li>
+        <strong><code>Env.decision().offers</code> is blind on <code>SingleDecision</code>:</strong> Pass 4 unified single and grouped decisions on <code>Env.decision()</code>, but <code>project_offers()</code> copies <code>DecisionFrame.offers</code> verbatim — where <code>source</code> is <em>hardcoded <code>None</code></em> and <code>label</code> falls back to raw <code>ActionType</code> names (<code>"PriorityPlayLand"</code>, <code>"PriorityCastSpell"</code>, <code>"DeclareAttacker"</code>). Two lands or two spells in hand are indistinguishable through <code>env.decision()</code>, and <code>Offer.source</code> is dead schema. Meanwhile <code>Game::decision_offer_subjects(actor)</code> already exists right next door, and populating <code>DecisionOffer</code> in <code>flow/group/mod.rs</code> moves zero <code>semantic_decision_frame</code> fingerprints.
+      </li>
+      <li>
+        <strong>Academy's <code>Board.svelte</code> still runs a second, legacy browser send loop for <code>PartitionPiles</code>:</strong> Foundations (<code>10217a2f08</code>) merged <code>Decision::PartitionPiles</code> onto <code>main</code> after MTG-483 unstacked from MTG-431. On <code>HEAD</code>, combat and Scry/Surveil/OrderLibrary use native <code>Decision</code> &rarr; <code>/group-preview</code> &rarr; 1-RTT atomic <code>group_command</code>, while Curator of Destinies (<code>Board.svelte:455-543</code>, <code>partition.ts</code>) still scrapes <code>FACE_UP_RE</code>, runs a multi-RTT <code>partitionRunning</code> send loop with <code>Stop sending</code>, owns a second <code>sessionStorage</code> key (<code>academy.table.partition-draft</code>), and keeps <code>Rail.svelte</code>'s <code>stopped</code> prop alive. Porting <code>PartitionPiles</code> onto <code>flow/group/library.rs</code> + <code>group_command</code> deletes the last browser send loop so Academy has one grouped-decision architecture.
+      </li>
+    </ol>
   </div>
 
   <section>
-    <h2>1. Concept Pairing Audit (Product vs. Built Code at <code>HEAD</code>)</h2>
+    <h2>1. Concept Pairing Audit (Product vs. Built Code at <code>HEAD dda8c2d532</code>)</h2>
     <p class="muted">
-      Each row pairs what a person (or Python caller) knows and does with the actual types, records, and endpoints built at <code>7e860ccfb3</code>.
+      Every row pairs what a person or Python caller expects with what actually exists at <code>dda8c2d532</code>. Rows marked <span class="pill no">No</span> drive Pass 5.
     </p>
     <table>
       <thead>
@@ -375,91 +363,85 @@
           <th style="width: 22%;">Product concept</th>
           <th style="width: 28%;">Built code concept (<code>HEAD</code>)</th>
           <th class="col-verdict">Aligned?</th>
-          <th>Assessment &amp; edge cases</th>
+          <th>Assessment</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><strong>A grouped decision</strong><br /><span class="muted">Active combat declaration or library arrangement, including library end, combat constraints, and anything already committed</span></td>
-          <td><code>Group { revision, fingerprint, #[serde(flatten)] spec: GroupSpec }</code> in <code>flow/group/mod.rs</code>; <code>Group</code> union in <code>managym/group.py</code>; <code>LiveGroup</code> in <code>academy/ui/src/lib/group.ts</code></td>
-          <td class="col-verdict"><span class="pill yes">Yes *</span></td>
-          <td>
-            Clean 1:1 tagged variants (<code>declare_attackers</code>, <code>declare_blockers</code>, <code>scry</code>, <code>surveil</code>, <code>order_library</code>) gated by domain thresholds (&ge;1 creature for combat; &ge;2 remaining cards for library). No label scraping or overloaded booleans.
-            <br /><span class="muted"><em>*Minor edge case:</em> <code>GroupSpec::OrderLibrary.committed</code> sends IDs only (<code>Vec&lt;ObjectRenderId&gt;</code>); for <code>end: Bottom</code>, <code>Decision::OrderLibrary::revealed_objects()</code> drops already-placed cards, so a mid-group raw click on a 3+ card bottom-order renders <code>Card #N</code> in <code>ArrangePanel</code> (see Section 2).</span>
-          </td>
-        </tr>
-        <tr>
-          <td><strong>Drafting a whole plan</strong><br /><span class="muted">Picking attackers, assigning blockers, placing scry top/bottom in reading order, marking surveil graveyard cards, ordering library</span></td>
-          <td>Tagged <code>GroupPlan</code> (Rust/Python/TS); browser <code>Draft</code> (<code>combat.ts</code>) &amp; <code>ArrangeDraft</code> (<code>arrange.ts</code>); one <code>sessionStorage</code> key <code>academy.table.group-draft</code> scoped to <code>(match_id, frame_hash, kind)</code></td>
+          <td><strong>One interactive decision surface</strong><br /><span class="muted">Ask <code>env.decision()</code>, optionally preview, then commit atomically — without opting into a separate grouped mode; RL keeps <code>env.step(int)</code></span></td>
+          <td><code>Env::{decision, preview, submit}</code> in <code>managym/src/agent/env.rs</code> + <code>flow/group/mod.rs</code>; Pydantic types in <code>managym/group.py</code>; <code>compound_*</code>/<code>structured_offers</code>/<code>step_structured</code>/<code>combat_preview</code> deprecated for <code>0.3.0</code></td>
           <td class="col-verdict"><span class="pill yes">Yes</span></td>
           <td>
-            Every kind carries only its real fields. <code>ScryPlan.bottom</code> uses top-to-bottom reading order matching <code>OrderLibrary::Bottom</code>; <code>ScryGroup::start</code> reverses when emitting <code>ScryCard(to_bottom=true)</code> to compensate for <code>decision.rs:2806</code>.
+            Cleanly answers Jack's Pass 3 feedback. One surface covers single and grouped choices; <code>submit</code> validates on a clone, steps atomically, and calls <code>finish_and_settle</code> so mixed-policy <code>[agent, heuristic]</code> envs match manual <code>env.step</code> identically. Passing a raw <code>int</code> offer id works even during a grouped decision.
+            <br /><span class="muted"><em>Naming seam (minor):</em> unified <code>Decision</code>/<code>Choice</code> types still live in <code>managym/group.py</code> (because <code>managym/decision.py</code> owns the v8 semantic contract), and Academy's wire/TS types call <code>GroupChoice</code> <code>plan</code>/<code>GroupPlan</code>. Acceptable; flagged in Section 4.</span>
           </td>
         </tr>
         <tr>
-          <td><strong>Read-only rules preview</strong><br /><span class="muted">Engine verdict, refusal reason on offending item, and outcome without mutating the game</span></td>
-          <td><code>Game::preview_group</code> &rarr; <code>GroupPreview</code> (clone-and-step driver); HTTP <code>POST /api/sessions/{id}/group-preview</code> strips authority-private <code>steps</code></td>
+          <td><strong>Reading a single-step offer</strong><br /><span class="muted">Every offer in <code>decision.offers</code> tells the caller what card, permanent, or player it acts on</span></td>
+          <td><code>DecisionOffer { id, verb, label, source }</code> in <code>flow/group/mod.rs:502-513</code>; copies <code>DecisionFrame.offers</code> from <code>structured_search_offers()</code> (<code>structured_offer.rs:640-686</code>)</td>
+          <td class="col-verdict"><span class="pill no">No</span></td>
+          <td>
+            <strong>Biggest Pass 4 mismatch.</strong> <code>structured_search_offers</code> hardcodes <code>source: None</code> on every offer and falls back to <code>format!("{:?}", action_type)</code> (<code>"PriorityPlayLand"</code>, <code>"PriorityCastSpell"</code>, <code>"DeclareAttacker"</code>, <code>"SelectCard"</code>, <code>"PayCost"</code>). Two lands in hand cannot be told apart, and <code>Offer.source</code> is always <code>None</code> (plus <code>flow/group/mod.rs</code> imports the narrower <code>structured_offer::SubjectRef</code> instead of <code>experience::SubjectRef</code>).
+            <br /><span class="pill proposed">Pass 5</span> Populate <code>DecisionOffer.source</code> and readable <code>label</code> from <code>Game::decision_offer_subjects(actor)</code> + <code>action_space()</code> in <code>flow/group/mod.rs</code> (zero fingerprint drift).
+          </td>
+        </tr>
+        <tr>
+          <td><strong>A grouped decision (and mid-group state)</strong><br /><span class="muted">Remaining items plus immutable already-committed choices with labels</span></td>
+          <td><code>DecisionSpec</code> variants (<code>DeclareAttackers</code>, <code>DeclareBlockers</code>, <code>Scry</code>, <code>Surveil</code>, <code>OrderLibrary</code>); library kinds use <code>GroupCard</code> for both <code>items</code> and <code>committed*</code></td>
           <td class="col-verdict"><span class="pill yes">Yes</span></td>
           <td>
-            One shared <code>drive_preview</code> loop serves all five kinds. Structurally incomplete plans return <code>complete: false</code> without cloning. Future native fingerprints stay server-side.
-            <br /><span class="muted"><em>Note:</em> if <code>/group-preview</code> fails transiently over HTTP, Confirm stays disabled without an inline retry hint (raw offers in the disclosure still work, and reconnect refreshes <code>frame</code> and re-fetches).</span>
+            Mid-combat and mid-library stepping report remaining undecided items plus <code>committed*</code> cleanly; Pass 4's move to <code>Vec&lt;GroupCard&gt;</code> on library <code>committed*</code> closed the Pass 3 <code>OrderLibrary::Bottom</code> <code>Card #N</code> edge case.
+            <br /><span class="muted"><em>Note on combat vs library <code>committed</code>:</em> combat tolerates already-committed IDs repeated in <code>Choice</code> (deduplicating against <code>declared_*</code>), while library kinds refuse already-committed cards. Both behaviors are intentional and documented.</span>
           </td>
         </tr>
         <tr>
-          <td><strong>Confirming once, all-or-nothing</strong><br /><span class="muted">One Confirm action; either the whole plan commits or the game does not move</span></td>
-          <td><code>Game::apply_group</code> / <code>Env::apply_group</code>; WS <code>group_command</code> (<code>testing-house-v1</code>) &rarr; <code>GameSession.hero_group</code> &rarr; shared <code>_finish_client_command</code></td>
-          <td class="col-verdict"><span class="pill yes">Yes *</span></td>
+          <td><strong>Every Academy drafted decision uses one atomic pipeline</strong><br /><span class="muted">No browser send loop, no label regex scraping, one draft store</span></td>
+          <td>Combat + Scry/Surveil/OrderLibrary use <code>group</code> + <code>/group-preview</code> + <code>group_command</code> + <code>academy.table.group-draft</code>; <strong><code>PartitionPiles</code> still uses <code>partition.ts</code> (<code>FACE_UP_RE</code>) + <code>Board.svelte:455-543</code> (<code>partitionRunning</code>) + <code>academy.table.partition-draft</code></strong></td>
+          <td class="col-verdict"><span class="pill no">No</span></td>
           <td>
-            Browser sends one <code>group_command</code>. <code>hero_group</code> previews on a clone first, rejects refused/incomplete plans with 0 rows written, steps each compiled action through <code>_apply_bound_command</code>, then runs the same early-commit + <code>_advance()</code> path as single Commands. Browser send loop, <code>stepOffer</code>, and <code>Stop sending</code> are deleted.
-            <br /><span class="muted"><em>*Minor edge case:</em> on a mixed-policy <code>Env</code> (external agent + built-in opponent), <code>Env::apply_group</code> matches <code>Env::step_structured</code> by not calling <code>settle_players</code> (see Section 2).</span>
+            <strong>Two competing grouped-decision pipelines live side-by-side on the same board.</strong> Foundations (<code>10217a2f08</code>) merged <code>Decision::PartitionPiles</code> onto <code>main</code>, so the old browser send loop, <code>FACE_UP_RE</code> scraper, <code>Stop sending</code> button, and <code>Rail.svelte</code>'s <code>stopped</code> prop are still active in <code>HEAD</code> — directly contradicting <code>plan.md</code>'s "no browser send loop" invariant.
+            <br /><span class="pill proposed">Pass 5</span> Add <code>PartitionPiles</code> to <code>flow/group/library.rs</code>, wire the two-pile panel to <code>group</code> + <code>group_command</code>, and delete <code>partitionRunning</code>, <code>FACE_UP_RE</code>, <code>academy.table.partition-draft</code>, and <code>Rail.stopped</code>.
           </td>
         </tr>
         <tr>
-          <td><strong>Recording, Replay, Study &amp; policy evidence</strong><br /><span class="muted">Grouped turns record byte-identical per-step decisions; Replay &amp; Study show raw offers only</span></td>
-          <td><code>hero_group</code> loops <code>_publish_current_prompt</code> &rarr; <code>_apply_bound_command</code> with <code>authority.group.&lt;id&gt;.&lt;n&gt;</code>, <code>source="client"</code>; <code>experience-v1.schema.json</code> untouched</td>
+          <td><strong>Read-only rules preview</strong><br /><span class="muted">Clone-and-step engine verdict, refusal on offending item, and outcome without mutating the game</span></td>
+          <td><code>Game::preview</code> &rarr; <code>DecisionPreview</code>; HTTP <code>POST /api/sessions/{id}/group-preview</code> calls <code>env.preview(plan, at=address)</code> and strips <code>steps</code></td>
           <td class="col-verdict"><span class="pill yes">Yes</span></td>
           <td>
-            Pinned row-for-row against single Commands in <code>test_group_command.py</code> and verified in Replay during live QA (<code>scratch/qa/replay-scry.png</code>). Zero <code>frame_hash</code> drift.
+            One shared <code>drive_preview</code> loop and <code>LibraryProgress</code> serve all grouped kinds; incomplete choices return <code>complete: false</code> without cloning; unknown <code>/api/*</code> routes now cleanly return 404 via <code>SpaStaticFiles</code>.
           </td>
         </tr>
         <tr>
-          <td><strong>Disconnect, reload &amp; duplicate recovery</strong><br /><span class="muted">Reloading mid-Confirm never double-applies and cleanly reconciles</span></td>
-          <td><code>PendingSubmission = CommandMessage | GroupCommandMessage</code> in <code>socket.svelte.ts</code>; <code>reconcileCommand</code> checks <code>accepted_commands</code> + <code>frame_hash</code>; pre-auth duplicate check in <code>_dispatch_table_request</code></td>
+          <td><strong>All-or-nothing Confirm &amp; byte-identical Replay/Study recording</strong><br /><span class="muted">One <code>group_command</code> writes one <code>ReplayDecision</code> per native step, or 0 rows on refusal</span></td>
+          <td>WS <code>group_command</code> (<code>testing-house-v1</code>) &rarr; <code>GameSession.hero_group</code> &rarr; clone preview &rarr; <code>_apply_bound_command</code> with <code>authority.group.&lt;id&gt;.&lt;n&gt;</code> &rarr; <code>_finish_client_command</code></td>
           <td class="col-verdict"><span class="pill yes">Yes</span></td>
           <td>
-            Grouped Confirms share exact idempotency and reconnect recovery with single Commands. Verified by <code>socket.svelte.test.ts</code>, <code>test_group_command.py</code>, and live QA (reload 60 ms after Confirm).
+            <code>experience-v1.schema.json</code> stays frozen with zero <code>frame_hash</code> drift. Replay and Study show every per-step raw offer and policy attachment point identically.
           </td>
         </tr>
         <tr>
-          <td><strong>Live-only privacy &amp; Pilot transfer</strong><br /><span class="muted">Watchers never see private Scry/Surveil cards; promoted Pilot gets the active group immediately</span></td>
-          <td><code>_response_with_participant</code> attaches <code>payload["group"] = record.game.live_group()</code> iff <code>SUBMIT_LIVE_COMMAND</code> is in role capabilities, else <code>None</code></td>
-          <td class="col-verdict"><span class="pill yes">Yes</span></td>
+          <td><strong>Refusal recovery in the browser</strong><br /><span class="muted">Editing a refused draft clears the error and re-enables Confirm cleanly</span></td>
+          <td><code>Board.svelte:262</code> <code>dismissRejection()</code> hides the panel/board refusal, but <code>gameStore.setError(message.rejection.message)</code> lingers in the rail until the next frame</td>
+          <td class="col-verdict"><span class="pill no">No *</span></td>
           <td>
-            Runs uniformly on <code>observation</code>, <code>command_outcome</code>, <code>table_snapshot</code>, <code>role_changed</code>, and cached recovery. Watchers always receive <code>group: null</code>; <code>TransferPilot</code> hands the live group straight to the new Pilot.
+            <strong>Small UX mismatch caught in Pass 4 QA (<code>scratch/qa.html</code>):</strong> after editing the draft re-enables Confirm, the red rejection banner still sits in the rail above the now-valid draft.
+            <br /><span class="pill proposed">Pass 5</span> Clear <code>gameStore</code>'s group rejection error when <code>Board.svelte</code> edits the draft.
           </td>
         </tr>
         <tr>
-          <td><strong>Inter-step purity boundary</strong><br /><span class="muted">Groups never cross a draw, reveal, shuffle, unseen hidden card, or opponent choice; post-group draws succeed</span></td>
-          <td><code>crossed_hidden_boundary</code> in <code>flow/group/mod.rs</code> checks <code>state.rng</code>, <code>CardDrawn</code>/<code>CardRevealed</code> in <code>state.events</code>, and <code>visible_hidden_objects</code> only while <code>continues()</code> is true</td>
+          <td><strong>Disconnect, reload, privacy &amp; Pilot transfer</strong><br /><span class="muted">Reload mid-Confirm deduplicates; watchers never see private cards; new Pilot gets active group immediately</span></td>
+          <td><code>PendingSubmission</code> in <code>socket.svelte.ts</code>; <code>accepted_commands</code> idempotency; <code>_response_with_participant</code> attaches <code>live_group()</code> iff <code>SUBMIT_LIVE_COMMAND</code></td>
           <td class="col-verdict"><span class="pill yes">Yes</span></td>
           <td>
-            Unit-tested against all four triggers (RNG, draw, reveal, silent hand addition) plus Preordain ("Scry 2, then draw") in <code>tests/rules/group.rs</code>.
+            Verified by unit tests, <code>test_group_command.py</code>, and live QA reload-60ms-after-Confirm check.
           </td>
         </tr>
         <tr>
-          <td><strong>Raw single-step escape hatch</strong><br /><span class="muted">Collapsed disclosure keeps every legal single-step offer clickable</span></td>
-          <td><code>Rail.svelte</code> folds offers under <code>groupDisclosureCopy(groupKind)</code>; clicking sends ordinary <code>command</code>; next frame updates <code>committed*</code> or drops below threshold</td>
+          <td><strong>Inter-step purity boundary &amp; raw escape hatch</strong><br /><span class="muted">Groups never cross draw/reveal/RNG/hidden-card boundaries; collapsed Rail disclosure keeps every raw offer clickable</span></td>
+          <td><code>crossed_hidden_boundary</code> in <code>flow/group/mod.rs</code>; <code>Rail.svelte</code> disclosure via <code>groupDisclosureCopy</code></td>
           <td class="col-verdict"><span class="pill yes">Yes</span></td>
           <td>
-            Shared decision surface preserved in both combat and <code>ArrangePanel</code>; verified in e2e and live QA.
-          </td>
-        </tr>
-        <tr>
-          <td><strong>Patch-clean <code>0.2.x</code> &amp; isolation from <code>compound_*</code></strong><br /><span class="muted">Existing <code>0.2.6</code> Python callers keep working; RL/Study surfaces unchanged</span></td>
-          <td><code>flow/combat_preview.rs</code> + <code>managym/combat.py</code> delegate to <code>preview_group</code> with <code>0.3.0</code> <code>DeprecationWarning</code>; <code>structured_offer.rs</code> untouched; <code>/combat-preview</code> removed (404)</td>
-          <td class="col-verdict"><span class="pill yes">Yes</span></td>
-          <td>
-            <code>tests/rules/combat_preview.rs</code> stays unedited and proves parity; <code>tests/public_api.json</code> records only non-breaking additions (<code>group_json</code>, <code>preview_group_json</code>, <code>apply_group_json</code>).
+            Purity boundary holds automatically for <code>PartitionPiles</code> too: <code>CardRevealed</code> fires only when <code>*next == looked.len()</code> and the decision leaves <code>PartitionPiles</code> into <code>ChoosePile</code> (<code>decision.rs:3438-3453</code>).
           </td>
         </tr>
       </tbody>
@@ -467,194 +449,233 @@
   </section>
 
   <section>
-    <h2>2. Before vs. After — Plus the Two Small Edge Cases Found Post-Build</h2>
+    <h2>2. The Two Mismatches — Before (<code>HEAD</code>) vs. After (<span class="pill proposed">Proposed Pass 5</span>)</h2>
 
+    <h3>Mismatch A — <code>Env.decision().offers</code> is blind on <code>SingleDecision</code></h3>
     <div class="grid-2">
       <div class="card">
         <div class="card-head">
-          <span>Before (Base <code>34e0cb7919</code>)</span>
-          <span class="pill existing">Replaced</span>
+          <span>Before (Built at <code>HEAD dda8c2d532</code>)</span>
+          <span class="pill no">Blind offers</span>
         </div>
-<pre><code>// Browser drove combat step-by-step over N RTTs:
-POST /api/sessions/{id}/combat-preview  // returned steps[]
-Board.svelte: running = { preview, at, sentAt }
-  -&gt; $effect sent 1 Command per frame
-  -&gt; Stop sending button + partial-progress recovery copy
-  -&gt; Disconnect mid-sequence left half-declared combat
-
-// Scry, Surveil, OrderLibrary:
-  -&gt; Raw sequential single-card offers only (no drafting)</code></pre>
+<pre><code>&gt;&gt;&gt; d = env.decision()
+SingleDecision(
+  address=DecisionAddress(viewer=0, revision=2, fingerprint='...'),
+  offers=[
+    Offer(id=0, verb='play_land', label='PriorityPlayLand', source=None),
+    Offer(id=1, verb='play_land', label='PriorityPlayLand', source=None),
+    Offer(id=2, verb='cast',      label='PriorityCastSpell', source=None),
+    Offer(id=3, verb='pass_priority', label='PriorityPass', source=None),
+  ],
+)
+# Which offer is Mountain and which is Island?
+# Offer.source is dead schema (always None).</code></pre>
       </div>
 
       <div class="card">
         <div class="card-head">
-          <span>After (Built at <code>HEAD 7e860ccfb3</code>)</span>
-          <span class="pill yes">Built</span>
+          <span>After (<span class="pill proposed">Proposed Pass 5</span>)</span>
+          <span class="pill proposed">Self-describing</span>
         </div>
-<pre><code>// One native compiler + atomic submission for 5 kinds:
-managym/src/flow/group/{mod,combat,library}.rs
-  Game::{group, preview_group, apply_group}
-  Env::{group_json, preview_group_json, apply_group_json}
-managym/academy/server.py
-  live_group() -&gt; sibling payload["group"] (pilot-only)
-  POST /group-preview -&gt; { complete, refused, outcome }
-  WS group_command -&gt; hero_group() -&gt; N recorded steps, 1 RTT
-academy/ui/src/lib/board/{Board,ArrangePanel}.svelte
-  Combat board draft + ArrangePanel -&gt; 1 group_command</code></pre>
+<pre><code>&gt;&gt;&gt; d = env.decision()
+SingleDecision(
+  address=DecisionAddress(viewer=0, revision=2, fingerprint='...'),
+  offers=[
+    Offer(id=0, verb='play_land', label='Play Mountain',
+          source=ObjectSubjectRef(kind='object', id=ObjectRenderId(...))),
+    Offer(id=1, verb='play_land', label='Play Island',
+          source=ObjectSubjectRef(kind='object', id=ObjectRenderId(...))),
+    Offer(id=2, verb='cast',      label='Cast Gray Ogre',
+          source=ObjectSubjectRef(kind='object', id=ObjectRenderId(...))),
+    Offer(id=3, verb='pass_priority', label='Pass priority', source=None),
+  ],
+)
+# Zero changes to semantic_decision_frame() or fingerprints.</code></pre>
       </div>
     </div>
 
-    <div class="callout mismatch">
-      <strong>Biggest remaining rough edges (non-blocking, found by inspecting <code>HEAD</code>):</strong>
-      <ul class="tight">
-        <li>
-          <strong>1. Committed card names in <code>OrderLibrary { end: Bottom }</code> after a raw step:</strong>
-          <code>GroupSpec::OrderLibrary.committed</code> is <code>Vec&lt;ObjectRenderId&gt;</code> (IDs only). Because <code>Decision::OrderLibrary::revealed_objects()</code> (<code>decision.rs:874-882</code>) omits already-placed bottom cards (<code>&amp;objects[*next..]</code>), those cards are absent from <code>ExperienceFrame.projection.agent.inspected</code>. Taking 1 raw step inside a 3+ card bottom-order would therefore display <code>Already ordered: Card #42</code> in <code>ArrangePanel.svelte:58</code> instead of the card's name. Changing <code>committed</code> on library specs to <code>Vec&lt;GroupCard&gt;</code> (optional follow-up) eliminates the fallback completely; no live deck currently triggers 3+ card <code>OrderLibrary::Bottom</code>.
-        </li>
-        <li>
-          <strong>2. <code>Env::apply_group</code> on a mixed-policy <code>Env</code> (external + built-in opponent):</strong>
-          <code>Env::apply_group</code> (<code>managym/src/agent/env.rs:905-937</code>) calls <code>require_external_chooser()</code> and drains <code>observation_events</code>, matching <code>Env::step_structured</code>, and does <em>not</em> call <code>settle_players</code>. On standard <code>[Agent, Agent]</code> envs (Academy and <code>tests/env/test_group.py</code>) this is identical to stepping <code>preview.steps</code> through <code>Env::step</code>. On a mixed <code>[Agent, Heuristic]</code> env, however, the final step of <code>Env::step</code> settles the built-in opponent while <code>Env::apply_group</code> leaves the built-in seat to act next.
-        </li>
-      </ul>
+    <h3>Mismatch B — Two grouped-decision architectures on Academy's board</h3>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <span>Before (Built at <code>HEAD dda8c2d532</code>)</span>
+          <span class="pill no">Split pipelines</span>
+        </div>
+<pre><code>// Pipeline 1 (Combat, Scry, Surveil, OrderLibrary):
+managym::flow::group -&gt; payload["group"]
+  -&gt; POST /group-preview -&gt; 1 WS group_command
+  -&gt; sessionStorage["academy.table.group-draft"]
+
+// Pipeline 2 (PartitionPiles / Curator of Destinies):
+partition.ts scrapes FACE_UP_RE / FACE_DOWN_RE from offer labels
+  -&gt; Board.svelte:455-543 partitionRunning multi-RTT send loop
+  -&gt; Stop sending button + Rail.svelte `stopped` prop
+  -&gt; sessionStorage["academy.table.partition-draft"]
+  -&gt; Disconnect mid-loop leaves half-split piles</code></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <span>After (<span class="pill proposed">Proposed Pass 5</span>)</span>
+          <span class="pill proposed">One pipeline</span>
+        </div>
+<pre><code>// One pipeline for ALL 6 grouped kinds
+// (DeclareAttackers, DeclareBlockers, Scry, Surveil,
+//  OrderLibrary, PartitionPiles):
+managym::flow::group -&gt; payload["group"]
+  -&gt; POST /group-preview -&gt; 1 WS group_command
+  -&gt; sessionStorage["academy.table.group-draft"]
+
+// Deleted from browser:
+// - partitionRunning send loop &amp; stopPartitionSending()
+// - FACE_UP_RE / FACE_DOWN_RE regex scraping
+// - partitionContext(), partitionOffer(), partitionSteps()
+// - academy.table.partition-draft &amp; Rail.svelte `stopped` prop</code></pre>
+      </div>
     </div>
   </section>
 
   <section>
-    <h2>3. Concrete Walkthroughs at <code>HEAD</code></h2>
+    <h2>3. Concrete Walkthroughs (Normal, Failure &amp; Recovery)</h2>
 
-    <h3>A. Normal path — Scry 2 / Preordain &amp; Surveil 2 &rarr; OrderLibrary</h3>
+    <h3>A. Python caller playing a full turn on <code>Env.decision()</code> (<span class="pill proposed">Pass 5 target</span>)</h3>
+    <div class="flow">
+      <div class="step-box">
+        <div class="step-num">1 · SingleDecision</div>
+        <div class="step-title"><code>env.decision()</code></div>
+        <p class="muted">Returns <code>SingleDecision</code> with readable <code>Offer.label</code> (<code>"Play Mountain"</code>) and populated <code>Offer.source</code>. Caller picks offer id directly and calls <code>env.submit(offer.id)</code>.</p>
+      </div>
+      <div class="step-box">
+        <div class="step-num">2 · Grouped Decision</div>
+        <div class="step-title"><code>DeclareAttackersDecision</code></div>
+        <p class="muted">At combat, <code>env.decision()</code> returns <code>declarable</code> + <code>committed</code> + raw <code>offers</code>. Caller previews <code>DeclareAttackersChoice(attackers=[...])</code>, gets engine verdict, then <code>env.submit(choice, at=d.address)</code>.</p>
+      </div>
+      <div class="step-box">
+        <div class="step-num">3 · Mid-Group Escape</div>
+        <div class="step-title"><code>env.submit(raw_offer.id)</code></div>
+        <p class="muted">Submitting one raw offer id mid-combat or mid-Scry commits that single step. The next <code>env.decision()</code> shows it in <code>committed*</code> with only the remaining items undecided.</p>
+      </div>
+      <div class="step-box">
+        <div class="step-num">4 · Failure &amp; Recovery</div>
+        <div class="step-title">All-or-nothing refusal</div>
+        <p class="muted">Menace lone block, stale <code>at</code>, or incomplete Scry raises <code>AgentError</code> with zero state mutation; the caller re-reads <code>d = env.decision()</code> (same revision &amp; digest) and submits a corrected choice.</p>
+      </div>
+    </div>
+
+    <h3>B. Academy <code>PartitionPiles</code> (Curator of Destinies) on the unified pipeline (<span class="pill proposed">Pass 5 target</span>)</h3>
     <div class="ui-mock">
       <div class="ui-mock-bar">
-        <span>ArrangePanel &middot; Scry 2 <span class="pill yes">Built &amp; QA'd</span></span>
-        <span><span class="btn-mock">Confirm (1 top, 1 bottom)</span></span>
+        <span>Split into two piles · 5 cards <span class="pill proposed">Unified via group_command</span></span>
+        <span><span class="btn-mock">Confirm split (2 up, 3 down)</span></span>
       </div>
       <div class="ui-cols">
         <div class="ui-col">
-          <div class="ui-col-title">Unplaced &middot; 0</div>
-          <span class="muted">Hidden once every card is placed</span>
+          <div class="ui-col-title">Face-up pile · 2 (opponent sees these)</div>
+          <div class="card-chip"><span>Curator of Destinies</span><span class="muted">Move down</span></div>
+          <div class="card-chip"><span>Island</span><span class="muted">Move down</span></div>
         </div>
         <div class="ui-col">
-          <div class="ui-col-title">Top of library &mdash; drawn first at top</div>
-          <div class="card-chip"><span>1. Bilbo Baggins, Burglar</span><span class="muted">&uarr; &darr; Bottom &times;</span></div>
-        </div>
-        <div class="ui-col">
-          <div class="ui-col-title">Bottom of library &mdash; top-most at top</div>
-          <div class="card-chip"><span>1. Island</span><span class="muted">&uarr; &darr; Top &times;</span></div>
+          <div class="ui-col-title">Face-down pile · 3</div>
+          <div class="card-chip"><span>Think Twice</span><span class="muted">Move up</span></div>
+          <div class="card-chip"><span>Opt</span><span class="muted">Move up</span></div>
+          <div class="card-chip"><span>Plains</span><span class="muted">Move up</span></div>
         </div>
       </div>
       <p class="muted" style="margin: 10px 0 0; font-size: 12.5px;">
-        &#9656; <strong>Each card's choice</strong> (collapsed in Rail) — Replay &amp; Study show only these raw offers.
+        &#9656; <strong>Each card's choice</strong> (collapsed in Rail) — Confirm sends <strong>1</strong> <code>group_command</code>; authority compiles 5 <code>ChooseMode</code> steps, records 5 identical <code>ReplayDecision</code> rows, then transitions cleanly to opponent's <code>ChoosePile</code>.
       </p>
     </div>
 
-    <div class="flow">
-      <div class="step-box">
-        <div class="step-num">1 &middot; Live Frame + Group</div>
-        <div class="step-title"><code>frame</code> + sibling <code>group</code></div>
-        <p class="muted"><code>frame.frame_hash</code> unchanged. <code>_response_with_participant</code> attaches <code>live_group()</code> for pilots and <code>null</code> for watchers.</p>
-      </div>
-      <div class="step-box">
-        <div class="step-num">2 &middot; Draft &amp; Preview</div>
-        <div class="step-title"><code>POST /group-preview</code></div>
-        <p class="muted">Incomplete Scry/OrderLibrary skips preview and keeps Confirm disabled. Complete draft previews on clone, returning <code>{ complete, refused, outcome }</code> (no <code>steps</code>).</p>
-      </div>
-      <div class="step-box">
-        <div class="step-num">3 &middot; One-Shot Confirm</div>
-        <div class="step-title">1 WS <code>group_command</code></div>
-        <p class="muted"><code>hero_group</code> validates on clone, then steps each compiled action via <code>_apply_bound_command</code> with <code>authority.group.&lt;id&gt;.&lt;n&gt;</code>. Post-group Preordain draw runs after <code>!continues()</code>.</p>
-      </div>
-      <div class="step-box">
-        <div class="step-num">4 &middot; Commit &amp; Advance</div>
-        <div class="step-title"><code>_finish_client_command</code></div>
-        <p class="muted">Writes N identical <code>ReplayDecision</code> rows + Study roots, sends early commit across <code>rev N &rarr; N+k</code>, runs <code>_advance()</code>, and sends settled outcome.</p>
-      </div>
-    </div>
-
-    <h3>B. Failure &amp; Recovery Matrix (Verified in Built Code)</h3>
+    <h3>C. Counterexamples &amp; Boundary Checks for Pass 5</h3>
     <table>
       <thead>
         <tr>
-          <th style="width: 24%;">Scenario</th>
-          <th style="width: 38%;">Actual implementation at <code>HEAD</code></th>
-          <th style="width: 38%;">What survives / what changes</th>
+          <th style="width: 26%;">Counterexample / Failure case</th>
+          <th style="width: 37%;">What could break if careless</th>
+          <th style="width: 37%;">How Pass 5 guarantees safety</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><strong>Rules refusal</strong><br /><span class="muted">Menace lone block, omitted must-attack</span></td>
-          <td><code>preview_group</code> returns <code>refused: { item, label, reason }</code>. Direct <code>group_command</code> rejects with <code>code="group_refused"</code>, <code>recover=False</code>, <code>refused</code> payload.</td>
-          <td>Digest untouched, 0 rows written. Browser keeps the draft intact, highlights the refused item, and displays the engine's sentence until the user edits the draft.</td>
+          <td><strong>Retained replay / fingerprint parity when fixing <code>Offer.label</code> &amp; <code>Offer.source</code></strong></td>
+          <td>Editing <code>structured_search_offers()</code> would change <code>DecisionFrame.fingerprint</code> and break retained replays / pinned tests.</td>
+          <td><code>structured_search_offers()</code> and <code>semantic_decision_frame()</code> stay untouched. Only <code>project_offers()</code> inside <code>flow/group/mod.rs</code> enriches <code>DecisionOffer</code> from <code>decision_offer_subjects(actor)</code> + <code>action_space()</code>.</td>
         </tr>
         <tr>
-          <td><strong>Stale address / wrong kind</strong><br /><span class="muted">Preview or Confirm arrives after revision moved</span></td>
-          <td><code>/group-preview</code> returns <code>409 group_preview_stale</code> (dropped). <code>hero_group</code> returns <code>rejected(stale_revision)</code> with <code>recovery</code>.</td>
-          <td>Nothing applied. Stale draft discarded on <code>frame_hash</code> change; recovered frame supplies the current <code>group</code>.</td>
+          <td><strong><code>PartitionPiles</code> purity boundary (<code>CardRevealed</code>)</strong></td>
+          <td>On the final card (<code>*next == looked.len()</code>), <code>decision.rs:3442</code> emits <code>CardRevealed</code> for every face-up card.</td>
+          <td><code>crossed_hidden_boundary</code> only checks while <code>continues()</code> is true. After the last card, <code>suspended.decision</code> becomes <code>Decision::ChoosePile</code>, so <code>continues()</code> is false and the post-group reveal completes cleanly (just like Preordain's draw).</td>
         </tr>
         <tr>
-          <td><strong>Disconnect / reload mid-Confirm</strong><br /><span class="muted">Tab reloads 60 ms after <code>group_command</code></span></td>
-          <td><code>socket.svelte.ts</code> saves <code>PendingSubmission</code> in <code>etude.gui.resume</code>. On reconnect, <code>reconcileCommand</code> checks <code>accepted_commands</code> and resends only if <code>(match_id, revision, prompt_id, frame_hash, grant_revision)</code> match.</td>
-          <td>Committed group clears pending with 0 duplicate rows; unreceived group resends with the same <code>command_id</code> and deduplicates on the server.</td>
+          <td><strong>Mid-partition raw offer click or 1 card left</strong></td>
+          <td>Clicking a single card's raw offer leaves 4 cards remaining (or 1 card at the end).</td>
+          <td><code>PartitionPilesGroup::describe</code> checks <code>remaining.len() &gt;= 2</code> and puts <code>looked[..next]</code> into <code>committed_face_up</code> / <code>committed_face_down</code> as <code>GroupCard</code>s; at 1 card left it drops cleanly to <code>SingleDecision</code> raw offers.</td>
         </tr>
         <tr>
-          <td><strong>Pilot transfer mid-group</strong><br /><span class="muted">Watcher promoted during Scry/Surveil/Combat</span></td>
-          <td><code>TransferPilot</code> broadcasts <code>role_changed</code> via <code>_response_with_participant</code>; <code>socket.svelte.ts</code> applies <code>message.group</code>.</td>
-          <td>New pilot immediately gets the active group with no reload; former pilot receives <code>group: null</code>.</td>
+          <td><strong>Reload mid-Confirm on <code>PartitionPiles</code></strong></td>
+          <td>Under the old <code>partitionRunning</code> loop, reload left 2 of 5 cards split and 3 undecided.</td>
+          <td>With 1-RTT <code>group_command</code>, <code>PendingSubmission</code> + <code>accepted_commands</code> either lands all 5 steps once or resends cleanly with zero half-splits.</td>
         </tr>
         <tr>
-          <td><strong>Mid-group raw offer click</strong><br /><span class="muted">Clicking one choice inside the rail disclosure</span></td>
-          <td>Sends ordinary <code>command</code>. Next frame carries updated <code>group</code> with <code>committed*</code> and remaining items, or <code>group: null</code> once below domain threshold.</td>
-          <td>Committed step stays committed; remaining cards/creatures stay draftable or fall back cleanly to raw offers.</td>
+          <td><strong>Non-group rejection vs group rejection on draft edit</strong></td>
+          <td>Clearing all <code>gameStore</code> errors on any click could hide an unrelated network error.</td>
+          <td>Only clear <code>lastCommandRejection</code> / error when its <code>command_id</code> matches the dismissed <code>groupRejection.command_id</code>.</td>
         </tr>
       </tbody>
     </table>
   </section>
 
   <section>
-    <h2>4. Choices Made for Review (Built as Committed)</h2>
+    <h2>4. Choices Made for Review (Including Pass 5 Plan)</h2>
     <div class="callout choice">
       <ul class="tight">
-        <li><strong>Based on <code>main</code>; MTG-431 pile split deferred to follow-up:</strong> Keeps MTG-483 unblocked from PR #605. Follow-up families (<code>PartitionPiles</code>, Pick, Amounts, <code>OrderTriggers</code>) each add one <code>flow/group/</code> file and one UI panel with zero server/recording changes.</li>
-        <li><strong>Tagged <code>GroupSpec</code> / <code>GroupPlan</code> / <code>GroupOutcome</code> over flat <code>Vec&lt;Choice&gt;</code>:</strong> Preserves <code>OrderLibrary.end</code>, combat constraints, committed state, and per-kind outcomes without dummy answers.</li>
-        <li><strong>Domain activation thresholds (&ge;1 creature for combat; &ge;2 remaining cards for library):</strong> Keeps 1-creature combat drafting (MTG-441) and 2-card <code>OrderLibrary</code> after Surveil 2 in <code>ArrangePanel</code> even under <code>skip_trivial=true</code>.</li>
-        <li><strong>Surveil starts in "Keep on top" with explicit dynamic Confirm label; Scry &amp; OrderLibrary start unplaced:</strong> Mirrors <code>Action::Decline</code> ("Keep on top") without silently choosing for Scry/OrderLibrary.</li>
-        <li><strong><code>ScryPlan.bottom</code> uses top-to-bottom reading order:</strong> Matches <code>OrderLibrary::Bottom</code>; the compiler reverses <code>ScryCard(to_bottom=true)</code> emissions to match <code>decision.rs:2806</code>.</li>
-        <li><strong><code>experience-v1.schema.json</code> frozen; <code>testing-house-v1.schema.json</code> adds <code>group_command</code>:</strong> Preserves every retained replay digest and <code>frame_hash</code>; recorded steps use <code>authority.group.&lt;id&gt;.&lt;n&gt;</code> with <code>source: "client"</code>.</li>
+        <li><strong>Take Pass 5 now instead of shipping blind <code>Offer</code>s and a second browser send loop:</strong> Both flaws sit directly in MTG-483's core premise (unified <code>Env.decision()</code> + eliminating browser chunked send loops &amp; <code>FACE_UP_RE</code>), and both fixes are narrow, structural, and shrink the browser code.</li>
+        <li><strong>Keep <code>managym/group.py</code> as the module path (do not rename to <code>decisions.py</code>):</strong> <code>managym/decision.py</code> already owns the v8 semantic contract (<code>DecisionFrame</code>, <code>Command</code>, <code>TransitionReceipt</code>). Creating a sibling <code>decisions.py</code> would introduce a confusing near-homonym; <code>Env.decision()</code> / <code>preview()</code> / <code>submit()</code> are the discoverable entry points.</li>
+        <li><strong>Keep Academy wire field <code>group</code> / <code>group_command.plan</code> beside frozen <code>ExperienceFrame</code>:</strong> Changing <code>ExperienceFrame</code> moves <code>frame_hash</code> on every retained replay; keeping <code>group</code> as a pilot-only sibling preserves replay parity and watcher privacy.</li>
+        <li><strong>Keep future families ("Pick", "Amounts", <code>OrderTriggers</code>) as follow-up Tasks:</strong> Those are genuinely new behavior (new UI panels and rules families), whereas <code>PartitionPiles</code> is an existing browser send loop already merged onto <code>main</code>.</li>
       </ul>
     </div>
   </section>
 
   <section>
-    <h2>5. Questions for Review (Reply with e.g. "2b")</h2>
+    <h2>5. Numbered Questions for Review (Reply with e.g. "2b")</h2>
     <p class="muted">
-      All items below are reversible polish or product choices; none block advancing this branch to gate.
+      Pass 5 proceeds with the bold, simpler option (marked <em>chosen for Pass 5</em>) on each reversible point below; answer any item to steer it differently.
     </p>
     <ol class="questions">
       <li>
-        <strong><code>Surveil</code> initial state in <code>ArrangePanel</code>:</strong>
+        <strong><code>Offer.label</code> format on <code>Env.decision().offers</code>:</strong>
         <ul class="opts">
-          <li><strong>1a (built):</strong> Remaining cards start in <em>Keep on top</em>, and Confirm explicitly names the commitment (<code>"Keep all 2 on top"</code> / <code>"Put 1 in graveyard, keep 1 on top"</code>).</li>
-          <li><strong>1b:</strong> Remaining cards start <em>Unplaced</em> (like Scry), disabling Confirm until every card is explicitly placed.</li>
+          <li><strong>1a (chosen for Pass 5):</strong> Enrich <code>DecisionOffer.label</code> and <code>DecisionOffer.source</code> inside <code>flow/group/mod.rs</code> using <code>decision_offer_subjects(actor)</code> + <code>action_space()</code> (e.g. <code>"Play Mountain"</code>, <code>"Cast Gray Ogre"</code>, <code>"Attack with Raging Goblin"</code>) with zero change to <code>semantic_decision_frame()</code> fingerprints.</li>
+          <li><strong>1b:</strong> Keep raw <code>ActionType</code> labels on <code>DecisionOffer</code> and only populate <code>Offer.source</code> + an optional subject label field.</li>
         </ul>
       </li>
       <li>
-        <strong>2-card <code>OrderLibrary</code> (e.g. keeping 2 cards on Surveil 2):</strong>
+        <strong><code>PartitionPiles</code> (Curator of Destinies) in MTG-483:</strong>
         <ul class="opts">
-          <li><strong>2a (built):</strong> Opens <code>ArrangePanel</code> (<code>remaining.len() &ge; 2</code>) so Surveil 2 &rarr; OrderLibrary feels seamless even though <code>skip_trivial</code> compiles it to 1 native step.</li>
-          <li><strong>2b:</strong> Drop to raw 1-click offers whenever <code>skip_trivial</code> reduces the decision to 1 native step.</li>
+          <li><strong>2a (chosen for Pass 5):</strong> Port <code>PartitionPiles</code> onto <code>flow/group/library.rs</code> + <code>group_command</code> now, deleting <code>partitionRunning</code>, <code>FACE_UP_RE</code>, <code>academy.table.partition-draft</code>, and <code>Rail.svelte</code>'s <code>stopped</code> prop so zero browser send loops remain.</li>
+          <li><strong>2b:</strong> Leave <code>PartitionPiles</code> on the legacy browser send loop for a follow-up Task and narrow MTG-483's docs/plan accordingly.</li>
         </ul>
       </li>
       <li>
-        <strong><code>GroupSpec::OrderLibrary.committed</code> card labels after a mid-group raw offer on 3+ card <code>end: Bottom</code>:</strong>
+        <strong><code>GroupChoice</code> vs <code>GroupPlan</code> / <code>group_command.plan</code> naming in Academy:</strong>
         <ul class="opts">
-          <li><strong>3a (built):</strong> Keep <code>committed: Vec&lt;ObjectRenderId&gt;</code> (minimal payload; falls back to <code>Card #N</code> only on the rare 3+ card <code>OrderLibrary::Bottom</code> mid-group raw step).</li>
-          <li><strong>3b <span class="pill proposed">Proposed polish</span>:</strong> Change library <code>committed*</code> fields to <code>Vec&lt;GroupCard&gt;</code> so every already-committed card carries its label regardless of <code>revealed_objects()</code>.</li>
+          <li><strong>3a (kept as built):</strong> Keep <code>GroupChoice</code> in Rust/Python/JSON-Schema and <code>GroupPlan</code> / <code>plan</code> in Academy's wire/TS layer (avoids churning <code>testing-house-v1</code> field names).</li>
+          <li><strong>3b:</strong> Rename <code>GroupCommand.plan</code>, <code>/group-preview</code>'s <code>plan</code> field, and TS <code>GroupPlan</code> to <code>choice</code> / <code>GroupChoice</code> before PR #623 merges so all three layers share one noun.</li>
         </ul>
       </li>
       <li>
-        <strong><code>Env::apply_group</code> on a mixed-policy <code>Env</code> (external agent + built-in opponent):</strong>
+        <strong>Combat <code>committed</code> shape (<code>ObjectRenderId</code> / <code>PlannedBlock</code> vs <code>GroupCard</code>) and tolerance:</strong>
         <ul class="opts">
-          <li><strong>4a (built):</strong> Match <code>Env::step_structured</code> (apply the group's steps only, without calling <code>settle_players</code>; document that mixed-policy callers advance built-ins separately).</li>
-          <li><strong>4b <span class="pill proposed">Proposed polish</span>:</strong> Call <code>settle_players</code> after <code>game.apply_group</code> when <code>external_seat().is_some()</code> so mixed-policy <code>Env::apply_group</code> matches manual <code>Env::step</code> loops identically.</li>
+          <li><strong>4a (kept as built):</strong> Keep combat <code>committed</code> as <code>list[ObjectRenderId]</code> / <code>list[PlannedBlock]</code> (symmetric with <code>Choice</code> and <code>Outcome</code>) and continue tolerating already-committed combat items repeated in a <code>Choice</code>, while library kinds keep <code>GroupCard</code> and refuse already-committed cards.</li>
+          <li><strong>4b:</strong> Align combat <code>committed</code> to also carry labels (e.g. <code>GroupCard</code> for attackers) and refuse repeating committed attackers in <code>DeclareAttackersChoice</code> for strict symmetry with library kinds.</li>
+        </ul>
+      </li>
+      <li>
+        <strong><code>Surveil</code> initial state and 2-card <code>OrderLibrary</code> threshold in <code>ArrangePanel</code>:</strong>
+        <ul class="opts">
+          <li><strong>5a (built):</strong> <code>Surveil</code> starts in <em>Keep on top</em> with an explicit dynamic Confirm label; 2-card <code>OrderLibrary</code> opens <code>ArrangePanel</code> (<code>remaining &ge; 2</code>) even under <code>skip_trivial=true</code>.</li>
+          <li><strong>5b:</strong> Start <code>Surveil</code> unplaced (like Scry), or drop 2-card <code>OrderLibrary</code> to raw 1-click offers when <code>skip_trivial</code> makes it 1 native step.</li>
         </ul>
       </li>
     </ol>
