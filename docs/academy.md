@@ -900,11 +900,16 @@ keyboard, then press **Confirm** once.
   every card is ordered. A two-card order (such as after keeping two cards with
   Surveil 2) stays in the arrangement panel even though native trivial-decision
   skipping resolves the final card automatically.
+- **PartitionPiles** (2+ cards, e.g., Curator of Destinies): two buckets,
+  **Face-up** (revealed to your opponent) and **Face-down** (hidden count only).
+  Remaining cards start face-down; click any card or press **Swap piles** to
+  adjust the split, and press **Confirm split** once to submit the whole split
+  in one `group_command`.
 
 Combat grouping activates whenever at least one creature can declare, so
 single-creature combat keeps the same drafting and Confirm controls. Scry,
-Surveil and OrderLibrary activate when two or more cards remain; a single-card
-Scry or Surveil stays a single raw choice.
+Surveil, OrderLibrary and PartitionPiles activate when two or more cards remain;
+a single remaining card stays a single raw choice.
 
 **Raw per-step choices stay reachable.** The underlying engine still steps one
 action at a time. During any live group, the rail keeps every legal single-step
@@ -928,7 +933,8 @@ items in the group.
   either settles it or resends the exact submission — never applying it twice
   and never leaving a half-committed group.
 - **Watchers and pilot transfer.** Live grouped descriptors are sent only to
-  the active pilot; watchers never receive private Scry or Surveil cards. When
+  the active pilot; watchers never receive private Scry, Surveil or
+  PartitionPiles cards. When
   pilot control transfers to another participant, any active group is delivered
   with the role change without reloading.
 - **Identical recordings, Replay and Study.** Applying a group executes the
@@ -950,7 +956,7 @@ items in the group.
 | Scry (2+ cards) | ordered top + ordered bottom | scry finishes | Supported |
 | Surveil (2+ cards) | graveyard subset | graveyard picks commit; OrderLibrary follows as its own group | Supported |
 | OrderLibrary top / bottom (2+ cards) | ordered list | last card placed | Supported |
-| PartitionPiles | two piles | split finishes (opponent chooses pile next) | Planned follow-up |
+| PartitionPiles (2+ cards) | face-up subset (remaining go face-down) | split finishes (opponent chooses pile next) | Supported |
 | Multi-card subset picks (SelectCards max > 1, SearchDistinctNames, Discard 2+, OpponentSplitsRevealed, KeepCreatures) | subset within engine limits | selection finishes | Planned follow-up |
 | Amount distributions (DistributeCounters, DivideAmongTargets, AssignCombatDamage) | amount per recipient | amounts exhausted | Planned follow-up |
 | OrderTriggers | trigger order | only while no trigger asks a mode or target between picks | Planned follow-up |

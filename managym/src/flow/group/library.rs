@@ -1,5 +1,5 @@
-//! Library arrangement kinds (`Scry`, `Surveil`, `OrderLibrary`) under the
-//! unified interactive decision driver.
+//! Library arrangement and pile-split kinds (`Scry`, `Surveil`, `OrderLibrary`,
+//! `PartitionPiles`) under the unified interactive decision driver.
 use std::collections::{HashMap, HashSet};
 
 use crate::agent::action::{Action, AgentError};
@@ -103,6 +103,10 @@ enum LibraryStep {
         render_id: ObjectRenderId,
         refusal_suffix: &'static str,
     },
+    ChooseMode {
+        mode: usize,
+        render_id: ObjectRenderId,
+    },
     DeclineSurveil,
 }
 
@@ -163,6 +167,24 @@ fn step_library(
                 NextStep::Refuse(DecisionRefusal {
                     item: Some(render_id),
                     reason: format!("{label} {refusal_suffix}"),
+                    label,
+                })
+            }
+        },
+        LibraryStep::ChooseMode { mode, render_id } => match space
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::ChooseMode { mode: offered, .. } if *offered == mode))
+        {
+            Some(action_index) => NextStep::Step {
+                action_index,
+                item: Some(render_id),
+            },
+            None => {
+                let label = live.render_card_label(render_id);
+                NextStep::Refuse(DecisionRefusal {
+                    item: Some(render_id),
+                    reason: format!("{label} cannot be placed in that pile."),
                     label,
                 })
             }
@@ -672,6 +694,178 @@ impl GroupKind for OrderLibraryGroup {
             DecisionOutcome::OrderLibrary {
                 end: *end,
                 order: final_order,
+            },
+            None,
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// PartitionPiles
+// -----------------------------------------------------------------------------
+
+pub(crate) struct PartitionPilesGroup;
+
+impl GroupKind for PartitionPilesGroup {
+    type Progress = LibraryProgress;
+
+    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
+        let Decision::PartitionPiles {
+            player,
+            looked,
+            next,
+            face_up,
+        } = &game.state.suspended_decision.as_ref()?.decision
+        else {
+            return None;
+        };
+        let remaining = &looked[*next..];
+        if *player != viewer || remaining.len() < 2 {
+            return None;
+        }
+        let committed_face_up = group_cards(game, face_up.iter().copied());
+        let committed_face_down = group_cards(
+            game,
+            looked[..*next]
+                .iter()
+                .copied()
+                .filter(|object| !face_up.contains(object)),
+        );
+        Some(DecisionSpec::PartitionPiles {
+            items: group_cards(game, remaining.iter().copied()),
+            committed_face_up,
+            committed_face_down,
+        })
+    }
+
+    fn validate(&self, game: &Game, spec: &DecisionSpec, choice: &DecisionChoice) -> ChoiceCheck {
+        let (
+            DecisionSpec::PartitionPiles {
+                items,
+                committed_face_up,
+                committed_face_down,
+            },
+            DecisionChoice::PartitionPiles { face_up },
+        ) = (spec, choice)
+        else {
+            unreachable!("matches_choice already verified variant");
+        };
+        validate_card_choice(
+            game,
+            items,
+            committed_face_up.iter().chain(committed_face_down.iter()),
+            face_up,
+            false,
+            CardChoiceReasons {
+                committed: "has already been placed.",
+                missing: "is not in the pending pile split.",
+                duplicate: "can only be chosen once.",
+            },
+        )
+    }
+
+    fn start(
+        &self,
+        game: &Game,
+        _viewer: PlayerId,
+        choice: &DecisionChoice,
+    ) -> Result<Self::Progress, AgentError> {
+        let DecisionChoice::PartitionPiles { face_up } = choice else {
+            unreachable!("matches_choice already verified variant");
+        };
+        let Some(Decision::PartitionPiles { looked, next, .. }) =
+            game.state.suspended_decision.as_ref().map(|s| &s.decision)
+        else {
+            return Err(AgentError("not a pending pile split".into()));
+        };
+        let face_up_set: HashSet<_> = face_up.iter().copied().collect();
+        let remaining = &looked[*next..];
+        let mut planned = Vec::with_capacity(remaining.len());
+        for &object in remaining {
+            let render_id = card_render_id(game, object);
+            let mode = if face_up_set.contains(&render_id) {
+                0
+            } else {
+                1
+            };
+            planned.push(LibraryStep::ChooseMode { mode, render_id });
+        }
+        Ok(LibraryProgress::new(planned))
+    }
+
+    fn continues(
+        &self,
+        position: &Game,
+        viewer: PlayerId,
+        _spec: &DecisionSpec,
+        progress: &Self::Progress,
+    ) -> bool {
+        // On the final card, `PartitionPiles` emits `CardRevealed` and hands off
+        // to `Decision::ChoosePile` for the opponent, ending the group cleanly
+        // without tripping the inter-step purity boundary.
+        progress.next_index < progress.planned.len()
+            && matches!(
+                position.state.suspended_decision.as_ref().map(|s| &s.decision),
+                Some(Decision::PartitionPiles { player, .. }) if *player == viewer
+            )
+    }
+
+    fn next_step(
+        &self,
+        live: &Game,
+        position: &Game,
+        _viewer: PlayerId,
+        _choice: &DecisionChoice,
+        progress: &mut Self::Progress,
+    ) -> NextStep {
+        step_library(&progress.planned, &mut progress.next_index, live, position)
+    }
+
+    fn finish(
+        &self,
+        _live: &Game,
+        _position: &Game,
+        _obs_events_from: usize,
+        spec: &DecisionSpec,
+        choice: &DecisionChoice,
+        _progress: &Self::Progress,
+    ) -> (DecisionOutcome, Option<DecisionRefusal>) {
+        let (
+            DecisionSpec::PartitionPiles {
+                items,
+                committed_face_up,
+                committed_face_down,
+            },
+            DecisionChoice::PartitionPiles { face_up },
+        ) = (spec, choice)
+        else {
+            unreachable!("matches_choice already verified variant");
+        };
+        let chosen_up: HashSet<_> = face_up.iter().copied().collect();
+        let final_face_up = committed_face_up
+            .iter()
+            .map(|c| c.item)
+            .chain(
+                items
+                    .iter()
+                    .map(|c| c.item)
+                    .filter(|id| chosen_up.contains(id)),
+            )
+            .collect();
+        let final_face_down = committed_face_down
+            .iter()
+            .map(|c| c.item)
+            .chain(
+                items
+                    .iter()
+                    .map(|c| c.item)
+                    .filter(|id| !chosen_up.contains(id)),
+            )
+            .collect();
+        (
+            DecisionOutcome::PartitionPiles {
+                face_up: final_face_up,
+                face_down: final_face_down,
             },
             None,
         )

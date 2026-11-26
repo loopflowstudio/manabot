@@ -72,9 +72,16 @@ export interface OrderLibraryGroup extends GroupAddress {
   committed: GroupCard[];
 }
 
+export interface PartitionPilesGroup extends GroupAddress {
+  kind: 'partition_piles';
+  items: GroupCard[];
+  committed_face_up: GroupCard[];
+  committed_face_down: GroupCard[];
+}
+
 export type CombatGroup = DeclareAttackersGroup | DeclareBlockersGroup;
 export type ArrangeGroup = ScryGroup | SurveilGroup | OrderLibraryGroup;
-export type LiveGroup = CombatGroup | ArrangeGroup;
+export type LiveGroup = CombatGroup | ArrangeGroup | PartitionPilesGroup;
 export type GroupKind = LiveGroup['kind'];
 
 export interface DeclareAttackersPlan {
@@ -103,12 +110,18 @@ export interface OrderLibraryPlan {
   order: ObjectRenderId[];
 }
 
+export interface PartitionPilesPlan {
+  kind: 'partition_piles';
+  face_up: ObjectRenderId[];
+}
+
 export type GroupPlan =
   | DeclareAttackersPlan
   | DeclareBlockersPlan
   | ScryPlan
   | SurveilPlan
-  | OrderLibraryPlan;
+  | OrderLibraryPlan
+  | PartitionPilesPlan;
 
 export interface GroupRefusal {
   item: ObjectRenderId | null;
@@ -121,7 +134,8 @@ export type GroupOutcome =
   | { kind: 'declare_blockers'; blocks: PlannedBlock[] }
   | { kind: 'scry'; top: ObjectRenderId[]; bottom: ObjectRenderId[] }
   | { kind: 'surveil'; graveyard: ObjectRenderId[]; kept: ObjectRenderId[] }
-  | { kind: 'order_library'; end: LibraryEnd; order: ObjectRenderId[] };
+  | { kind: 'order_library'; end: LibraryEnd; order: ObjectRenderId[] }
+  | { kind: 'partition_piles'; face_up: ObjectRenderId[]; face_down: ObjectRenderId[] };
 
 export interface GroupPreviewRequest extends GroupAddress {
   plan: GroupPlan;
@@ -156,6 +170,10 @@ export function isArrangeGroup(group: LiveGroup | null): group is ArrangeGroup {
   return group !== null && (group.kind === 'scry' || group.kind === 'surveil' || group.kind === 'order_library');
 }
 
+export function isPartitionGroup(group: LiveGroup | null): group is PartitionPilesGroup {
+  return group !== null && group.kind === 'partition_piles';
+}
+
 function renderIdKey(id: ObjectRenderId): string {
   return `${id.entity}@${id.incarnation}`;
 }
@@ -176,6 +194,8 @@ export function groupPlanKey(plan: GroupPlan): string {
       return JSON.stringify([plan.kind, plan.graveyard.map(renderIdKey).sort()]);
     case 'order_library':
       return JSON.stringify([plan.kind, plan.order.map(renderIdKey)]);
+    case 'partition_piles':
+      return JSON.stringify([plan.kind, plan.face_up.map(renderIdKey).sort()]);
   }
 }
 
@@ -207,6 +227,8 @@ export function validGroupPlan(value: unknown): value is GroupPlan {
       return validRenderIdList(plan.graveyard);
     case 'order_library':
       return validRenderIdList(plan.order);
+    case 'partition_piles':
+      return validRenderIdList(plan.face_up);
     default:
       return false;
   }
@@ -223,6 +245,12 @@ export function groupDisclosureCopy(kind: GroupKind): GroupDisclosureCopy {
     return {
       summary: "Each creature's choice",
       caption: 'Confirming the draft commits all declarations together, or choose one creature below.',
+    };
+  }
+  if (kind === 'partition_piles') {
+    return {
+      summary: "Each card's choice",
+      caption: 'Confirming the split commits all cards together, or choose one card below.',
     };
   }
   return {

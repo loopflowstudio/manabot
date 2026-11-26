@@ -90,14 +90,12 @@
     draft?: Snippet;
     /** Active group kind, for the collapsed raw-offer disclosure wording. */
     groupKind?: GroupKind | null;
-    /** Why a confirmed browser-side draft (pile split) stopped before all of it was sent. */
-    stopped?: string | null;
   }
 
   let {
     view, stack: stackGiven, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recentFacts, resolvedSpells, history, opponentName,
     stackSources, drop, onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false,
-    evidence = null, moveMarks = new Map(), shownMoves = new Set(), recapTitle = 'Since your last move', onjump, recording = false, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, groupKind = null, stopped = null,
+    evidence = null, moveMarks = new Map(), shownMoves = new Set(), recapTitle = 'Since your last move', onjump, recording = false, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, groupKind = null,
   }: Props = $props();
 
   const stack = $derived(stackGiven ?? view.stack);
@@ -320,7 +318,6 @@
           {/if}
         </div>
       {/if}
-      {#if stopped}<p class="type-caption text-ink-2" data-testid="combat-stopped" role="status">{stopped}</p>{/if}
       {#if draft}
         {@render draft()}
       {:else if !recording}

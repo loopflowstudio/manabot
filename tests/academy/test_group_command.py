@@ -824,3 +824,162 @@ def test_watcher_hides_private_surveil_group_and_transfer_pilot_delivers_live_gr
             settled_message(pilot_socket)
             assert order_done["status"] == "accepted"
             assert order_done["group"] is None
+
+
+CURATOR_CONFIG: dict[str, Any] = {
+    "hero_deck": {"Island": 24, "Curator of Destinies": 16},
+    "villain_deck": {"Forest": 40},
+    "villain_type": "passive",
+    "seed": 13,
+    "auto_pass": False,
+}
+
+
+def _advance_session_to_curator_partition(
+    game: server.GameSession,
+) -> ExperienceFrame:
+    assert game.env is not None
+    frame = ExperienceFrame.model_validate(game._wire_message()["frame"])
+    while keep := next((o for o in frame.offers if o.label == "Keep hand"), None):
+        frame = _step_command(game, frame, keep.id)
+    for _ in range(6):
+        game.env.scenario_force_battlefield(0, "Island", ready=True)
+    game.env.scenario_clear_hand(0)
+    game.env.scenario_force_card_in_hand(0, "Curator of Destinies")
+    game.obs = game.env.scenario_refresh()
+    game.published_prompt = None
+    frame = ExperienceFrame.model_validate(game._wire_message()["frame"])
+    for step in range(40):
+        live = game.live_group()
+        if live is not None and live["kind"] == "partition_piles":
+            return frame
+        offer = (
+            next((o for o in frame.offers if "Curator of Destinies" in o.label), None)
+            or next(
+                (o for o in frame.offers if o.verb in {"pay_cost", "pass_priority"}),
+                frame.offers[0],
+            )
+        )
+        frame = _step_command(game, frame, offer.id, command_id=f"curator-{step}")
+    raise AssertionError("did not reach Curator of Destinies PartitionPiles")
+
+
+def test_partition_piles_group_command_parity_watcher_privacy_and_choose_pile(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    single = server.GameSession(
+        tmp_path / "single-curator", id_factory=lambda _kind: "match.curator"
+    )
+    grouped = server.GameSession(
+        tmp_path / "grouped-curator", id_factory=lambda _kind: "match.curator"
+    )
+    single.new_game(CURATOR_CONFIG)
+    grouped.new_game(CURATOR_CONFIG)
+
+    single_frame = _advance_session_to_curator_partition(single)
+    grouped_frame = _advance_session_to_curator_partition(grouped)
+    assert single_frame == grouped_frame
+
+    active_group = grouped.live_group()
+    assert active_group is not None
+    assert active_group["kind"] == "partition_piles"
+    assert len(active_group["items"]) == 5
+    assert active_group["committed_face_up"] == []
+    assert active_group["committed_face_down"] == []
+
+    # Session A: submit 5 individual commands [up, down, up, down, down].
+    frame_a = single_frame
+    before_count = len(single.canonical_decisions)
+    for idx, offer_id in enumerate((0, 1, 0, 1, 1)):
+        frame_a = _step_command(single, frame_a, offer_id, command_id=f"part-{idx}")
+
+    # Session B: submit 1 group_command with cards 0 and 2 face-up.
+    assert grouped_frame.prompt is not None
+    face_up = [active_group["items"][0]["item"], active_group["items"][2]["item"]]
+    outcome = grouped.hero_group(
+        {
+            "command_id": "grp-partition-1",
+            "match_id": grouped_frame.match_id,
+            "expected_revision": grouped_frame.revision,
+            "prompt_id": grouped_frame.prompt.id,
+            "frame_hash": grouped_frame.frame_hash,
+            "plan": {"kind": "partition_piles", "face_up": face_up},
+        }
+    )
+    assert outcome["status"] == "accepted", outcome
+    assert single.env is not None and grouped.env is not None
+    assert single.env.state_digest() == grouped.env.state_digest()
+    assert len(single.canonical_decisions) == len(grouped.canonical_decisions)
+    grouped_rows = grouped.canonical_decisions[before_count : before_count + 5]
+    assert [row.command_id for row in grouped_rows] == [
+        f"authority.group.grp-partition-1.{idx}" for idx in range(5)
+    ]
+
+    # Watcher privacy: watchers never receive private PartitionPiles cards.
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+    with TestClient(server.app) as client:
+        with (
+            client.websocket_connect("/ws/play") as pilot_socket,
+            client.websocket_connect("/ws/play") as watcher_socket,
+        ):
+            pilot_socket.send_json({"type": "new_game", "config": CURATOR_CONFIG})
+            initial = settled_message(pilot_socket)
+            table_id, invite_token = _invite(initial["table"])
+            watcher_socket.send_json(
+                {
+                    "type": "join_table",
+                    "table_id": table_id,
+                    "invite_token": invite_token,
+                }
+            )
+            settled_message(watcher_socket)
+            settled_message(pilot_socket)
+
+            record = server.SESSION_REGISTRY[initial["session_id"]]
+            ws_frame = _advance_session_to_curator_partition(record.game)
+            assert ws_frame.prompt is not None
+            pilot_group = record.game.live_group()
+            assert pilot_group is not None and pilot_group["kind"] == "partition_piles"
+
+            # Watcher receives group=None on role_changed; new pilot receives full PartitionPiles group.
+            watcher_participant = next(
+                p for p in record.participants.values() if p.role.value == "watcher"
+            )
+            pilot_socket.send_json(
+                {
+                    "type": "transfer_pilot",
+                    "grant_revision": 1,
+                    "target_viewer_id": watcher_participant.viewer_id,
+                }
+            )
+            former_pilot_role = settled_message(pilot_socket)
+            new_pilot_role = settled_message(watcher_socket)
+            assert former_pilot_role["type"] == "role_changed"
+            assert former_pilot_role["group"] is None
+            assert new_pilot_role["type"] == "role_changed"
+            assert new_pilot_role["group"] == pilot_group
+
+            # New pilot submits the whole 5-card split in one atomic group_command.
+            watcher_socket.send_json(
+                {
+                    "type": "group_command",
+                    "grant_revision": 2,
+                    "command": {
+                        "command_id": "ws-partition-1",
+                        "match_id": pilot_group["match_id"],
+                        "expected_revision": pilot_group["revision"],
+                        "prompt_id": pilot_group["prompt_id"],
+                        "frame_hash": pilot_group["frame_hash"],
+                        "plan": {
+                            "kind": "partition_piles",
+                            "face_up": [pilot_group["items"][0]["item"]],
+                        },
+                    },
+                }
+            )
+            split_done = settled_message(watcher_socket)
+            settled_message(pilot_socket)
+            assert split_done["status"] == "accepted"
+            assert split_done["group"] is None

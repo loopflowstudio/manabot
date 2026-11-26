@@ -93,13 +93,13 @@ them in the browser. Preserve Command binding, stale rejection, actual pending
 decisions on reconnect, replay/fork identity and accessibility. Cancellation or
 undo requires an explicit shared action and cannot erase committed costs or
 revealed information. Keep priority-stop automation distinct from deliberate
-human decisions. Live grouped decisions (combat declarations on the board and
-Scry, Surveil, and OrderLibrary in `ArrangePanel`) are drafted whole and
-committed in one `group_command` compiled to sequential native `Action`s with no
-engine action-space change (pile partitions still draft over verified steps
-until ported): fold raw single-step offers under a collapsed disclosure while
-drafting (not beside the draft), and keep them listed in Replay and Study where
-recorded policy probabilities attach. Play's retained `hero_*`/`villain_*` setup
+human decisions. Live grouped decisions (combat declarations on the board,
+Scry, Surveil, and OrderLibrary in `ArrangePanel`, and `PartitionPiles` in the
+two-pile partition panel) are drafted whole and committed in one `group_command`
+compiled to sequential native `Action`s with no engine action-space change:
+fold raw single-step offers under a collapsed disclosure while drafting (not
+beside the draft), and keep them listed in Replay and Study where recorded
+policy probabilities attach. Play's retained `hero_*`/`villain_*` setup
 fields name human/opponent roles; `GameConfig.human_seat` orders them at the
 native boundary. Record and project actual native seats; Watch keeps its
 two-seat acting-view contract. Scope Academy resume credentials and the

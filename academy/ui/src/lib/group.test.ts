@@ -16,6 +16,8 @@ describe('groupPlanKey', () => {
       .toBe(groupPlanKey({ kind: 'declare_attackers', attackers: [b, a] }));
     expect(groupPlanKey({ kind: 'surveil', graveyard: [a, b] }))
       .toBe(groupPlanKey({ kind: 'surveil', graveyard: [b, a] }));
+    expect(groupPlanKey({ kind: 'partition_piles', face_up: [a, b] }))
+      .toBe(groupPlanKey({ kind: 'partition_piles', face_up: [b, a] }));
     expect(groupPlanKey({ kind: 'scry', top: [a, b], bottom: [] }))
       .not.toBe(groupPlanKey({ kind: 'scry', top: [b, a], bottom: [] }));
     expect(groupPlanKey({ kind: 'order_library', order: [a, b] }))
@@ -24,13 +26,15 @@ describe('groupPlanKey', () => {
 });
 
 describe('validGroupPlan', () => {
-  it('validates all five plan kinds and rejects malformed values', () => {
+  it('validates all six plan kinds and rejects malformed values', () => {
     const id = { entity: 5, incarnation: 0 };
     expect(validGroupPlan({ kind: 'declare_attackers', attackers: [id] })).toBe(true);
     expect(validGroupPlan({ kind: 'declare_blockers', blocks: [{ blocker: id, attacker: id }] })).toBe(true);
     expect(validGroupPlan({ kind: 'scry', top: [id], bottom: [] })).toBe(true);
     expect(validGroupPlan({ kind: 'surveil', graveyard: [] })).toBe(true);
     expect(validGroupPlan({ kind: 'order_library', order: [id] })).toBe(true);
+    expect(validGroupPlan({ kind: 'partition_piles', face_up: [id] })).toBe(true);
+    expect(validGroupPlan({ kind: 'partition_piles', face_up: ['bad'] })).toBe(false);
     expect(validGroupPlan({ kind: 'unknown', items: [] })).toBe(false);
     expect(validGroupPlan({ kind: 'scry', top: ['bad'], bottom: [] })).toBe(false);
   });
@@ -57,5 +61,7 @@ describe('unified group draft persistence', () => {
   it('names disclosure copy per group kind', () => {
     expect(groupDisclosureCopy('declare_attackers').summary).toBe("Each creature's choice");
     expect(groupDisclosureCopy('scry').summary).toBe("Each card's choice");
+    expect(groupDisclosureCopy('partition_piles').summary).toBe("Each card's choice");
+    expect(groupDisclosureCopy('partition_piles').caption).toContain('split');
   });
 });

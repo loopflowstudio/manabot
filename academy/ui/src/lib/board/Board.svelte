@@ -27,6 +27,7 @@
     groupPlanKey,
     isArrangeGroup,
     isCombatGroup,
+    isPartitionGroup,
     loadGroupDraft,
     saveGroupDraft,
     type GroupPlan,
@@ -64,8 +65,7 @@
     type Draft,
   } from './combat';
   import {
-    loadPartitionDraft, partitionContext, partitionOffer, partitionSteps, partitionWords,
-    savePartitionDraft, swapPiles, toggleCardPile, type PartitionStep,
+    partitionPlanOf, partitionWords, sanitizePartitionDraft, swapPiles, toggleCardPile,
   } from './partition';
   import { offerText, primaryLabel, promptHint, promptLine } from './prompt';
   import { recentMarks, boardLines, turnOwners, type Endpoint, type RecentMarks } from './recent';
@@ -165,6 +165,8 @@
     ongroupact?: (plan: GroupPlan) => void;
     /** Latest grouped rejection (`group_refused` / `group_incomplete`) for this frame, if any. */
     groupRejection?: CommandRejection | null;
+    /** Clear a dismissed group rejection banner owned by the caller. */
+    ondismissgrouprejection?: (rejection: CommandRejection) => void;
     /** The person's board after each step that led to this frame: each beat is shown on its own. */
     stepBoards?: readonly StepBoard[];
     /** Arena-style client Auto-tap: auto-submits mandatory pure-mana payments when Full Control is off. */
@@ -183,7 +185,7 @@
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
     since: sinceGiven, history: historyGiven, onjump, readOnly = onjump !== undefined, currentMove = null, cursorSeq = null, stepBoardsError = null, onclearcursor,
     evidence = null, moveMarks, shownMoves, recapTitle, heading = null, bottom, strip, notices, result, menu, bar, chips = [], historyHref = '/games',
-    group = null, groupPreview, ongroupact, groupRejection = null, stepBoards = [],
+    group = null, groupPreview, ongroupact, groupRejection = null, ondismissgrouprejection, stepBoards = [],
     autoTap = false, fullControl = 'off', ontoggleautotap, onfullcontrol, onautotap,
     walkPace = 'study', onwalkpace,
   }: Props = $props();
@@ -237,7 +239,7 @@
   const draftLine = $derived(connect && current.phase === 'dragging'
     ? { from: connect.from, to: snapped ?? current.pointer, kind: connect.style } : null);
 
-  // ———————————————— Grouped decisions (combat & library arrangement)
+  // ———————————————— Grouped decisions (combat, library arrangement & pile partition)
 
   // Live grouped decisions come directly from the authority (`group`), bound
   // to `(match_id, frame_hash)`. Draft edits preview through `/group-preview`
@@ -246,6 +248,8 @@
   /** The blocker a person is placing: the next attacker clicked is the one it blocks. */
   let armed = $state<number | null>(null);
   let arrangeDraft = $state.raw<ArrangeDraft | null>(null);
+  let partitionFaceUp = $state.raw<number[]>([]);
+  let partitionFolded = $state(false);
   let previewed = $state.raw<{ frameHash: string; planKey: string; response: GroupPreviewResponse } | null>(null);
   let dismissedRejectionId = $state<string | null>(null);
   let draftScopeKey = '';
@@ -255,12 +259,15 @@
   );
   const combatGroup = $derived(isCombatGroup(activeGroup) ? activeGroup : null);
   const arrangeGroup = $derived(isArrangeGroup(activeGroup) ? activeGroup : null);
+  const partitionGroup = $derived(isPartitionGroup(activeGroup) ? activeGroup : null);
   const activeArrangeDraft = $derived(
     arrangeGroup && arrangeDraft?.kind === arrangeGroup.kind ? arrangeDraft : null,
   );
 
   function dismissRejection(): void {
-    if (groupRejection) dismissedRejectionId = groupRejection.command_id;
+    if (!groupRejection) return;
+    dismissedRejectionId = groupRejection.command_id;
+    ondismissgrouprejection?.(groupRejection);
   }
 
   // Load any saved draft for this exact `(match_id, frame_hash, kind)`.
@@ -271,15 +278,23 @@
     untrack(() => {
       armed = null;
       previewed = null;
+      partitionFolded = false;
       if (combatGroup) {
         draft = sanitizeCombatDraft(loadGroupDraft<Draft>(combatGroup), combatGroup);
         arrangeDraft = null;
+        partitionFaceUp = [];
       } else if (arrangeGroup) {
         arrangeDraft = sanitizeArrangeDraft(loadGroupDraft<ArrangeDraft>(arrangeGroup), arrangeGroup);
         draft = EMPTY_DRAFT;
+        partitionFaceUp = [];
+      } else if (partitionGroup) {
+        partitionFaceUp = sanitizePartitionDraft(loadGroupDraft<number[]>(partitionGroup), partitionGroup);
+        draft = EMPTY_DRAFT;
+        arrangeDraft = null;
       } else {
         draft = EMPTY_DRAFT;
         arrangeDraft = null;
+        partitionFaceUp = [];
       }
     });
   });
@@ -289,6 +304,7 @@
     if (arrangeGroup && activeArrangeDraft && isArrangeComplete(activeArrangeDraft, arrangeGroup)) {
       return arrangePlanOf(activeArrangeDraft, arrangeGroup);
     }
+    if (partitionGroup) return partitionPlanOf(partitionFaceUp, partitionGroup);
     return null;
   });
   const activePlanKey = $derived(activePlan ? groupPlanKey(activePlan) : null);
@@ -323,6 +339,7 @@
   $effect(() => {
     if (combatGroup) saveGroupDraft(combatGroup, draft);
     else if (arrangeGroup && activeArrangeDraft) saveGroupDraft(arrangeGroup, activeArrangeDraft);
+    else if (partitionGroup) saveGroupDraft(partitionGroup, partitionFaceUp);
   });
 
   /** The preview answers this exact draft, not an earlier one. */
@@ -452,94 +469,24 @@
     ongroupact(activePlan);
   }
 
-  // ———————————————— Pile partition draft
-
-  // Curator of Destinies asks about one inspected card at a time. Show all
-  // remaining inspected cards together so a person can split them holistically,
-  // then send the engine's exact per-card offers one by one on Confirm.
-  let partitionFaceUp = $state.raw<number[]>([]);
-  let partitionRunning = $state.raw<{ steps: PartitionStep[]; at: number; sentAt: number } | null>(null);
-  let stopNote = $state<string | null>(null);
-  let partitionFolded = $state(false);
-  let partitionFrameKey = '';
-  const partition = $derived(live && !activeGroup ? partitionContext(frame) : null);
-  const partitioning = $derived(partition !== null && !partitionRunning);
-
-  $effect(() => {
-    const active = partition !== null;
-    const key = `${frame.match_id}:${frame.frame_hash}:${active}`;
-    if (key === partitionFrameKey) return;
-    partitionFrameKey = key;
-    untrack(() => {
-      if (partitionRunning) return;
-      partitionFolded = false;
-      if (!partition) { partitionFaceUp = []; return; }
-      const validIds = new Set(partition.remaining.map(card => card.id));
-      partitionFaceUp = loadPartitionDraft(frame, validIds) ?? [];
-    });
-  });
-  $effect(() => {
-    if (partitioning) savePartitionDraft(frame, partitionFaceUp);
-  });
-
-  const partitionSummary = $derived(partition ? partitionWords(partition.remaining, partitionFaceUp, partition.committed.length) : null);
+  const partitionSourceName = $derived(
+    frame.projection.decision_context?.source?.label ?? 'Split into two piles',
+  );
+  const partitionSummary = $derived(
+    partitionGroup ? partitionWords(partitionGroup, partitionFaceUp) : null,
+  );
   const partitionUpSet = $derived(new Set(partitionFaceUp));
-  const partitionUpCards = $derived(partition ? partition.remaining.filter(card => partitionUpSet.has(card.id)) : []);
-  const partitionDownCards = $derived(partition ? partition.remaining.filter(card => !partitionUpSet.has(card.id)) : []);
+  const partitionUpItems = $derived(
+    partitionGroup ? partitionGroup.items.filter(entry => partitionUpSet.has(entry.item.entity)) : [],
+  );
+  const partitionDownItems = $derived(
+    partitionGroup ? partitionGroup.items.filter(entry => !partitionUpSet.has(entry.item.entity)) : [],
+  );
 
   function togglePartitionCard(cardId: number): void {
-    if (!partitioning) return;
-    stopNote = null;
+    if (!live || pending || !partitionGroup) return;
+    dismissRejection();
     partitionFaceUp = toggleCardPile(partitionFaceUp, cardId);
-  }
-
-  function confirmPartition(): void {
-    if (!partitioning || !partition || !partition.remaining.length) return;
-    const steps = partitionSteps(partition.remaining, partitionFaceUp);
-    const offer = partitionOffer(frame, steps[0]);
-    if (!offer) {
-      stopNote = 'The decision changed before the split was sent; split the remaining cards again.';
-      return;
-    }
-    partitionRunning = { steps, at: 0, sentAt: frame.revision };
-    send(offer);
-  }
-
-  $effect(() => {
-    const revision = frame.revision;
-    const sending = partitionRunning;
-    if (!sending) return;
-    const answerable = live && !pending;
-    untrack(() => {
-      if (revision === sending.sentAt) {
-        if (!answerable) return;
-        partitionRunning = null;
-        if (sending.at > 0) {
-          partitionFaceUp = [];
-          stopNote = `Stopped after ${sending.at} of ${sending.steps.length}. The next choice was not accepted. Split any remaining cards from here.`;
-        }
-        return;
-      }
-      const next = sending.at + 1;
-      if (next >= sending.steps.length) { partitionRunning = null; partitionFaceUp = []; return; }
-      if (!answerable) return;
-      const offer = partitionOffer(frame, sending.steps[next]);
-      if (!offer) {
-        partitionRunning = null;
-        partitionFaceUp = [];
-        stopNote = `Stopped after ${next} of ${sending.steps.length}: the game asked something unexpected. The board shows where it stands; split any remaining cards from here.`;
-        return;
-      }
-      partitionRunning = { ...sending, at: next, sentAt: revision };
-      onact(offer);
-    });
-  });
-
-  function stopPartitionSending(): void {
-    if (!partitionRunning) return;
-    stopNote = `Stopped after ${partitionRunning.at + 1} of ${partitionRunning.steps.length}; the rest was not sent.`;
-    partitionRunning = null;
-    partitionFaceUp = [];
   }
 
   /** The frame as the board draws it: with the drafted declaration, while there is one. */
@@ -638,12 +585,11 @@
     activeGroup && activeRefusal ? activeRefusal.reason
       : combatGroup && words ? words.plan
         : arrangeGroup && arrangeSummary ? arrangeSummary.planLine
-          : partitioning && partitionSummary ? partitionSummary.plan
-            : partitionRunning ? `Placing ${partitionRunning.at + 1} of ${partitionRunning.steps.length}…`
-              : promptLine(frame, view, !readOnly),
+          : partitionGroup && partitionSummary ? partitionSummary.plan
+            : promptLine(frame, view, !readOnly),
   );
   // How to answer with the live input; a recording has none.
-  const hint = $derived(activeGroup || partitioning || partitionRunning || readOnly ? null : promptHint(frame, view));
+  const hint = $derived(activeGroup || readOnly ? null : promptHint(frame, view));
   const paymentNote = $derived(!payOffer ? null
     : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
       : payKnown && payKnown.state !== 'exact' && payKnown.state !== 'not_applicable' ? payKnown.explanation : null);
@@ -874,7 +820,7 @@
         : board.asked,
   );
   /** The person may act on the drawn board now: what they cannot act on steps back. */
-  const acting = $derived(live && activeCursor === null && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || activeGroup !== null || partitioning));
+  const acting = $derived(live && activeCursor === null && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || activeGroup !== null));
   const boardNotice = $derived.by<{ testid: string; text: string } | null>(() => {
     if (activeCursor === null) return null;
     if (stepBoardsError) return { testid: 'board-unavailable', text: 'Board unavailable for this step' };
@@ -1410,7 +1356,7 @@
   let ctrlShift = false;
 
   $effect(() => {
-    if (recording || !live || activeCursor !== null || result || activeGroup || partitioning || partitionRunning || !onautotap) return;
+    if (recording || !live || activeCursor !== null || result || activeGroup || !onautotap) return;
     if (fullControl === 'once') {
       if (frame.action_space === 'PAY_OR_NOT') {
         wasPayingInOnce = true;
@@ -1520,7 +1466,6 @@
     if (event.key === '?') { event.preventDefault(); keysOpen = !keysOpen; return; }
     if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
     if (event.key === 'Escape' && anyTrackerOpen) { myDeckOpen = false; oppDeckOpen = false; return; }
-    if (event.key === 'Escape' && partitionRunning) { stopPartitionSending(); return; }
     if (event.key === 'Escape' && live && armed !== null) { armed = null; return; }
     if (event.key === 'Escape' && (menuAt || zoneAt || hovered)) { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
     if (event.key === 'Escape' && activeCursor !== null) { clearActiveCursor(); return; }
@@ -1537,8 +1482,8 @@
     }
     if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
-      // Live grouped decisions and pile-partition drafts fold raw single-step offers under a collapsed disclosure, not numbered shortcuts.
-      if (!menuAt && (activeGroup || partitioning || partitionRunning)) return;
+      // Live grouped decisions fold raw single-step offers under a collapsed disclosure, not numbered shortcuts.
+      if (!menuAt && activeGroup) return;
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
@@ -1553,7 +1498,6 @@
       if (inHistoryOrWalk) event.preventDefault();
       if (!inHistoryOrWalk && ownsSpace(event.target)) return;
       if (activeGroup) { event.preventDefault(); confirmGroup(); return; }
-      if (partitioning) { event.preventDefault(); confirmPartition(); return; }
       if (view.primary && live) { event.preventDefault(); act(view.primary); }
     }
   }
@@ -1690,7 +1634,7 @@
           </div>
         {/each}
       </div>
-      {#if view.tray.length && !finished && !arrangeGroup && !partitioning && !partitionRunning && activeCursor === null}
+      {#if view.tray.length && !finished && !arrangeGroup && !partitionGroup && activeCursor === null}
         <div class="tray" role="group" aria-label="Choices from outside the board" data-testid="tray" style:max-width={`${trayReserve}px`}>
           {#each view.tray as item (item.placed.offer.id)}
             {#if item.name}
@@ -1710,19 +1654,22 @@
       {/if}
     </section>
 
-    {#if (partitioning || partitionRunning) && partition && !finished && activeCursor === null}
+    {#if partitionGroup && !finished && activeCursor === null}
       <!-- Over the board, foldable so the battlefield stays readable around it. -->
-      <section use:region={{ across: connection !== null }} class="partition-panel" class:folded={partitionFolded} aria-label={`${partition.sourceName}: split into two piles`} data-testid="partition-panel">
+      <section use:region={{ across: connection !== null }} class="partition-panel" class:folded={partitionFolded} aria-label={`${partitionSourceName}: split into two piles`} data-testid="partition-panel" data-group-kind="partition_piles">
         {#if partitionFolded}
           <button type="button" class="btn btn-secondary btn-sm" data-testid="partition-unfold" onclick={() => (partitionFolded = false)}>Show pile split</button>
         {:else}
           <header class="partition-head">
             <div>
-              <p class="type-heading text-ink">{partition.sourceName} · Split into two piles</p>
+              <p class="type-heading text-ink">{partitionSourceName} · Split into two piles</p>
               <p class="type-caption text-ink-2">Click a card to move it between piles. Your opponent sees the face-up pile and only the count of face-down cards.</p>
             </div>
             <button type="button" class="fold type-caption" data-testid="partition-fold" onclick={() => (partitionFolded = true)}>Look at the board</button>
           </header>
+          {#if activeRefusal}
+            <p class="type-caption text-danger" role="alert" data-testid="partition-refusal">{activeRefusal.reason}</p>
+          {/if}
           <div class="partition-piles">
             {#each [
               {
@@ -1730,7 +1677,7 @@
                 testId: 'partition-pile-up',
                 title: 'Face-up',
                 hint: 'Opponent sees these',
-                cards: partitionUpCards,
+                entries: partitionUpItems,
                 draft: 'in' as const,
                 note: 'in the face-up pile; press to move to the face-down pile',
                 empty: 'Empty — click a card below to put it face-up',
@@ -1740,25 +1687,26 @@
                 testId: 'partition-pile-down',
                 title: 'Face-down',
                 hint: 'Hidden — opponent sees count only',
-                cards: partitionDownCards,
+                entries: partitionDownItems,
                 draft: 'can' as const,
                 note: 'in the face-down pile; press to move to the face-up pile',
                 empty: 'Empty — all remaining cards are face-up',
               },
             ] as pile (pile.key)}
-              <div class="partition-pile" data-testid={pile.testId} role="group" aria-label={`${pile.title} pile, ${pile.cards.length} ${pile.cards.length === 1 ? 'card' : 'cards'}`}>
+              <div class="partition-pile" data-testid={pile.testId} role="group" aria-label={`${pile.title} pile, ${pile.entries.length} ${pile.entries.length === 1 ? 'card' : 'cards'}`}>
                 <p class="partition-pile-head">
-                  <span class="type-label text-ink">{pile.title} · {pile.cards.length}</span>
+                  <span class="type-label text-ink">{pile.title} · {pile.entries.length}</span>
                   <span class="type-caption text-ink-3">{pile.hint}</span>
                 </p>
-                {#if pile.cards.length}
+                {#if pile.entries.length}
                   <div class="partition-cards">
-                    {#each pile.cards as card (card.id)}
-                      <div class="partition-card-slot" data-testid="partition-card" data-object-id={card.id} data-pile={pile.key}>
-                        <BoardCard name={card.name} width={104} {card} live={partitioning} draft={pile.draft}
+                    {#each pile.entries as entry (`${entry.item.entity}:${entry.item.incarnation}`)}
+                      {@const card = cards.get(entry.item.entity)}
+                      <div class="partition-card-slot" data-testid="partition-card" data-object-id={entry.item.entity} data-pile={pile.key}>
+                        <BoardCard name={card?.name ?? entry.label} width={104} {card} live={live && !pending} draft={pile.draft}
                           note={pile.note}
-                          onactivate={() => togglePartitionCard(card.id)}
-                          onpreview={element => previewCard(element ? card : null, element)} />
+                          onactivate={() => togglePartitionCard(entry.item.entity)}
+                          onpreview={element => previewArrangeCard(element ? entry.item.entity : null, element ? entry.label : null, element)} />
                       </div>
                     {/each}
                   </div>
@@ -1768,9 +1716,16 @@
               </div>
             {/each}
           </div>
-          {#if partition.committed.length}
+          {#if partitionGroup.committed_face_up.length || partitionGroup.committed_face_down.length}
             <p class="partition-committed type-caption text-ink-3" data-testid="partition-committed">
-              Already placed ({partition.committed.length}): {partition.committed.map(card => card.name).join(', ')}
+              Already placed:
+              {#if partitionGroup.committed_face_up.length}
+                Face-up: {partitionGroup.committed_face_up.map(card => card.label).join(', ')}
+              {/if}
+              {#if partitionGroup.committed_face_up.length && partitionGroup.committed_face_down.length}{' · '}{/if}
+              {#if partitionGroup.committed_face_down.length}
+                Face-down: {partitionGroup.committed_face_down.map(card => card.label).join(', ')}
+              {/if}
             </p>
           {/if}
         {/if}
@@ -1871,22 +1826,20 @@
       {evidence} {moveMarks} {shownMoves} {recapTitle} {onjump} recording={readOnly} {currentMove}
       onselectline={connection !== null ? selectHistoryLine : undefined}
       cursorLineIds={active.lineIds} cursorSourceSeq={active.sourceSeq}
-      draft={combatGroup ? combatControls : arrangeGroup ? arrangeControls : partitioning || partitionRunning ? partitionControls : undefined}
-      groupKind={activeGroup?.kind ?? null} stopped={stopNote} />
+      draft={combatGroup ? combatControls : arrangeGroup ? arrangeControls : partitionGroup ? partitionControls : undefined}
+      groupKind={activeGroup?.kind ?? null} />
   </div>
 
   {#snippet partitionControls()}
     <div class="combat-draft" data-testid="partition-draft">
-      {#if partitionRunning}
-        <button type="button" class="btn btn-secondary" data-testid="partition-stop" onclick={stopPartitionSending}><kbd>Esc</kbd>Stop sending</button>
-      {:else if partition && partitionSummary}
-        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready="true"
-          aria-label={`Confirm: ${partitionSummary.plan}`} title={partitionSummary.plan}
-          disabled={!live} onclick={confirmPartition}>
+      {#if partitionGroup && partitionSummary}
+        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={groupReady}
+          aria-label={`Confirm: ${activeRefusal ? activeRefusal.reason : partitionSummary.plan}`} title={partitionSummary.plan}
+          disabled={!live || pending || !groupReady} onclick={confirmGroup}>
           <span>{partitionSummary.text}</span><kbd>Space</kbd>
         </button>
-        <button type="button" class="btn btn-secondary secondary" data-testid="partition-swap" disabled={!live}
-          onclick={() => { stopNote = null; partitionFaceUp = swapPiles(partition.remaining, partitionFaceUp); }}>Swap piles</button>
+        <button type="button" class="btn btn-secondary secondary" data-testid="partition-swap" disabled={!live || pending}
+          onclick={() => { dismissRejection(); partitionFaceUp = swapPiles(partitionGroup.items, partitionFaceUp); }}>Swap piles</button>
         <p class="type-caption text-ink-3">Nothing is placed until you confirm. Click any card to move it between piles.</p>
       {/if}
     </div>

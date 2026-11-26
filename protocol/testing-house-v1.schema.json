@@ -944,6 +944,7 @@
           "declare_attackers": "#/$defs/DeclareAttackersChoice",
           "declare_blockers": "#/$defs/DeclareBlockersChoice",
           "order_library": "#/$defs/OrderLibraryChoice",
+          "partition_piles": "#/$defs/PartitionPilesChoice",
           "scry": "#/$defs/ScryChoice",
           "surveil": "#/$defs/SurveilChoice"
         },
@@ -964,6 +965,9 @@
         },
         {
           "$ref": "#/$defs/OrderLibraryChoice"
+        },
+        {
+          "$ref": "#/$defs/PartitionPilesChoice"
         }
       ]
     },
@@ -1331,6 +1335,27 @@
         "connected"
       ],
       "title": "ParticipantPresence",
+      "type": "object"
+    },
+    "PartitionPilesChoice": {
+      "additionalProperties": false,
+      "description": "Cards to put in the face-up pile; all remaining looked-at cards go face-down.",
+      "properties": {
+        "face_up": {
+          "items": {
+            "$ref": "#/$defs/ObjectRenderId"
+          },
+          "title": "Face Up",
+          "type": "array"
+        },
+        "kind": {
+          "const": "partition_piles",
+          "default": "partition_piles",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "PartitionPilesChoice",
       "type": "object"
     },
     "PassTurnMessage": {

@@ -15,6 +15,9 @@ from managym.group import (
     DeclareAttackersDecision,
     OrderLibraryChoice,
     OrderLibraryDecision,
+    PartitionPilesChoice,
+    PartitionPilesDecision,
+    PartitionPilesOutcome,
     ScryChoice,
     SingleDecision,
     SingleOutcome,
@@ -303,3 +306,99 @@ def test_deprecated_structured_and_combat_preview_apis_warn_for_0_3_0() -> None:
         for w in caught_combat
     )
     assert legacy.refused is None
+
+
+def test_single_decision_offers_have_readable_labels_sources_and_stable_fingerprint() -> (
+    None
+):
+    env = _setup_env(
+        {"Mountain": 10, "Island": 10, "Gray Ogre": 10, "Hill Giant": 10},
+        {"Forest": 40},
+        seed=7,
+    )
+    _keep_opening_hands(env)
+    for _ in range(4):
+        env.scenario_force_battlefield(0, "Mountain", ready=True)
+    env.scenario_clear_hand(0)
+    for name in ("Mountain", "Island", "Gray Ogre", "Hill Giant"):
+        env.scenario_force_card_in_hand(0, name)
+    env.scenario_refresh()
+
+    raw_frame = json.loads(env.semantic_decision_frame_json())
+    decision = env.decision()
+    assert isinstance(decision, SingleDecision)
+    assert decision.address.fingerprint == raw_frame["fingerprint"]
+    assert any(
+        o["label"] == "PriorityPlayLand" and o["source"] is None
+        for o in raw_frame["offers"]
+    )
+
+    by_label = {offer.label: offer for offer in decision.offers}
+    for label in ("Play Mountain", "Play Island", "Cast Gray Ogre", "Cast Hill Giant"):
+        assert label in by_label, sorted(by_label)
+        src = by_label[label].source
+        assert src is not None and src.kind == "object"
+    assert by_label["Play Mountain"].source != by_label["Play Island"].source
+    assert by_label["Cast Gray Ogre"].source != by_label["Cast Hill Giant"].source
+    assert by_label["Pass priority"].source is None
+
+
+def test_partition_piles_round_trip_and_choose_pile_transition() -> None:
+    env = _setup_env(
+        {"Island": 24, "Curator of Destinies": 16},
+        {"Forest": 40},
+        seed=13,
+    )
+    _keep_opening_hands(env)
+    for _ in range(6):
+        env.scenario_force_battlefield(0, "Island", ready=True)
+    env.scenario_clear_hand(0)
+    env.scenario_force_card_in_hand(0, "Curator of Destinies")
+    env.scenario_refresh()
+
+    active = _advance_to_decision(env, "partition_piles", max_steps=60)
+    assert isinstance(active, PartitionPilesDecision)
+    assert active.address.viewer == 0
+    assert len(active.items) == 5
+    assert active.committed_face_up == []
+    assert active.committed_face_down == []
+    assert env.decision(viewer=1) is None
+
+    # Duplicate card refuses without mutating.
+    digest_before = env.state_digest()
+    dup = env.preview(
+        PartitionPilesChoice(face_up=[active.items[0].item, active.items[0].item]),
+        at=active.address,
+    )
+    assert dup.complete is False
+    assert dup.refused is not None
+    with pytest.raises(managym.AgentError):
+        env.submit(
+            PartitionPilesChoice(face_up=[active.items[0].item, active.items[0].item]),
+            at=active.address,
+        )
+    assert env.state_digest() == digest_before
+
+    # Full 5-card split matches manual step-by-step execution and hands off to ChoosePile.
+    choice = PartitionPilesChoice(
+        face_up=[active.items[0].item, active.items[2].item]
+    )
+    preview = env.preview(choice, at=active.address)
+    assert preview.complete is True
+    assert preview.refused is None
+    assert len(preview.steps) == 5
+    assert preview.outcome == PartitionPilesOutcome(
+        face_up=[active.items[0].item, active.items[2].item],
+        face_down=[active.items[1].item, active.items[3].item, active.items[4].item],
+    )
+    assert env.state_digest() == digest_before
+
+    manual = env.clone_env()
+    for step in preview.steps:
+        manual.step(step.action_index)
+    env.submit(choice, at=active.address)
+    assert env.state_digest() == manual.state_digest()
+
+    next_decision = env.decision(viewer=1)
+    assert isinstance(next_decision, SingleDecision)
+    assert any("face-up pile" in o.label for o in next_decision.offers)

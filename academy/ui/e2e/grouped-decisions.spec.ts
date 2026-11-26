@@ -114,6 +114,13 @@ async function mountScenario(
             end: state.group?.kind === 'order_library' ? state.group.end : 'top',
             order: request.plan.order,
           };
+        case 'partition_piles': {
+          const up = new Set(request.plan.face_up.map(item => item.entity));
+          const down = state.group?.kind === 'partition_piles'
+            ? state.group.items.filter(card => !up.has(card.item.entity)).map(card => card.item)
+            : [];
+          return { kind: 'partition_piles', face_up: request.plan.face_up, face_down: down };
+        }
       }
     })();
     await route.fulfill({

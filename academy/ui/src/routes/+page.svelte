@@ -603,6 +603,7 @@
       groupPreview={liveTable ? fetchGroupPreview : undefined}
       ongroupact={handleGroupSubmit}
       {groupRejection}
+      ondismissgrouprejection={rejection => gameStore.dismissCommandRejection(rejection.command_id)}
       onact={handleActionSelect}
       pending={gameStore.commandPending}
       onpassturn={handlePassTurn}

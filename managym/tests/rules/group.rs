@@ -10,7 +10,7 @@ use managym::{
         player_policy::PlayerPolicy,
         structured_offer::OfferVerb,
     },
-    experience::ObjectRenderId,
+    experience::{ObjectRenderId, SubjectRef},
     flow::{
         decision::Decision,
         group::{
@@ -1102,4 +1102,259 @@ fn env_submit_settles_mixed_policy_identically_to_env_step() {
             .unwrap();
     }
     panic!("did not reach DeclareAttackers in mixed-policy env");
+}
+
+#[test]
+fn single_decision_offers_have_readable_labels_sources_and_unchanged_fingerprint() {
+    let mut s = five_color_setup(&["Mountain", "Island", "Gray Ogre", "Hill Giant"]);
+    s.force_card_in_hand(0, "Mountain");
+    s.force_card_in_hand(0, "Island");
+    s.force_card_in_hand(0, "Gray Ogre");
+    s.force_card_in_hand(0, "Hill Giant");
+    s.game_mut().scenario_refresh_priority().unwrap();
+
+    let raw_frame = s.game().semantic_decision_frame().unwrap();
+    let d = s.game().decision(None).expect("priority decision");
+    assert_eq!(d.spec, DecisionSpec::Single);
+    assert_eq!(
+        d.address.fingerprint, raw_frame.fingerprint,
+        "Offer enrichment must not alter semantic_decision_frame().fingerprint"
+    );
+    // Raw DecisionFrame still carries the unchanged structured_search_offers labels.
+    assert!(
+        raw_frame
+            .offers
+            .iter()
+            .any(|o| o.label == "PriorityPlayLand" && o.source.is_none()),
+        "raw DecisionFrame offers must remain untouched"
+    );
+
+    // Enriched Decision offers distinguish lands and spells by name and populate SubjectRef.
+    let play_mountain = d
+        .offers
+        .iter()
+        .find(|o| o.label == "Play Mountain")
+        .expect("Play Mountain offer");
+    let play_island = d
+        .offers
+        .iter()
+        .find(|o| o.label == "Play Island")
+        .expect("Play Island offer");
+    let cast_ogre = d
+        .offers
+        .iter()
+        .find(|o| o.label == "Cast Gray Ogre")
+        .expect("Cast Gray Ogre offer");
+    let cast_giant = d
+        .offers
+        .iter()
+        .find(|o| o.label == "Cast Hill Giant")
+        .expect("Cast Hill Giant offer");
+    let pass = d
+        .offers
+        .iter()
+        .find(|o| o.label == "Pass priority")
+        .expect("Pass priority offer");
+
+    for offer in [play_mountain, play_island, cast_ogre, cast_giant] {
+        assert!(
+            matches!(offer.source, Some(SubjectRef::Object { .. })),
+            "expected Object SubjectRef on {offer:?}"
+        );
+    }
+    assert_ne!(play_mountain.source, play_island.source);
+    assert_ne!(cast_ogre.source, cast_giant.source);
+    assert_eq!(pass.source, None);
+}
+
+#[test]
+fn partition_piles_full_mid_group_threshold_refusal_and_choose_pile_transition() {
+    let (mut s, pinned) = setup_library_effect(
+        &["Gray Ogre", "Forest", "Mountain", "Island", "Swamp"],
+        vec![Effect::SeparatePiles { look: 5 }],
+        true,
+    );
+    let ids: Vec<_> = pinned.iter().map(|&obj| card_render(s.game(), obj)).collect();
+    let d = s.game().decision(Some(PlayerId(0))).expect("PartitionPiles 5");
+    assert!(s.game().decision(Some(PlayerId(1))).is_none());
+    match &d.spec {
+        DecisionSpec::PartitionPiles {
+            items,
+            committed_face_up,
+            committed_face_down,
+        } => {
+            assert_eq!(items.len(), 5);
+            assert_eq!(
+                items.iter().map(|c| c.label.as_str()).collect::<Vec<_>>(),
+                vec!["Gray Ogre", "Forest", "Mountain", "Island", "Swamp"]
+            );
+            assert!(committed_face_up.is_empty());
+            assert!(committed_face_down.is_empty());
+        }
+        other => panic!("expected PartitionPiles, got {other:?}"),
+    }
+
+    // Duplicate and unknown cards are refused without mutating.
+    let before = witness(s.game());
+    let dup = s
+        .game()
+        .preview(
+            Some(&d.address),
+            &DecisionChoice::PartitionPiles {
+                face_up: vec![ids[0], ids[0]],
+            },
+        )
+        .unwrap();
+    assert!(!dup.complete);
+    assert!(dup
+        .refused
+        .as_ref()
+        .unwrap()
+        .reason
+        .contains("only be chosen once"));
+    let unknown = s
+        .game()
+        .preview(
+            Some(&d.address),
+            &DecisionChoice::PartitionPiles {
+                face_up: vec![ObjectRenderId {
+                    entity: 99999,
+                    incarnation: 0,
+                }],
+            },
+        )
+        .unwrap();
+    assert!(!unknown.complete);
+    assert!(unknown
+        .refused
+        .as_ref()
+        .unwrap()
+        .reason
+        .contains("not in the pending pile split"));
+    assert_eq!(witness(s.game()), before);
+
+    // Empty face-up pile and all-face-up pile both preview cleanly.
+    let all_down = s
+        .game()
+        .preview(
+            Some(&d.address),
+            &DecisionChoice::PartitionPiles { face_up: vec![] },
+        )
+        .unwrap();
+    assert!(all_down.complete);
+    assert_eq!(all_down.steps.len(), 5);
+    assert_eq!(
+        all_down.outcome,
+        Some(DecisionOutcome::PartitionPiles {
+            face_up: vec![],
+            face_down: ids.clone(),
+        })
+    );
+
+    // Clone for mid-group raw stepping before committing the full split.
+    let mut mid = s.game().clone();
+
+    // Full split: Gray Ogre (0) and Forest (2) face-up; Hill Giant (1), Plains (3), Swamp (4) face-down.
+    // The final step emits CardRevealed and transitions to ChoosePile for opponent (seat 1)
+    // without tripping the inter-step purity boundary.
+    let full_choice = DecisionChoice::PartitionPiles {
+        face_up: vec![ids[0], ids[2]],
+    };
+    let submitted = assert_submit_matches_manual(s.game_mut(), 0, &full_choice);
+    assert_eq!(submitted.steps.len(), 5);
+    assert_eq!(
+        submitted.outcome,
+        Some(DecisionOutcome::PartitionPiles {
+            face_up: vec![ids[0], ids[2]],
+            face_down: vec![ids[1], ids[3], ids[4]],
+        })
+    );
+    let next_decision = s
+        .game()
+        .decision(Some(PlayerId(1)))
+        .expect("opponent ChoosePile active");
+    assert_eq!(next_decision.spec, DecisionSpec::Single);
+    assert!(matches!(
+        s.game().state.suspended_decision.as_ref().map(|sd| &sd.decision),
+        Some(Decision::ChoosePile { player, .. }) if *player == PlayerId(1)
+    ));
+
+    // Mid-group raw stepping: put card 0 face-up (mode 0), card 1 face-down (mode 1).
+    mid.step(0).unwrap();
+    mid.step(1).unwrap();
+    let mid_decision = mid.decision(Some(PlayerId(0))).expect("3 cards remain");
+    assert_eq!(
+        mid_decision.spec,
+        DecisionSpec::PartitionPiles {
+            items: vec![
+                GroupCard {
+                    item: ids[2],
+                    label: "Mountain".into(),
+                },
+                GroupCard {
+                    item: ids[3],
+                    label: "Island".into(),
+                },
+                GroupCard {
+                    item: ids[4],
+                    label: "Swamp".into(),
+                },
+            ],
+            committed_face_up: vec![GroupCard {
+                item: ids[0],
+                label: "Gray Ogre".into(),
+            }],
+            committed_face_down: vec![GroupCard {
+                item: ids[1],
+                label: "Forest".into(),
+            }],
+        }
+    );
+
+    // Already-committed card is refused.
+    let committed_refusal = mid
+        .preview(
+            Some(&mid_decision.address),
+            &DecisionChoice::PartitionPiles {
+                face_up: vec![ids[0]],
+            },
+        )
+        .unwrap();
+    assert!(!committed_refusal.complete);
+    assert!(committed_refusal
+        .refused
+        .as_ref()
+        .unwrap()
+        .reason
+        .contains("already been placed"));
+
+    // Threshold check: stepping to 1 remaining card drops to Single.
+    let mut one_left = mid.clone();
+    one_left.step(0).unwrap();
+    one_left.step(1).unwrap();
+    assert_eq!(
+        one_left.decision(Some(PlayerId(0))).unwrap().spec,
+        DecisionSpec::Single
+    );
+
+    // Submitting the remaining 3 cards (Forest face-up; Plains, Swamp face-down) matches full submit digest.
+    let rest_submitted = assert_submit_matches_manual(
+        &mut mid,
+        0,
+        &DecisionChoice::PartitionPiles {
+            face_up: vec![ids[2]],
+        },
+    );
+    assert_eq!(
+        rest_submitted.outcome,
+        Some(DecisionOutcome::PartitionPiles {
+            face_up: vec![ids[0], ids[2]],
+            face_down: vec![ids[1], ids[3], ids[4]],
+        })
+    );
+    assert_eq!(
+        mid.state.deterministic_hash(),
+        s.game().state.deterministic_hash(),
+        "mid-group raw steps + submit must match full submit"
+    );
 }

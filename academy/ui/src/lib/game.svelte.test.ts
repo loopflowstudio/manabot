@@ -385,3 +385,40 @@ describe('stop changes in flight', () => {
     }
   });
 });
+
+describe('dismissCommandRejection', () => {
+  it('clears the matching rejection and error banner without wiping unrelated errors', () => {
+    const store = createGameStore();
+    store.lastCommandRejection = {
+      command_id: 'cmd-1',
+      code: 'group_refused',
+      message: 'Boggart Brute requires at least two blockers.',
+      current_revision: 12,
+      current_prompt: null,
+    };
+    store.setError('Boggart Brute requires at least two blockers.');
+
+    // Mismatched command id leaves both intact.
+    store.dismissCommandRejection('cmd-other');
+    expect(store.errorMessage).toBe('Boggart Brute requires at least two blockers.');
+    expect(store.lastCommandRejection?.command_id).toBe('cmd-1');
+
+    // Matching command id clears both rejection and matching error banner.
+    store.dismissCommandRejection('cmd-1');
+    expect(store.errorMessage).toBeNull();
+    expect(store.lastCommandRejection).toBeNull();
+
+    // Unrelated error message is preserved when dismissing a rejection.
+    store.lastCommandRejection = {
+      command_id: 'cmd-2',
+      code: 'group_incomplete',
+      message: 'Place remaining cards before confirming.',
+      current_revision: 13,
+      current_prompt: null,
+    };
+    store.setError('WebSocket error. Trying to reconnect.');
+    store.dismissCommandRejection('cmd-2');
+    expect(store.lastCommandRejection).toBeNull();
+    expect(store.errorMessage).toBe('WebSocket error. Trying to reconnect.');
+  });
+});

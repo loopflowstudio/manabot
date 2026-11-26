@@ -1242,14 +1242,19 @@ Supported `Decision` kinds and grouped activation thresholds:
 | `scry` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_top` (`GroupCard`), `committed_bottom` (`GroupCard`) | `ScryChoice(top, bottom)` | `top`, `bottom` |
 | `surveil` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_graveyard` (`GroupCard`) | `SurveilChoice(graveyard)` | `graveyard`, `kept` |
 | `order_library` | `>= 2` remaining cards | `end` (`"top"` or `"bottom"`), `items` (`GroupCard`), `committed` (`GroupCard`) | `OrderLibraryChoice(order)` | `end`, `order` |
+| `partition_piles` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_face_up` (`GroupCard`), `committed_face_down` (`GroupCard`) | `PartitionPilesChoice(face_up)` | `face_up`, `face_down` |
 
 - **`env.decision(viewer=None)`** returns the active `Decision` for `viewer`
   (defaulting to the current acting player), or `None` when the game is over or
   `viewer` is not the chooser. Every `Decision` carries its optimistic-concurrency
   `address` (`DecisionAddress(viewer, revision, fingerprint)`) and the raw
-  single-step legal `offers` (`list[Offer]`). Halfway through raw stepping a
-  grouped decision, `env.decision()` returns the remaining undecided items plus
-  immutable `committed*` state (and drops to `SingleDecision` below threshold).
+  single-step legal `offers` (`list[Offer]`), where each `Offer` carries a
+  human-readable `label` (such as `"Play Mountain"`, `"Cast Gray Ogre"`,
+  `"Pass priority"`) and its viewer-safe `source: SubjectRef | None` without
+  changing `semantic_decision_frame()` fingerprints. Halfway through raw
+  stepping a grouped decision, `env.decision()` returns the remaining undecided
+  items plus immutable `committed*` state (and drops to `SingleDecision` below
+  threshold).
 - **`env.preview(choice, *, at=None)`** is read-only: the live game's state
   digest, RNG, revision, trace and pending decision do not change. `choice` is
   either a single `int` offer id or a grouped `Choice`; `at` defaults to the
@@ -1279,7 +1284,8 @@ Supported `Decision` kinds and grouped activation thresholds:
   hidden-zone object became visible to `viewer`. If a boundary trips mid-group,
   preview stops with `complete=False, outcome=None` and `submit` refuses it.
   Effects that fire after the final step exits the group — such as drawing a
-  card after Scry 2 resolves — complete cleanly. Surveil finishes when its
+  card after Scry 2 resolves or revealing the face-up pile when `PartitionPiles`
+  transitions to `ChoosePile` — complete cleanly. Surveil finishes when its
   graveyard picks commit; any following `order_library` is its own decision.
 - **Deprecations (`0.3.0`):** `Env.compound_offers`,
   `Env.compound_commands_json`, `Env.structured_offers`, `Env.step_structured`,

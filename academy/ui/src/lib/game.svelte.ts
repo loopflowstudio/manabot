@@ -268,6 +268,15 @@ export class GameStore {
     this.errorMessage = message;
   }
 
+  /** Clear a command rejection and its matching rail error banner once the player edits the draft. */
+  dismissCommandRejection(commandId: string): void {
+    if (this.lastCommandRejection?.command_id !== commandId) return;
+    if (this.errorMessage === this.lastCommandRejection.message) {
+      this.errorMessage = null;
+    }
+    this.lastCommandRejection = null;
+  }
+
   setOpponentChoice(next: PlayerChoice): void {
     this.opponentChoice = next;
   }

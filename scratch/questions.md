@@ -52,10 +52,10 @@
 
 ## Follow-ups for ship-review to file or drop
 
-- **Pile split as a group kind** once MTG-431 lands: `PartitionPiles` in
-  `flow/group/`, its panel on `group_command`, and removal of MTG-431's
-  `partition.ts` send loop and `FACE_UP_RE`. Includes the `ChoosePile`
-  opponent-view check, which has no UI test.
+- **`ChoosePile` opponent-view UI test:** `PartitionPiles` itself is now ported
+  onto the native `group_command` pipeline (Pass 5b), with zero browser send
+  loops or `FACE_UP_RE` scrapers left; the opponent-side `ChoosePile` view
+  still has no dedicated UI test.
 - **"Pick" kind and panel:** SelectCards with max > 1, SearchDistinctNames,
   Discard of 2+, OpponentSplitsRevealed, KeepCreatures.
 - **"Amounts" kind and panel:** DistributeCounters, DivideAmongTargets,
@@ -64,10 +64,5 @@
   between picks.
 - The `discard` instruction text says "or decline when offered" though no
   decline is offered (`managym/src/decision_context.rs:513`).
-- Remove the `combat_preview` wrappers with the other `0.3.0` graphs.
-- Raw `Offer.label` on `env.decision().offers` is often the native
-  `ActionType` name (`PriorityPlayLand`, `DeclareAttacker`, `SelectCard`,
-  `PayCost`) with `source` unset (`structured_offer.rs:644` fallback). The
-  label is part of the decision fingerprint, so a readable label or source
-  needs its own change that accepts moved fingerprints or adds the subject
-  beside the fingerprinted label. Found in Pass 4 QA.
+- Remove the `combat_preview` and `structured_offers`/`compound_offers`
+  wrappers with the other `0.3.0` graphs.

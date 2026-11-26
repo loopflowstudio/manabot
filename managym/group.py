@@ -1,11 +1,11 @@
 """Unified interactive decision, preview, and atomic submission types.
 
-Multi-part decisions (combat declarations, Scry, Surveil and OrderLibrary) keep
-their flat sequential native ``Action``s. Callers inspect the active decision
-through ``env.decision()``, preview a single offer id or grouped ``Choice`` on
-a native clone via ``env.preview(choice, at=...)``, and commit atomically via
-``env.submit(choice, at=...)`` without touching ``env.step(action)`` or the
-observation contract.
+Multi-part decisions (combat declarations, Scry, Surveil, OrderLibrary and
+PartitionPiles) keep their flat sequential native ``Action``s. Callers inspect
+the active decision through ``env.decision()``, preview a single offer id or
+grouped ``Choice`` on a native clone via ``env.preview(choice, at=...)``, and
+commit atomically via ``env.submit(choice, at=...)`` without touching
+``env.step(action)`` or the observation contract.
 """
 
 import json
@@ -99,13 +99,21 @@ class OrderLibraryDecision(DecisionBase):
     committed: list[GroupCard]
 
 
+class PartitionPilesDecision(DecisionBase):
+    kind: Literal["partition_piles"] = "partition_piles"
+    items: list[GroupCard]
+    committed_face_up: list[GroupCard]
+    committed_face_down: list[GroupCard]
+
+
 type Decision = Annotated[
     SingleDecision
     | DeclareAttackersDecision
     | DeclareBlockersDecision
     | ScryDecision
     | SurveilDecision
-    | OrderLibraryDecision,
+    | OrderLibraryDecision
+    | PartitionPilesDecision,
     Field(discriminator="kind"),
 ]
 
@@ -142,12 +150,20 @@ class OrderLibraryChoice(ProtocolModel):
     order: list[ObjectRenderId] = Field(default_factory=list)
 
 
+class PartitionPilesChoice(ProtocolModel):
+    """Cards to put in the face-up pile; all remaining looked-at cards go face-down."""
+
+    kind: Literal["partition_piles"] = "partition_piles"
+    face_up: list[ObjectRenderId] = Field(default_factory=list)
+
+
 type GroupChoice = Annotated[
     DeclareAttackersChoice
     | DeclareBlockersChoice
     | ScryChoice
     | SurveilChoice
-    | OrderLibraryChoice,
+    | OrderLibraryChoice
+    | PartitionPilesChoice,
     Field(discriminator="kind"),
 ]
 
@@ -202,13 +218,20 @@ class OrderLibraryOutcome(ProtocolModel):
     order: list[ObjectRenderId]
 
 
+class PartitionPilesOutcome(ProtocolModel):
+    kind: Literal["partition_piles"] = "partition_piles"
+    face_up: list[ObjectRenderId]
+    face_down: list[ObjectRenderId]
+
+
 type DecisionOutcome = Annotated[
     SingleOutcome
     | DeclareAttackersOutcome
     | DeclareBlockersOutcome
     | ScryOutcome
     | SurveilOutcome
-    | OrderLibraryOutcome,
+    | OrderLibraryOutcome
+    | PartitionPilesOutcome,
     Field(discriminator="kind"),
 ]
 

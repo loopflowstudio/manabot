@@ -1,12 +1,12 @@
 //! Unified interactive decision API over sequential native `Action`s.
 //!
-//! Multi-part decisions (combat declarations, Scry, Surveil, OrderLibrary)
-//! stay flat and sequential in the core engine (`Game::step`) so RL policies,
-//! search, observations and replay digests never change. This module reads the
-//! current decision (`Game::decision`, returning either `Single` or a grouped
-//! variant above its domain threshold), previews a single or grouped choice on
-//! a clone (`Game::preview`), and applies a valid choice atomically
-//! (`Game::submit`) by stepping those exact sequential actions.
+//! Multi-part decisions (combat declarations, Scry, Surveil, OrderLibrary,
+//! PartitionPiles) stay flat and sequential in the core engine (`Game::step`)
+//! so RL policies, search, observations and replay digests never change. This
+//! module reads the current decision (`Game::decision`, returning either
+//! `Single` or a grouped variant above its domain threshold), previews a single
+//! or grouped choice on a clone (`Game::preview`), and applies a valid choice
+//! atomically (`Game::submit`) by stepping those exact sequential actions.
 //!
 //! Every grouped kind shares one clone-and-step driver and one inter-step
 //! purity boundary: between step `i` and step `i+1` (while the same group
@@ -18,21 +18,22 @@ use std::collections::BTreeSet;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::agent::action::{ActionSpaceKind, AgentError};
-use crate::agent::structured_offer::{OfferVerb, SubjectRef};
-use crate::experience::ObjectRenderId;
+use crate::agent::action::{Action, ActionSpaceKind, AgentError};
+use crate::agent::structured_offer::OfferVerb;
+use crate::cards::content_pack::default_content_pack;
+use crate::experience::{ObjectRenderId, OfferSubjectView, SubjectRef};
 use crate::flow::decision::Decision;
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
 use crate::state::ability::LibraryEnd as StateLibraryEnd;
-use crate::state::game_object::{ObjectId, PlayerId};
+use crate::state::game_object::{ObjectId, PlayerId, Target};
 use crate::state::zone::ZoneType;
 
 mod combat;
 mod library;
 
 pub(crate) use combat::CombatGroup;
-use library::{OrderLibraryGroup, ScryGroup, SurveilGroup};
+use library::{OrderLibraryGroup, PartitionPilesGroup, ScryGroup, SurveilGroup};
 
 /// Which end of a library receives ordered cards (`snake_case` wire spelling).
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -137,6 +138,11 @@ pub enum DecisionSpec {
         items: Vec<GroupCard>,
         committed: Vec<GroupCard>,
     },
+    PartitionPiles {
+        items: Vec<GroupCard>,
+        committed_face_up: Vec<GroupCard>,
+        committed_face_down: Vec<GroupCard>,
+    },
 }
 
 impl DecisionSpec {
@@ -157,6 +163,10 @@ impl DecisionSpec {
                 | (
                     Self::OrderLibrary { .. },
                     DecisionChoice::OrderLibrary { .. }
+                )
+                | (
+                    Self::PartitionPiles { .. },
+                    DecisionChoice::PartitionPiles { .. }
                 )
         )
     }
@@ -195,6 +205,11 @@ pub enum DecisionChoice {
     OrderLibrary {
         #[serde(default)]
         order: Vec<ObjectRenderId>,
+    },
+    /// Cards to put in the face-up pile; all remaining looked-at cards go face-down.
+    PartitionPiles {
+        #[serde(default)]
+        face_up: Vec<ObjectRenderId>,
     },
 }
 
@@ -240,6 +255,10 @@ pub enum DecisionOutcome {
     OrderLibrary {
         end: LibraryEnd,
         order: Vec<ObjectRenderId>,
+    },
+    PartitionPiles {
+        face_up: Vec<ObjectRenderId>,
+        face_down: Vec<ObjectRenderId>,
     },
 }
 
@@ -358,6 +377,9 @@ fn active_spec(game: &Game, viewer: PlayerId) -> DecisionSpec {
             }
             Decision::OrderLibrary { player, .. } if *player == viewer => {
                 OrderLibraryGroup.describe(game, viewer)
+            }
+            Decision::PartitionPiles { player, .. } if *player == viewer => {
+                PartitionPilesGroup.describe(game, viewer)
             }
             _ => None,
         }
@@ -499,15 +521,147 @@ fn drive_preview<K: GroupKind>(
     })
 }
 
-fn project_offers(frame: &crate::decision::DecisionFrame) -> Vec<DecisionOffer> {
+fn primary_subject(subjects: &[OfferSubjectView]) -> Option<SubjectRef> {
+    subjects
+        .iter()
+        .find(|view| view.role == "source")
+        .or_else(|| subjects.first())
+        .map(|view| view.object.subject)
+}
+
+fn format_offer_label(
+    game: &Game,
+    space_kind: ActionSpaceKind,
+    action: &Action,
+    subjects: &[OfferSubjectView],
+) -> String {
+    let spell_name = |object: ObjectId| -> String {
+        default_content_pack()
+            .spell_definition(&game.state[object], action.spell_profile())
+            .map(|def| def.name.clone())
+            .unwrap_or_else(|| game.observed_object_name(object))
+    };
+    let perm_name = |permanent| -> String {
+        game.permanent_object(permanent)
+            .map(|object| game.observed_object_name(object))
+            .unwrap_or_else(|| "permanent".to_string())
+    };
+    match action {
+        Action::PlayLand { object, .. } => format!("Play {}", spell_name(*object)),
+        Action::CastSpell { object, .. } => format!("Cast {}", spell_name(*object)),
+        Action::PassPriority { .. } => "Pass priority".to_string(),
+        Action::DeclareAttacker {
+            permanent, attack, ..
+        } => {
+            let name = perm_name(*permanent);
+            if *attack {
+                format!("Attack with {name}")
+            } else {
+                format!("Don't attack with {name}")
+            }
+        }
+        Action::DeclareBlocker {
+            blocker, attacker, ..
+        } => {
+            let blocker_name = perm_name(*blocker);
+            match attacker {
+                Some(target) => format!("Block {} with {blocker_name}", perm_name(*target)),
+                None => format!("Don't block with {blocker_name}"),
+            }
+        }
+        Action::ChooseTarget { target, .. } => {
+            if let Some(subject) = subjects.first() {
+                format!("Target {}", subject.object.label)
+            } else {
+                match target {
+                    Target::Player(player) => format!("Target Seat {}", player.0 + 1),
+                    Target::Permanent(permanent) => format!("Target {}", perm_name(*permanent)),
+                    Target::StackSpell(object) | Target::GraveyardCard(object) => {
+                        format!("Target {}", game.observed_object_name(*object))
+                    }
+                    Target::StackAbility(id) => {
+                        let name = game
+                            .stack_ability_source(*id)
+                            .map(|object| game.observed_object_name(object))
+                            .unwrap_or_else(|| "ability".to_string());
+                        format!("Target {name}")
+                    }
+                }
+            }
+        }
+        Action::ActivateAbility { permanent, .. } => format!("Activate {}", perm_name(*permanent)),
+        Action::ActivateCardAbility { object, .. } => {
+            format!("Activate {}", game.observed_object_name(*object))
+        }
+        Action::TurnFaceUp { object, .. } => {
+            format!("Turn {} face up", game.observed_object_name(*object))
+        }
+        Action::Foretell { object, .. } => {
+            format!("Foretell {}", game.observed_object_name(*object))
+        }
+        Action::ScryCard {
+            object, to_bottom, ..
+        } => {
+            let name = game.observed_object_name(*object);
+            if *to_bottom {
+                format!("Put {name} on bottom")
+            } else {
+                format!("Keep {name} on top")
+            }
+        }
+        Action::SelectCard { object, .. } => {
+            let name = game.observed_object_name(*object);
+            match space_kind {
+                ActionSpaceKind::Discard => format!("Discard {name}"),
+                ActionSpaceKind::LegendRule => format!("Keep {name}"),
+                _ => format!("Select {name}"),
+            }
+        }
+        Action::LearnTakeLesson { object, .. } => {
+            format!("Take lesson {}", game.state.source_base(*object).1.name)
+        }
+        Action::LearnDiscard { object, .. } => {
+            format!("Discard {} to draw", game.observed_object_name(*object))
+        }
+        Action::PayCost { .. } => "Pay cost".to_string(),
+        Action::Decline { .. } => "Decline".to_string(),
+        Action::ChooseMode { mode, .. } => format!("Mode {}", mode + 1),
+        Action::WaterbendTap { permanent, .. } | Action::TapForMana { permanent, .. } => {
+            format!("Tap {}", perm_name(*permanent))
+        }
+        Action::ChooseTrigger { .. } => "Choose trigger".to_string(),
+    }
+}
+
+fn project_offers(
+    game: &Game,
+    actor: PlayerId,
+    frame: &crate::decision::DecisionFrame,
+) -> Vec<DecisionOffer> {
+    let subjects = game.decision_offer_subjects(actor);
+    let space = game.action_space();
     frame
         .offers
         .iter()
-        .map(|offer| DecisionOffer {
-            id: offer.id.0 as usize,
-            verb: offer.verb,
-            label: offer.label.clone(),
-            source: offer.source,
+        .enumerate()
+        .map(|(index, offer)| {
+            let offer_subjects = subjects.get(index).map(Vec::as_slice).unwrap_or(&[]);
+            let source = primary_subject(offer_subjects);
+            let label = space
+                .and_then(|s| {
+                    s.actions.get(index).map(|action| {
+                        game.action_description(action).unwrap_or_else(|| {
+                            format_offer_label(game, s.kind, action, offer_subjects)
+                        })
+                    })
+                })
+                .unwrap_or_else(|| offer.label.clone());
+            DecisionOffer {
+                id: offer.id.0 as usize,
+                verb: offer.verb,
+                label,
+                source,
+            }
         })
         .collect()
 }
@@ -515,7 +669,7 @@ fn project_offers(frame: &crate::decision::DecisionFrame) -> Vec<DecisionOffer> 
 impl Game {
     fn build_decision(&self, frame: crate::decision::DecisionFrame) -> ActiveDecision {
         let actor = PlayerId(frame.actor as usize);
-        let offers = project_offers(&frame);
+        let offers = project_offers(self, actor, &frame);
         let address = DecisionAddress {
             viewer: actor.0,
             revision: frame.revision,
@@ -617,6 +771,9 @@ impl Game {
             }
             DecisionSpec::OrderLibrary { .. } => {
                 drive_preview(self, &OrderLibraryGroup, actor, decision, choice)
+            }
+            DecisionSpec::PartitionPiles { .. } => {
+                drive_preview(self, &PartitionPilesGroup, actor, decision, choice)
             }
         }
     }
