@@ -481,7 +481,8 @@ mod tests {
         },
         state::{
             ability::{
-                Ability, AbilitySet, Actor, Effect, LinkedExile, ObjectSelector, TriggerSubject,
+                Ability, AbilitySet, Actor, Effect, GrantKey, LinkedExile, ObjectSelector,
+                TriggerSubject,
             },
             card::{
                 ActivatedAbilityDefinition, DamageRecipient, DamageSource, DamageTransform,
@@ -840,7 +841,7 @@ mod tests {
             .scenario_force_battlefield(PlayerId(1), "Gray Ogre", false)
             .unwrap();
 
-        let exile_with_set = |game: &mut Game, target: PermanentId, ability_set: AbilitySet| {
+        let exile_with_grant = |game: &mut Game, target: PermanentId, acquired: Option<GrantKey>| {
             let mut frame = EffectFrame::new(
                 PlayerId(0),
                 vec![Effect::exile_linked(
@@ -849,7 +850,7 @@ mod tests {
                 )],
             );
             frame.bind_source(Some(koh_obj), Some(koh_obj));
-            frame.ability_set = Some(ability_set);
+            frame.acquired = acquired;
             frame.targets = vec![crate::flow::decision::ResolutionTarget {
                 target: crate::state::game_object::Target::Permanent(target),
                 requirement: 0,
@@ -858,18 +859,18 @@ mod tests {
             }];
             game.run_frame(frame);
         };
-        let linked_exiles = |game: &Game, ability_set: AbilitySet| -> Vec<ObjectId> {
+        let linked_exiles = |game: &Game, acquired: Option<GrantKey>| -> Vec<ObjectId> {
             let mut frame = EffectFrame::new(PlayerId(0), vec![]);
             frame.bind_source(Some(koh_obj), Some(koh_obj));
-            frame.ability_set = Some(ability_set);
+            frame.acquired = acquired;
             let source = game
                 .linked_ability_source(&frame)
                 .expect("ability carries linked source");
             game.state.exiled_with(source).collect()
         };
 
-        // Step 1: Koh's printed ability exiles `victim_a` under `AbilitySet::Printed(koh_def)`.
-        exile_with_set(&mut game, victim_a, AbilitySet::Printed(koh_def));
+        // Step 1: Koh's printed ability (`acquired: None`) exiles `victim_a` under `AbilitySet::Printed(koh_def)`.
+        exile_with_grant(&mut game, victim_a, None);
         assert_eq!(game.state.exile_links.len(), 1);
         let exiled_a = game.state.exile_links[0].exiled_object;
         assert_eq!(
@@ -877,7 +878,7 @@ mod tests {
             AbilitySet::Printed(koh_def)
         );
 
-        // Step 2: Two separate Layer-6 grants receive distinct `AbilitySet::Acquired` keys.
+        // Step 2: Two separate Layer-6 grants receive distinct `GrantKey`s.
         let affected_koh = game.affected_permanent(koh).unwrap();
         game.apply_continuous(
             None,
@@ -905,39 +906,39 @@ mod tests {
             EffectDuration::Indefinite,
         );
         let view = game.characteristics(koh);
-        assert_eq!(
-            view.activated_abilities.first().unwrap().ability_set,
-            Some(AbilitySet::Printed(koh_def))
-        );
-        let grant_a_set = view
+        assert_eq!(view.activated_abilities.first().unwrap().acquired, None);
+        let grant_a = view
             .activated_abilities
             .last()
             .unwrap()
-            .ability_set
-            .expect("granted activated ability carries Acquired set");
-        let grant_b_set = view.triggered_abilities.last().unwrap().ability_set;
-        assert!(grant_a_set.is_acquired());
-        assert!(grant_b_set.is_acquired());
-        assert_ne!(grant_a_set, grant_b_set);
+            .acquired
+            .expect("granted activated ability carries GrantKey");
+        let grant_b = view
+            .triggered_abilities
+            .last()
+            .unwrap()
+            .acquired
+            .expect("granted triggered ability carries GrantKey");
+        assert_ne!(grant_a, grant_b);
 
         // Neither separate grant can read Koh's printed exile.
-        assert!(linked_exiles(&game, grant_a_set).is_empty());
-        assert!(linked_exiles(&game, grant_b_set).is_empty());
+        assert!(linked_exiles(&game, Some(grant_a)).is_empty());
+        assert!(linked_exiles(&game, Some(grant_b)).is_empty());
 
-        // An exile under `grant_a_set` pairs with `grant_a_set`, never with printed or `grant_b_set`.
-        exile_with_set(&mut game, victim_b, grant_a_set);
+        // An exile under `grant_a` pairs with `grant_a`, never with printed or `grant_b`.
+        exile_with_grant(&mut game, victim_b, Some(grant_a));
         let exiled_b = game.state.exile_links[1].exiled_object;
-        assert_eq!(game.state.exile_links[1].ability_set, grant_a_set);
-        assert_eq!(linked_exiles(&game, grant_a_set), vec![exiled_b]);
-        assert!(linked_exiles(&game, grant_b_set).is_empty());
         assert_eq!(
-            linked_exiles(&game, AbilitySet::Printed(koh_def)),
-            vec![exiled_a]
+            game.state.exile_links[1].ability_set,
+            AbilitySet::Acquired(grant_a)
         );
+        assert_eq!(linked_exiles(&game, Some(grant_a)), vec![exiled_b]);
+        assert!(linked_exiles(&game, Some(grant_b)).is_empty());
+        assert_eq!(linked_exiles(&game, None), vec![exiled_a]);
 
         // Step 3: CR 607.5 — one `HasAbilitiesOfSource` (Koh inheriting Boiling Rock Rioter)
-        // assigns the SAME `AbilitySet::Acquired` key to both the inherited activated
-        // ability and the inherited attack trigger, so they pair with each other.
+        // assigns the SAME `GrantKey` to both the inherited activated ability and the
+        // inherited attack trigger, so they pair with each other.
         let rioter_def = crate::cards::content_pack::default_content_pack()
             .definition_id("Boiling Rock Rioter")
             .unwrap();
@@ -954,25 +955,26 @@ mod tests {
                 source_object: None,
             });
         let view = game.characteristics(koh);
-        let rioter_activated_set = view
+        let rioter_activated = view
             .activated_abilities
             .last()
             .unwrap()
-            .ability_set
-            .expect("inherited activated ability set");
-        let rioter_triggered_set = view.triggered_abilities.last().unwrap().ability_set;
-        assert!(rioter_activated_set.is_acquired());
+            .acquired
+            .expect("inherited activated ability grant");
+        let rioter_triggered = view
+            .triggered_abilities
+            .last()
+            .unwrap()
+            .acquired
+            .expect("inherited triggered ability grant");
         assert_eq!(
-            rioter_activated_set, rioter_triggered_set,
-            "CR 607.5: abilities acquired together through one effect share an AbilitySet"
+            rioter_activated, rioter_triggered,
+            "CR 607.5: abilities acquired together through one effect share a GrantKey"
         );
-        exile_with_set(&mut game, victim_c, rioter_activated_set);
+        exile_with_grant(&mut game, victim_c, Some(rioter_activated));
         let exiled_c = game.state.exile_links[2].exiled_object;
-        assert_eq!(linked_exiles(&game, rioter_triggered_set), vec![exiled_c]);
-        assert_eq!(
-            linked_exiles(&game, AbilitySet::Printed(koh_def)),
-            vec![exiled_a]
-        );
+        assert_eq!(linked_exiles(&game, Some(rioter_triggered)), vec![exiled_c]);
+        assert_eq!(linked_exiles(&game, None), vec![exiled_a]);
 
         // Step 4: CR 607.5 — Koh re-choosing Boiling Rock Rioter is a NEW acquiring effect
         // with a new timestamp; it replaces the previous inherited set (no duplicate
@@ -1002,15 +1004,19 @@ mod tests {
             triggered_count_before,
             "re-choosing replaces the prior HasAbilitiesOfSource without duplicating triggers"
         );
-        let rechosen_set = view.triggered_abilities.last().unwrap().ability_set;
-        assert!(rechosen_set.is_acquired());
-        assert_ne!(rechosen_set, rioter_activated_set);
+        let rechosen = view
+            .triggered_abilities
+            .last()
+            .unwrap()
+            .acquired
+            .expect("re-chosen inherited trigger grant");
+        assert_ne!(rechosen, rioter_activated);
         assert!(
-            linked_exiles(&game, rechosen_set).is_empty(),
+            linked_exiles(&game, Some(rechosen)).is_empty(),
             "CR 607.5: a new acquiring effect cannot pair with exiles from an earlier grant"
         );
 
-        // Step 5: `AttachedHas` carries both `granted_by` and an `Acquired` ability set.
+        // Step 5: `AttachedHas` carries both `granted_by` and an `acquired` grant key.
         let aura = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", false)
             .unwrap();
@@ -1026,6 +1032,12 @@ mod tests {
         assert!(view
             .activated_abilities
             .iter()
-            .any(|a| a.granted_by.is_some() && a.ability_set.is_some_and(AbilitySet::is_acquired)));
+            .any(|a| a.granted_by.is_some() && a.acquired.is_some()));
+
+        // Printed EffectFrame omits `acquired` from canonical state serialization.
+        let printed_frame = EffectFrame::new(PlayerId(0), Vec::new());
+        let printed_json = serde_json::to_value(&printed_frame).unwrap();
+        assert!(printed_json.get("acquired").is_none());
+        assert!(printed_json.get("ability_set").is_none());
     }
 }

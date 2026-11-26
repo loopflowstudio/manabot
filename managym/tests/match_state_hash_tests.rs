@@ -302,3 +302,133 @@ fn pending_turn_and_combat_schedules_are_part_of_match_identity() {
     combat.state.turn.combat_attackers = Some(managym::state::predicate::CardPredicate::creature());
     assert_ne!(combat.state.deterministic_hash(), restricted);
 }
+
+#[test]
+fn printed_ability_carriers_omit_acquired_and_effective_trigger_derives_clock() {
+    use managym::{
+        flow::trigger::{PendingTrigger, TriggerId},
+        state::{
+            ability::{
+                Ability, AbilityOrigin, EffectiveTrigger, GrantClock, GrantKey, TriggerCondition,
+                TriggerSubject,
+            },
+            game_object::{AbilitySource, PermanentId},
+            stack_object::{ActivatedAbilityOnStack, TriggeredAbilityOnStack},
+        },
+    };
+
+    let object = make_game(23).state.zones.latest().nth(3).unwrap();
+    let key = GrantKey::new(Some(PermanentId(2)), PublicId(9), Some(1));
+
+    let mut activated = ActivatedAbilityOnStack {
+        effects: Vec::new(),
+        program: false,
+        source_transforms: 0,
+        inherited_from: None,
+        id: PublicId(10),
+        controller: PlayerId(0),
+        source_definition_id: CardDefId(7),
+        source_object: object,
+        ability_index: 0,
+        targets: Vec::new(),
+        target_req_indices: Vec::new(),
+        target_divisions: Vec::new(),
+        attached: None,
+        x: 0,
+        loyalty_change: None,
+        granted_by: None,
+        acquired: None,
+        paid: Default::default(),
+    };
+    let printed_act = serde_json::to_value(&activated).unwrap();
+    assert!(printed_act.get("acquired").is_none());
+    assert!(printed_act.get("ability_set").is_none());
+    activated.acquired = Some(key);
+    assert!(serde_json::to_value(&activated)
+        .unwrap()
+        .get("acquired")
+        .is_some());
+
+    let mut triggered = TriggeredAbilityOnStack {
+        source_face: None,
+        program: false,
+        triggering_amount: 0,
+        remembered: Vec::new(),
+        source_transforms: 0,
+        id: PublicId(11),
+        controller: PlayerId(0),
+        source_identity: AbilitySource::new(object, Some(object)),
+        source_lki: None,
+        source_definition_id: CardDefId(7),
+        ability_index: 0,
+        targets: Vec::new(),
+        target_req_indices: Vec::new(),
+        context: None,
+        player: None,
+        kicked: false,
+        x: 0,
+        spent: Default::default(),
+        chosen_modes: Vec::new(),
+        inline_effects: None,
+        acquired: None,
+    };
+    let printed_trig = serde_json::to_value(&triggered).unwrap();
+    assert!(printed_trig.get("acquired").is_none());
+    assert!(printed_trig.get("ability_set").is_none());
+    triggered.acquired = Some(key);
+    assert!(serde_json::to_value(&triggered)
+        .unwrap()
+        .get("acquired")
+        .is_some());
+
+    let mut pending = PendingTrigger::new(
+        TriggerId(0),
+        PlayerId(0),
+        AbilitySource::new(object, Some(object)),
+        0,
+    );
+    let printed_pending = serde_json::to_value(&pending).unwrap();
+    assert!(printed_pending.get("acquired").is_none());
+    assert!(printed_pending.get("ability_set").is_none());
+    pending.acquired = Some(key);
+    assert!(serde_json::to_value(&pending)
+        .unwrap()
+        .get("acquired")
+        .is_some());
+
+    let once_ability = Ability::Triggered {
+        condition: TriggerCondition::OnceEachTurn {
+            condition: Box::new(TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
+            }),
+        },
+        intervening_if: None,
+        effects: Vec::new(),
+    };
+    let printed_eff = EffectiveTrigger {
+        origin: AbilityOrigin::Own,
+        acquired: None,
+        ability_index: 2,
+        ability: once_ability.clone(),
+        program: false,
+    };
+    assert_eq!(printed_eff.clock(), None);
+    let acquired_eff = EffectiveTrigger {
+        origin: AbilityOrigin::Permanent(PermanentId(2)),
+        acquired: Some(key),
+        ability_index: 3,
+        ability: once_ability,
+        program: false,
+    };
+    assert_eq!(
+        acquired_eff.clock(),
+        Some(GrantClock {
+            grant: key,
+            ability_index: 3,
+        })
+    );
+    let eff_json = serde_json::to_value(&acquired_eff).unwrap();
+    assert!(eff_json.get("acquired").is_none());
+    assert!(eff_json.get("ability_index").is_none());
+    assert!(eff_json.get("clock").is_none());
+}

@@ -2268,11 +2268,8 @@ impl Game {
             .record_activation(permanent_id, ability_index, &ability);
 
         debug_assert!(
-            ability.granted_by.is_none()
-                || ability
-                    .ability_set
-                    .is_some_and(crate::state::ability::AbilitySet::is_acquired),
-            "attached ability grant must carry an Acquired ability set"
+            ability.granted_by.is_none() || ability.acquired.is_some(),
+            "attached ability grant must carry an Acquired grant key"
         );
         let id = self.state.id_gen_mut().next_id();
         Ok(ActivatedAbilityOnStack {
@@ -2294,11 +2291,7 @@ impl Game {
             x,
             loyalty_change: ability.loyalty.map(|cost| cost.counter_change(x)),
             granted_by: ability.granted_by,
-            ability_set: ability
-                .ability_set
-                .unwrap_or(crate::state::ability::AbilitySet::Printed(
-                    source_definition_id,
-                )),
+            acquired: ability.acquired,
             paid: PaymentReceipt::default(),
         })
     }
@@ -2340,7 +2333,7 @@ impl Game {
             x: 0,
             loyalty_change: None,
             granted_by: None,
-            ability_set: crate::state::ability::AbilitySet::Printed(source_definition_id),
+            acquired: None,
             paid: PaymentReceipt::default(),
         })
     }

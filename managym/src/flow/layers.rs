@@ -6,8 +6,8 @@ use crate::{
     flow::{game::Game, statics::Characteristics},
     state::{
         ability::{
-            Ability, AbilityOrigin, AbilitySet, Condition, Effect, EffectValue, EffectiveTrigger,
-            Except, GrantClock, GrantKey, ObjectProperty, ObjectSelector, Scope,
+            Ability, AbilityOrigin, Condition, Effect, EffectValue, EffectiveTrigger, Except,
+            GrantKey, ObjectProperty, ObjectSelector, Scope,
         },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -956,23 +956,16 @@ impl<'a> Context<'a> {
                 ward: source.ward().cloned(),
                 power: source.power.unwrap_or(0),
                 toughness: source.toughness.unwrap_or(0),
-                activated_abilities: source
-                    .activated_abilities
-                    .iter()
-                    .cloned()
-                    .map(|mut ability| {
-                        ability.ability_set = Some(AbilitySet::Printed(source.definition_id));
-                        ability
-                    })
-                    .collect(),
+                activated_abilities: source.activated_abilities.clone(),
                 triggered_abilities: source
                     .abilities
                     .iter()
                     .cloned()
-                    .map(|ability| EffectiveTrigger {
+                    .enumerate()
+                    .map(|(ability_index, ability)| EffectiveTrigger {
                         origin: AbilityOrigin::Own,
-                        ability_set: AbilitySet::Printed(source.definition_id),
-                        clock: None,
+                        acquired: None,
+                        ability_index,
                         ability,
                         program: false,
                     })
@@ -1849,14 +1842,7 @@ impl<'a> Context<'a> {
             .then_some(node.key[1])
             .filter(|&slot| slot != usize::MAX);
         let grant_key = GrantKey::new(grantor, node.timestamp, static_slot);
-        let acquired = AbilitySet::Acquired(grant_key);
-        let clock = |ability: &Ability, index| {
-            let Ability::Triggered { condition, .. } = ability;
-            condition.once_each_turn().then(|| GrantClock {
-                grant: grant_key,
-                ability_index: index,
-            })
-        };
+        let acquired = Some(grant_key);
         for (ordinal, instruction) in instructions.iter().enumerate() {
             let id = instruction.target;
             let origin = if Some(id) == node.source.permanent {
@@ -1885,7 +1871,7 @@ impl<'a> Context<'a> {
                     lose_all_abilities(view, &mut object.statics);
                     view.activated_abilities.extend(
                         intrinsic_mana_ability(|name| name == subtype).map(|mut ability| {
-                            ability.ability_set = Some(acquired);
+                            ability.acquired = acquired;
                             ability
                         }),
                     );
@@ -1901,16 +1887,16 @@ impl<'a> Context<'a> {
                                 .iter()
                                 .cloned()
                                 .map(|mut ability| {
-                                    ability.ability_set = Some(acquired);
+                                    ability.acquired = acquired;
                                     ability
                                 }),
                         );
                         view.triggered_abilities.extend(
                             definition.abilities.iter().cloned().enumerate().map(
-                                |(index, ability)| EffectiveTrigger {
+                                |(ability_index, ability)| EffectiveTrigger {
                                     origin,
-                                    ability_set: acquired,
-                                    clock: clock(&ability, index),
+                                    acquired,
+                                    ability_index,
                                     ability,
                                     program: false,
                                 },
@@ -1921,8 +1907,8 @@ impl<'a> Context<'a> {
                 Operation::CatalogTrigger(ability) => {
                     view.triggered_abilities.push(EffectiveTrigger {
                         origin,
-                        ability_set: acquired,
-                        clock: clock(ability, 0),
+                        acquired,
+                        ability_index: 0,
                         ability: (**ability).clone(),
                         program: false,
                     })
@@ -1957,7 +1943,7 @@ impl<'a> Context<'a> {
                                     && !view.subtypes.iter().any(|subtype| subtype == name)
                             })
                             .map(|mut ability| {
-                                ability.ability_set = Some(acquired);
+                                ability.acquired = acquired;
                                 ability
                             });
                             view.activated_abilities.extend(gained);
@@ -2059,8 +2045,8 @@ impl<'a> Context<'a> {
                         view.firebending = view.firebending.saturating_add(*n);
                         view.triggered_abilities.push(EffectiveTrigger {
                             origin,
-                            ability_set: acquired,
-                            clock: None,
+                            acquired,
+                            ability_index: 0,
                             ability: Ability::firebending(*n),
                             program: true,
                         });
@@ -2068,14 +2054,14 @@ impl<'a> Context<'a> {
                     Modification::GrantActivated(ability) => {
                         object.dirty |= DIRTY_ACTIVATIONS;
                         let mut granted = (**ability).clone();
-                        granted.ability_set = Some(acquired);
+                        granted.acquired = acquired;
                         view.activated_abilities.push(granted);
                     }
                     Modification::GrantTriggered(ability) => {
                         view.triggered_abilities.push(EffectiveTrigger {
                             origin,
-                            ability_set: acquired,
-                            clock: clock(ability, 0),
+                            acquired,
+                            ability_index: 0,
                             ability: (**ability).clone(),
                             program: true,
                         })
@@ -2086,8 +2072,8 @@ impl<'a> Context<'a> {
                             view.ward = Some(cost.clone());
                             view.triggered_abilities.push(EffectiveTrigger {
                                 origin,
-                                ability_set: acquired,
-                                clock: None,
+                                acquired,
+                                ability_index: 0,
                                 ability: Ability::ward(cost.clone()),
                                 program: true,
                             });

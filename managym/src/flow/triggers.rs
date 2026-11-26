@@ -772,7 +772,7 @@ impl Game {
             spent: trigger.spent,
             chosen_modes: trigger.chosen_modes,
             inline_effects: trigger.inline_effects,
-            ability_set: trigger.ability_set,
+            acquired: trigger.acquired,
         }));
         self.presentation_placing(trigger.id);
         self.emit(GameEvent::AbilityTriggered {
@@ -1070,7 +1070,7 @@ impl Game {
                             .state
                             .turn
                             .used_trigger_grants
-                            .contains(source.object, grant.clock.expect("limited grant clock")),
+                            .contains(source.object, grant.clock().expect("limited grant clock")),
                     };
                     if used {
                         continue;
@@ -1148,15 +1148,8 @@ impl Game {
         {
             let controller = source.controller;
             let source_object = source.object;
-            let (ability_index, granted, program, ability_set) = match ability {
-                TriggerAbility::Printed(index) => (
-                    index,
-                    None,
-                    false,
-                    Some(crate::state::ability::AbilitySet::Printed(
-                        source.definition,
-                    )),
-                ),
+            let (ability_index, granted, program, acquired) = match ability {
+                TriggerAbility::Printed(index) => (index, None, false, None),
                 TriggerAbility::Granted(grant) => {
                     let Ability::Triggered {
                         intervening_if,
@@ -1172,7 +1165,7 @@ impl Game {
                         }],
                         None => effects.clone(),
                     };
-                    (0, Some(inline), grant.program, Some(grant.ability_set))
+                    (0, Some(inline), grant.program, grant.acquired)
                 }
             };
             let attacker = match event {
@@ -1191,7 +1184,7 @@ impl Game {
                         .state
                         .turn
                         .used_trigger_grants
-                        .record(source_object, grant.clock.expect("limited grant clock")),
+                        .record(source_object, grant.clock().expect("limited grant clock")),
                 }
             }
             let id = self.next_trigger_id();
@@ -1203,7 +1196,7 @@ impl Game {
                 player,
                 attacker,
                 inline_effects: granted,
-                ability_set,
+                acquired,
                 program,
                 ..PendingTrigger::new(
                     id,
@@ -1712,10 +1705,8 @@ impl Game {
             let id = self.next_trigger_id();
             let object = source.object;
             let controller = source.controller;
-            let definition = source.definition;
             self.state.pending_triggers_mut().push(PendingTrigger {
                 source_lki: source.lki,
-                ability_set: Some(crate::state::ability::AbilitySet::Printed(definition)),
                 ..PendingTrigger::new(
                     id,
                     controller,

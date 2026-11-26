@@ -115,7 +115,7 @@ fn stack(
                 x: 0,
                 loyalty_change: None,
                 granted_by: None,
-                ability_set: crate::state::ability::AbilitySet::Printed(source_definition_id),
+                acquired: None,
                 paid: Default::default(),
             })
         }
@@ -141,9 +141,7 @@ fn stack(
             player: None,
             chosen_modes: Vec::new(),
             inline_effects: Some(effects),
-            ability_set: Some(crate::state::ability::AbilitySet::Printed(
-                source_definition_id,
-            )),
+            acquired: None,
             x: 0,
             spent: Default::default(),
         }),
@@ -728,9 +726,7 @@ fn counter_spell_cannot_affect_an_ability() {
             what: ObjectSelector::Target(TargetSpec::Spell),
             exile: false,
         }]),
-        ability_set: Some(crate::state::ability::AbilitySet::Printed(
-            game.state[source_object].definition_id,
-        )),
+        acquired: None,
         x: 0,
         spent: Default::default(),
     }));

@@ -678,22 +678,27 @@ impl Game {
     /// CR 607.1a, 607.5: exact creating object and ability set for a linked
     /// exile write or linked read.
     ///
-    /// Printed and Layer-1 copied abilities carry `AbilitySet::Printed(def_id)`;
-    /// Layer-6 granted or inherited abilities carry `AbilitySet::Acquired(grant_key)`
-    /// so abilities acquired together through one effect pair with each other and
-    /// never with the permanent's printed abilities or any other grant.
+    /// Layer-6 granted or inherited abilities carry `acquired: Some(grant_key)`
+    /// (`AbilitySet::Acquired(grant_key)`) so abilities acquired together
+    /// through one effect pair with each other and never with the permanent's
+    /// printed abilities or any other grant; printed and Layer-1 copied
+    /// abilities carry `acquired: None` and derive `AbilitySet::Printed(def)`
+    /// here.
     pub(crate) fn linked_ability_source(
         &self,
         frame: &EffectFrame,
     ) -> Option<crate::state::ability::LinkedAbilitySource> {
         let creator = frame.source_ref()?;
-        let set = frame.ability_set.unwrap_or_else(|| {
-            let def = frame
-                .ability_face
-                .or_else(|| self.observed_source_definition(creator))
-                .unwrap_or_else(|| self.state.source_base(creator).0);
-            crate::state::ability::AbilitySet::Printed(def)
-        });
+        let set = match frame.acquired {
+            Some(key) => crate::state::ability::AbilitySet::Acquired(key),
+            None => {
+                let def = frame
+                    .ability_face
+                    .or_else(|| self.observed_source_definition(creator))
+                    .unwrap_or_else(|| self.state.source_base(creator).0);
+                crate::state::ability::AbilitySet::Printed(def)
+            }
+        };
         Some(crate::state::ability::LinkedAbilitySource::new(
             creator, set,
         ))
@@ -754,7 +759,7 @@ impl Game {
             targets,
             attached: ability.attached,
             grantor: ability.granted_by.map(|grant| grant.grantor),
-            ability_set: Some(ability.ability_set),
+            acquired: ability.acquired,
             ..EffectFrame::new(
                 ability.controller,
                 crate::state::ability::bind_effect_clauses(effects),
@@ -806,7 +811,7 @@ impl Game {
             triggering_player: triggered.player,
             ability,
             ability_face: ability.map(|_| triggered.source_definition_id),
-            ability_set: triggered.ability_set,
+            acquired: triggered.acquired,
             ..EffectFrame::new(
                 triggered.controller,
                 crate::state::ability::bind_effect_clauses(effects),
@@ -2298,7 +2303,7 @@ impl Game {
                 trigger.x = frame.x;
                 trigger.spent = frame.spent.clone();
                 trigger.player = frame.triggering_player;
-                trigger.ability_set = frame.ability_set;
+                trigger.acquired = frame.acquired;
                 None
             }
             Effect::MayOnceEachTurn { effects } => {

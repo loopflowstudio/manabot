@@ -109,8 +109,10 @@ pub struct ActivatedAbilityOnStack {
     /// its grant, fixed at activation (`ability_index` names the grantee's list).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub granted_by: Option<AbilityGrant>,
-    /// CR 607.1, 607.5: the ability set this activated ability belongs to.
-    pub ability_set: super::ability::AbilitySet,
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited this
+    /// activated ability, or `None` for printed / Layer-1 copied abilities.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acquired: Option<super::ability::GrantKey>,
     /// What activating it paid (CR 602.2b): the mana spent and the objects
     /// tapped, sacrificed, discarded or exiled for its cost.
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
@@ -175,9 +177,10 @@ pub struct TriggeredAbilityOnStack {
     /// Non-printed triggers (delayed, reflexive, granted, firebending)
     /// resolve these effects instead of `Object::abilities[ability_index]`.
     pub inline_effects: Option<Vec<Effect>>,
-    /// CR 607.1, 607.5: the ability set this triggered ability belongs to.
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited this
+    /// triggered ability, or `None` for printed / Layer-1 copied abilities.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ability_set: Option<super::ability::AbilitySet>,
+    pub acquired: Option<super::ability::GrantKey>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]

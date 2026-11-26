@@ -3390,7 +3390,7 @@ pub enum AbilityOrigin {
 /// `HasAbilitiesOfSource` choice carries a distinct timestamp.
 ///
 /// Stores slots as `Option<NonZeroU32>` (`slot + 1`) so `GrantKey` stays
-/// 12 bytes and `Option<AbilitySet>` fits in 16 bytes inline on `EffectFrame`.
+/// compact inline on `EffectFrame` and stack carriers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GrantKey {
     grantor_plus_one: Option<std::num::NonZeroU32>,
@@ -3440,18 +3440,17 @@ impl serde::Serialize for GrantKey {
 }
 
 /// CR 607.1 / 607.5: the set an ability was printed in or acquired with.
+///
+/// Ability carriers store `acquired: Option<GrantKey>` (`None` for printed or
+/// Layer-1 copied abilities); `AbilitySet` is derived once in
+/// `Game::linked_ability_source` and stored on [`LinkedAbilitySource`] and
+/// `ExileLink`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum AbilitySet {
     /// CR 607.1, 607.1a–b; Layer-1 copies establish a new printed set.
     Printed(crate::card::CardDefId),
     /// CR 607.5: abilities acquired together through one Layer-6 effect.
     Acquired(GrantKey),
-}
-
-impl AbilitySet {
-    pub fn is_acquired(self) -> bool {
-        matches!(self, Self::Acquired(_))
-    }
 }
 
 /// CR 607.1a, 607.5: the exact creating object and ability set latched onto a
@@ -3482,14 +3481,29 @@ pub struct EffectiveTrigger {
     /// Battlefield inspection uses the live origin before this trigger leaves play.
     #[serde(skip)]
     pub origin: AbilityOrigin,
-    /// CR 607.1, 607.5: the ability set this trigger belongs to.
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited this
+    /// trigger, or `None` for printed / Layer-1 copied triggers.
     #[serde(skip)]
-    pub ability_set: AbilitySet,
-    /// Grant timestamp, static ability slot and inherited ability slot for a once-per-turn clock.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub clock: Option<GrantClock>,
+    pub acquired: Option<GrantKey>,
+    /// Slot within an inherited multi-ability grant (0 for single-ability grants),
+    /// paired with `acquired` to derive a once-per-turn [`GrantClock`].
+    #[serde(skip)]
+    pub ability_index: usize,
     pub ability: Ability,
     pub program: bool,
+}
+
+impl EffectiveTrigger {
+    /// Once-per-turn clock identity for an acquired trigger, derived from
+    /// `(acquired, ability_index)`.
+    pub fn clock(&self) -> Option<GrantClock> {
+        let Ability::Triggered { condition, .. } = &self.ability;
+        let grant = self.acquired?;
+        condition.once_each_turn().then_some(GrantClock {
+            grant,
+            ability_index: self.ability_index,
+        })
+    }
 }
 
 /// Identifies one limited ability supplied by a continuous effect. Several

@@ -234,9 +234,10 @@ pub struct EffectFrame {
     pub ability: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ability_face: Option<crate::state::card::CardDefId>,
-    /// CR 607.1, 607.5: the ability set of the resolving ability.
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited the
+    /// resolving ability, or `None` for printed / Layer-1 copied abilities.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ability_set: Option<crate::state::ability::AbilitySet>,
+    pub acquired: Option<crate::state::ability::GrantKey>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
     pub completion: FrameCompletion,
@@ -313,7 +314,7 @@ impl EffectFrame {
             grantor: None,
             ability: None,
             ability_face: None,
-            ability_set: None,
+            acquired: None,
             queue: effects.into(),
             completion: FrameCompletion::Priority,
         }
@@ -343,7 +344,7 @@ impl EffectFrame {
             grantor: self.grantor,
             ability: self.ability,
             ability_face: self.ability_face,
-            ability_set: self.ability_set,
+            acquired: self.acquired,
             ..Self::new(self.controller, effects)
         }
     }

@@ -96,8 +96,9 @@ pub struct PendingTrigger {
     /// their effects inline instead of referencing `Object::abilities`
     /// (`ability_index` is unused when set).
     pub inline_effects: Option<Vec<Effect>>,
-    /// CR 607.1, 607.5: the ability set this trigger belongs to.
-    pub ability_set: Option<crate::state::ability::AbilitySet>,
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited this
+    /// trigger, or `None` for printed / Layer-1 copied triggers.
+    pub acquired: Option<crate::state::ability::GrantKey>,
 }
 
 /// A delayed triggered ability (CR 603.7) waiting for its event. It fires
@@ -232,7 +233,7 @@ impl PendingTrigger {
             source_lki: None,
             ordering_class: TriggerOrderingClass::Ordinary,
             inline_effects: None,
-            ability_set: None,
+            acquired: None,
             program: false,
             remembered: Vec::new(),
             targets: Vec::new(),
@@ -325,8 +326,8 @@ impl serde::Serialize for PendingTrigger {
             map.serialize_entry("modes_chosen", &true)?;
         }
         map.serialize_entry("inline_effects", &self.inline_effects)?;
-        if self.ability_set.is_some() {
-            map.serialize_entry("ability_set", &self.ability_set)?;
+        if self.acquired.is_some() {
+            map.serialize_entry("acquired", &self.acquired)?;
         }
         map.end()
     }
