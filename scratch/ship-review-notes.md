@@ -43,3 +43,10 @@
 - Deprecate the unused `compound_offers` / `compound_commands_json` / `structured_offers` / `step_structured` methods for `0.3.0` (patch-clean `main`) so `managym` has one grouped-decision surface.
 - Align Academy's server/protocol cleanly with the new `managym` decision/choice model (while keeping `protocol/experience-v1.schema.json` frozen for replay `frame_hash` parity) and fix the two CI failures on PR #623 (`test_group_command.py:226` 405 vs 404, and `e2e/fixtures/combat.ts:319` `showEachCreaturesChoice` for library groups).
 - No follow-up Tasks filed yet; keep them for the next `ship-review` after Pass 4.
+
+## Headless ship-review pass (2026-11-26, nobody present)
+
+- No new words from Jack Heart. Prior approval (item 9) stands; the renames he asked for after it (item 8) are on the branch.
+- Fixed here: `conformance/public_commitment_parity.py` still listed the renamed `managym/src/agent/structured_offer.rs`.
+- Filed `c44b11` (Academy wave): Pick, Amounts and OrderTriggers DecisionGroup kinds, plus the ChoosePile opponent UI test and the discard-payment instruction text.
+- Open questions for Jack are on `scratch/ship-review.html` §6.

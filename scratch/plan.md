@@ -79,9 +79,9 @@ with no Academy involved:
   `step_structured`, and `combat_preview_json` / `managym/combat.py` warn for
   removal in `0.3.0`; `structured_search_offers` stays.
 
-Types live in `managym/group.py`; the native layer is `managym/src/flow/group/`
+Types live in `managym/decision_group.py`; the native layer is `managym/src/flow/decision_group/`
 (`mod.rs` driver, `combat.rs`, `library.rs`); Academy reads it through
-`GameSession.live_group()`, `POST /api/sessions/{id}/group-preview`, and WS
+`GameSession.live_decision_group()`, `POST /api/sessions/{id}/decision-group-preview`, and WS
 `group_command` in `managym/academy/server.py`.
 
 ## Decisions that still explain the approach
@@ -126,8 +126,8 @@ Types live in `managym/group.py`; the native layer is `managym/src/flow/group/`
   hidden during a board walk.
 
 - Pass 5 left no recorded test results in `scratch/`: gate runs debug
-  `cargo nextest` for `managym/tests/rules/group.rs`, `uv run python -m pytest
-  tests/env/test_group.py tests/academy/test_group_command.py`, vitest for
+  `cargo nextest` for `managym/tests/rules/decision_group.rs`, `uv run python -m pytest
+  tests/env/test_decision_group.py tests/academy/test_decision_group_command.py`, vitest for
   `academy/ui/src/lib/{group,game.svelte,board/partition}.test.ts`, Playwright
   `e2e/partition-piles.spec.ts` and `e2e/grouped-decisions.spec.ts`, and
   `uv run python scripts/public_api.py check`.
