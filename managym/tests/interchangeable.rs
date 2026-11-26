@@ -2438,3 +2438,214 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
         vec![0, 2]
     );
 }
+
+#[test]
+fn london_mulligan_bottom_putting_folds_duplicates_and_skips_seven_identical() {
+    use std::collections::BTreeSet;
+
+    // 1. Mixed hand with duplicates: bottom-putting folds identical cards into
+    //    one SelectCard offer per distinct card, exposing the rest as aliases.
+    let mixed = deck(&[("Forest", 20), ("Llanowar Elves", 20)]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", mixed.clone()),
+            PlayerConfig::new("p1", mixed),
+        ],
+        213,
+        true,
+    );
+    game.step(1).unwrap(); // Seat 0 mulligans.
+    game.step(0).unwrap(); // Seat 1 keeps.
+
+    let hand = game.state.zones.zone_objects(ZoneType::Hand, PlayerId(0));
+    assert_eq!(hand.len(), 7);
+    let distinct_names: BTreeSet<&str> = hand
+        .iter()
+        .map(|&obj| game.state[obj].name.as_str())
+        .collect();
+    assert!(
+        distinct_names.len() < 7,
+        "mixed hand must contain duplicate cards to test folding"
+    );
+
+    let space = game.action_space().unwrap();
+    assert_eq!(space.player, Some(PlayerId(0)));
+    assert!(space
+        .actions
+        .iter()
+        .all(|a| matches!(a, Action::SelectCard { .. })));
+    assert_eq!(space.actions.len(), distinct_names.len());
+    assert_eq!(space.actions.len() + game.action_aliases().len(), 7);
+
+    let decision = game.decision(Some(PlayerId(0))).expect("active decision");
+    assert_eq!(decision.offers.len(), distinct_names.len());
+    let total_covered: usize = decision.offers.iter().map(|o| 1 + o.aliases.len()).sum();
+    assert_eq!(total_covered, 7);
+
+    // Selecting one folded card bottoms it and moves to the next keep/mulligan decision.
+    game.step(0).unwrap();
+    assert_eq!(
+        game.state
+            .zones
+            .zone_objects(ZoneType::Hand, PlayerId(0))
+            .len(),
+        6
+    );
+    assert_eq!(game.action_space().unwrap().kind, ActionSpaceKind::Modal);
+
+    // 2. Seven identical cards with skip_trivial=true: folds to one legal
+    //    SelectCard and auto-skips straight to the next keep/mulligan decision.
+    let mono = deck(&[("Mountain", 40)]);
+    let mut skipped = Game::new(
+        vec![
+            PlayerConfig::new("p0", mono.clone()),
+            PlayerConfig::new("p1", mono.clone()),
+        ],
+        213,
+        true,
+    );
+    skipped.step(1).unwrap(); // Seat 0 mulligans.
+    skipped.step(0).unwrap(); // Seat 1 keeps; seat 0's 7-Mountain bottom skips automatically.
+    assert_eq!(
+        skipped
+            .state
+            .zones
+            .zone_objects(ZoneType::Hand, PlayerId(0))
+            .len(),
+        6
+    );
+    assert_eq!(skipped.action_space().unwrap().kind, ActionSpaceKind::Modal);
+
+    // 3. Seven identical cards with skip_trivial=false: exposes 1 SelectCard
+    //    offer with 6 aliases.
+    let mut unskipped = Game::new(
+        vec![
+            PlayerConfig::new("p0", mono.clone()),
+            PlayerConfig::new("p1", mono),
+        ],
+        213,
+        false,
+    );
+    unskipped.step(1).unwrap();
+    unskipped.step(0).unwrap();
+    let unskipped_space = unskipped.action_space().unwrap();
+    assert_eq!(unskipped_space.actions.len(), 1);
+    assert!(matches!(
+        unskipped_space.actions[0],
+        Action::SelectCard { .. }
+    ));
+    assert_eq!(unskipped.action_aliases().len(), 6);
+    let unskipped_decision = unskipped
+        .decision(Some(PlayerId(0)))
+        .expect("active unskipped bottom decision");
+    assert_eq!(unskipped_decision.offers.len(), 1);
+    assert_eq!(unskipped_decision.offers[0].aliases.len(), 6);
+}
+
+#[test]
+fn decision_group_exposes_offer_aliases_and_normalizes_combat_submit() {
+    use managym::flow::decision_group::{DecisionChoice, DecisionOutcome, PlannedBlock};
+
+    // 1. DecisionOffer.aliases mirrors folded payment offers and omits empty aliases in JSON.
+    let entries = [
+        ("Kyoshi Village", 4),
+        ("Plains", 24),
+        ("Youthful Knight", 12),
+    ];
+    let mut pay_game = position(
+        &["Kyoshi Village", "Plains", "Plains", "Plains"],
+        &entries,
+        "Youthful Knight",
+    );
+    cast_first(&mut pay_game);
+    let decision = pay_game
+        .decision(Some(PlayerId(0)))
+        .expect("active payment decision");
+    assert_eq!(decision.offers.len(), 3);
+    assert!(decision.offers[0].aliases.is_empty());
+    assert_eq!(decision.offers[1].aliases.len(), 2);
+    assert!(decision.offers[2].aliases.is_empty());
+    let json_val = serde_json::to_value(&decision).unwrap();
+    assert!(json_val["offers"][0].get("aliases").is_none());
+    assert_eq!(
+        json_val["offers"][1]["aliases"].as_array().unwrap().len(),
+        2
+    );
+    assert!(json_val["offers"][2].get("aliases").is_none());
+
+    // 2. Game::submit on grouped DeclareAttackers normalizes a non-canonical
+    //    subset (only the last-asked of 3 identical tokens).
+    let combat_entries = [("Mountain", 24), ("Gray Ogre", 16)];
+    let mut atk_game = position(&["Mountain"], &combat_entries, "Gray Ogre");
+    let p0 = PlayerId(0);
+    let p1 = PlayerId(1);
+    let mut tokens = Vec::new();
+    for _ in 0..3 {
+        let id = atk_game.create_token("token.ally", p0).unwrap();
+        atk_game.state.permanents[id]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
+        tokens.push(id);
+    }
+    atk_game.scenario_refresh_priority().unwrap();
+    advance_to_step(
+        &mut atk_game,
+        p0,
+        managym::flow::turn::StepKind::DeclareAttackers,
+    );
+    let atk_decision = atk_game.decision(Some(p0)).expect("attackers group");
+    let atk_events_from = atk_game.state.observation_events.len();
+    let atk_choice = DecisionChoice::DeclareAttackers {
+        attackers: vec![render_perm(&atk_game, tokens[0]).into()],
+    };
+    let atk_preview = atk_game
+        .submit(Some(&atk_decision.address), &atk_choice)
+        .expect("grouped attack submit normalizes non-canonical subset");
+    assert!(atk_preview.complete && atk_preview.refused.is_none());
+    match atk_preview.outcome {
+        Some(DecisionOutcome::DeclareAttackers { attackers }) => assert_eq!(attackers.len(), 1),
+        other => panic!("unexpected outcome: {other:?}"),
+    }
+    assert_eq!(declared_attacker_count(&atk_game, atk_events_from), 1);
+
+    // 3. Game::submit on grouped DeclareBlockers normalizes split blocks over
+    //    non-canonical blockers and a folded attacker alias.
+    let mut blk_game = position(&["Mountain"], &combat_entries, "Gray Ogre");
+    let mut att = Vec::new();
+    for _ in 0..2 {
+        let id = blk_game.create_token("token.ally", p0).unwrap();
+        blk_game.state.permanents[id]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
+        att.push(id);
+    }
+    let mut blk = Vec::new();
+    for _ in 0..3 {
+        blk.push(blk_game.create_token("token.ally", p1).unwrap());
+    }
+    declare_all_attackers_and_advance_to_blockers(&mut blk_game, p0);
+    let blk_decision = blk_game.decision(Some(p1)).expect("blockers group");
+    let blk_events_from = blk_game.state.observation_events.len();
+    let blk_choice = DecisionChoice::DeclareBlockers {
+        blocks: vec![
+            PlannedBlock {
+                blocker: render_perm(&blk_game, blk[1]),
+                attacker: render_perm(&blk_game, att[0]),
+            },
+            PlannedBlock {
+                blocker: render_perm(&blk_game, blk[0]),
+                attacker: render_perm(&blk_game, att[1]),
+            },
+        ],
+    };
+    let blk_preview = blk_game
+        .submit(Some(&blk_decision.address), &blk_choice)
+        .expect("grouped blocker submit normalizes aliases");
+    assert!(blk_preview.complete && blk_preview.refused.is_none());
+    assert_eq!(
+        declared_blocker_counts(&blk_game, blk_events_from, 2),
+        vec![1, 1]
+    );
+}

@@ -808,7 +808,7 @@ pub struct PaidView {
     pub object: Option<DecisionObjectView>,
 }
 
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DecisionObjectView {
     pub entity_id: u32,

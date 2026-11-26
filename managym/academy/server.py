@@ -2849,14 +2849,21 @@ class GameSession:
             offer_id: int(action["index"]) for offer_id, action in enumerate(actions)
         }
         subjects = json.loads(self.env.decision_offer_subjects_json(viewer))
-        aliases = json.loads(self.env.decision_offer_aliases_json(viewer))
+        active_decision = self.env.decision(viewer=viewer)
+        decision_offers = active_decision.offers if active_decision is not None else []
         offers = [
             {
                 "id": offer_id,
                 **({"subjects": subjects[offer_id]} if subjects[offer_id] else {}),
                 **(
-                    {"aliases": aliases[offer_id]}
-                    if offer_id < len(aliases) and aliases[offer_id]
+                    {
+                        "aliases": [
+                            alias.model_dump(mode="json")
+                            for alias in decision_offers[offer_id].aliases
+                        ]
+                    }
+                    if offer_id < len(decision_offers)
+                    and decision_offers[offer_id].aliases
                     else {}
                 ),
                 "actor": viewer,

@@ -13,7 +13,12 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, TypeAdapter
 
-from managym.experience import ObjectRenderId, ProtocolModel, SubjectRef
+from managym.experience import (
+    DecisionObjectView,
+    ObjectRenderId,
+    ProtocolModel,
+    SubjectRef,
+)
 
 LibraryEnd = Literal["top", "bottom"]
 
@@ -62,6 +67,9 @@ class Offer(ProtocolModel):
     verb: str
     label: str
     source: SubjectRef | None = None
+    aliases: list[DecisionObjectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
 
 
 class DecisionBase(ProtocolModel):

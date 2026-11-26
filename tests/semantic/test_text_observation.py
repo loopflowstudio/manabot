@@ -128,13 +128,21 @@ def test_reset_and_offline_capture_cannot_execute() -> None:
 
 def test_opening_capture_renders_bottom_order_and_pregame_entry() -> None:
     env = managym.Env(seed=23)
-    env.reset([managym.PlayerConfig(seat, {"Leyline Axe": 40}) for seat in ("a", "b")])
+    env.reset(
+        [
+            managym.PlayerConfig(seat, {"Leyline Axe": 20, "Plains": 20})
+            for seat in ("a", "b")
+        ]
+    )
     env.step(1)  # First seat mulligans.
     env.step(0)  # Second seat keeps.
     bottom = capture_text_decision(env)
     assert "1 card left to bottom" in bottom.text
     assert "active target clause" not in bottom.text
-    assert len(bottom.actions) == 7
+    assert len(bottom.actions) == 2
+    active = env.decision(0)
+    assert active is not None
+    assert sum(1 + len(offer.aliases) for offer in active.offers) == 7
     env.step(0)  # Choose the exact bottom card.
     env.step(0)  # Keep the redraw.
     entry = capture_text_decision(env)
@@ -195,16 +203,40 @@ def test_unsupported_or_inconsistent_capture_fails_closed(mutation: str) -> None
 
 
 def test_duplicate_card_choices_have_distinct_aliases_and_commands() -> None:
-    env = priority_root(("Lightning Bolt", "Lightning Bolt"), ("Mountain", "Mountain"))
-    decision = capture_text_decision(env)
+    # Indistinguishable hand copies fold to one Cast offer with one alias;
+    # distinguishable same-named permanents (here, one ready and one summoning
+    # sick) stay separate with distinct text aliases and Commands.
+    folded = priority_root(
+        ("Lightning Bolt", "Lightning Bolt"), ("Mountain", "Mountain")
+    )
+    folded_decision = capture_text_decision(folded)
     casts = [
-        action for action in decision.actions if action.description.startswith("Cast ")
+        action
+        for action in folded_decision.actions
+        if action.description.startswith("Cast ")
     ]
-    assert len(casts) == 2
-    assert casts[0].description != casts[1].description
+    assert len(casts) == 1
+    active = folded.decision(0)
+    assert active is not None and len(active.offers[0].aliases) == 1
+
+    env = priority_root(
+        ("Lightning Bolt",),
+        ("Mountain", "Gray Ogre"),
+        opponent=("Gray Ogre",),
+    )
+    _choose(env, "Cast ")
+    decision = capture_text_decision(env)
+    ogre_targets = [
+        action
+        for action in decision.actions
+        if "Gray Ogre" in action.description
+        and action.description.startswith("Target ")
+    ]
+    assert len(ogre_targets) == 2
+    assert ogre_targets[0].description != ogre_targets[1].description
     assert (
-        resolve_action(decision, casts[0].reference).offer_id
-        != resolve_action(decision, casts[1].reference).offer_id
+        resolve_action(decision, ogre_targets[0].reference).offer_id
+        != resolve_action(decision, ogre_targets[1].reference).offer_id
     )
 
 
@@ -509,9 +541,7 @@ def test_stack_text_states_granted_spell_keywords_only_when_present() -> None:
     decision = capture_text_decision(env)
     assert "granted keywords" not in decision.text
     payload = json.loads(decision.capture_json)
-    keywords = {
-        name: name == "lifelink" for name in _KEYWORDS if name != "changeling"
-    }
+    keywords = {name: name == "lifelink" for name in _KEYWORDS if name != "changeling"}
     payload["observation"]["viewer_state"]["stack_objects"][0]["granted_keywords"] = (
         keywords
     )
@@ -1484,9 +1514,7 @@ def test_protection_and_hexproof_reach_both_viewer_presentations() -> None:
     board = serialize_observation(_viewer_observation(decision))["agent"]
     assert board["hexproof"]
     assert any(p.get("hexproof_from") == ["black"] for p in board["battlefield"])
-    assert any(
-        p.get("protection_from") == ["everything"] for p in board["battlefield"]
-    )
+    assert any(p.get("protection_from") == ["everything"] for p in board["battlefield"])
     _choose(env, "Cast ")
     choices = [action.description for action in capture_text_decision(env).actions]
     assert "Target You" in choices
@@ -1501,7 +1529,9 @@ def test_changeling_reaches_the_elf_anthem_and_viewer_text() -> None:
     decision = capture_text_decision(env)
     assert "effective keywords changeling" in decision.text
     board = serialize_observation(_viewer_observation(decision))["agent"]["battlefield"]
-    mauler = next(permanent for permanent in board if permanent["name"] == "Taurean Mauler")
+    mauler = next(
+        permanent for permanent in board if permanent["name"] == "Taurean Mauler"
+    )
     assert mauler["keywords"] == ["changeling"]
     assert (mauler["power"], mauler["toughness"]) == (3, 3)
 
@@ -1517,9 +1547,7 @@ def test_permanent_control_and_blocked_status_are_visible() -> None:
     opp_ogre = state["opponent_permanents"][0]
     opp_ogre.update(entry_controller_id=agent_id)
     lines = render_decision(_redigest(payload)).text.splitlines()
-    my_line = next(
-        line for line in lines if "entered under Opponent's control" in line
-    )
+    my_line = next(line for line in lines if "entered under Opponent's control" in line)
     assert "; blocked;" in my_line and "; attacking;" in my_line
     assert any("entered under your control" in line for line in lines)
 
@@ -2428,7 +2456,15 @@ def test_distinct_long_game_decision_memory_fits_default_text_budget(
     # emitted by this game, with changing turn/step/hand/board/source snapshots;
     # no repeated prefix or hand-written chronological records size this proof.
     env = managym.Env(seed=7, decision_memory=True)
-    deck = {"Mountain": 60, "Island": 20, "Gray Ogre": 120}
+    deck = {
+        "Mountain": 40,
+        "Island": 20,
+        "Gray Ogre": 30,
+        "Hill Giant": 30,
+        "Wind Drake": 30,
+        "Boggart Brute": 30,
+        "Shivan Dragon": 20,
+    }
     configs = [managym.PlayerConfig(name, deck) for name in ("a", "b")]
     env.reset(managym.GameSetup(configs, decklists=disclosure))
     remaining = [595, 1024]
@@ -2462,7 +2498,7 @@ def test_distinct_long_game_decision_memory_fits_default_text_budget(
                 managym.ActionEnum.PRIORITY_PLAY_LAND,
                 managym.ActionEnum.PRIORITY_CAST_SPELL,
             )
-            and len(obs.agent_permanents) < 8
+            and len(obs.agent_permanents) < 14
         ]
         peaceful = [
             i
@@ -2566,7 +2602,7 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
     )
     matchup = manifest["matchup"]
     # A seed whose uniformly random game is still live after 600 steps.
-    env = managym.Env(seed=379, decision_memory=True)
+    env = managym.Env(seed=14, decision_memory=True)
     raw, _ = env.reset(
         [
             managym.PlayerConfig(role, matchup[role]["cards"])
@@ -2574,13 +2610,13 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
         ]
     )
     keep_opening_hands(env, raw)
-    rng = random.Random(379)
+    rng = random.Random(14)
     for _ in range(600):
         env.step(rng.randrange(env.action_count()))
     memory = read_records(
         env.observation_for_player(env.current_agent_index()).decision_memory_json()
     )
-    assert len(memory) == 428
+    assert len(memory) == 412
     decision = capture_text_decision(env)
     _assert_memory_contexts(decision.text, memory)
     assert len({r.context.model_dump_json() for r in memory}) > 250
@@ -2615,7 +2651,10 @@ def test_manual_mana_sources_reach_text_commands_and_policy_input() -> None:
     assert any(
         "Pay the offered cost" in action.description for action in payment.actions
     )
-    assert len(payment.actions) == 5
+    assert len(payment.actions) == 3
+    active = env.decision(0)
+    assert active is not None
+    assert [len(offer.aliases) for offer in active.offers] == [1, 1, 0]
     _assert_policy_input_holds_the_decision(env, payment)
     submit_response(env, payment, source.reference)
     following = capture_text_decision(env)
@@ -2914,12 +2953,16 @@ def test_retarget_and_keep_permanents_surface_in_text_and_academy() -> None:
         opponent=("Gray Ogre",),
     )
     _choose(env, "Cast ")
-    while decision_surface_view(env, 0)["decision_context"]["stage"] != "keep_permanents":
+    while (
+        decision_surface_view(env, 0)["decision_context"]["stage"] != "keep_permanents"
+    ):
         _choose(env, "Pass")
     decision = capture_text_decision(env)
     assert "Stage: keep permanents." in decision.text
     _assert_policy_input_holds_the_decision(env, decision)
-    assert decision_surface_view(env, 0)["decision_context"]["stage"] == "keep_permanents"
+    assert (
+        decision_surface_view(env, 0)["decision_context"]["stage"] == "keep_permanents"
+    )
 
     copy_env = priority_root(
         ("Teach by Example", "Biogenic Upgrade"),
@@ -2956,12 +2999,23 @@ def test_retarget_and_keep_permanents_surface_in_text_and_academy() -> None:
 
 def test_savage_ventmaw_end_of_turn_mana_renders_in_text_and_academy() -> None:
     env = priority_root((), ("Savage Ventmaw",), opponent=())
-    while not env.is_game_over() and not env.observation_for_player(0).agent.pooled_mana_classes:
+    while (
+        not env.is_game_over()
+        and not env.observation_for_player(0).agent.pooled_mana_classes
+    ):
         decision = capture_text_decision(env)
         action = next(
-            (a for a in decision.actions if "Attack with Savage Ventmaw" in a.description),
+            (
+                a
+                for a in decision.actions
+                if "Attack with Savage Ventmaw" in a.description
+            ),
             next(
-                (a for a in decision.actions if "Pass" in a.description or "Decline" in a.description),
+                (
+                    a
+                    for a in decision.actions
+                    if "Pass" in a.description or "Decline" in a.description
+                ),
                 decision.actions[0],
             ),
         )

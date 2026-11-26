@@ -480,16 +480,24 @@ def test_explicit_legal_prefix_keeps_first_actions_in_scalar_and_vector_buffers(
 
 
 def test_first_64_legal_actions_preserve_membership_mapping_and_masks() -> None:
+    defs = json.loads(managym.card_definitions_json())
+    distinct_lands = [
+        card["name"]
+        for card in defs
+        if not card["is_token"] and "Land" in card["types"]["types"]
+    ][:70]
+    assert len(distinct_lands) == 70
+    deck = {name: 1 for name in distinct_lands}
     scalar = managym.Env(seed=213, skip_trivial=True)
-    players = [managym.PlayerConfig(name, {"Mountain": 100}) for name in ("a", "b")]
+    players = [managym.PlayerConfig(name, deck) for name in ("a", "b")]
     scalar.reset(players)
     scalar.step(0)
     scalar.step(0)
     scalar.scenario_clear_hand(0)
-    for _ in range(70):
-        scalar.scenario_force_card_in_hand(0, "Mountain")
+    for name in distinct_lands:
+        scalar.scenario_force_card_in_hand(0, name)
     obs = scalar.scenario_refresh()
-    assert len(obs.action_space.actions) == 71  # 70 individually legal lands + pass.
+    assert len(obs.action_space.actions) == 71  # 70 distinct legal lands + pass.
     before = scalar.state_digest()
     frame = json.loads(scalar.semantic_decision_frame_json())
     full = encode_observation(
@@ -565,8 +573,15 @@ def test_captured_vector_records_native_support_before_policy_step(
         vector.set_buffers(
             allocate_vector_buffers(space, 1), "first-legal", layout=space.layout
         )
+        distinct_lands = {
+            "Mountain": 6,
+            "Forest": 6,
+            "Plains": 6,
+            "Island": 6,
+            "Swamp": 6,
+        }
         vector.reset_all_into_buffers(
-            [managym.PlayerConfig(name, {"Mountain": 30}) for name in ("a", "b")]
+            [managym.PlayerConfig(name, distinct_lands) for name in ("a", "b")]
         )
         vector.step_into_buffers([0])
         vector.step_into_buffers([0])

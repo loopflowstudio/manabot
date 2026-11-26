@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::agent::action::{Action, ActionSpaceKind, AgentError};
 use crate::agent::decision_surface::DecisionVerb;
 use crate::cards::content_pack::default_content_pack;
-use crate::experience::{ObjectRenderId, OfferSubjectView, SubjectRef};
+use crate::experience::{DecisionObjectView, ObjectRenderId, OfferSubjectView, SubjectRef};
 use crate::flow::decision::Decision;
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
@@ -122,6 +122,8 @@ pub struct DecisionOffer {
     pub verb: DecisionVerb,
     pub label: String,
     pub source: Option<SubjectRef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<DecisionObjectView>,
 }
 
 /// The active decision a viewer faces now, carrying its bound address, raw
@@ -653,6 +655,7 @@ fn project_offers(
     frame: &crate::decision::DecisionFrame,
 ) -> Vec<DecisionOffer> {
     let subjects = game.decision_offer_subjects(actor);
+    let mut aliases = game.decision_offer_aliases(actor);
     let space = game.action_space();
     frame
         .offers
@@ -661,6 +664,10 @@ fn project_offers(
         .map(|(index, offer)| {
             let offer_subjects = subjects.get(index).map(Vec::as_slice).unwrap_or(&[]);
             let source = primary_subject(offer_subjects);
+            let offer_aliases = aliases
+                .get_mut(index)
+                .map(std::mem::take)
+                .unwrap_or_default();
             let label = space
                 .and_then(|s| {
                     s.actions.get(index).map(|action| {
@@ -675,6 +682,7 @@ fn project_offers(
                 verb: offer.verb,
                 label,
                 source,
+                aliases: offer_aliases,
             }
         })
         .collect()

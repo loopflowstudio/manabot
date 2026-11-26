@@ -416,3 +416,40 @@ def test_decision_surface_and_deprecated_structured_search_offers_alias() -> Non
     with pytest.warns(DeprecationWarning, match="0.3.0"):
         legacy = env.structured_search_offers()
     assert legacy.projection_json() == surface.projection_json()
+
+
+def test_decision_offers_expose_folded_aliases() -> None:
+    env = _setup_env(
+        {"Kyoshi Village": 4, "Plains": 24, "Youthful Knight": 12},
+        {"Plains": 40},
+        seed=7,
+    )
+    _keep_opening_hands(env)
+    env.scenario_clear_hand(0)
+    env.scenario_force_card_in_hand(0, "Youthful Knight")
+    env.scenario_force_card_in_hand(0, "Youthful Knight")
+    env.scenario_force_battlefield(0, "Kyoshi Village", ready=True)
+    for _ in range(3):
+        env.scenario_force_battlefield(0, "Plains", ready=True)
+    env.scenario_refresh()
+
+    priority = env.decision(0)
+    assert isinstance(priority, SingleDecision)
+    cast_offer = next(o for o in priority.offers if o.label == "Cast Youthful Knight")
+    assert len(cast_offer.aliases) == 1
+    env.submit(cast_offer.id, at=priority.address)
+
+    payment = env.decision(0)
+    assert isinstance(payment, SingleDecision)
+    assert [o.label for o in payment.offers] == [
+        "Tap Kyoshi Village for {G}/{W}",
+        "Tap Plains for {W}",
+        "Pay cost",
+    ]
+    assert payment.offers[0].aliases == []
+    assert len(payment.offers[1].aliases) == 2
+    assert payment.offers[2].aliases == []
+    dumped = payment.model_dump(mode="json")
+    assert "aliases" not in dumped["offers"][0]
+    assert len(dumped["offers"][1]["aliases"]) == 2
+    assert "aliases" not in dumped["offers"][2]

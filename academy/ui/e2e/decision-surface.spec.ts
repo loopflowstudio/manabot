@@ -118,7 +118,10 @@ test('Precision on the board: cards act, inspecting commits nothing, recovery an
 test('Precision exposes the shared four-mana alternative', async ({ page }) => {
   await start(page, 'precision-mana');
   await choose(page, await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.label === 'Cast Deadly Precision')!.id));
-  await choose(page, await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.action_type === 'CHOOSE_TARGET')!.id));
+  // Both Callous Inspectors are indistinguishable, so the target choice folds
+  // to one legal offer and auto-skips straight to the additional-cost prompt.
+  const target = await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.action_type === 'CHOOSE_TARGET')?.id);
+  if (target !== undefined) await choose(page, target);
   const alternative = await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.action_type === 'PAY_COST')!);
   expect(alternative.label).toContain('{4}');
   await choose(page, alternative.id);

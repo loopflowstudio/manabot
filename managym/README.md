@@ -1326,8 +1326,9 @@ Supported `Decision` kinds and grouped activation thresholds:
   `address` (`DecisionAddress(viewer, revision, fingerprint)`) and the raw
   single-step legal `offers` (`list[Offer]`), where each `Offer` carries a
   human-readable `label` (such as `"Play Mountain"`, `"Cast Gray Ogre"`,
-  `"Pass priority"`) and its viewer-safe `source: SubjectRef | None` without
-  changing `semantic_decision_frame()` fingerprints. Halfway through raw
+  `"Pass priority"`), its viewer-safe `source: SubjectRef | None`, and any
+  viewer-visible folded copies in `aliases: list[DecisionObjectView]` (omitted
+  when empty) without changing `semantic_decision_frame()` fingerprints. Halfway through raw
   stepping a grouped decision, `env.decision()` returns the remaining undecided
   items plus immutable `committed*` state (and drops to `SingleDecision` below
   threshold).
