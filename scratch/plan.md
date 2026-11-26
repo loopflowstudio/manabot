@@ -90,69 +90,16 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   Academy-side, plus one `experience.rs` field and matching protocol schema
   additions. No Python/Academy/schema checks run after the merge; they fall to gate.
 
-## Engine performance review — Pass 2 (post-compress `5a3416e943` vs `main` `fcc96be003`)
+## Engine performance review — Pass 2 (`5a3416e943` vs main `fcc96be003`)
 
-Measured on Apple M4 Max (contended host; load-invariant `/usr/bin/time -l`
-instructions retired, cycles elapsed, and 1 ms `/usr/bin/sample` CPU profiles
-govern). Both sides built as uninstrumented release binaries (`--release --locked`,
-no `benchmark` feature) on the same machine after the #610 merge and P5–P6
-compress (`ba30625410`).
-
-### Supported gains (uninstrumented release, identical digests)
-
-- `bench_steps` (512 games, 118,559 steps, 0 capped, digest `10601622128491155944`):
-  ABBA median `46.763B` (`46.814B`, `46.713B`) → `46.320B` (`46.322B`, `46.319B`)
-  instructions retired (**−0.95%**, `−0.44B`).
-- `bench_steps --layers` (16 games, 1,308 steps, digest `1064912348938184597`):
-  `0.6487B` → `0.6403B` instructions (**−1.28%**, **−1.33%** cycles).
-- `bench_search --layers` (seed 244, 8 dec., 1,344 sims, digest `17627308883250227726`,
-  BLAKE3 `0eaa372c...`): `17.263B` → `16.333B` instructions (**−5.39%**,
-  **−4.46%** cycles).
-- `bench_search` (seeds 1–3, 40 dec. each, 0 caps, `7,680 / 8,064 / 7,424` sims,
-  digests `13638875039089371439` / `5466143068363283977` / `9998925852575961750`
-  and BLAKE3 `2f29dd10...` / `09de41e9...` / `9692421a...` unchanged):
-  `1,028.10B` → `999.74B` instructions (**−2.76%**, `−28.36B`),
-  `245.61B` → `238.50B` cycles (**−2.90%**), user `96.28s → 91.12s`.
-
-### CPU profile & stress-state scaling
-
-- **1 ms `/usr/bin/sample` on `bench_search`** (`10,781` base vs `10,702` cand samples):
-  P6 eliminated `Context::exists` (`0.36%` inclusive pre-P6 → `0.00%`);
-  `Context::evaluate` fell `46.91% → 42.48%` (`−4.43pp` inclusive), `layer_board`
-  `42.79% → 40.87%` (`−1.92pp`), `Context::targets` `3.39% → 2.29%` (`−1.11pp`),
-  `Context::apply` `10.00% → 9.19%` (`−0.81pp`), `drain_pending_events`
-  `36.31% → 34.98%` (`−1.33pp`). `bench_steps` (`1,307` vs `1,668` samples) shows
-  no branch-introduced regression.
-- **`bench_states --features benchmark --allocations`**:
-  - `attack-planeswalkers` (`N = 4, 8, 16, 32`): `damage | step:damage` boards
-    `3 / 7 / 15 / 31` → `1 / 1 / 1 / 1` (`339 / 389 / 323 / 480` allocs,
-    `0.047 / 0.053 / 0.056 / 0.128 ms`); `block | search` at `N = 32` dropped
-    `4,620` → `714` boards (`5.41`/sim across 132 sims, linear like
-    `duplicate-creatures` `668` boards / `132` sims = `5.06`/sim; 16→32 bytes
-    `2.81x` vs `duplicate-creatures` `3.09x`).
-  - `way-grants`, `divided-damage`, `keep-one-each-type`: 1 board per
-    `characteristics`, 0 boards per `step:activate` on `way-grants`, 23–28 clone
-    allocs. Existing guards (`duplicate-creatures`, `diverse-statics`,
-    `herald-statics`, `triggers` at `N = 8, 16`) match baseline `step:damage`
-    board counts (`6 / 1 / 2 / 6`) with linear N=8→16 growth.
-
-### Invariants, negative results & ruled-out bottlenecks
-
-- **Debug invariants verified (`debug_assertions` ON)**: audited `StateReads` /
-  `ReadSet` / `TrackedState` (`mark_dealt_damage`, `record_life_change`,
-  `change_counters`, `ActivatedAbilitiesCostLess` → `dynamic_activations`);
-  passed `managym --lib` (413), `managym-state` (18), `managym-cards --test cards`
-  (1,414), `rules_tests` (214, 2 ignored), `match_state_hash_tests` (11),
-  `conformance_tests` (2), `semantic_conformance_tests` (7), and `scenario_tests` (20).
-- **Ruled out / no open branch bottleneck**: P5 and P6 closed the two bottlenecks
-  flagged in Pass 1 (`attack-planeswalkers` `O(N)` damage rebuilds and `Context::exists`
-  `permanent_of` lookups). The remaining top `bench_search` shares (`Context::evaluate`
-  42.5%, `priority_action_space` 24.2%, `_platform_memmove` 7.3%,
-  `perform_state_based_batch` 7.1%) are shared baseline engine costs, all lower or
-  flat in absolute instructions vs `main`; `finish_state_based_batch`'s `+0.42pp`
-  relative sample share (`1.52% → 1.94%`) is sampling variance/shrunk-total shift
-  (the only branch change there is a single enum arm `ObjectKind::Emblem => false`).
-  No further MTG-430 optimization pass is warranted; advance to gate/CI.
+M4 Max, uninstrumented release, instructions retired govern; all digests
+unchanged. `bench_steps` −0.95% (46.763B → 46.320B), `--layers` −1.28%;
+`bench_search` seeds 1–3 −2.76% (1,028.10B → 999.74B), `--layers` −5.39%.
+`bench_states` stress cases (`attack-planeswalkers`, `way-grants`,
+`divided-damage`, `keep-one-each-type`) scale linearly; existing guards match
+baseline. Remaining `bench_search` hot spots (`Context::evaluate`,
+`priority_action_space`, memmove, SBA batch) are shared baseline costs. No
+further MTG-430 optimization pass warranted.
 
 ## Remaining (Architectural Redo — 2026-11-25)
 
@@ -163,45 +110,76 @@ layouts, pinned pilot zero-drift, and Engine Budget intact. Do not adopt inline
 ad-hoc emblems, dedicated per-keyword `Effect` state machines, or compound
 batch `DeclareAttackers`.
 
-- Slice R1 (`58e3e40618`): centralized `managym/src/flow/functioning_abilities.rs`
-  gate (CR 702.26b phasing, CR 114.4 command-zone emblem admission, CR 113.6
-  zone-of-function classifiers) routing `layers.rs`, `triggers.rs`,
-  `proposed_event.rs`, `statics.rs` (deleted obsolete `static_sources()`),
-  `zones::emblems()`, `damage.rs`, `tick.rs`, `sba.rs`, `mana.rs`, `play.rs`,
-  `resolution.rs`, and `opening.rs` (also fixed missing phasing guards on
-  damage replacements and `static_sources`, and main-merge `create_token`
-  arity in `tla.rs`); added `AbilityProvenance` (`Characteristic` vs Layer-6
-  `Granted`) + `LinkedAbilitySource { creator, characteristic_set }` latched
-  onto `ExileLink` and emblem `ObjectForm` so Layer-6 grants fail closed on
-  linked exile/emblem pairing (CR 607.1a/d, 607.5). Verified: `managym --lib`
-  419/419 (including 5 new directed Slice R1 tests, `record_vocabulary`,
-  `token_renames`, `sba::tests`), `managym-state` 18/18, `match_state_hash_tests`
-  11/11, `rules_tests` 214/214, and `managym-cards` (`tla::koh`,
-  `tla::boiling_rock`, `fdn::`, `fra::`) 248/248 green; Python extension
-  rebuild + pinned pilot check deferred to Slice R2.
+- Slice R1 (`58e3e40618`): one functioning-abilities gate
+  (`flow/functioning_abilities.rs`: CR 113.6 zones, 114.4 emblems, 702.26b
+  phasing) routes layers, triggers, replacements, statics, damage, SBA, mana,
+  play, resolution and opening (fixed two missing phasing guards); added
+  `AbilityProvenance` + `LinkedAbilitySource { creator, characteristic_set }`
+  on `ExileLink` and emblem `ObjectForm`. Debug `managym --lib`, rules, hash
+  and fdn/fra/tla card tests green.
+- Slice R2 (`735620f5a6`): `StaticSourceIndex` (`flow/layers.rs`) — a
+  per-`Context::evaluate` filter that still scans every layer object; only the
+  gathers after it (Layer-6 `discover()`, `compute_board`,
+  `for_each_functioning_static`) scale with generators. Added
+  `source_census.rs` text-count tests. Release digests unchanged
+  (`bench_steps` `10601622128491155944`, `46.157B` instr), pinned pilot zero
+  drift, cp313 rebuilt.
+- Concept review of R1–R2 (`09df882062`, `scratch/concept-review.html`):
+  debug workspace nextest 2,205 passed / 3 skipped at `e4a02d45cb`; no v11
+  column, token, Command or offer shape changed in R1–R2. Findings F1–F6 are
+  Slice R3; F7 is deferred.
 
-- Slice R2 (`735620f5a6`): added condition-independent `StaticSourceIndex`
-  (plus `Layer` active bitmask and `pt_counters` pre-collection) in
-  `managym/src/flow/layers.rs`, `statics.rs`, and `functioning_abilities.rs` so
-  layer rebuilds, Layer-6 `discover()`, `compute_board`, and
-  `for_each_functioning_static`/`has_functioning_static` scale with
-  `O(|generators|)` instead of `O(|battlefield|)` while over-including
-  conservatively and validating completeness under `debug_assertions`; added
-  comment- and `#[cfg(test)]`-aware `managym/src/source_census.rs` architectural
-  guard tests pinning single-authority counts across `managym/src/` (and fixed a
-  main-merge `create_token` arity in `agent/observation.rs`). Verified:
-  `managym --lib` 428/428 (including `static_source_index_scales_with_generators_and_is_condition_independent`
-  and 7 `source_census` tests), `match_state_hash_tests` 11/11, `rules_tests`
-  214/214 (2 ignored), `managym-cards` (`fdn::`, `fra::`) 243/243, `cargo fmt --check`,
-  release `bench_steps` digest `10601622128491155944` (`46.157B` instructions,
-  −0.35% vs Pass 2), `bench_steps --layers` digest `1064912348938184597`,
-  `bench_search --layers` digest `17627308883250227726` / BLAKE3 `0eaa372c...`
-  (`16.336B` instructions), `bench_states --features benchmark --allocations`
-  linear scaling (`duplicate-tokens` 10/13/19 allocs, `attack-planeswalkers`
-  10/11/14 allocs at N=8/16/32), cp313 `maturin develop` rebuild, and
-  `tests/model/test_pinned_pilot.py` (2 passed, 1 skipped, zero drift).
-  Refreshed `scratch/tour.yaml`; ready to advance to `card-review` → `card-perf`
-  → `compress` → `pr-publish` → `ship-review`.
+### Slice R3 — linked-ability identity and redo cleanup (next pass)
+
+Headless choices made for review (the review's recommended options; not
+settled by a person):
+
+- **F1 + F2 (CR 607.5).** Replace `AbilityProvenance` and
+  `characteristic_set: Option<CardDefId>` with one
+  `AbilitySet { Printed(CardDefId), Acquired(GrantKey) }`, where `GrantKey` is
+  `GrantClock` without `ability_index` (grantor, timestamp, static slot), and
+  `LinkedAbilitySource { creator, set }` pairs by equality. Store it in place of
+  every provenance field (`EffectFrame`, `PendingTrigger`, `EffectiveTrigger`,
+  `ActivatedAbilityDefinition`, both stack ability records); delete
+  `AbilityProvenance::from_origin` and the `is_granted` branches in
+  `latch_linked_ability_source` / `frame_linked_ability_source`
+  (`flow/resolution.rs`). Passed over: keep fail-closed `None` (breaks
+  Koh/Rioter), pair by object only (pre-R1; printed choice sees inherited
+  exiles), key by `AbilityGrant` (misses program and `HasAbilitiesOfSource`
+  grants). Do it before PR #607 merges: the link serializes into snapshots and
+  the state hash.
+  - Acceptance: new `tla.rs` test beside `koh_inherits` — Koh inherits Boiling
+    Rock Rioter, the inherited exile takes a graveyard Ally card you own, the
+    inherited attack trigger offers casting it, and Koh's printed "choose a
+    creature card exiled with Koh" does not list it. Rewrite
+    `layer6_granted_ability_fails_closed_on_linked_exile_pairing` (and the
+    emblem variant) to the 607.5 behavior; a re-choice by Koh is a new grant
+    and cannot reach old exiles.
+- **F3.** Delete `managym/src/source_census.rs` and its `lib.rs` mod line;
+  enforce the boundary with visibility (reads of `LayerObject.statics` /
+  `replacement_effects` and command-zone object scans go through
+  `functioning_abilities` accessors). Directed tests in
+  `functioning_abilities::tests` keep behavior covered.
+- **F4.** Delete `FunctionZones::Command`, `emblems_linked_to` and
+  `ObjectForm.emblem_source` (plus its `CanonicalCard.emblem_source` hash
+  field) until a catalog emblem reads its creator's linked choice (CR 607.1d).
+- **F5 / F6.** Rename `FunctionZones::Battlefield` → `Default` and
+  `StaticSourceIndex` → `StaticSources`; document beside its seat buckets that
+  they use the previous evaluation's controller and are safe only because
+  consumers sort by timestamp.
+- Checks: debug nextest of `managym --lib`, `rules_tests`,
+  `match_state_hash_tests`, `managym-cards` (tla/fdn/fra); cp313 rebuild;
+  pinned pilot (expect zero drift; R1 changed no tokens); release `bench_steps`
+  digest; `cargo fmt --all`.
+
+## Deferred findings
+
+- **F7 replacement source order.** `ReplacementSourceOrder::{BySeat,
+  SlotOrder, ControlledBy}` (`flow/proposed_event.rs` 4 sites,
+  `flow/mana.rs:3449`) keeps three call-site traversal orders; CR 616.1 makes
+  order the affected player's choice. Collapsing could change which
+  replacement a "first applicable" path picks and move recorded games. Needs
+  its own CR 616.1 Task: one order plus the choice where two apply.
 
 ## Prior PR publish verification (baseline before redo)
 
