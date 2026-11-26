@@ -383,10 +383,17 @@ impl Game {
                     return None;
                 };
                 let must_attack = self.must_attack(attacker);
-                let suppress_attack = !must_attack && self.declined_interchangeable_attacker(attacker);
+                let suppress_attack =
+                    !must_attack && self.declined_interchangeable_attacker(attacker);
                 let actions = [true, false]
                     .into_iter()
-                    .filter(|&attack| if attack { !suppress_attack } else { !must_attack })
+                    .filter(|&attack| {
+                        if attack {
+                            !suppress_attack
+                        } else {
+                            !must_attack
+                        }
+                    })
                     .map(|attack| Action::DeclareAttacker {
                         player: active,
                         permanent: attacker,

@@ -469,7 +469,7 @@
   const payKnown = $derived(live && payAnswer?.frameHash === frame.frame_hash && payAnswer.offerId === payOffer?.offer.id
     ? payAnswer.answered : null);
   const payKnownPlan = $derived(paymentPlan(payKnown, frame));
-  const unpiled = $derived((payKnownPlan ?? payPlanned)?.sources ?? null);
+  const unpiled = $derived((payOffer ? payKnownPlan : payPlanned)?.sources ?? null);
   const primaryText = $derived(primaryLabel(frame, view, payKnown));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
     : running ? `Declaring ${running.at + 1} of ${running.preview.steps.length}…`

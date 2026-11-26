@@ -247,6 +247,106 @@ describe('where decisions land', () => {
     const after = boardView(frame, PLAYERS).you.support.find(pile => pile.items.some(item => item.permanent.id === land.id))!;
     expect(after.items.map(item => item.permanent.id)).toEqual([land.id]);
   });
+
+  it('places folded offer aliases on drawn copies on the board and in hand, keeping piles whole and trays deduplicated', () => {
+    const frame = structuredClone(navigation.PAY_OR_NOT.frame);
+    const { agent, opponent } = frame.projection;
+    const basePerm = agent.battlefield[0];
+    const plains = [501, 502, 503].map(id => ({
+      ...basePerm,
+      id,
+      name: 'Plains',
+      controller_id: agent.id,
+      tapped: false,
+      damage: 0,
+      summoning_sick: false,
+      power: null,
+      toughness: null,
+      base_power: null,
+      base_toughness: null,
+      plus1_counters: 0,
+      attached_to: undefined,
+      effects: undefined,
+      copy_of: undefined,
+      types: { is_creature: false, is_land: true, is_spell: false, is_artifact: false, is_enchantment: false, is_planeswalker: false, is_battle: false },
+    }));
+    const handBase = agent.hand[0] ?? {
+      id: 0, registry_key: 1, name: 'Youthful Knight', zone: 'HAND', owner_id: agent.id,
+      power: 2, toughness: 1, mana_value: 2,
+      types: { is_creature: true, is_land: false, is_spell: true, is_artifact: false, is_enchantment: false, is_planeswalker: false, is_battle: false },
+    };
+    const knights = [601, 602].map(id => ({ ...handBase, id, name: 'Youthful Knight', zone: 'HAND' }));
+    const graveCards = [701, 702].map(id => ({ ...handBase, id, name: 'Mountain', zone: 'GRAVEYARD' }));
+    agent.battlefield = plains;
+    opponent.battlefield = [];
+    agent.hand = knights;
+    agent.graveyard = graveCards;
+    frame.projection.decision_context = undefined;
+    const obj = (id: number, label: string) => ({
+      entity_id: id,
+      subject: { kind: 'object' as const, id: { entity: id, incarnation: 0 } },
+      display_id: id,
+      label,
+    });
+    const baseOffer = frame.offers[0];
+    frame.offers = [
+      {
+        ...baseOffer,
+        id: 0,
+        verb: 'activate',
+        action_type: 'TAP_FOR_COST',
+        label: 'Tap Plains for {W}',
+        confirm_label: 'Tap Plains for {W}',
+        source: null,
+        subjects: [{ role: 'choice', object: obj(501, 'Plains') }],
+        aliases: [obj(502, 'Plains'), obj(503, 'Plains')],
+        focus: [501],
+      },
+      {
+        ...baseOffer,
+        id: 1,
+        verb: 'cast',
+        action_type: 'PRIORITY_CAST_SPELL',
+        label: 'Cast Youthful Knight',
+        confirm_label: 'Cast Youthful Knight',
+        source: obj(601, 'Youthful Knight').subject,
+        subjects: [{ role: 'source', object: obj(601, 'Youthful Knight') }],
+        aliases: [obj(602, 'Youthful Knight')],
+        focus: [601],
+      },
+      {
+        ...baseOffer,
+        id: 2,
+        verb: 'choose',
+        action_type: 'SELECT_CARD',
+        label: 'Select Mountain',
+        confirm_label: 'Select Mountain',
+        source: null,
+        subjects: [{ role: 'choice', object: obj(701, 'Mountain') }],
+        aliases: [obj(702, 'Mountain')],
+        focus: [701],
+      },
+    ];
+
+    const view = boardView(frame, PLAYERS);
+    // Rail lists each canonical offer once.
+    expect(view.list.map(placed => placed.offer.id)).toEqual([0, 1, 2]);
+    // All three Plains share one pile and every copy carries the canonical offer.
+    expect(view.you.support).toHaveLength(1);
+    expect(view.you.support[0].items.map(item => item.permanent.id)).toEqual([501, 502, 503]);
+    for (const item of view.you.support[0].items) {
+      expect(item.offers.map(placed => placed.offer.id)).toEqual([0]);
+    }
+    // Both copies in hand carry the canonical cast offer.
+    expect(view.hand.map(item => [item.card.id, item.offers.map(placed => placed.offer.id)])).toEqual([
+      [601, [1]],
+      [602, [1]],
+    ]);
+    // Graveyard aliases never duplicate tray cards.
+    expect(view.tray).toHaveLength(1);
+    expect(view.tray[0].placed.offer.id).toBe(2);
+    expect(view.tray[0].card?.id).toBe(701);
+  });
 });
 
 describe('fitRow', () => {

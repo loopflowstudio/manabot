@@ -944,6 +944,20 @@ impl Env {
             .decision_offer_subjects(PlayerId(viewer)))
     }
 
+    pub fn decision_offer_aliases(
+        &self,
+        viewer: usize,
+    ) -> Result<Vec<Vec<crate::experience::DecisionObjectView>>, AgentError> {
+        if viewer >= 2 {
+            return Err(AgentError("viewer out of bounds".into()));
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .decision_offer_aliases(PlayerId(viewer)))
+    }
+
     pub fn player_controls(&self) -> Result<Vec<crate::experience::PlayerControlView>, AgentError> {
         let game = self
             .game

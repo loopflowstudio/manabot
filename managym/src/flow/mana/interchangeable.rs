@@ -98,10 +98,7 @@ impl Game {
 
         // Every member of the unique optional profile must be mutually
         // interchangeable under the shared fail-closed predicate.
-        let opt_objects: Vec<_> = opt_indices
-            .iter()
-            .map(|&i| taps[i].source.object)
-            .collect();
+        let opt_objects: Vec<_> = opt_indices.iter().map(|&i| taps[i].source.object).collect();
         if !self.all_interchangeable(&opt_objects) {
             return None;
         }

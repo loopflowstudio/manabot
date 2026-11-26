@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from managym.academy.recording import narrate_move, own_steps
 from managym.academy.server import GameSession
 from managym.experience import ExperienceFrame, InteractionOffer
 from managym.payment import preview_payment
@@ -134,10 +135,9 @@ def test_dual_land_plus_three_plains_labels_and_skips_redundant_modal(
     assert [offer.label for offer in payment.offers] == [
         "Tap Kyoshi Village for {G}/{W}",
         "Tap Plains for {W}",
-        "Tap Plains for {W}",
-        "Tap Plains for {W}",
         "Pay the cost",
     ]
+    assert len(payment.offers[1].aliases) == 2
 
     # Tapping Kyoshi Village leaves 3 interchangeable Plains for {1}/{W} (even
     # when the 3rd Plains was played this turn), so the color modal skips too.
@@ -165,9 +165,32 @@ def test_priority_dual_land_float_logs_resolved_color_not_raw_offer(
         for offer in frame.offers
         if offer.label == "Tap Kyoshi Village for {G}/{W}"
     )
-    modal, open_log = _submit(session, frame, tap)
-    assert open_log == []
+    modal, _ = _submit(session, frame, tap)
     assert modal.action_space == "MODAL"
+    payload = session.attempt_store.load(session.match_id)
+    assert payload is not None
+    events = payload["events"]
+    assert (
+        narrate_move(
+            frame.projection.model_dump(mode="json"),
+            modal.projection.model_dump(mode="json"),
+            [],
+            own_steps(events, len(events) - 1),
+        )
+        is None
+    )
     add_white = next(offer for offer in modal.offers if offer.label == "Add {W}")
-    _, resolved_log = _submit(session, modal, add_white)
-    assert [entry["text"] for entry in resolved_log] == ["Tap Kyoshi Village for {W}"]
+    after, _ = _submit(session, modal, add_white)
+    assert after.projection.agent.mana == (1, 0, 0, 0, 0, 0)
+    payload = session.attempt_store.load(session.match_id)
+    assert payload is not None
+    events = payload["events"]
+    assert (
+        narrate_move(
+            modal.projection.model_dump(mode="json"),
+            after.projection.model_dump(mode="json"),
+            [],
+            own_steps(events, len(events) - 1),
+        )
+        == "Tap Kyoshi Village for {W}"
+    )

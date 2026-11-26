@@ -14,7 +14,7 @@ use crate::{
 };
 
 const SETUP_SEED: u64 = 377;
-const HEAVY_ACTION_SEED: u64 = 0xc10e;
+const HEAVY_ACTION_SEED: u64 = 0xc10f;
 
 fn interactive_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([
@@ -125,9 +125,9 @@ fn check_shape(id: &str, game: &Game) -> Result<(), String> {
         "interactive-midgame-48-opening-v1" if action_count != 2 => Err(format!(
             "midgame fixture drift: expected 2 root actions, got {action_count}"
         )),
-        "interactive-heavy-80-opening-v1" if objects != 120 || slots != 27 || events != 617 => {
+        "interactive-heavy-80-opening-v1" if objects != 120 || slots != 13 || events != 572 => {
             Err(format!(
-                "heavy fixture drift: expected cards/slots/events 120/27/617, got {objects}/{slots}/{events}"
+                "heavy fixture drift: expected cards/slots/events 120/13/572, got {objects}/{slots}/{events}"
             ))
         }
         _ => Ok(()),

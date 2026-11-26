@@ -154,9 +154,7 @@ impl Game {
                 }
                 for id in self.declared_attackers() {
                     if !plan.attackers.contains(&id) {
-                        let perm = self
-                            .permanent_by_render_id(id)
-                            .expect("declared attacker");
+                        let perm = self.permanent_by_render_id(id).expect("declared attacker");
                         working_attackers.push((perm, true));
                     }
                 }
@@ -328,8 +326,7 @@ impl Game {
         }
         self.read_declaration(&position, events_from, &mut preview);
         if preview.refused.is_none() {
-            preview.refused =
-                self.undeclared(kind, &working_attackers, &working_blocks, &preview);
+            preview.refused = self.undeclared(kind, &working_attackers, &working_blocks, &preview);
         }
         Ok(preview)
     }

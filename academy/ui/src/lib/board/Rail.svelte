@@ -552,9 +552,9 @@
   .pass-turn { justify-self: center; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); padding: 2px 6px; border-radius: var(--radius-sm); }
   .pass-turn:hover { color: var(--text); background: var(--bg-field); }
   .status { min-height: 16px; }
-  .choices { flex: 0 1 auto; min-height: 0; max-height: 40%; display: flex; flex-direction: column; }
+  .choices { flex: 0 1 auto; min-height: 0; max-height: 40%; display: flex; flex-direction: column; overflow: hidden; }
   .heading { display: flex; justify-content: space-between; }
-  .raw { min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+  .raw { min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
   .raw[open] { flex: 1; }
   /* A draft's per-creature answers are not numbered keys. */
   .raw kbd { display: none; }

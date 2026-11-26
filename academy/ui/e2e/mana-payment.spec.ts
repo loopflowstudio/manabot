@@ -115,26 +115,27 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     await expect(planned(page)).toHaveCount(2);
     expect(await planned(page).evaluateAll(cards => cards.map(card => card.getAttribute('data-object-id')).sort())).toEqual(plannedIds);
 
-    // Pointing at a land outside the plan previews "tap this, then the rest"; clicking it is the authority's tap.
-    // The first land outside the plan tops its pile, so its left edge is the
-    // part only it covers: further right, a copy under it shares the point
-    // and the hover raises whichever the browser hits first. The land and the
-    // point are read together, since a second read can name another card.
+    // Pointing at an alias copy in a pile of identical lands previews tapping
+    // the canonical copy the engine will tap; clicking the alias sends that
+    // canonical offer and taps the canonical copy.
+    const mountainOffer = (await frame(page)).offers.find(offer => offer.label === 'Tap Mountain for {R}')!;
+    const canonicalMountainId = String(mountainOffer.subjects![0].object.display_id);
     const { ownId, x, y } = await page.evaluate(() => {
       const land = [...document.querySelectorAll<HTMLElement>('.you .row.support [data-testid=board-card].legal:not([data-payment-source])')]
         .find(card => card.dataset.cardName === 'Mountain')!;
       const box = land.getBoundingClientRect();
       return { ownId: land.dataset.objectId!, x: box.left + 6, y: box.top + box.height / 2 };
     });
+    expect(mountainOffer.aliases?.some(alias => String(alias.display_id) === ownId)).toBe(true);
     await page.mouse.move(x, y);
-    await expect(page.locator(`[data-object-id="${ownId}"][data-payment-source="1"]`)).toHaveCount(1);
+    await expect(page.locator(`[data-object-id="${canonicalMountainId}"][data-payment-source="1"]`)).toHaveCount(1);
     await expect(primary).toHaveText(/^Auto pay \{1\}\{R\}\s*Space$/);
     before = (await frame(page)).revision;
     await clickCard(page.locator(`[data-object-id="${ownId}"]`));
     await waitForRevision(page, before);
-    expect((await page.evaluate(() => window.__mana.commands.at(-1)!)).offer_id).toBeDefined();
+    expect((await page.evaluate(() => window.__mana.commands.at(-1)!)).offer_id).toBe(mountainOffer.id);
     await page.mouse.move(2, 2);
-    await expect(page.locator(`[data-object-id="${ownId}"]`)).toHaveAttribute('aria-label', /tapped/i);
+    await expect(page.locator(`[data-object-id="${canonicalMountainId}"]`)).toHaveAttribute('aria-label', /tapped/i);
 
     // Space pays what remains along the plan the button reads.
     const after = await frame(page);

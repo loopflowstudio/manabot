@@ -24,9 +24,7 @@ use crate::{
             TargetIteration,
         },
         event::{CombatPlayerHit, DamageTarget, GameEvent},
-        game::{
-            ActivationSource, CastChoices, Game, GameProcedure, GameState, PendingChoice,
-        },
+        game::{ActivationSource, CastChoices, Game, GameProcedure, GameState, PendingChoice},
         payment::{CostComponent, Help, Operation, Payment, PaymentProgress},
         priority::PriorityState,
         proposed_event::{
@@ -211,7 +209,9 @@ impl<'a> ReferenceCensus<'a> {
 
         // Procedure holds no object ids (OpeningHands is counts/stage, Finished is outcome).
         match procedure {
-            GameProcedure::OpeningHands(_) | GameProcedure::Playing | GameProcedure::Finished(_) => {}
+            GameProcedure::OpeningHands(_)
+            | GameProcedure::Playing
+            | GameProcedure::Finished(_) => {}
         }
 
         // PriorityState holds no object ids.
@@ -1876,7 +1876,10 @@ impl Game {
             return true;
         }
         let zone = self.state.zones.zone_of(first);
-        if !rest.iter().all(|&obj| self.state.zones.zone_of(obj) == zone) {
+        if !rest
+            .iter()
+            .all(|&obj| self.state.zones.zone_of(obj) == zone)
+        {
             return false;
         }
         if !self.same_object_state_cheap(zone, first, rest) {
@@ -2133,9 +2136,7 @@ impl Game {
         // (Vehicles, Spacecraft), and self-animating lands. Plain lands played
         // this turn are interchangeable with earlier copies.
         if left.summoning_sick != right.summoning_sick
-            && (left_view.is_creature()
-                || !left_view.is_land()
-                || can_become_creature(left_view))
+            && (left_view.is_creature() || !left_view.is_land() || can_become_creature(left_view))
         {
             return false;
         }
@@ -2153,7 +2154,11 @@ impl Game {
 
     /// Find `wanted` in `space`, falling back to `self.action_aliases()` when
     /// folding replaced `wanted`'s object with an interchangeable representative.
-    pub(crate) fn resolve_action_index(&self, space: &ActionSpace, wanted: &Action) -> Option<usize> {
+    pub(crate) fn resolve_action_index(
+        &self,
+        space: &ActionSpace,
+        wanted: &Action,
+    ) -> Option<usize> {
         if let Some(index) = space.actions.iter().position(|legal| legal == wanted) {
             return Some(index);
         }
@@ -2588,7 +2593,11 @@ impl Game {
                     if rep_key != key {
                         continue;
                     }
-                    if self.state.entry_object(rep_object).same_object_identity(obj) {
+                    if self
+                        .state
+                        .entry_object(rep_object)
+                        .same_object_identity(obj)
+                    {
                         matched_rep = Some(rep_orig_idx);
                         break;
                     }

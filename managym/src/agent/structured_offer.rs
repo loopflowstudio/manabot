@@ -1538,12 +1538,10 @@ impl Game {
                     };
                     let mut attack = remaining_selected.remove(&permanent);
                     if !attack {
-                        if let Some(&donor) =
-                            declaration_order[pos + 1..].iter().find(|&&other| {
-                                remaining_selected.contains(&other)
-                                    && self.interchangeable_permanents(permanent, other)
-                            })
-                        {
+                        if let Some(&donor) = declaration_order[pos + 1..].iter().find(|&&other| {
+                            remaining_selected.contains(&other)
+                                && self.interchangeable_permanents(permanent, other)
+                        }) {
                             remaining_selected.remove(&donor);
                             attack = true;
                         }

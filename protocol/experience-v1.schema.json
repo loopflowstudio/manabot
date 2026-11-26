@@ -987,6 +987,12 @@
           "maximum": 255,
           "minimum": 0
         },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DecisionObjectView"
+          }
+        },
         "choices": {
           "type": "array",
           "items": {

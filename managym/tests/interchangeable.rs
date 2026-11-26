@@ -173,11 +173,7 @@ fn priority_all_floats_eight_forests_folds_to_one_tap_with_seven_aliases() {
 
 #[test]
 fn convoke_with_four_identical_tokens_folds_to_one_waterbend_tap() {
-    let entries = [
-        ("Plains", 24),
-        ("Forest", 8),
-        ("Guardian of Vitu-Ghazi", 8),
-    ];
+    let entries = [("Plains", 24), ("Forest", 8), ("Guardian of Vitu-Ghazi", 8)];
     let mut game = position(
         &["Plains", "Plains", "Plains", "Forest"],
         &entries,
@@ -187,10 +183,7 @@ fn convoke_with_four_identical_tokens_folds_to_one_waterbend_tap() {
     let mut tokens = Vec::new();
     for _ in 0..4 {
         let id = game.create_token("token.ally", player, false).unwrap();
-        game.state.permanents[id]
-            .as_mut()
-            .unwrap()
-            .summoning_sick = false;
+        game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         tokens.push(game.permanent_object(id).unwrap());
     }
     game.scenario_refresh_priority().unwrap();
@@ -220,11 +213,7 @@ fn convoke_with_four_identical_tokens_folds_to_one_waterbend_tap() {
 
 #[test]
 fn distinguishing_permanent_state_blocks_interchangeability() {
-    let entries = [
-        ("Plains", 24),
-        ("Forest", 8),
-        ("Gray Ogre", 8),
-    ];
+    let entries = [("Plains", 24), ("Forest", 8), ("Gray Ogre", 8)];
     let game = position(&["Plains"; 3], &entries, "Gray Ogre");
     let player = PlayerId(0);
     let p0 = PermanentId(0);
@@ -365,7 +354,10 @@ fn snapshot_and_game_over_preserve_and_clear_aliases() {
     let snapshot = env.snapshot().unwrap();
     let restored = snapshot.restore(RestoreOptions::default()).unwrap();
     // Both original and restored expose the same folded space and digest.
-    assert_eq!(env.action_count().unwrap(), restored.action_count().unwrap());
+    assert_eq!(
+        env.action_count().unwrap(),
+        restored.action_count().unwrap()
+    );
     assert_eq!(
         env.selected_witness().unwrap(),
         restored.selected_witness().unwrap()
@@ -391,10 +383,7 @@ fn snapshot_and_game_over_preserve_and_clear_aliases() {
         .position(|a| matches!(a, Action::PassPriority { .. }))
         .unwrap();
     assert!(over.step(pass).unwrap());
-    assert_eq!(
-        over.action_space().unwrap().kind,
-        ActionSpaceKind::GameOver
-    );
+    assert_eq!(over.action_space().unwrap().kind, ActionSpaceKind::GameOver);
     assert!(over.action_aliases().is_empty());
 }
 
@@ -403,11 +392,7 @@ fn snapshot_and_game_over_preserve_and_clear_aliases() {
 
 #[test]
 fn hand_play_land_and_cast_spell_fold_with_aliases() {
-    let entries = [
-        ("Island", 16),
-        ("Forest", 16),
-        ("First-Time Flyer", 8),
-    ];
+    let entries = [("Island", 16), ("Forest", 16), ("First-Time Flyer", 8)];
     let mut game = position(&["Island", "Island"], &entries, "First-Time Flyer");
     let player = PlayerId(0);
     game.scenario_force_card_in_hand(player, "First-Time Flyer")
@@ -427,7 +412,11 @@ fn hand_play_land_and_cast_spell_fold_with_aliases() {
         .enumerate()
         .filter_map(|(i, a)| matches!(a, Action::PlayLand { .. }).then_some(i))
         .collect();
-    assert_eq!(cast_indices.len(), 1, "two First-Time Flyers fold to one CastSpell");
+    assert_eq!(
+        cast_indices.len(),
+        1,
+        "two First-Time Flyers fold to one CastSpell"
+    );
     assert_eq!(land_indices.len(), 1, "two Forests fold to one PlayLand");
 
     let hand_flyers: Vec<ObjectId> = game
@@ -448,8 +437,12 @@ fn hand_play_land_and_cast_spell_fold_with_aliases() {
         .collect();
     assert_eq!(hand_flyers.len(), 2);
     assert_eq!(hand_forests.len(), 2);
-    assert!(game.action_aliases().contains(&(cast_indices[0], hand_flyers[1])));
-    assert!(game.action_aliases().contains(&(land_indices[0], hand_forests[1])));
+    assert!(game
+        .action_aliases()
+        .contains(&(cast_indices[0], hand_flyers[1])));
+    assert!(game
+        .action_aliases()
+        .contains(&(land_indices[0], hand_forests[1])));
 }
 
 fn pass_until(game: &mut Game, pred: impl Fn(&Game) -> bool) {
@@ -480,7 +473,11 @@ fn discard_one_from_two_identical_cards_folds_and_skips_when_trivial() {
     let mut base = position(&["Island", "Island"], &entries, "Chart a Course");
     let player = PlayerId(0);
     // Ensure top 2 cards of library are Islands.
-    let lib = base.state.zones.zone_objects(ZoneType::Library, player).to_vec();
+    let lib = base
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, player)
+        .to_vec();
     let islands: Vec<ObjectId> = lib
         .iter()
         .copied()
@@ -609,16 +606,18 @@ fn target_three_identical_opponent_tokens_folds_to_one_and_compound_lowers_alias
             Action::ChooseTarget {
                 target: Target::Permanent(perm),
                 ..
-            } if game.permanent_object(perm).is_some_and(|o| tokens.contains(&o)) => Some(i),
+            } if game
+                .permanent_object(perm)
+                .is_some_and(|o| tokens.contains(&o)) =>
+            {
+                Some(i)
+            }
             _ => None,
         })
         .collect();
     assert_eq!(token_targets.len(), 1);
     let idx = token_targets[0];
-    assert_eq!(
-        game.action_aliases(),
-        &[(idx, tokens[1]), (idx, tokens[2])]
-    );
+    assert_eq!(game.action_aliases(), &[(idx, tokens[1]), (idx, tokens[2])]);
 }
 
 #[test]
@@ -756,8 +755,16 @@ fn learn_folds_hand_discards_and_sideboard_lessons_via_entry_object() {
             _ => None,
         })
         .collect();
-    assert_eq!(take_indices.len(), 1, "4 identical sideboard Lessons fold to 1");
-    assert_eq!(discard_islands.len(), 1, "identical hand Islands fold to 1 LearnDiscard");
+    assert_eq!(
+        take_indices.len(),
+        1,
+        "4 identical sideboard Lessons fold to 1"
+    );
+    assert_eq!(
+        discard_islands.len(),
+        1,
+        "identical hand Islands fold to 1 LearnDiscard"
+    );
     let sb_aliases: Vec<_> = game
         .action_aliases()
         .iter()
@@ -811,7 +818,10 @@ fn cost_component_sacrifice_and_delve_fold_with_aliases() {
     assert_eq!(sac_indices.len(), 1);
     assert_eq!(
         game.action_aliases(),
-        &[(sac_indices[0], my_tokens[1]), (sac_indices[0], my_tokens[2])]
+        &[
+            (sac_indices[0], my_tokens[1]),
+            (sac_indices[0], my_tokens[2])
+        ]
     );
 
     // Delve (Teval, Arbiter of Virtue + 3 identical cards in graveyard) -> 1 Delve SelectCard.
@@ -852,7 +862,11 @@ fn cost_component_sacrifice_and_delve_fold_with_aliases() {
         .enumerate()
         .filter_map(|(i, a)| matches!(a, Action::SelectCard { .. }).then_some(i))
         .collect();
-    assert_eq!(delve_selects.len(), 1, "3 identical graveyard Islands fold to 1 delve exile");
+    assert_eq!(
+        delve_selects.len(),
+        1,
+        "3 identical graveyard Islands fold to 1 delve exile"
+    );
     let delve_aliases: Vec<ObjectId> = delve_game
         .action_aliases()
         .iter()
@@ -951,7 +965,9 @@ fn distinguishing_card_and_selection_cases_stay_separate() {
     multi_game.skip_trivial = false;
     let mut tokens = Vec::new();
     for _ in 0..3 {
-        let id = multi_game.create_token("token.ally", player, false).unwrap();
+        let id = multi_game
+            .create_token("token.ally", player, false)
+            .unwrap();
         tokens.push(multi_game.permanent_object(id).unwrap());
     }
     multi_game.scenario_refresh_priority().unwrap();
@@ -981,7 +997,10 @@ fn distinguishing_card_and_selection_cases_stay_separate() {
         .filter_map(|(i, a)| matches!(a, Action::ChooseTarget { .. }).then_some(i))
         .collect();
     assert_eq!(second_targets.len(), 1);
-    assert_eq!(multi_game.action_aliases(), &[(second_targets[0], tokens[2])]);
+    assert_eq!(
+        multi_game.action_aliases(),
+        &[(second_targets[0], tokens[2])]
+    );
 
     // 4. DiscardFromRevealedHand (deleted definition-only dedup): folds unreferenced copies
     // with alias, keeps pinned copy separate.
@@ -1287,7 +1306,10 @@ fn compound_waterbend_lowers_folded_aliases_under_both_skip_trivial_modes() {
             .position(|a| matches!(a, Action::ActivateAbility { .. }))
             .unwrap();
         game.step(activate).unwrap();
-        assert_eq!(game.action_space().unwrap().kind, ActionSpaceKind::Waterbend);
+        assert_eq!(
+            game.action_space().unwrap().kind,
+            ActionSpaceKind::Waterbend
+        );
 
         let offers = game.compound_offers().unwrap();
         let offer = &offers.projection().offers[0];
@@ -1315,7 +1337,9 @@ fn compound_waterbend_lowers_folded_aliases_under_both_skip_trivial_modes() {
         let cmds = game.compound_commands(&offers, &submission).unwrap();
         assert!(!cmds.is_empty());
         let mut applied = game.clone();
-        applied.apply_offer_submission(&offers, &submission).unwrap();
+        applied
+            .apply_offer_submission(&offers, &submission)
+            .unwrap();
         assert!(!matches!(
             applied.action_space().map(|s| s.kind),
             Some(ActionSpaceKind::Waterbend)
@@ -1795,8 +1819,7 @@ fn soundness_oracle_on_curated_matchups() {
 
 fn advance_to_step(game: &mut Game, active: PlayerId, target: managym::flow::turn::StepKind) {
     for _ in 0..64 {
-        if game.state.turn.active_player == active
-            && game.state.turn.current_step_kind() == target
+        if game.state.turn.active_player == active && game.state.turn.current_step_kind() == target
         {
             return;
         }
@@ -1829,11 +1852,7 @@ fn render_perm(game: &Game, perm: PermanentId) -> managym::experience::ObjectRen
 }
 
 fn explore_declaration_leaves(game: &Game, kind: ActionSpaceKind, out: &mut Vec<Game>) {
-    if game.is_game_over()
-        || game
-            .action_space()
-            .is_none_or(|space| space.kind != kind)
-    {
+    if game.is_game_over() || game.action_space().is_none_or(|space| space.kind != kind) {
         out.push(game.clone());
         return;
     }
@@ -1883,7 +1902,11 @@ fn declare_attackers_three_identical_tokens_yields_four_outcomes_not_eight() {
             tokens.push(id);
         }
         game.scenario_refresh_priority().unwrap();
-        advance_to_step(&mut game, player, managym::flow::turn::StepKind::DeclareAttackers);
+        advance_to_step(
+            &mut game,
+            player,
+            managym::flow::turn::StepKind::DeclareAttackers,
+        );
         assert_eq!(
             game.action_space().unwrap().kind,
             ActionSpaceKind::DeclareAttacker
@@ -1917,7 +1940,9 @@ fn declare_attackers_three_identical_tokens_yields_four_outcomes_not_eight() {
     let player = PlayerId(0);
     let mut tokens = Vec::new();
     for _ in 0..3 {
-        let id = distinguished.create_token("token.ally", player, false).unwrap();
+        let id = distinguished
+            .create_token("token.ally", player, false)
+            .unwrap();
         distinguished.state.permanents[id]
             .as_mut()
             .unwrap()
@@ -1959,7 +1984,11 @@ fn declare_blockers_folds_identical_attackers_and_declined_blockers() {
         game.create_token("token.ally", p1, false).unwrap();
     }
     game.scenario_refresh_priority().unwrap();
-    advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareAttackers);
+    advance_to_step(
+        &mut game,
+        p0,
+        managym::flow::turn::StepKind::DeclareAttackers,
+    );
     while game
         .action_space()
         .is_some_and(|s| s.kind == ActionSpaceKind::DeclareAttacker)
@@ -1973,7 +2002,11 @@ fn declare_blockers_folds_identical_attackers_and_declined_blockers() {
             .unwrap();
         game.step(attack_idx).unwrap();
     }
-    advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareBlockers);
+    advance_to_step(
+        &mut game,
+        p0,
+        managym::flow::turn::StepKind::DeclareBlockers,
+    );
     assert_eq!(
         game.action_space().unwrap().kind,
         ActionSpaceKind::DeclareBlocker
@@ -2006,7 +2039,10 @@ fn declare_blockers_folds_identical_attackers_and_declined_blockers() {
         .combat
         .as_ref()
         .is_none_or(|c| c.declined_blockers.is_empty()));
-    assert_eq!(declared_blocker_counts(&decline_branch, decline_events_from, 3), vec![0, 0, 0]);
+    assert_eq!(
+        declared_blocker_counts(&decline_branch, decline_events_from, 3),
+        vec![0, 0, 0]
+    );
 
     // Branch B: first blocker blocks canonical attacker -> that attacker is now
     // blocked (marked by census), while the remaining 2 unblocked attackers still
@@ -2061,7 +2097,11 @@ fn declare_blockers_menace_and_must_block_never_empty_after_decline() {
         source_object: None,
     });
     game.scenario_refresh_priority().unwrap();
-    advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareAttackers);
+    advance_to_step(
+        &mut game,
+        p0,
+        managym::flow::turn::StepKind::DeclareAttackers,
+    );
     let attack_idx = game
         .action_space()
         .unwrap()
@@ -2070,7 +2110,11 @@ fn declare_blockers_menace_and_must_block_never_empty_after_decline() {
         .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
         .unwrap();
     game.step(attack_idx).unwrap();
-    advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareBlockers);
+    advance_to_step(
+        &mut game,
+        p0,
+        managym::flow::turn::StepKind::DeclareBlockers,
+    );
 
     // Exhaust every reachable blocker path: never empty, and every leaf satisfies
     // Menace + MustBeBlocked (2 or 3 blockers on Brute).
@@ -2105,7 +2149,11 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
             tokens.push(id);
         }
         game.scenario_refresh_priority().unwrap();
-        advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareAttackers);
+        advance_to_step(
+            &mut game,
+            p0,
+            managym::flow::turn::StepKind::DeclareAttackers,
+        );
 
         // Preview drafting only tokens[0] (the LAST-asked token).
         let frame = game.semantic_decision_frame().unwrap();
@@ -2156,7 +2204,9 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
             }],
         };
         let mut lowered = game.clone();
-        lowered.apply_offer_submission(&offers, &submission).unwrap();
+        lowered
+            .apply_offer_submission(&offers, &submission)
+            .unwrap();
         assert_eq!(declared_attacker_count(&lowered, events_from), 1);
         let cmds = game.compound_commands(&offers, &submission).unwrap();
         assert_eq!(cmds.len(), if skip_trivial { 2 } else { 3 });
@@ -2175,7 +2225,11 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
             blk.push(bgame.create_token("token.ally", p1, false).unwrap());
         }
         bgame.scenario_refresh_priority().unwrap();
-        advance_to_step(&mut bgame, p0, managym::flow::turn::StepKind::DeclareAttackers);
+        advance_to_step(
+            &mut bgame,
+            p0,
+            managym::flow::turn::StepKind::DeclareAttackers,
+        );
         while bgame
             .action_space()
             .is_some_and(|s| s.kind == ActionSpaceKind::DeclareAttacker)
@@ -2189,7 +2243,11 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
                 .unwrap();
             bgame.step(attack_idx).unwrap();
         }
-        advance_to_step(&mut bgame, p0, managym::flow::turn::StepKind::DeclareBlockers);
+        advance_to_step(
+            &mut bgame,
+            p0,
+            managym::flow::turn::StepKind::DeclareBlockers,
+        );
 
         // Split-block drafted on non-canonical blockers (blk[1] -> att[0], blk[0] -> att[1]),
         // skipping blk[2] (first asked) and naming folded attacker att[0] first!
@@ -2320,7 +2378,11 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
     let b0 = mgame.create_token("token.ally", p1, false).unwrap();
     let b1 = mgame.create_token("token.ally", p1, false).unwrap();
     mgame.scenario_refresh_priority().unwrap();
-    advance_to_step(&mut mgame, p0, managym::flow::turn::StepKind::DeclareAttackers);
+    advance_to_step(
+        &mut mgame,
+        p0,
+        managym::flow::turn::StepKind::DeclareAttackers,
+    );
     while mgame
         .action_space()
         .is_some_and(|s| s.kind == ActionSpaceKind::DeclareAttacker)
@@ -2334,7 +2396,11 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
             .unwrap();
         mgame.step(attack_idx).unwrap();
     }
-    advance_to_step(&mut mgame, p0, managym::flow::turn::StepKind::DeclareBlockers);
+    advance_to_step(
+        &mut mgame,
+        p0,
+        managym::flow::turn::StepKind::DeclareBlockers,
+    );
     // m1 was declared first, so m0 is the folded Menace attacker.
     let mframe = mgame.semantic_decision_frame().unwrap();
     let mevents_from = mgame.state.observation_events.len();
@@ -2359,5 +2425,8 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
     for step in &mpreview.steps {
         mfollow.step(step.action_index).unwrap();
     }
-    assert_eq!(declared_blocker_counts(&mfollow, mevents_from, 2), vec![0, 2]);
+    assert_eq!(
+        declared_blocker_counts(&mfollow, mevents_from, 2),
+        vec![0, 2]
+    );
 }

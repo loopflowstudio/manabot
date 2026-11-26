@@ -2187,6 +2187,13 @@
           "title": "Actor",
           "type": "integer"
         },
+        "aliases": {
+          "items": {
+            "$ref": "#/$defs/DecisionObjectView"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
         "choices": {
           "items": {
             "discriminator": {

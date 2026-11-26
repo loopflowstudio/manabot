@@ -2131,6 +2131,10 @@
             "kind": "method",
             "signature": "(self)"
           },
+          "decision_offer_aliases_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
           "decision_offer_subjects_json": {
             "kind": "method",
             "signature": "(self, viewer)"

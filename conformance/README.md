@@ -3,7 +3,7 @@
 Current-world (w17) corpora with executable consumers:
 
 - `semantic-kernel-w17-v6/` — seeded cases (`manifest.json`) whose regenerated
-  traces must match `evidence-battlefield-history-v1.json`'s per-case `trace_sha256`, plus property and
+  traces must match `evidence-interchangeable-v1.json`'s per-case `trace_sha256`, plus property and
   Phase-matrix checks (`managym/tests/semantic_conformance_tests.rs`, CI fuzzing).
   A drifted case is written to `target/semantic-conformance/semantic-kernel-w17-v6/`;
   inspect it with `cargo run --manifest-path managym/Cargo.toml --bin

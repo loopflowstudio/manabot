@@ -381,11 +381,26 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   const at = new Map<string, PlacedOffer[]>();
   const anchorKey = (anchor: Anchor): string =>
     anchor.kind === 'player' ? `player:${anchor.index}` : 'id' in anchor ? `${anchor.kind}:${anchor.id}` : anchor.kind;
-  for (const placed of list) {
-    const key = anchorKey(placed.anchor);
+  const place = (anchor: Anchor, placed: PlacedOffer): void => {
+    const key = anchorKey(anchor);
     const group = at.get(key);
-    if (group) group.push(placed);
-    else at.set(key, [placed]);
+    if (group) {
+      if (!group.includes(placed)) group.push(placed);
+    } else {
+      at.set(key, [placed]);
+    }
+  };
+  for (const placed of list) {
+    place(placed.anchor, placed);
+    // Alias anchors go only on drawn objects (battlefield and hand) so piles
+    // stay whole and every copy sends the canonical offer; tray/list stay one per offer.
+    if (placed.anchor.kind === 'object') {
+      for (const alias of placed.offer.aliases ?? []) {
+        if (alias.subject.kind === 'object' && drawn.has(alias.display_id)) {
+          place({ kind: 'object', id: alias.display_id }, placed);
+        }
+      }
+    }
   }
   const placedAt = new Set<PlacedOffer>();
   const offersAt = (anchor: Anchor): PlacedOffer[] => {

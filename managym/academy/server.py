@@ -2454,10 +2454,16 @@ class GameSession:
             offer_id: int(action["index"]) for offer_id, action in enumerate(actions)
         }
         subjects = json.loads(self.env.decision_offer_subjects_json(viewer))
+        aliases = json.loads(self.env.decision_offer_aliases_json(viewer))
         offers = [
             {
                 "id": offer_id,
                 **({"subjects": subjects[offer_id]} if subjects[offer_id] else {}),
+                **(
+                    {"aliases": aliases[offer_id]}
+                    if offer_id < len(aliases) and aliases[offer_id]
+                    else {}
+                ),
                 "actor": viewer,
                 "verb": offer_verb(str(action.get("type", ""))),
                 "source": next(

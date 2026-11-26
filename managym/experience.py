@@ -218,6 +218,9 @@ class InteractionOffer(ProtocolModel):
     subjects: list[OfferSubjectView] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    aliases: list[DecisionObjectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     id: UInt32
     actor: UInt8
     verb: OfferVerb

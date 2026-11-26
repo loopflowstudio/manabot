@@ -153,6 +153,37 @@ impl Game {
             .collect()
     }
 
+    /// Viewer-safe folded copies for each one-action offer, in native offer order.
+    /// Objects hidden from `viewer` are never exposed.
+    pub fn decision_offer_aliases(&self, viewer: PlayerId) -> Vec<Vec<DecisionObjectView>> {
+        let Some(space) = self.action_space() else {
+            return Vec::new();
+        };
+        if space.player != Some(viewer) {
+            return Vec::new();
+        }
+        let mut by_offer = vec![Vec::new(); space.actions.len()];
+        if self.action_aliases().is_empty() {
+            return by_offer;
+        }
+        for &(offer_index, alias_object) in self.action_aliases() {
+            if offer_index >= by_offer.len() {
+                continue;
+            }
+            if self
+                .visible_reference(alias_object, viewer)
+                .object
+                .is_none()
+            {
+                continue;
+            }
+            if let Some(view) = self.decision_object(alias_object) {
+                by_offer[offer_index].push(view);
+            }
+        }
+        by_offer
+    }
+
     /// Public event identities captured before a transition so a permanent's
     /// later departure cannot turn a committed damage target into a guess.
     /// `object:<slot>` names each battlefield and graveyard appearance by the

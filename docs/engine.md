@@ -229,7 +229,9 @@ life or high of poison for a player who can lose ends the game as
 `GameOutcome::Draw { mandatory_loop: true }`, and Env reports
 `draw_reason: "mandatory_loop"`. A chain that spends counters, cards or
 permanents never repeats a fingerprint, so it is never drawn; 10,000
-resolutions draw a loop that grows something without bound.
+resolutions draw a loop that grows something without bound. Version 32 adds
+`CombatState.declined_attackers` and `declined_blockers` (for combat symmetry
+breaking across indistinguishable creatures) and `TurnState.graveyard_from_battlefield`.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.

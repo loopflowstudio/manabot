@@ -212,6 +212,8 @@ pub enum ChoiceStep {
 pub struct InteractionOffer {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subjects: Vec<OfferSubjectView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<DecisionObjectView>,
     pub id: OfferId,
     pub actor: PlayerId,
     pub verb: OfferVerb,
