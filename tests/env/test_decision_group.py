@@ -484,7 +484,9 @@ def test_decision_offers_expose_folded_aliases() -> None:
     block_offer = block_offers[0]
     assert block_offer.source is not None and block_offer.source.kind == "object"
     assert len(block_offer.aliases) == 1 and block_offer.aliases[0].kind == "object"
-    attacker_items = {(item.item.entity, item.item.incarnation) for item in atk.declarable}
+    attacker_items = {
+        (item.item.entity, item.item.incarnation) for item in atk.declarable
+    }
     assert {
         (block_offer.source.id.entity, block_offer.source.id.incarnation),
         (block_offer.aliases[0].id.entity, block_offer.aliases[0].id.incarnation),

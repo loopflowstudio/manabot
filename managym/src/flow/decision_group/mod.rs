@@ -548,8 +548,16 @@ fn drive_preview<K: DecisionGroupKind>(
     })
 }
 
-fn primary_subject(subjects: &[OfferSubjectView]) -> Option<SubjectRef> {
-    ["target", "source", "choice"]
+/// The object an offer acts on. A blocker offer folds over the attackers it
+/// may block, so its subject is the attacker (`target`), the same class as its
+/// aliases; every other offer, including an attack on a planeswalker, names
+/// its `source` first.
+fn primary_subject(action: Option<&Action>, subjects: &[OfferSubjectView]) -> Option<SubjectRef> {
+    let order = match action {
+        Some(Action::DeclareBlocker { .. }) => ["target", "source", "choice"],
+        _ => ["source", "target", "choice"],
+    };
+    order
         .into_iter()
         .find_map(|role| subjects.iter().find(|view| view.role == role))
         .or_else(|| subjects.first())
@@ -666,7 +674,7 @@ fn project_offers(
         .enumerate()
         .map(|(index, offer)| {
             let offer_subjects = subjects.get(index).map(Vec::as_slice).unwrap_or(&[]);
-            let source = primary_subject(offer_subjects);
+            let source = primary_subject(space.and_then(|s| s.actions.get(index)), offer_subjects);
             let offer_aliases = aliases
                 .get_mut(index)
                 .map(std::mem::take)

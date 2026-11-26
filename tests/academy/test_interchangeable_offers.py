@@ -209,7 +209,7 @@ def test_dual_land_plus_three_plains_folds_with_aliases_replays_and_rejects_stal
     assert replay_frame.frame_hash == finished_cast.frame_hash
 
 
-def test_server_projects_decision_once_per_hero_prompt_and_skips_villain_autoplay(
+def test_server_projects_each_recorded_decision_once(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
@@ -247,11 +247,18 @@ def test_server_projects_decision_once_per_hero_prompt_and_skips_villain_autopla
     assert session.live_decision_group() is None
     assert parse_calls == [session.human_seat]
 
-    # Step past opening keep so villain autoplays its keep/turn without projecting env.decision().
+    # Villain autoplay records its decisions, so each is projected with its
+    # aliases exactly as Watch and Import record that seat; the next hero
+    # prompt is projected once.
     keep = next(offer for offer in frame.offers if offer.label == "Keep hand")
     parse_calls.clear()
     _choose(session, frame, keep)
-    assert all(viewer == session.human_seat for viewer in parse_calls)
-    assert len(parse_calls) == 1
+    villain = 1 - session.human_seat
+    assert parse_calls.count(session.human_seat) == 1
+    assert set(parse_calls) == {session.human_seat, villain}
+    assert parse_calls.count(villain) == sum(
+        1 for decision in session.canonical_decisions if decision.viewer == villain
+    )
+    projected = len(parse_calls)
     assert session.live_decision_group() is None
-    assert len(parse_calls) == 1
+    assert len(parse_calls) == projected

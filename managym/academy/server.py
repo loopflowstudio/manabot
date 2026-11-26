@@ -2556,7 +2556,9 @@ class GameSession:
                 raise RuntimeError("Villain auto-play exceeded safety step limit.")
             steps += 1
 
-            context = self._build_decision_context(self.obs, viewer=1 - self.human_seat)
+            context = self._build_decision_context(
+                self.obs, viewer=1 - self.human_seat, include_decision=True
+            )
             if self._villain_offer_policy is not None:
                 offer_id = int(self._villain_offer_policy(context))
                 action_index = context.action_by_offer.get(offer_id)
@@ -2855,9 +2857,7 @@ class GameSession:
             offer_id: int(action["index"]) for offer_id, action in enumerate(actions)
         }
         subjects = json.loads(self.env.decision_offer_subjects_json(viewer))
-        active_decision = (
-            self.env.decision(viewer=viewer) if include_decision else None
-        )
+        active_decision = self.env.decision(viewer=viewer) if include_decision else None
         decision_offers = active_decision.offers if active_decision is not None else []
         offers = [
             {

@@ -288,9 +288,7 @@ def step_watch(
     context = (
         game._publish_current_prompt()
         if seat == 0
-        else game._build_decision_context(
-            game.obs, viewer=seat, include_decision=True
-        )
+        else game._build_decision_context(game.obs, viewer=seat, include_decision=True)
     )
     assert context is not None
     assert game.watch_policies is not None

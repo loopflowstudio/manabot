@@ -50,7 +50,10 @@ fn position_with_skip(
         487,
         skip_trivial,
     );
-    while game.action_space().is_some_and(|s| s.kind != ActionSpaceKind::Priority) {
+    while game
+        .action_space()
+        .is_some_and(|s| s.kind != ActionSpaceKind::Priority)
+    {
         game.step(0).unwrap();
     }
     let player = PlayerId(0);
@@ -2848,7 +2851,11 @@ fn combat_describe_respects_committed_declines_for_blockers_and_attackers() {
             .unwrap()
             .summoning_sick = false;
         game.scenario_refresh_priority().unwrap();
-        advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareAttackers);
+        advance_to_step(
+            &mut game,
+            p0,
+            managym::flow::turn::StepKind::DeclareAttackers,
+        );
 
         let r_ogre1 = render_perm(&game, ogre1);
         let r_tok2 = render_perm(&game, token2);
@@ -2897,7 +2904,11 @@ fn combat_describe_respects_committed_declines_for_blockers_and_attackers() {
             .unwrap()
             .summoning_sick = false;
         game.scenario_refresh_priority().unwrap();
-        advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareAttackers);
+        advance_to_step(
+            &mut game,
+            p0,
+            managym::flow::turn::StepKind::DeclareAttackers,
+        );
 
         let decline_idx = game
             .action_space()
