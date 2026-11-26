@@ -1432,7 +1432,7 @@ pub(crate) fn project_frame(
     if let Some(source) = effect.source_ref() {
         out.retained_object(source);
     }
-    if let Some(target) = effect.context_target {
+    if let Some(target) = effect.context {
         out.retained_target(target);
     }
     if let Some(attached) = effect.attached {

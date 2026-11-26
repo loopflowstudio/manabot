@@ -13413,6 +13413,41 @@ fn raven_eagle_exiles_graveyard_cards_clues_creatures_and_drains_on_your_second_
     assert_eq!((s.life(0), s.life(1)), (mine + 1, theirs - 1));
 }
 
+/// Entering or attacking without a chosen graveyard target leaves Raven Eagle
+/// untouched, exiles nothing, and makes no Clue.
+#[test]
+fn raven_eagle_without_a_chosen_target_leaves_itself_alone() {
+    for with_graveyard_card in [false, true] {
+        let mut s = five_color_setup(&["Raven Eagle", "Gray Ogre"]);
+        let ogre = with_graveyard_card.then(|| plant_in_graveyard(&mut s, 1, "Gray Ogre"));
+        enter_battlefield(&mut s, "Raven Eagle");
+        if with_graveyard_card {
+            pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+            assert!(s.take_action_by_type(ActionType::DeclineChoice));
+        }
+        settle(&mut s);
+        let eagle = permanent_named(&s, "Raven Eagle");
+        clear_summoning_sickness(&mut s, eagle);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, eagle);
+        if with_graveyard_card {
+            pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+            assert!(s.take_action_by_type(ActionType::DeclineChoice));
+        }
+        settle(&mut s);
+        assert_eq!(
+            s.battlefield_permanents_named(0, "Raven Eagle"),
+            vec![eagle]
+        );
+        if let Some(ogre) = ogre {
+            assert_eq!(zone_of(&s, ogre), Some(ZoneType::Graveyard));
+        }
+        s.assert_zone_size(0, ZoneType::Exile, 0);
+        s.assert_zone_size(1, ZoneType::Exile, 0);
+        assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
+    }
+}
+
 /// From the graveyard, your second draw offers {B} to return it with a
 /// finality counter; dying again exiles it.
 #[test]

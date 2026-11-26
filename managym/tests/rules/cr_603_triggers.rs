@@ -398,3 +398,68 @@ fn chosen_mode_trigger_keeps_its_printed_ability_and_intervening_if() {
         "one creature left: the intervening if fails"
     );
 }
+
+/// An attack trigger with an "up to one target" clause and no chosen target
+/// must not fall back to the attacking creature for object verbs, player
+/// readings, or target conditions.
+#[test]
+fn attack_trigger_with_no_chosen_target_does_not_fall_back_to_attacker() {
+    use crate::support::{
+        inspect::card_of,
+        play::{attack_with, pass_until, settle},
+    };
+    use managym::{
+        agent::action::ActionType,
+        state::{
+            ability::{
+                Ability, Condition, Effect, EffectValue, ObjectSelector, Per, PlayerSelector,
+                TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+            },
+            predicate::CardPredicate,
+        },
+    };
+
+    for with_opponent_creature in [false, true] {
+        let mut s = five_color_setup(&["Hill Giant", "Gray Ogre"]);
+        let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+        let giant_card = card_of(&s, giant);
+        let spec = TargetSpec::CreatureOpponentControls;
+        s.game_mut().state[giant_card].abilities = vec![Ability::Triggered {
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+            intervening_if: None,
+            effects: vec![Effect::TargetClause {
+                requirement: TargetRequirement::up_to(1, spec.clone()),
+                effects: vec![
+                    Effect::If {
+                        condition: Condition::TargetMatches(CardPredicate::creature()),
+                        then: vec![Effect::gain_life(4)],
+                        otherwise: vec![],
+                    },
+                    Effect::DealDamageToPlayer {
+                        player: PlayerSelector::TargetController,
+                        amount: EffectValue::Fixed(3),
+                    },
+                    Effect::exile(ObjectSelector::Target(spec)),
+                ],
+            }],
+        }];
+        let ogre = with_opponent_creature.then(|| s.force_permanent_on_battlefield(1, "Gray Ogre"));
+        clear_summoning_sickness(&mut s, giant);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, giant);
+        if with_opponent_creature {
+            pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+            assert!(s.take_action_by_type(ActionType::DeclineChoice));
+        }
+        settle(&mut s);
+
+        assert_eq!(s.battlefield_permanents_named(0, "Hill Giant"), vec![giant]);
+        s.assert_life(0, 20);
+        s.assert_life(1, 20);
+        s.assert_zone_size(0, ZoneType::Exile, 0);
+        s.assert_zone_size(1, ZoneType::Exile, 0);
+        if let Some(ogre) = ogre {
+            assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre"), vec![ogre]);
+        }
+    }
+}
