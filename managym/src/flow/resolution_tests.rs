@@ -115,7 +115,7 @@ fn stack(
                 x: 0,
                 loyalty_change: None,
                 granted_by: None,
-                provenance: crate::state::ability::AbilityProvenance::Characteristic,
+                ability_set: crate::state::ability::AbilitySet::Printed(source_definition_id),
                 paid: Default::default(),
             })
         }
@@ -141,7 +141,9 @@ fn stack(
             player: None,
             chosen_modes: Vec::new(),
             inline_effects: Some(effects),
-            provenance: crate::state::ability::AbilityProvenance::Characteristic,
+            ability_set: Some(crate::state::ability::AbilitySet::Printed(
+                source_definition_id,
+            )),
             x: 0,
             spent: Default::default(),
         }),
@@ -726,7 +728,9 @@ fn counter_spell_cannot_affect_an_ability() {
             what: ObjectSelector::Target(TargetSpec::Spell),
             exile: false,
         }]),
-        provenance: crate::state::ability::AbilityProvenance::Characteristic,
+        ability_set: Some(crate::state::ability::AbilitySet::Printed(
+            game.state[source_object].definition_id,
+        )),
         x: 0,
         spent: Default::default(),
     }));
@@ -2910,9 +2914,10 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
     }];
     let returned = exiled_counter_entry(&mut game, player);
     let returned_ref = game.state.now(returned);
+    let source_def = game.state[source_object].definition_id;
     game.state.exile_links.push(ExileLink {
         source: source_ref,
-        characteristic_set: None,
+        ability_set: crate::state::ability::AbilitySet::Printed(source_def),
         exiled_object: returned_ref,
         returns: true,
     });
@@ -3061,9 +3066,10 @@ fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
     let source_ref = game.permanent_object(source).unwrap();
     let returned = exiled_counter_entry(&mut game, player);
     let returned_ref = game.state.now(returned);
+    let source_def = game.state[source_object].definition_id;
     game.state.exile_links.push(ExileLink {
         source: source_ref,
-        characteristic_set: None,
+        ability_set: crate::state::ability::AbilitySet::Printed(source_def),
         exiled_object: returned_ref,
         returns: true,
     });
@@ -3484,9 +3490,10 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
     let returned_ref = game.state.now(returned);
     // The real Merchant program is the consumer; this constructed link isolates
     // a source departure whose consequent entry asks a replacement question.
+    let source_def = game.state[source].definition_id;
     game.state.exile_links.push(ExileLink {
         source: source_ref,
-        characteristic_set: None,
+        ability_set: crate::state::ability::AbilitySet::Printed(source_def),
         exiled_object: returned_ref,
         returns: true,
     });

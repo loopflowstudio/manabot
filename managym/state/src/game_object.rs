@@ -672,10 +672,6 @@ pub struct ObjectForm {
     /// The copy effect that made this object a copy (CR 707.2); the shown
     /// face is then the copiable values that effect produced.
     copy: Option<crate::effect::CopyEffect>,
-    /// CR 607.1a/d, 607.5: for an emblem created by an ability, the exact
-    /// creating object and its characteristic set (`None` for a Layer-6
-    /// granted ability).
-    emblem_source: Option<crate::ability::LinkedAbilitySource>,
 }
 
 /// One object in a game: a card, a token or a copy of a spell, told apart
@@ -781,17 +777,6 @@ impl Object {
     /// The copy effect that made this object a copy (CR 707.2).
     pub fn copy(&self) -> Option<&crate::effect::CopyEffect> {
         self.form.as_deref()?.copy.as_ref()
-    }
-
-    /// CR 607.1a/d, 607.5: the creating object and characteristic set latched
-    /// onto an emblem when created.
-    pub fn emblem_source(&self) -> Option<crate::ability::LinkedAbilitySource> {
-        self.form.as_deref()?.emblem_source
-    }
-
-    /// Latch `{ creator, characteristic_set }` onto an emblem (CR 607.1a/d, 607.5).
-    pub fn set_emblem_source(&mut self, source: crate::ability::LinkedAbilitySource) {
-        self.form.get_or_insert_with(Default::default).emblem_source = Some(source);
     }
 
     /// The printing behind a face-down, melded or entry-copy form.
@@ -988,7 +973,6 @@ impl Object {
             form.backing.is_none()
                 && !form.face_down
                 && form.copy.is_none()
-                && form.emblem_source.is_none()
                 && form
                     .faces
                     .as_ref()

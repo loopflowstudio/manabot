@@ -6,8 +6,8 @@ use crate::{
     flow::{game::Game, statics::Characteristics},
     state::{
         ability::{
-            Ability, AbilityOrigin, Condition, Effect, EffectValue, EffectiveTrigger, Except,
-            GrantClock, ObjectProperty, ObjectSelector, Scope,
+            Ability, AbilityOrigin, AbilitySet, Condition, Effect, EffectValue, EffectiveTrigger,
+            Except, GrantClock, GrantKey, ObjectProperty, ObjectSelector, Scope,
         },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -77,44 +77,53 @@ impl Layer {
     }
 }
 
-/// Condition-independent generator pre-filter for static-bearing objects across
+/// Condition-independent generator filter for static-bearing objects across
 /// the battlefield and command zone.
 ///
-/// Built once at the top of `Context::evaluate` after base reset and before
-/// per-layer gathers. Over-includes conservatively (every functioning
+/// Built once at the top of `Context::evaluate` by scanning all layer objects
+/// after base reset; subsequent gathers (`discover()`, `compute_board`,
+/// `for_each_functioning_static`) then scale with generators rather than the
+/// whole battlefield. Over-includes conservatively (every functioning
 /// battlefield permanent and command-zone emblem whose base definition carries
 /// a static ability, plus any functioning permanent granted a static in layer 6)
 /// and never evaluates runtime conditions, so dependency changes and condition
 /// flips cannot hide a generator.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct StaticSourceIndex {
+pub(super) struct StaticSources {
     /// Functioning battlefield permanents carrying static abilities, per seat.
-    pub(crate) battlefield: [Vec<PermanentId>; 2],
+    ///
+    /// Invariant: buckets use `live_permanent(id).controller` (the controller
+    /// committed by the previous evaluation). That is safe during layer
+    /// evaluation only because layer consumers ignore bucket order and sort by
+    /// timestamp, `compute_board` reads each permanent's newly evaluated
+    /// controller before recording permissions/restrictions, and any committed
+    /// control change invalidates the cached `LayerBoard`.
+    pub(super) battlefield: [Vec<PermanentId>; 2],
     /// Functioning command-zone objects (CR 114.4 emblems) carrying static
     /// abilities, per seat.
-    pub(crate) command: [Vec<ObjectId>; 2],
+    pub(super) command: [Vec<ObjectId>; 2],
 }
 
-impl StaticSourceIndex {
-    /// Collect every functioning battlefield permanent and command-zone emblem
-    /// whose base definition carries a static ability, without evaluating
-    /// runtime conditions.
+impl StaticSources {
+    /// Scan every layer object and command-zone emblem to collect functioning
+    /// objects whose base definition carries a static ability, without
+    /// evaluating runtime conditions.
     fn collect(game: &Game, objects: &BTreeMap<PermanentId, Arc<LayerObject>>) -> Self {
-        let mut index = Self::default();
+        let mut sources = Self::default();
         for (&id, object) in objects {
             if !object.statics.is_empty() && game.permanent_abilities_function(id) {
                 let seat = game.live_permanent(id).controller.0;
-                index.battlefield[seat].push(id);
+                sources.battlefield[seat].push(id);
             }
         }
         for seat in [PlayerId(0), PlayerId(1)] {
             for object in game.functioning_command_objects_for(seat) {
-                if !game.state[object].statics.is_empty() {
-                    index.command[seat.0].push(object);
+                if game.functioning_object_statics(object).next().is_some() {
+                    sources.command[seat.0].push(object);
                 }
             }
         }
-        index
+        sources
     }
 
     /// Record a permanent that gained a static ability during layer 6
@@ -157,7 +166,7 @@ impl StaticSourceIndex {
         }
     }
 
-    pub(crate) fn battlefield_ids(
+    pub(super) fn battlefield_ids(
         &self,
         controller: Option<PlayerId>,
     ) -> impl Iterator<Item = PermanentId> + '_ {
@@ -171,7 +180,7 @@ impl StaticSourceIndex {
             .flat_map(|&seat| self.battlefield[seat].iter().copied())
     }
 
-    pub(crate) fn command_objects(
+    pub(super) fn command_objects(
         &self,
         controller: Option<PlayerId>,
     ) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
@@ -697,7 +706,7 @@ impl<'a> Context<'a> {
     pub fn evaluate(
         game: &'a Game,
         seeds: Option<&mut Vec<Option<Arc<SourceSeed>>>>,
-    ) -> (Self, StaticSourceIndex) {
+    ) -> (Self, StaticSources) {
         #[cfg(feature = "benchmark")]
         let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
             m.boards += 1;
@@ -766,11 +775,19 @@ impl<'a> Context<'a> {
                 }
             }
             if has_effects {
+                let latest_inherit = game
+                    .effects_on(id)
+                    .filter(|record| record.modification == Modification::HasAbilitiesOfSource)
+                    .map(|record| record.timestamp)
+                    .last();
                 for (i, record) in game.effects_on(id).enumerate() {
                     let Some(layer) = layer(&record.modification) else {
                         continue;
                     };
                     let operation = if record.modification == Modification::HasAbilitiesOfSource {
+                        if Some(record.timestamp) != latest_inherit {
+                            continue;
+                        }
                         Operation::Inherit
                     } else if record.modification == Modification::Control {
                         Operation::Control(record.controller)
@@ -793,9 +810,9 @@ impl<'a> Context<'a> {
                 }
             }
         }
-        // Build the condition-independent generator index once after base
+        // Build the condition-independent generator filter once after base
         // reset, before gathering initial static nodes or running layers.
-        let mut static_sources = StaticSourceIndex::collect(game, &context.objects);
+        let mut static_sources = StaticSources::collect(game, &context.objects);
         for id in static_sources.battlefield_ids(None) {
             let seed = seeds[id.0].as_ref().unwrap();
             for node in &seed.nodes {
@@ -803,15 +820,12 @@ impl<'a> Context<'a> {
             }
         }
         for (_, source) in static_sources.command_objects(None) {
-            let emblem = &game.state[source];
-            for (index, ability) in emblem.statics.iter().enumerate() {
-                if !game.static_ability_functions(source, ability) {
-                    continue;
-                }
+            let emblem_id = game.state[source].id;
+            for (index, ability) in game.functioning_object_statics_indexed(source) {
                 let entry = StaticEntry {
                     origin: AbilityOrigin::Object(source),
                     key: vec![usize::MAX, index, source.slot()],
-                    timestamp: emblem.id,
+                    timestamp: emblem_id,
                     ability: ability.clone(),
                 };
                 if let Some(node) = Self::static_node(game, NodeSource::command(source), &entry) {
@@ -942,14 +956,22 @@ impl<'a> Context<'a> {
                 ward: source.ward().cloned(),
                 power: source.power.unwrap_or(0),
                 toughness: source.toughness.unwrap_or(0),
-                activated_abilities: source.activated_abilities.clone(),
+                activated_abilities: source
+                    .activated_abilities
+                    .iter()
+                    .cloned()
+                    .map(|mut ability| {
+                        ability.ability_set = Some(AbilitySet::Printed(source.definition_id));
+                        ability
+                    })
+                    .collect(),
                 triggered_abilities: source
                     .abilities
                     .iter()
                     .cloned()
                     .map(|ability| EffectiveTrigger {
                         origin: AbilityOrigin::Own,
-                        provenance: crate::state::ability::AbilityProvenance::Characteristic,
+                        ability_set: AbilitySet::Printed(source.definition_id),
                         clock: None,
                         ability,
                         program: false,
@@ -1779,7 +1801,6 @@ impl<'a> Context<'a> {
                     grantor: source.object,
                     index,
                 });
-                granted.provenance = crate::state::ability::AbilityProvenance::Granted;
                 add(
                     Layer::Ability,
                     Modification::GrantActivated(Box::new(granted)),
@@ -1824,12 +1845,15 @@ impl<'a> Context<'a> {
         mut granted: Option<&mut Vec<Node>>,
     ) {
         let grantor = node.source.permanent;
+        let static_slot = matches!(node.kind, NodeKind::Static { .. })
+            .then_some(node.key[1])
+            .filter(|&slot| slot != usize::MAX);
+        let grant_key = GrantKey::new(grantor, node.timestamp, static_slot);
+        let acquired = AbilitySet::Acquired(grant_key);
         let clock = |ability: &Ability, index| {
             let Ability::Triggered { condition, .. } = ability;
             condition.once_each_turn().then(|| GrantClock {
-                timestamp: node.timestamp,
-                grantor,
-                static_slot: (node.key[1] != usize::MAX).then_some(node.key[1]),
+                grant: grant_key,
                 ability_index: index,
             })
         };
@@ -1859,8 +1883,12 @@ impl<'a> Context<'a> {
                     view.subtypes.push(subtype.clone());
                     view.added_subtypes.push(subtype.clone());
                     lose_all_abilities(view, &mut object.statics);
-                    view.activated_abilities
-                        .extend(intrinsic_mana_ability(|name| name == subtype));
+                    view.activated_abilities.extend(
+                        intrinsic_mana_ability(|name| name == subtype).map(|mut ability| {
+                            ability.ability_set = Some(acquired);
+                            ability
+                        }),
+                    );
                 }
                 Operation::Inherit => {
                     if let Some(definition) = self.game.inherited_definition(id) {
@@ -1873,8 +1901,7 @@ impl<'a> Context<'a> {
                                 .iter()
                                 .cloned()
                                 .map(|mut ability| {
-                                    ability.provenance =
-                                        crate::state::ability::AbilityProvenance::Granted;
+                                    ability.ability_set = Some(acquired);
                                     ability
                                 }),
                         );
@@ -1882,7 +1909,7 @@ impl<'a> Context<'a> {
                             definition.abilities.iter().cloned().enumerate().map(
                                 |(index, ability)| EffectiveTrigger {
                                     origin,
-                                    provenance: crate::state::ability::AbilityProvenance::Granted,
+                                    ability_set: acquired,
                                     clock: clock(&ability, index),
                                     ability,
                                     program: false,
@@ -1894,7 +1921,7 @@ impl<'a> Context<'a> {
                 Operation::CatalogTrigger(ability) => {
                     view.triggered_abilities.push(EffectiveTrigger {
                         origin,
-                        provenance: crate::state::ability::AbilityProvenance::Granted,
+                        ability_set: acquired,
                         clock: clock(ability, 0),
                         ability: (**ability).clone(),
                         program: false,
@@ -1928,6 +1955,10 @@ impl<'a> Context<'a> {
                             let gained = intrinsic_mana_ability(|name| {
                                 types.iter().any(|subtype| subtype == name)
                                     && !view.subtypes.iter().any(|subtype| subtype == name)
+                            })
+                            .map(|mut ability| {
+                                ability.ability_set = Some(acquired);
+                                ability
                             });
                             view.activated_abilities.extend(gained);
                         }
@@ -2028,7 +2059,7 @@ impl<'a> Context<'a> {
                         view.firebending = view.firebending.saturating_add(*n);
                         view.triggered_abilities.push(EffectiveTrigger {
                             origin,
-                            provenance: crate::state::ability::AbilityProvenance::Granted,
+                            ability_set: acquired,
                             clock: None,
                             ability: Ability::firebending(*n),
                             program: true,
@@ -2037,13 +2068,13 @@ impl<'a> Context<'a> {
                     Modification::GrantActivated(ability) => {
                         object.dirty |= DIRTY_ACTIVATIONS;
                         let mut granted = (**ability).clone();
-                        granted.provenance = crate::state::ability::AbilityProvenance::Granted;
+                        granted.ability_set = Some(acquired);
                         view.activated_abilities.push(granted);
                     }
                     Modification::GrantTriggered(ability) => {
                         view.triggered_abilities.push(EffectiveTrigger {
                             origin,
-                            provenance: crate::state::ability::AbilityProvenance::Granted,
+                            ability_set: acquired,
                             clock: clock(ability, 0),
                             ability: (**ability).clone(),
                             program: true,
@@ -2055,7 +2086,7 @@ impl<'a> Context<'a> {
                             view.ward = Some(cost.clone());
                             view.triggered_abilities.push(EffectiveTrigger {
                                 origin,
-                                provenance: crate::state::ability::AbilityProvenance::Granted,
+                                ability_set: acquired,
                                 clock: None,
                                 ability: Ability::ward(cost.clone()),
                                 program: true,

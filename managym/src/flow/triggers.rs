@@ -772,7 +772,7 @@ impl Game {
             spent: trigger.spent,
             chosen_modes: trigger.chosen_modes,
             inline_effects: trigger.inline_effects,
-            provenance: trigger.provenance,
+            ability_set: trigger.ability_set,
         }));
         self.emit(GameEvent::AbilityTriggered {
             source_object: trigger.source_identity.object(),
@@ -1145,12 +1145,14 @@ impl Game {
         {
             let controller = source.controller;
             let source_object = source.object;
-            let (ability_index, granted, program, provenance) = match ability {
+            let (ability_index, granted, program, ability_set) = match ability {
                 TriggerAbility::Printed(index) => (
                     index,
                     None,
                     false,
-                    crate::state::ability::AbilityProvenance::Characteristic,
+                    Some(crate::state::ability::AbilitySet::Printed(
+                        source.definition,
+                    )),
                 ),
                 TriggerAbility::Granted(grant) => {
                     let Ability::Triggered {
@@ -1167,7 +1169,7 @@ impl Game {
                         }],
                         None => effects.clone(),
                     };
-                    (0, Some(inline), grant.program, grant.provenance)
+                    (0, Some(inline), grant.program, Some(grant.ability_set))
                 }
             };
             let attacker = match event {
@@ -1198,7 +1200,7 @@ impl Game {
                 player,
                 attacker,
                 inline_effects: granted,
-                provenance,
+                ability_set,
                 program,
                 ..PendingTrigger::new(
                     id,
@@ -1707,8 +1709,10 @@ impl Game {
             let id = self.next_trigger_id();
             let object = source.object;
             let controller = source.controller;
+            let definition = source.definition;
             self.state.pending_triggers_mut().push(PendingTrigger {
                 source_lki: source.lki,
+                ability_set: Some(crate::state::ability::AbilitySet::Printed(definition)),
                 ..PendingTrigger::new(
                     id,
                     controller,

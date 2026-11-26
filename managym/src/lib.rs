@@ -23,8 +23,6 @@ mod permanent_details;
 pub mod possible_worlds;
 pub mod python;
 pub mod search_state;
-#[cfg(test)]
-mod source_census;
 pub mod state;
 pub mod study;
 pub mod world;

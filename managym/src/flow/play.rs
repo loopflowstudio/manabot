@@ -532,10 +532,7 @@ impl Game {
                 cost = cost.plus(kicker);
             }
         }
-        for ability in &card_ref.statics {
-            if !self.static_ability_functions(object, ability) {
-                continue;
-            }
+        for ability in self.functioning_object_statics(object) {
             let count = match ability {
                 StaticAbility::CostsLessPerPermanent(predicate) => {
                     self.count_battlefield_matching(player, predicate)
@@ -2268,8 +2265,11 @@ impl Game {
             .record_activation(permanent_id, ability_index, &ability);
 
         debug_assert!(
-            ability.granted_by.is_none() || ability.provenance.is_granted(),
-            "attached ability grant must carry Granted provenance"
+            ability.granted_by.is_none()
+                || ability
+                    .ability_set
+                    .is_some_and(crate::state::ability::AbilitySet::is_acquired),
+            "attached ability grant must carry an Acquired ability set"
         );
         let id = self.state.id_gen_mut().next_id();
         Ok(ActivatedAbilityOnStack {
@@ -2291,7 +2291,11 @@ impl Game {
             x,
             loyalty_change: ability.loyalty.map(|cost| cost.counter_change(x)),
             granted_by: ability.granted_by,
-            provenance: ability.provenance,
+            ability_set: ability
+                .ability_set
+                .unwrap_or(crate::state::ability::AbilitySet::Printed(
+                    source_definition_id,
+                )),
             paid: PaymentReceipt::default(),
         })
     }
@@ -2314,6 +2318,7 @@ impl Game {
             .state
             .live(self.state.object_of(card))
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
+        let source_definition_id = self.state[self.state.object_of(card)].definition_id;
         let id = self.state.id_gen_mut().next_id();
         Ok(ActivatedAbilityOnStack {
             target_req_indices: Vec::new(),
@@ -2324,7 +2329,7 @@ impl Game {
             inherited_from: None,
             id,
             controller: player,
-            source_definition_id: self.state[self.state.object_of(card)].definition_id,
+            source_definition_id,
             source_object,
             ability_index,
             targets,
@@ -2332,7 +2337,7 @@ impl Game {
             x: 0,
             loyalty_change: None,
             granted_by: None,
-            provenance: crate::state::ability::AbilityProvenance::Characteristic,
+            ability_set: crate::state::ability::AbilitySet::Printed(source_definition_id),
             paid: PaymentReceipt::default(),
         })
     }

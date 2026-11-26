@@ -16068,6 +16068,94 @@ fn koh_inherited_death_trigger_uses_last_known_abilities() {
     );
 }
 
+/// CR 607.5: Koh inheriting Boiling Rock Rioter acquires both linked abilities
+/// through one effect, so cards exiled by the inherited activated ability are
+/// castable via the inherited attack trigger, hidden from Koh's printed choice,
+/// and unreachable after Koh re-chooses Boiling Rock Rioter (a new grant).
+#[test]
+fn koh_inherits_boiling_rock_rioter_linked_exile_pair_under_cr_607_5() {
+    let mut s = five_color_setup(&[
+        "Koh, the Face Stealer",
+        "Boiling Rock Rioter",
+        "Ty Lee, Chi Blocker",
+    ]);
+    let koh = koh_inherits(&mut s, "Boiling Rock Rioter");
+    let ally = s
+        .game_mut()
+        .create_token("token.ally", PlayerId(0))
+        .unwrap();
+    let ty_lee_first = plant_in_graveyard(&mut s, 0, "Ty Lee, Chi Blocker");
+    let ty_lee_second = plant_in_graveyard(&mut s, 0, "Ty Lee, Chi Blocker");
+
+    let exile_with_inherited_rioter = |s: &mut Scenario, target_card: ObjectId| {
+        s.game_mut().state.permanents[ally].as_mut().unwrap().tapped = false;
+        let target = now(s, target_card);
+        activate(s, koh, 1);
+        assert!(s.choose_target(Target::GraveyardCard(target)));
+        assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+        let payer_card = card_of(s, ally);
+        select_card(s, payer_card);
+        settle(s);
+        assert_eq!(zone_of(s, target_card), Some(ZoneType::Exile));
+    };
+
+    // Exile the first Ty Lee through Koh's inherited Rioter ability.
+    exile_with_inherited_rioter(&mut s, ty_lee_first);
+
+    // Attack with Koh: the inherited attack trigger pairs with the inherited
+    // exile and offers casting Ty Lee.
+    clear_summoning_sickness(&mut s, koh);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, koh);
+    s.set_player_mana_pool(0, "2U");
+    s.advance_until(
+        |s| {
+            s.action_space().kind == ActionSpaceKind::LookAndSelect
+                && offered_cards(s).contains(&now(s, ty_lee_first))
+        },
+        "inherited Rioter attack trigger offers casting Ty Lee".into(),
+    );
+    let ty_lee_exiled = now(&s, ty_lee_first);
+    assert_eq!(offered_cards(&s), vec![ty_lee_exiled]);
+    select_card(&mut s, ty_lee_exiled);
+    settle(&mut s);
+    assert_eq!(
+        zone_of(&s, ty_lee_first),
+        Some(ZoneType::Battlefield),
+        "CR 607.5: inherited linked attack trigger casts Ally exiled by inherited activated ability"
+    );
+
+    // Back in main phase: exile a second Ty Lee via the inherited Rioter ability.
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    exile_with_inherited_rioter(&mut s, ty_lee_second);
+
+    // Koh's printed "choose a creature card exiled with Koh" ability lists ONLY
+    // Boiling Rock Rioter, NOT Ty Lee exiled by the inherited ability.
+    activate(&mut s, koh, 0);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(
+        s.action_space().actions.len(),
+        1,
+        "CR 607.5: Koh's printed linked choice must not see cards exiled by an inherited ability"
+    );
+    // Re-choosing Boiling Rock Rioter creates a new acquiring effect (new grant key).
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+
+    // On the next attack, the re-acquired Rioter trigger cannot reach the prior
+    // grant's exiled Ty Lee.
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.game_mut().state.permanents[koh].as_mut().unwrap().tapped = false;
+    s.set_player_mana_pool(0, "2U");
+    attack_with(&mut s, koh);
+    settle(&mut s);
+    assert_eq!(
+        zone_of(&s, ty_lee_second),
+        Some(ZoneType::Exile),
+        "CR 607.5: re-choosing creates a new acquiring effect that cannot cast old grant's exiles"
+    );
+}
+
 #[test]
 fn foggy_swamp_visions_waits_for_its_controllers_next_end_step() {
     let mut s = five_color_setup(&["Foggy Swamp Visions", "Gray Ogre"]);

@@ -5,7 +5,7 @@ use crate::{
     flow::{
         decision::EffectFrame,
         game::{Game, Revisions},
-        layers::{matches_view, Context, SourceSeed, StateReads, StaticSourceIndex},
+        layers::{matches_view, Context, SourceSeed, StateReads, StaticSources},
         proposed_event::{EntryFace, ZoneEntry},
         triggers::TriggerIndex,
         turn::RecordedCast,
@@ -245,9 +245,9 @@ pub(super) struct LayerBoard {
     /// Layered permissions for both seats, computed during the board's scan.
     pub play_permissions: [StaticPlayPermissions; 2],
     restrictions: Vec<(PermanentId, PlayerId, StaticRestriction)>,
-    /// Indexed functioning static generators (`O(|generators|)` reads across
-    /// the battlefield and command zone).
-    pub(super) static_sources: StaticSourceIndex,
+    /// Filtered functioning static generators (`O(|generators|)` downstream
+    /// gathers across the battlefield and command zone).
+    pub(super) static_sources: StaticSources,
     reads: StateReads,
     /// Finalization can inspect state beyond the raw layer view. Ordinary
     /// fixed activations retain their finalized entry across state writes
@@ -400,19 +400,17 @@ impl Game {
         for (controller, object) in static_sources.command_objects(None) {
             let permissions = &mut play_permissions[controller.0];
             let player_mods = &mut player_modifications[controller.0];
-            let record = &self.state[object];
-            for ability in &record.statics {
-                if self.static_ability_functions(object, ability) {
-                    apply_play_static(
-                        ability,
-                        object,
-                        record.id,
-                        permissions,
-                        player_mods,
-                        &mut land_plays_each_player,
-                        &mut dynamic_activations,
-                    );
-                }
+            let record_id = self.state[object].id;
+            for ability in self.functioning_object_statics(object) {
+                apply_play_static(
+                    ability,
+                    object,
+                    record_id,
+                    permissions,
+                    player_mods,
+                    &mut land_plays_each_player,
+                    &mut dynamic_activations,
+                );
             }
         }
         static_sources.finalize_for_board(self, &objects);
@@ -427,15 +425,15 @@ impl Game {
                     let seat = self.state.permanents[id].as_ref().unwrap().controller.0;
                     debug_assert!(
                         static_sources.battlefield[seat].contains(&id),
-                        "StaticSourceIndex missed functioning battlefield static {id:?}"
+                        "StaticSources missed functioning battlefield static {id:?}"
                     );
                 }
             }
             for (seat, object) in self.functioning_command_objects() {
-                if !self.state[object].statics.is_empty() {
+                if self.functioning_object_statics(object).next().is_some() {
                     debug_assert!(
                         static_sources.command[seat.0].contains(&object),
-                        "StaticSourceIndex missed functioning command-zone static {object:?}"
+                        "StaticSources missed functioning command-zone static {object:?}"
                     );
                 }
             }
@@ -2219,8 +2217,8 @@ mod cache_tests {
             }],
         )];
 
-        // Even while the anthem's Artifact condition is false, StaticSourceIndex
-        // still indexes ONLY the 1 anthem and 1 emblem (never the 64 tokens).
+        // Even while the anthem's Artifact condition is false, StaticSources
+        // still retains ONLY the 1 anthem and 1 emblem (never the 64 tokens).
         let board = game.layer_board();
         assert_eq!(board.static_sources.battlefield[0], vec![anthem]);
         assert!(board.static_sources.battlefield[1].is_empty());

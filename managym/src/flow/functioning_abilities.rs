@@ -23,11 +23,7 @@ pub(crate) enum FunctionZones {
     AllZones,
     /// CR 113.6 default + CR 114.4: battlefield permanents (while phased in)
     /// and emblems in the command zone.
-    Battlefield,
-    /// Explicit opt-in for abilities that function in the command zone even on
-    /// non-emblem objects (CR 113.6, CR 114.4).
-    #[allow(dead_code)]
-    Command,
+    Default,
     /// CR 113.6b: functions only while the object is a spell on the stack
     /// (`CantBeCountered`, `YouCastThis`, stack-resolution replacements).
     Stack,
@@ -69,14 +65,13 @@ pub(crate) fn ability_functions_in(
     }
     match zones {
         FunctionZones::AllZones => true,
-        FunctionZones::Battlefield => match zone {
+        FunctionZones::Default => match zone {
             Some(ZoneType::Battlefield) => true,
             // CR 114.4: command-zone objects function by default only when
             // they are emblems.
             Some(ZoneType::Command) => kind == ObjectKind::Emblem,
             _ => false,
         },
-        FunctionZones::Command => zone == Some(ZoneType::Command),
         FunctionZones::Stack => zone == Some(ZoneType::Stack),
         FunctionZones::Hand => zone == Some(ZoneType::Hand),
         FunctionZones::Graveyard => zone == Some(ZoneType::Graveyard),
@@ -154,7 +149,7 @@ pub(crate) fn static_ability_zones(ability: &StaticAbility) -> FunctionZones {
         | StaticAbility::SpellsFromOutsideHandCostLess(_)
         | StaticAbility::UntapsDuringOtherUntapSteps
         | StaticAbility::SpellsHave { .. }
-        | StaticAbility::StateBasedActionDoesntApply { .. } => FunctionZones::Battlefield,
+        | StaticAbility::StateBasedActionDoesntApply { .. } => FunctionZones::Default,
     }
 }
 
@@ -199,7 +194,7 @@ pub(crate) fn trigger_condition_zones(condition: &TriggerCondition) -> FunctionZ
         | TriggerCondition::CardsLeaveYourGraveyard
         | TriggerCondition::SourceDealsDamage
         | TriggerCondition::SourceDealsCombatDamage
-        | TriggerCondition::DealsDamage { .. } => FunctionZones::Battlefield,
+        | TriggerCondition::DealsDamage { .. } => FunctionZones::Default,
     }
 }
 
@@ -235,7 +230,7 @@ pub(crate) fn replacement_effect_zones(effect: &ReplacementEffect) -> FunctionZo
         | ReplacementEffect::ModifyDamage { .. }
         | ReplacementEffect::UnspentManaBecomesRed
         | ReplacementEffect::ModifyCounters { .. }
-        | ReplacementEffect::MultiplyTokens { .. } => FunctionZones::Battlefield,
+        | ReplacementEffect::MultiplyTokens { .. } => FunctionZones::Default,
     }
 }
 
@@ -264,14 +259,14 @@ impl Game {
             .get(id.0)
             .and_then(Option::as_ref)
             .is_some_and(|permanent| {
-                self.object_ability_functions(permanent.object, FunctionZones::Battlefield)
+                self.object_ability_functions(permanent.object, FunctionZones::Default)
             })
     }
 
     /// Whether an object in the command zone functions under CR 114.4 (emblems only by default).
     pub(crate) fn command_object_functions(&self, object: ObjectId) -> bool {
         self.state.zones.zone_of(object) == Some(ZoneType::Command)
-            && self.object_ability_functions(object, FunctionZones::Battlefield)
+            && self.object_ability_functions(object, FunctionZones::Default)
     }
 
     pub(crate) fn static_ability_functions(
@@ -280,6 +275,29 @@ impl Game {
         ability: &StaticAbility,
     ) -> bool {
         self.object_ability_functions(object, static_ability_zones(ability))
+    }
+
+    /// Functioning printed static abilities on `object` (CR 113.6 / 114.4 / 702.26b).
+    pub(crate) fn functioning_object_statics(
+        &self,
+        object: ObjectId,
+    ) -> impl Iterator<Item = &StaticAbility> + '_ {
+        self.state[object]
+            .statics
+            .iter()
+            .filter(move |ability| self.static_ability_functions(object, ability))
+    }
+
+    /// Functioning printed static abilities on `object` paired with their printed slot.
+    pub(super) fn functioning_object_statics_indexed(
+        &self,
+        object: ObjectId,
+    ) -> impl Iterator<Item = (usize, &StaticAbility)> + '_ {
+        self.state[object]
+            .statics
+            .iter()
+            .enumerate()
+            .filter(move |(_, ability)| self.static_ability_functions(object, ability))
     }
 
     pub(crate) fn trigger_condition_functions(
@@ -306,7 +324,7 @@ impl Game {
     }
 
     /// Functioning command-zone objects controlled by `controller` (CR 114.4).
-    pub(crate) fn functioning_command_objects_for(
+    pub(super) fn functioning_command_objects_for(
         &self,
         controller: PlayerId,
     ) -> impl Iterator<Item = ObjectId> + '_ {
@@ -319,7 +337,7 @@ impl Game {
     }
 
     /// Every functioning command-zone object across both players (CR 114.4).
-    pub(crate) fn functioning_command_objects(
+    pub(super) fn functioning_command_objects(
         &self,
     ) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
         [PlayerId(0), PlayerId(1)]
@@ -332,7 +350,7 @@ impl Game {
 
     /// Visit every functioning static ability on the battlefield and command
     /// zone (for `controller`, or across both seats when `controller` is `None`),
-    /// iterating only the `LayerBoard`'s condition-independent `StaticSourceIndex`
+    /// iterating only the `LayerBoard`'s condition-independent `StaticSources`
     /// (`O(|generators|)` instead of `O(|battlefield|)`).
     pub(crate) fn for_each_functioning_static(
         &self,
@@ -356,10 +374,8 @@ impl Game {
             }
         }
         for (seat, object) in board.static_sources.command_objects(controller) {
-            for (index, ability) in self.state[object].statics.iter().enumerate() {
-                if self.static_ability_functions(object, ability) {
-                    visit(object, None, seat, index, ability);
-                }
+            for (index, ability) in self.functioning_object_statics_indexed(object) {
+                visit(object, None, seat, index, ability);
             }
         }
     }
@@ -386,10 +402,8 @@ impl Game {
             }
         }
         for (_, object) in board.static_sources.command_objects(controller) {
-            for ability in &self.state[object].statics {
-                if self.static_ability_functions(object, ability) && predicate(ability) {
-                    return true;
-                }
+            if self.functioning_object_statics(object).any(&predicate) {
+                return true;
             }
         }
         false
@@ -467,8 +481,7 @@ mod tests {
         },
         state::{
             ability::{
-                Ability, AbilityProvenance, Actor, Effect, LinkedAbilitySource, LinkedExile,
-                ObjectSelector, TriggerSubject,
+                Ability, AbilitySet, Actor, Effect, LinkedExile, ObjectSelector, TriggerSubject,
             },
             card::{
                 ActivatedAbilityDefinition, DamageRecipient, DamageSource, DamageTransform,
@@ -642,13 +655,11 @@ mod tests {
             transform: DamageTransform::Double,
         }];
 
-        // CR 114.4: non-emblem in Command zone is rejected by default, admitted only
-        // for explicit `FunctionZones::Command` opt-in.
+        // CR 114.4: non-emblem in Command zone does not function under Default.
         assert!(!game.command_object_functions(card_in_cmd));
         assert!(game.functioning_command_objects().next().is_none());
         assert!(game.emblems().next().is_none());
-        assert!(game.object_ability_functions(card_in_cmd, FunctionZones::Command));
-        assert!(!game.object_ability_functions(card_in_cmd, FunctionZones::Battlefield));
+        assert!(!game.object_ability_functions(card_in_cmd, FunctionZones::Default));
         assert_eq!(game.characteristics(peer).pt(), (2, 2));
 
         game.draw_cards(PlayerId(0), 1);
@@ -812,45 +823,61 @@ mod tests {
     }
 
     #[test]
-    fn layer6_granted_ability_fails_closed_on_linked_exile_pairing() {
+    fn layer6_acquired_abilities_pair_within_same_grant_and_isolate_other_sets() {
         let mut game = test_game();
         let koh = game
             .scenario_force_battlefield(PlayerId(0), "Koh, the Face Stealer", false)
             .unwrap();
         let koh_obj = game.permanent_object(koh).unwrap();
+        let koh_def = game.state[koh_obj].definition_id;
         let victim_a = game
             .scenario_force_battlefield(PlayerId(1), "Gray Ogre", false)
             .unwrap();
         let victim_b = game
             .scenario_force_battlefield(PlayerId(1), "Gray Ogre", false)
             .unwrap();
+        let victim_c = game
+            .scenario_force_battlefield(PlayerId(1), "Gray Ogre", false)
+            .unwrap();
 
-        // Step 1: Koh's printed (Characteristic) ability exiles `victim_a` linked with Koh.
-        let mut printed_exile = EffectFrame::new(
-            PlayerId(0),
-            vec![Effect::exile_linked(
-                ObjectSelector::Target(crate::state::ability::TargetSpec::Creature),
-                LinkedExile::WithSource,
-            )],
-        );
-        printed_exile.bind_source(Some(koh_obj), Some(koh_obj));
-        printed_exile.ability_provenance = AbilityProvenance::Characteristic;
-        printed_exile.targets = vec![crate::flow::decision::ResolutionTarget {
-            target: crate::state::game_object::Target::Permanent(victim_a),
-            requirement: 0,
-            legal: true,
-            division: 0,
-        }];
-        game.run_frame(printed_exile);
+        let exile_with_set = |game: &mut Game, target: PermanentId, ability_set: AbilitySet| {
+            let mut frame = EffectFrame::new(
+                PlayerId(0),
+                vec![Effect::exile_linked(
+                    ObjectSelector::Target(crate::state::ability::TargetSpec::Creature),
+                    LinkedExile::WithSource,
+                )],
+            );
+            frame.bind_source(Some(koh_obj), Some(koh_obj));
+            frame.ability_set = Some(ability_set);
+            frame.targets = vec![crate::flow::decision::ResolutionTarget {
+                target: crate::state::game_object::Target::Permanent(target),
+                requirement: 0,
+                legal: true,
+                division: 0,
+            }];
+            game.run_frame(frame);
+        };
+        let linked_exiles = |game: &Game, ability_set: AbilitySet| -> Vec<ObjectId> {
+            let mut frame = EffectFrame::new(PlayerId(0), vec![]);
+            frame.bind_source(Some(koh_obj), Some(koh_obj));
+            frame.ability_set = Some(ability_set);
+            let source = game
+                .linked_ability_source(&frame)
+                .expect("ability carries linked source");
+            game.state.exiled_with(source).collect()
+        };
+
+        // Step 1: Koh's printed ability exiles `victim_a` under `AbilitySet::Printed(koh_def)`.
+        exile_with_set(&mut game, victim_a, AbilitySet::Printed(koh_def));
         assert_eq!(game.state.exile_links.len(), 1);
         let exiled_a = game.state.exile_links[0].exiled_object;
         assert_eq!(
-            game.state.exile_links[0].characteristic_set,
-            Some(game.state[koh_obj].definition_id)
+            game.state.exile_links[0].ability_set,
+            AbilitySet::Printed(koh_def)
         );
 
-        // Step 2: Grant Koh a Layer-6 activated ability and a Layer-6 triggered ability.
-        // Verify layers mark both with `AbilityProvenance::Granted`.
+        // Step 2: Two separate Layer-6 grants receive distinct `AbilitySet::Acquired` keys.
         let affected_koh = game.affected_permanent(koh).unwrap();
         game.apply_continuous(
             None,
@@ -879,78 +906,46 @@ mod tests {
         );
         let view = game.characteristics(koh);
         assert_eq!(
-            view.activated_abilities.first().unwrap().provenance,
-            AbilityProvenance::Characteristic
+            view.activated_abilities.first().unwrap().ability_set,
+            Some(AbilitySet::Printed(koh_def))
         );
-        assert_eq!(
-            view.activated_abilities.last().unwrap().provenance,
-            AbilityProvenance::Granted
-        );
-        assert_eq!(
-            view.triggered_abilities.last().unwrap().provenance,
-            AbilityProvenance::Granted
-        );
+        let grant_a_set = view
+            .activated_abilities
+            .last()
+            .unwrap()
+            .ability_set
+            .expect("granted activated ability carries Acquired set");
+        let grant_b_set = view.triggered_abilities.last().unwrap().ability_set;
+        assert!(grant_a_set.is_acquired());
+        assert!(grant_b_set.is_acquired());
+        assert_ne!(grant_a_set, grant_b_set);
 
-        // Step 3: A Layer-6 granted read on Koh fails closed and cannot return `exiled_a`.
-        let mut granted_read = EffectFrame::new(
-            PlayerId(0),
-            vec![Effect::return_to_hand(ObjectSelector::ExiledWithSource)],
-        );
-        granted_read.bind_source(Some(koh_obj), Some(koh_obj));
-        granted_read.ability_provenance = AbilityProvenance::Granted;
-        assert!(game.frame_linked_ability_source(&granted_read).is_none());
-        game.run_frame(granted_read);
-        assert_eq!(
-            game.state.zones.zone_of(exiled_a),
-            Some(ZoneType::Exile),
-            "Layer-6 granted ability must fail closed and not touch printed linked exile"
-        );
+        // Neither separate grant can read Koh's printed exile.
+        assert!(linked_exiles(&game, grant_a_set).is_empty());
+        assert!(linked_exiles(&game, grant_b_set).is_empty());
 
-        // Step 4: A Layer-6 granted exile on Koh latches `characteristic_set: None`.
-        let mut granted_exile = EffectFrame::new(
-            PlayerId(0),
-            vec![Effect::exile_linked(
-                ObjectSelector::Target(crate::state::ability::TargetSpec::Creature),
-                LinkedExile::WithSource,
-            )],
-        );
-        granted_exile.bind_source(Some(koh_obj), Some(koh_obj));
-        granted_exile.ability_provenance = AbilityProvenance::Granted;
-        granted_exile.targets = vec![crate::flow::decision::ResolutionTarget {
-            target: crate::state::game_object::Target::Permanent(victim_b),
-            requirement: 0,
-            legal: true,
-            division: 0,
-        }];
-        game.run_frame(granted_exile);
-        assert_eq!(game.state.exile_links.len(), 2);
+        // An exile under `grant_a_set` pairs with `grant_a_set`, never with printed or `grant_b_set`.
+        exile_with_set(&mut game, victim_b, grant_a_set);
         let exiled_b = game.state.exile_links[1].exiled_object;
-        assert_eq!(game.state.exile_links[1].characteristic_set, None);
-
-        // Step 5: Koh's printed ability sees ONLY `exiled_a`, never `exiled_b`.
-        let mut printed_read = EffectFrame::new(PlayerId(0), vec![]);
-        printed_read.bind_source(Some(koh_obj), Some(koh_obj));
-        printed_read.ability_provenance = AbilityProvenance::Characteristic;
-        let linked_source = game
-            .frame_linked_ability_source(&printed_read)
-            .expect("characteristic ability carries linked source");
+        assert_eq!(game.state.exile_links[1].ability_set, grant_a_set);
+        assert_eq!(linked_exiles(&game, grant_a_set), vec![exiled_b]);
+        assert!(linked_exiles(&game, grant_b_set).is_empty());
         assert_eq!(
-            game.state.exiled_with(linked_source).collect::<Vec<_>>(),
+            linked_exiles(&game, AbilitySet::Printed(koh_def)),
             vec![exiled_a]
         );
-        assert_ne!(exiled_a, exiled_b);
 
-        // Step 6: Layer-6 inheritance (`HasAbilitiesOfSource`, Koh copying
-        // Boiling Rock Rioter) also marks inherited abilities `Granted`, and
-        // `AttachedHas` marks both `granted_by` and `AbilityProvenance::Granted`.
+        // Step 3: CR 607.5 — one `HasAbilitiesOfSource` (Koh inheriting Boiling Rock Rioter)
+        // assigns the SAME `AbilitySet::Acquired` key to both the inherited activated
+        // ability and the inherited attack trigger, so they pair with each other.
         let rioter_def = crate::cards::content_pack::default_content_pack()
             .definition_id("Boiling Rock Rioter")
             .unwrap();
-        let timestamp = game.state.id_gen_mut().next_id();
+        let t1 = game.state.id_gen_mut().next_id();
         game.state
             .effects
             .push(crate::state::effect::ContinuousEffect {
-                timestamp,
+                timestamp: t1,
                 source: Some(rioter_def),
                 controller: PlayerId(0),
                 affected: affected_koh,
@@ -958,6 +953,64 @@ mod tests {
                 duration: EffectDuration::Indefinite,
                 source_object: None,
             });
+        let view = game.characteristics(koh);
+        let rioter_activated_set = view
+            .activated_abilities
+            .last()
+            .unwrap()
+            .ability_set
+            .expect("inherited activated ability set");
+        let rioter_triggered_set = view.triggered_abilities.last().unwrap().ability_set;
+        assert!(rioter_activated_set.is_acquired());
+        assert_eq!(
+            rioter_activated_set, rioter_triggered_set,
+            "CR 607.5: abilities acquired together through one effect share an AbilitySet"
+        );
+        exile_with_set(&mut game, victim_c, rioter_activated_set);
+        let exiled_c = game.state.exile_links[2].exiled_object;
+        assert_eq!(linked_exiles(&game, rioter_triggered_set), vec![exiled_c]);
+        assert_eq!(
+            linked_exiles(&game, AbilitySet::Printed(koh_def)),
+            vec![exiled_a]
+        );
+
+        // Step 4: CR 607.5 — Koh re-choosing Boiling Rock Rioter is a NEW acquiring effect
+        // with a new timestamp; it replaces the previous inherited set (no duplicate
+        // abilities) and cannot reach exiles from the earlier grant.
+        let activated_count_before = view.activated_abilities.len();
+        let triggered_count_before = view.triggered_abilities.len();
+        let t2 = game.state.id_gen_mut().next_id();
+        game.state
+            .effects
+            .push(crate::state::effect::ContinuousEffect {
+                timestamp: t2,
+                source: Some(rioter_def),
+                controller: PlayerId(0),
+                affected: affected_koh,
+                modification: Modification::HasAbilitiesOfSource,
+                duration: EffectDuration::Indefinite,
+                source_object: None,
+            });
+        let view = game.characteristics(koh);
+        assert_eq!(
+            view.activated_abilities.len(),
+            activated_count_before,
+            "re-choosing replaces the prior HasAbilitiesOfSource without duplicating abilities"
+        );
+        assert_eq!(
+            view.triggered_abilities.len(),
+            triggered_count_before,
+            "re-choosing replaces the prior HasAbilitiesOfSource without duplicating triggers"
+        );
+        let rechosen_set = view.triggered_abilities.last().unwrap().ability_set;
+        assert!(rechosen_set.is_acquired());
+        assert_ne!(rechosen_set, rioter_activated_set);
+        assert!(
+            linked_exiles(&game, rechosen_set).is_empty(),
+            "CR 607.5: a new acquiring effect cannot pair with exiles from an earlier grant"
+        );
+
+        // Step 5: `AttachedHas` carries both `granted_by` and an `Acquired` ability set.
         let aura = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", false)
             .unwrap();
@@ -970,84 +1023,9 @@ mod tests {
         game.state.permanents[aura].as_mut().unwrap().attached_to = Some(koh_obj);
 
         let view = game.characteristics(koh);
-        // Every non-printed activated ability (GrantActivated, HasAbilitiesOfSource,
-        // AttachedHas) carries `AbilityProvenance::Granted`.
-        let printed_activated = game.state[koh_obj].activated_abilities.len();
-        assert!(view.activated_abilities.len() > printed_activated + 2);
-        for ability in &view.activated_abilities[printed_activated..] {
-            assert_eq!(ability.provenance, AbilityProvenance::Granted);
-        }
         assert!(view
             .activated_abilities
             .iter()
-            .any(|a| a.granted_by.is_some() && a.provenance.is_granted()));
-        // Every non-printed triggered ability (GrantTriggered, HasAbilitiesOfSource)
-        // carries `AbilityProvenance::Granted`.
-        let printed_triggered = game.state[koh_obj].abilities.len();
-        assert!(view.triggered_abilities.len() > printed_triggered + 1);
-        for trigger in &view.triggered_abilities[printed_triggered..] {
-            assert_eq!(trigger.provenance, AbilityProvenance::Granted);
-        }
-    }
-
-    #[test]
-    fn layer6_granted_ability_fails_closed_on_emblem_pairing() {
-        let mut game = test_game();
-        let chandra = game
-            .scenario_force_battlefield(PlayerId(0), "Chandra, Flameshaper", false)
-            .unwrap();
-        let chandra_obj = game.permanent_object(chandra).unwrap();
-        let chandra_def = game.state[chandra_obj].definition_id;
-
-        // 1. Printed (Characteristic) loyalty ability creates an emblem latching
-        // `{ creator: chandra_obj, characteristic_set: Some(chandra_def) }`.
-        let mut printed_frame = EffectFrame::new(
-            PlayerId(0),
-            vec![Effect::CreateEmblem {
-                key: "emblem.chandra_torch_of_defiance".into(),
-            }],
-        );
-        printed_frame.bind_source(Some(chandra_obj), Some(chandra_obj));
-        printed_frame.ability_provenance = AbilityProvenance::Characteristic;
-        game.run_frame(printed_frame.clone());
-
-        // 2. Layer-6 granted ability on Chandra creates an emblem latching
-        // `{ creator: chandra_obj, characteristic_set: None }`.
-        let mut granted_frame = EffectFrame::new(
-            PlayerId(0),
-            vec![Effect::CreateEmblem {
-                key: "emblem.chandra_torch_of_defiance".into(),
-            }],
-        );
-        granted_frame.bind_source(Some(chandra_obj), Some(chandra_obj));
-        granted_frame.ability_provenance = AbilityProvenance::Granted;
-        game.run_frame(granted_frame.clone());
-
-        let emblems: Vec<ObjectId> = game.emblems().map(|(_, obj)| obj).collect();
-        assert_eq!(emblems.len(), 2);
-        let printed_emblem = emblems[0];
-        let granted_emblem = emblems[1];
-        assert_eq!(
-            game.state[printed_emblem].emblem_source(),
-            Some(LinkedAbilitySource::characteristic(
-                chandra_obj,
-                chandra_def
-            ))
-        );
-        assert_eq!(
-            game.state[granted_emblem].emblem_source(),
-            Some(LinkedAbilitySource::granted(chandra_obj))
-        );
-
-        // 3. Printed ability pairs ONLY with its own characteristic emblem;
-        // Layer-6 granted ability fails closed (`None`).
-        let printed_source = game
-            .frame_linked_ability_source(&printed_frame)
-            .expect("characteristic source");
-        assert_eq!(
-            game.emblems_linked_to(printed_source).collect::<Vec<_>>(),
-            vec![printed_emblem]
-        );
-        assert!(game.frame_linked_ability_source(&granted_frame).is_none());
+            .any(|a| a.granted_by.is_some() && a.ability_set.is_some_and(AbilitySet::is_acquired)));
     }
 }

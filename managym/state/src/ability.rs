@@ -3377,90 +3377,106 @@ pub enum AbilityOrigin {
     Object(ObjectId),
 }
 
-/// CR 607.1 / 607.5: whether an ability comes from its object's own printed or
-/// Layer-1 copiable characteristic set, or was granted by a Layer-6 continuous
-/// effect. Layer-6 granted abilities never pair with printed linked abilities.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
-pub enum AbilityProvenance {
-    /// Printed on the object's face or copied onto it in Layer 1.
-    #[default]
-    Characteristic,
-    /// Granted by a Layer-6 continuous effect.
-    Granted,
+/// Identifies one Layer-6 acquiring effect (CR 607.5). Abilities acquired
+/// together through the same effect share a `GrantKey`; a later grant or a new
+/// `HasAbilitiesOfSource` choice carries a distinct timestamp.
+///
+/// Stores slots as `Option<NonZeroU32>` (`slot + 1`) so `GrantKey` stays
+/// 12 bytes and `Option<AbilitySet>` fits in 16 bytes inline on `EffectFrame`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GrantKey {
+    grantor_plus_one: Option<std::num::NonZeroU32>,
+    pub timestamp: crate::game_object::PublicId,
+    static_slot_plus_one: Option<std::num::NonZeroU32>,
 }
 
-impl AbilityProvenance {
-    pub fn is_characteristic(&self) -> bool {
-        *self == Self::Characteristic
-    }
-
-    pub fn is_granted(&self) -> bool {
-        *self == Self::Granted
-    }
-
-    pub fn from_origin(origin: AbilityOrigin) -> Self {
-        match origin {
-            AbilityOrigin::Own => Self::Characteristic,
-            AbilityOrigin::Effect(_)
-            | AbilityOrigin::Counter
-            | AbilityOrigin::Permanent(_)
-            | AbilityOrigin::Object(_) => Self::Granted,
+impl GrantKey {
+    pub fn new(
+        grantor: Option<crate::game_object::PermanentId>,
+        timestamp: crate::game_object::PublicId,
+        static_slot: Option<usize>,
+    ) -> Self {
+        let encode = |slot: usize| {
+            u32::try_from(slot)
+                .ok()
+                .and_then(|v| v.checked_add(1))
+                .and_then(std::num::NonZeroU32::new)
+                .expect("slot fits in NonZeroU32")
+        };
+        Self {
+            grantor_plus_one: grantor.map(|id| encode(id.0)),
+            timestamp,
+            static_slot_plus_one: static_slot.map(encode),
         }
     }
+
+    pub fn grantor(self) -> Option<crate::game_object::PermanentId> {
+        self.grantor_plus_one
+            .map(|v| crate::game_object::PermanentId((v.get() - 1) as usize))
+    }
+
+    pub fn static_slot(self) -> Option<usize> {
+        self.static_slot_plus_one.map(|v| (v.get() - 1) as usize)
+    }
 }
 
-/// CR 607.1a/d, 607.5: the exact creating object and characteristic set
-/// latched onto a linked exile record or emblem.
-///
-/// Characteristic abilities latch `characteristic_set: Some(def_id)`. Layer-6
-/// granted abilities latch `characteristic_set: None` and fail closed on
-/// linked reads so they never pair with a permanent's printed linked abilities.
+impl serde::Serialize for GrantKey {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut s = serializer.serialize_struct("GrantKey", 3)?;
+        s.serialize_field("grantor", &self.grantor())?;
+        s.serialize_field("timestamp", &self.timestamp)?;
+        s.serialize_field("static_slot", &self.static_slot())?;
+        s.end()
+    }
+}
+
+/// CR 607.1 / 607.5: the set an ability was printed in or acquired with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum AbilitySet {
+    /// CR 607.1, 607.1a–b; Layer-1 copies establish a new printed set.
+    Printed(crate::card::CardDefId),
+    /// CR 607.5: abilities acquired together through one Layer-6 effect.
+    Acquired(GrantKey),
+}
+
+impl AbilitySet {
+    pub fn is_acquired(self) -> bool {
+        matches!(self, Self::Acquired(_))
+    }
+}
+
+/// CR 607.1a, 607.5: the exact creating object and ability set latched onto a
+/// linked exile record and matched by linked reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct LinkedAbilitySource {
     #[serde(serialize_with = "crate::game_object::exact")]
     pub creator: ObjectId,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub characteristic_set: Option<crate::card::CardDefId>,
+    pub set: AbilitySet,
 }
 
 impl LinkedAbilitySource {
-    pub const fn characteristic(
-        creator: ObjectId,
-        characteristic_set: crate::card::CardDefId,
-    ) -> Self {
-        Self {
-            creator,
-            characteristic_set: Some(characteristic_set),
-        }
+    pub const fn new(creator: ObjectId, set: AbilitySet) -> Self {
+        Self { creator, set }
     }
 
-    pub const fn granted(creator: ObjectId) -> Self {
-        Self {
-            creator,
-            characteristic_set: None,
-        }
-    }
-
-    /// CR 607.1a/d, 607.5: two abilities pair only when both belong to the
-    /// same object's characteristic set. Any granted side (`None`) fails closed.
+    /// CR 607.1a, 607.5: two linked abilities pair iff they belong to the same
+    /// object and the same ability set (printed face or acquiring effect).
     pub fn pairs_with(self, other: Self) -> bool {
-        self.creator == other.creator
-            && self.characteristic_set.is_some()
-            && self.characteristic_set == other.characteristic_set
+        self == other
     }
 }
 
-/// Effective triggered ability with the provenance needed after its source leaves.
+/// Effective triggered ability with the identity needed after its source leaves.
 /// Catalog grants have retained input joins; a continuous-effect program does not.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectiveTrigger {
     /// Battlefield inspection uses the live origin before this trigger leaves play.
     #[serde(skip)]
     pub origin: AbilityOrigin,
-    /// CR 607.5: whether this trigger came from its source's characteristic
-    /// set or was granted in Layer 6.
+    /// CR 607.1, 607.5: the ability set this trigger belongs to.
     #[serde(skip)]
-    pub provenance: AbilityProvenance,
+    pub ability_set: AbilitySet,
     /// Grant timestamp, static ability slot and inherited ability slot for a once-per-turn clock.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clock: Option<GrantClock>,
@@ -3472,9 +3488,8 @@ pub struct EffectiveTrigger {
 /// permanents can receive the same static grant at one timestamp.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 pub struct GrantClock {
-    pub grantor: Option<crate::game_object::PermanentId>,
-    pub timestamp: crate::game_object::PublicId,
-    pub static_slot: Option<usize>,
+    #[serde(flatten)]
+    pub grant: GrantKey,
     pub ability_index: usize,
 }
 

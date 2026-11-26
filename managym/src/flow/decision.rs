@@ -234,10 +234,9 @@ pub struct EffectFrame {
     pub ability: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ability_face: Option<crate::state::card::CardDefId>,
-    /// CR 607.5: whether the resolving ability belongs to its source's
-    /// characteristic set or was granted in Layer 6.
-    #[serde(skip_serializing_if = "crate::state::ability::AbilityProvenance::is_characteristic")]
-    pub ability_provenance: crate::state::ability::AbilityProvenance,
+    /// CR 607.1, 607.5: the ability set of the resolving ability.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ability_set: Option<crate::state::ability::AbilitySet>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
     pub completion: FrameCompletion,
@@ -314,7 +313,7 @@ impl EffectFrame {
             grantor: None,
             ability: None,
             ability_face: None,
-            ability_provenance: crate::state::ability::AbilityProvenance::Characteristic,
+            ability_set: None,
             queue: effects.into(),
             completion: FrameCompletion::Priority,
         }
@@ -344,7 +343,7 @@ impl EffectFrame {
             grantor: self.grantor,
             ability: self.ability,
             ability_face: self.ability_face,
-            ability_provenance: self.ability_provenance,
+            ability_set: self.ability_set,
             ..Self::new(self.controller, effects)
         }
     }

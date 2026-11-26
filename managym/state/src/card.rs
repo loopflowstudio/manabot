@@ -1089,11 +1089,11 @@ pub struct ActivatedAbilityDefinition {
     /// from a grantor; printed abilities have none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub granted_by: Option<AbilityGrant>,
-    /// CR 607.5: whether this effective ability belongs to its source's
-    /// characteristic set or was granted in Layer 6. Printed definitions are
-    /// always `Characteristic`; omitted from catalog serialization.
+    /// CR 607.1, 607.5: the ability set this effective ability belongs to on a
+    /// permanent (`Printed(def_id)` or `Acquired(grant_key)`). `None` on raw
+    /// catalog definitions before layer evaluation; omitted from catalog serialization.
     #[serde(skip)]
-    pub provenance: crate::ability::AbilityProvenance,
+    pub ability_set: Option<crate::ability::AbilitySet>,
     /// Resolution effects in printed order ("draw a card, then discard a card").
     pub effects: Vec<Effect>,
 }

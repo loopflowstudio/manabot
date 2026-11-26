@@ -72,9 +72,6 @@ struct CanonicalCard {
     /// A transformed object's front face (CR 712.8). Omitted on its front.
     #[serde(skip_serializing_if = "Option::is_none")]
     front_definition_id: Option<CardDefId>,
-    /// CR 607.1a/d, 607.5: creating object and characteristic set latched onto an emblem.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    emblem_source: Option<crate::state::ability::LinkedAbilitySource>,
     owner: PlayerId,
 }
 
@@ -299,7 +296,6 @@ impl<'a> CanonicalMatchState<'a> {
                     .form_faces()
                     .filter(|faces| faces.back_up)
                     .map(|faces| faces.front.0),
-                emblem_source: object.emblem_source(),
                 owner: object.owner,
             })
             .collect();

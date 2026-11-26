@@ -1114,7 +1114,7 @@ impl Game {
                         .exile_links
                         .push(crate::flow::trigger::ExileLink {
                             source: linked_source.creator,
-                            characteristic_set: linked_source.characteristic_set,
+                            ability_set: linked_source.set,
                             exiled_object: object,
                             returns,
                         });

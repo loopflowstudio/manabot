@@ -210,8 +210,7 @@ impl GameState {
         self.zones.latest().zip(self.objects.iter())
     }
 
-    /// Cards still in the exile appearances linked to `source` (CR 607.1a/d, 607.5).
-    /// Fails closed when `source.characteristic_set` is `None` (Layer-6 granted ability).
+    /// Cards still in the exile appearances linked to `source` (CR 607.1a, 607.5).
     pub(crate) fn exiled_with(
         &self,
         source: crate::state::ability::LinkedAbilitySource,
