@@ -4872,12 +4872,12 @@ fn snapshot_shuffle_keeps_inspections_and_random_bottom_placements_until_a_rules
         ));
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         let inspected = game.library_top_objects(owner, 12);
-        let space = game.current_action_space.clone();
+        let space = game.action_space().cloned();
         let mut sibling = game.clone();
         game.shuffle_unseen_libraries(101);
         sibling.shuffle_unseen_libraries(101);
         assert_eq!(game.library_top_objects(owner, 12), inspected);
-        assert_eq!(game.current_action_space, space);
+        assert_eq!(game.action_space(), space.as_ref());
         checked_command(&mut game, Action::Decline { player: owner });
         checked_command(&mut sibling, Action::Decline { player: owner });
         let order = |game: &Game| {

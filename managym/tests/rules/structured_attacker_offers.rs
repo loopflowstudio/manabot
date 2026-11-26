@@ -232,7 +232,7 @@ fn assert_equivalent_surface(structured: &Game, legacy: &Game) {
         structured.state.deterministic_hash(),
         legacy.state.deterministic_hash()
     );
-    assert_eq!(structured.current_action_space, legacy.current_action_space);
+    assert_eq!(structured.action_space(), legacy.action_space());
     assert_eq!(
         serde_json::to_value(&structured.pending_choice).expect("pending choice serializes"),
         serde_json::to_value(&legacy.pending_choice).expect("pending choice serializes")
@@ -423,7 +423,7 @@ fn structured_attacker_adapter_matches_seeded_two_deck_traces() {
 
             while !structured.is_game_over() {
                 assert_eq!(structured.is_game_over(), legacy.is_game_over());
-                assert_eq!(structured.current_action_space, legacy.current_action_space);
+                assert_eq!(structured.action_space(), legacy.action_space());
                 let space = structured.action_space().expect("live action space");
 
                 if space.kind == ActionSpaceKind::DeclareAttacker {
@@ -471,7 +471,7 @@ fn structured_attacker_adapter_matches_seeded_two_deck_traces() {
                 legacy_trace
                     .push(Observation::new(&legacy, &legacy.state.observation_events).to_json());
                 assert_eq!(structured_trace.last(), legacy_trace.last());
-                assert_eq!(structured.current_action_space, legacy.current_action_space);
+                assert_eq!(structured.action_space(), legacy.action_space());
                 assert_eq!(structured.state.events, legacy.state.events);
                 assert_eq!(structured.state.pending_events, legacy.state.pending_events);
                 assert_eq!(

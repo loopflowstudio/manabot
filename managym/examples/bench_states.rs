@@ -779,8 +779,7 @@ fn build(recipe: &Recipe) -> Env {
 }
 fn actions(env: &mut Env) -> Vec<Action> {
     env.fixture_game_mut()
-        .current_action_space
-        .as_ref()
+        .action_space()
         .unwrap()
         .actions
         .clone()

@@ -7732,7 +7732,7 @@ fn iroh_leaves_graveyard_permanents_to_muldrothas_permission() {
     ));
 
     let mut forged = s.game().clone();
-    let actions = &mut forged.current_action_space.as_mut().unwrap().actions;
+    let actions = &mut forged.action_space_mut().unwrap().actions;
     let index = actions.len();
     actions.push(Action::CastSpell {
         player: PlayerId(0),

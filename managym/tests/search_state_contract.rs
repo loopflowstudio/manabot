@@ -30,7 +30,7 @@ fn witness_preserves_acting_events_and_fixed_viewer_bytes() {
                 });
             }
             if !with_chooser {
-                game.current_action_space = None;
+                game.clear_published_decision();
             }
             let evidence = witness(&game);
             let acting = Observation::new(&game, &game.state.observation_events).to_json();
@@ -80,7 +80,7 @@ fn semantic_direct_hash_preserves_viewer_bytes_and_event_exclusion() {
                 });
             }
             if !with_chooser {
-                game.current_action_space = None;
+                game.clear_published_decision();
             }
             let before = witness(&game);
             for viewer in [PlayerId(0), PlayerId(1)] {

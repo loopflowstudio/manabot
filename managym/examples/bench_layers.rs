@@ -217,7 +217,7 @@ fn payment_surface(env: &mut Env) -> serde_json::Value {
     let game = env.fixture_game_mut();
     serde_json::json!({
         "digest": digest,
-        "legal_actions": game.current_action_space,
+        "legal_actions": game.action_space(),
         "players": game.state.players.iter().map(|p| serde_json::json!({
             "life":p.life, "mana":p.mana_pool, "combat_mana":p.combat_mana_pool,
         })).collect::<Vec<_>>(),
@@ -244,8 +244,7 @@ fn payment(
     for decision in 0..8 {
         let actions = env
             .fixture_game_mut()
-            .current_action_space
-            .as_ref()
+            .action_space()
             .unwrap()
             .actions
             .clone();

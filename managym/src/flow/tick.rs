@@ -18,31 +18,27 @@ impl Game {
         if self.is_game_over() {
             return Err(AgentError("game is over".to_string()));
         }
-        let action_space = self
-            .current_action_space
-            .take()
+        let decision = self
+            .take_published_decision()
             .ok_or_else(|| AgentError("no active action space".to_string()))?;
-        let action_aliases = self.action_aliases.take();
 
-        if action >= action_space.actions.len() {
-            self.current_action_space = Some(action_space.clone());
-            self.action_aliases = action_aliases;
+        if action >= decision.space.actions.len() {
+            let len = decision.space.actions.len();
+            self.restore_published_decision(decision);
             return Err(AgentError(format!(
-                "Action index {action} out of bounds: {}",
-                action_space.actions.len()
+                "Action index {action} out of bounds: {len}"
             )));
         }
 
         let pending_memory = crate::agent::decision_memory::capture(
             self,
-            &action_space,
-            &action_space.actions[action],
+            &decision.space,
+            &decision.space.actions[action],
         );
-        let exposure = self.exposure_choice(&action_space, action);
-        let selected_action = action_space.actions[action].clone();
+        let exposure = self.exposure_choice(&decision.space, action);
+        let selected_action = decision.space.actions[action].clone();
         if let Err(error) = self.execute_action(&selected_action) {
-            self.current_action_space = Some(action_space);
-            self.action_aliases = action_aliases;
+            self.restore_published_decision(decision);
             return Err(error);
         }
 
@@ -92,12 +88,15 @@ impl Game {
             .map(|action| action.player())
             .map(|player| self.decision_controller(player));
         self.remember_controlled_hands();
-        self.action_aliases = if action_space.kind == ActionSpaceKind::GameOver {
+        let aliases = if action_space.kind == ActionSpaceKind::GameOver {
             None
         } else {
             aliases
         };
-        self.current_action_space = Some(action_space);
+        self.published_decision = Some(crate::flow::game::PublishedDecision {
+            space: action_space,
+            aliases,
+        });
     }
 
     pub fn play(&mut self) {
@@ -440,17 +439,7 @@ impl Game {
                     }
                     return None;
                 };
-                let mut actions = self.block_actions(defending, blocker);
-                if actions.len() > 1
-                    && actions.iter().any(|action| {
-                        matches!(action, Action::DeclareBlocker { attacker: None, .. })
-                    })
-                    && self.declined_interchangeable_blocker(blocker)
-                {
-                    actions.retain(|action| {
-                        matches!(action, Action::DeclareBlocker { attacker: None, .. })
-                    });
-                }
+                let actions = self.block_actions(defending, blocker);
                 Some(ActionSpace {
                     player: Some(defending),
                     kind: ActionSpaceKind::DeclareBlocker,

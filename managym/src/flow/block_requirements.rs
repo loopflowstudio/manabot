@@ -62,7 +62,7 @@ impl Game {
             .as_ref()
             .expect("declaring blockers")
             .blockers_to_declare;
-        self.block_options(blocker, remaining)
+        self.block_options_with_declines(blocker, remaining, true)
             .into_iter()
             .map(|attacker| crate::agent::action::Action::DeclareBlocker {
                 player,
@@ -79,6 +79,21 @@ impl Game {
         blocker: PermanentId,
         remaining: &[PermanentId],
     ) -> Vec<Option<PermanentId>> {
+        self.block_options_with_declines(blocker, remaining, false)
+    }
+
+    /// Compute legal choices for `blocker`. When `respect_declines` is true
+    /// (live sequential declaration), accounts for blocker decline-pruning:
+    /// remaining blockers already suppressed by `combat.declined_blockers` are
+    /// excluded from future capacity, declining `blocker` suppresses remaining
+    /// copies interchangeable with `blocker`, and an already-suppressed
+    /// `blocker` retains only `None` when declining is legal.
+    fn block_options_with_declines(
+        &self,
+        blocker: PermanentId,
+        remaining: &[PermanentId],
+        respect_declines: bool,
+    ) -> Vec<Option<PermanentId>> {
         let _scan = self.board_scan();
         let combat = self.state.combat.as_ref().expect("declaring blockers");
         let attackers = &combat.attackers;
@@ -87,6 +102,9 @@ impl Game {
             .map(|&id| self.block_requirements(id))
             .collect();
         if rules.iter().all(|r| !r.menace && r.first + r.each == 0) {
+            if respect_declines && self.declined_interchangeable_blocker(blocker) {
+                return vec![None];
+            }
             return attackers
                 .iter()
                 .copied()
@@ -106,10 +124,23 @@ impl Game {
             .iter()
             .map(|a| combat.attacker_to_blockers.get(a).map_or(0, Vec::len))
             .collect();
+        let active_remaining: Vec<PermanentId> =
+            if respect_declines && !combat.declined_blockers.is_empty() {
+                let suppressed =
+                    self.interchangeable_with_any_permanent(&combat.declined_blockers, remaining);
+                remaining
+                    .iter()
+                    .copied()
+                    .zip(suppressed)
+                    .filter_map(|(id, is_suppressed)| (!is_suppressed).then_some(id))
+                    .collect()
+            } else {
+                remaining.to_vec()
+            };
         let edges: Vec<Vec<usize>> = attackers
             .iter()
             .map(|&a| {
-                remaining
+                active_remaining
                     .iter()
                     .enumerate()
                     .filter(|(_, &b)| self.blocker_can_block_attacker(b, a))
@@ -117,11 +148,43 @@ impl Game {
                     .collect()
             })
             .collect();
-        let chosen = if rules.iter().all(|r| !r.menace) {
-            let fast = non_menace_best_choices(&rules, &edges, remaining.len(), &counts, &options);
+        let decline_edges: Option<Vec<Vec<usize>>> =
+            if respect_declines && !active_remaining.is_empty() {
+                let suppressed_on_decline =
+                    self.interchangeable_with_any_permanent(&[blocker], &active_remaining);
+                suppressed_on_decline.iter().any(|&s| s).then(|| {
+                    edges
+                        .iter()
+                        .map(|list| {
+                            list.iter()
+                                .copied()
+                                .filter(|&idx| !suppressed_on_decline[idx])
+                                .collect()
+                        })
+                        .collect()
+                })
+            } else {
+                None
+            };
+        let mut chosen = if rules.iter().all(|r| !r.menace) {
+            let fast = non_menace_best_choices(
+                &rules,
+                &edges,
+                decline_edges.as_deref(),
+                active_remaining.len(),
+                &counts,
+                &options,
+            );
             #[cfg(debug_assertions)]
             if attackers.len() <= 16 {
-                let slow = general_best_choices(&rules, &edges, remaining.len(), &counts, &options);
+                let slow = general_best_choices(
+                    &rules,
+                    &edges,
+                    decline_edges.as_deref(),
+                    active_remaining.len(),
+                    &counts,
+                    &options,
+                );
                 debug_assert_eq!(
                     fast, slow,
                     "non-menace residual solver diverged from general bound"
@@ -129,8 +192,22 @@ impl Game {
             }
             fast
         } else {
-            general_best_choices(&rules, &edges, remaining.len(), &counts, &options)
+            general_best_choices(
+                &rules,
+                &edges,
+                decline_edges.as_deref(),
+                active_remaining.len(),
+                &counts,
+                &options,
+            )
         };
+        if respect_declines
+            && chosen.len() > 1
+            && chosen.contains(&None)
+            && self.declined_interchangeable_blocker(blocker)
+        {
+            chosen.retain(Option::is_none);
+        }
         chosen
             .into_iter()
             .map(|choice| choice.map(|i| attackers[i]))
@@ -141,6 +218,7 @@ impl Game {
 fn general_best_choices(
     rules: &[BlockRequirements],
     edges: &[Vec<usize>],
+    decline_edges: Option<&[Vec<usize>]>,
     blockers: usize,
     counts: &[usize],
     options: &[Option<usize>],
@@ -150,10 +228,14 @@ fn general_best_choices(
     let mut legal = Vec::new();
     let mut blocked = vec![None; rules.len()];
     for &choice in options {
-        if let Some(i) = choice {
-            counts[i] += 1;
-        }
-        let bound = block_requirement_bound(rules, edges, blockers, &counts, &mut blocked);
+        let choice_edges = match choice {
+            Some(i) => {
+                counts[i] += 1;
+                edges
+            }
+            None => decline_edges.unwrap_or(edges),
+        };
+        let bound = block_requirement_bound(rules, choice_edges, blockers, &counts, &mut blocked);
         if let Some(i) = choice {
             counts[i] -= 1;
         }
@@ -168,25 +250,12 @@ fn general_best_choices(
     legal
 }
 
-/// Evaluate all candidate choices for the current blocker when no attacker has
-/// menace. Solve one baseline transversal-matroid matching for `remaining`
-/// blockers (corresponding to `choice = None`), then evaluate every `Some(a)`
-/// via a single residual reachability pass.
-///
-/// Assigning the current blocker to attacker `a` increases committed score by
-/// `direct = r.each + [c == 0] * r.first` and decreases the weight of at most
-/// one baseline slot on `a` (from `first + each` to `0` if `limited`, or to
-/// `each` if unblocked with `first > 0`). By matroid sensitivity analysis,
-/// lowering a matched slot's weight replaces it with the highest-weight
-/// unmatched slot reachable to `a` in the residual graph (`u -> v` when some
-/// `b in edges[u]` is assigned to `v`), or keeps the slot at its new weight.
-fn non_menace_best_choices(
+fn non_menace_matching(
     rules: &[BlockRequirements],
     edges: &[Vec<usize>],
     blockers: usize,
     counts: &[usize],
-    options: &[Option<usize>],
-) -> Vec<Option<usize>> {
+) -> (Vec<Option<usize>>, Vec<usize>, Vec<usize>, usize) {
     let mut slot_groups = Vec::with_capacity(rules.len() * 2);
     let mut capacity = Vec::with_capacity(rules.len());
     for (i, &r) in rules.iter().enumerate() {
@@ -210,7 +279,8 @@ fn non_menace_best_choices(
     let mut matched = vec![0usize; rules.len()];
     let mut saturated = vec![false; rules.len()];
     let mut seen = vec![false; blockers];
-    for (_, attacker, count) in slot_groups {
+    let mut score = 0usize;
+    for (weight, attacker, count) in slot_groups {
         if saturated[attacker] {
             continue;
         }
@@ -218,12 +288,42 @@ fn non_menace_best_choices(
             seen.fill(false);
             if augment(attacker, edges, &mut assigned, &mut seen) {
                 matched[attacker] += 1;
+                score += weight;
             } else {
                 saturated[attacker] = true;
                 break;
             }
         }
     }
+    (assigned, matched, capacity, score)
+}
+
+/// Evaluate all candidate choices for the current blocker when no attacker has
+/// menace. Solve one baseline transversal-matroid matching for `remaining`
+/// blockers, evaluate every `Some(a)` via a single residual reachability pass,
+/// and evaluate `None` against `decline_edges` when declining suppresses
+/// interchangeable remaining blockers.
+///
+/// Assigning the current blocker to attacker `a` increases committed score by
+/// `direct = r.each + [c == 0] * r.first` and decreases the weight of at most
+/// one baseline slot on `a` (from `first + each` to `0` if `limited`, or to
+/// `each` if unblocked with `first > 0`). By matroid sensitivity analysis,
+/// lowering a matched slot's weight replaces it with the highest-weight
+/// unmatched slot reachable to `a` in the residual graph (`u -> v` when some
+/// `b in edges[u]` is assigned to `v`), or keeps the slot at its new weight.
+fn non_menace_best_choices(
+    rules: &[BlockRequirements],
+    edges: &[Vec<usize>],
+    decline_edges: Option<&[Vec<usize>]>,
+    blockers: usize,
+    counts: &[usize],
+    options: &[Option<usize>],
+) -> Vec<Option<usize>> {
+    let (assigned, matched, capacity, baseline_score) =
+        non_menace_matching(rules, edges, blockers, counts);
+    let decline_score = decline_edges.map_or(baseline_score, |de| {
+        non_menace_matching(rules, de, blockers, counts).3
+    });
 
     // Highest-weight unmatched slot on each attacker, then one descending-weight
     // traversal in the residual graph to find the best replacement for every
@@ -262,26 +362,27 @@ fn non_menace_best_choices(
         }
     }
 
-    let mut best_delta = 0;
+    let mut best_score: Option<usize> = None;
     let mut legal = Vec::new();
     for &choice in options {
-        let delta = match choice {
-            None => 0,
+        let score = match choice {
+            None => decline_score,
             Some(a) => {
                 let r = rules[a];
                 let c = counts[a];
-                if c == 0 && (r.limited || r.first > 0) && matched[a] > 0 {
+                let delta = if c == 0 && (r.limited || r.first > 0) && matched[a] > 0 {
                     let new_weight = if r.limited { 0 } else { r.each };
                     best_repl[a].max(new_weight)
                 } else {
                     r.next_reward(c)
-                }
+                };
+                baseline_score + delta
             }
         };
-        if delta >= best_delta {
-            if delta > best_delta {
+        if Some(score) >= best_score {
+            if Some(score) > best_score {
                 legal.clear();
-                best_delta = delta;
+                best_score = Some(score);
             }
             legal.push(choice);
         }
@@ -522,11 +623,36 @@ mod tests {
                         .map(Some)
                         .chain([None])
                         .collect();
-                    let fast = non_menace_best_choices(&rules, &edges, 3, &counts, &options);
-                    let slow = general_best_choices(&rules, &edges, 3, &counts, &options);
+                    let fast = non_menace_best_choices(&rules, &edges, None, 3, &counts, &options);
+                    let slow = general_best_choices(&rules, &edges, None, 3, &counts, &options);
                     assert_eq!(
                         fast, slow,
                         "mask={mask}, rules=({r0},{r1},{r2}), counts={counts:?}, options={options:?}"
+                    );
+                    // Also verify when declining suppresses blocker 0 (and blocker 1).
+                    let decline_edges: Vec<Vec<usize>> = edges
+                        .iter()
+                        .map(|list| list.iter().copied().filter(|&b| b == 2).collect())
+                        .collect();
+                    let fast_d = non_menace_best_choices(
+                        &rules,
+                        &edges,
+                        Some(&decline_edges),
+                        3,
+                        &counts,
+                        &options,
+                    );
+                    let slow_d = general_best_choices(
+                        &rules,
+                        &edges,
+                        Some(&decline_edges),
+                        3,
+                        &counts,
+                        &options,
+                    );
+                    assert_eq!(
+                        fast_d, slow_d,
+                        "decline mask={mask}, rules=({r0},{r1},{r2}), counts={counts:?}"
                     );
                 }
             }

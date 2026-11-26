@@ -1335,7 +1335,7 @@ impl Env {
             .ok_or_else(|| AgentError("env.state_digest called before reset".to_string()))?;
         Ok(snapshot::state_digest(
             &game.state,
-            &game.current_action_space,
+            game.action_space(),
             &game.pending_choice,
             game.skip_trivial,
             game.skip_trivial_count,

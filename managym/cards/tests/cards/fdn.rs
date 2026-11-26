@@ -3669,7 +3669,7 @@ fn a_rejected_action_leaves_the_loop_watch() {
         .as_ref()
         .unwrap()
         .object;
-    s.game_mut().current_action_space.as_mut().unwrap().actions = vec![Action::CastSpell {
+    s.game_mut().action_space_mut().unwrap().actions = vec![Action::CastSpell {
         player: PlayerId(0),
         object,
         profile: Default::default(),

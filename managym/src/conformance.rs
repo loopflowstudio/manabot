@@ -342,7 +342,7 @@ fn normalize_reference(game: &mut Game) -> Result<(), String> {
 fn checkpoint(game: &Game) -> Result<Checkpoint, String> {
     Ok(Checkpoint {
         state_hash: game.state.deterministic_hash().to_string(),
-        action_space_digest: digest_serialized(&game.current_action_space)?,
+        action_space_digest: digest_serialized(&game.action_space())?,
         pending_choice_digest: digest_serialized(&game.pending_choice)?,
         event_boundary: [
             game.state.events.len(),

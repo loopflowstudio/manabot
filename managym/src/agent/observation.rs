@@ -1107,11 +1107,7 @@ impl Observation {
             viewer.0 < game.state.players.len(),
             "viewer must name a player"
         );
-        let expose_actions = game
-            .current_action_space
-            .as_ref()
-            .and_then(|space| space.player)
-            == Some(viewer);
+        let expose_actions = game.action_space().and_then(|space| space.player) == Some(viewer);
         Self::for_player_with_events(game, viewer, std::iter::empty(), expose_actions)
     }
 
@@ -1153,10 +1149,7 @@ impl Observation {
 
         // Action descriptions ask payment questions of one board.
         let _payments = game.payment_scan();
-        let action_space = game
-            .current_action_space
-            .as_ref()
-            .map(|space| ActionSpaceData {
+        let action_space = game.action_space().map(|space| ActionSpaceData {
                 action_space_type: space.kind,
                 actions: if expose_actions {
                     space

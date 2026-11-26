@@ -1846,8 +1846,7 @@ mod identity_tests {
         assert!(game.execute_decision_action(&forged).is_err());
         assert!(game.state.suspended_decision.is_some());
         let index = |game: &Game, action: &Action| {
-            game.current_action_space
-                .as_ref()
+            game.action_space()
                 .unwrap()
                 .actions
                 .iter()

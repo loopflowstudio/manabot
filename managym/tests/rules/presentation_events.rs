@@ -175,9 +175,8 @@ fn a_combat_death_follows_from_the_damage_and_each_line_keeps_its_board() {
                 .count()
         };
         assert!(elves(damage_board) > elves(death_board));
-        assert!(positions[death_board as usize]
-            .current_action_space
-            .is_none());
+        assert!(positions[death_board as usize].action_space().is_none());
+        assert!(positions[death_board as usize].action_aliases().is_empty());
     }
 }
 

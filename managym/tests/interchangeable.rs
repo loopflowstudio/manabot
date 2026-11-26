@@ -1421,10 +1421,6 @@ fn substitute_alias(game: &Game, action: &Action, alias_object: ObjectId) -> Act
             player,
             permanent: perm.expect("permanent alias for WaterbendTap"),
         },
-        Action::TurnFaceUp { player, .. } => Action::TurnFaceUp {
-            player,
-            object: alias_object,
-        },
         Action::PlayLand {
             profile,
             player,
@@ -1691,11 +1687,7 @@ fn verify_folded_pair(base: &Game, surviving_idx: usize, alias_object: ObjectId,
 
     let mut kept_branch = base.clone();
     let mut removed_branch = base.clone();
-    removed_branch
-        .current_action_space
-        .as_mut()
-        .unwrap()
-        .actions[surviving_idx] = removed_action.clone();
+    removed_branch.action_space_mut().unwrap().actions[surviving_idx] = removed_action.clone();
 
     kept_branch.step(surviving_idx).unwrap();
     removed_branch.step(surviving_idx).unwrap();
@@ -2117,17 +2109,243 @@ fn declare_blockers_menace_and_must_block_never_empty_after_decline() {
     );
 
     // Exhaust every reachable blocker path: never empty, and every leaf satisfies
-    // Menace + MustBeBlocked (2 or 3 blockers on Brute).
+    // Menace + MustBeBlocked with zero duplicate blocker-count branches (exact
+    // leaves: 2 blockers and 3 blockers, no dedup needed).
     let mut leaves = Vec::new();
     explore_declaration_leaves(&game, ActionSpaceKind::DeclareBlocker, &mut leaves);
-    assert!(!leaves.is_empty());
     let mut blocker_counts: Vec<usize> = leaves
         .iter()
         .map(|g| g.state.combat.as_ref().unwrap().attacker_to_blockers[&brute].len())
         .collect();
     blocker_counts.sort();
-    blocker_counts.dedup();
     assert_eq!(blocker_counts, vec![2, 3]);
+}
+
+#[test]
+fn declare_blockers_must_be_blocked_and_menace_have_no_duplicate_branches() {
+    let entries = [("Mountain", 24), ("Boggart Brute", 8), ("Gray Ogre", 8)];
+    let p0 = PlayerId(0);
+    let p1 = PlayerId(1);
+
+    // 1. MustBeBlocked attacker vs 2 identical blockers, then 3 identical blockers:
+    //    exact leaves [1, 2] and [1, 2, 3] with zero duplicate 1-blocker outcomes.
+    for blocker_count in [2usize, 3] {
+        let mut game = position(&["Mountain"], &entries, "Gray Ogre");
+        let ogre = game
+            .scenario_force_battlefield(p0, "Gray Ogre", true)
+            .unwrap();
+        let ogre_obj = game.permanent_object(ogre).unwrap();
+        for _ in 0..blocker_count {
+            game.create_token("token.ally", p1, false).unwrap();
+        }
+        let ts = game.state.permanents[ogre].as_ref().unwrap().timestamp;
+        game.state.effects.push(ContinuousEffect {
+            timestamp: ts,
+            source: None,
+            controller: p0,
+            affected: Affected::Object(ogre_obj),
+            modification: Modification::MustBeBlocked,
+            duration: EffectDuration::EndOfTurn,
+            source_object: None,
+        });
+        game.scenario_refresh_priority().unwrap();
+        advance_to_step(
+            &mut game,
+            p0,
+            managym::flow::turn::StepKind::DeclareAttackers,
+        );
+        let attack_idx = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+            .unwrap();
+        game.step(attack_idx).unwrap();
+        advance_to_step(
+            &mut game,
+            p0,
+            managym::flow::turn::StepKind::DeclareBlockers,
+        );
+
+        let events_from = game.state.observation_events.len();
+        let mut leaves = Vec::new();
+        explore_declaration_leaves(&game, ActionSpaceKind::DeclareBlocker, &mut leaves);
+        let mut counts: Vec<usize> = leaves
+            .iter()
+            .map(|g| declared_blocker_counts(g, events_from, 1).into_iter().sum())
+            .collect();
+        counts.sort();
+        let expected: Vec<usize> = (1..=blocker_count).collect();
+        assert_eq!(
+            counts, expected,
+            "MustBeBlocked with {blocker_count} identical blockers must emit no duplicate branches"
+        );
+    }
+
+    // 2. Menace-only attacker (no MustBeBlocked) vs 3 identical blockers:
+    //    exact leaves [0, 2, 3] with zero duplicate 2-blocker outcomes.
+    {
+        let mut game = position(&["Mountain"], &entries, "Gray Ogre");
+        let _brute = game
+            .scenario_force_battlefield(p0, "Boggart Brute", true)
+            .unwrap();
+        for _ in 0..3 {
+            game.create_token("token.ally", p1, false).unwrap();
+        }
+        game.scenario_refresh_priority().unwrap();
+        advance_to_step(
+            &mut game,
+            p0,
+            managym::flow::turn::StepKind::DeclareAttackers,
+        );
+        let attack_idx = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+            .unwrap();
+        game.step(attack_idx).unwrap();
+        advance_to_step(
+            &mut game,
+            p0,
+            managym::flow::turn::StepKind::DeclareBlockers,
+        );
+
+        let events_from = game.state.observation_events.len();
+        let mut leaves = Vec::new();
+        explore_declaration_leaves(&game, ActionSpaceKind::DeclareBlocker, &mut leaves);
+        let mut counts: Vec<usize> = leaves
+            .iter()
+            .map(|g| declared_blocker_counts(g, events_from, 1).into_iter().sum())
+            .collect();
+        counts.sort();
+        assert_eq!(counts, vec![0, 2, 3]);
+    }
+
+    // 3. Mixed blockers in asking order [token A, Gray Ogre, token B] facing a
+    //    MustBeBlocked attacker: preserves the distinct "only Ogre blocks"
+    //    outcome while pruning the duplicate "(token B only)" branch.
+    //    blockers_to_declare is popped from the back, so creating [token B,
+    //    Gray Ogre, token A] asks token A, then Gray Ogre, then token B.
+    {
+        let mut game = position(&["Mountain"], &entries, "Gray Ogre");
+        let attacker = game
+            .scenario_force_battlefield(p0, "Gray Ogre", true)
+            .unwrap();
+        let attacker_obj = game.permanent_object(attacker).unwrap();
+        let _tok_b = game.create_token("token.ally", p1, false).unwrap();
+        let ogre_blk = game
+            .scenario_force_battlefield(p1, "Gray Ogre", true)
+            .unwrap();
+        let ogre_blk_render = render_perm(&game, ogre_blk);
+        let _tok_a = game.create_token("token.ally", p1, false).unwrap();
+        let ts = game.state.permanents[attacker].as_ref().unwrap().timestamp;
+        game.state.effects.push(ContinuousEffect {
+            timestamp: ts,
+            source: None,
+            controller: p0,
+            affected: Affected::Object(attacker_obj),
+            modification: Modification::MustBeBlocked,
+            duration: EffectDuration::EndOfTurn,
+            source_object: None,
+        });
+        game.scenario_refresh_priority().unwrap();
+        advance_to_step(
+            &mut game,
+            p0,
+            managym::flow::turn::StepKind::DeclareAttackers,
+        );
+        let attack_idx = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+            .unwrap();
+        game.step(attack_idx).unwrap();
+        advance_to_step(
+            &mut game,
+            p0,
+            managym::flow::turn::StepKind::DeclareBlockers,
+        );
+
+        let events_from = game.state.observation_events.len();
+        let mut leaves = Vec::new();
+        explore_declaration_leaves(&game, ActionSpaceKind::DeclareBlocker, &mut leaves);
+        // Distinct legal multisets of (tokens_blocking, ogre_blocking):
+        // (0, true), (1, false), (1, true), (2, false), (2, true) — 5 total, no duplicates.
+        let mut outcomes: Vec<(usize, bool)> = leaves
+            .iter()
+            .map(|g| {
+                let mut blockers = Vec::new();
+                for event in &g.state.observation_events[events_from..] {
+                    if let managym::flow::event::GameEvent::BlockersDeclared { assignments } = event
+                    {
+                        for (_, assigned) in assignments {
+                            blockers.extend(assigned.iter().copied());
+                        }
+                        break;
+                    }
+                }
+                let has_ogre = blockers
+                    .iter()
+                    .any(|&b| managym::experience::ObjectRenderId::from(b) == ogre_blk_render);
+                let token_count = blockers.len() - usize::from(has_ogre);
+                (token_count, has_ogre)
+            })
+            .collect();
+        outcomes.sort();
+        assert_eq!(
+            outcomes,
+            vec![(0, true), (1, false), (1, true), (2, false), (2, true)]
+        );
+    }
+}
+
+#[test]
+fn published_decision_seam_clears_aliases_with_action_space() {
+    let entries = [("Mountain", 24), ("Gray Ogre", 16)];
+    let mut game = position(&[], &entries, "Mountain");
+    game.scenario_force_card_in_hand(PlayerId(0), "Mountain")
+        .unwrap();
+    game.scenario_refresh_priority().unwrap();
+    game.enable_presentation();
+    assert!(
+        !game.action_aliases().is_empty(),
+        "identical Mountains in hand must populate aliases"
+    );
+
+    // Clearing published decision clears both space and aliases.
+    let mut cleared = game.clone();
+    cleared.clear_published_decision();
+    assert!(cleared.action_space().is_none());
+    assert!(cleared.action_aliases().is_empty());
+
+    // Applying a search action (playing a Mountain) updates the published
+    // decision cleanly and presentation cuts carry neither space nor aliases.
+    let offers = game.structured_search_offers().unwrap();
+    let play_offer = offers
+        .projection()
+        .offers
+        .iter()
+        .find(|o| o.verb == OfferVerb::PlayLand)
+        .unwrap();
+    game.apply_offer_submission(
+        &offers,
+        &OfferSubmission {
+            offer_id: play_offer.id,
+            answers: Vec::new(),
+        },
+    )
+    .unwrap();
+    let positions = game.take_presentation_positions();
+    assert!(!positions.is_empty());
+    for pos in &positions {
+        assert!(pos.action_space().is_none());
+        assert!(pos.action_aliases().is_empty());
+    }
 }
 
 #[test]

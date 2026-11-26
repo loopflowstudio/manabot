@@ -293,7 +293,7 @@ impl Game {
 
     /// Bind an atomic action to the same published choice as indexed stepping.
     pub(crate) fn exposure_for_action(&self, action: &Action) -> Option<ExposureChoice> {
-        let space = self.current_action_space.as_ref()?;
+        let space = self.action_space()?;
         let index = space
             .actions
             .iter()

@@ -601,7 +601,7 @@ impl Game {
         if self.is_game_over() {
             return Err(StructuredOfferError::GameOver);
         }
-        match self.current_action_space.as_ref().map(|space| space.kind) {
+        match self.action_space().map(|space| space.kind) {
             Some(ActionSpaceKind::Priority) => self.structured_priority_offers(),
             Some(ActionSpaceKind::DeclareAttacker) => self.structured_attacker_offers(),
             Some(_) => Err(StructuredOfferError::WrongDecision),
@@ -622,8 +622,7 @@ impl Game {
             return Err(StructuredOfferError::GameOver);
         }
         let action_space = self
-            .current_action_space
-            .as_ref()
+            .action_space()
             .ok_or(StructuredOfferError::NoActiveActionSpace)?;
         let actor = action_space
             .player
@@ -707,7 +706,7 @@ impl Game {
     /// every other decision retains its ordinary action-aligned offer.
     pub fn compound_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
         let mut complete = self.structured_search_offers()?;
-        match self.current_action_space.as_ref().map(|space| space.kind) {
+        match self.action_space().map(|space| space.kind) {
             Some(ActionSpaceKind::DeclareAttacker)
                 if self.attacker_declaration_is_constrained() =>
             {
@@ -1032,8 +1031,7 @@ impl Game {
             return Err(StructuredOfferError::GameOver);
         }
         let action_space = self
-            .current_action_space
-            .as_ref()
+            .action_space()
             .ok_or(StructuredOfferError::NoActiveActionSpace)?;
         if action_space.kind != ActionSpaceKind::Priority {
             return Err(StructuredOfferError::WrongDecision);
@@ -1508,68 +1506,32 @@ impl Game {
                         "attacker declaration contains a duplicate or unoffered permanent".into(),
                     ));
                 }
-                let mut remaining_selected = selected;
+                let planned: Vec<(PermanentId, bool)> =
+                    selected.into_iter().map(|perm| (perm, false)).collect();
+                let mut normalizer = crate::flow::combat_preview::AttackPlanNormalizer::new(
+                    declaration_order,
+                    planned,
+                );
                 let mut actions = 0;
                 let mut done = false;
                 // The final choice may skip trivial windows all the way to a
                 // later turn's declaration, even by this same actor. Lower only
                 // the batch bound at the root, never a fresh prompt of this kind.
-                // Re-home planned marks onto the creature being asked so subsets
-                // like `[A:no, B:yes]` normalize cleanly under the declined-earlier
-                // rule, and skip forced declines already consumed by `skip_trivial`.
-                for (pos, permanent) in declaration_order.iter().copied().enumerate() {
-                    let Some(space) = self.action_space().filter(|space| {
-                        space.kind == ActionSpaceKind::DeclareAttacker
-                            && space.actions.iter().any(|action| {
-                                matches!(
-                                    action,
-                                    Action::DeclareAttacker {
-                                        player: legal_player,
-                                        permanent: legal_permanent,
-                                        ..
-                                    } if legal_player == player && *legal_permanent == permanent
-                                )
-                            })
-                    }) else {
-                        if self.skip_trivial && !remaining_selected.contains(&permanent) {
-                            continue;
-                        }
-                        return Err(StructuredOfferError::WrongDecision);
-                    };
-                    let mut attack = remaining_selected.remove(&permanent);
-                    if !attack {
-                        if let Some(&donor) = declaration_order[pos + 1..].iter().find(|&&other| {
-                            remaining_selected.contains(&other)
-                                && self.interchangeable_permanents(permanent, other)
-                        }) {
-                            remaining_selected.remove(&donor);
-                            attack = true;
-                        }
-                    }
-                    let action = space
-                        .actions
-                        .iter()
-                        .position(|action| {
-                            matches!(
-                                action,
-                                Action::DeclareAttacker {
-                                    player: legal_player,
-                                    permanent: legal_permanent,
-                                    attack: legal_attack,
-                                } if legal_player == player
-                                    && *legal_permanent == permanent
-                                    && *legal_attack == attack
-                            )
-                        })
-                        .ok_or_else(|| {
-                            StructuredOfferError::Invariant(
-                                "legacy attacker prompt lacks a binary choice".to_string(),
-                            )
-                        })?;
+                while let Some(step) = normalizer.next_step(self, *player) {
+                    let action = step.action_index.ok_or_else(|| {
+                        StructuredOfferError::Invariant(
+                            "legacy attacker prompt lacks a binary choice".to_string(),
+                        )
+                    })?;
                     done = self.record_compound_step(action, commands)?;
                     actions += 1;
                 }
-                if !remaining_selected.is_empty() {
+                if !self.skip_trivial
+                    && (normalizer.skipped() > 0 || normalizer.remaining_count() > 0)
+                {
+                    return Err(StructuredOfferError::WrongDecision);
+                }
+                if !normalizer.all_committed() {
                     return Err(StructuredOfferError::StaleOrIllegal(
                         "attacker declaration could not commit every planned attacker".into(),
                     ));
@@ -1584,8 +1546,8 @@ impl Game {
                         .first()
                         .map(Action::player)
                         .ok_or(StructuredOfferError::WrongDecision)?;
-                    let mut remaining_plan: Vec<(PermanentId, Option<PermanentId>)> =
-                        Vec::with_capacity(actions.len());
+                    let mut order = Vec::with_capacity(actions.len());
+                    let mut planned = Vec::new();
                     for action in actions {
                         match *action {
                             Action::DeclareBlocker {
@@ -1593,68 +1555,34 @@ impl Game {
                                 blocker,
                                 attacker,
                             } if action_player == player => {
-                                remaining_plan.push((blocker, attacker));
+                                order.push(blocker);
+                                if attacker.is_some() {
+                                    planned.push(crate::flow::combat_preview::PlannedBlockEntry {
+                                        blocker,
+                                        attacker,
+                                        raw_attacker: None,
+                                        committed: false,
+                                    });
+                                }
                             }
                             _ => return Err(StructuredOfferError::WrongDecision),
                         }
                     }
-                    for pos in 0..remaining_plan.len() {
-                        let (blocker, mut wanted_attacker) = remaining_plan[pos];
-                        let Some(space) = self.action_space().filter(|space| {
-                            space.kind == ActionSpaceKind::DeclareBlocker
-                                && space.actions.iter().any(|action| {
-                                    matches!(
-                                        action,
-                                        Action::DeclareBlocker {
-                                            player: legal_player,
-                                            blocker: legal_blocker,
-                                            ..
-                                        } if *legal_player == player && *legal_blocker == blocker
-                                    )
-                                })
-                        }) else {
-                            if self.skip_trivial && wanted_attacker.is_none() {
-                                continue;
-                            }
-                            return Err(StructuredOfferError::WrongDecision);
-                        };
-                        if wanted_attacker.is_none() {
-                            if let Some(donor_pos) = ((pos + 1)..remaining_plan.len()).find(|&j| {
-                                remaining_plan[j].1.is_some()
-                                    && self.interchangeable_permanents(blocker, remaining_plan[j].0)
-                            }) {
-                                wanted_attacker = remaining_plan[donor_pos].1.take();
-                                remaining_plan[pos].1 = wanted_attacker;
-                            }
-                        }
-                        let wanted = Action::DeclareBlocker {
-                            player,
-                            blocker,
-                            attacker: wanted_attacker,
-                        };
-                        let index = self
-                            .resolve_action_index(space, &wanted)
+                    let mut normalizer =
+                        crate::flow::combat_preview::BlockPlanNormalizer::new(order, planned);
+                    while let Some(step) = normalizer.next_step(self, player) {
+                        let index = step
+                            .action_index
                             .ok_or(StructuredOfferError::WrongDecision)?;
-                        if let (
-                            Some(want_att),
-                            Action::DeclareBlocker {
-                                attacker: Some(canon_att),
-                                ..
-                            },
-                        ) = (wanted_attacker, &space.actions[index])
-                        {
-                            if *canon_att != want_att {
-                                for (_, target) in &mut remaining_plan[pos + 1..] {
-                                    if *target == Some(want_att) {
-                                        *target = Some(*canon_att);
-                                    } else if *target == Some(*canon_att) {
-                                        *target = Some(want_att);
-                                    }
-                                }
-                            }
-                        }
                         done = self.record_compound_step(index, commands)?;
                         executed += 1;
+                    }
+                    if executed == 0
+                        || (!self.skip_trivial
+                            && (normalizer.skipped() > 0 || normalizer.remaining_count() > 0))
+                        || !normalizer.all_committed()
+                    {
+                        return Err(StructuredOfferError::WrongDecision);
                     }
                     return Ok((done, executed));
                 }
@@ -1832,8 +1760,7 @@ impl Game {
             return Err(StructuredOfferError::GameOver);
         }
         let offered = self
-            .current_action_space
-            .as_ref()
+            .action_space()
             .ok_or(StructuredOfferError::NoActiveActionSpace)?
             .actions
             .iter()
@@ -1848,14 +1775,11 @@ impl Game {
         drop(validation_timer);
         #[cfg(feature = "benchmark")]
         let _rules_timer = crate::benchmark_search::Timer::new("rules_execution");
-        let pending_memory = crate::agent::decision_memory::capture(
-            self,
-            self.current_action_space.as_ref().unwrap(),
-            action,
-        );
+        let pending_memory =
+            crate::agent::decision_memory::capture(self, self.action_space().unwrap(), action);
         let action = action.clone();
         let exposure = self.exposure_for_action(&action);
-        self.current_action_space.take();
+        self.clear_published_decision();
         self.execute_action(&action).unwrap_or_else(|error| {
             panic!("structured search offer admitted an unexecutable action: {error}")
         });
@@ -1879,8 +1803,7 @@ impl Game {
     /// is forced to decline because an interchangeable creature declined earlier.
     fn attacker_declaration_is_constrained(&self) -> bool {
         let current = self
-            .current_action_space
-            .as_ref()
+            .action_space()
             .into_iter()
             .flat_map(|space| &space.actions)
             .filter_map(|action| match action {
@@ -1905,8 +1828,7 @@ impl Game {
         &self,
     ) -> Result<(PlayerId, Vec<PermanentId>), StructuredOfferError> {
         let action_space = self
-            .current_action_space
-            .as_ref()
+            .action_space()
             .ok_or(StructuredOfferError::NoActiveActionSpace)?;
         if action_space.kind != ActionSpaceKind::DeclareAttacker {
             return Err(StructuredOfferError::WrongDecision);

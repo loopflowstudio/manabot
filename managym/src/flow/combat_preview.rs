@@ -143,7 +143,7 @@ impl Game {
         }
 
         let mut working_attackers: Vec<(PermanentId, bool)> = Vec::new();
-        let mut working_blocks: Vec<WorkingBlock> = Vec::new();
+        let mut working_blocks: Vec<PlannedBlockEntry> = Vec::new();
         match kind {
             DeclarationKind::Attackers => {
                 for id in &plan.attackers {
@@ -165,10 +165,10 @@ impl Game {
                         .permanent_by_render_id(block.blocker)
                         .expect("verified by unaskable");
                     let attacker = self.permanent_by_render_id(block.attacker);
-                    working_blocks.push(WorkingBlock {
+                    working_blocks.push(PlannedBlockEntry {
                         blocker,
                         attacker,
-                        raw_attacker: block.attacker,
+                        raw_attacker: Some(block.attacker),
                         committed: !order.contains(&blocker),
                     });
                 }
@@ -178,10 +178,10 @@ impl Game {
                             .permanent_by_render_id(block.blocker)
                             .expect("declared blocker");
                         let attacker = self.permanent_by_render_id(block.attacker);
-                        working_blocks.push(WorkingBlock {
+                        working_blocks.push(PlannedBlockEntry {
                             blocker,
                             attacker,
-                            raw_attacker: block.attacker,
+                            raw_attacker: Some(block.attacker),
                             committed: true,
                         });
                     }
@@ -189,144 +189,94 @@ impl Game {
             }
         }
 
+        let rules_player = space
+            .actions
+            .first()
+            .map(Action::player)
+            .ok_or_else(|| AgentError("declaration has no legal actions".into()))?;
         let mut position = self.clone();
         let events_from = position.state.observation_events.len();
-        let mut remaining = order.as_slice();
         // A creature with one legal answer is answered by the engine without
         // asking (`skip_trivial`); the declaration ends when the decision is
         // about none of the creatures still to declare.
-        while let Some(asked) = position.asked_creature(kind, viewer) {
-            let Some(at) = remaining.iter().position(|creature| *creature == asked) else {
-                break;
-            };
-            remaining = &remaining[at + 1..];
-            let space = position.action_space().expect("asked decision");
-            let (wanted, index, chosen_blocks) = match kind {
-                DeclarationKind::Attackers => {
-                    let want = if let Some(entry) = working_attackers
-                        .iter_mut()
-                        .find(|(perm, committed)| !*committed && *perm == asked)
-                    {
-                        entry.1 = true;
-                        true
-                    } else if let Some(&donor) = remaining.iter().find(|&&other| {
-                        working_attackers
-                            .iter()
-                            .any(|(perm, committed)| !*committed && *perm == other)
-                            && position.interchangeable_permanents(asked, other)
-                    }) {
-                        let entry = working_attackers
-                            .iter_mut()
-                            .find(|(perm, committed)| !*committed && *perm == donor)
-                            .expect("matched donor");
-                        *entry = (asked, true);
-                        true
-                    } else {
-                        false
+        match kind {
+            DeclarationKind::Attackers => {
+                let mut normalizer = AttackPlanNormalizer::new(order, working_attackers);
+                while position
+                    .action_space()
+                    .is_some_and(|space| space.player == Some(viewer))
+                {
+                    let Some(step) = normalizer.next_step(&position, rules_player) else {
+                        break;
                     };
-                    let wanted_action = Action::DeclareAttacker {
-                        player: viewer,
-                        permanent: asked,
-                        attack: want,
+                    let space = position.action_space().expect("asked decision");
+                    let Some(index) = step.action_index else {
+                        preview.refused =
+                            Some(self.refusal(step.permanent, Answer::Attack(step.attack), space));
+                        return Ok(preview);
                     };
-                    let index = space
-                        .actions
-                        .iter()
-                        .position(|action| *action == wanted_action);
-                    (Answer::Attack(want), index, None)
-                }
-                DeclarationKind::Blockers => {
-                    let entry_pos = if let Some(pos) = working_blocks
-                        .iter()
-                        .position(|entry| !entry.committed && entry.blocker == asked)
-                    {
-                        Some(pos)
-                    } else if let Some(&donor) = remaining.iter().find(|&&other| {
-                        working_blocks.iter().any(|entry| {
-                            !entry.committed && entry.blocker == other && entry.attacker.is_some()
-                        }) && position.interchangeable_permanents(asked, other)
-                    }) {
-                        let pos = working_blocks
-                            .iter()
-                            .position(|entry| {
-                                !entry.committed
-                                    && entry.blocker == donor
-                                    && entry.attacker.is_some()
-                            })
-                            .expect("matched donor");
-                        working_blocks[pos].blocker = asked;
-                        Some(pos)
-                    } else {
-                        None
-                    };
-                    let want_att = entry_pos.and_then(|pos| working_blocks[pos].attacker);
-                    let wanted_action = Action::DeclareBlocker {
-                        player: viewer,
-                        blocker: asked,
-                        attacker: want_att,
-                    };
-                    let index = position.resolve_action_index(space, &wanted_action);
-                    let chosen_att = index.and_then(|idx| match space.actions[idx] {
-                        Action::DeclareBlocker { attacker, .. } => attacker,
-                        _ => None,
+                    let frame = position
+                        .semantic_decision_frame()
+                        .map_err(|error| AgentError(error.to_string()))?;
+                    preview.steps.push(DeclarationStep {
+                        revision: frame.revision,
+                        fingerprint: frame.fingerprint,
+                        creature: self.render_id(step.permanent),
+                        action_index: index,
+                        attack: step.attack,
+                        blocks: None,
                     });
-                    if let Some(pos) = entry_pos {
-                        if working_blocks[pos].attacker.is_some() {
-                            working_blocks[pos].committed = true;
-                        }
-                        if let (Some(want), Some(canon)) = (want_att, chosen_att) {
-                            if canon != want {
-                                let canon_render = self.render_id(canon);
-                                let want_render = self.render_id(want);
-                                working_blocks[pos].attacker = Some(canon);
-                                working_blocks[pos].raw_attacker = canon_render;
-                                // Transpose want <-> canon across uncommitted blocks
-                                // so split-blocks stay split and double-blocks stay
-                                // paired on the canonical attacker.
-                                for (i, other) in working_blocks.iter_mut().enumerate() {
-                                    if i != pos && !other.committed {
-                                        if other.attacker == Some(want) {
-                                            other.attacker = Some(canon);
-                                            other.raw_attacker = canon_render;
-                                        } else if other.attacker == Some(canon) {
-                                            other.attacker = Some(want);
-                                            other.raw_attacker = want_render;
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    position.step(index)?;
+                    if position.is_game_over() {
+                        break;
                     }
-                    (
-                        Answer::Block(want_att),
-                        index,
-                        chosen_att.map(|attacker| self.render_id(attacker)),
-                    )
                 }
-            };
-            let Some(index) = index else {
-                preview.refused = Some(self.refusal(asked, wanted, space));
-                return Ok(preview);
-            };
-            let frame = position
-                .semantic_decision_frame()
-                .map_err(|error| AgentError(error.to_string()))?;
-            preview.steps.push(DeclarationStep {
-                revision: frame.revision,
-                fingerprint: frame.fingerprint,
-                creature: self.render_id(asked),
-                action_index: index,
-                attack: matches!(wanted, Answer::Attack(true)),
-                blocks: chosen_blocks,
-            });
-            position.step(index)?;
-            if position.is_game_over() {
-                break;
+                self.read_declaration(&position, events_from, &mut preview);
+                if preview.refused.is_none() {
+                    preview.refused = self.undeclared(kind, normalizer.planned(), &[], &preview);
+                }
             }
-        }
-        self.read_declaration(&position, events_from, &mut preview);
-        if preview.refused.is_none() {
-            preview.refused = self.undeclared(kind, &working_attackers, &working_blocks, &preview);
+            DeclarationKind::Blockers => {
+                let mut normalizer = BlockPlanNormalizer::new(order, working_blocks);
+                while position
+                    .action_space()
+                    .is_some_and(|space| space.player == Some(viewer))
+                {
+                    let Some(step) = normalizer.next_step(&position, rules_player) else {
+                        break;
+                    };
+                    let space = position.action_space().expect("asked decision");
+                    let Some(index) = step.action_index else {
+                        preview.refused = Some(self.refusal(
+                            step.blocker,
+                            Answer::Block(step.wanted_attacker),
+                            space,
+                        ));
+                        return Ok(preview);
+                    };
+                    let frame = position
+                        .semantic_decision_frame()
+                        .map_err(|error| AgentError(error.to_string()))?;
+                    preview.steps.push(DeclarationStep {
+                        revision: frame.revision,
+                        fingerprint: frame.fingerprint,
+                        creature: self.render_id(step.blocker),
+                        action_index: index,
+                        attack: false,
+                        blocks: step
+                            .resolved_attacker
+                            .map(|attacker| self.render_id(attacker)),
+                    });
+                    position.step(index)?;
+                    if position.is_game_over() {
+                        break;
+                    }
+                }
+                self.read_declaration(&position, events_from, &mut preview);
+                if preview.refused.is_none() {
+                    preview.refused = self.undeclared(kind, &[], normalizer.planned(), &preview);
+                }
+            }
         }
         Ok(preview)
     }
@@ -359,16 +309,39 @@ impl Game {
         if space.player != Some(viewer) {
             return None;
         }
+        let rules_player = space.actions.first().map(Action::player)?;
+        self.asked_creature_for_rules_player(kind, rules_player)
+    }
+
+    pub(crate) fn asked_creature_for_rules_player(
+        &self,
+        kind: DeclarationKind,
+        rules_player: PlayerId,
+    ) -> Option<PermanentId> {
+        let space = self.action_space()?;
+        let expected_kind = match kind {
+            DeclarationKind::Attackers => ActionSpaceKind::DeclareAttacker,
+            DeclarationKind::Blockers => ActionSpaceKind::DeclareBlocker,
+        };
+        if space.kind != expected_kind {
+            return None;
+        }
         space
             .actions
             .iter()
             .find_map(|action| match (action, kind) {
-                (Action::DeclareAttacker { permanent, .. }, DeclarationKind::Attackers) => {
-                    Some(*permanent)
-                }
-                (Action::DeclareBlocker { blocker, .. }, DeclarationKind::Blockers) => {
-                    Some(*blocker)
-                }
+                (
+                    Action::DeclareAttacker {
+                        player, permanent, ..
+                    },
+                    DeclarationKind::Attackers,
+                ) if *player == rules_player => Some(*permanent),
+                (
+                    Action::DeclareBlocker {
+                        player, blocker, ..
+                    },
+                    DeclarationKind::Blockers,
+                ) if *player == rules_player => Some(*blocker),
                 _ => None,
             })
     }
@@ -537,10 +510,19 @@ impl Game {
             })
             .collect();
         let reason = match wanted {
-            Answer::Block(None) => match offered.as_slice() {
-                [attacker] => format!("{label} must block {}.", self.label(*attacker)),
-                _ => format!("{label} must block an attacker that requires it."),
-            },
+            Answer::Block(None) => {
+                let coupled: Vec<_> = offered
+                    .iter()
+                    .copied()
+                    .filter(|&attacker| self.blocks_are_coupled(attacker))
+                    .collect();
+                match (offered.as_slice(), coupled.as_slice()) {
+                    ([attacker], _) | (_, [attacker]) => {
+                        format!("{label} must block {}.", self.label(*attacker))
+                    }
+                    _ => format!("{label} must block an attacker that requires it."),
+                }
+            }
             Answer::Block(Some(attacker)) => {
                 format!("{label} can't block {}.", self.label(attacker))
             }
@@ -595,7 +577,7 @@ impl Game {
         &self,
         kind: DeclarationKind,
         working_attackers: &[(PermanentId, bool)],
-        working_blocks: &[WorkingBlock],
+        working_blocks: &[PlannedBlockEntry],
         preview: &CombatPreview,
     ) -> Option<DeclarationRefusal> {
         let named = |id: ObjectRenderId| self.render_label(id);
@@ -641,7 +623,9 @@ impl Game {
                     .iter()
                     .map(|block| PlannedBlock {
                         blocker: self.render_id(block.blocker),
-                        attacker: block.raw_attacker,
+                        attacker: block
+                            .raw_attacker
+                            .expect("combat preview blocks carry render ids"),
                     })
                     .collect();
                 let missing = planned
@@ -673,12 +657,255 @@ impl Game {
     }
 }
 
+/// One planned block entry tracked through sequential blocker declaration.
 #[derive(Clone, Copy, Debug)]
-struct WorkingBlock {
-    blocker: PermanentId,
-    attacker: Option<PermanentId>,
-    raw_attacker: ObjectRenderId,
-    committed: bool,
+pub(crate) struct PlannedBlockEntry {
+    pub(crate) blocker: PermanentId,
+    pub(crate) attacker: Option<PermanentId>,
+    pub(crate) raw_attacker: Option<ObjectRenderId>,
+    pub(crate) committed: bool,
+}
+
+/// Normalized answer for the currently asked creature in an attacker declaration.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct NormalizedAttackStep {
+    pub(crate) permanent: PermanentId,
+    pub(crate) attack: bool,
+    pub(crate) action_index: Option<usize>,
+}
+
+/// Normalized answer for the currently asked creature in a blocker declaration.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct NormalizedBlockStep {
+    pub(crate) blocker: PermanentId,
+    pub(crate) wanted_attacker: Option<PermanentId>,
+    pub(crate) resolved_attacker: Option<PermanentId>,
+    pub(crate) action_index: Option<usize>,
+}
+
+/// Shared attack-plan normalizer for `combat_preview` and compound lowering.
+///
+/// Advances past creatures auto-resolved by `skip_trivial` and re-homes
+/// planned marks from later interchangeable donors onto the creature being
+/// asked so non-canonical subsets (like `[A:no, B:yes]`) normalize cleanly
+/// under the declined-earlier symmetry rule.
+pub(crate) struct AttackPlanNormalizer {
+    order: Vec<PermanentId>,
+    cursor: usize,
+    skipped: usize,
+    planned: Vec<(PermanentId, bool)>,
+}
+
+impl AttackPlanNormalizer {
+    pub(crate) fn new(order: Vec<PermanentId>, planned: Vec<(PermanentId, bool)>) -> Self {
+        Self {
+            order,
+            cursor: 0,
+            skipped: 0,
+            planned,
+        }
+    }
+
+    pub(crate) fn next_step(
+        &mut self,
+        game: &Game,
+        player: PlayerId,
+    ) -> Option<NormalizedAttackStep> {
+        let asked = game.asked_creature_for_rules_player(DeclarationKind::Attackers, player)?;
+        let rel = self.order[self.cursor..]
+            .iter()
+            .position(|creature| *creature == asked)?;
+        self.skipped += rel;
+        self.cursor += rel + 1;
+        let remaining = &self.order[self.cursor..];
+        let attack = if let Some(entry) = self
+            .planned
+            .iter_mut()
+            .find(|(perm, committed)| !*committed && *perm == asked)
+        {
+            entry.1 = true;
+            true
+        } else if let Some(&donor) = remaining.iter().find(|&&other| {
+            self.planned
+                .iter()
+                .any(|(perm, committed)| !*committed && *perm == other)
+                && game.interchangeable_permanents(asked, other)
+        }) {
+            let entry = self
+                .planned
+                .iter_mut()
+                .find(|(perm, committed)| !*committed && *perm == donor)
+                .expect("matched donor");
+            *entry = (asked, true);
+            true
+        } else {
+            false
+        };
+        let space = game.action_space().expect("asked decision");
+        let wanted = Action::DeclareAttacker {
+            player,
+            permanent: asked,
+            attack,
+        };
+        let action_index = space.actions.iter().position(|action| *action == wanted);
+        Some(NormalizedAttackStep {
+            permanent: asked,
+            attack,
+            action_index,
+        })
+    }
+
+    pub(crate) fn all_committed(&self) -> bool {
+        self.planned.iter().all(|(_, committed)| *committed)
+    }
+
+    pub(crate) fn skipped(&self) -> usize {
+        self.skipped
+    }
+
+    pub(crate) fn remaining_count(&self) -> usize {
+        self.order.len() - self.cursor
+    }
+
+    pub(crate) fn planned(&self) -> &[(PermanentId, bool)] {
+        &self.planned
+    }
+}
+
+/// Shared block-plan normalizer for `combat_preview` and compound lowering.
+///
+/// Advances past blockers auto-resolved by `skip_trivial`, re-homes planned
+/// blocks from later interchangeable donors onto the blocker being asked,
+/// resolves folded attacker aliases through `Game::resolve_action_index`, and
+/// transposes `want <-> canon` across remaining uncommitted blocks so
+/// split-blocks stay split and double-blocks stay paired.
+pub(crate) struct BlockPlanNormalizer {
+    order: Vec<PermanentId>,
+    cursor: usize,
+    skipped: usize,
+    planned: Vec<PlannedBlockEntry>,
+}
+
+impl BlockPlanNormalizer {
+    pub(crate) fn new(order: Vec<PermanentId>, planned: Vec<PlannedBlockEntry>) -> Self {
+        Self {
+            order,
+            cursor: 0,
+            skipped: 0,
+            planned,
+        }
+    }
+
+    pub(crate) fn next_step(
+        &mut self,
+        game: &Game,
+        player: PlayerId,
+    ) -> Option<NormalizedBlockStep> {
+        let asked = game.asked_creature_for_rules_player(DeclarationKind::Blockers, player)?;
+        let rel = self.order[self.cursor..]
+            .iter()
+            .position(|creature| *creature == asked)?;
+        self.skipped += rel;
+        self.cursor += rel + 1;
+        let remaining = &self.order[self.cursor..];
+
+        let entry_pos = if let Some(pos) = self
+            .planned
+            .iter()
+            .position(|entry| !entry.committed && entry.blocker == asked)
+        {
+            Some(pos)
+        } else if let Some(&donor) = remaining.iter().find(|&&other| {
+            self.planned
+                .iter()
+                .any(|entry| !entry.committed && entry.blocker == other && entry.attacker.is_some())
+                && game.interchangeable_permanents(asked, other)
+        }) {
+            let pos = self
+                .planned
+                .iter()
+                .position(|entry| {
+                    !entry.committed && entry.blocker == donor && entry.attacker.is_some()
+                })
+                .expect("matched donor");
+            self.planned[pos].blocker = asked;
+            Some(pos)
+        } else {
+            None
+        };
+
+        let wanted_attacker = entry_pos.and_then(|pos| self.planned[pos].attacker);
+        let space = game.action_space().expect("asked decision");
+        let wanted_action = Action::DeclareBlocker {
+            player,
+            blocker: asked,
+            attacker: wanted_attacker,
+        };
+        let action_index = game.resolve_action_index(space, &wanted_action);
+        let resolved_attacker = action_index.and_then(|idx| match space.actions[idx] {
+            Action::DeclareBlocker { attacker, .. } => attacker,
+            _ => None,
+        });
+
+        if let Some(pos) = entry_pos {
+            if self.planned[pos].attacker.is_some() {
+                self.planned[pos].committed = true;
+            }
+            if let (Some(want), Some(canon)) = (wanted_attacker, resolved_attacker) {
+                if canon != want {
+                    let canon_render = self.planned[pos]
+                        .raw_attacker
+                        .map(|_| game.render_id(canon));
+                    let want_render = self.planned[pos].raw_attacker.map(|_| game.render_id(want));
+                    self.planned[pos].attacker = Some(canon);
+                    if let Some(render) = canon_render {
+                        self.planned[pos].raw_attacker = Some(render);
+                    }
+                    // Transpose want <-> canon across uncommitted blocks so
+                    // split-blocks stay split and double-blocks stay paired on
+                    // the canonical attacker.
+                    for (i, other) in self.planned.iter_mut().enumerate() {
+                        if i != pos && !other.committed {
+                            if other.attacker == Some(want) {
+                                other.attacker = Some(canon);
+                                if let Some(render) = canon_render {
+                                    other.raw_attacker = Some(render);
+                                }
+                            } else if other.attacker == Some(canon) {
+                                other.attacker = Some(want);
+                                if let Some(render) = want_render {
+                                    other.raw_attacker = Some(render);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Some(NormalizedBlockStep {
+            blocker: asked,
+            wanted_attacker,
+            resolved_attacker,
+            action_index,
+        })
+    }
+
+    pub(crate) fn all_committed(&self) -> bool {
+        self.planned.iter().all(|entry| entry.committed)
+    }
+
+    pub(crate) fn skipped(&self) -> usize {
+        self.skipped
+    }
+
+    pub(crate) fn remaining_count(&self) -> usize {
+        self.order.len() - self.cursor
+    }
+
+    pub(crate) fn planned(&self) -> &[PlannedBlockEntry] {
+        &self.planned
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

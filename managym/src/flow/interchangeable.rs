@@ -53,7 +53,7 @@ use crate::{
 };
 
 /// Folded members of surviving actions: `(surviving_action_index, folded_object)`
-/// pairs, stored beside `Game::current_action_space` and absent when nothing
+/// pairs, stored inside `Game::published_decision` and absent when nothing
 /// folded.
 pub(crate) type ActionAliases = Option<Box<[(usize, ObjectId)]>>;
 
@@ -1807,7 +1807,6 @@ fn same_action_shell(left: &Action, right: &Action) -> bool {
             },
         ) => lpl == rpl && li == ri,
         (Action::Foretell { player: lpl, .. }, Action::Foretell { player: rpl, .. })
-        | (Action::TurnFaceUp { player: lpl, .. }, Action::TurnFaceUp { player: rpl, .. })
         | (Action::TapForMana { player: lpl, .. }, Action::TapForMana { player: rpl, .. })
         | (Action::WaterbendTap { player: lpl, .. }, Action::WaterbendTap { player: rpl, .. })
         | (Action::SelectCard { player: lpl, .. }, Action::SelectCard { player: rpl, .. })
@@ -1853,7 +1852,10 @@ impl Game {
     /// Folded copies for the currently published action space, as
     /// `(surviving_action_index, folded_object)` pairs.
     pub fn action_aliases(&self) -> &[(usize, ObjectId)] {
-        self.action_aliases.as_deref().unwrap_or(&[])
+        self.published_decision
+            .as_ref()
+            .and_then(|decision| decision.aliases.as_deref())
+            .unwrap_or(&[])
     }
 
     /// Whether two objects in the same zone (or both outside the game) are
@@ -1891,19 +1893,17 @@ impl Game {
         }
         if zone == Some(ZoneType::Battlefield) {
             let _scan = self.board_scan();
-            let first_perm = self.state.permanent_of(first);
-            let Some(first_perm) = first_perm else {
+            let Some(first_perm) = self.state.permanent_of(first) else {
                 return false;
             };
-            let left_view = self.characteristics(first_perm);
-            if !left_view.static_abilities.is_empty() {
+            let Some(left_view) = self.foldable_permanent_view(first_perm) else {
                 return false;
-            }
+            };
             for &other in rest {
                 let Some(other_perm) = self.state.permanent_of(other) else {
                     return false;
                 };
-                if !self.same_layered_pair(first_perm, &left_view, other_perm) {
+                if !self.post_census_permanents_equivalent(first_perm, &left_view, other_perm) {
                     return false;
                 }
             }
@@ -1940,72 +1940,99 @@ impl Game {
         self.declined_interchangeable_permanent(blocker, &combat.declined_blockers)
     }
 
+    /// For each permanent in `candidates`, whether it is currently
+    /// interchangeable with at least one distinct permanent in `anchors`.
+    /// Filters pairs by cheap identity and permanent state before running at
+    /// most one `ReferenceCensus` and one `board_scan`.
+    pub(crate) fn interchangeable_with_any_permanent(
+        &self,
+        anchors: &[PermanentId],
+        candidates: &[PermanentId],
+    ) -> Vec<bool> {
+        let mut matched = vec![false; candidates.len()];
+        if anchors.is_empty() || candidates.is_empty() {
+            return matched;
+        }
+
+        let mut anchor_info: Vec<(PermanentId, PermanentBucket, ObjectId)> =
+            Vec::with_capacity(anchors.len());
+        for &anchor in anchors {
+            if let Some((bucket, object)) = self.permanent_bucket(anchor) {
+                anchor_info.push((anchor, bucket, object));
+            }
+        }
+        if anchor_info.is_empty() {
+            return matched;
+        }
+
+        let mut pairs: Vec<(usize, PermanentId, ObjectId, PermanentId, ObjectId)> = Vec::new();
+        for (ci, &cand) in candidates.iter().enumerate() {
+            let Some((cand_bucket, cand_object)) = self.permanent_bucket(cand) else {
+                continue;
+            };
+            for &(anchor, anchor_bucket, anchor_object) in &anchor_info {
+                if anchor == cand || anchor_bucket != cand_bucket {
+                    continue;
+                }
+                if self.same_object_pair_cheap(true, anchor_object, cand_object) {
+                    pairs.push((ci, anchor, anchor_object, cand, cand_object));
+                }
+            }
+        }
+        if pairs.is_empty() {
+            return matched;
+        }
+
+        let mut watch: Vec<ObjectId> = Vec::new();
+        let mut watch_index = |object: ObjectId| -> usize {
+            if let Some(pos) = watch.iter().position(|&w| w == object) {
+                pos
+            } else {
+                let pos = watch.len();
+                watch.push(object);
+                pos
+            }
+        };
+        let mut pair_slots: Vec<(usize, usize)> = Vec::with_capacity(pairs.len());
+        for &(_, _, anchor_object, _, cand_object) in &pairs {
+            pair_slots.push((watch_index(anchor_object), watch_index(cand_object)));
+        }
+
+        let census = ReferenceCensus::run(self, &watch);
+        if census.all_named() {
+            return matched;
+        }
+
+        let _scan = self.board_scan();
+        let mut anchor_views: Vec<(PermanentId, Option<std::sync::Arc<Characteristics>>)> =
+            Vec::new();
+        for (&(ci, anchor, _, cand, _), &(a_slot, c_slot)) in pairs.iter().zip(&pair_slots) {
+            if matched[ci] || census.is_named(a_slot) || census.is_named(c_slot) {
+                continue;
+            }
+            let view = if let Some((_, cached)) = anchor_views.iter().find(|&&(id, _)| id == anchor)
+            {
+                cached.as_ref()
+            } else {
+                let computed = self.foldable_permanent_view(anchor);
+                anchor_views.push((anchor, computed));
+                anchor_views.last().unwrap().1.as_ref()
+            };
+            if let Some(anchor_view) = view {
+                if self.post_census_permanents_equivalent(anchor, anchor_view, cand) {
+                    matched[ci] = true;
+                }
+            }
+        }
+        matched
+    }
+
     fn declined_interchangeable_permanent(
         &self,
         candidate: PermanentId,
         declined: &[PermanentId],
     ) -> bool {
-        if declined.is_empty() {
-            return false;
-        }
-        let Some((cand_bucket, cand_object)) = self.permanent_bucket(candidate) else {
-            return false;
-        };
-        let Some(cand_perm) = self.state.permanents[candidate].as_ref() else {
-            return false;
-        };
-        let cand_obj = &self.state[cand_object];
-
-        let mut matches: Vec<(PermanentId, ObjectId)> = Vec::new();
-        for &other in declined {
-            if other == candidate {
-                continue;
-            }
-            let Some((other_bucket, other_object)) = self.permanent_bucket(other) else {
-                continue;
-            };
-            if other_bucket != cand_bucket {
-                continue;
-            }
-            let Some(other_perm) = self.state.permanents[other].as_ref() else {
-                continue;
-            };
-            if !cand_obj.same_object_identity(&self.state[other_object]) {
-                continue;
-            }
-            if !self.same_permanent_state_cheap(candidate, cand_perm, other, other_perm) {
-                continue;
-            }
-            matches.push((other, other_object));
-        }
-        if matches.is_empty() {
-            return false;
-        }
-
-        let mut watch = Vec::with_capacity(1 + matches.len());
-        watch.push(cand_object);
-        for &(_, obj) in &matches {
-            watch.push(obj);
-        }
-        let census = ReferenceCensus::run(self, &watch);
-        if census.is_named(0) {
-            return false;
-        }
-
-        let _scan = self.board_scan();
-        let cand_view = self.characteristics(candidate);
-        if !cand_view.static_abilities.is_empty() {
-            return false;
-        }
-        for (i, &(other, _)) in matches.iter().enumerate() {
-            if census.is_named(i + 1) {
-                continue;
-            }
-            if self.same_layered_pair(candidate, &cand_view, other) {
-                return true;
-            }
-        }
-        false
+        !declined.is_empty() && self.interchangeable_with_any_permanent(declined, &[candidate])[0]
     }
 
     /// Compare two battlefield permanents on their cheap permanent record,
@@ -2050,6 +2077,32 @@ impl Game {
         !left_blocked && !right_blocked
     }
 
+    /// Cheap (pre-census, pre-layer) pair check for two objects that already
+    /// share a zone/bucket (battlefield permanents when `is_permanent` is true,
+    /// otherwise non-battlefield or sideboard cards).
+    fn same_object_pair_cheap(&self, is_permanent: bool, left: ObjectId, right: ObjectId) -> bool {
+        if is_permanent {
+            let (Some(left_id), Some(right_id)) = (
+                self.state.permanent_of(left),
+                self.state.permanent_of(right),
+            ) else {
+                return false;
+            };
+            let (Some(left_perm), Some(right_perm)) = (
+                self.state.permanents[left_id].as_ref(),
+                self.state.permanents[right_id].as_ref(),
+            ) else {
+                return false;
+            };
+            self.state[left].same_object_identity(&self.state[right])
+                && self.same_permanent_state_cheap(left_id, left_perm, right_id, right_perm)
+        } else {
+            self.state
+                .entry_object(left)
+                .same_object_identity(self.state.entry_object(right))
+        }
+    }
+
     /// Cheap (pre-census, pre-layer) object and permanent state check.
     fn same_object_state_cheap(
         &self,
@@ -2072,61 +2125,41 @@ impl Game {
         if first_obj.is_face_down() {
             return false;
         }
-        let first_perm = if zone == Some(ZoneType::Battlefield) {
-            let Some(id) = self.state.permanent_of(first) else {
-                return false;
-            };
-            self.state.permanents[id].as_ref().map(|p| (id, p))
-        } else {
-            None
-        };
+        let is_permanent = zone == Some(ZoneType::Battlefield);
         for &other in rest {
-            let other_obj = match zone {
-                Some(_) => match self.state.object(other) {
-                    Ok(obj) => obj,
-                    Err(_) => return false,
-                },
-                None => {
-                    if !self.state.zones.is_latest(other) {
-                        return false;
-                    }
-                    self.state.entry_object(other)
-                }
+            let other_valid = match zone {
+                Some(_) => self.state.object(other).is_ok(),
+                None => self.state.zones.is_latest(other),
             };
-            if !first_obj.same_object_identity(other_obj) {
+            if !other_valid || !self.same_object_pair_cheap(is_permanent, first, other) {
                 return false;
-            }
-            if let Some((left_id, left)) = first_perm {
-                let Some(other_id) = self.state.permanent_of(other) else {
-                    return false;
-                };
-                let Some(right) = self.state.permanents[other_id].as_ref() else {
-                    return false;
-                };
-                if !self.same_permanent_state_cheap(left_id, left, other_id, right) {
-                    return false;
-                }
             }
         }
         true
     }
 
-    /// Layered characteristics, timestamp/static rule, summoning sickness and
-    /// `power_up` turn-of-entry check for two battlefield permanents that
-    /// already passed `same_object_identity` and `same_permanent_record_cheap`.
-    /// Caller holds a `board_scan()`.
-    fn same_layered_pair(
+    /// Layered characteristics for a battlefield permanent eligible to fold.
+    /// Permanents with any layered (printed or granted) static ability have
+    /// layer-ordering timestamps (CR 613.7) and never fold. Caller holds a
+    /// `board_scan()`.
+    fn foldable_permanent_view(&self, id: PermanentId) -> Option<std::sync::Arc<Characteristics>> {
+        let view = self.characteristics(id);
+        view.static_abilities.is_empty().then_some(view)
+    }
+
+    /// Post-census layered characteristics, timestamp/static rule, summoning
+    /// sickness, and `power_up` turn-of-entry check for two unnamed battlefield
+    /// permanents that already passed `same_object_pair_cheap`. Caller holds a
+    /// `board_scan()`.
+    fn post_census_permanents_equivalent(
         &self,
         left_id: PermanentId,
         left_view: &std::sync::Arc<Characteristics>,
         right_id: PermanentId,
     ) -> bool {
-        let right_view = self.characteristics(right_id);
-        // Permanents with any layered (printed or granted) static ability have
-        // layer-ordering timestamps (CR 613.7) and never fold.
-        if !left_view.static_abilities.is_empty() || !right_view.static_abilities.is_empty() {
+        let Some(right_view) = self.foldable_permanent_view(right_id) else {
             return false;
-        }
+        };
         if !std::sync::Arc::ptr_eq(left_view, &right_view) && left_view != &right_view {
             return false;
         }
@@ -2182,7 +2215,6 @@ impl Game {
             | Action::CastSpell { object, .. }
             | Action::ActivateCardAbility { object, .. }
             | Action::Foretell { object, .. }
-            | Action::TurnFaceUp { object, .. }
             | Action::SelectCard { object, .. }
             | Action::LearnDiscard { object, .. }
             | Action::LearnTakeLesson { object, .. } => Some(object),
@@ -2206,19 +2238,60 @@ impl Game {
     }
 
     /// Whether the active decision allows folding `Action::SelectCard`.
-    /// `OrderLibrary` and `DistributeCounters` are never folded even when
-    /// their candidates would otherwise look identical.
+    /// Exhaustive over `PendingChoice` and `Decision` (no wildcards) so a new
+    /// ordered or positional decision fails to compile until classified.
     fn select_card_decision_allows_fold(&self) -> bool {
-        if self.state.opening().is_some() || self.pending_choice.is_some() {
+        if self.state.opening().is_some() {
             return true;
         }
+        if let Some(choice) = &self.pending_choice {
+            return match choice {
+                PendingChoice::Pay { .. } => true,
+                PendingChoice::ActivatedTarget { .. }
+                | PendingChoice::AnnounceX { .. }
+                | PendingChoice::KickerChoice { .. }
+                | PendingChoice::ActivationX { .. }
+                | PendingChoice::SpellMode { .. }
+                | PendingChoice::ChooseTargets { .. } => false,
+            };
+        }
         let Some(suspended) = &self.state.suspended_decision else {
-            return true;
+            return false;
         };
-        !matches!(
-            suspended.decision,
-            Decision::OrderLibrary { .. } | Decision::DistributeCounters { .. }
-        )
+        match suspended.decision {
+            Decision::EnterAsCopy { .. }
+            | Decision::SearchNamed { .. }
+            | Decision::Payment(_)
+            | Decision::ManaUpfront { .. }
+            | Decision::ChooseObject { .. }
+            | Decision::SelectCards { .. }
+            | Decision::DiscardFromRevealedHand { .. }
+            | Decision::CastDuringResolution { .. }
+            | Decision::ExileLinked { .. }
+            | Decision::Discard { .. }
+            | Decision::KeepCreatures { .. }
+            | Decision::ChooseToExile { .. }
+            | Decision::LegendRule { .. } => true,
+            Decision::OrderMeldedCards { .. }
+            | Decision::AssignCombatDamage { .. }
+            | Decision::OrderReplacement { .. }
+            | Decision::ChooseCreatureType { .. }
+            | Decision::NameCard { .. }
+            | Decision::ChoosePaymentX { .. }
+            | Decision::ManaSpend { .. }
+            | Decision::ManaChoice { .. }
+            | Decision::DistributeCounters { .. }
+            | Decision::Scry { .. }
+            | Decision::ManifestDread { .. }
+            | Decision::Surveil { .. }
+            | Decision::LookAndSelect { .. }
+            | Decision::OrderLibrary { .. }
+            | Decision::SearchDistinctNames { .. }
+            | Decision::OpponentSplitsRevealed { .. }
+            | Decision::Modal { .. }
+            | Decision::Learn { .. }
+            | Decision::Retarget { .. } => false,
+        }
     }
 
     fn permanent_bucket(&self, permanent: PermanentId) -> Option<(PermanentBucket, ObjectId)> {
@@ -2488,12 +2561,15 @@ impl Game {
             spill
         };
 
-        // Mark which candidate entries belong to a bucket of size >= 2 and
-        // build a deduplicated watch list for the reference census.
-        let mut in_dup_bucket = vec![false; candidates.len()];
-        let mut watch: Vec<ObjectId> = Vec::with_capacity(candidates.len());
+        // Group duplicate-key candidates that also pass cheap object/permanent
+        // equivalence before running `ReferenceCensus::run` or acquiring
+        // `board_scan()`. Copies differing cheaply by counters, damage,
+        // attachment, or combat role exit before any census walk.
+        let mut cheap_group: Vec<usize> = vec![usize::MAX; candidates.len()];
+        let mut watch: Vec<ObjectId> = Vec::new();
         let mut watch_slot: Vec<usize> = vec![usize::MAX; candidates.len()];
         let mut has_perm_dup = false;
+        let mut next_group = 0usize;
         let mut watch_index = |object: ObjectId| -> usize {
             if let Some(pos) = watch.iter().position(|&w| w == object) {
                 pos
@@ -2504,23 +2580,33 @@ impl Game {
             }
         };
         for i in 0..candidates.len() {
-            if in_dup_bucket[i] {
+            if cheap_group[i] != usize::MAX {
                 continue;
             }
-            let key = candidates[i].0;
-            let mut found = false;
+            let (key, _, rep_obj) = candidates[i];
+            let is_perm = key.is_permanent();
+            let mut group = usize::MAX;
             for j in (i + 1)..candidates.len() {
-                if candidates[j].0 == key {
-                    if !found {
-                        found = true;
-                        has_perm_dup |= key.is_permanent();
-                        in_dup_bucket[i] = true;
-                        watch_slot[i] = watch_index(candidates[i].2);
-                    }
-                    in_dup_bucket[j] = true;
-                    watch_slot[j] = watch_index(candidates[j].2);
+                if cheap_group[j] != usize::MAX || candidates[j].0 != key {
+                    continue;
                 }
+                if !self.same_object_pair_cheap(is_perm, rep_obj, candidates[j].2) {
+                    continue;
+                }
+                if group == usize::MAX {
+                    group = next_group;
+                    next_group += 1;
+                    has_perm_dup |= is_perm;
+                    cheap_group[i] = group;
+                    watch_slot[i] = watch_index(rep_obj);
+                }
+                cheap_group[j] = group;
+                watch_slot[j] = watch_index(candidates[j].2);
             }
+        }
+
+        if watch.is_empty() {
+            return (space, None);
         }
 
         let census = ReferenceCensus::run(self, &watch);
@@ -2535,80 +2621,43 @@ impl Game {
         let mut folded_into: Vec<Option<(usize, ObjectId)>> = vec![None; space.actions.len()];
         let mut any_folded = false;
 
-        // Track representatives per duplicate bucket.
-        let mut perm_reps: Vec<(
-            FoldKey,
-            usize,
-            ObjectId,
-            PermanentId,
-            std::sync::Arc<Characteristics>,
-        )> = Vec::new();
-        let mut card_reps: Vec<(FoldKey, usize, ObjectId)> = Vec::new();
+        // Track post-census representatives per cheap group.
+        let mut perm_reps: Vec<(usize, usize, PermanentId, std::sync::Arc<Characteristics>)> =
+            Vec::new();
+        let mut card_rep: Vec<Option<usize>> = vec![None; next_group];
 
         for (ci, &(key, orig_idx, object)) in candidates.iter().enumerate() {
-            if !in_dup_bucket[ci] || census.is_named(watch_slot[ci]) {
+            let g = cheap_group[ci];
+            if g == usize::MAX || census.is_named(watch_slot[ci]) {
                 continue;
             }
             if key.is_permanent() {
                 let Some(perm_id) = self.state.permanent_of(object) else {
                     continue;
                 };
-                let Some(perm) = self.state.permanents[perm_id].as_ref() else {
-                    continue;
-                };
-                let obj = &self.state[object];
-
-                let mut matched_rep = None;
-                for &(rep_key, rep_orig_idx, rep_object, rep_perm_id, ref rep_view) in &perm_reps {
-                    if rep_key != key {
-                        continue;
-                    }
-                    let rep_obj = &self.state[rep_object];
-                    if !rep_obj.same_object_identity(obj) {
-                        continue;
-                    }
-                    let rep_perm = self.state.permanents[rep_perm_id].as_ref().unwrap();
-                    if !self.same_permanent_state_cheap(rep_perm_id, rep_perm, perm_id, perm) {
-                        continue;
-                    }
-                    if self.same_layered_pair(rep_perm_id, rep_view, perm_id) {
-                        matched_rep = Some(rep_orig_idx);
-                        break;
-                    }
-                }
+                let matched_rep = perm_reps
+                    .iter()
+                    .find(|&&(rep_g, _, rep_perm_id, ref rep_view)| {
+                        rep_g == g
+                            && self.post_census_permanents_equivalent(
+                                rep_perm_id,
+                                rep_view,
+                                perm_id,
+                            )
+                    })
+                    .map(|&(_, rep_orig_idx, _, _)| rep_orig_idx);
 
                 if let Some(rep_orig_idx) = matched_rep {
                     folded_into[orig_idx] = Some((rep_orig_idx, object));
                     any_folded = true;
-                } else {
-                    let view = self.characteristics(perm_id);
-                    if view.static_abilities.is_empty() {
-                        perm_reps.push((key, orig_idx, object, perm_id, view));
-                    }
+                } else if let Some(view) = self.foldable_permanent_view(perm_id) {
+                    perm_reps.push((g, orig_idx, perm_id, view));
                 }
+            } else if let Some(rep_orig_idx) = card_rep[g] {
+                folded_into[orig_idx] = Some((rep_orig_idx, object));
+                any_folded = true;
             } else {
-                let obj = self.state.entry_object(object);
-                let mut matched_rep = None;
-                for &(rep_key, rep_orig_idx, rep_object) in &card_reps {
-                    if rep_key != key {
-                        continue;
-                    }
-                    if self
-                        .state
-                        .entry_object(rep_object)
-                        .same_object_identity(obj)
-                    {
-                        matched_rep = Some(rep_orig_idx);
-                        break;
-                    }
-                }
-
-                if let Some(rep_orig_idx) = matched_rep {
-                    folded_into[orig_idx] = Some((rep_orig_idx, object));
-                    any_folded = true;
-                } else {
-                    card_reps.push((key, orig_idx, object));
-                }
+                card_rep[g] = Some(orig_idx);
             }
         }
 

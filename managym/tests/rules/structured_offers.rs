@@ -133,7 +133,7 @@ fn legacy_cast_at_player(game: &mut Game, object: ObjectId, player: PlayerId) {
 }
 
 fn assert_equivalent_surface(structured: &Game, legacy: &Game) {
-    assert_eq!(structured.current_action_space, legacy.current_action_space);
+    assert_eq!(structured.action_space(), legacy.action_space());
     assert_eq!(structured.state.stack_objects, legacy.state.stack_objects);
     assert_eq!(structured.state.events, legacy.state.events);
     assert_eq!(structured.state.pending_events, legacy.state.pending_events);

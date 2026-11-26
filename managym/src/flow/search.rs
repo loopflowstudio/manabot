@@ -261,7 +261,7 @@ impl Game {
                                 | Decision::CastDuringResolution { .. }
                         )
             });
-        let priority = self.current_action_space.as_ref().is_some_and(|space| {
+        let priority = self.action_space().is_some_and(|space| {
             space.kind == ActionSpaceKind::Priority
                 && space
                     .actions
@@ -282,7 +282,7 @@ impl Game {
             // Fold before comparing so identical decisions don't spuriously
             // advance `decision_epoch` and invalidate live Commands.
             let (space, aliases) = self.fold_action_space(space);
-            let unchanged = self.current_action_space.as_ref().is_some_and(|current| {
+            let unchanged = self.action_space().is_some_and(|current| {
                 current.kind == space.kind
                     && current.actions == space.actions
                     && current.focus == space.focus
@@ -290,7 +290,7 @@ impl Game {
             if !unchanged {
                 self.publish_folded_action_space(space, aliases);
             } else {
-                self.action_aliases = aliases;
+                self.set_published_aliases(aliases);
             }
         }
     }
@@ -420,10 +420,7 @@ impl Game {
                 }
                 return Ok(None);
             }
-            let action_count = self
-                .current_action_space
-                .as_ref()
-                .map_or(0, |space| space.actions.len());
+            let action_count = self.action_space().map_or(0, |space| space.actions.len());
             if action_count == 0 {
                 return Err(AgentError("random_playout: empty action space".to_string()));
             }

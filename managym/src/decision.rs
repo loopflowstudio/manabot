@@ -337,11 +337,8 @@ impl Game {
         let decision = if self.is_game_over() {
             None
         } else {
-            let actor_is_viewer = self
-                .current_action_space
-                .as_ref()
-                .and_then(|space| space.player)
-                == Some(viewer);
+            let actor_is_viewer =
+                self.action_space().and_then(|space| space.player) == Some(viewer);
             if actor_is_viewer {
                 self.semantic_decision_frame().ok()
             } else {
@@ -654,8 +651,7 @@ mod tests {
     fn observation_is_viewer_safe_and_decision_only_for_actor() {
         let game = first_game();
         let actor = game
-            .current_action_space
-            .as_ref()
+            .action_space()
             .and_then(|space| space.player)
             .expect("an actor holds the first decision");
 

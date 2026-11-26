@@ -260,7 +260,7 @@ impl Game {
     }
 
     pub fn action_space(&self) -> Option<&ActionSpace> {
-        self.current_action_space.as_ref()
+        self.published_decision.as_ref().map(|d| &d.space)
     }
 
     pub fn active_player(&self) -> PlayerId {
@@ -272,8 +272,7 @@ impl Game {
     }
 
     pub fn agent_player(&self) -> PlayerId {
-        self.current_action_space
-            .as_ref()
+        self.action_space()
             .and_then(|space| space.player)
             .unwrap_or(PlayerId(0))
     }
