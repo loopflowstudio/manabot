@@ -168,6 +168,16 @@ batch `DeclareAttackers`.
   `managym/perf/baseline.json`), cp313 rebuild, `test_pinned_pilot.py` (zero
   drift), `test_authored_match_authority.py` + `test_authored_match_parity.py`
   (8/8), and `scripts/public_api.py check`. All planned passes built.
+- Concept review of R4 (`f1db71c3fa`, `scratch/concept-review.html`): groups
+  A–C line up; `match_state_hash_tests` + `semantic_conformance_tests` 32/32
+  and authored-match authority/parity 8/8 at `4211b4bac1`. Dispositions:
+  G5 adopted for review — a Layer-6-granted ability on the stack or pending
+  writes `"acquired": {grantor, timestamp, static_slot}` into the state hash
+  (real CR 607.5 state, same class as G3; no checked-in receipt holds one);
+  say so in the PR beside G3. Passed over: auditing retained TLA receipts
+  first. G6 deferred (below). G7 fixed: comment in
+  `Game::linked_ability_source` naming which frames lack `ability_face`.
+  No remaining passes.
 
 ## Deferred findings
 
@@ -177,6 +187,14 @@ batch `DeclareAttackers`.
   order the affected player's choice. Collapsing could change which
   replacement a "first applicable" path picks and move recorded games. Needs
   its own CR 616.1 Task: one order plus the choice where two apply.
+
+- **G6 two grant records.** `granted_by: Option<AbilityGrant>` (exact
+  grantor `ObjectId` + `AttachedHas` index) sits beside `acquired:
+  Option<GrantKey>`; `flow/play.rs` only `debug_assert!`s that the first
+  implies the second. Fold into one `Acquisition { key, grantor,
+  attached_index }` record in its own Task: it moves main's `granted_by`
+  bytes and TLA equipment's catalog-program lookup, so it needs a
+  pinned-pilot and receipt check.
 
 ## Prior PR publish verification (baseline before redo)
 

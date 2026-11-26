@@ -692,6 +692,9 @@ impl Game {
         let set = match frame.acquired {
             Some(key) => crate::state::ability::AbilitySet::Acquired(key),
             None => {
+                // Only triggered-ability frames record `ability_face`; spell
+                // and activated-ability frames fall back to the source's face
+                // now (or as it last existed), then its base card.
                 let def = frame
                     .ability_face
                     .or_else(|| self.observed_source_definition(creator))

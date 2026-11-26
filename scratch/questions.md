@@ -108,3 +108,7 @@
   state main never recorded); note it in the PR. Passed over: auditing retained
   TLA receipts for mid-game exile links first, since no checked-in receipt
   failed for it.
+
+- Adopted for review (R4 concept review G5): accept that granted abilities on
+  the stack or pending write `acquired` into the state hash; note it in the PR
+  with G3. Passed over: auditing retained TLA receipts first.
