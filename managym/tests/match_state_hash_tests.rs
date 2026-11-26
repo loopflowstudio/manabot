@@ -300,4 +300,30 @@ fn pending_turn_and_combat_schedules_are_part_of_match_identity() {
     let restricted = combat.state.deterministic_hash();
     combat.state.turn.combat_attackers = Some(managym::state::predicate::CardPredicate::creature());
     assert_ne!(combat.state.deterministic_hash(), restricted);
+
+    let mut gy_from_bf = baseline.clone();
+    let card = gy_from_bf.state.zones.latest().next().unwrap();
+    gy_from_bf.state.turn.graveyard_from_battlefield.push(card);
+    assert_ne!(gy_from_bf.state.deterministic_hash(), hash);
+
+    let mut declined = baseline.clone();
+    declined.state.combat = Some(Box::default());
+    let empty_combat_hash = declined.state.deterministic_hash();
+    declined
+        .state
+        .combat
+        .as_mut()
+        .unwrap()
+        .declined_attackers
+        .push(managym::state::game_object::PermanentId(0));
+    let declined_att_hash = declined.state.deterministic_hash();
+    assert_ne!(declined_att_hash, empty_combat_hash);
+    declined
+        .state
+        .combat
+        .as_mut()
+        .unwrap()
+        .declined_blockers
+        .push(managym::state::game_object::PermanentId(1));
+    assert_ne!(declined.state.deterministic_hash(), declined_att_hash);
 }

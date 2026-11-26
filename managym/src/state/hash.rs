@@ -26,7 +26,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 31;
+pub const MATCH_STATE_HASH_VERSION: u32 = 32;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -92,6 +92,11 @@ struct CanonicalTurn<'a> {
     attacks_this_turn: Vec<(ObjectId, u32)>,
 
     history: [crate::flow::turn::PlayerTurnHistory; 2],
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    graveyard_from_battlefield: Vec<ObjectId>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     ability_triggers_this_turn: Vec<(ObjectId, (CardDefId, usize), u32)>,
@@ -126,6 +131,7 @@ impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
             attacks_this_turn: turn.attacks_this_turn.clone(),
 
             history: turn.history,
+            graveyard_from_battlefield: turn.graveyard_from_battlefield.clone(),
             used_trigger_grants: &turn.used_trigger_grants,
             ability_triggers_this_turn: turn
                 .ability_triggers_this_turn
@@ -164,6 +170,10 @@ struct CanonicalCombat {
     already_attacking: Option<usize>,
     attackers_to_declare: Vec<PermanentId>,
     blockers_to_declare: Vec<PermanentId>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    declined_attackers: Vec<PermanentId>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    declined_blockers: Vec<PermanentId>,
 }
 
 impl From<&CombatState> for CanonicalCombat {
@@ -181,6 +191,8 @@ impl From<&CombatState> for CanonicalCombat {
             already_attacking: (combat.already_attacking != 0).then_some(combat.already_attacking),
             attackers_to_declare: combat.attackers_to_declare.clone(),
             blockers_to_declare: combat.blockers_to_declare.clone(),
+            declined_attackers: combat.declined_attackers.clone(),
+            declined_blockers: combat.declined_blockers.clone(),
         }
     }
 }

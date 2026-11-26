@@ -155,7 +155,7 @@ fn submission_for_mask(
 /// fixed-action ABI. This deliberately uses only the public legacy prompts;
 /// it is the independent oracle for the new atomic command path.
 fn apply_legacy_attacker_adapter(game: &mut Game, selected_entities: &BTreeSet<u32>) {
-    let mut seen_entities = BTreeSet::new();
+    let mut remaining_selected = selected_entities.clone();
     while game
         .action_space()
         .is_some_and(|space| space.kind == ActionSpaceKind::DeclareAttacker)
@@ -174,8 +174,31 @@ fn apply_legacy_attacker_adapter(game: &mut Game, selected_entities: &BTreeSet<u
             .expect("legacy attacker should exist")
             .id
             .0;
-        seen_entities.insert(entity);
-        let attack = selected_entities.contains(&entity);
+        let mut attack = remaining_selected.remove(&entity);
+        if !attack {
+            let asked_obj = game
+                .permanent_object(permanent_id)
+                .expect("asked attacker object");
+            let donor_entity = game
+                .state
+                .combat
+                .as_ref()
+                .into_iter()
+                .flat_map(|combat| combat.attackers_to_declare.iter().rev().copied())
+                .find_map(|other| {
+                    let other_entity = game.state.permanents[other].as_ref()?.id.0;
+                    if !remaining_selected.contains(&other_entity) {
+                        return None;
+                    }
+                    let other_obj = game.permanent_object(other)?;
+                    game.interchangeable(asked_obj, other_obj)
+                        .then_some(other_entity)
+                });
+            if let Some(donor) = donor_entity {
+                remaining_selected.remove(&donor);
+                attack = true;
+            }
+        }
         let action_index = space
             .actions
             .iter()
@@ -194,7 +217,7 @@ fn apply_legacy_attacker_adapter(game: &mut Game, selected_entities: &BTreeSet<u
             .expect("legacy attacker action should apply");
     }
     assert!(
-        selected_entities.is_subset(&seen_entities),
+        remaining_selected.is_empty(),
         "structured selection must be representable by legacy prompts"
     );
 }

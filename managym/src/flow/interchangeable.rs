@@ -361,7 +361,7 @@ impl<'a> ReferenceCensus<'a> {
             history: _,
             graveyard_from_battlefield,
             damage_pairs,
-            attacks_this_turn,
+            attacks_this_turn: _, // per-object count compared in `same_permanent_state_cheap`
             ability_triggers_this_turn,
             used_trigger_grants,
             ability_resolutions_this_turn,
@@ -385,9 +385,6 @@ impl<'a> ReferenceCensus<'a> {
             self.mark_object(object);
         }
         damage_pairs.visit_objects(|obj| self.mark_object(obj));
-        for &(object, _) in attacks_this_turn {
-            self.mark_object(object);
-        }
         for &(object, _, _) in ability_triggers_this_turn.keys() {
             self.mark_object(object);
         }
@@ -403,24 +400,32 @@ impl<'a> ReferenceCensus<'a> {
             regular_damage_step: _,
             attackers,
             attacker_to_blockers,
-            already_attacking: _,
+            already_attacking,
             blocked,
             attackers_to_declare: _, // vouched candidate list for DeclareAttackers
             blockers_to_declare: _,  // vouched candidate list for DeclareBlockers
+            declined_attackers: _,   // vouched symmetry-breaking list for DeclareAttackers
+            declined_blockers: _,    // vouched symmetry-breaking list for DeclareBlockers
         } = combat;
         for &id in first_strikers {
             self.mark_permanent(id);
         }
-        for &id in attackers {
+        // Attackers already in combat before declaration (CR 508.4) do not fire
+        // `AttackersDeclared` triggers at the end of declaration; mark them so
+        // they never fold with newly declared attackers. Unblocked attackers
+        // with no blockers yet compare by combat role in `same_combat_role`.
+        for &id in attackers.iter().take(*already_attacking) {
             self.mark_permanent(id);
         }
         for &id in blocked {
             self.mark_permanent(id);
         }
         for (&attacker, blockers) in attacker_to_blockers {
-            self.mark_permanent(attacker);
-            for &blocker in blockers {
-                self.mark_permanent(blocker);
+            if !blockers.is_empty() {
+                self.mark_permanent(attacker);
+                for &blocker in blockers {
+                    self.mark_permanent(blocker);
+                }
             }
         }
     }
@@ -1647,6 +1652,7 @@ struct PermanentBucket {
     kind: ObjectKind,
     controller: PlayerId,
     tapped: bool,
+    attacking: bool,
 }
 
 /// Cheap bucket key for non-battlefield zone cards and outside-game sideboard
@@ -1721,6 +1727,11 @@ enum FoldKey {
         player: PlayerId,
         card: CardBucket,
     },
+    DeclareBlocker {
+        player: PlayerId,
+        blocker: PermanentId,
+        attacker: PermanentBucket,
+    },
 }
 
 impl FoldKey {
@@ -1733,6 +1744,7 @@ impl FoldKey {
                 | Self::WaterbendTap { .. }
                 | Self::ChooseTargetPermanent { .. }
                 | Self::SelectCardPermanent { .. }
+                | Self::DeclareBlocker { .. }
         )
     }
 }
@@ -1896,6 +1908,145 @@ impl Game {
         true
     }
 
+    /// Whether two battlefield permanents are currently game-indistinguishable.
+    pub(crate) fn interchangeable_permanents(&self, a: PermanentId, b: PermanentId) -> bool {
+        if a == b {
+            return true;
+        }
+        let (Some(oa), Some(ob)) = (self.permanent_object(a), self.permanent_object(b)) else {
+            return false;
+        };
+        self.interchangeable(oa, ob)
+    }
+
+    /// Whether an interchangeable creature declined to attack earlier in the
+    /// current declaration.
+    pub(crate) fn declined_interchangeable_attacker(&self, attacker: PermanentId) -> bool {
+        let Some(combat) = self.state.combat.as_deref() else {
+            return false;
+        };
+        self.declined_interchangeable_permanent(attacker, &combat.declined_attackers)
+    }
+
+    /// Whether an interchangeable creature declined to block earlier in the
+    /// current declaration.
+    pub(crate) fn declined_interchangeable_blocker(&self, blocker: PermanentId) -> bool {
+        let Some(combat) = self.state.combat.as_deref() else {
+            return false;
+        };
+        self.declined_interchangeable_permanent(blocker, &combat.declined_blockers)
+    }
+
+    fn declined_interchangeable_permanent(
+        &self,
+        candidate: PermanentId,
+        declined: &[PermanentId],
+    ) -> bool {
+        if declined.is_empty() {
+            return false;
+        }
+        let Some((cand_bucket, cand_object)) = self.permanent_bucket(candidate) else {
+            return false;
+        };
+        let Some(cand_perm) = self.state.permanents[candidate].as_ref() else {
+            return false;
+        };
+        let cand_obj = &self.state[cand_object];
+
+        let mut matches: Vec<(PermanentId, ObjectId)> = Vec::new();
+        for &other in declined {
+            if other == candidate {
+                continue;
+            }
+            let Some((other_bucket, other_object)) = self.permanent_bucket(other) else {
+                continue;
+            };
+            if other_bucket != cand_bucket {
+                continue;
+            }
+            let Some(other_perm) = self.state.permanents[other].as_ref() else {
+                continue;
+            };
+            if !cand_obj.same_object_identity(&self.state[other_object]) {
+                continue;
+            }
+            if !self.same_permanent_state_cheap(candidate, cand_perm, other, other_perm) {
+                continue;
+            }
+            matches.push((other, other_object));
+        }
+        if matches.is_empty() {
+            return false;
+        }
+
+        let mut watch = Vec::with_capacity(1 + matches.len());
+        watch.push(cand_object);
+        for &(_, obj) in &matches {
+            watch.push(obj);
+        }
+        let census = ReferenceCensus::run(self, &watch);
+        if census.is_named(0) {
+            return false;
+        }
+
+        let _scan = self.board_scan();
+        let cand_view = self.characteristics(candidate);
+        if !cand_view.static_abilities.is_empty() {
+            return false;
+        }
+        for (i, &(other, _)) in matches.iter().enumerate() {
+            if census.is_named(i + 1) {
+                continue;
+            }
+            if self.same_layered_pair(candidate, &cand_view, other) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Compare two battlefield permanents on their cheap permanent record,
+    /// `attacks_this_turn` count, and combat role (same attacking status and
+    /// neither already blocked or assigned blockers).
+    fn same_permanent_state_cheap(
+        &self,
+        left_id: PermanentId,
+        left: &Permanent,
+        right_id: PermanentId,
+        right: &Permanent,
+    ) -> bool {
+        if !same_permanent_record_cheap(left, right) {
+            return false;
+        }
+        if !self.state.turn.attacks_this_turn.is_empty()
+            && self.state.turn.attack_count(left.object)
+                != self.state.turn.attack_count(right.object)
+        {
+            return false;
+        }
+        self.same_combat_role(left_id, right_id)
+    }
+
+    fn same_combat_role(&self, left: PermanentId, right: PermanentId) -> bool {
+        let Some(combat) = self.state.combat.as_deref() else {
+            return true;
+        };
+        if combat.attackers.contains(&left) != combat.attackers.contains(&right) {
+            return false;
+        }
+        let left_blocked = combat.blocked.contains(&left)
+            || combat
+                .attacker_to_blockers
+                .get(&left)
+                .is_some_and(|blockers| !blockers.is_empty());
+        let right_blocked = combat.blocked.contains(&right)
+            || combat
+                .attacker_to_blockers
+                .get(&right)
+                .is_some_and(|blockers| !blockers.is_empty());
+        !left_blocked && !right_blocked
+    }
+
     /// Cheap (pre-census, pre-layer) object and permanent state check.
     fn same_object_state_cheap(
         &self,
@@ -1922,7 +2073,7 @@ impl Game {
             let Some(id) = self.state.permanent_of(first) else {
                 return false;
             };
-            self.state.permanents[id].as_ref()
+            self.state.permanents[id].as_ref().map(|p| (id, p))
         } else {
             None
         };
@@ -1942,14 +2093,14 @@ impl Game {
             if !first_obj.same_object_identity(other_obj) {
                 return false;
             }
-            if let Some(left) = first_perm {
+            if let Some((left_id, left)) = first_perm {
                 let Some(other_id) = self.state.permanent_of(other) else {
                     return false;
                 };
                 let Some(right) = self.state.permanents[other_id].as_ref() else {
                     return false;
                 };
-                if !same_permanent_record_cheap(left, right) {
+                if !self.same_permanent_state_cheap(left_id, left, other_id, right) {
                     return false;
                 }
             }
@@ -2078,6 +2229,7 @@ impl Game {
                 kind: obj.kind(),
                 controller: perm.controller,
                 tapped: perm.tapped,
+                attacking: perm.attacking,
             },
             perm.object,
         ))
@@ -2249,9 +2401,24 @@ impl Game {
                 let card = self.sideboard_card_bucket(object)?;
                 Some((FoldKey::LearnTakeLesson { player, card }, object))
             }
+            Action::DeclareBlocker {
+                player,
+                blocker,
+                attacker: Some(attacker_id),
+            } => {
+                let (attacker, object) = self.permanent_bucket(attacker_id)?;
+                Some((
+                    FoldKey::DeclareBlocker {
+                        player,
+                        blocker,
+                        attacker,
+                    },
+                    object,
+                ))
+            }
             // Face-down TurnFaceUp, Library/Stack targets, ChooseMode,
             // ScryCard, ChooseTrigger, PassPriority, PayCost, Decline, and
-            // combat declarations (Pass 3) never fold here.
+            // DeclareAttacker / DeclareBlocker(None) never fold here.
             _ => None,
         }
     }
@@ -2396,7 +2563,7 @@ impl Game {
                         continue;
                     }
                     let rep_perm = self.state.permanents[rep_perm_id].as_ref().unwrap();
-                    if !same_permanent_record_cheap(rep_perm, perm) {
+                    if !self.same_permanent_state_cheap(rep_perm_id, rep_perm, perm_id, perm) {
                         continue;
                     }
                     if self.same_layered_pair(rep_perm_id, rep_view, perm_id) {

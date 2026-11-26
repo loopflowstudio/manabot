@@ -1462,7 +1462,16 @@ fn substitute_alias(game: &Game, action: &Action, alias_object: ObjectId) -> Act
             player,
             object: alias_object,
         },
-        other => panic!("unexpected folded action variant in Pass 2: {other:?}"),
+        Action::DeclareBlocker {
+            player,
+            blocker,
+            attacker: Some(_),
+        } => Action::DeclareBlocker {
+            player,
+            blocker,
+            attacker: Some(perm.expect("permanent alias for DeclareBlocker")),
+        },
+        other => panic!("unexpected folded action variant: {other:?}"),
     }
 }
 
@@ -1778,4 +1787,577 @@ fn soundness_oracle_on_curated_matchups() {
         checked_folds >= 40,
         "oracle must exercise folded spaces; only checked {checked_folds}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Pass 3: Combat symmetry breaking, block target folding, preview & compound
+// normalization.
+
+fn advance_to_step(game: &mut Game, active: PlayerId, target: managym::flow::turn::StepKind) {
+    for _ in 0..64 {
+        if game.state.turn.active_player == active
+            && game.state.turn.current_step_kind() == target
+        {
+            return;
+        }
+        let pass = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .expect("expected PassPriority while advancing to step");
+        game.step(pass).unwrap();
+    }
+    panic!(
+        "failed to reach {:?} for {:?}; now at {:?} ({:?})",
+        target,
+        active,
+        game.state.turn.current_step_kind(),
+        game.action_space().map(|s| s.kind)
+    );
+}
+
+fn render_perm(game: &Game, perm: PermanentId) -> managym::experience::ObjectRenderId {
+    let permanent = game.state.permanents[perm]
+        .as_ref()
+        .expect("permanent on battlefield");
+    managym::experience::ObjectRenderId {
+        entity: permanent.id.0,
+        incarnation: permanent.object.generation(),
+    }
+}
+
+fn explore_declaration_leaves(game: &Game, kind: ActionSpaceKind, out: &mut Vec<Game>) {
+    if game.is_game_over()
+        || game
+            .action_space()
+            .is_none_or(|space| space.kind != kind)
+    {
+        out.push(game.clone());
+        return;
+    }
+    let count = game.action_space().unwrap().actions.len();
+    assert!(count > 0, "combat declaration must never yield empty space");
+    for idx in 0..count {
+        let mut next = game.clone();
+        next.step(idx).unwrap();
+        explore_declaration_leaves(&next, kind, out);
+    }
+}
+
+fn declared_attacker_count(game: &Game, from: usize) -> usize {
+    for event in &game.state.observation_events[from..] {
+        if let managym::flow::event::GameEvent::CombatAttackersDeclared { attackers, .. } = event {
+            return attackers.len();
+        }
+    }
+    0
+}
+
+fn declared_blocker_counts(game: &Game, from: usize, attacker_count: usize) -> Vec<usize> {
+    for event in &game.state.observation_events[from..] {
+        if let managym::flow::event::GameEvent::BlockersDeclared { assignments } = event {
+            let mut counts: Vec<usize> = assignments.iter().map(|(_, b)| b.len()).collect();
+            while counts.len() < attacker_count {
+                counts.push(0);
+            }
+            counts.sort();
+            return counts;
+        }
+    }
+    vec![0; attacker_count]
+}
+
+#[test]
+fn declare_attackers_three_identical_tokens_yields_four_outcomes_not_eight() {
+    let entries = [("Plains", 32), ("Gray Ogre", 8)];
+    for skip_trivial in [true, false] {
+        let mut game = position(&["Plains"], &entries, "Gray Ogre");
+        game.skip_trivial = skip_trivial;
+        let player = PlayerId(0);
+        let mut tokens = Vec::new();
+        for _ in 0..3 {
+            let id = game.create_token("token.ally", player, false).unwrap();
+            game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
+            tokens.push(id);
+        }
+        game.scenario_refresh_priority().unwrap();
+        advance_to_step(&mut game, player, managym::flow::turn::StepKind::DeclareAttackers);
+        assert_eq!(
+            game.action_space().unwrap().kind,
+            ActionSpaceKind::DeclareAttacker
+        );
+
+        let events_from = game.state.observation_events.len();
+        let mut leaves = Vec::new();
+        explore_declaration_leaves(&game, ActionSpaceKind::DeclareAttacker, &mut leaves);
+        let mut counts: Vec<usize> = leaves
+            .iter()
+            .map(|g| {
+                // Declined list is cleared once declaration finishes.
+                assert!(g
+                    .state
+                    .combat
+                    .as_ref()
+                    .is_none_or(|c| c.declined_attackers.is_empty()));
+                declared_attacker_count(g, events_from)
+            })
+            .collect();
+        counts.sort();
+        assert_eq!(
+            counts,
+            vec![0, 1, 2, 3],
+            "skip_trivial={skip_trivial}: 3 identical tokens must yield 4 paths (0..=3), not 8"
+        );
+    }
+
+    // Distinguishing one token with a +1/+1 counter keeps 2 * 3 = 6 paths.
+    let mut distinguished = position(&["Plains"], &entries, "Gray Ogre");
+    let player = PlayerId(0);
+    let mut tokens = Vec::new();
+    for _ in 0..3 {
+        let id = distinguished.create_token("token.ally", player, false).unwrap();
+        distinguished.state.permanents[id]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
+        tokens.push(id);
+    }
+    distinguished.state.permanents[tokens[0]]
+        .as_mut()
+        .unwrap()
+        .change_counters(CounterKind::PlusOnePlusOne, 1);
+    distinguished.scenario_refresh_priority().unwrap();
+    advance_to_step(
+        &mut distinguished,
+        player,
+        managym::flow::turn::StepKind::DeclareAttackers,
+    );
+    let mut leaves = Vec::new();
+    explore_declaration_leaves(
+        &distinguished,
+        ActionSpaceKind::DeclareAttacker,
+        &mut leaves,
+    );
+    assert_eq!(leaves.len(), 6);
+}
+
+#[test]
+fn declare_blockers_folds_identical_attackers_and_declined_blockers() {
+    let entries = [("Plains", 32), ("Gray Ogre", 8)];
+    let mut game = position(&["Plains"], &entries, "Gray Ogre");
+    let p0 = PlayerId(0);
+    let p1 = PlayerId(1);
+    let mut attackers = Vec::new();
+    for _ in 0..3 {
+        let id = game.create_token("token.ally", p0, false).unwrap();
+        game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
+        attackers.push(id);
+    }
+    for _ in 0..2 {
+        game.create_token("token.ally", p1, false).unwrap();
+    }
+    game.scenario_refresh_priority().unwrap();
+    advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareAttackers);
+    while game
+        .action_space()
+        .is_some_and(|s| s.kind == ActionSpaceKind::DeclareAttacker)
+    {
+        let attack_idx = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+            .unwrap();
+        game.step(attack_idx).unwrap();
+    }
+    advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareBlockers);
+    assert_eq!(
+        game.action_space().unwrap().kind,
+        ActionSpaceKind::DeclareBlocker
+    );
+
+    // 3 identical unblocked attackers fold to 1 block offer (+ Decline = 2 actions),
+    // with the other 2 attackers recorded as aliases on action 0.
+    let space = game.action_space().unwrap();
+    assert_eq!(space.actions.len(), 2);
+    assert_eq!(game.action_aliases().len(), 2);
+    assert!(game.action_aliases().iter().all(|&(idx, _)| idx == 0));
+
+    // Branch A: first blocker declines -> second blocker is suppressed & skipped.
+    let mut decline_branch = game.clone();
+    let decline_events_from = decline_branch.state.observation_events.len();
+    let decline_idx = decline_branch
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::DeclareBlocker { attacker: None, .. }))
+        .unwrap();
+    decline_branch.step(decline_idx).unwrap();
+    assert_ne!(
+        decline_branch.action_space().unwrap().kind,
+        ActionSpaceKind::DeclareBlocker
+    );
+    assert!(decline_branch
+        .state
+        .combat
+        .as_ref()
+        .is_none_or(|c| c.declined_blockers.is_empty()));
+    assert_eq!(declared_blocker_counts(&decline_branch, decline_events_from, 3), vec![0, 0, 0]);
+
+    // Branch B: first blocker blocks canonical attacker -> that attacker is now
+    // blocked (marked by census), while the remaining 2 unblocked attackers still
+    // fold together, so second blocker sees 2 block targets + Decline = 3 actions.
+    let mut block_branch = game.clone();
+    block_branch.step(0).unwrap();
+    assert_eq!(
+        block_branch.action_space().unwrap().kind,
+        ActionSpaceKind::DeclareBlocker
+    );
+    assert_eq!(block_branch.action_space().unwrap().actions.len(), 3);
+    assert_eq!(block_branch.action_aliases().len(), 1);
+    assert_eq!(block_branch.action_aliases()[0].0, 1);
+
+    // Distinction check: an attacker that entered attacking (attacks_this_turn == 0)
+    // does not fold with declared attackers (attacks_this_turn == 1).
+    let mut mixed = game.clone();
+    let first_attacker = mixed.state.combat.as_ref().unwrap().attackers[0];
+    let first_obj = mixed.permanent_object(first_attacker).unwrap();
+    mixed
+        .state
+        .turn
+        .attacks_this_turn
+        .retain(|&(obj, _)| obj != first_obj);
+    let other_attacker = mixed.state.combat.as_ref().unwrap().attackers[1];
+    let other_obj = mixed.permanent_object(other_attacker).unwrap();
+    assert!(!mixed.interchangeable(first_obj, other_obj));
+}
+
+#[test]
+fn declare_blockers_menace_and_must_block_never_empty_after_decline() {
+    let entries = [("Mountain", 24), ("Boggart Brute", 8), ("Gray Ogre", 8)];
+    let mut game = position(&["Mountain"], &entries, "Gray Ogre");
+    let p0 = PlayerId(0);
+    let p1 = PlayerId(1);
+    let brute = game
+        .scenario_force_battlefield(p0, "Boggart Brute", true)
+        .unwrap();
+    let brute_obj = game.permanent_object(brute).unwrap();
+    for _ in 0..3 {
+        game.create_token("token.ally", p1, false).unwrap();
+    }
+    // Give Boggart Brute (Menace) "must be blocked if able" via continuous effect.
+    let ts = game.state.permanents[brute].as_ref().unwrap().timestamp;
+    game.state.effects.push(ContinuousEffect {
+        timestamp: ts,
+        source: None,
+        controller: p0,
+        affected: Affected::Object(brute_obj),
+        modification: Modification::MustBeBlocked,
+        duration: EffectDuration::EndOfTurn,
+        source_object: None,
+    });
+    game.scenario_refresh_priority().unwrap();
+    advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareAttackers);
+    let attack_idx = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+        .unwrap();
+    game.step(attack_idx).unwrap();
+    advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareBlockers);
+
+    // Exhaust every reachable blocker path: never empty, and every leaf satisfies
+    // Menace + MustBeBlocked (2 or 3 blockers on Brute).
+    let mut leaves = Vec::new();
+    explore_declaration_leaves(&game, ActionSpaceKind::DeclareBlocker, &mut leaves);
+    assert!(!leaves.is_empty());
+    let mut blocker_counts: Vec<usize> = leaves
+        .iter()
+        .map(|g| g.state.combat.as_ref().unwrap().attacker_to_blockers[&brute].len())
+        .collect();
+    blocker_counts.sort();
+    blocker_counts.dedup();
+    assert_eq!(blocker_counts, vec![2, 3]);
+}
+
+#[test]
+fn combat_preview_and_compound_lowering_normalize_combat_plans() {
+    use managym::flow::combat_preview::{CombatPlan, PlannedBlock};
+
+    let entries = [("Mountain", 24), ("Boggart Brute", 8), ("Gray Ogre", 8)];
+    for skip_trivial in [true, false] {
+        // 1. Attack normalization: 3 identical tokens, draft only the last-asked
+        //    token or the 2nd & 3rd asked tokens.
+        let mut game = position(&["Mountain"], &entries, "Gray Ogre");
+        game.skip_trivial = skip_trivial;
+        let p0 = PlayerId(0);
+        let p1 = PlayerId(1);
+        let mut tokens = Vec::new();
+        for _ in 0..3 {
+            let id = game.create_token("token.ally", p0, false).unwrap();
+            game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
+            tokens.push(id);
+        }
+        game.scenario_refresh_priority().unwrap();
+        advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareAttackers);
+
+        // Preview drafting only tokens[0] (the LAST-asked token).
+        let frame = game.semantic_decision_frame().unwrap();
+        let events_from = game.state.observation_events.len();
+        let plan_one = CombatPlan {
+            attackers: vec![render_perm(&game, tokens[0])],
+            blocks: Vec::new(),
+        };
+        let preview_one = game
+            .combat_preview(p0, frame.revision, &frame.fingerprint, &plan_one)
+            .unwrap();
+        assert!(
+            preview_one.refused.is_none(),
+            "skip_trivial={skip_trivial}: {:?}",
+            preview_one.refused
+        );
+        assert_eq!(preview_one.declared_attackers.len(), 1);
+        let mut followed = game.clone();
+        for step in &preview_one.steps {
+            followed.step(step.action_index).unwrap();
+        }
+        assert_eq!(declared_attacker_count(&followed, events_from), 1);
+
+        // Preview drafting tokens[0] and tokens[1] (2nd & 3rd asked).
+        let plan_two = CombatPlan {
+            attackers: vec![render_perm(&game, tokens[0]), render_perm(&game, tokens[1])],
+            blocks: Vec::new(),
+        };
+        let preview_two = game
+            .combat_preview(p0, frame.revision, &frame.fingerprint, &plan_two)
+            .unwrap();
+        assert!(preview_two.refused.is_none(), "{:?}", preview_two.refused);
+        assert_eq!(preview_two.declared_attackers.len(), 2);
+
+        // Compound DeclareAttackers lowering with non-canonical subset [last-asked].
+        let offers = game.compound_offers().unwrap();
+        let offer = &offers.projection().offers[0];
+        assert_eq!(offer.verb, OfferVerb::DeclareAttackers);
+        let ChoiceStep::Select {
+            role, candidates, ..
+        } = &offer.choices[0];
+        let last_cand = candidates.initial.as_ref().unwrap().last().unwrap().id;
+        let submission = OfferSubmission {
+            offer_id: offer.id,
+            answers: vec![ChoiceAnswer::Candidates {
+                role: *role,
+                candidates: vec![last_cand],
+            }],
+        };
+        let mut lowered = game.clone();
+        lowered.apply_offer_submission(&offers, &submission).unwrap();
+        assert_eq!(declared_attacker_count(&lowered, events_from), 1);
+        let cmds = game.compound_commands(&offers, &submission).unwrap();
+        assert_eq!(cmds.len(), if skip_trivial { 2 } else { 3 });
+
+        // 2. Blocker normalization: 2 identical attackers, 3 identical blockers.
+        let mut bgame = position(&["Mountain"], &entries, "Gray Ogre");
+        bgame.skip_trivial = skip_trivial;
+        let mut att = Vec::new();
+        for _ in 0..2 {
+            let id = bgame.create_token("token.ally", p0, false).unwrap();
+            bgame.state.permanents[id].as_mut().unwrap().summoning_sick = false;
+            att.push(id);
+        }
+        let mut blk = Vec::new();
+        for _ in 0..3 {
+            blk.push(bgame.create_token("token.ally", p1, false).unwrap());
+        }
+        bgame.scenario_refresh_priority().unwrap();
+        advance_to_step(&mut bgame, p0, managym::flow::turn::StepKind::DeclareAttackers);
+        while bgame
+            .action_space()
+            .is_some_and(|s| s.kind == ActionSpaceKind::DeclareAttacker)
+        {
+            let attack_idx = bgame
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+                .unwrap();
+            bgame.step(attack_idx).unwrap();
+        }
+        advance_to_step(&mut bgame, p0, managym::flow::turn::StepKind::DeclareBlockers);
+
+        // Split-block drafted on non-canonical blockers (blk[1] -> att[0], blk[0] -> att[1]),
+        // skipping blk[2] (first asked) and naming folded attacker att[0] first!
+        let bframe = bgame.semantic_decision_frame().unwrap();
+        let bevents_from = bgame.state.observation_events.len();
+        let split_plan = CombatPlan {
+            attackers: Vec::new(),
+            blocks: vec![
+                PlannedBlock {
+                    blocker: render_perm(&bgame, blk[1]),
+                    attacker: render_perm(&bgame, att[0]),
+                },
+                PlannedBlock {
+                    blocker: render_perm(&bgame, blk[0]),
+                    attacker: render_perm(&bgame, att[1]),
+                },
+            ],
+        };
+        let split_preview = bgame
+            .combat_preview(p1, bframe.revision, &bframe.fingerprint, &split_plan)
+            .unwrap();
+        assert!(
+            split_preview.refused.is_none(),
+            "skip_trivial={skip_trivial}: {:?}",
+            split_preview.refused
+        );
+        let mut split_follow = bgame.clone();
+        for step in &split_preview.steps {
+            split_follow.step(step.action_index).unwrap();
+        }
+        assert_eq!(
+            declared_blocker_counts(&split_follow, bevents_from, 2),
+            vec![1, 1],
+            "split block must stay split across both identical attackers"
+        );
+
+        // Double-block drafted on folded attacker att[0] using last two blockers (blk[1], blk[0]).
+        let double_plan = CombatPlan {
+            attackers: Vec::new(),
+            blocks: vec![
+                PlannedBlock {
+                    blocker: render_perm(&bgame, blk[1]),
+                    attacker: render_perm(&bgame, att[0]),
+                },
+                PlannedBlock {
+                    blocker: render_perm(&bgame, blk[0]),
+                    attacker: render_perm(&bgame, att[0]),
+                },
+            ],
+        };
+        let double_preview = bgame
+            .combat_preview(p1, bframe.revision, &bframe.fingerprint, &double_plan)
+            .unwrap();
+        assert!(
+            double_preview.refused.is_none(),
+            "skip_trivial={skip_trivial}: {:?}",
+            double_preview.refused
+        );
+        let mut double_follow = bgame.clone();
+        for step in &double_preview.steps {
+            double_follow.step(step.action_index).unwrap();
+        }
+        assert_eq!(
+            declared_blocker_counts(&double_follow, bevents_from, 2),
+            vec![0, 2],
+            "double block on folded attacker must stay paired on one canonical attacker"
+        );
+
+        // Compound DeclareBlockers lowering: role 0 declines, role 1 blocks folded
+        // attacker #2, role 2 blocks attacker #1 -> preserves split block [1, 1].
+        let boffers = bgame.compound_offers().unwrap();
+        let boffer = &boffers.projection().offers[0];
+        assert_eq!(boffer.verb, OfferVerb::DeclareBlockers);
+        assert_eq!(boffer.choices.len(), 3);
+        let ChoiceStep::Select { role: r0, .. } = &boffer.choices[0];
+        let ChoiceStep::Select {
+            role: r1,
+            candidates: c1,
+            ..
+        } = &boffer.choices[1];
+        let ChoiceStep::Select {
+            role: r2,
+            candidates: c2,
+            ..
+        } = &boffer.choices[2];
+        let c1_list = c1.initial.as_ref().unwrap();
+        let c2_list = c2.initial.as_ref().unwrap();
+        let split_sub = OfferSubmission {
+            offer_id: boffer.id,
+            answers: vec![
+                ChoiceAnswer::Candidates {
+                    role: *r0,
+                    candidates: vec![],
+                },
+                ChoiceAnswer::Candidates {
+                    role: *r1,
+                    candidates: vec![c1_list[1].id],
+                },
+                ChoiceAnswer::Candidates {
+                    role: *r2,
+                    candidates: vec![c2_list[0].id],
+                },
+            ],
+        };
+        let mut compound_split = bgame.clone();
+        compound_split
+            .apply_offer_submission(&boffers, &split_sub)
+            .unwrap();
+        assert_eq!(
+            declared_blocker_counts(&compound_split, bevents_from, 2),
+            vec![1, 1]
+        );
+        let bcmds = bgame.compound_commands(&boffers, &split_sub).unwrap();
+        assert_eq!(bcmds.len(), 3);
+    }
+
+    // 3. Two identical Menace attackers + 2 identical blockers: drafting a
+    //    double-block on the folded Menace attacker succeeds!
+    let mut mgame = position(&["Mountain"], &entries, "Gray Ogre");
+    let p0 = PlayerId(0);
+    let p1 = PlayerId(1);
+    let m0 = mgame
+        .scenario_force_battlefield(p0, "Boggart Brute", true)
+        .unwrap();
+    let _m1 = mgame
+        .scenario_force_battlefield(p0, "Boggart Brute", true)
+        .unwrap();
+    let b0 = mgame.create_token("token.ally", p1, false).unwrap();
+    let b1 = mgame.create_token("token.ally", p1, false).unwrap();
+    mgame.scenario_refresh_priority().unwrap();
+    advance_to_step(&mut mgame, p0, managym::flow::turn::StepKind::DeclareAttackers);
+    while mgame
+        .action_space()
+        .is_some_and(|s| s.kind == ActionSpaceKind::DeclareAttacker)
+    {
+        let attack_idx = mgame
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+            .unwrap();
+        mgame.step(attack_idx).unwrap();
+    }
+    advance_to_step(&mut mgame, p0, managym::flow::turn::StepKind::DeclareBlockers);
+    // m1 was declared first, so m0 is the folded Menace attacker.
+    let mframe = mgame.semantic_decision_frame().unwrap();
+    let mevents_from = mgame.state.observation_events.len();
+    let mplan = CombatPlan {
+        attackers: Vec::new(),
+        blocks: vec![
+            PlannedBlock {
+                blocker: render_perm(&mgame, b0),
+                attacker: render_perm(&mgame, m0),
+            },
+            PlannedBlock {
+                blocker: render_perm(&mgame, b1),
+                attacker: render_perm(&mgame, m0),
+            },
+        ],
+    };
+    let mpreview = mgame
+        .combat_preview(p1, mframe.revision, &mframe.fingerprint, &mplan)
+        .unwrap();
+    assert!(mpreview.refused.is_none(), "{:?}", mpreview.refused);
+    let mut mfollow = mgame.clone();
+    for step in &mpreview.steps {
+        mfollow.step(step.action_index).unwrap();
+    }
+    assert_eq!(declared_blocker_counts(&mfollow, mevents_from, 2), vec![0, 2]);
 }

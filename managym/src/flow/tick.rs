@@ -264,6 +264,7 @@ impl Game {
                 let combat = self.state.combat.get_or_insert_default();
                 combat.already_attacking = combat.attackers.len();
                 combat.attackers_to_declare = eligible;
+                combat.declined_attackers.clear();
             }
             StepKind::DeclareBlockers => {
                 // CR 509.1 — Defending player declares blockers.
@@ -271,6 +272,7 @@ impl Game {
                 let eligible = self.eligible_blockers(defender);
                 let combat = self.state.combat.get_or_insert_default();
                 combat.blockers_to_declare = eligible;
+                combat.declined_blockers.clear();
             }
             _ => {}
         }
@@ -350,6 +352,7 @@ impl Game {
                 let active = self.active_player();
                 let combat = self.state.combat.get_or_insert_default();
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
+                    combat.declined_attackers.clear();
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
                     let first = std::mem::take(&mut combat.already_attacking);
@@ -380,9 +383,10 @@ impl Game {
                     return None;
                 };
                 let must_attack = self.must_attack(attacker);
+                let suppress_attack = !must_attack && self.declined_interchangeable_attacker(attacker);
                 let actions = [true, false]
                     .into_iter()
-                    .filter(|attack| *attack || !must_attack)
+                    .filter(|&attack| if attack { !suppress_attack } else { !must_attack })
                     .map(|attack| Action::DeclareAttacker {
                         player: active,
                         permanent: attacker,
@@ -400,6 +404,7 @@ impl Game {
                 let defending = self.non_active_player();
                 let combat = self.state.combat.get_or_insert_default();
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
+                    combat.declined_blockers.clear();
                     let assignments: Vec<_> = self
                         .state
                         .combat
@@ -428,7 +433,17 @@ impl Game {
                     }
                     return None;
                 };
-                let actions = self.block_actions(defending, blocker);
+                let mut actions = self.block_actions(defending, blocker);
+                if actions.len() > 1
+                    && actions.iter().any(|action| {
+                        matches!(action, Action::DeclareBlocker { attacker: None, .. })
+                    })
+                    && self.declined_interchangeable_blocker(blocker)
+                {
+                    actions.retain(|action| {
+                        matches!(action, Action::DeclareBlocker { attacker: None, .. })
+                    });
+                }
                 Some(ActionSpace {
                     player: Some(defending),
                     kind: ActionSpaceKind::DeclareBlocker,

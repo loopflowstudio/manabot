@@ -19,6 +19,14 @@ pub struct CombatState {
     pub blocked: Vec<PermanentId>,
     pub attackers_to_declare: Vec<PermanentId>,
     pub blockers_to_declare: Vec<PermanentId>,
+    /// Creatures that declined to attack earlier in this declaration, cleared
+    /// once declaration finishes. Breaks attack symmetry across prompts.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub declined_attackers: Vec<PermanentId>,
+    /// Creatures that declined to block earlier in this declaration, cleared
+    /// once declaration finishes. Breaks block symmetry across prompts.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub declined_blockers: Vec<PermanentId>,
 }
 
 impl CombatState {
@@ -33,6 +41,8 @@ impl CombatState {
         }
         self.attackers_to_declare.retain(|&p| p != id);
         self.blockers_to_declare.retain(|&p| p != id);
+        self.declined_attackers.retain(|&p| p != id);
+        self.declined_blockers.retain(|&p| p != id);
         self.attacker_to_blockers.remove(&id);
         self.blocked.retain(|&p| p != id);
         for blockers in self.attacker_to_blockers.values_mut() {

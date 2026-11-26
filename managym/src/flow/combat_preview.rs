@@ -142,6 +142,55 @@ impl Game {
             return Ok(preview);
         }
 
+        let mut working_attackers: Vec<(PermanentId, bool)> = Vec::new();
+        let mut working_blocks: Vec<WorkingBlock> = Vec::new();
+        match kind {
+            DeclarationKind::Attackers => {
+                for id in &plan.attackers {
+                    let perm = self
+                        .permanent_by_render_id(*id)
+                        .expect("verified by unaskable");
+                    working_attackers.push((perm, !order.contains(&perm)));
+                }
+                for id in self.declared_attackers() {
+                    if !plan.attackers.contains(&id) {
+                        let perm = self
+                            .permanent_by_render_id(id)
+                            .expect("declared attacker");
+                        working_attackers.push((perm, true));
+                    }
+                }
+            }
+            DeclarationKind::Blockers => {
+                for block in &plan.blocks {
+                    let blocker = self
+                        .permanent_by_render_id(block.blocker)
+                        .expect("verified by unaskable");
+                    let attacker = self.permanent_by_render_id(block.attacker);
+                    working_blocks.push(WorkingBlock {
+                        blocker,
+                        attacker,
+                        raw_attacker: block.attacker,
+                        committed: !order.contains(&blocker),
+                    });
+                }
+                for block in self.declared_blocks() {
+                    if !plan.blocks.contains(&block) {
+                        let blocker = self
+                            .permanent_by_render_id(block.blocker)
+                            .expect("declared blocker");
+                        let attacker = self.permanent_by_render_id(block.attacker);
+                        working_blocks.push(WorkingBlock {
+                            blocker,
+                            attacker,
+                            raw_attacker: block.attacker,
+                            committed: true,
+                        });
+                    }
+                }
+            }
+        }
+
         let mut position = self.clone();
         let events_from = position.state.observation_events.len();
         let mut remaining = order.as_slice();
@@ -153,20 +202,110 @@ impl Game {
                 break;
             };
             remaining = &remaining[at + 1..];
-            let wanted = self.planned_answer(kind, asked, plan);
             let space = position.action_space().expect("asked decision");
-            let index = space
-                .actions
-                .iter()
-                .position(|action| match (action, wanted) {
-                    (Action::DeclareAttacker { attack, .. }, Answer::Attack(want)) => {
-                        *attack == want
+            let (wanted, index, chosen_blocks) = match kind {
+                DeclarationKind::Attackers => {
+                    let want = if let Some(entry) = working_attackers
+                        .iter_mut()
+                        .find(|(perm, committed)| !*committed && *perm == asked)
+                    {
+                        entry.1 = true;
+                        true
+                    } else if let Some(&donor) = remaining.iter().find(|&&other| {
+                        working_attackers
+                            .iter()
+                            .any(|(perm, committed)| !*committed && *perm == other)
+                            && position.interchangeable_permanents(asked, other)
+                    }) {
+                        let entry = working_attackers
+                            .iter_mut()
+                            .find(|(perm, committed)| !*committed && *perm == donor)
+                            .expect("matched donor");
+                        *entry = (asked, true);
+                        true
+                    } else {
+                        false
+                    };
+                    let wanted_action = Action::DeclareAttacker {
+                        player: viewer,
+                        permanent: asked,
+                        attack: want,
+                    };
+                    let index = space
+                        .actions
+                        .iter()
+                        .position(|action| *action == wanted_action);
+                    (Answer::Attack(want), index, None)
+                }
+                DeclarationKind::Blockers => {
+                    let entry_pos = if let Some(pos) = working_blocks
+                        .iter()
+                        .position(|entry| !entry.committed && entry.blocker == asked)
+                    {
+                        Some(pos)
+                    } else if let Some(&donor) = remaining.iter().find(|&&other| {
+                        working_blocks.iter().any(|entry| {
+                            !entry.committed && entry.blocker == other && entry.attacker.is_some()
+                        }) && position.interchangeable_permanents(asked, other)
+                    }) {
+                        let pos = working_blocks
+                            .iter()
+                            .position(|entry| {
+                                !entry.committed
+                                    && entry.blocker == donor
+                                    && entry.attacker.is_some()
+                            })
+                            .expect("matched donor");
+                        working_blocks[pos].blocker = asked;
+                        Some(pos)
+                    } else {
+                        None
+                    };
+                    let want_att = entry_pos.and_then(|pos| working_blocks[pos].attacker);
+                    let wanted_action = Action::DeclareBlocker {
+                        player: viewer,
+                        blocker: asked,
+                        attacker: want_att,
+                    };
+                    let index = position.resolve_action_index(space, &wanted_action);
+                    let chosen_att = index.and_then(|idx| match space.actions[idx] {
+                        Action::DeclareBlocker { attacker, .. } => attacker,
+                        _ => None,
+                    });
+                    if let Some(pos) = entry_pos {
+                        if working_blocks[pos].attacker.is_some() {
+                            working_blocks[pos].committed = true;
+                        }
+                        if let (Some(want), Some(canon)) = (want_att, chosen_att) {
+                            if canon != want {
+                                let canon_render = self.render_id(canon);
+                                let want_render = self.render_id(want);
+                                working_blocks[pos].attacker = Some(canon);
+                                working_blocks[pos].raw_attacker = canon_render;
+                                // Transpose want <-> canon across uncommitted blocks
+                                // so split-blocks stay split and double-blocks stay
+                                // paired on the canonical attacker.
+                                for (i, other) in working_blocks.iter_mut().enumerate() {
+                                    if i != pos && !other.committed {
+                                        if other.attacker == Some(want) {
+                                            other.attacker = Some(canon);
+                                            other.raw_attacker = canon_render;
+                                        } else if other.attacker == Some(canon) {
+                                            other.attacker = Some(want);
+                                            other.raw_attacker = want_render;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                    (Action::DeclareBlocker { attacker, .. }, Answer::Block(want)) => {
-                        *attacker == want
-                    }
-                    _ => false,
-                });
+                    (
+                        Answer::Block(want_att),
+                        index,
+                        chosen_att.map(|attacker| self.render_id(attacker)),
+                    )
+                }
+            };
             let Some(index) = index else {
                 preview.refused = Some(self.refusal(asked, wanted, space));
                 return Ok(preview);
@@ -180,10 +319,7 @@ impl Game {
                 creature: self.render_id(asked),
                 action_index: index,
                 attack: matches!(wanted, Answer::Attack(true)),
-                blocks: match wanted {
-                    Answer::Block(Some(attacker)) => Some(self.render_id(attacker)),
-                    _ => None,
-                },
+                blocks: chosen_blocks,
             });
             position.step(index)?;
             if position.is_game_over() {
@@ -192,7 +328,8 @@ impl Game {
         }
         self.read_declaration(&position, events_from, &mut preview);
         if preview.refused.is_none() {
-            preview.refused = self.undeclared(kind, plan, &preview);
+            preview.refused =
+                self.undeclared(kind, &working_attackers, &working_blocks, &preview);
         }
         Ok(preview)
     }
@@ -384,24 +521,6 @@ impl Game {
         }
     }
 
-    fn planned_answer(
-        &self,
-        kind: DeclarationKind,
-        creature: PermanentId,
-        plan: &CombatPlan,
-    ) -> Answer {
-        let id = self.render_id(creature);
-        match kind {
-            DeclarationKind::Attackers => Answer::Attack(plan.attackers.contains(&id)),
-            DeclarationKind::Blockers => Answer::Block(
-                plan.blocks
-                    .iter()
-                    .find(|block| block.blocker == id)
-                    .and_then(|block| self.permanent_by_render_id(block.attacker)),
-            ),
-        }
-    }
-
     fn refusal(
         &self,
         creature: PermanentId,
@@ -472,25 +591,23 @@ impl Game {
         }
     }
 
-    /// The engine finished the declaration but did not declare the plan:
-    /// the engine answered a forced declaration for a skipped creature.
+    /// The engine finished the declaration but did not declare the normalized
+    /// plan: the engine answered a forced declaration for a skipped creature,
+    /// or a planned target could not be resolved.
     fn undeclared(
         &self,
         kind: DeclarationKind,
-        plan: &CombatPlan,
+        working_attackers: &[(PermanentId, bool)],
+        working_blocks: &[WorkingBlock],
         preview: &CombatPreview,
     ) -> Option<DeclarationRefusal> {
         let named = |id: ObjectRenderId| self.render_label(id);
         match kind {
             DeclarationKind::Attackers => {
-                // Creatures declared before this decision (a skipped
-                // creature that must attack) are not part of the plan.
-                let mut planned = plan.attackers.clone();
-                planned.extend(
-                    self.declared_attackers()
-                        .into_iter()
-                        .filter(|id| !plan.attackers.contains(id)),
-                );
+                let mut planned: Vec<ObjectRenderId> = working_attackers
+                    .iter()
+                    .map(|(perm, _)| self.render_id(*perm))
+                    .collect();
                 let mut declared = preview.declared_attackers.clone();
                 planned.sort_by_key(|id| (id.entity, id.incarnation));
                 declared.sort_by_key(|id| (id.entity, id.incarnation));
@@ -523,15 +640,13 @@ impl Game {
                 })
             }
             DeclarationKind::Blockers => {
-                // Blocks declared before this decision (a skipped creature
-                // that must block) are not part of the plan.
-                let mut planned = plan.blocks.clone();
-                // `unaskable` admits a declared blocker only in its declared block.
-                planned.extend(
-                    self.declared_blocks()
-                        .into_iter()
-                        .filter(|block| !plan.blocks.contains(block)),
-                );
+                let planned: Vec<PlannedBlock> = working_blocks
+                    .iter()
+                    .map(|block| PlannedBlock {
+                        blocker: self.render_id(block.blocker),
+                        attacker: block.raw_attacker,
+                    })
+                    .collect();
                 let missing = planned
                     .iter()
                     .find(|block| !preview.declared_blocks.contains(block));
@@ -559,6 +674,14 @@ impl Game {
             }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct WorkingBlock {
+    blocker: PermanentId,
+    attacker: Option<PermanentId>,
+    raw_attacker: ObjectRenderId,
+    committed: bool,
 }
 
 #[derive(Clone, Copy, Debug)]

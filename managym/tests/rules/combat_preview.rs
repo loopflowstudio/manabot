@@ -164,6 +164,9 @@ fn a_multi_block_is_declared_as_planned() {
         attacker: render(game, attackers[attacker]),
     };
     // Two Elves on the Brute satisfy menace; the third blocks an Ogre.
+    // `attackers[1]` and `attackers[2]` are indistinguishable unblocked Gray
+    // Ogres, and `attackers[2]` was declared first, so blocking `attackers[1]`
+    // normalizes onto the canonical unblocked Ogre (`attackers[2]`).
     let plan = CombatPlan {
         attackers: Vec::new(),
         blocks: vec![block(0, 0), block(1, 0), block(2, 1)],
@@ -181,15 +184,15 @@ fn a_multi_block_is_declared_as_planned() {
     assert_eq!(result.steps.len(), 3);
     let mut declared = result.declared_blocks.clone();
     declared.sort_by_key(|block| (block.attacker.entity, block.blocker.entity));
-    let mut planned = plan.blocks.clone();
-    planned.sort_by_key(|block| (block.attacker.entity, block.blocker.entity));
-    assert_eq!(declared, planned);
+    let mut expected = vec![block(0, 0), block(1, 0), block(2, 2)];
+    expected.sort_by_key(|block| (block.attacker.entity, block.blocker.entity));
+    assert_eq!(declared, expected);
 
     follow(s.game_mut(), &result);
     let combat = s.game().state.combat.as_ref().unwrap();
     assert_eq!(combat.attacker_to_blockers[&attackers[0]].len(), 2);
     assert_eq!(
-        combat.attacker_to_blockers[&attackers[1]],
+        combat.attacker_to_blockers[&attackers[2]],
         vec![blockers[2]]
     );
 }
