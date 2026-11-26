@@ -668,7 +668,7 @@ export class GameSocketController {
     gameStore.newGamePending = false;
     if (gameStore.swapPending) {
       gameStore.swapPending = false;
-      gameStore.swapError = message.message;
+      gameStore.swapError = text;
     }
     if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
     if (message.type === 'error' && message.game_stopped) {

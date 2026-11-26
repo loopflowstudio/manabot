@@ -132,7 +132,7 @@ export class GameStore {
   gameId = $state<string | null>(null);
   opponent = $state.raw<GameOpponent | null>(null);
   opponentLabel = $state<string | null>(null);
-  /** The setup the game on the board was started with: what Rematch, Swap sides and Play again send back. */
+  /** The setup the game on the board was started with: what Rematch, Swap play/draw and Play again send back. */
   setup = $state.raw<Record<string, unknown> | null>(null);
   // Frames and projections are the authority's immutable values, replaced
   // whole on every update: raw state, so reading one is a plain property

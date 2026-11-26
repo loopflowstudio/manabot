@@ -29,9 +29,12 @@ from managym.academy.server import app
 from managym.academy.watch import WatchRequest, create_watch
 from managym.experience import UNVERSIONED_CONTENT_HASH
 from managym.policy import PolicyRegistry
-from tests.academy.socket_messages import settled_message
+from tests.academy.socket_messages import (
+    find_offer as _offer,
+    make_command as _command,
+    settled_message,
+)
 from tests.academy.test_policy_runtime import IndependentFactory
-from tests.academy.test_server import _command, _offer
 
 MAX_HERO_MOVES = 3000
 CURATED_COMBAT_FIXTURE = json.loads(

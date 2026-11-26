@@ -35,8 +35,8 @@ pending choice with the same legal offers and permitted information.
   game id, authoritative game loop, rebuild-from-record resume, viewer-safe
   observation serialization
 - **`play_protocol.py`**: Pydantic models for `/ws/play` requests (`resume`,
-  `new_game`, `rematch`, `command`, `action`, `pass_turn`, `retry_mirror`,
-  `set_stops`, `show_analysis`)
+  `new_game`, `rematch`, `swap_sides`, `command`, `decision_group_command`,
+  `action`, `pass_turn`, `retry_mirror`, `set_stops`, `show_analysis`)
 - **`presentation.py`**: per-viewer semantic presentation projection (moves,
   consequences, causes, rules, and viewer-safe per-event labels) derived from
   the engine's unhashed presentation sink
@@ -52,7 +52,7 @@ pending choice with the same legal offers and permitted information.
   A closed opponent's deck reads `closed` in those rows until the game is
   `completed` (`CLOSED_DECK_SQL`), the rule the live frame and setup echo also
   follow. Games in memory are a cache: played games with no connection leave it
-  after 15 idle minutes or beyond `IDLE_GAMES_KEPT`, payment and combat
+  after 15 idle minutes or beyond `IDLE_GAMES_KEPT`, payment and decision-group
   previews never rebuild one, and a finished game is never taken up again.
   Every saved game in `traces_dir` is readable and every unfinished played game
   stays resumable across idle eviction and server restarts, with no credentials
@@ -443,27 +443,25 @@ with the turn it starts on.
 
 ### Swapping sides mid-game
 
-The pilot's `swap_sides` request (`SwapSidesMessage`, `CONFIGURE_MATCH`, bound
-to `match_id`, `expected_revision` and an idempotent `request_id`) flips seats
-in place on the live `GameSession` without restarting the engine or mutating
-`GameConfig` or `play_sessions.draft_json`. Before mutating session state,
-`GameSession.swap_sides` builds and admits a replacement villain policy for the
-human's old seat; stateless policies observe the live `Env` directly (decision
-memory is already captured for both native seats), while `recurrent=True`
-policies warm up over `managym.replay.walk` of the game so far. Any admission
-or load failure closes the disposable policy and leaves the live game untouched
-at the same revision.
+The `swap_sides` request (`SwapSidesMessage`, bound to `match_id`,
+`expected_revision` and an idempotent `request_id`) flips seats in place on the
+live `GameSession` without restarting the engine or mutating `GameConfig`.
+Before mutating session state, `GameSession.swap_sides` builds and admits a
+replacement villain policy for the human's old seat; stateless policies observe
+the live `Env` directly (decision memory is already captured for both native
+seats), while `recurrent=True` policies warm up over `managym.replay.walk` of
+the game so far. Any admission or load failure closes the disposable policy and
+leaves the live game untouched at the same revision.
 
 On commit, the session flips `human_seat` and `deck_names`, appends
 `len(trace.events)` to `Trace.seat_swaps` (omitted from JSON when empty),
 refreshes presentation state from the new seat's canonical track, bumps the
 protocol revision so in-flight Commands for the old seat are rejected as stale,
-updates active `attempt_players` and `session_games.matchup_json` atomically in
-`AttemptStore.save`, immediately broadcasts the committed flipped board (with
-`work.state == "running"` and active live-analysis policy metadata), then
-advances if the bot is now to act and restarts `LiveAnalysis` for the new seat
-if live analysis was on. Every reader
-(`ReplayedViews`, `Recording`, `prepare_trace_payload`, `game_numbers`,
+updates active `attempt_players` atomically in `AttemptStore.save`, immediately
+broadcasts the committed flipped board (with `work.state == "running"` and
+active live-analysis policy metadata), then advances if the bot is now to act
+and restarts `LiveAnalysis` for the new seat if live analysis was on. Every
+reader (`ReplayedViews`, `Recording`, `prepare_trace_payload`, `game_numbers`,
 `analyse_game`, `agent_line`, `LiveAnalysis`, and `_play_recorded_prefix`)
 resolves the human seat at step `i` through `human_seat_at(trace, i)` in
 `trace.py`. `Recording` and `GET /api/traces/{id}/decisions`

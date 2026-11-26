@@ -935,11 +935,6 @@ items in the group.
   checks the pending `decision_group_command` against the server's accepted commands and
   either settles it or resends the exact submission — never applying it twice
   and never leaving a half-committed group.
-- **Watchers and pilot transfer.** Live grouped descriptors are sent only to
-  the active pilot; watchers never receive private Scry, Surveil or
-  PartitionPiles cards. When
-  pilot control transfers to another participant, any active group is delivered
-  with the role change without reloading.
 - **Identical recordings, Replay and Study.** Applying a group executes the
   exact sequential native actions in order and records one decision per native
   step, byte-for-byte equivalent to submitting one Command at a time. Replay,
@@ -985,21 +980,18 @@ dialog; press **Swap sides** again at any time to swap back.
 | **Auto-tap and priority stops** | Stay with you; an active **Pass turn** (F6) yield clears for the new seat. |
 | **Native mana payment and floats** | Stay with each seat as the game started. |
 | **Show analysis** | If on, stays on and follows you to your new seat without holding play; earlier choices keep their **analysis shown** mark. |
-| **Next game** (`Rematch`, `Swap play/draw`, `Edit next game`) | Unchanged, and the session's game number stays the same. **Swap play/draw** is separate: it starts the next game keeping your deck and reversing play/draw. |
+| **Next game** (`Rematch`, `Swap play/draw`, `Deal new decks`) | Unchanged: the game's saved starting setup is untouched. **Swap play/draw** starts the next game keeping your deck and reversing play/draw. |
 
 **Swap sides** is unavailable once the game is over, in **Watch**, while a
-**Study** branch is active, while a bot retry (**Retry bot decision** / **Retry
-search**) is pending, or when you are watching a shared table rather than
-piloting it. If loading the bot for the seat you are leaving fails, Academy
+**Study** branch is active, or while a bot retry (**Retry bot decision** / **Retry
+search**) is pending. If loading the bot for the seat you are leaving fails, Academy
 shows the reason under the button and leaves the live game untouched so you can
 keep playing.
 
 The game remains one game through the end:
 
-- **Games and My record**: it appears once in **Games** with each player in
-  their final seat and deck, and counts once in **My record** by how it ends (a
-  win if the seat you finished in won). A game started via **Play on from here**
-  stays out of **My record** even if you swap sides during it.
+- **History**: it appears once in **History** with each player in their final
+  seat and deck.
 - **Review and Analysis**: **Review** defaults **Perspective** to **Follow the
   chooser** so the bottom seat follows you across each swap (fixed Seat 1 and
   Seat 2 perspectives remain selectable, labelled by native seat and deck), names
