@@ -348,8 +348,8 @@
         </details>
       {/if}
     {/if}
-    <!-- While you may act, or once the game is over, the heading above already says what the status would. -->
-    <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null || frame.status === 'game_over'} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
+    <!-- While you may act, once the game is over, or when status is blank, nothing needs space here. -->
+    <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null || frame.status === 'game_over' || !status} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
   </section>
 
   <!-- A finished game has no choices to list; the result card says what happened. Read-only, a position without a decision lists none. -->
@@ -451,6 +451,7 @@
                             <button type="button" aria-current={isLineCurrent(child) ? 'true' : undefined}
                               data-move={isChildJump ? child.jumpKey! : undefined}
                               data-history-seq={child.boardSeq ?? undefined}
+                              title={isChildJump ? child.segments.map(segment => segment.text).join('') : undefined}
                               onclick={() => (isChildJump ? onjump!(child.jumpKey!, child.boardSeq) : onselectline!(child))}>
                               <span class="what">{@render lineSegments(child.segments, false)}</span>
                             </button>
@@ -574,11 +575,12 @@
   /* Reviewing, the moves are what you read: they take the remaining height, and the choices list keeps a bounded share. */
   .recording .log { flex: 1 1 0; min-height: 200px; }
   .recording .choices { flex: 0 1 auto; min-height: 0; max-height: 26%; }
-  .turns { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 6px; }
-  .turn ol { display: grid; gap: 1px; }
+  .turns { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; }
+  .turn { min-width: 0; }
+  .turn ol { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
   .turn-head { display: flex; gap: 8px; align-items: baseline; margin-bottom: 2px; color: var(--text-secondary); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
   .turn-head .number { min-width: 18px; font-variant-numeric: tabular-nums; color: var(--text); }
-  .move { padding: 1px 4px; color: var(--text); line-height: 20px; }
+  .move { min-width: 0; padding: 1px 4px; color: var(--text); line-height: 20px; }
   /* What happened is the game's face; who did it and the count stay the interface's. */
   .move .what { display: block; min-width: 0; font: 14px/20px var(--font-serif); overflow-wrap: break-word; }
   .move .who {
@@ -617,6 +619,7 @@
   .recording .turn + .turn { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); padding-top: 2px; }
   .recording .turns { gap: 0; }
   .recording .turn { min-width: 0; }
+  .recording .turn ol { gap: 0; }
   .gutter { flex: none; width: 16px; font-variant-numeric: tabular-nums; color: var(--text); }
   .recording .move.jump button { min-width: 0; min-height: 24px; display: flex; align-items: baseline; gap: 6px; padding: 2px 4px; }
   .recording .move.jump .who { flex: none; width: 44px; margin-right: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -634,10 +637,13 @@
   /* Who chose it follows the choice on its line, wrapping under it only when the line is full. */
   .who-chose { margin-left: 6px; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; }
   .estimate { flex: none; font: 400 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-tertiary); min-width: 2ch; text-align: right; }
-  .consequences-wrap, .consequence-summary { padding-left: 6px; }
-  .consequences { display: grid; gap: 1px; border-left: 1px solid var(--border); padding-left: 7px; margin: 1px 0 3px; }
-  .consequence { color: var(--text-secondary); line-height: 20px; }
+  .consequences-wrap, .consequence-summary { min-width: 0; padding-left: 6px; }
+  .consequences { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; border-left: 1px solid var(--border); padding-left: 7px; margin: 1px 0 3px; }
+  .consequence { min-width: 0; color: var(--text-secondary); line-height: 20px; }
   .consequence .what { display: block; font: 14px/20px var(--font-serif); overflow-wrap: break-word; }
+  .recording .consequences { gap: 0; margin: 0 0 1px; }
+  .recording .consequence.jump button { padding: 1px 4px; }
+  .recording .consequence .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .consequence-toggle { min-height: 0; color: var(--text-tertiary); padding: 1px 3px; text-decoration: underline dotted; }
   .consequence-toggle:hover { color: var(--text); }
 </style>
