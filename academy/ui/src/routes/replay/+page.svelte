@@ -48,6 +48,7 @@
   const presentation = createPresentationPlayer();
   let studyButton = $state<HTMLButtonElement | null>(null);
   let perspective = $state<Perspective>(0);
+  let revealBeforeStudy: boolean | null = null;
   let stripOpen = $state(false);
   let loaded = '';
   let lastHistoryKey = '';
@@ -264,6 +265,7 @@
   const perspectiveText = $derived(!current ? ''
     : current.kind === 'choice' && current.decision
       ? `${current.revealed ? 'Both hands · spectator view' : `Acting view · seat ${current.viewer + 1}`} · chooser seat ${current.decision.viewer + 1}`
+      : current.revealed ? 'Both hands · spectator view'
       : `Recorded seat-${current.viewer + 1} view · private post-action views unavailable`);
 
   // ———————————————— Opening a recording
@@ -286,7 +288,9 @@
     const params = page.url.searchParams;
     // Review starts the game from its first position, whatever was read last.
     const review = params.has('review');
-    replayStore.reveal = (params.get('view') ?? (saved.reveal ? 'spectator' : 'acting')) === 'spectator';
+    // The address, then what was last chosen here, then the recording's default (both hands in a Watch).
+    const view = params.get('view');
+    replayStore.reveal = view !== null ? view === 'spectator' : saved.reveal ?? null;
     await replayStore.open(id, review ? undefined : params.get('position') ?? saved.key);
     if (review && replayStore.index) await replayStore.seek(0);
     const near = params.get('near') ?? (saved.near === undefined ? null : String(saved.near));
@@ -467,7 +471,8 @@
       const restored = await replayStore.api<RestoredReplayDecision>(`/api/traces/${traceId}/decisions/${encodeURIComponent(decisionRow.address)}`);
       if (replayStore.current?.key !== decisionRow.address) throw new Error('The selected choice changed while opening Study.');
       studyStore.restore(selected.study_source, decisionRow, restored);
-      // Study is the acting view; a spectator reveal never carries into it or back.
+      // Study is the acting view; the view shown before it comes back on Return.
+      revealBeforeStudy = replayStore.reveal;
       replayStore.reveal = false;
       if (replayStore.current) replayStore.current = { ...replayStore.current, observation: decisionRow.frame.projection, revealed: false };
     } catch (reason) { studyStore.setError(reason instanceof Error ? reason.message : String(reason)); }
@@ -561,6 +566,8 @@
       studyStore.returnToScore(returned);
       lastHistoryKey = '';
       restoreFocus = true;
+      if (revealBeforeStudy) { replayStore.reveal = true; await replayStore.seek(replayStore.selected); }
+      revealBeforeStudy = null;
     } catch (error) {
       studyStore.setError(error instanceof Error ? error.message : 'Return failed.');
     } finally {

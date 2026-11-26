@@ -273,6 +273,10 @@ class Trace:
     canonical_replay: dict[str, Any] | None = None
     recording_import: RecordingImport | None = None
     played_from: PlayedFrom | None = None
+    # A Watch's other hand on the final board, for the spectator view past the
+    # last event. Authority-private like `analysis_observation`; absent from
+    # played games and from Watch records written before it existed.
+    final_opponent_hand: list[dict[str, Any]] | None = None
 
     def to_record(self) -> dict[str, Any]:
         """Borrow JSON payloads for immediate, read-only persistence.
@@ -291,6 +295,8 @@ class Trace:
             record.pop("played_from")
         else:
             record["played_from"] = asdict(self.played_from)
+        if self.final_opponent_hand is None:
+            record.pop("final_opponent_hand")
         record["config"] = self.config.to_record()
         record["mana_payment"] = list(
             self.config.by_seat(self.config.mana_payment, "manual")
@@ -459,6 +465,7 @@ def prepare_trace_payload(
     # ``reveal_hidden`` is a legacy post-game observation aid. It never grants
     # access to the mixed-view canonical authority artifact.
     prepared.pop("canonical_replay", None)
+    prepared.pop("final_opponent_hand", None)
     for event in prepared.get("events", []):
         event.pop("analysis_observation", None)
     config = prepared.get("config", {})

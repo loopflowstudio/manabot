@@ -14,7 +14,7 @@ test('live Watch resumes the same timeline after Study and reload', async ({ pag
   await page.getByRole('button', {name: 'Start watching', exact: true}).click();
   await page.getByRole('button', {name: 'Continue', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
-  await expect(page.getByRole('checkbox', {name: 'Show both hands'})).not.toBeChecked();
+  await expect(page.getByRole('checkbox', {name: 'Show both hands'})).toBeChecked();
   const id = new URL(page.url()).searchParams.get('trace')!;
   expect(id).toBeTruthy();
 
@@ -61,7 +61,7 @@ test('verified evaluation import reads the same timeline without producing a pol
   await expect(page.getByTestId('game-result-dialog')).toHaveCount(0);
   await page.getByRole('button', {name: 'Next', exact: true}).click();
   await expect(page.getByTestId('game-result-dialog')).toBeVisible();
-  await expect(page.getByTestId('replay-perspective')).toContainText('Recorded seat-');
+  await expect(page.getByTestId('replay-perspective')).toContainText('Both hands · spectator view');
   // The move list and the strip name the recording's moves and jump to them.
   const moves = page.getByTestId('game-log').locator('button[data-move]');
   expect(await moves.count()).toBeGreaterThan(1);

@@ -11,11 +11,25 @@ test('watch reads choices and consequences on the board, then returns from Study
   await expect(rows.first()).toBeDisabled();
   await expect(page.locator('[data-testid="action-option"][data-chosen="true"]')).toHaveCount(1);
   await expect(page.getByTestId('recorded-decision-evidence')).toBeVisible();
-  await page.getByRole('checkbox', {name: 'Show both hands'}).check();
+  // A Watch opens with Seat 1 at the bottom and both hands up, and stays so through each step.
+  const perspective = page.getByRole('combobox', {name: 'Perspective'});
+  const bothHands = page.getByRole('checkbox', {name: 'Show both hands'});
+  const topSeat = (): Promise<string | null> => page.locator('[data-plate-side="opponent"]').getAttribute('data-player-index');
+  await expect(perspective).toHaveValue('0');
+  await expect(bothHands).toBeChecked();
   await expect(page.getByTestId('replay-perspective')).toContainText('Both hands · spectator view');
+  await expect(page.getByTestId('shown-hand')).toHaveCount(1);
+  const top = await topSeat();
   await page.getByRole('button', {name: 'Next', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
-  await expect(page.getByTestId('replay-perspective')).toContainText('Recorded seat-');
+  await expect(page.getByTestId('replay-perspective')).toHaveText('Both hands · spectator view');
+  await expect(page.getByTestId('shown-hand')).toHaveCount(1);
+  await page.getByRole('button', {name: 'Next', exact: true}).click();
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 3 / 3');
+  await expect(bothHands).toBeChecked();
+  await expect(page.getByTestId('shown-hand')).toHaveCount(1);
+  expect(await topSeat()).toBe(top);
+  await page.getByRole('button', {name: 'Previous', exact: true}).click();
   await expect(rows).toHaveCount(0);
   await page.getByRole('button', {name: 'Previous', exact: true}).click();
   await page.getByRole('button', {name: 'Try another line', exact: true}).click();
@@ -24,7 +38,8 @@ test('watch reads choices and consequences on the board, then returns from Study
   await page.getByTestId('study-return').click();
   await expect(page.getByRole('button', {name: 'Try another line', exact: true})).toBeFocused();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
-  await expect(page.getByRole('checkbox', {name: 'Show both hands'})).not.toBeChecked();
+  // Study drew the acting view; the view shown before it is back.
+  await expect(bothHands).toBeChecked();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
   await page.reload();

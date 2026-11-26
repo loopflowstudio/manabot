@@ -2695,6 +2695,11 @@ class GameSession:
         retained = replace(
             self.trace,
             final_observation=decision_surface_view(self.env, self.human_seat),
+            final_opponent_hand=serialize_observation(
+                self.env.observation_for_player(1 - self.human_seat)
+            )["agent"]["hand"]
+            if self.watch_mode
+            else None,
             winner=self.env.winner_index() if self.obs.game_over else None,
             end_reason=end_reason if finished else self.trace.end_reason,
             # Only a finished trace is kept; a live save encodes the replay incrementally.
