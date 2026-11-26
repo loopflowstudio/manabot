@@ -54,11 +54,9 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   etude train run>`; `GET /api/opponents` lists what the picker shows (an
   unreadable file is omitted, not listed; a refused one is listed with
   `available: false` and its reason). The list is read at launch: restart
-  the server after adding checkpoints. The launch opens inside a game, so
-  **Start game** on the New game page and **Start next game** raise a browser
-  confirm ("Stop the current game and start a new session?"). Playwright
-  dismisses it by default and the click then does nothing: register
-  `page.on('dialog', d => d.accept())` first. Check the header names the
+  the server after adding checkpoints. No action raises a confirm dialog:
+  "New game" opens setup in place and the game left stays unfinished in
+  History. Check the header names the
   chosen policy before reading the opponent's plays. When this checkout has no
   `academy/ui/node_modules`, keep the script under `.runs/` and load Playwright
   from a sibling checkout with `createRequire('<sibling>/academy/ui/')('playwright')`.
@@ -132,9 +130,9 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   header, so detect the end by the right panel's "Game over — no next
   decision." text (or one Rematch button), not by counting two Rematch
   buttons, and bound play loops by time, since the bot can win first. Live bot work
-  ("Searching · Seat 2") shows in the table masthead. Opening `/games?session=`
-  needs the owner credential from the same browser profile; a fresh browser
-  context gets 403. Games-page Replay links are labelled `Replay game <id>`;
+  ("Searching · Seat 2") shows in the table masthead. Nothing needs a
+  credential: any browser context opens any game, and a 403 is a real failure.
+  Games-page Replay links are labelled `Replay game <id>`;
   select them with `locator('a', {hasText: /^Replay$/})`. The game-over
   dialog moves focus and scrolls the table, so screenshot it as it is.
   For a demo with specific cards, check that art for an uncached card loads
@@ -162,8 +160,7 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   with `managym academy --policy <file>.json play|watch`. A checkpoint trained
   before syncing main can pass the picker yet fail Start with "Failed to load
   the selected opponent." (catalog vocabulary grew); retrain rather than debug
-  it. Watch resume tokens live in that tab's storage, so reopen a live Watch
-  trace in the same browser context. A completed Play game's evidence opens
+  it. A completed Play game's evidence opens
   from `/replay?trace=<id>` (ids from `/api/traces`) via "Inspect bot search".
   An Elemental recipe policy (`etude train manabot/recipes/elemental.py
   --config '{"updates": 2, "streams": 4}' --until updates=1`, about 10 s)
@@ -178,14 +175,14 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   QA observed both at load averages around 300, but did not establish a cause.
   Repeat on an idle host before attributing a stall to the change or to load.
 - Combat drafts (`[data-testid=combat-draft]`, `POST
-  /api/sessions/<id>/combat-preview`): the draft appears only after the
+  /api/games/<game>/combat-preview`): the draft appears only after the
   preview answers, so wait for it before clicking creatures; without a preview
   (a mocked socket with no route) the table keeps one creature at a time.
   `[data-draft]` on a card is `can`, `in` or `armed`; confirm only once the
   primary has `data-draft-ready=true`. Collect creature ids before clicking:
   a locator over `[data-draft=can]` shifts as cards are drafted.
 - Payment previews (`[data-testid=payment-preview]`, `POST
-  /api/sessions/<id>/payment-preview`): the panel exists only once a payment
+  /api/games/<game>/payment-preview`): the panel exists only once a payment
   offer has been previewed in the current decision, so read it with a count
   check. Arrival focus previews the first offer as soon as a game starts; a
   `page.route` for failure or delay must be installed before Start game.
@@ -201,9 +198,12 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   all-sources cast (turn 3), a real source-choice prompt with triggered mana
   (turn 5, after earthbending the Mountain) and a Bolt target → payment flow
   (turn 7). Cub's earthbend trigger asks for a land target after it resolves.
-  Each new browser context starts a new game from the same launch URL.
-  **Open replay** is a link, not a button. Read the resume credentials from
-  `sessionStorage['etude.gui.resume']` to probe the route from the page.
+  A launch starts one game: every context that opens its URL takes up that
+  same game (the last one opened holds it), and once the game is over the
+  URL opens its Replay. Restart the server for a fresh launch id.
+  **Open replay** is a link, not a button. The tab's game is
+  `localStorage['academy.game']`; its in-flight Command and last frame are
+  `sessionStorage['academy.tab.<game>']`.
 - Search (search-capable policy in Play/Watch): `uv run etude train
   manabot/recipes/local.py` gives a compatible
   `out/policies/<update>-raw.safetensors` in about 90 s; save `{"provider": "manabot",
@@ -223,8 +223,7 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   (`events[].bot_decision.mirror`). To probe reconnect, click an offer that hands
   priority to the bot and reload about 1.5 s later while the table shows
   `Search W×D· N s`; the game must stay `active` and resume at the
-  committed state. A reload before the first response has no resume
-  credentials and launches a new game by design.
+  committed state.
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.
@@ -342,22 +341,22 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `innerText` is empty; number keys do nothing there. Drag with
   `page.mouse` down/move in steps/up; target `.board` cards with
   `:not(.hand *)`, since `.board` also contains the hand. A long QA session
-  is easiest from one persistent Playwright process (a new browser context
-  loses the tab's resume credentials and starts a new game); Bash background
-  jobs stop after their timeout, so give it `timeout` up to 2 h.
+  is easiest from one persistent Playwright process; a new context reaches
+  the same game by `/?game=<id>`. Bash background jobs stop after their
+  timeout, so give it `timeout` up to 2 h.
   The leftmost creature sits flush against the player plate: start an
   attack sweep on a creature or on empty row space, since a press on the
-  plate is ordinary text selection. To change decks mid-session, open
-  `/?setup=1`, press "Edit next game", choose `Seat 1 deck`/`Seat 2 deck`
-  (uncheck "Use imported decks" first) and "Start next game". The release
+  plate is ordinary text selection. To change decks, press the board's "New
+  game" (setup opens in place; the game stays resumable in History), choose
+  the decks and Start game. The release
   proof's API server needs `VIRTUAL_ENV=<checkout>/.runs/play-venv` (or another
   env with uvicorn) for `uv run --active`; targeted specs reuse running dev
   servers when `ACADEMY_API_PORT`/`ACADEMY_FRONTEND_PORT` name them.
 - Study (Review analysis, Show analysis, Games record) as a returning user:
-  games only count as "mine" (and only the participant may start an
-  analysis) in the same browser profile and origin, so drive every game with
-  Playwright `launchPersistentContext(<.runs dir>)` and keep one port for
-  the old and new builds. For games written by an older build, `git worktree
+  drive games with Playwright `launchPersistentContext(<.runs dir>)` so `/`
+  returns to the unfinished game; any context may analyse any game, finished
+  or not (Settings → Analysis → "Analyse with…", `[data-testid=analyse-with]`;
+  the menu is `[data-testid=game-menu]`). For games written by an older build, `git worktree
   add --detach /private/tmp/<x> <base>`, build its SPA there, and run it with
   this checkout's `.venv/bin/python` from `/tmp` (cwd on `sys.path` otherwise
   loads this checkout) with `PYTHONPATH=/private/tmp/<x>` and
@@ -372,10 +371,6 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   The Bolt-deck acceptance spec never meets long option names or a stack
   item; check Review's rail at a Lessons v Allies decision (Learn has nine
   options) and with **See its line** open, which passes no `onjump`.
-  `playwright.study.config.ts` (`study.spec.ts`) fails at setup on this
-  branch's base protocol ("Study source omitted its participant
-  credential") and runs in no CI job; do not read its failure as a
-  regression without reverting the change first.
 - Battlefield badges in a real game (`managym academy play` with imported
   `--deck`/`--opponent-deck` files and `--opponent passive`): drive it with a
   Node Playwright script copied into `academy/ui` (move it out afterwards).
@@ -414,3 +409,18 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `[data-testid=game-menu]` again. Auto passes are `auto: true` events in
   `attempts.trace_json`. A Once stop must hold the window it arrives at:
   check the priority offers appear there before the bar turns Off.
+- Resume across a restart (MTG-488): `./scripts/play --port <api> --frontend-port
+  <ui>` with `UV_PROJECT_ENVIRONMENT=$PWD/.runs/play-venv` and
+  `ACADEMY_TRACES_DIR=$PWD/.runs/<dir>`; start with **Deal & Play**, decide a
+  few times, close the persistent context, SIGINT the `scripts/play.py`
+  Python process (a `nohup … &` launch still accepts SIGINT there), start it
+  again on the same traces dir. Bare `/` in the same profile and History's
+  **Resume** (`/?game=<id>`) both return to the pending decision; a fresh
+  context opens `/replay?trace=<id>` with Play on from here
+  (`[data-testid=play-on]`, then `[data-testid=start-played-from]`).
+  `attempts` columns are `id`, `status`, `ending_reason`, `num_events`. In
+  combat the per-creature offers are hidden: click visible offers only and
+  fall back to `[data-testid=primary-action]` ("No attack"). A configured
+  launch with `20 Mountain / 40 Lightning Bolt` against `40 Plains`, Passive,
+  seed 7 ends in 9 turns with 17 clicks preferring Bolt → "Target Passive
+  player".

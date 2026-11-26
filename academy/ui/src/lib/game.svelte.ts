@@ -161,6 +161,8 @@ export class GameStore {
   stopped = $state(false);
   /** A game the server would not take up again, and why; its Replay still opens. */
   resumeRefused = $state<ResumeRefusal | null>(null);
+  /** The game a configured launch already started, which it would not start again; Play opens its address. */
+  launchedGame = $state<string | null>(null);
   selectedTargetId = $state<number | null>(null);
   opponentChoice = $state<PlayerChoice>('random');
   decklists = $state<Decklists>('open');

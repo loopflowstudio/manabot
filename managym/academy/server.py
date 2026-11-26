@@ -3340,16 +3340,21 @@ def _dispatch_request(
 
 
 def _launch_metadata(launch_id: object) -> dict[str, Any]:
-    """Return setup to the requesting tab even when a known launch is refused."""
+    """Return setup to the requesting tab even when a known launch is refused,
+    and the game it started, so a refused launch opens that game's address."""
     launch = LAUNCHES.get(launch_id) if isinstance(launch_id, str) else None
     if launch is None:
         return {}
-    return {
+    metadata: dict[str, Any] = {
         "launch": launch_id,
         "launch_setup": {
             key: value for key, value in launch.config.items() if key != "seed"
         },
     }
+    started = LAUNCH_GAMES.get(launch_id)
+    if started is not None:
+        metadata["game"] = started
+    return metadata
 
 
 def _request_error(request: object, message: str) -> dict[str, Any]:
@@ -3478,12 +3483,9 @@ async def _start_game(
     config = _start_config(request)
     started = LAUNCH_GAMES.get(launch_id) if isinstance(launch_id, str) else None
     if started is not None:
-        try:
-            live = await take_up_game(started)
-        except ValueError as exc:
-            raise ValueError(
-                f"launch_played: This launch already played game {started}; open its replay or start a new game."
-            ) from exc
+        # Refused, the reply names the game (`_launch_metadata`) and the
+        # browser opens its address: a finished one opens its Replay.
+        live = await take_up_game(started)
         await _attach_websocket(live, websocket)
         async with live.lock:
             await _send_reply(

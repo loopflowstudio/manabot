@@ -545,7 +545,15 @@ export class GameSocketController {
       this.refuseResume(code, text);
       return;
     }
+    const launched = this.starting?.type === 'new_game' && this.starting.config?.launch !== undefined
+      && message.type === 'error' ? message.game ?? null : null;
     this.starting = null;
+    if (launched) {
+      // A launch that already started a game refuses another: its game's address says what it is now.
+      gameStore.newGamePending = false;
+      gameStore.launchedGame = launched;
+      return;
+    }
     gameStore.endFastForward();
     this.clearPendingCommand();
     gameStore.endCommand();

@@ -27,6 +27,7 @@ from managym.academy.launch import (
 from managym.academy.opponent import policy_registry
 from managym.search import SearchConfig
 from tests.academy.socket_messages import settled_message
+from tests.academy.test_play_modes import finish
 from tests.academy.test_policy_search_play import SearchFactory
 
 
@@ -130,6 +131,29 @@ def test_a_launch_starts_one_game_however_often_it_is_opened(
             assert config.decklists == "closed"
     assert games[0] == games[1]
     assert server.LAUNCH_GAMES == {launch_id: games[0]}
+
+
+def test_a_launch_whose_game_is_over_names_that_game(
+    academy: Academy, tmp_path: Path
+) -> None:
+    islands, mountains = tmp_path / "islands.txt", tmp_path / "mountains.txt"
+    islands.write_text("8 Island\n")
+    mountains.write_text("8 Mountain\n")
+    launched = academy.new_game(
+        deck=islands, opponent_deck=mountains, opponent="passive", seed=3
+    )
+    launch_id = _launch_id(launched.url)
+    with _play_socket(academy) as ws:
+        game = _start_launch(ws, launch_id)["game"]
+    finish(server.LIVE_GAMES[game].game)
+    with _play_socket(academy) as ws:
+        refused = _start_launch(ws, launch_id)
+    # The browser opens the game's own address, which for a finished game is
+    # its Replay; the launch never starts a second game.
+    assert refused["type"] == "error"
+    assert refused["message"].startswith("game_finished: ")
+    assert refused["game"] == game
+    assert server.LAUNCH_GAMES == {launch_id: game}
 
 
 def test_mixed_file_and_bundled_decks_admit_sideboards(

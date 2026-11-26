@@ -147,9 +147,17 @@
       if (window.location.pathname + window.location.search !== address) setAddress(address);
     });
   });
+  // A launch that already started a game is that game's address.
+  $effect(() => {
+    const game = gameStore.launchedGame;
+    if (!game) return;
+    gameStore.launchedGame = null;
+    launching = false;
+    untrack(() => void goto(`/?game=${encodeURIComponent(game)}`, { replaceState: true }));
+  });
   // A launch that was refused starts nothing: ordinary setup, at the ordinary address.
   $effect(() => {
-    if (!launching || gameStore.newGamePending || gameStore.gameId) return;
+    if (!launching || gameStore.newGamePending || gameStore.gameId || gameStore.launchedGame) return;
     launching = false;
     untrack(() => setAddress('/'));
   });

@@ -67,11 +67,23 @@ beforeEach(() => {
   vi.stubGlobal('window', { location: { protocol: 'http:', host: 'academy.test' }, localStorage: local, sessionStorage: session });
   gameStore.leaveGame();
   gameStore.resumeRefused = null;
+  gameStore.launchedGame = null;
   presentationPlayer.clear();
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('taking up a game by its id', () => {
+  it('hands a launch that already started a game to that game\'s address, with no error', () => {
+    const controller = new GameSocketController();
+    controller.connect();
+    latest().open();
+    controller.sendNewGame({ launch: 'L1' });
+    latest().receive({ type: 'error', message: 'game_finished: That game is over.', launch: 'L1', game: GAME } as ServerMessage);
+    expect(gameStore.launchedGame).toBe(GAME);
+    expect(gameStore.newGamePending).toBe(false);
+    expect(gameStore.errorMessage).toBeNull();
+  });
+
   it('asks for the game when the socket opens and remembers it for `/`', () => {
     const controller = new GameSocketController();
     controller.resume(GAME);
