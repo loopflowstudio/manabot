@@ -104,6 +104,14 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   `read_record` before retrying. Its phase should be `ready`, with both
   pre-call prefixes intact. Correcting the batch should spend the same fresh
   seed as a first successful load.
+- Trigger-resolution fixes (what an ability does to its own source or a
+  target): play seeded random games with decks built around the card, take
+  `DeclineChoice` about half the time at target choices, and count zone
+  transitions per step from both seats' `agent_cards` (for example, Eagles
+  entering exile not from a graveyard). Run the identical script against the
+  base wheel unzipped to `.runs/base-site` with `PYTHONPATH` as the control:
+  in MTG-486, 100 games took about 2 s per engine, with 625 self-exiles on base
+  and 0 after the fix.
 - `tests/env/test_skip_forced_decisions.py::test_no_runner_turns_skipping_off`
   greps every `.rs`/`.py` line under `managym/src`, `manabot`, `academy`,
   `scripts` and `experiments` for `skip_trivial=false`/`False`, comments

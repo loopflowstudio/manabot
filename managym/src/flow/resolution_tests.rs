@@ -968,10 +968,7 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
         game.resolve_top_of_stack();
         let suspended = game.state.suspended_decision.as_ref().unwrap();
         assert_eq!(suspended.frame.remembered[0].object, remembered);
-        assert_eq!(
-            suspended.frame.context_target,
-            Some(Target::StackSpell(cast))
-        );
+        assert_eq!(suspended.frame.context, Some(Target::StackSpell(cast)));
         let space = game.suspended_decision_action_space().unwrap();
         assert_eq!(
             space.player,

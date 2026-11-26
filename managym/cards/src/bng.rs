@@ -38,7 +38,7 @@ fn searing_blood() -> CardDefinition {
                     frequency: DelayedFrequency::Once,
                     expiry: DelayedExpiry::ThisTurn,
                     effects: vec![Effect::DealDamageToPlayer {
-                        player: PlayerSelector::TargetController,
+                        player: PlayerSelector::TriggeringPlayer,
                         amount: EffectValue::Fixed(3),
                     }],
                 },

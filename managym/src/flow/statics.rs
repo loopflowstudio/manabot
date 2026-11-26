@@ -1228,7 +1228,7 @@ impl Game {
             controller,
             frame,
             frame.and_then(|frame| frame.source_ref()),
-            frame.and_then(|frame| frame.context_target),
+            frame.and_then(|frame| frame.context),
         )
     }
 
@@ -1264,7 +1264,7 @@ impl Game {
                             source_identity: crate::state::game_object::AbilitySource::optional(
                                 source, source,
                             ),
-                            context_target: triggering,
+                            context: triggering,
                             ..EffectFrame::new(controller, Vec::new())
                         };
                         &context
