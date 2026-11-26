@@ -621,6 +621,12 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
+- Each Academy e2e spec belongs to one Playwright config
+  (`academy/ui/playwright.*.config.ts` `testMatch`) with its own fixture
+  server; under another config it fails for want of fixtures. Run a spec with
+  its config: release after `npm run build`, launch and policy after
+  `ACADEMY_STATIC_BUILD=1 npm run build`. A failed launch run leaves a taken
+  run name in `test-results/launch/`; delete it before rerunning.
 
 ### Card definitions
 
