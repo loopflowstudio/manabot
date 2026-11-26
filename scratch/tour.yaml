@@ -1,0 +1,63 @@
+at: 32b37f22738cacea75a088868f061a68bdf72f32
+first:
+  - path: docs/academy.md
+    why: User behavior, grouped-decision invariants, and reclassified multi-step audit
+  - path: managym/README.md
+    why: Python grouped-input API contract and 0.3.0 deprecation note
+  - path: managym/src/flow/group/mod.rs
+    why: Shared GroupSpec/Plan/Outcome types, generic driver, and purity boundary
+  - path: managym/src/flow/group/combat.rs
+    why: DeclareAttackers and DeclareBlockers compiled through the group driver
+  - path: managym/src/flow/group/library.rs
+    why: Scry, Surveil, and OrderLibrary compilation and bottom-order reversal
+  - path: managym/src/agent/env.rs
+    why: Env::group, preview_group, and apply_group with step-digest parity
+  - path: managym/src/python/bindings.rs
+    why: PyO3 bindings exposing group_json, preview_group_json, apply_group_json
+  - path: managym/group.py
+    why: Typed Pydantic models and public Python wrappers over Env
+  - path: managym/__init__.pyi
+    why: Public managym type stubs for grouped-input methods
+  - path: managym/src/flow/combat_preview.rs
+    why: Slim 0.3.0-deprecated wrapper delegating to Game::preview_group
+  - path: managym/combat.py
+    why: Python 0.3.0-deprecated combat_preview wrapper
+  - path: managym/academy/shared_table_protocol.py
+    why: GroupCommandMessage added to testing-house-v1 WebSocket envelope
+  - path: managym/academy/server.py
+    why: Pilot-only live group attachment, /group-preview, and atomic hero_group
+  - path: academy/ui/src/lib/group.ts
+    why: Browser grouped-decision types, preview client, and storage helper
+  - path: academy/ui/src/lib/socket.svelte.ts
+    why: One-shot sendGroupCommand and PendingSubmission reconnect reconciliation
+  - path: academy/ui/src/lib/game.svelte.ts
+    why: Store tracking liveGroup bound to the active frame_hash
+  - path: academy/ui/src/lib/board/arrange.ts
+    why: Pure draft state and plan builders for Scry, Surveil, and OrderLibrary
+  - path: academy/ui/src/lib/board/ArrangePanel.svelte
+    why: Interactive arrangement overlay panel for looked-at library cards
+  - path: academy/ui/src/lib/board/combat.ts
+    why: Combat draft helpers stripped of stepOffer and send-loop types
+  - path: academy/ui/src/lib/board/Board.svelte
+    why: Unified grouped-draft wiring; deleted browser send loop and Stop sending
+  - path: academy/ui/src/lib/board/Rail.svelte
+    why: Collapsed raw-choice disclosure copy generalized across all group kinds
+  - path: academy/ui/src/routes/+page.svelte
+    why: Table page passing group preview fetcher and sendGroupCommand
+  - path: managym/tests/rules/group.rs
+    why: Native parity, Preordain purity boundary, and refusal tests
+  - path: tests/env/test_group.py
+    why: Python Env apply_group digest parity with manual Env.step
+  - path: tests/academy/test_group_command.py
+    why: Authority replay parity, WS recovery, watcher privacy, Pilot transfer
+  - path: academy/ui/e2e/grouped-decisions.spec.ts
+    why: End-to-end combat, Scry, Surveil, OrderLibrary, and raw disclosure flows
+hide:
+  - path: tests/public_api.json
+    why: Recorded public API snapshot updated via scripts/public_api.py record
+  - path: protocol/testing-house-v1.schema.json
+    why: Generated JSON schema for shared_table_protocol.py
+  - path: protocol/fixtures/testing-house-control-v1.json
+    why: Protocol conformance fixture for group_command
+  - path: scratch/
+    why: Working plan, concept review, QA report, and ship-review notes

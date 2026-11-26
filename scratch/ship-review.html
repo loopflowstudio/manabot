@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MTG-483 Ship Review — First-Class Grouped Input for Combat &amp; Library Decisions</title>
+<style>
+  :root {
+    --bg: #faf8f4;
+    --surface: #ffffff;
+    --surface-2: #f3efe6;
+    --ink: #1e1b16;
+    --muted: #625a4c;
+    --line: #ddd5c5;
+    --accent: #7a4c1d;
+    --accent-soft: #f5eadb;
+    --yes-bg: #e7f4ea;
+    --yes-ink: #1c5b2e;
+    --yes-line: #b7dec0;
+    --no-bg: #fce9e6;
+    --no-ink: #8c2318;
+    --no-line: #efc0b8;
+    --warn-bg: #fdf4df;
+    --warn-ink: #7a5200;
+    --warn-line: #ebd193;
+    --info-bg: #eaf1fb;
+    --info-ink: #1b497a;
+    --info-line: #b9d0ee;
+    --code-bg: #f4f1ea;
+    --shadow: 0 1px 2px rgba(30, 27, 22, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151412;
+      --surface: #1e1c19;
+      --surface-2: #272420;
+      --ink: #ece7de;
+      --muted: #a69d8e;
+      --line: #36312a;
+      --accent: #e0a458;
+      --accent-soft: #2e2418;
+      --yes-bg: #162b1c;
+      --yes-ink: #8ad89d;
+      --yes-line: #274d31;
+      --no-bg: #321916;
+      --no-ink: #f39b90;
+      --no-line: #5b2923;
+      --warn-bg: #2f2612;
+      --warn-ink: #f0c96b;
+      --warn-line: #55421b;
+      --info-bg: #172638;
+      --info-ink: #8ec0f7;
+      --info-line: #28466a;
+      --code-bg: #181613;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 36px 24px 80px;
+  }
+  header {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+  }
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 8px;
+  }
+  h1 {
+    font-size: 28px;
+    line-height: 1.22;
+    margin: 0 0 10px;
+    letter-spacing: -0.015em;
+  }
+  h2 {
+    font-size: 20px;
+    margin: 40px 0 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    font-size: 15.5px;
+    margin: 22px 0 8px;
+  }
+  p { margin: 0 0 12px; }
+  a { color: var(--accent); }
+  .lead { font-size: 15.5px; color: var(--muted); max-width: 82ch; }
+  .meta-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .pill.yes { background: var(--yes-bg); color: var(--yes-ink); border-color: var(--yes-line); }
+  .pill.no { background: var(--no-bg); color: var(--no-ink); border-color: var(--no-line); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-line); }
+  .pill.info { background: var(--info-bg); color: var(--info-ink); border-color: var(--info-line); }
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 15px 18px;
+    margin: 16px 0;
+    box-shadow: var(--shadow);
+  }
+  .callout.warn { border-left-color: var(--no-ink); background: linear-gradient(to right, var(--no-bg), var(--surface) 22%); }
+  .callout.info { border-left-color: var(--info-ink); background: linear-gradient(to right, var(--info-bg), var(--surface) 22%); }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 14px 0 20px;
+  }
+  @media (max-width: 820px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  figure {
+    margin: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: var(--shadow);
+  }
+  figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 5px;
+    border: 1px solid var(--line);
+  }
+  figcaption {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  pre {
+    margin: 10px 0 16px;
+    padding: 14px 16px;
+    border-radius: 7px;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    overflow-x: auto;
+    font: 12.8px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  code {
+    font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 22px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 11px 13px;
+    border-bottom: 1px solid var(--line);
+  }
+  th {
+    background: var(--surface-2);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  tr:last-child td { border-bottom: none; }
+
+  ol.questions { padding-left: 20px; }
+  ol.questions > li {
+    margin-bottom: 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 13px 16px;
+    box-shadow: var(--shadow);
+  }
+  .opts { list-style: none; padding-left: 0; margin: 8px 0 0; }
+  .opts li { margin: 5px 0; }
+  .muted { color: var(--muted); }
+  ul.tight { margin: 6px 0 10px; padding-left: 18px; }
+  ul.tight li { margin-bottom: 5px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">MTG-483 · Ship Review · PR #623</p>
+    <h1>Confirm grouped combat and library decisions in one step</h1>
+    <p class="lead">
+      Following your Option A pivot, <code>managym</code> now owns a first-class grouped-input compiler above flat sequential <code>Action</code>s (<code>group</code>, <code>preview_group</code>, <code>apply_group</code>), and Academy confirms combat declarations, Scry, Surveil, and OrderLibrary in a single all-or-nothing <code>group_command</code> while recording byte-identical per-step decisions.
+    </p>
+    <div class="meta-strip">
+      <span class="pill info">PR #623 (open)</span>
+      <span class="pill info">HEAD 32b37f2273 · 54 files (+9443 / −1239)</span>
+      <span class="pill yes">Rust / Python / Protocol / Engine Budget green</span>
+      <span class="pill no">2 CI failures: play (405 vs 404) · Academy UI (laptop-comfort)</span>
+    </div>
+  </header>
+
+  <!-- 1. WHAT SHIPS -->
+  <section>
+    <h2>1. What ships</h2>
+    <p>
+      In live Academy play, you draft multi-card library choices (<strong>Scry</strong>, <strong>Surveil</strong>, <strong>OrderLibrary</strong>) in a new arrangement panel and draft combat declarations on the board as before — then press <strong>Confirm</strong> (<code>Space</code>) once. One WebSocket <code>group_command</code> goes to the server; either the whole plan lands or none of it does. There is no browser send loop, no <em>Stop sending</em> button, and no half-sent combat state on disconnect. Every underlying step still records as an ordinary sequential decision, so Replay, Study forks, and policy probabilities are unchanged.
+    </p>
+
+    <div class="grid-2">
+      <figure>
+        <img src="qa/attack-4.png" alt="Live Academy attack draft with 4 Raging Goblins" />
+        <figcaption><strong>Combat:</strong> Drafting 4 attackers and pressing Confirm sends one <code>group_command</code> instead of 4 sequential <code>command</code>s (real QA session against Passive).</figcaption>
+      </figure>
+      <figure>
+        <img src="qa/scry-fixed.png" alt="ArrangePanel during Scry 2 with long card name truncated cleanly" />
+        <figcaption><strong>Scry 2:</strong> Cards start unplaced; Confirm enables once placed in Top/Bottom reading order. Long card names ellipsize cleanly inside the bucket (fixed during QA).</figcaption>
+      </figure>
+      <figure>
+        <img src="qa/surveil.png" alt="ArrangePanel during Surveil 2" />
+        <figcaption><strong>Surveil 2:</strong> Starts in <em>Keep on top</em> with an explicit Confirm label (<code>Keep all 2 on top</code> / <code>Put 1 in graveyard, keep 1 on top</code>).</figcaption>
+      </figure>
+      <figure>
+        <img src="qa/order.png" alt="ArrangePanel during 2-card OrderLibrary after Surveil" />
+        <figcaption><strong>OrderLibrary:</strong> Keeping 2+ cards on Surveil opens OrderLibrary as its own grouped Confirm; Replay (below) still shows raw sequential steps.</figcaption>
+      </figure>
+    </div>
+
+    <figure style="margin-bottom: 18px;">
+      <img src="qa/replay-scry.png" alt="Replay showing individual SCRY steps with no arrange panel" />
+      <figcaption><strong>Replay parity:</strong> <code>canonical_replay.decisions</code> holds one row per native step (<code>authority.group.&lt;id&gt;.0</code>, <code>.1</code>) with raw offers and the chosen one checked — no arrange panel, zero <code>experience-v1</code> schema change.</figcaption>
+    </figure>
+
+    <h3>Real Python API (no Academy required)</h3>
+<pre><code>import managym
+from managym.group import ScryPlan, apply_group, group, preview_group
+
+active = group(env, viewer=0)
+# -&gt; ScryGroup(revision=14, fingerprint="...", kind="scry",
+#              items=[GroupCard(item=86, label="Bilbo Baggins, Burglar"),
+#                     GroupCard(item=91, label="Island")],
+#              committed_top=[], committed_bottom=[])
+
+plan = ScryPlan(top=[86], bottom=[91])
+verdict = preview_group(
+    env, viewer=0, revision=active.revision, fingerprint=active.fingerprint, plan=plan
+)
+# -&gt; GroupPreview(complete=True, refused=None, steps=[GroupStep(...), GroupStep(...)],
+#                 outcome=ScryOutcome(kind="scry", top=[86], bottom=[91]))
+
+apply_group(
+    env, viewer=0, revision=active.revision, fingerprint=active.fingerprint, plan=plan
+)
+# Exact same env.state_digest() as stepping verdict.steps manually through env.step()</code></pre>
+
+    <h3>Real wire output (live Academy WebSocket + SQLite recording)</h3>
+<pre><code>// Browser -&gt; Server (1 message for a 2-card Scry or 4-creature attack):
+{
+  "type": "group_command",
+  "grant_revision": 1,
+  "command": {
+    "command_id": "cmd-019...",
+    "match_id": "match_...",
+    "expected_revision": 14,
+    "prompt_id": "prompt_14",
+    "frame_hash": "8f2a...",
+    "plan": { "kind": "scry", "top": [86], "bottom": [91] }
+  }
+}
+
+// Recorded rows in play.sqlite canonical_replay.decisions (verified in QA):
+//   command_id = "authority.group.cmd-019....0"  -&gt;  "Keep Bilbo Baggins, Burglar on top"
+//   command_id = "authority.group.cmd-019....1"  -&gt;  "Put Island on the bottom"
+//
+// Live WS sibling field (pilot-only; null for watchers and never inside ExperienceFrame):
+//   payload["group"] = { "kind": "scry", "revision": 14, "items": [...], ... }</code></pre>
+  </section>
+
+  <!-- 2. HOW TO TRY IT -->
+  <section>
+    <h2>2. How to try it</h2>
+    <p>Start Academy locally with the Scry / Surveil / attack QA deck against Passive (or launch any deck with <code>./scripts/play</code>):</p>
+<pre><code>cat &lt;&lt;'EOF' &gt; /tmp/mtg483-group.txt
+7 Mountain
+7 Island
+7 Swamp
+16 Raging Goblin
+12 Bilbo Baggins, Burglar
+11 Diresight
+EOF
+cat &lt;&lt;'EOF' &gt; /tmp/mtg483-plains.txt
+60 Plains
+EOF
+
+uv run --no-project managym academy play \
+  --deck /tmp/mtg483-group.txt \
+  --opponent-deck /tmp/mtg483-plains.txt \
+  --opponent passive --seed 7</code></pre>
+    <p class="muted">
+      Attack with multiple Raging Goblins, cast <strong>Bilbo Baggins, Burglar</strong> (triggers Scry 2 on attack/etb via Take a Glance / Scry spells — or cast <strong>Diresight</strong> for Surveil 2 &rarr; OrderLibrary), open DevTools &rarr; Network &rarr; WS to see one <code>group_command</code> per Confirm, then open the finished game in <strong>Replay</strong> to verify per-step raw decisions.
+    </p>
+    <p>Run the native + authority + browser acceptance suite:</p>
+<pre><code>CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --profile ci --test-threads 2 -E 'test(group) | test(combat_preview)' \
+  &amp;&amp; uv run python scripts/public_api.py check \
+  &amp;&amp; uv run --extra dev --extra play python -m pytest tests/academy/test_group_command.py tests/academy/test_shared_table_protocol.py tests/env/test_group.py -q \
+  &amp;&amp; (cd academy/ui &amp;&amp; npm run check &amp;&amp; npm test \
+      &amp;&amp; npx playwright test e2e/grouped-decisions.spec.ts e2e/combat-presentation.spec.ts e2e/drag-play.spec.ts e2e/keyboard-play.spec.ts)</code></pre>
+  </section>
+
+  <!-- 3. WHAT IS LIKELIEST TO SURPRISE YOU -->
+  <section>
+    <h2>3. What is likeliest to surprise you</h2>
+    <ul class="tight">
+      <li><strong>Unstacked from MTG-431 onto <code>main</code>:</strong> Curator of Destinies' <code>PartitionPiles</code> only lives on PR #605 (which conflicts with <code>main</code>), so this branch unstacked to ship combat + Scry/Surveil/OrderLibrary directly on <code>main</code>. Porting <code>PartitionPiles</code> becomes a clean follow-up once MTG-431 merges.</li>
+      <li><strong><code>protocol/experience-v1.schema.json</code> is untouched:</strong> Putting <code>group</code> inside <code>ExperienceFrame</code> would shift every combat <code>frame_hash</code> and break retained replays. Instead, live <code>group</code> travels as a sibling field on live WS messages (attached per-recipient in <code>_response_with_participant</code>: pilot-only, <code>null</code> for watchers, delivered immediately on <code>TransferPilot</code>). <code>testing-house-v1.schema.json</code> adds <code>group_command</code>.</li>
+      <li><strong>Built on <code>combat_preview</code>, not <code>compound_*</code> / <code>step_structured</code>:</strong> Study branches and benchmarks execute through <code>compound_*</code>; widening it would change policy/Study semantics. <code>/api/sessions/{id}/combat-preview</code> is removed, while Python <code>Env.combat_preview_json</code> and <code>managym/combat.py</code> stay as <code>0.3.0</code>-deprecated wrappers over <code>preview_group</code> to keep <code>main</code> patch-clean.</li>
+      <li><strong>Surveil starts in <em>Keep on top</em>, while Scry &amp; OrderLibrary start unplaced:</strong> Matches the engine's <code>Action::Decline</code> ("Keep on top") and Combat's default "No attack" without silently picking a card order for Scry/OrderLibrary. Confirm's label always states the exact Surveil commitment.</li>
+      <li><strong>Domain activation thresholds (not step count):</strong> Combat groups activate at <code>&ge; 1</code> creature (preserving MTG-441 drag/draft consistency); Scry/Surveil/OrderLibrary activate at <code>&ge; 2</code> remaining cards (so 2-card <code>OrderLibrary</code> after Surveil 2 still opens <code>ArrangePanel</code> even when <code>skip_trivial</code> collapses it to 1 native step).</li>
+      <li><strong><code>ScryPlan.bottom</code> uses top-to-bottom reading order:</strong> Matches <code>OrderLibrary::Bottom</code> and human reading order; the Rust compiler reverses <code>ScryCard(to_bottom=true)</code> emissions to compensate for <code>decision.rs:2806</code>.</li>
+      <li><strong>All-or-nothing Confirm deleted the browser send loop:</strong> <code>stepOffer</code>, <code>Stop sending</code>, and partial-progress banners are gone. Mid-Confirm reloads reconcile via <code>PendingSubmission</code> and <code>recovery.accepted_commands</code>; individual steps remain clickable under the rail's collapsed raw disclosure (<code>Each creature's choice</code> / <code>Each card's choice</code>).</li>
+    </ul>
+  </section>
+
+  <!-- 4. FINDINGS -->
+  <section>
+    <h2>4. Findings &amp; proposals (everything left outside or failing in PR #623)</h2>
+    <div class="callout warn">
+      <strong>CI is currently red on 2 narrow test bugs</strong> (out of 22 checks — Rust Tests, Python Unit Tests, Engine Budget, Protocol v1 Conformance, Semantic Kernel Conformance, Clean-machine Play, Integration, and packaging all passed). Both are small fixes to make before merging.
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 24%;">Finding</th>
+          <th style="width: 48%;">Concrete detail</th>
+          <th style="width: 28%;">Proposal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. CI failure: <code>test_group_command.py:226</code></strong><br /><span class="pill no">CI red</span></td>
+          <td><code>POST /api/sessions/{id}/combat-preview</code> returned <code>405 Method Not Allowed</code> instead of <code>404</code> in CI (<code>Academy Integration / play</code>: 447 passed, 1 failed) because the built static SPA catch-all matches <code>GET</code> on unknown paths.</td>
+          <td><strong>Fix here</strong> (in <code>gate</code> or a quick build pass): return <code>404</code> for unknown <code>/api/*</code> routes or accept <code>(404, 405)</code> in the test.</td>
+        </tr>
+        <tr>
+          <td><strong>2. CI failure: <code>e2e/laptop-comfort.spec.ts:162</code></strong><br /><span class="pill no">CI red</span></td>
+          <td>Seeded 1280&times;800 game hit a library group (<code>Put Mountain next on the bottom</code>) and timed out clicking <code>action-option</code> inside the collapsed disclosure because <code>showEachCreaturesChoice</code> (<code>e2e/fixtures/combat.ts:319</code>) early-returns for non-combat action spaces (86 passed, 1 failed).</td>
+          <td><strong>Fix here</strong> (in <code>gate</code> or a quick build pass): open <code>per-creature-choices</code> whenever attached, regardless of action-space kind.</td>
+        </tr>
+        <tr>
+          <td><strong>3. <code>OrderLibrary::Bottom</code> committed card label fallback</strong><br /><span class="pill warn">Edge case</span></td>
+          <td><code>GroupSpec::OrderLibrary.committed</code> carries IDs only (<code>Vec&lt;ObjectRenderId&gt;</code>). Because <code>decision.rs:874</code> omits already-placed bottom cards from <code>revealed_objects()</code>, a mid-group raw click on a 3+ card bottom-order renders <code>Card #42</code> in <code>ArrangePanel</code> instead of the card's name.</td>
+          <td><strong>Drop</strong> (rare 3+ bottom-order raw-click edge case; no current deck triggers it) — or <strong>Fix here</strong> by changing library <code>committed*</code> to <code>Vec&lt;GroupCard&gt;</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>4. <code>Env::apply_group</code> on mixed-policy <code>[Agent, Heuristic]</code> envs</strong><br /><span class="pill warn">Edge case</span></td>
+          <td>Matches <code>Env::step_structured</code> (does not call <code>settle_players</code>). On <code>[Agent, Agent]</code> envs (Academy &amp; <code>test_group.py</code>) this is identical to <code>Env::step</code>; on mixed <code>[Agent, Heuristic]</code> envs the built-in seat isn't auto-advanced after the group finishes.</td>
+          <td><strong>Drop</strong> (consistent with <code>step_structured</code>) — or <strong>Fix here</strong> by calling <code>settle_players</code> when <code>external_seat().is_some()</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>5. QA cosmetic &amp; pre-existing notes</strong><br /><span class="pill info">Observed</span></td>
+          <td>(a) <code>ArrangePanel</code> is vertically centered so it shifts upward as cards are placed and it shrinks; (b) fresh-creature pile counter (<code>3 of 3 Raging Goblin</code> beside <code>Attack with 4</code>, same on <code>main</code>); (c) <code>decision_context.rs:513</code> discard text says "or decline when offered" though no decline exists.</td>
+          <td><strong>Drop</strong> (cosmetic/pre-existing; fold the discard wording into the Pick follow-up Task if filed).</td>
+        </tr>
+        <tr>
+          <td><strong>6. Port <code>PartitionPiles</code> &amp; check <code>ChoosePile</code></strong><br /><span class="pill info">Follow-up</span></td>
+          <td>Once MTG-431 (PR #605) merges: add <code>PartitionPiles</code> to <code>flow/group/</code>, delete MTG-431's <code>partition.ts</code> browser send loop and <code>FACE_UP_RE</code> label regex, and add the missing <code>ChoosePile</code> opponent-view UI test.</td>
+          <td><strong>Own Task</strong> (blocked on MTG-431 landing; clear standalone scope).</td>
+        </tr>
+        <tr>
+          <td><strong>7. Next grouped families: Pick, Amounts, OrderTriggers</strong><br /><span class="pill info">Follow-up</span></td>
+          <td>From the reclassified audit in <code>docs/academy.md</code>: <strong>Pick</strong> (<code>SelectCards</code> max&gt;1, <code>SearchDistinctNames</code>, <code>Discard</code> 2+, <code>OpponentSplitsRevealed</code>, <code>KeepPermanents</code>), <strong>Amounts</strong> (<code>DistributeCounters</code>, <code>DivideAmongTargets</code>, <code>AssignCombatDamage</code>), and pure-prefix <code>OrderTriggers</code>. Each adds one <code>flow/group/</code> file + one panel, zero protocol changes.</td>
+          <td><strong>Own Task</strong> (one grouped Task for the next families rather than one per decision).</td>
+        </tr>
+        <tr>
+          <td><strong>8. <code>0.3.0</code> removal of <code>combat_preview</code> wrappers</strong><br /><span class="pill info">Tagged</span></td>
+          <td><code>managym/src/flow/combat_preview.rs</code>, <code>managym/combat.py</code>, and <code>Env.combat_preview_json</code> already carry <code>0.3.0</code> deprecation tags for the minor rollover.</td>
+          <td><strong>Drop</strong> (already tracked by <code>0.3.0</code> rollover tags).</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 5. NUMBERED QUESTIONS -->
+  <section>
+    <h2>5. Questions (reply e.g. <code>1a 2a 3a 4a 5a 6a</code>)</h2>
+    <ol class="questions">
+      <li>
+        <strong>Path forward for PR #623 &amp; the two CI failures:</strong>
+        <ul class="opts">
+          <li><strong>1a (recommended):</strong> Advance to <code>deliver</code> — let <code>gate</code> fix the 2 CI test bugs (<code>405</code> on removed <code>/combat-preview</code> and <code>showEachCreaturesChoice</code> for library groups) and land PR #623.</li>
+          <li><strong>1b:</strong> Go back to <code>build</code> first to fix the 2 CI bugs plus any polish you pick in Questions 2–5 below.</li>
+        </ul>
+      </li>
+      <li>
+        <strong><code>Surveil</code> initial bucket in <code>ArrangePanel</code>:</strong>
+        <ul class="opts">
+          <li><strong>2a (built):</strong> Remaining cards start in <em>Keep on top</em>, and Confirm explicitly names the commitment (<code>Keep all 2 on top</code>).</li>
+          <li><strong>2b:</strong> Remaining cards start <em>Unplaced</em> (like Scry), disabling Confirm until every card is placed.</li>
+        </ul>
+      </li>
+      <li>
+        <strong>2-card <code>OrderLibrary</code> activation (e.g. keeping 2 cards after Surveil 2):</strong>
+        <ul class="opts">
+          <li><strong>3a (built):</strong> Open <code>ArrangePanel</code> whenever <code>remaining.len() &ge; 2</code>, even though <code>skip_trivial</code> compiles 2 cards to 1 native step.</li>
+          <li><strong>3b:</strong> Fall back to raw 1-click offers whenever <code>skip_trivial</code> reduces the decision to 1 native step.</li>
+        </ul>
+      </li>
+      <li>
+        <strong><code>OrderLibrary::Bottom</code> committed card labels (Finding 3):</strong>
+        <ul class="opts">
+          <li><strong>4a (built / drop):</strong> Keep <code>committed: Vec&lt;ObjectRenderId&gt;</code> (<code>Card #N</code> fallback only on a mid-group raw click in 3+ card bottom-order).</li>
+          <li><strong>4b (fix here):</strong> Change library <code>committed*</code> fields to <code>Vec&lt;GroupCard&gt;</code> so every committed card carries its name.</li>
+        </ul>
+      </li>
+      <li>
+        <strong><code>Env::apply_group</code> on mixed-policy <code>[Agent, Heuristic]</code> envs (Finding 4):</strong>
+        <ul class="opts">
+          <li><strong>5a (built / drop):</strong> Keep parity with <code>Env::step_structured</code> (apply the group's steps only; do not call <code>settle_players</code>).</li>
+          <li><strong>5b (fix here):</strong> Call <code>settle_players</code> when <code>external_seat().is_some()</code> so mixed-policy <code>apply_group</code> matches manual <code>Env::step</code>.</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Follow-up Tasks to file (Findings 6 &amp; 7):</strong>
+        <ul class="opts">
+          <li><strong>6a (recommended):</strong> File both — (i) Port <code>PartitionPiles</code> + <code>ChoosePile</code> UI test after MTG-431, and (ii) Add Pick + Amounts (+ pure <code>OrderTriggers</code>) grouped-input families.</li>
+          <li><strong>6b:</strong> File only <code>PartitionPiles</code> (after MTG-431) for now.</li>
+          <li><strong>6c:</strong> File none now; keep the reclassified audit in <code>docs/academy.md</code>.</li>
+        </ul>
+      </li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

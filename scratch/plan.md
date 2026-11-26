@@ -742,9 +742,25 @@ change.
    `grouped-decisions`, `combat-presentation`, `drag-play` and `keyboard-play`
    (34/34).
 
-Nothing remains to build. Deferred to gate: the Rust group and
-`combat_preview` tests in debug (never run on this branch), the full
-acceptance command above, and the demo.
+4. **Pass 4 — Unified `managym` Decision API (`decision` / `preview` / `submit`), `0.3.0` deprecation of unused `compound_*`/`step_structured`, Academy alignment, and CI fixes** *(added after `ship-review`, 2026-11-25; verbatim direction in `scratch/ship-review-notes.md`)*:
+   - **Why:** Jack Heart reviewed PR #623 and found the side-channel `group(env, viewer=...)` + `preview_group(env, viewer, revision, fingerprint, plan)` + `apply_group(...)` API awkward, confirmed `compound_offers`/`step_structured` has no live callers, noted `env.step(plan)` would be ambiguous ("does it execute all the plan or just one part"), and approved building the unified `decision()` / `preview(choice)` / `submit(choice)` API while keeping `env.step(action: int)` strictly for single flat RL steps.
+   - **Unified `managym` API (Rust `Env` + PyO3 + typed Python facade + `managym/__init__.pyi` + `tests/public_api.json`):**
+     - Keep `env.step(action: int)` strictly for **one** flat sequential engine step (RL/search, unchanged).
+     - Expose one unified decision surface on `Env` (and typed Python models in `managym/decision.py` or `managym/group.py`, removing the unshipped side-channel `group`/`preview_group`/`apply_group` free functions so there is only one API):
+       - **`env.decision(viewer=None)`** (defaults to current acting player; `None` if terminal / no actor): returns one tagged `Decision` union — `SingleDecision` or one of the grouped kinds (`DeclareAttackersDecision`, `DeclareBlockersDecision`, `ScryDecision`, `SurveilDecision`, `OrderLibraryDecision`). Every `Decision` carries its bound `address` (`DecisionAddress(viewer, revision, fingerprint)`) and raw single-step `offers` (`list[Offer]` / legal action descriptions & ids) so callers never poll a side-channel or manually thread `(viewer, revision, fingerprint)` on normal calls. Halfway through raw stepping, a grouped decision returns the remaining undecided tail (`declarable` / `items`) plus immutable `committed` state (and drops to `SingleDecision` below threshold: `< 2` cards for library, `< 1` creature for combat).
+       - **`env.preview(choice, *, at=None)`**: read-only clone validation & compilation (`complete`, `refused`, `outcome`, `steps`). Uses `Choice` naming (`DeclareAttackersChoice`, `DeclareBlockersChoice`, `ScryChoice`, `SurveilChoice`, `OrderLibraryChoice`) instead of ambiguous `Plan`. Defaults to the current decision's address; accepts explicit `at=address` for optimistic-concurrency checks (Academy).
+       - **`env.submit(choice, *, at=None)`**: **commits the whole decision atomically (all-or-nothing)** — takes either a single `int` / offer id OR a complete grouped `Choice`. Validates on a clone first (zero mutation on refusal/incomplete/stale), executes *all* compiled sequential engine steps, drains `observation_events`, and calls `settle_players` when `external_seat().is_some()` so mixed-policy `[Agent, Heuristic]` envs match manual `Env::step` identically; returns the settled `(obs, reward, done, trunc, info)` tuple.
+     - Upgrade library `committed*` fields (`committed_top`, `committed_bottom`, `committed_graveyard`, `committed`) to `Vec<GroupCard>` so mid-group raw clicks on 3+ card `OrderLibrary::Bottom` always carry card names instead of falling back to `Card #N`.
+     - **Reconcile unused structured-offer surface (patch-clean `0.2.x`):** Deprecate `Env.compound_offers`, `Env.compound_commands_json`, `Env.structured_offers`, and `Env.step_structured` for `0.3.0` (`DeprecationWarning` + `0.3.0` tag; leave `structured_search_offers` untouched for `manabot/semantic/decision_contract.py`; keep `Env.combat_preview_json` and `managym/combat.py` as `0.3.0`-deprecated wrappers). Keep `scripts/public_api.py check` green with non-breaking additions only (note: remove the unshipped `group_json`/`preview_group_json`/`apply_group_json` names from `tests/public_api.json` if replaced by the new `Env` methods, since they never shipped to `main`).
+   - **Academy authority & UI alignment:**
+     - Keep `protocol/experience-v1.schema.json` (`ExperienceFrame`, `Command`, `ReplayDecision`) frozen so retained replay `frame_hash`es and `Protocol v1 Conformance` stay green.
+     - Wire `managym/academy/server.py` to the new `managym` `decision` / `preview` / `submit` surface (keep `/group-preview` or rename consistently with `testing-house-v1` + Academy UI; keep one clean submission contract without violating frozen `experience-v1` `Command` schema).
+   - **Fix both CI failures from PR #623:**
+     1. `tests/academy/test_group_command.py:226`: `POST /api/sessions/{id}/combat-preview` returned `405` in CI when built static SPA assets are mounted (ensure unknown `/api/*` paths return `404` or fix the route/assertion cleanly).
+     2. `academy/ui/e2e/fixtures/combat.ts:319` (`showEachCreaturesChoice`): open `per-creature-choices` whenever attached (not gated on `DECLARE_ATTACKER`/`DECLARE_BLOCKER`) so `e2e/laptop-comfort.spec.ts:162` opens the collapsed disclosure during library groups too.
+   - **Docs & tests:** Update `managym/README.md`, `docs/academy.md`, `tests/env/test_group.py`, `tests/academy/test_group_command.py`, `managym/tests/rules/group.rs`, and run the acceptance command (plus `e2e/laptop-comfort.spec.ts`).
+
+Deferred to gate after Pass 4: full CI matrix and live demo.
 
 ## Done when
 
