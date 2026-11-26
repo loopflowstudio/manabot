@@ -4567,13 +4567,7 @@ impl PyEnv {
         let Some(decision) = decision else {
             return Ok(py.None());
         };
-        let raw = serde_json::to_string(&decision)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
-        Ok(py
-            .import_bound("managym.group")?
-            .getattr("_parse_decision")?
-            .call1((raw,))?
-            .unbind())
+        to_group_model(py, "parse_decision", &decision)
     }
 
     /// Read-only preview of a single offer id (`int`) or grouped `Choice`.
@@ -4594,13 +4588,7 @@ impl PyEnv {
             env.preview(parsed_at.as_ref(), &parsed_choice)
                 .map_err(map_agent_err)?
         };
-        let raw = serde_json::to_string(&preview)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
-        Ok(py
-            .import_bound("managym.group")?
-            .getattr("_parse_preview")?
-            .call1((raw,))?
-            .unbind())
+        to_group_model(py, "parse_preview", &preview)
     }
 
     /// Validate on a clone and commit a single offer id (`int`) or complete
@@ -5942,6 +5930,31 @@ pub(crate) fn python_game_setup(
 }
 
 #[cfg(feature = "python")]
+fn to_group_model<T: serde::Serialize>(
+    py: Python<'_>,
+    parser_name: &str,
+    value: &T,
+) -> PyResult<PyObject> {
+    let raw =
+        serde_json::to_string(value).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    Ok(py
+        .import_bound("managym.group")?
+        .getattr(parser_name)?
+        .call1((raw,))?
+        .unbind())
+}
+
+#[cfg(feature = "python")]
+fn parse_group_json<T: serde::de::DeserializeOwned>(
+    group_mod: &Bound<'_, PyModule>,
+    dumper_name: &str,
+    value: Bound<'_, PyAny>,
+) -> PyResult<T> {
+    let raw: String = group_mod.getattr(dumper_name)?.call1((value,))?.extract()?;
+    serde_json::from_str(&raw).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
+#[cfg(feature = "python")]
 fn parse_choice_and_address(
     py: Python<'_>,
     choice: Bound<'_, PyAny>,
@@ -5951,22 +5964,10 @@ fn parse_choice_and_address(
     Option<crate::flow::group::DecisionAddress>,
 )> {
     let group_mod = py.import_bound("managym.group")?;
-    let choice_json: String = group_mod
-        .getattr("_dump_choice")?
-        .call1((choice,))?
-        .extract()?;
-    let parsed_choice: crate::flow::group::DecisionChoice = serde_json::from_str(&choice_json)
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let parsed_at: Option<crate::flow::group::DecisionAddress> = match at {
+    let parsed_choice = parse_group_json(&group_mod, "dump_choice", choice)?;
+    let parsed_at = match at {
         Some(value) if !value.is_none() => {
-            let addr_json: String = group_mod
-                .getattr("_dump_address")?
-                .call1((value,))?
-                .extract()?;
-            Some(
-                serde_json::from_str(&addr_json)
-                    .map_err(|error| PyValueError::new_err(error.to_string()))?,
-            )
+            Some(parse_group_json(&group_mod, "dump_address", value)?)
         }
         _ => None,
     };

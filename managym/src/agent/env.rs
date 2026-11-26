@@ -635,7 +635,15 @@ impl Env {
         chooser: usize,
         action: i64,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
-        let (obs, mut reward, terminated, truncated, info) = self.step_once(action)?;
+        let result = self.step_once(action)?;
+        self.finish_and_settle(chooser, result)
+    }
+
+    fn finish_and_settle(
+        &mut self,
+        chooser: usize,
+        (obs, mut reward, terminated, truncated, info): (Observation, f64, bool, bool, InfoDict),
+    ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
         // A mixed game's rewards belong to its external seat.
         if self.external_seat().is_some_and(|seat| seat != chooser) {
             reward = -reward;
@@ -928,36 +936,21 @@ impl Env {
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
         self.require_external_chooser()?;
         let preview = self.preview(at, choice)?;
-        if let Some(refusal) = &preview.refused {
-            return Err(AgentError(format!("decision refused: {}", refusal.reason)));
-        }
-        if !preview.complete || preview.steps.is_empty() {
-            return Err(AgentError("decision choice is incomplete".into()));
-        }
+        preview.require_submittable()?;
         let chooser = preview.decision.address.viewer;
         let mut last_result = None;
         for step in &preview.steps {
-            let frame = self
-                .game
+            self.game
                 .as_ref()
                 .ok_or_else(|| AgentError("no active game".into()))?
-                .semantic_decision_frame()
-                .map_err(|error| AgentError(error.to_string()))?;
-            if frame.revision != step.revision || frame.fingerprint != step.fingerprint {
-                return Err(AgentError("decision execution diverged from preview".into()));
-            }
+                .verify_step(step)?;
             let result = self.step_once(step.action_index as i64)?;
             if let Some(trace) = &mut self.provenance {
                 trace.push(RecordedAction::Index(step.action_index as i64));
             }
             last_result = Some(result);
         }
-        let (obs, mut reward, terminated, truncated, info) =
-            last_result.expect("preview.steps is non-empty");
-        if self.external_seat().is_some_and(|seat| seat != chooser) {
-            reward = -reward;
-        }
-        self.settle_players(obs, reward, terminated, truncated, info)
+        self.finish_and_settle(chooser, last_result.expect("preview.steps is non-empty"))
     }
 
     /// Tell the current game's facts until it ends; see

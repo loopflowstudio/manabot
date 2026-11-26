@@ -1819,14 +1819,7 @@ class GameSession:
         except Exception:
             return self._reject_command(raw, "invalid_command", recover=False)
 
-        native = SemanticDecisionFrame.from_json(
-            pending.root.semantic_decision_frame_json()
-        )
-        address = DecisionAddress(
-            viewer=context.viewer,
-            revision=native.revision,
-            fingerprint=native.fingerprint,
-        )
+        address = _pending_decision_address(context, pending)
         try:
             preview = self.env.preview(group_command.plan, at=address)
         except managym.AgentError:
@@ -5546,26 +5539,38 @@ async def get_payment_preview(
         }
 
 
+def _pending_decision_address(
+    context: DecisionContext, pending: PendingCanonicalDecision
+) -> DecisionAddress:
+    native = SemanticDecisionFrame.from_json(
+        pending.root.semantic_decision_frame_json()
+    )
+    return DecisionAddress(
+        viewer=context.viewer,
+        revision=native.revision,
+        fingerprint=native.fingerprint,
+    )
+
+
 def _incomplete_group_message(preview: DecisionPreview, plan: GroupChoice) -> str:
     """Describe what remains unplaced when a grouped preview is incomplete."""
     decision = preview.decision
-    placed_items: tuple[Any, ...] | list[Any] | None = None
     if isinstance(decision, ScryDecision) and isinstance(plan, ScryChoice):
-        placed_items = (*plan.top, *plan.bottom)
+        items, placed_items = decision.items, [*plan.top, *plan.bottom]
     elif isinstance(decision, OrderLibraryDecision) and isinstance(
         plan, OrderLibraryChoice
     ):
-        placed_items = plan.order
-    if placed_items is not None:
-        assert isinstance(decision, (ScryDecision, OrderLibraryDecision))
-        placed = {(item.entity, item.incarnation) for item in placed_items}
-        missing = [
-            card.label
-            for card in decision.items
-            if (card.item.entity, card.item.incarnation) not in placed
-        ]
-        if missing:
-            return f"Place remaining cards before confirming: {', '.join(missing)}."
+        items, placed_items = decision.items, plan.order
+    else:
+        return "Grouped plan is incomplete."
+    placed = {(item.entity, item.incarnation) for item in placed_items}
+    missing = [
+        card.label
+        for card in items
+        if (card.item.entity, card.item.incarnation) not in placed
+    ]
+    if missing:
+        return f"Place remaining cards before confirming: {', '.join(missing)}."
     return "Grouped plan is incomplete."
 
 
@@ -5619,14 +5624,7 @@ async def get_group_preview(
             raise HTTPException(409, "group_preview_stale")
         if game.live_group() is None:
             raise HTTPException(409, "group_preview_no_group")
-        native = SemanticDecisionFrame.from_json(
-            pending.root.semantic_decision_frame_json()
-        )
-        address = DecisionAddress(
-            viewer=context.viewer,
-            revision=native.revision,
-            fingerprint=native.fingerprint,
-        )
+        address = _pending_decision_address(context, pending)
         try:
             preview = game.env.preview(payload.plan, at=address)
         except managym.AgentError as exc:

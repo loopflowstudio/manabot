@@ -9,6 +9,7 @@ import pytest
 import managym
 from managym.combat import CombatPlan, preview_combat
 from managym.group import (
+    Decision,
     DecisionAddress,
     DeclareAttackersChoice,
     DeclareAttackersDecision,
@@ -40,12 +41,22 @@ def _setup_env(
     return env
 
 
+def _keep_opening_hands(env: managym.Env) -> None:
+    while True:
+        d = env.decision()
+        assert d is not None
+        keep = next((o for o in d.offers if "Keep" in o.label), None)
+        if keep is None:
+            break
+        env.submit(keep.id)
+
+
 def _advance_to_decision(
     env: managym.Env,
     target_kind: str,
     *,
     max_steps: int = 400,
-) -> object:
+) -> Decision:
     for _ in range(max_steps):
         if env.is_game_over():
             break
@@ -152,13 +163,7 @@ def test_mixed_policy_submit_settles_identically_to_step() -> None:
         seed=19,
         player_policies=("agent", "heuristic"),
     )
-    while True:
-        d = env.decision()
-        assert d is not None
-        keep = next((o for o in d.offers if "Keep" in o.label), None)
-        if keep is None:
-            break
-        env.submit(keep.id)
+    _keep_opening_hands(env)
     env.scenario_force_battlefield(0, "Gray Ogre", ready=True)
     env.scenario_force_battlefield(0, "Gray Ogre", ready=True)
     env.scenario_force_battlefield(1, "Llanowar Elves", ready=True)
@@ -245,13 +250,7 @@ def test_deprecated_structured_and_combat_preview_apis_warn_for_0_3_0() -> None:
         seed=19,
     )
     # Advance to priority so structured_offers / compound_offers / step_structured work.
-    while True:
-        d = env.decision()
-        assert d is not None
-        keep = next((o for o in d.offers if "Keep" in o.label), None)
-        if keep is None:
-            break
-        env.submit(keep.id)
+    _keep_opening_hands(env)
 
     for label, fn in (
         ("structured_offers", lambda: env.structured_offers()),

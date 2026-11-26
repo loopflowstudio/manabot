@@ -58,55 +58,46 @@ class Offer(ProtocolModel):
     source: SubjectRef | None = None
 
 
-class _DecisionBase(ProtocolModel):
+class DecisionBase(ProtocolModel):
     address: DecisionAddress
     offers: list[Offer]
 
 
-class SingleDecision(_DecisionBase):
+class SingleDecision(DecisionBase):
     kind: Literal["single"] = "single"
 
 
-class DeclareAttackersDecision(_DecisionBase):
+class DeclareAttackersDecision(DecisionBase):
     kind: Literal["declare_attackers"] = "declare_attackers"
     declarable: list[AttackerItem]
     committed: list[ObjectRenderId]
 
 
-class DeclareBlockersDecision(_DecisionBase):
+class DeclareBlockersDecision(DecisionBase):
     kind: Literal["declare_blockers"] = "declare_blockers"
     declarable: list[BlockerItem]
     committed: list[PlannedBlock]
 
 
-class ScryDecision(_DecisionBase):
+class ScryDecision(DecisionBase):
     kind: Literal["scry"] = "scry"
     items: list[GroupCard]
     committed_top: list[GroupCard]
     committed_bottom: list[GroupCard]
 
 
-class SurveilDecision(_DecisionBase):
+class SurveilDecision(DecisionBase):
     kind: Literal["surveil"] = "surveil"
     items: list[GroupCard]
     committed_graveyard: list[GroupCard]
 
 
-class OrderLibraryDecision(_DecisionBase):
+class OrderLibraryDecision(DecisionBase):
     kind: Literal["order_library"] = "order_library"
     end: LibraryEnd
     items: list[GroupCard]
     committed: list[GroupCard]
 
-
-type GroupedDecision = Annotated[
-    DeclareAttackersDecision
-    | DeclareBlockersDecision
-    | ScryDecision
-    | SurveilDecision
-    | OrderLibraryDecision,
-    Field(discriminator="kind"),
-]
 
 type Decision = Annotated[
     SingleDecision
@@ -230,28 +221,28 @@ class DecisionPreview(ProtocolModel):
     outcome: DecisionOutcome | None
 
 
-_DECISION_ADAPTER: TypeAdapter[Decision] = TypeAdapter(Decision)
-_GROUP_CHOICE_ADAPTER: TypeAdapter[GroupChoice] = TypeAdapter(GroupChoice)
+DECISION_ADAPTER: TypeAdapter[Decision] = TypeAdapter(Decision)
+GROUP_CHOICE_ADAPTER: TypeAdapter[GroupChoice] = TypeAdapter(GroupChoice)
 
 
-def _parse_decision(raw: str) -> Decision:
-    return _DECISION_ADAPTER.validate_json(raw)
+def parse_decision(raw: str) -> Decision:
+    return DECISION_ADAPTER.validate_json(raw)
 
 
-def _parse_preview(raw: str) -> DecisionPreview:
+def parse_preview(raw: str) -> DecisionPreview:
     return DecisionPreview.model_validate_json(raw)
 
 
-def _dump_choice(choice: Choice) -> str:
+def dump_choice(choice: Choice) -> str:
     if isinstance(choice, bool):
         raise TypeError("choice must be an int offer id or a grouped Choice, not bool")
     if isinstance(choice, int):
         if choice < 0:
             raise ValueError(f"offer id must be non-negative, got {choice}")
         return json.dumps({"kind": "single", "offer_id": choice})
-    validated = _GROUP_CHOICE_ADAPTER.validate_python(choice)
-    return _GROUP_CHOICE_ADAPTER.dump_json(validated).decode()
+    validated = GROUP_CHOICE_ADAPTER.validate_python(choice)
+    return GROUP_CHOICE_ADAPTER.dump_json(validated).decode()
 
 
-def _dump_address(at: DecisionAddress) -> str:
+def dump_address(at: DecisionAddress) -> str:
     return DecisionAddress.model_validate(at).model_dump_json()

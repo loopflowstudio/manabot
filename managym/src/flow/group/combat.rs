@@ -72,8 +72,11 @@ impl GroupKind for CombatGroup {
                 declarable: order
                     .iter()
                     .map(|creature| {
-                        let others: Vec<_> =
-                            order.iter().copied().filter(|id| *id != *creature).collect();
+                        let others: Vec<_> = order
+                            .iter()
+                            .copied()
+                            .filter(|id| *id != *creature)
+                            .collect();
                         let options = game.block_options(*creature, &others);
                         let must_block = !options.contains(&None);
                         BlockerItem {
@@ -91,14 +94,6 @@ impl GroupKind for CombatGroup {
                 committed: game.declared_blocks(),
             }),
         }
-    }
-
-    fn matches_choice(&self, choice: &DecisionChoice) -> bool {
-        matches!(
-            (self.role, choice),
-            (CombatRole::Attackers, DecisionChoice::DeclareAttackers { .. })
-                | (CombatRole::Blockers, DecisionChoice::DeclareBlockers { .. })
-        )
     }
 
     fn validate(&self, game: &Game, spec: &DecisionSpec, choice: &DecisionChoice) -> ChoiceCheck {
@@ -169,7 +164,6 @@ impl GroupKind for CombatGroup {
         &self,
         game: &Game,
         viewer: PlayerId,
-        _spec: &DecisionSpec,
         _choice: &DecisionChoice,
     ) -> Result<Self::Progress, AgentError> {
         let remaining = game.declaration_order(self.role, viewer)?;
@@ -179,7 +173,13 @@ impl GroupKind for CombatGroup {
         })
     }
 
-    fn continues(&self, position: &Game, viewer: PlayerId, progress: &Self::Progress) -> bool {
+    fn continues(
+        &self,
+        position: &Game,
+        viewer: PlayerId,
+        _spec: &DecisionSpec,
+        progress: &Self::Progress,
+    ) -> bool {
         position
             .asked_creature(self.role, viewer)
             .is_some_and(|asked| progress.remaining[progress.offset..].contains(&asked))
@@ -227,6 +227,7 @@ impl GroupKind for CombatGroup {
         live: &Game,
         position: &Game,
         obs_events_from: usize,
+        _spec: &DecisionSpec,
         choice: &DecisionChoice,
         _progress: &Self::Progress,
     ) -> (DecisionOutcome, Option<DecisionRefusal>) {
@@ -394,7 +395,12 @@ impl Game {
 
     /// Read the completed declaration from the clone's own declaration event,
     /// before any later turn could declare again.
-    fn read_combat_outcome(&self, role: CombatRole, position: &Game, from: usize) -> DecisionOutcome {
+    fn read_combat_outcome(
+        &self,
+        role: CombatRole,
+        position: &Game,
+        from: usize,
+    ) -> DecisionOutcome {
         for event in &position.state.observation_events[from..] {
             match event {
                 GameEvent::TurnStarted { .. } => break,

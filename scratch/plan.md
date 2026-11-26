@@ -122,10 +122,6 @@ No build pass remains.
 - Ship-review: answer Jack's API questions against the new surface and file
   the follow-ups in `scratch/questions.md` (pile split, "pick", "amounts",
   OrderTriggers, discard instruction text, `0.3.0` removals).
-- Nit: `managym/group.py` names internal helpers `_parse_decision`,
-  `_parse_preview`, `_dump_choice`, `_dump_address`, `_DecisionBase`, against
-  the no-underscore style rule; `managym/src/python/bindings.rs` looks them up
-  by name, so renaming needs an extension rebuild.
 
 ## Done when
 

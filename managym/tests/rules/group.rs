@@ -142,7 +142,10 @@ fn single_decision_preview_and_submit_match_manual_step() {
     let before = witness(s.game());
     assert!(s
         .game()
-        .preview(None, &DecisionChoice::DeclareAttackers { attackers: vec![] })
+        .preview(
+            None,
+            &DecisionChoice::DeclareAttackers { attackers: vec![] }
+        )
         .is_err());
     // Out-of-bounds single offer id returns refused without mutating.
     let oob = s
@@ -758,7 +761,10 @@ fn surveil_two_to_order_library_top_under_both_skip_trivial_settings() {
             order: vec![c1, c0],
         };
         let order_submitted = assert_submit_matches_manual(s.game_mut(), 0, &order_choice);
-        assert_eq!(order_submitted.steps.len(), if skip_trivial { 1 } else { 2 });
+        assert_eq!(
+            order_submitted.steps.len(),
+            if skip_trivial { 1 } else { 2 }
+        );
         assert_eq!(
             order_submitted.outcome,
             Some(DecisionOutcome::OrderLibrary {
@@ -1048,8 +1054,10 @@ fn env_submit_settles_mixed_policy_identically_to_env_step() {
         env.submit(None, &DecisionChoice::Single { offer_id: keep.id })
             .unwrap();
     }
-    env.scenario_force_battlefield(0, "Gray Ogre", true).unwrap();
-    env.scenario_force_battlefield(0, "Gray Ogre", true).unwrap();
+    env.scenario_force_battlefield(0, "Gray Ogre", true)
+        .unwrap();
+    env.scenario_force_battlefield(0, "Gray Ogre", true)
+        .unwrap();
     env.scenario_force_battlefield(1, "Llanowar Elves", true)
         .unwrap();
     env.scenario_force_battlefield(1, "Llanowar Elves", true)
