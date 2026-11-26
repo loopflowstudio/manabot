@@ -289,6 +289,45 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   header's "New game" (selects, then "Start game") and click
   `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
   `os.killpg(pid, SIGINT)`.
+- Manual mana payments in a real game: `managym academy play --deck <f>
+  --opponent-deck <f> --opponent passive --seed 11` with `14 Kyoshi Village /
+  10 Plains / 16 Youthful Knight` against `40 Plains` reaches Village + Plains
+  (exact {1}{W}, no stop) on turn 5 and Village + 3 Plains on turn 9 when the
+  script plays Village first, then Plains. The rail's turn number (`li.turn`
+  `data-turn`) is the last log entry, not reliably the current turn; to cast
+  "the turn after the last land", drive `GameSession.new_game`/`hero_command`
+  by offer labels in Python and read `projection.turn.turn_number` and each
+  permanent's `entered_this_turn`. Plain non-creature, non-animating lands
+  played this turn are interchangeable with earlier copies; creatures,
+  non-lands, and self-animating lands (e.g. Soulstone Sanctuary) stay distinct.
+  Mid-payment color choices are MODAL frames with
+  `decision_context.stage == "mana_color"`. The table's client Auto-tap
+  (on by default) submits "Pay the cost" at every mandatory payment, so the
+  browser never shows a native payment stop and Moves reads
+  `Auto-tapped {1}{W} for <spell>`. To turn it off, open
+  `[data-testid=game-menu]` (Settings) and click the switch
+  `[data-testid=auto-tap-toggle]` (a hidden-styled `input[role=switch]`:
+  wait for it `attached`, check `isChecked()`), close the menu and wait for
+  the header chip `[data-testid=chip-auto-tap]` to read "Manual tap".
+  "Pay the cost" renders as "Auto pay". A payment's taps fold into its
+  "Cast …" move. During attacks the per-creature offers sit in a closed
+  disclosure, so a driver waiting for a visible `action-option` stalls:
+  also accept `[data-testid=primary-action][data-draft-ready=true]` and click
+  it ("No attack"). A tapped land is drawn as a landscape box (`.turned`,
+  aria-label "… — Tapped"), not a rotated picture; count `.turned` rather
+  than judging a screenshot. Ward payments come from a real `GameSession` with
+  `villain_type: "random"`, `{"Island": 22, "Waterfall Aerialist": 18}` and a
+  Mountain/Kyoshi Village/Plains/Lightning Bolt hero (seeds 3, 5, 7 reach
+  Bolt → Ward {2} stops at `stage == "resolution_payment"`).
+  `14 Gruul Guildgate / 6 Mountain / 6 Forest / 14 Gray Ogre` (seed 11) reaches
+  Guildgate + Forest + Mountain (exact {2}{R}, no stop). Gruul Guildgate
+  enters tapped, so casting on the turn the second Guildgate is played is
+  again exact; cast on a later turn to reach the two-Guildgate stop, color
+  modal and second stop. To check a browser game's choices exactly, replay
+  the hero's recorded `action_description`s from `attempts.trace_json` through
+  `GameSession` with the recorded `config` (drop `hero_source`,
+  `villain_source`, `seed_was_requested`). Rebuild the static SPA
+  after any `academy/ui` change; a configured launch serves the stale build silently.
 - Board drags and combat drafts in a real game: import `22 Mountain / 30 Raging
   Goblin / 8 Burst Lightning` against `60 Plains` with Passive and Automatic
   payment; haste goblins give a multi-creature attack draft by turn 3 and

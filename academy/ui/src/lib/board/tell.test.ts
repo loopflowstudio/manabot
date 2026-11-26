@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PresentationEvent, PresentationLabels, PresentationRule } from '$lib/types';
-import { segmentText, tell, tellRule, type TellPlayers } from './tell';
+import { segmentsFromText, segmentText, tell, tellRule, type TellPlayers } from './tell';
 
 const EMPTY: PresentationLabels = { objects: {}, players: {}, stacks: {} };
 const PLAYERS: TellPlayers = { youSeat: 0, you: 'You', opponent: 'Heuristic' };
@@ -326,5 +326,20 @@ describe('tell', () => {
       PLAYERS,
     );
     expect(segmentText(retToYou)).toBe('Gray Ogre returned to you · cleanup');
+  });
+});
+
+describe('segmentsFromText', () => {
+  it('keeps mana symbols outside card-name segments so history renders them as pips', () => {
+    expect(segmentsFromText('Tap Kyoshi Village for {W}', ['Kyoshi Village'])).toEqual([
+      { text: 'Tap ', card: null },
+      { text: 'Kyoshi Village', card: 'Kyoshi Village' },
+      { text: ' for {W}', card: null },
+    ]);
+    expect(segmentsFromText('Tap Plains for {W}', ['Plains'])).toEqual([
+      { text: 'Tap ', card: null },
+      { text: 'Plains', card: 'Plains' },
+      { text: ' for {W}', card: null },
+    ]);
   });
 });

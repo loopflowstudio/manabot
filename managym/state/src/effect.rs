@@ -176,6 +176,17 @@ impl<N> Modification<N> {
         }
     }
 
+    /// Whether this modification can give a permanent the Creature card type.
+    pub fn grants_creature_type(&self) -> bool {
+        match self {
+            Self::BecomeCreature => true,
+            Self::AddTypes(types) | Self::SetTypes { types, .. } => {
+                types.contains(&CardType::Creature)
+            }
+            _ => false,
+        }
+    }
+
     /// The record's form, with every amount resolved.
     pub fn resolve(&self, amount: impl FnMut(&N) -> i32) -> Modification<i32> {
         self.map_amount(amount)

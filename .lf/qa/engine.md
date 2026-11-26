@@ -104,3 +104,8 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   `read_record` before retrying. Its phase should be `ready`, with both
   pre-call prefixes intact. Correcting the batch should spend the same fresh
   seed as a first successful load.
+- `tests/env/test_skip_forced_decisions.py::test_no_runner_turns_skipping_off`
+  greps every `.rs`/`.py` line under `managym/src`, `manabot`, `academy`,
+  `scripts` and `experiments` for `skip_trivial=false`/`False`, comments
+  included. Describe lockstep or debug paths in prose ("with and without
+  `skip_trivial`") rather than writing the assignment in a doc comment.

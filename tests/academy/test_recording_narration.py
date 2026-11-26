@@ -272,3 +272,139 @@ def test_an_attacker_s_damage_among_its_blockers_is_one_move() -> None:
         "Colossal Dreadmaw assigns 2 to Llanowar Elves, 4 left to assign, "
         "Colossal Dreadmaw assigns 2 to Grizzly Bears, 2 to defending player"
     )
+
+
+def _trace_event(
+    stage: str,
+    chosen: int,
+    *offers: str,
+    action_type: str,
+    source: str | None = None,
+) -> dict[str, Any]:
+    context: dict[str, Any] = {"stage": stage}
+    if source is not None:
+        context["source"] = {"label": source}
+    return {
+        "actor": 0,
+        "action": chosen,
+        "action_description": offers[chosen],
+        "actions": [{"type": action_type, "description": o} for o in offers],
+        "observation": {"decision_context": context},
+    }
+
+
+def test_choice_of_color_mana_tap_records_resolved_color_not_raw_offer() -> None:
+    events = [
+        _trace_event(
+            "priority",
+            0,
+            "Tap Kyoshi Village for {G}/{W}",
+            action_type="PRIORITY_ACTIVATE_ABILITY",
+        ),
+        _trace_event(
+            "mana_color",
+            1,
+            "Add {G}",
+            "Add {W}",
+            action_type="CHOOSE_MODE",
+            source="Kyoshi Village",
+        ),
+    ]
+    # Opening the color modal waits for the chosen color instead of logging the offer.
+    assert (
+        narrate_move(
+            board("priority"),
+            board("mana_color", source={"label": "Kyoshi Village"}),
+            [],
+            own_steps(events, 0),
+        )
+        is None
+    )
+    # Completing the color modal logs the resolved mana produced.
+    assert (
+        narrate_move(
+            board("mana_color", source={"label": "Kyoshi Village"}),
+            board("priority"),
+            [],
+            own_steps(events, 1),
+        )
+        == "Tap Kyoshi Village for {W}"
+    )
+
+    # During a payment, opening the color modal does not leak the raw offer label,
+    # and returning to payment stays quiet until the spell is cast.
+    assert (
+        narrate_move(
+            board("payment"),
+            board("mana_color", source={"label": "Gruul Guildgate"}),
+            [],
+            [own("payment", 0, "Tap Gruul Guildgate for {R}/{G}")],
+        )
+        is None
+    )
+    assert (
+        narrate_move(
+            board("mana_color", source={"label": "Gruul Guildgate"}),
+            board("payment"),
+            [],
+            [
+                own("payment", 0, "Tap Gruul Guildgate for {R}/{G}"),
+                own("mana_color", 0, "Add {R}", "Add {G}"),
+            ],
+        )
+        is None
+    )
+
+    # A resolution payment (e.g. Ward) folds the tap + color choice into one phrase.
+    ward_events = [
+        _trace_event(
+            "resolution_payment",
+            0,
+            "Tap Kyoshi Village for {G}/{W}",
+            action_type="PRIORITY_ACTIVATE_ABILITY",
+            source="Waterfall Aerialist",
+        ),
+        _trace_event(
+            "mana_color",
+            1,
+            "Add {G}",
+            "Add {W}",
+            action_type="CHOOSE_MODE",
+            source="Kyoshi Village",
+        ),
+        _trace_event(
+            "resolution_payment",
+            0,
+            "Pay the cost",
+            action_type="PAY_COST",
+            source="Waterfall Aerialist",
+        ),
+    ]
+    assert (
+        narrate_move(
+            board("resolution_payment", source={"label": "Waterfall Aerialist"}),
+            board("priority"),
+            [],
+            own_steps(ward_events, 2),
+        )
+        == "Waterfall Aerialist: tap Kyoshi Village for {W}, pay the cost"
+    )
+
+    # Even without a modal (auto-picked color), pool delta resolves the mana symbol.
+    before_pool = {
+        **board("priority"),
+        "agent": {"player_index": 0, "mana": [0, 0, 0, 0, 0, 0]},
+    }
+    after_pool = {
+        **board("priority"),
+        "agent": {"player_index": 0, "mana": [0, 0, 0, 0, 1, 0]},
+    }
+    assert (
+        narrate_move(
+            before_pool,
+            after_pool,
+            [],
+            [own("priority", 0, "Tap Kyoshi Village for {G}/{W}")],
+        )
+        == "Tap Kyoshi Village for {G}"
+    )

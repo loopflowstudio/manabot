@@ -20,6 +20,10 @@ fn game(lands: &[&str]) -> Game {
 }
 
 fn game_with(lands: &[&str], deck: &[(&str, usize)]) -> Game {
+    position(lands, deck, "Gray Ogre")
+}
+
+fn position(lands: &[&str], deck: &[(&str, usize)], spell: &str) -> Game {
     let deck: BTreeMap<String, usize> = deck
         .iter()
         .copied()
@@ -38,8 +42,7 @@ fn game_with(lands: &[&str], deck: &[(&str, usize)]) -> Game {
     }
     let player = PlayerId(0);
     game.scenario_clear_hand(player);
-    game.scenario_force_card_in_hand(player, "Gray Ogre")
-        .unwrap();
+    game.scenario_force_card_in_hand(player, spell).unwrap();
     for land in lands {
         game.scenario_force_battlefield(player, land, true).unwrap();
     }
@@ -53,7 +56,21 @@ fn cast(game: &mut Game) {
         .actions
         .iter()
         .position(|action| action.action_type() == ActionType::PriorityCastSpell)
-        .expect("Gray Ogre is castable");
+        .expect("the spell is castable");
+    game.step(index).unwrap();
+}
+
+fn play_land(game: &mut Game, land: &str) {
+    game.scenario_force_card_in_hand(PlayerId(0), land).unwrap();
+    game.scenario_refresh_priority().unwrap();
+    let space = game.action_space().expect("priority").clone();
+    let index = space
+        .actions
+        .iter()
+        .position(|action| {
+            matches!(action, Action::PlayLand { object, .. } if game.state[*object].name == land)
+        })
+        .unwrap_or_else(|| panic!("{land} is playable from hand"));
     game.step(index).unwrap();
 }
 
@@ -107,20 +124,41 @@ fn per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes() {
         .iter()
         .any(|action| matches!(action, Action::PayCost { .. })));
 
-    // Tap the Forest: two Mountains are still needed, and which one stays
-    // is still a choice. The Forest is gone from the offers.
+    // Choosing the Forest leaves only interchangeable Mountains to pay.
     let forest = offers.iter().find(|(_, land)| land == "Forest").unwrap().0;
     by_hand.step(forest).unwrap();
-    let offers = taps(&by_hand);
-    assert_eq!(offers.len(), 3);
-    assert!(offers.iter().all(|(_, land)| land == "Mountain"));
-    by_hand.step(offers[0].0).unwrap();
-    assert_eq!(taps(&by_hand).len(), 2);
-    // The last needed tap completes the payment without a further decision.
-    let last = taps(&by_hand)[0].0;
-    by_hand.step(last).unwrap();
     assert!(by_hand.pending_choice.is_none());
     assert_eq!(untapped(&by_hand), ["Mountain"]);
+
+    // With two Mountains and two Forests, tapping a Forest leaves {1}{R} and
+    // tapping a Mountain leaves {1}, keeping the Mountain-vs-Forest choice
+    // until the final tap finishes the payment.
+    let mut multi_step = game(&["Mountain", "Mountain", "Forest", "Forest"]);
+    cast(&mut multi_step);
+    let forest = taps(&multi_step)
+        .into_iter()
+        .find(|(_, land)| land == "Forest")
+        .unwrap()
+        .0;
+    multi_step.step(forest).unwrap();
+    let offers = taps(&multi_step);
+    assert_eq!(offers.len(), 3);
+    let mountain = offers
+        .iter()
+        .find(|(_, land)| land == "Mountain")
+        .unwrap()
+        .0;
+    multi_step.step(mountain).unwrap();
+    let offers = taps(&multi_step);
+    assert_eq!(offers.len(), 2);
+    let mountain = offers
+        .iter()
+        .find(|(_, land)| land == "Mountain")
+        .unwrap()
+        .0;
+    multi_step.step(mountain).unwrap();
+    assert!(multi_step.pending_choice.is_none());
+    assert_eq!(untapped(&multi_step), ["Forest"]);
 
     // PayCost at once is the automatic payer: Mountains first, in order.
     let mut automatic = game(&lands);
@@ -134,6 +172,814 @@ fn per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes() {
         .unwrap();
     automatic.step(pay).unwrap();
     assert_eq!(untapped(&automatic), ["Forest"]);
+}
+
+fn payment_position(spell: &str, sources: &[&str]) -> Game {
+    let mut deck = vec![("Mountain", 20), (spell, 8)];
+    for source in sources {
+        if !deck.iter().any(|(name, _)| name == source) {
+            deck.push((source, 8));
+        }
+    }
+    position(sources, &deck, spell)
+}
+
+fn payment_labels(game: &Game) -> Vec<String> {
+    game.semantic_decision_frame()
+        .unwrap()
+        .offers
+        .into_iter()
+        .map(|offer| offer.label)
+        .collect()
+}
+
+#[test]
+fn exact_dual_land_payments_cast_without_a_source_or_color_prompt() {
+    for lands in [
+        ["Gruul Guildgate", "Forest", "Forest"],
+        ["Gruul Guildgate", "Mountain", "Forest"],
+        ["Gruul Guildgate"; 3],
+    ] {
+        let mut game = payment_position("Gray Ogre", &lands);
+        cast(&mut game);
+        assert!(game.pending_choice.is_none(), "{lands:?}");
+        assert!(untapped(&game).is_empty(), "{lands:?}");
+        assert_eq!(spell_receipt(&game, "Gray Ogre").total(), 3);
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
+    }
+}
+
+#[test]
+fn a_spare_source_keeps_every_payment_offer_including_the_dual() {
+    let mut game = payment_position(
+        "Gray Ogre",
+        &["Gruul Guildgate", "Mountain", "Mountain", "Forest"],
+    );
+    cast(&mut game);
+    let labels = payment_labels(&game);
+    assert_eq!(labels.len(), 5, "{labels:?}");
+    assert_eq!(labels[0], "Tap Gruul Guildgate for {R}/{G}");
+    assert_eq!(taps(&game).len(), 3);
+    game.step(0).unwrap();
+    // Red leaves two generic pips, green leaves a red pip and a generic.
+    assert_eq!(payment_labels(&game), ["Add {R}", "Add {G}"]);
+}
+
+#[test]
+fn required_dual_pays_with_one_of_two_interchangeable_plains() {
+    let mut game = payment_position("Badgermole Cub", &["Plains", "Plains", "Kyoshi Village"]);
+    cast(&mut game);
+    assert!(game.pending_choice.is_none());
+    assert_eq!(game.state.players[0].mana_pool.total(), 0);
+    assert_eq!(
+        untapped(&game)
+            .iter()
+            .filter(|name| name.as_str() == "Plains")
+            .count(),
+        1
+    );
+    assert!(!untapped(&game).contains(&"Kyoshi Village".to_string()));
+}
+
+#[test]
+fn interchangeable_single_unit_sources_pay_and_leave_the_spare_untapped() {
+    for (spell, land, count, owed) in [
+        ("Gray Ogre", "Mountain", 4, 3),
+        ("Leonin Skyhunter", "Plains", 3, 2),
+        ("Firebrand Archer", "Gruul Guildgate", 3, 2),
+    ] {
+        let mut game = payment_position(spell, &vec![land; count]);
+        cast(&mut game);
+        assert!(game.pending_choice.is_none(), "{spell}");
+        assert_eq!(untapped(&game).iter().filter(|s| *s == land).count(), 1);
+        assert_eq!(spell_receipt(&game, spell).total(), owed);
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
+    }
+}
+
+#[test]
+fn choosing_village_keeps_two_plains_and_skips_the_color_choice() {
+    let mut game = payment_position(
+        "Youthful Knight",
+        &["Kyoshi Village", "Plains", "Plains", "Plains"],
+    );
+    cast(&mut game);
+    assert_eq!(
+        payment_labels(&game),
+        [
+            "Tap Kyoshi Village for {G}/{W}",
+            "Tap Plains for {W}",
+            "Tap Plains for {W}",
+            "Tap Plains for {W}",
+            "PayCost",
+        ]
+    );
+    assert!(game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .any(|action| matches!(action, Action::PayCost { .. })));
+    game.step(0).unwrap();
+    assert!(game.pending_choice.is_none());
+    assert_eq!(untapped(&game).iter().filter(|s| *s == "Plains").count(), 2);
+    assert!(!untapped(&game).iter().any(|s| s == "Kyoshi Village"));
+    assert_eq!(spell_receipt(&game, "Youthful Knight").total(), 2);
+    assert_eq!(game.state.players[0].mana_pool.total(), 0);
+}
+
+#[test]
+fn playing_a_plain_land_for_turn_stays_interchangeable_for_manual_payment() {
+    // 4th Mountain played this turn still skips Gray Ogre {2}{R}.
+    let mut mountains = payment_position("Gray Ogre", &["Mountain"; 3]);
+    play_land(&mut mountains, "Mountain");
+    assert!(mountains
+        .state
+        .permanents
+        .iter()
+        .flatten()
+        .any(|p| p.summoning_sick && p.entered_this_turn(mountains.state.turn.turn_number)));
+    cast(&mut mountains);
+    assert!(mountains.pending_choice.is_none());
+    assert_eq!(untapped(&mountains), ["Mountain"]);
+    assert_eq!(spell_receipt(&mountains, "Gray Ogre").total(), 3);
+    assert_eq!(mountains.state.players[0].mana_pool.total(), 0);
+
+    // 2nd Plains played this turn beside Kyoshi Village still skips Badgermole Cub {1}{G}.
+    let mut village_pair = payment_position("Badgermole Cub", &["Plains", "Kyoshi Village"]);
+    play_land(&mut village_pair, "Plains");
+    cast(&mut village_pair);
+    assert!(village_pair.pending_choice.is_none());
+    assert_eq!(
+        untapped(&village_pair)
+            .iter()
+            .filter(|name| name.as_str() == "Plains")
+            .count(),
+        1
+    );
+    assert!(!untapped(&village_pair).contains(&"Kyoshi Village".to_string()));
+    assert_eq!(village_pair.state.players[0].mana_pool.total(), 0);
+
+    // 3rd Plains played this turn beside Kyoshi Village + 2 Plains: tapping Village
+    // skips the color modal and finishes directly.
+    let mut village_three =
+        payment_position("Youthful Knight", &["Kyoshi Village", "Plains", "Plains"]);
+    play_land(&mut village_three, "Plains");
+    cast(&mut village_three);
+    assert_eq!(
+        payment_labels(&village_three),
+        [
+            "Tap Kyoshi Village for {G}/{W}",
+            "Tap Plains for {W}",
+            "Tap Plains for {W}",
+            "Tap Plains for {W}",
+            "PayCost",
+        ]
+    );
+    village_three.step(0).unwrap();
+    assert!(village_three.pending_choice.is_none());
+    assert_eq!(
+        untapped(&village_three)
+            .iter()
+            .filter(|name| name.as_str() == "Plains")
+            .count(),
+        2
+    );
+    assert!(!untapped(&village_three).contains(&"Kyoshi Village".to_string()));
+    assert_eq!(spell_receipt(&village_three, "Youthful Knight").total(), 2);
+    assert_eq!(village_three.state.players[0].mana_pool.total(), 0);
+}
+
+#[test]
+fn self_animating_land_played_this_turn_stays_distinct() {
+    let mut game = payment_position("Sol Ring", &["Soulstone Sanctuary"]);
+    play_land(&mut game, "Soulstone Sanctuary");
+    cast(&mut game);
+    // One Soulstone Sanctuary can animate and attack this turn; the newly
+    // played one is summoning-sick, so the choice of which to tap stays open.
+    assert_eq!(taps(&game).len(), 2);
+}
+
+#[test]
+fn a_targeted_plains_keeps_its_tap_offer_in_response() {
+    use managym::state::game_object::Target;
+
+    let player = PlayerId(0);
+    let deck = [
+        ("Plains", 24),
+        ("Imprisoned in the Moon", 8),
+        ("Teferi's Protection", 8),
+    ];
+    let mut game = position(&["Plains"; 4], &deck, "Imprisoned in the Moon");
+    game.skip_trivial = false;
+    game.scenario_force_card_in_hand(player, "Teferi's Protection")
+        .unwrap();
+    game.state.players[0].mana_pool = Mana::parse("2U").into();
+    game.scenario_refresh_priority().unwrap();
+    let aura = game.action_space().unwrap().actions.iter().position(|action|
+        matches!(action, Action::CastSpell { object, .. } if game.state[*object].name == "Imprisoned in the Moon")
+    ).unwrap();
+    game.step(aura).unwrap();
+    let target = Target::Permanent(PermanentId(0));
+    let index = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|action| matches!(action, Action::ChooseTarget { target: t, .. } if *t == target))
+        .unwrap();
+    game.step(index).unwrap();
+    assert_eq!(
+        game.state.stack_objects.last().unwrap().targets(),
+        &[target]
+    );
+    game.skip_trivial = true;
+    cast(&mut game);
+    assert_eq!(taps(&game).len(), 4);
+}
+
+#[test]
+fn enchanted_and_animated_plains_keep_the_source_choice() {
+    use managym::state::effect::{Affected, ContinuousEffect, EffectDuration, Modification};
+    let player = PlayerId(0);
+    let deck = [
+        ("Plains", 24),
+        ("Imprisoned in the Moon", 8),
+        ("Youthful Knight", 8),
+    ];
+    let base = position(&["Plains"; 3], &deck, "Youthful Knight");
+    let plains = base.state.permanents[PermanentId(0)].as_ref().unwrap();
+    let mut enchanted = base.clone();
+    let aura = enchanted
+        .scenario_force_battlefield(player, "Imprisoned in the Moon", true)
+        .unwrap();
+    enchanted.state.permanents[aura]
+        .as_mut()
+        .unwrap()
+        .attached_to = Some(plains.object);
+    enchanted.scenario_refresh_priority().unwrap();
+    cast(&mut enchanted);
+    assert_eq!(payment_labels(&enchanted).len(), 4);
+    assert!(payment_labels(&enchanted).contains(&"Tap Plains for {C}".into()));
+
+    let mut animated = base.clone();
+    for modification in [
+        Modification::BecomeCreature,
+        Modification::SetBasePt {
+            power: Some(2),
+            toughness: Some(2),
+        },
+    ] {
+        animated.state.effects.push(ContinuousEffect {
+            timestamp: plains.timestamp,
+            source: None,
+            controller: player,
+            affected: Affected::Object(plains.object),
+            modification,
+            duration: EffectDuration::EndOfTurn,
+            source_object: None,
+        });
+    }
+    animated.scenario_refresh_priority().unwrap();
+    cast(&mut animated);
+    assert_eq!(taps(&animated).len(), 3);
+}
+
+#[test]
+fn a_dual_paying_generic_mana_skips_only_equivalent_colors() {
+    let mut game = payment_position(
+        "Gray Ogre",
+        &["Kyoshi Village", "Plains", "Mountain", "Island"],
+    );
+    cast(&mut game);
+    tap(&mut game, "Mountain");
+    let labels = payment_labels(&game);
+    let dual = labels
+        .iter()
+        .position(|label| label == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    game.step(dual).unwrap();
+    assert_eq!(owed(&game), "{1}");
+    assert_eq!(taps(&game).len(), 2);
+    assert_eq!(committed(&game).len(), 2);
+}
+
+#[test]
+fn two_forced_completions_tapping_different_lands_keep_the_color_modal() {
+    let mut game = payment_position(
+        "Anthem of Champions",
+        &["Kyoshi Village", "Forest", "Plains"],
+    );
+    cast(&mut game);
+    let dual = payment_labels(&game)
+        .iter()
+        .position(|label| label == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    game.step(dual).unwrap();
+    assert_eq!(payment_labels(&game), ["Add {G}", "Add {W}"]);
+    for (mode, kept) in [(0, "Forest"), (1, "Plains")] {
+        let mut branch = game.clone();
+        branch.step(mode).unwrap();
+        assert!(branch.pending_choice.is_none());
+        assert!(untapped(&branch).contains(&kept.to_string()));
+        assert_eq!(branch.state.players[0].mana_pool.total(), 0);
+    }
+}
+
+#[test]
+fn mana_abilities_on_one_permanent_only_fund_one_tap() {
+    for source in ["Jasmine Dragon Tea Shop", "Kyoshi Village"] {
+        let mut game = payment_position("Compassionate Healer", &[source, "Plains"]);
+        cast(&mut game);
+        assert!(game.pending_choice.is_none());
+        for permanent in game.state.permanents.iter().flatten() {
+            if [source, "Plains"].contains(&game.state[permanent.object].name.as_str()) {
+                assert!(permanent.tapped);
+            }
+        }
+    }
+    let mut game = payment_position("Badgermole Cub", &["Animal Attendant", "Plains"]);
+    cast(&mut game);
+    assert!(game.pending_choice.is_none());
+    // The spend effect is part of the receipt whichever color was chosen.
+    assert_eq!(spell_receipt(&game, "Badgermole Cub").entry_counters(), 1);
+}
+
+#[test]
+fn turning_a_manifest_face_up_skips_when_forced_and_offers_taps_on_real_choice() {
+    let player = PlayerId(0);
+    let turn_face_up = |sources: &[&str]| {
+        let mut game = payment_position("Compassionate Healer", sources);
+        let card = game
+            .state
+            .zones
+            .zone_objects(managym::state::zone::ZoneType::Hand, player)
+            .iter()
+            .copied()
+            .next()
+            .unwrap();
+        let face_down = game.manifest(card, player);
+        game.scenario_refresh_priority().unwrap();
+        let index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
+            .unwrap();
+        game.step(index).unwrap();
+        (game, face_down)
+    };
+
+    // Forced exact (dual + basic) and interchangeable basics skip without a prompt.
+    for (sources, expected_untapped_lands) in [
+        (&["Kyoshi Village", "Plains"][..], 0_usize),
+        (&["Plains", "Plains", "Plains"][..], 1_usize),
+    ] {
+        let (game, face_down) = turn_face_up(sources);
+        assert!(!game.state[face_down].is_face_down(), "{sources:?}");
+        assert_eq!(game.state.players[0].mana_pool.total(), 0, "{sources:?}");
+        let untapped_lands = untapped(&game)
+            .into_iter()
+            .filter(|name| name != "Compassionate Healer")
+            .count();
+        assert_eq!(untapped_lands, expected_untapped_lands, "{sources:?}");
+    }
+
+    // Real choice (dual + spare basics or mixed basics): offers per-source taps
+    // beside PayCost; clicking Kyoshi Village beside 3 Plains skips the color
+    // modal and finishes directly, leaving 2 Plains untapped.
+    let (mut choice_dual, face_down) =
+        turn_face_up(&["Kyoshi Village", "Plains", "Plains", "Plains"]);
+    assert!(choice_dual.state[face_down].is_face_down());
+    let labels = payment_labels(&choice_dual);
+    assert!(
+        labels.contains(&"Tap Kyoshi Village for {G}/{W}".into()),
+        "{labels:?}"
+    );
+    assert_eq!(taps(&choice_dual).len(), 3);
+    let dual = labels
+        .iter()
+        .position(|label| label == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    choice_dual.step(dual).unwrap();
+    assert!(!choice_dual.state[face_down].is_face_down());
+    assert_eq!(choice_dual.state.players[0].mana_pool.total(), 0);
+    let remaining: Vec<_> = untapped(&choice_dual)
+        .into_iter()
+        .filter(|name| name != "Compassionate Healer")
+        .collect();
+    assert_eq!(remaining, ["Plains", "Plains"]);
+
+    // Mixed basics offer per-source taps and PayCost finishes.
+    let (mut choice_basics, face_down) = turn_face_up(&["Plains", "Plains", "Forest"]);
+    assert!(choice_basics.state[face_down].is_face_down());
+    assert_eq!(taps(&choice_basics).len(), 3);
+    pay_cost(&mut choice_basics);
+    assert!(!choice_basics.state[face_down].is_face_down());
+    assert_eq!(choice_basics.state.players[0].mana_pool.total(), 0);
+    let remaining_count = untapped(&choice_basics)
+        .into_iter()
+        .filter(|name| name != "Compassionate Healer")
+        .count();
+    assert_eq!(remaining_count, 1);
+}
+
+#[test]
+fn ward_offers_per_source_taps_on_real_choice_and_skips_when_forced() {
+    let player = PlayerId(0);
+    let deck = [
+        ("Mountain", 20),
+        ("Lightning Bolt", 8),
+        ("Kyoshi Village", 4),
+        ("Plains", 8),
+        ("Forest", 8),
+        ("Waterfall Aerialist", 4),
+        ("Sol Ring", 4),
+    ];
+    let cast_at_ward = |sources: &[&str], with_treasure: bool| {
+        let mut game = position(sources, &deck, "Lightning Bolt");
+        let target = game
+            .scenario_force_battlefield(PlayerId(1), "Waterfall Aerialist", true)
+            .unwrap();
+        let treasure =
+            with_treasure.then(|| game.create_token("token.treasure", player, false).unwrap());
+        game.state.players[0].mana_pool = Mana::parse("R").into();
+        game.scenario_refresh_priority().unwrap();
+        cast(&mut game);
+        let index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| {
+                matches!(
+                    a,
+                    Action::ChooseTarget {
+                        target: managym::state::game_object::Target::Permanent(p),
+                        ..
+                    } if *p == target
+                )
+            })
+            .unwrap();
+        game.step(index).unwrap();
+        if game.pending_choice.is_some() {
+            pay_cost(&mut game);
+        }
+        (game, treasure)
+    };
+
+    // Exact dual + basic and interchangeable basics: PayCost or Decline only.
+    for sources in [
+        &["Kyoshi Village", "Plains"][..],
+        &["Plains", "Plains", "Plains"][..],
+    ] {
+        let (mut forced, _) = cast_at_ward(sources, false);
+        assert_eq!(
+            forced.action_space().unwrap().actions,
+            [Action::PayCost { player }, Action::Decline { player }],
+            "{sources:?}"
+        );
+        let mut decline = forced.clone();
+        decline.step(1).unwrap();
+        assert_eq!(
+            untapped(&decline)
+                .into_iter()
+                .filter(|name| name != "Waterfall Aerialist")
+                .count(),
+            sources.len(),
+            "{sources:?}"
+        );
+        forced.step(0).unwrap();
+        assert_eq!(
+            untapped(&forced)
+                .into_iter()
+                .filter(|name| name != "Waterfall Aerialist")
+                .count(),
+            sources.len() - 2,
+            "{sources:?}"
+        );
+    }
+
+    // Real choice (dual or basic beside Sol Ring): both offer per-source taps
+    // beside PayCost/Decline, and PayCost still taps Sol Ring while leaving the
+    // land untapped.
+    for first in ["Kyoshi Village", "Plains"] {
+        let (mut game, _) = cast_at_ward(&[first, "Sol Ring"], false);
+        let labels = payment_labels(&game);
+        assert!(
+            labels
+                .iter()
+                .any(|l| l.starts_with(&format!("Tap {first} for "))),
+            "{first}: {labels:?}"
+        );
+        assert!(
+            labels.iter().any(|l| l.starts_with("Tap Sol Ring for ")),
+            "{first}: {labels:?}"
+        );
+        assert!(game
+            .action_space()
+            .unwrap()
+            .actions
+            .contains(&Action::PayCost { player }));
+        assert!(game
+            .action_space()
+            .unwrap()
+            .actions
+            .contains(&Action::Decline { player }));
+        pay_cost(&mut game);
+        assert!(untapped(&game).contains(&first.to_string()), "{first}");
+        assert!(
+            !untapped(&game).contains(&"Sol Ring".to_string()),
+            "{first}"
+        );
+    }
+
+    // Real choice on Ward {2} with Kyoshi Village + Mountain + Forest: tapping
+    // Kyoshi Village skips the redundant {G}/{W} modal and returns to the
+    // remaining choice between Mountain and Forest.
+    let (mut dual_choice, _) = cast_at_ward(&["Kyoshi Village", "Mountain", "Forest"], false);
+    let dual = payment_labels(&dual_choice)
+        .iter()
+        .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    dual_choice.step(dual).unwrap();
+    assert_eq!(taps(&dual_choice).len(), 2);
+    tap(&mut dual_choice, "Mountain");
+    assert_eq!(
+        dual_choice.action_space().unwrap().actions,
+        [Action::PayCost { player }, Action::Decline { player }]
+    );
+    pay_cost(&mut dual_choice);
+    assert!(untapped(&dual_choice).contains(&"Forest".into()));
+
+    // A second Kyoshi Village tap completes Ward {2} beside the first one's
+    // floating mana: either color is spent whole, so no {G}/{W} modal.
+    let (mut second_dual, _) = cast_at_ward(&["Kyoshi Village", "Kyoshi Village", "Plains"], false);
+    for _ in 0..2 {
+        let dual = payment_labels(&second_dual)
+            .iter()
+            .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
+            .unwrap();
+        second_dual.step(dual).unwrap();
+    }
+    assert_eq!(
+        second_dual.action_space().unwrap().actions,
+        [Action::PayCost { player }, Action::Decline { player }]
+    );
+    pay_cost(&mut second_dual);
+    assert_eq!(
+        untapped(&second_dual)
+            .into_iter()
+            .filter(|name| name != "Waterfall Aerialist")
+            .collect::<Vec<_>>(),
+        ["Plains"]
+    );
+
+    // Non-simple mana abilities (Treasure) remain offered alongside PayCost/Decline.
+    let (with_treasure, treasure) = cast_at_ward(&["Plains", "Plains"], true);
+    let treasure = treasure.unwrap();
+    let actions = &with_treasure.action_space().unwrap().actions;
+    assert!(
+        actions.iter().any(
+            |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == treasure)
+        ),
+        "{actions:?}"
+    );
+    assert!(actions.contains(&Action::PayCost { player }));
+    assert!(actions.contains(&Action::Decline { player }));
+}
+
+#[test]
+fn partial_multi_tap_resolution_payments_skip_redundant_color_modals() {
+    let player = PlayerId(0);
+    let begin_turn_face_up = |lands: &[&str]| {
+        let mut game = payment_position("Cat Collector", lands);
+        let card = game
+            .state
+            .zones
+            .zone_objects(managym::state::zone::ZoneType::Hand, player)
+            .iter()
+            .copied()
+            .next()
+            .unwrap();
+        let face_down = game.manifest(card, player);
+        game.scenario_refresh_priority().unwrap();
+        let index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
+            .unwrap();
+        game.step(index).unwrap();
+        tap(&mut game, "Plains");
+        let dual = payment_labels(&game)
+            .iter()
+            .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
+            .unwrap();
+        game.step(dual).unwrap();
+        (game, face_down)
+    };
+
+    // TurnFaceUp {2}{W} with Plains + Kyoshi Village + Mountain + Forest:
+    // tapping Plains ({W} in pool) then Kyoshi Village leaves {1} under either
+    // {G} or {W}, so the {G}/{W} modal skips and Mountain vs Forest stays open.
+    let (mut turn_up, face_down) =
+        begin_turn_face_up(&["Plains", "Kyoshi Village", "Mountain", "Forest"]);
+    // Skipped the color modal; Mountain and Forest remain offered beside PayCost.
+    let offers = taps(&turn_up);
+    assert_eq!(offers.len(), 2, "{offers:?}");
+    tap(&mut turn_up, "Mountain");
+    assert!(!turn_up.state[face_down].is_face_down());
+    assert_eq!(turn_up.state.players[0].mana_pool.total(), 0);
+    assert_eq!(
+        untapped(&turn_up)
+            .into_iter()
+            .filter(|name| name != "Cat Collector")
+            .collect::<Vec<_>>(),
+        ["Forest"]
+    );
+
+    // Multi-unit remaining source (Sol Ring) can overshoot into floating mana,
+    // so tapping Kyoshi Village beside Plains + Sol Ring keeps the color modal.
+    let (with_sol_ring, _) = begin_turn_face_up(&["Plains", "Kyoshi Village", "Sol Ring"]);
+    assert_eq!(payment_labels(&with_sol_ring), ["Add {G}", "Add {W}"]);
+
+    // Optional resolution payment {4} (Mystic Remora trigger) with Plains +
+    // Kyoshi Village + Mountain + Forest + Island: tapping Plains then Kyoshi
+    // Village skips the {G}/{W} modal and keeps the remaining land choice open.
+    let deck = [
+        ("Mountain", 12),
+        ("Forest", 8),
+        ("Island", 8),
+        ("Plains", 8),
+        ("Kyoshi Village", 4),
+        ("Lightning Bolt", 4),
+        ("Mystic Remora", 4),
+    ];
+    let mut remora = position(
+        &["Plains", "Kyoshi Village", "Mountain", "Forest", "Island"],
+        &deck,
+        "Lightning Bolt",
+    );
+    remora
+        .scenario_force_battlefield(PlayerId(1), "Mystic Remora", true)
+        .unwrap();
+    remora.state.players[0].mana_pool = Mana::parse("R").into();
+    remora.scenario_refresh_priority().unwrap();
+    cast(&mut remora);
+    let target = remora
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| {
+            matches!(
+                a,
+                Action::ChooseTarget {
+                    target: managym::state::game_object::Target::Player(PlayerId(1)),
+                    ..
+                }
+            )
+        })
+        .unwrap();
+    remora.step(target).unwrap();
+    // Pass priority twice to resolve Mystic Remora's trigger into the {4} payment.
+    for _ in 0..4 {
+        if remora
+            .action_space()
+            .unwrap()
+            .actions
+            .contains(&Action::Decline { player })
+        {
+            break;
+        }
+        let pass = remora
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap();
+        remora.step(pass).unwrap();
+    }
+    tap(&mut remora, "Plains");
+    let dual = payment_labels(&remora)
+        .iter()
+        .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    remora.step(dual).unwrap();
+    assert_eq!(taps(&remora).len(), 3);
+    assert!(remora
+        .action_space()
+        .unwrap()
+        .actions
+        .contains(&Action::Decline { player }));
+}
+
+#[test]
+fn granted_mana_does_not_double_count_a_forest_and_treasure_stays_explicit() {
+    let deck = [
+        ("Forest", 20),
+        ("Great Divide Guide", 4),
+        ("Firebrand Archer", 8),
+    ];
+    let mut game = position(&["Forest", "Forest"], &deck, "Firebrand Archer");
+    game.scenario_force_battlefield(PlayerId(0), "Great Divide Guide", false)
+        .unwrap();
+    game.scenario_refresh_priority().unwrap();
+    let mut with_treasure = game.clone();
+    let treasure = with_treasure
+        .create_token("token.treasure", PlayerId(0), false)
+        .unwrap();
+    with_treasure.scenario_refresh_priority().unwrap();
+    cast(&mut game);
+    assert!(game.pending_choice.is_none());
+    cast(&mut with_treasure);
+    assert!(with_treasure
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == treasure)));
+}
+
+#[test]
+fn fourteen_lands_with_granted_color_choices_stay_under_the_policy_action_capacity() {
+    let deck = [
+        ("Forest", 24),
+        ("Great Divide Guide", 4),
+        ("Firebrand Archer", 8),
+    ];
+    let mut game = position(&["Forest"; 14], &deck, "Firebrand Archer");
+    // One Forest has its own state, so choosing which lands to keep matters.
+    game.state.permanents[PermanentId(0)]
+        .as_mut()
+        .unwrap()
+        .change_counters(managym::state::permanent::CounterKind::PlusOnePlusOne, 1);
+    game.scenario_force_battlefield(PlayerId(0), "Great Divide Guide", false)
+        .unwrap();
+    game.scenario_refresh_priority().unwrap();
+    cast(&mut game);
+    let labels = payment_labels(&game);
+    assert_eq!(
+        labels
+            .iter()
+            .filter(|s| s.as_str() == "Tap Forest for any color")
+            .count(),
+        14
+    );
+    assert_eq!(taps(&game).len(), 14);
+    assert_eq!(labels.len(), 29);
+}
+
+#[test]
+fn paying_a_convoke_spell_entirely_in_mana_charges_its_generic_cost_once() {
+    let mut game = payment_position("Guardian of Vitu-Ghazi", &["Kyoshi Village", "Forest"]);
+    game.state.players[0].mana_pool = Mana::parse("6").into();
+    game.scenario_refresh_priority().unwrap();
+    cast(&mut game);
+    assert!(game.pending_choice.is_none());
+    assert_eq!(spell_receipt(&game, "Guardian of Vitu-Ghazi").total(), 8);
+    assert_eq!(game.state.players[0].mana_pool.total(), 0);
+}
+
+#[test]
+fn lesson_mana_uses_two_units_only_when_the_cost_needs_both() {
+    let mut exact = payment_position("Energybending", &["Hermitic Herbalist"]);
+    cast(&mut exact);
+    assert!(exact.pending_choice.is_none());
+    assert_eq!(exact.state.players[0].mana_pool.total(), 0);
+    assert!(!untapped(&exact).contains(&"Hermitic Herbalist".into()));
+
+    let mut spare = payment_position("Boomerang Basics", &["Hermitic Herbalist"]);
+    cast(&mut spare);
+    let labels = payment_labels(&spare);
+    assert!(
+        labels.contains(&"Tap Hermitic Herbalist for any color".into()),
+        "{labels:?}"
+    );
+    assert!(
+        labels.contains(&"Tap Hermitic Herbalist for 2 mana (Lesson spells only)".into()),
+        "{labels:?}"
+    );
+}
+
+#[test]
+fn converge_keeps_a_color_choice_with_exact_sources() {
+    let mut game = payment_position(
+        "Uncle's Musings",
+        &["Kyoshi Village", "Forest", "Forest", "Forest"],
+    );
+    cast(&mut game);
+    let labels = payment_labels(&game);
+    let dual = labels
+        .iter()
+        .position(|label| label == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    game.step(dual).unwrap();
+    assert_eq!(payment_labels(&game), ["Add {G}", "Add {W}"]);
 }
 
 #[test]
@@ -283,7 +1129,7 @@ fn mana_made_while_paying_commits_to_the_cost() {
         let mut fork = game.clone();
         tap(&mut fork, last);
         assert!(fork.pending_choice.is_none());
-        let receipt = ogre_receipt(&fork);
+        let receipt = spell_receipt(&fork, "Gray Ogre");
         let colors: Vec<u8> = receipt.mana().iter().map(|unit| unit.color).collect();
         let third = if last == "Forest" { GREEN } else { RED };
         assert_eq!(colors, [GREEN, RED, third]);
@@ -291,6 +1137,29 @@ fn mana_made_while_paying_commits_to_the_cost() {
         assert_eq!(fork.state.players[0].mana_pool, Mana::default());
         assert_eq!(owed(&game), "{1}");
     }
+}
+
+#[test]
+fn required_sol_ring_can_leave_a_mountain_or_floating_mana() {
+    let mut game = payment_position("Gray Ogre", &["Sol Ring", "Mountain", "Mountain"]);
+    cast(&mut game);
+    assert_eq!(taps(&game).len(), 3);
+    game.skip_trivial = false; // Inspect priority before the floating mana empties.
+
+    let mut exact = game.clone();
+    pay_cost(&mut exact);
+    assert_eq!(spell_receipt(&exact, "Gray Ogre").total(), 3);
+    assert_eq!(untapped(&exact), ["Mountain"]);
+    assert_eq!(exact.state.players[0].mana_pool.total(), 0);
+
+    tap(&mut game, "Mountain");
+    tap(&mut game, "Mountain");
+    if game.pending_choice.is_some() {
+        pay_cost(&mut game);
+    }
+    assert_eq!(spell_receipt(&game, "Gray Ogre").total(), 3);
+    assert!(untapped(&game).is_empty());
+    assert_eq!(game.state.players[0].mana_pool, Mana::parse("C"));
 }
 
 /// A source that makes more than is owed pays what is owed; the rest floats.
@@ -315,7 +1184,10 @@ fn surplus_of_mana_made_while_paying_floats() {
     tap(&mut game, "Sol Ring");
     assert!(game.pending_choice.is_none());
     assert_eq!(untapped(&game), ["Mountain"]);
-    assert_eq!(ogre_receipt(&game).amounts(), [0, 0, 0, 1, 1, 1]);
+    assert_eq!(
+        spell_receipt(&game, "Gray Ogre").amounts(),
+        [0, 0, 0, 1, 1, 1]
+    );
     assert_eq!(game.state.players[0].mana_pool, Mana::parse("C"));
 }
 
@@ -337,7 +1209,10 @@ fn mana_made_while_paying_that_cannot_pay_floats() {
     assert_eq!(committed(&game).len(), 2);
     tap(&mut game, "Mountain");
     assert!(game.pending_choice.is_none());
-    assert_eq!(ogre_receipt(&game).amounts(), [0, 0, 0, 1, 2, 0]);
+    assert_eq!(
+        spell_receipt(&game, "Gray Ogre").amounts(),
+        [0, 0, 0, 1, 2, 0]
+    );
     assert_eq!(game.state.players[0].mana_pool, Mana::parse("G"));
 }
 
@@ -388,7 +1263,13 @@ fn a_payment_ends_when_its_last_unit_comes_from_a_mana_ability() {
     }
     assert!(game.pending_choice.is_none());
     assert_eq!(untapped(&game), ["Forest", "Meteorite", "Mountain"]);
-    assert_eq!(ogre_receipt(&game).amounts().iter().sum::<u8>(), 3);
+    assert_eq!(
+        spell_receipt(&game, "Gray Ogre")
+            .amounts()
+            .iter()
+            .sum::<u8>(),
+        3
+    );
     assert_eq!(game.state.players[0].mana_pool.total(), 0);
 }
 
@@ -462,9 +1343,9 @@ fn usable_priority_requires_a_spend_or_a_trigger_on_that_source() {
     assert_eq!(game.state.players[0].life, 21);
 }
 
-/// The receipt of the Ogre's payment: on the spell while it is on the stack,
+/// The receipt on a spell while it is on the stack,
 /// then on the permanent it became.
-fn ogre_receipt(game: &Game) -> PaymentReceipt {
+fn spell_receipt(game: &Game, name: &str) -> PaymentReceipt {
     let cast = game
         .state
         .stack_objects
@@ -478,8 +1359,8 @@ fn ogre_receipt(game: &Game) -> PaymentReceipt {
             .permanents
             .iter()
             .flatten()
-            .find(|permanent| game.state[permanent.object].name == "Gray Ogre")
-            .expect("the Ogre was cast")
+            .find(|permanent| game.state[permanent.object].name == name)
+            .expect("the spell was cast")
             .spell_entry
             .as_deref()
             .unwrap()
@@ -522,7 +1403,7 @@ fn receipt_names_the_source_of_each_unit_under_manual_auto_and_floated_payment()
         ("Mountain".to_string(), RED),
     ];
 
-    // Manual: the Forest and two Mountains, tapped one at a time.
+    // Choosing the Forest determines the two remaining Mountain taps.
     let mut by_hand = game(&lands);
     cast(&mut by_hand);
     let forest = taps(&by_hand)
@@ -535,7 +1416,10 @@ fn receipt_names_the_source_of_each_unit_under_manual_auto_and_floated_payment()
         let tap = taps(&by_hand)[0].0;
         by_hand.step(tap).unwrap();
     }
-    assert_eq!(paid_by(&by_hand, &ogre_receipt(&by_hand)), expected);
+    assert_eq!(
+        paid_by(&by_hand, &spell_receipt(&by_hand, "Gray Ogre")),
+        expected
+    );
 
     // Auto: the payer taps Mountains first; the receipt names exactly those.
     let mut automatic = game(&lands);
@@ -543,7 +1427,7 @@ fn receipt_names_the_source_of_each_unit_under_manual_auto_and_floated_payment()
     cast(&mut automatic);
     assert!(automatic.pending_choice.is_none());
     assert_eq!(
-        paid_by(&automatic, &ogre_receipt(&automatic)),
+        paid_by(&automatic, &spell_receipt(&automatic, "Gray Ogre")),
         [RED; 3].map(|color| ("Mountain".to_string(), color))
     );
     assert_eq!(untapped(&automatic), ["Forest"]);
@@ -574,13 +1458,16 @@ fn receipt_names_the_source_of_each_unit_under_manual_auto_and_floated_payment()
     if floated.pending_choice.is_some() {
         pay_cost(&mut floated);
     }
-    assert_eq!(paid_by(&floated, &ogre_receipt(&floated)), expected);
+    assert_eq!(
+        paid_by(&floated, &spell_receipt(&floated, "Gray Ogre")),
+        expected
+    );
     assert_eq!(untapped(&floated), ["Mountain"]);
     assert_eq!(floated.state.players[0].mana_pool, Mana::default());
 
     // Whole object ids, so a later appearance of a land is never mistaken
     // for the one that paid.
-    let json = serde_json::to_value(ogre_receipt(&floated)).unwrap();
+    let json = serde_json::to_value(spell_receipt(&floated, "Gray Ogre")).unwrap();
     let source = &json["mana"][0]["source"];
     assert!(source["object"]["entity"].is_u64() && source["object"]["incarnation"].is_u64());
     assert!(source["definition"].is_u64());
@@ -596,7 +1483,7 @@ fn receipt_separates_sourceless_mana_from_a_lands() {
     game.scenario_refresh_priority().unwrap();
     cast(&mut game);
     assert!(game.pending_choice.is_none());
-    let receipt = ogre_receipt(&game);
+    let receipt = spell_receipt(&game, "Gray Ogre");
     assert_eq!(receipt.total(), 3);
     assert_eq!(receipt.amounts(), [0, 0, 0, 1, 0, 2]);
     let sources = receipt.mana_sources();

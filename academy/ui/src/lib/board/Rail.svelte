@@ -188,7 +188,7 @@
         <span class="card-name" {...hover(segment.card)}>{segment.text}</span>
       {/if}
     {:else}
-      {segment.text}
+      <ManaText text={segment.text} size={13} />
     {/if}
   {/each}
 {/snippet}
