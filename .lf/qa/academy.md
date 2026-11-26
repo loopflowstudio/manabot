@@ -197,7 +197,14 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `canonical_replay.decisions` of `<traces>/play.sqlite`. Land and spell offers
   are `[data-testid=action-option]` rows in "All legal choices", not in
   `[data-testid=action-panel]`. `/replay?trace=<id>` of an active game works
-  only in the context that played it.
+  only in the context that played it. Placed rows move with `Move X to
+  top|bottom` and `Unplace X`. Raging Goblin attacks need a script that plays
+  Mountains, or the game decks out with no combat. To exercise an authority
+  rejection from the real browser, `page.routeWebSocket(/.*/, ws => …)` with
+  `ws.connectToServer()` and rewrite one outgoing `group_command` plan (empty
+  `bottom` on Scry 2): the server answers `rejected` with "Place remaining
+  cards before confirming", the game stays at the Scry, and Confirm stays
+  disabled until the draft is edited.
 - Payment previews (`[data-testid=payment-preview]`, `POST
   /api/sessions/<id>/payment-preview`): the panel exists only once a payment
   offer has been previewed in the current decision, so read it with a count

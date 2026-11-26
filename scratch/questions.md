@@ -65,3 +65,9 @@
 - The `discard` instruction text says "or decline when offered" though no
   decline is offered (`managym/src/decision_context.rs:513`).
 - Remove the `combat_preview` wrappers with the other `0.3.0` graphs.
+- Raw `Offer.label` on `env.decision().offers` is often the native
+  `ActionType` name (`PriorityPlayLand`, `DeclareAttacker`, `SelectCard`,
+  `PayCost`) with `source` unset (`structured_offer.rs:644` fallback). The
+  label is part of the decision fingerprint, so a readable label or source
+  needs its own change that accepts moved fingerprints or adds the subject
+  beside the fingerprinted label. Found in Pass 4 QA.
