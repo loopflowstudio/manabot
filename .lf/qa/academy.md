@@ -361,3 +361,15 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `[data-testid=game-menu]` again. Auto passes are `auto: true` events in
   `attempts.trace_json`. A Once stop must hold the window it arrives at:
   check the priority offers appear there before the bar turns Off.
+- Scripted Play with chosen cards (no file upload needed): a fresh worktree has
+  no `.venv`; `uv venv --python 3.13 && uv sync --extra play --extra dev`
+  builds the release engine and installs it editable (about 10 min at load
+  ~85). On `/?setup=1` the opponent picker's values are `policy` (the
+  registered checkpoint), `random` and `passive`; there is no heuristic. After
+  "Import decklist files" and the "Use imported decks" checkbox, `fill` the
+  "Your deck source" / "Opponent deck source" textareas with counted lines; the
+  Play page has no Seed field, so deals vary. Combat is drafted on the board:
+  the per-creature offers are hidden, so click every `.board
+  [data-testid=board-card][data-draft=can]` and then `primary-action`, and
+  restrict offer clicks to `:visible`. A passive opponent discards to hand
+  size, which fills its graveyard by about turn 4.
