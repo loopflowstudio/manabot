@@ -56,6 +56,7 @@ function addPlayerLabels(
     ...player.graveyard,
     ...player.exile,
     ...player.stack,
+    ...(player.command ?? []),
   ]) {
     // Protocol-v1's legacy Observation does not expose incarnation yet. This
     // indexes only incarnation zero; nonzero authoritative refs intentionally

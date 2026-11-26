@@ -24,11 +24,12 @@
  * stays the acting viewer's recorded track: labels come from the index, never
  * from a spectator reveal.
  */
-import { orientBoard, type BotDecision, type BranchKind, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
+import { orientBoard, type BotDecision, type BranchKind, type Position, type RecordedPosition, type RecordingIndex, type SeatSwap } from '$lib/recording';
 import { decisionMark, firstChoice, score, type AnalysedDecision, type DecisionMark, type LivePoint } from '$lib/analysis';
+import { checkpointIdentity, playerIdentity, recordedIdentity, type PlayerIdentity } from '$lib/player-identity';
 import type { ExperienceFrame, GameLogEntry, PresentationEvent } from '$lib/types';
 import { mergeBoards, type StepBoard } from './boards';
-import type { HistoryTurn } from './history';
+import type { HistoryNote, HistoryTurn } from './history';
 import { possessive } from './view';
 import { PROTOCOL_VERSION } from '$lib/types';
 
@@ -37,10 +38,50 @@ import { PROTOCOL_VERSION } from '$lib/types';
 /** Who sits at the bottom: a fixed seat, or whoever chose at this position. */
 export type Perspective = 0 | 1 | 'chooser';
 
-/** The address's `near` value, or the recording's natural seat: the person, else Seat 1. */
-export function perspectiveOf(near: string | null, index: Pick<RecordingIndex, 'players'>): Perspective {
+/** Native seat the human piloted at `eventIndex` (or at game end when null). */
+export function humanSeatAt(startingSeat: 0 | 1, swaps: readonly SeatSwap[], eventIndex: number | null): 0 | 1 {
+  if (!swaps.length) return startingSeat;
+  const flips = eventIndex === null
+    ? swaps.length
+    : swaps.filter(swap => swap.event <= eventIndex).length;
+  return ((startingSeat ^ (flips & 1)) as 0 | 1);
+}
+
+/** Native seat in `index.players` whose pilot controlled `seat` when `currentHeroSeat` was the human's seat. */
+export function pilotSeatAt(seat: 0 | 1, finalHeroSeat: 0 | 1, currentHeroSeat: 0 | 1): 0 | 1 {
+  return seat === currentHeroSeat ? finalHeroSeat : ((1 - finalHeroSeat) as 0 | 1);
+}
+
+/**
+ * A seat's recorded identity; a record that predates recorded players falls back to
+ * its configured opponent. In a Play game the bot's seat (whichever seat it finished in)
+ * carries the checkpoint's producer and provenance.
+ */
+export function seatIdentity(
+  index: Pick<RecordingIndex, 'players' | 'opponent' | 'opponent_checkpoint' | 'watch'> | null | undefined,
+  seat: number,
+): PlayerIdentity {
+  const recorded = index?.players.find(player => player.seat === seat);
+  const opponent = recorded
+    ? (!index?.watch && recorded.kind === 'bot' ? index?.opponent : null)
+    : (seat === 1 ? index?.opponent : null);
+  const base = recorded ? recordedIdentity(recorded)
+    : opponent ? checkpointIdentity(opponent) : playerIdentity({ name: `Seat ${seat + 1}` });
+  return opponent ? { ...base, producer: opponent.producer, provenance: index?.opponent_checkpoint ?? undefined } : base;
+}
+
+/** Fixed-perspective dropdown label: names the pilot when unswapped, or the permanent native seat and deck when swapped. */
+export function perspectiveLabel(seat: 0 | 1, name: string, deck: string | null, swapped: boolean): string {
+  const base = `Seat ${seat + 1} at the bottom`;
+  if (!swapped) return `${base} · ${name}`;
+  return deck ? `${base} · ${deck}` : base;
+}
+
+/** The address's `near` value, or the recording's natural seat: chooser when swapped, else the person, else Seat 1. */
+export function perspectiveOf(near: string | null, index: Pick<RecordingIndex, 'players' | 'seat_swaps'>): Perspective {
   if (near === '0' || near === '1') return Number(near) as 0 | 1;
   if (near === 'chooser') return 'chooser';
+  if (index.seat_swaps?.length) return 'chooser';
   return index.players.find(player => player.kind === 'human')?.seat === 1 ? 1 : 0;
 }
 
@@ -219,19 +260,44 @@ const BRANCHES: Record<BranchKind, string> = {
   reseed: 'randomness reseeded',
 };
 const BRANCH_ENTRY = 'branch:';
+const SWAP_ENTRY = 'swap:';
 
-/** The position a log entry jumps to: a branch note jumps to the choice it precedes. */
+/** The position a log entry jumps to: branch and swap notes jump to the position they precede. */
 export function entryPosition(id: string): string {
-  return id.startsWith(BRANCH_ENTRY) ? id.slice(BRANCH_ENTRY.length) : id;
+  if (id.startsWith(BRANCH_ENTRY)) return id.slice(BRANCH_ENTRY.length);
+  if (id.startsWith(SWAP_ENTRY)) {
+    const second = id.indexOf(':', SWAP_ENTRY.length);
+    return second >= 0 ? id.slice(second + 1) : id;
+  }
+  return id;
 }
 
-export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatName?: (seat: 0 | 1) => string): GameLogEntry[] {
+export function replayLog(
+  positions: readonly Position[],
+  heroSeat: 0 | 1,
+  seatName?: (seat: 0 | 1, currentHero: 0 | 1) => string,
+  swaps: readonly SeatSwap[] = [],
+): GameLogEntry[] {
   const entries: GameLogEntry[] = [];
   // The first of the person's own steps in this step of the turn whose move
   // has not been named yet: the decision where that move began.
   let begun: Position | null = null;
+  let swapIndex = 0;
   positions.forEach((position, i) => {
+    const posEvent = position.event ?? Infinity;
+    while (swapIndex < swaps.length && swaps[swapIndex].event <= posEvent) {
+      const swap = swaps[swapIndex];
+      entries.push({
+        id: `${SWAP_ENTRY}${swapIndex}:${position.key}`,
+        actor: 'system',
+        turn: swap.turn ?? position.turn,
+        text: swap.turn != null ? `Swapped sides · Turn ${swap.turn}` : 'Swapped sides',
+      });
+      begun = null;
+      swapIndex += 1;
+    }
     if (position.kind === 'state') return;
+    const currentHero = (heroSeat ^ (swapIndex & 1)) as 0 | 1;
     // A neutral note where an imported record branched from its source game.
     if (position.kind === 'choice' && position.branched?.length) {
       entries.push({
@@ -247,7 +313,7 @@ export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatN
     // opponent's does. A step of a move that completes later is no line; the
     // move jumps to the decision where it began.
     const after = positions[i + 1];
-    const narrated = position.kind === 'choice' && position.actor === heroSeat && after?.kind === 'consequences';
+    const narrated = position.kind === 'choice' && position.actor === currentHero && after?.kind === 'consequences';
     const sameStep = begun !== null && begun.turn === position.turn && begun.step === position.step;
     if (narrated && after.label === null) {
       if (!sameStep) begun = position;
@@ -258,18 +324,19 @@ export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatN
     const auto = position.kind === 'consequences' && position.automatic;
     let text = ((narrated ? after.label : position.label) ?? 'Choice').replace(/^Auto: /, '');
     if (seatName) {
-      text = nameSeats(text, seatName, position.actor === heroSeat);
+      const resolveSeat = (seat: 0 | 1): string => seatName(seat, currentHero);
+      text = nameSeats(text, resolveSeat, position.actor === currentHero);
       // A recorded choice names players by setup role: Hero is the seat named "you".
-      const chooser = position.actor === heroSeat ? 'hero' : 'villain';
+      const chooser = position.actor === currentHero ? 'hero' : 'villain';
       text = text.replace(/^Target (Hero|Villain)$/, (_, role: string) => {
-        const seat = (role === 'Hero' ? heroSeat : 1 - heroSeat) as 0 | 1;
-        const name = seatName(seat);
+        const seat = (role === 'Hero' ? currentHero : 1 - currentHero) as 0 | 1;
+        const name = resolveSeat(seat);
         return `Target ${name !== 'You' ? name : chooser === 'hero' ? 'yourself' : 'you'}`;
       });
     }
     entries.push({
       id: anchor.key,
-      actor: auto ? 'auto' : position.actor === null ? 'villain' : position.actor === heroSeat ? 'hero' : 'villain',
+      actor: auto ? 'auto' : position.actor === null ? 'villain' : position.actor === currentHero ? 'hero' : 'villain',
       turn: anchor.turn,
       text,
     });
@@ -423,6 +490,8 @@ export interface StripMark {
   value: number | null;
   /** An analysed decision where you chose otherwise than the policy. */
   differs?: boolean;
+  /** A mid-game seat swap occurred right before this position; breaks the estimate line. */
+  breakBefore?: boolean;
   label: string;
 }
 
@@ -442,17 +511,32 @@ export interface StripLine {
 }
 
 /** Every position as a mark on one line: decisions stand out, turns are ticked. */
-export function stripMarks(positions: readonly Position[], heroSeat: 0 | 1): StripMark[] {
-  return positions.map((position, at) => ({
-    at,
-    key: position.key,
-    turn: position.turn,
-    turnStart: at === 0 || position.turn !== positions[at - 1].turn,
-    decision: position.kind === 'choice',
-    side: position.actor === null ? null : position.actor === heroSeat ? 'you' : 'opponent',
-    value: position.value ?? null,
-    label: `Turn ${position.turn ?? '?'} · ${position.label ?? (position.kind === 'state' ? 'Final position' : position.kind === 'choice' ? 'Choice' : 'Consequences')}`,
-  }));
+export function stripMarks(
+  positions: readonly Position[],
+  heroSeat: 0 | 1,
+  swaps: readonly SeatSwap[] = [],
+): StripMark[] {
+  let swapIndex = 0;
+  return positions.map((position, at) => {
+    const posEvent = position.event ?? Infinity;
+    let breakBefore = false;
+    while (swapIndex < swaps.length && swaps[swapIndex].event <= posEvent) {
+      breakBefore = true;
+      swapIndex += 1;
+    }
+    const currentHero = (heroSeat ^ (swapIndex & 1)) as 0 | 1;
+    return {
+      at,
+      key: position.key,
+      turn: position.turn,
+      turnStart: at === 0 || position.turn !== positions[at - 1].turn,
+      decision: position.kind === 'choice',
+      side: position.actor === null ? null : position.actor === currentHero ? 'you' : 'opponent',
+      value: position.value ?? null,
+      ...(breakBefore ? { breakBefore: true } : {}),
+      label: `Turn ${position.turn ?? '?'} · ${position.label ?? (position.kind === 'state' ? 'Final position' : position.kind === 'choice' ? 'Choice' : 'Consequences')}`,
+    };
+  });
 }
 
 /**
@@ -529,10 +613,47 @@ export function labelledTurns(marks: readonly StripMark[], minGap: number): Stri
   return shown;
 }
 
+/** Build Review history divider notes for mid-game seat swaps, anchored on `events` by revision. */
+export function swapHistoryNotes(
+  swaps: readonly SeatSwap[],
+  positions: readonly Position[],
+  events: readonly PresentationEvent[],
+): HistoryNote[] {
+  if (!swaps.length || !positions.length) return [];
+  return swaps.flatMap((swap, swapIndex) => {
+    const target = positions.find(position => (position.event ?? Infinity) >= swap.event);
+    if (!target) return [];
+    let maxPreRevision: number | null = null;
+    for (const position of positions) {
+      if ((position.event ?? Infinity) >= swap.event) break;
+      if (position.revision != null) {
+        maxPreRevision = maxPreRevision === null ? position.revision : Math.max(maxPreRevision, position.revision);
+      }
+    }
+    let afterSeq = -1;
+    if (maxPreRevision !== null) {
+      for (const event of events) {
+        if (event.from_revision <= maxPreRevision) afterSeq = event.seq;
+        else break;
+      }
+    }
+    const id = `${SWAP_ENTRY}${swapIndex}:${target.key}`;
+    return [{
+      id,
+      actor: 'note' as const,
+      turn: swap.turn ?? target.turn,
+      afterSeq,
+      text: swap.turn != null ? `Swapped sides · Turn ${swap.turn}` : 'Swapped sides',
+      jumpKey: id,
+    }];
+  });
+}
+
 function historyYourMoveChoices(
   turns: readonly HistoryTurn[],
   positions: readonly Position[],
   heroSeat: 0 | 1,
+  swaps: readonly SeatSwap[] = [],
 ): [string, Position][] {
   const indexByKey = new Map(positions.map((position, index) => [position.key, index]));
   const lineAt = new Map<number, { id: string; actor: HistoryTurn['lines'][number]['actor'] }>();
@@ -554,7 +675,8 @@ function historyYourMoveChoices(
   positions.forEach((position, at) => {
     const line = lineAt.get(at);
     if (line?.actor === 'you') lastHero = line.id;
-    if (position.kind !== 'choice' || position.actor !== heroSeat) return;
+    const currentHero = humanSeatAt(heroSeat, swaps, position.event ?? null);
+    if (position.kind !== 'choice' || position.actor !== currentHero) return;
     const owner = lastHero ?? firstHero;
     if (owner !== null) choices.push([owner, position]);
   });
@@ -567,8 +689,9 @@ export function historyMoveMarks(
   positions: readonly Position[],
   heroSeat: 0 | 1,
   decisions: ReadonlyMap<number, AnalysedDecision>,
+  swaps: readonly SeatSwap[] = [],
 ): Map<string, DecisionMark> {
-  return aggregateMoveMarks(historyYourMoveChoices(turns, positions, heroSeat), decisions);
+  return aggregateMoveMarks(historyYourMoveChoices(turns, positions, heroSeat, swaps), decisions);
 }
 
 /** Your moves chosen with a live analysis shown, keyed by top-level `HistoryLine.id`. */
@@ -576,9 +699,10 @@ export function historyAnalysisShown(
   turns: readonly HistoryTurn[],
   positions: readonly Position[],
   heroSeat: 0 | 1,
+  swaps: readonly SeatSwap[] = [],
 ): Set<string> {
   return new Set(
-    historyYourMoveChoices(turns, positions, heroSeat)
+    historyYourMoveChoices(turns, positions, heroSeat, swaps)
       .filter(([, choice]) => choice.analysis_shown)
       .map(([move]) => move),
   );

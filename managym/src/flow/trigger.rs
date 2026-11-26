@@ -80,7 +80,7 @@ pub struct PendingTrigger {
     /// The ability's X: for an entering permanent's own trigger, the X of
     /// the spell that became it (CR 107.3m); for a counters or per-creature
     /// combat damage trigger, its event's amount ("that many"); otherwise 0.
-    pub x: u8,
+    pub x: i32,
     /// For an entering permanent's own trigger, the mana spent to cast the
     /// spell that became it; otherwise empty.
     pub spent: crate::state::payment::PaymentReceipt,
@@ -96,6 +96,9 @@ pub struct PendingTrigger {
     /// their effects inline instead of referencing `Object::abilities`
     /// (`ability_index` is unused when set).
     pub inline_effects: Option<Vec<Effect>>,
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited this
+    /// trigger, or `None` for printed / Layer-1 copied triggers.
+    pub acquired: Option<crate::state::ability::GrantKey>,
 }
 
 /// A delayed triggered ability (CR 603.7) waiting for its event. It fires
@@ -174,6 +177,8 @@ pub enum DelayedTriggerEvent {
     YouCastSpell(Box<CardPredicate>),
     /// "At the beginning of upkeep".
     Upkeep,
+    /// Any ordinary [`TriggerCondition`], matched by the shared trigger matcher.
+    Whenever(Box<crate::state::ability::TriggerCondition>),
 }
 
 /// A card exiled with an exact `source` object (CR 607.2a). "Until [source]
@@ -186,6 +191,9 @@ pub enum DelayedTriggerEvent {
 pub struct ExileLink {
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub source: ObjectId,
+    /// CR 607.1a, 607.5: the ability set latched when the link was created
+    /// (`Printed(def_id)` or `Acquired(grant_key)`).
+    pub ability_set: crate::state::ability::AbilitySet,
     /// The appearance found by the exiling effect (CR 400.7j), not any
     /// later appearance of the same physical card.
     /// V16 recorded a row here, so its bytes keep the slot alone.
@@ -194,6 +202,15 @@ pub struct ExileLink {
     /// The card returns as the source leaves the battlefield.
     #[serde(skip_serializing_if = "is_true")]
     pub returns: bool,
+}
+
+impl ExileLink {
+    pub fn linked_source(&self) -> crate::state::ability::LinkedAbilitySource {
+        crate::state::ability::LinkedAbilitySource {
+            creator: self.source,
+            set: self.ability_set,
+        }
+    }
 }
 
 fn is_true(value: &bool) -> bool {
@@ -216,6 +233,7 @@ impl PendingTrigger {
             source_lki: None,
             ordering_class: TriggerOrderingClass::Ordinary,
             inline_effects: None,
+            acquired: None,
             program: false,
             remembered: Vec::new(),
             targets: Vec::new(),
@@ -247,13 +265,6 @@ impl PendingTrigger {
     }
     pub fn source_ref(&self) -> Option<ObjectId> {
         self.source_identity.reference()
-    }
-    pub fn current_clause_targets(&self) -> impl Iterator<Item = Target> + Clone + '_ {
-        self.targets
-            .iter()
-            .zip(&self.target_req_indices)
-            .filter(|(_, index)| **index == self.requirement_index)
-            .map(|(target, _)| *target)
     }
 }
 
@@ -315,6 +326,9 @@ impl serde::Serialize for PendingTrigger {
             map.serialize_entry("modes_chosen", &true)?;
         }
         map.serialize_entry("inline_effects", &self.inline_effects)?;
+        if self.acquired.is_some() {
+            map.serialize_entry("acquired", &self.acquired)?;
+        }
         map.end()
     }
 }

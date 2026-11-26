@@ -61,6 +61,27 @@ fn cityscape_leveler_cast_trigger_destroys_and_pays_the_controller_a_tapped_powe
 }
 
 #[test]
+fn cityscape_leveler_attack_trigger_declined_leaves_itself_and_makes_no_powerstone() {
+    use crate::support::{game::clear_summoning_sickness, play::settle};
+    use managym::agent::action::ActionType;
+
+    let mut s = five_color_setup(&["Cityscape Leveler"]);
+    let leveler = s.force_permanent_on_battlefield(0, "Cityscape Leveler");
+    clear_summoning_sickness(&mut s, leveler);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, leveler);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Cityscape Leveler"),
+        vec![leveler]
+    );
+    assert!(powerstones(&s, 0).is_empty());
+    assert!(powerstones(&s, 1).is_empty());
+}
+
+#[test]
 fn powerstone_mana_pays_for_artifact_spells_but_not_nonartifact_spells() {
     for (pool, name, castable) in [
         ("1R", "Gray Ogre", false),
@@ -71,7 +92,7 @@ fn powerstone_mana_pays_for_artifact_spells_but_not_nonartifact_spells() {
         let mut s = five_color_unfunded_setup(&["Cityscape Leveler", "Gray Ogre"]);
         s.force_card_in_hand(0, name);
         s.game_mut()
-            .create_token("token.powerstone", PlayerId(0), false)
+            .create_token("token.powerstone", PlayerId(0))
             .expect("powerstone");
         s.set_player_mana_pool(0, pool);
         s.game_mut().scenario_refresh_priority().unwrap();

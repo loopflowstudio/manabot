@@ -404,7 +404,13 @@ fn joraga_invocation_offers_every_maximal_declaration() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |action| {
-            matches!(action, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                action,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     s.advance_to_active_step(0, StepKind::DeclareBlockers);

@@ -60,6 +60,7 @@ fn felidar_retreat() -> CardDefinition {
                     ..Default::default()
                 }),
                 vec![Effect::TriggerModes {
+                    min: 0,
                     up_to: None,
                     unchosen: false,
                     modes: vec![

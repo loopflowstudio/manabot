@@ -1034,6 +1034,7 @@ fn biblioplex_tomekeeper() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     up_to: Some(1.into()),
                     unchosen: false,
                     modes: vec![

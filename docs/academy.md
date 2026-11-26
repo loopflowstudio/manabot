@@ -13,6 +13,8 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
 - [Playing on the board](#playing-on-the-board)
+- [Grouped decisions](#grouped-decisions)
+- [Swapping sides mid-game](#swapping-sides-mid-game)
 - [Previewing payments](#previewing-payments)
 - [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 - [Choosing priority stops](#choosing-priority-stops)
@@ -216,7 +218,7 @@ Once the game starts, the browser address updates to `/?game=<id>`, so
 reloading the page returns to the same game and its pending decision — even
 after an idle timeout or a server restart — and never deals again. To play
 again with the same setup or reversed seats, use
-[Rematch, Swap sides or Deal new decks](#rematch-swap-sides-and-resuming).
+[Rematch, Swap play/draw or Deal new decks](#rematch-swap-sides-and-resuming).
 **New game** opens setup in place with the launched decks, opponent and
 decklist mode selected, leaving the current game unfinished in **History**.
 For imported matchups, setup shows both selected source files and their
@@ -513,12 +515,12 @@ one line from the history: turns, and each player's spells cast and attacks.
 | Action on the result card | What carries forward |
 |---|---|
 | **Rematch** | Both decks (including imported lists), exact opponent configuration, disclosure, **Open hands**, priority stops and your seat from the game just played |
-| **Swap sides** | The rematch setup with your native play/draw seat reversed; your deck stays yours |
+| **Swap play/draw** | The rematch setup with your native play/draw seat reversed; your deck stays yours |
 | **Deal new decks** | Same deck pools and opponent configuration, drawing fresh decks from the pools |
 | **Review this game** | Opens `/replay?trace=<id>` from the first recorded position |
 
 Priority-stop and **Open hands** changes made during play are saved into the
-game's setup and carry forward into **Rematch**, **Swap sides** and **Resume**.
+game's setup and carry forward into **Rematch**, **Swap play/draw** and **Resume**.
 
 Academy names every opponent with how it decides: **Search 64 · search**,
 **Heuristic · scripted**, **Passive · scripted**, a checkpoint by its name and
@@ -541,7 +543,7 @@ supplied seed, including one supplied with CLI `--seed` or Python `seed=`.
 Enter a seed as a decimal unsigned 64-bit integer, from `0` to
 `18446744073709551615`. The selected mode is visible before starting.
 
-Rematching or swapping sides preserves this mode. Repeating a seed does not
+Rematching or swapping play/draw preserves this mode. Repeating a seed does not
 repeat policy decisions, and swapping native seats changes which player gets
 each seat's deal. These controls do not establish a paired evaluation.
 
@@ -777,8 +779,8 @@ The rail flows from the past into the present:
   long one is shortened and its full text is the button's accessible name and
   tooltip. Declining, and a combat answer that does not name another creature,
   are separate buttons, so a click on a card never declines. During a live
-  combat draft the per-creature answers fold under a closed disclosure (see
-  combat below).
+  grouped decision (combat or card arrangement) the raw single-step offers fold
+  under a closed disclosure (see [Grouped decisions](#grouped-decisions)).
 
 While the opponent decides, the rail and the opponent's plate say so, with
 the seconds it has taken ("Search 64 is searching · 3 s"), and the rail's
@@ -804,7 +806,9 @@ sweep and joins the drafted attack on release; dragging a box only adds (click a
 creature or **Clear the draft** to remove one), and box selection starts only
 inside the battlefield rows during an attack draft — never on player plates,
 your hand, the rail or the bars, and never for lands or cards that commit one
-action at a time. Drafted attackers are ringed with a dashed line and lean in,
+action at a time. When a planeswalker can be attacked, choose the defending
+player or a named planeswalker for each attacker; the confirmation lists those
+assignments. Drafted attackers are ringed with a dashed line and lean in,
 and a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
 rail. At a block, drag a declarable blocker onto an attacker it can block, or
 click the blocker and then the attacker. Dragging draws a live blocking line,
@@ -812,28 +816,25 @@ lights up legal attackers and hides an already-assigned blocker's old line while
 you move it; release on a legal attacker to assign or move the block, or release
 elsewhere or press Escape to put it back without disturbing a blocker you
 clicked. On click, a blocker that can block only one attacker still takes it at
-once, and clicking still takes a block back. When combat preview is unavailable
-and blocks are asked one creature at a time, dragging from the blocker onto an
-attacker still draws a blocking line and submits that block. The prompt reads
-the whole plan ("Attack with 3 · not with
-Tiger-Seal", "Badgermole Cub and Ally on Invasion Reinforcements") and
-nothing is declared while drafting. The engine still asks about one creature
-at a time: Academy's read-only combat preview replays the draft on a copy of
-the game and returns the exact answers that declare it, or the first one it
-refuses and why (a lone blocker of a creature with menace, a creature that
-cannot attack). Confirm (Space) sends those answers one by one; if the game
-asks anything the preview did not predict, sending stops and the board shows
-where the game stands. While a priority stop updates, your draft and selected
-blocker stay in place. If the first declaration is refused at the same
-decision, you can edit the draft and confirm again. If a later declaration
-is refused, the board keeps the accepted declarations and lets you draft
-from that decision. Escape stops a confirmed plan between answers. A
-reload keeps the draft for the same decision in that tab. While a draft is
-open in live play it is the only way to declare: each creature's own answers
-stay in the list of legal choices under a closed **Each creature's choice**
-disclosure and are not numbered keys. Replay and Study keep them listed, since
-recorded policy probabilities attach to them. **Pass turn** (F6) passes
-priority until the turn ends.
+once, and clicking still takes a block back. When grouped combat drafting is
+unavailable and blocks are asked one creature at a time, dragging from the
+blocker onto an attacker still draws a blocking line and submits that block. The
+prompt reads the whole plan ("Attack with 3 · not with Tiger-Seal", "Badgermole
+Cub and Ally on Invasion Reinforcements") and nothing is declared while
+drafting. The engine still asks about one creature at a time: Academy's
+read-only grouped preview replays the draft on a copy of the game and returns
+the exact answers that declare it, or the first one it refuses and why (a lone
+blocker of a creature with menace, a creature that cannot attack). **Confirm**
+(Space) commits the whole plan in one all-or-nothing request; if the plan is
+refused or incomplete, the board stays unchanged and you can edit the draft and
+confirm again (see [Grouped decisions](#grouped-decisions)). While a priority
+stop updates, your draft and selected blocker stay in place. A reload keeps the
+draft for the same decision in that tab. While a draft is open in live play,
+each creature's own answers stay in the list of legal choices under a closed
+**Each creature's choice** disclosure and are not numbered keys; choosing one
+submits that single step as an ordinary command. Replay and Study keep them
+listed, since recorded policy probabilities attach to them. **Pass turn** (F6)
+passes priority until the turn ends.
 
 Keys: `1`–`9` choose a numbered choice, Space presses the primary button (or
 returns the board to now while looking back, unless a control with its own
@@ -864,6 +865,163 @@ in **Replay**. Their decision surface shows the acting seat's permitted view
 and the complete legal choices for that decision. Recorded policy outputs
 appear only when available; missing outputs are not reconstructed. See
 [Inspect a replay](#inspect-a-replay).
+
+### Grouped decisions
+
+Multi-part decisions that belong to one rules choice — declaring attackers,
+declaring blockers, arranging looked-at cards for **Scry**, **Surveil** and
+**OrderLibrary**, and splitting piles for **PartitionPiles** — are drafted whole
+and committed in one **Confirm**.
+
+**Declaring attackers and blockers.** When you enter Declare Attackers with
+three creatures that can attack, each declarable creature is outlined on the
+board. Click a creature (or focus it and press Enter) to add it to the attack
+or leave it out, or drag a box across the creatures you want; drafted attackers
+get a dashed ring and lean in, and a pile of identical creatures shows its
+drafted count ("2 of 3 Tiger-Seal") in the rail. When the opponent controls a
+planeswalker, drafted attackers default to the defending player and can be
+retargeted individually on the board or from the rail's defender selector. When blocking, drag a blocker
+onto an attacker it can block, or click the blocker and then the attacker; on
+click, a blocker with only one legal attacker assigns it immediately and draws
+the block line. As you edit the draft, Academy asks the rules engine to preview
+the whole plan on a copy of the game without changing the live state. If the
+engine would refuse the plan — for example, a lone blocker on a creature with
+menace, or leaving out a creature that must attack — its exact refusal reason
+appears on that creature and the draft stays open for editing. Press **Confirm**
+(Space) once to commit the entire declaration in a single request: either the
+whole plan lands or none of it does.
+
+**Arranging looked-at cards (Scry, Surveil, OrderLibrary).** Cast a spell with
+Scry 2 and an arrangement panel opens with the two looked-at cards and two
+ordered buckets: **Top of library — drawn first at top** and **Bottom of
+library — top-most at top**. Both cards start unplaced and **Confirm** stays
+disabled until every card is placed. Move and reorder cards with the pointer or
+keyboard, then press **Confirm** once.
+
+- **Scry** (2+ cards): remaining cards start unplaced; **Confirm** enables once
+  every card is placed in **Top of library** or **Bottom of library** and the
+  engine preview marks the plan complete. Top cards are drawn first from top to
+  bottom; bottom cards sit on the bottom of your library in the same
+  top-to-bottom reading order (the bottom-most card in the bucket goes on the
+  very bottom of the library).
+- **Surveil** (2+ cards): two buckets, **Keep on top** and **Graveyard**.
+  Remaining cards start in **Keep on top** (matching the engine's decline
+  offer), and the Confirm button names the exact commitment ("Keep all 2 on
+  top", "Put 1 in graveyard, keep 1 on top", "Put all 2 in graveyard"). When two
+  or more cards stay on top, confirming the Surveil immediately opens
+  **OrderLibrary** as its own grouped confirmation.
+- **OrderLibrary** (2+ cards, top or bottom of library): one ordered list
+  headed **Top of library — drawn first at top** or **Bottom of library — drawn
+  first at top**. Remaining cards start unplaced and **Confirm** enables once
+  every card is ordered. A two-card order (such as after keeping two cards with
+  Surveil 2) stays in the arrangement panel even though native trivial-decision
+  skipping resolves the final card automatically.
+- **PartitionPiles** (2+ cards, e.g., Curator of Destinies): two buckets,
+  **Face-up** (revealed to your opponent) and **Face-down** (hidden count only).
+  Remaining cards start face-down; click any card or press **Swap piles** to
+  adjust the split, and press **Confirm split** once to submit the whole split
+  in one `decision_group_command`.
+
+Combat grouping activates whenever at least one creature can declare, so
+single-creature combat keeps the same drafting and Confirm controls. Scry,
+Surveil, OrderLibrary and PartitionPiles activate when two or more cards remain;
+a single remaining card stays a single raw choice.
+
+**Raw per-step choices stay reachable.** The underlying engine still steps one
+action at a time. During any live group, the rail keeps every legal single-step
+offer under its collapsed disclosure. Choosing a raw offer submits that single
+step as an ordinary Command; the next frame shows what has already committed
+(as a read-only summary in the panel or on the board) alongside the remaining
+items in the group.
+
+**Recovery, privacy and recordings.**
+
+- **All-or-nothing submission.** Nothing mutates while drafting. Pressing
+  **Confirm** sends one `decision_group_command` bound to the active match, revision,
+  prompt and frame hash. The server validates the whole plan on a clone before
+  stepping the live game; a refused or incomplete plan leaves the board
+  unchanged and keeps your draft with the engine's reason.
+- **Reload and reconnect.** An unsubmitted draft is stored in this tab's
+  session storage for that exact decision and discarded if the frame moves on.
+  While a grouped Confirm is in flight, the draft stays visible and disabled.
+  If the connection drops or the tab reloads before the reply arrives, recovery
+  checks the pending `decision_group_command` against the server's accepted commands and
+  either settles it or resends the exact submission — never applying it twice
+  and never leaving a half-committed group.
+- **Watchers and pilot transfer.** Live grouped descriptors are sent only to
+  the active pilot; watchers never receive private Scry, Surveil or
+  PartitionPiles cards. When
+  pilot control transfers to another participant, any active group is delivered
+  with the role change without reloading.
+- **Identical recordings, Replay and Study.** Applying a group executes the
+  exact sequential native actions in order and records one decision per native
+  step, byte-for-byte equivalent to submitting one Command at a time. Replay,
+  Watch and Study never show grouped panels: they show every recorded per-step
+  decision, legal offer, policy probability and Study fork.
+- **Purity boundary.** A group covers consecutive steps of one decision by one
+  player and stops cleanly before any hidden-information reveal, draw, shuffle
+  or opponent choice. Effects that fire after the group finishes — such as a
+  spell that scries and then draws a card — run cleanly once the final Scry
+  step commits.
+
+#### Which multi-step decisions group
+
+| Decision | Plan shape | Where the group ends | Status |
+|---|---|---|---|
+| Declare attackers / blockers (1+ creatures) | attackers list (optional planeswalker defender) / blocker → attacker pairs | declaration commits | Supported |
+| Scry (2+ cards) | ordered top + ordered bottom | scry finishes | Supported |
+| Surveil (2+ cards) | graveyard subset | graveyard picks commit; OrderLibrary follows as its own group | Supported |
+| OrderLibrary top / bottom (2+ cards) | ordered list | last card placed | Supported |
+| PartitionPiles (2+ cards) | face-up subset (remaining go face-down) | split finishes (opponent chooses pile next) | Supported |
+| Multi-card subset picks (SelectCards max > 1, SearchDistinctNames, Discard 2+, OpponentSplitsRevealed, KeepCreatures) | subset within engine limits | selection finishes | Planned follow-up |
+| Amount distributions (DistributeCounters, DivideAmongTargets, AssignCombatDamage) | amount per recipient | amounts exhausted | Planned follow-up |
+| OrderTriggers | trigger order | only while no trigger asks a mode or target between picks | Planned follow-up |
+| Retarget, ManaUpfront, ManaSpend, OrderEntryChoices, OrderReplacement | — | — | Stays sequential (later options depend on earlier picks) |
+| LookAndSelect, ManifestDread, ChooseToExile, DiscardFromRevealedHand, OrderMeldedCards, ExileLinked, LegendRule, ChoosePile | — | — | Single step |
+
+### Swapping sides mid-game
+
+You are on turn 4 playing UR Lessons against Reader piloting GW Allies, and you
+want to play the position from the Allies side. Open **Settings** in the top
+bar, go to **Game → This game**, and press **Swap sides**.
+
+The board turns to the other seat in the same game: GW Allies' hand sits along
+the bottom, **GW Allies** appears under **You**, and the same life totals,
+battlefield, stack and turn stay in place. The live move list keeps earlier
+moves and adds a **Swapped sides** divider. Reader takes over UR Lessons and
+acts at once if that seat was to move. One press swaps without a confirmation
+dialog; press **Swap sides** again at any time to swap back.
+
+| What | After you swap sides |
+|---|---|
+| **Your hand, board and deck** | Flips to the other seat in the same game; the bot pilots the seat you left. |
+| **Auto-tap and priority stops** | Stay with you; an active **Pass turn** (F6) yield clears for the new seat. |
+| **Native mana payment and floats** | Stay with each seat as the game started. |
+| **Show analysis** | If on, stays on and follows you to your new seat without holding play; earlier choices keep their **analysis shown** mark. |
+| **Next game** (`Rematch`, `Swap play/draw`, `Edit next game`) | Unchanged, and the session's game number stays the same. **Swap play/draw** is separate: it starts the next game keeping your deck and reversing play/draw. |
+
+**Swap sides** is unavailable once the game is over, in **Watch**, while a
+**Study** branch is active, while a bot retry (**Retry bot decision** / **Retry
+search**) is pending, or when you are watching a shared table rather than
+piloting it. If loading the bot for the seat you are leaving fails, Academy
+shows the reason under the button and leaves the live game untouched so you can
+keep playing.
+
+The game remains one game through the end:
+
+- **Games and My record**: it appears once in **Games** with each player in
+  their final seat and deck, and counts once in **My record** by how it ends (a
+  win if the seat you finished in won). A game started via **Play on from here**
+  stays out of **My record** even if you swap sides during it.
+- **Review and Analysis**: **Review** defaults **Perspective** to **Follow the
+  chooser** so the bottom seat follows you across each swap (fixed Seat 1 and
+  Seat 2 perspectives remain selectable, labelled by native seat and deck), names
+  each seat by who piloted it at the shown position, marks each swap in the move
+  list as **Swapped sides · Turn T** with a notice, and shows every decision you
+  made before and after each swap. Post-game **Analysis** reads all of your
+  deliberate decisions across both seats, **See its line** works from any
+  analysed decision before or after a swap, and **Play on from here** places you
+  in the seat you piloted at that decision.
 
 ### Previewing payments
 
@@ -924,7 +1082,7 @@ and always stop.
 Under **Mana floats**, **Off** is the default. Choose **Only when the mana could be used** to float when a legal action can spend mana or tapping the source
 can trigger an ability. Usable also offers an activation that pays life,
 sacrifices a permanent or has another effect. **All** offers every legal
-mana activation at priority. With **Manual** payment you can select these abilities and choose a land’s output while paying. A deliberate float at priority also lets you choose its output. The setting follows you when you swap sides.
+mana activation at priority. With **Manual** payment you can select these abilities and choose a land’s output while paying. A deliberate float at priority also lets you choose its output. The setting follows you when you use **Swap play/draw** for the next game; swapping sides mid-game keeps each seat's native mana settings as started while browser **Auto-tap** stays with you.
 Your priority stops still determine which windows pause for a decision: with
 **Auto-pass outside stops** on, priority pauses only when you also have a
 non-mana play; turn it off for **Full control** to pause solely to float mana.
@@ -1390,8 +1548,9 @@ or tuck both hands together. At game over, neither ribbon stays extended.
 
 The **Perspective** control in the top bar chooses who sits at the bottom:
 fixed seats (**Seat 1 at the bottom** is the default for Watch and imported
-games; your seat is the default for a game you played), or **Follow the
-chooser** (`near=chooser`), which turns each choice and its consequences to the
+games; your seat is the default for an unswapped game you played), or **Follow the
+chooser** (`near=chooser`, the default for played games where you swapped sides
+mid-game), which turns each choice and its consequences to the
 choosing seat. Turning the board never reveals a hand or changes the recorded
 policy inputs.
 
@@ -1421,12 +1580,15 @@ retries that decision; browsing saved positions never retries it.
 
 An analysis reads a played game against a policy: at each of your decisions
 with more than one legal action, what that policy would have done in your
-seat. Academy replays the game with the policy in your seat; it sees only what
-your seat saw, and the game follows the moves you made. Opening Replay on a
-finished played game starts an analysis automatically when the game has none
-yet: by your opponent's policy when it is a registered trained policy,
-otherwise by Academy's recommended policy, the one setup offers first. On an
-unfinished played game, analysis runs only when you click **Analyse** (never
+seat. If you [swapped sides mid-game](#swapping-sides-mid-game), it reads all
+of your deliberate decisions across both seats, and **See its line** and
+**Play on from here** act from the seat you piloted at that decision. Academy
+replays the game with the policy in your seat; it sees only what your seat saw,
+and the game follows the moves you made. Opening Replay on a finished played
+game starts an analysis automatically when the game has none yet: by your
+opponent's policy when it is a registered trained policy, otherwise by
+Academy's recommended policy, the one setup offers first. On an unfinished
+played game, analysis runs only when you click **Analyse** (never
 automatically). Replay is usable at once; **Analysing 34 of 81** counts up
 while the marks fill in.
 
@@ -1524,7 +1686,9 @@ Each choice you commit after its reading reached you is saved as made with
 analysis shown. Replay marks that move **analysis shown**, **This game**
 counts them, and **History** shows them on the game's row.
 Turning **Show analysis** off stops the marking from your next decision; it
-never unmarks a choice. A game you play without it saves exactly as before.
+never unmarks a choice. If you [swap sides mid-game](#swapping-sides-mid-game)
+while it is on, analysis follows you to your new seat and earlier choices keep
+their marks. A game you play without it saves exactly as before.
 
 | You see | Why | What to do |
 |---|---|---|
@@ -1569,7 +1733,10 @@ Click the chip or switch **Open hands** off to glide them back into card backs
 The result card of a game you played ends with one line of its numbers, such as
 **9 turns · you cast 6 spells and attacked 4 times; Reader cast 3 and attacked
 2 times**. In Review, **This game** in **Settings** gives turns, whether you were on
-the play or the draw and how long the game took, and a table of both seats:
+the play or the draw (noting starting and final order when a mid-game swap
+changed it) and how long the game took, and a table of both seats (in a game
+where you swapped sides mid-game, each column counts that native seat across the
+whole game, labelled by native seat, deck and who finished in it):
 
 | Count | What it counts |
 |---|---|
@@ -1582,8 +1749,8 @@ the play or the draw and how long the game took, and a table of both seats:
 
 With an analysis shown, **This game** also reads **Decisions with a choice: 20 ·
 chose as Reader would: 8 of 20**, where the policy's first choice was yours,
-and the policy's estimate from your seat at the start, at its highest and at
-the end. A game with choices made while [analysis was
+and (for games without a mid-game swap) the policy's estimate from your seat at
+the start, at its highest and at the end. A game with choices made while [analysis was
 shown](#analysis-while-you-play) reads **Chosen with analysis shown: 3
 decisions**, and one with choices made while [Open
 hands](#open-hands-while-you-play) was on reads **Played with open hands: 4

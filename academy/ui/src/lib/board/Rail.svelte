@@ -9,6 +9,7 @@
    * collapsible in one click).
    */
   import { tick, type Snippet } from 'svelte';
+  import { decisionGroupDisclosureCopy, type DecisionGroupKind } from '$lib/decision-group';
   import type { ExperienceFrame } from '$lib/types';
   import type { HistoryLine, HistoryTurn } from './history';
   import type { Segment } from './tell';
@@ -74,16 +75,16 @@
     cursorLineIds?: ReadonlySet<string>;
     /** Cast/activation seq marked when a standalone resolution line is selected. */
     cursorSourceSeq?: number | null;
-    /** A combat draft's controls, in place of the per-creature buttons. */
+    /** A live group's or draft's controls, in place of the single-step buttons. */
     draft?: Snippet;
-    /** Why a confirmed combat declaration stopped before all of it was sent. */
-    stopped?: string | null;
+    /** Active group kind, for the collapsed raw-offer disclosure wording. */
+    groupKind?: DecisionGroupKind | null;
   }
 
   let {
     view, stack: stackGiven, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, history, opponentName,
     stackSources, drop, onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false,
-    evidence = null, moveMarks = new Map(), shownMoves = new Set(), onjump, recording = false, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, stopped = null,
+    evidence = null, moveMarks = new Map(), shownMoves = new Set(), onjump, recording = false, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, groupKind = null,
   }: Props = $props();
 
   const stack = $derived(stackGiven ?? view.stack);
@@ -395,15 +396,14 @@
             {/if}
           </div>
         {/if}
-        {#if stopped}<p class="type-caption text-ink-2" data-testid="combat-stopped" role="status">{stopped}</p>{/if}
-
         {#if hasChoicesBlock && choicesOpen && !waitingFor}
           <div use:region={{ across: !onjump }} class="choices" aria-label="All legal choices">
-            <!-- An open combat draft is the way to declare; each creature's own offer stays one click away for inspection. -->
+            <!-- An open live group folds raw single-step offers under a collapsed disclosure. -->
             {#if draft}
-              <details class="raw" data-testid="per-creature-choices">
-                <summary class="type-caption text-ink-3">Each creature's choice</summary>
-                <p class="type-caption text-ink-3">Confirming the draft sends these one creature at a time.</p>
+              {@const disclosure = decisionGroupDisclosureCopy(groupKind ?? 'declare_attackers')}
+              <details class="raw" data-testid="per-creature-choices" data-group-kind={groupKind ?? undefined}>
+                <summary class="type-caption text-ink-3">{disclosure.summary}</summary>
+                <p class="type-caption text-ink-3">{disclosure.caption}</p>
                 {@render choiceList()}
               </details>
             {:else}
@@ -594,10 +594,13 @@
   .recording .turn { min-width: 0; }
   .recording .turn ol { gap: 0; }
   .gutter { flex: none; width: 16px; font-variant-numeric: tabular-nums; color: var(--text); }
-  .recording .move.jump button { min-width: 0; min-height: 24px; display: flex; align-items: baseline; gap: 6px; padding: 2px 4px; }
+  /* Dense rows: a 24 px target (WCAG 2.5.8) rather than the 32 px control height. */
+  .recording .move.jump button { min-width: 0; min-height: 24px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 2px 4px; }
   .recording .move.jump .who { flex: none; width: 44px; margin-right: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .recording .move.jump .who.repeat { visibility: hidden; }
-  .recording .move.jump .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recording .move.jump .what { flex: 1 1 5em; min-width: 5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Marks never squeeze the move away: in a narrow rail they wrap under it, kept to the right. */
+  .recording .move.jump .reading, .recording .move.jump .shown { margin-left: auto; }
   /* An analysis's reading of your move: neutral ink, never a grade. */
   .reading { flex: none; display: inline-flex; gap: 4px; align-items: center; }
   .mark { font-family: var(--font-sans); color: var(--text-tertiary); }

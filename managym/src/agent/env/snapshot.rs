@@ -472,7 +472,12 @@ mod card_history_tests {
             .scenario_force_battlefield(actor, "Drake Hatcher", true)
             .unwrap();
         game.state.combat = Some(Box::new(CombatState {
-            attackers: vec![source],
+            attack_targets: vec![(
+                source,
+                Some(crate::flow::combat::AttackTarget::Player(
+                    game.next_player(actor),
+                )),
+            )],
             ..Default::default()
         }));
         let combat = env.snapshot().unwrap();
@@ -538,7 +543,7 @@ mod card_history_tests {
             .scenario_force_battlefield(actor, "Steel Hellkite", true)
             .unwrap();
         let source = game.permanent_object(hit).unwrap();
-        let token = game.create_token("token.food", actor, false).unwrap();
+        let token = game.create_token("token.food", actor).unwrap();
         for (permanent, combat) in [(other, false), (hit, true)] {
             assert!(
                 game.commit_damage(

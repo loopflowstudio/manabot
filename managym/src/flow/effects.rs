@@ -144,6 +144,7 @@ impl Game {
             return;
         }
         self.state.effects.extend(records);
+        self.remove_invalid_defenders();
     }
 
     /// The `Affected` of a battlefield permanent's current incarnation.
@@ -282,7 +283,9 @@ impl Game {
     pub fn player_has(&self, player: PlayerId, modification: &Modification) -> bool {
         self.player_effects(player)
             .any(|effect| &effect.modification == modification)
-            || self.layer_board().player_modifications[player.0].contains(modification)
+            || self.with_layer_board(|board| {
+                board.player_modifications[player.0].contains(modification)
+            })
     }
 
     /// The most life `player` can pay: none other than 0 while their life
@@ -355,7 +358,7 @@ impl Game {
                     let permanent = self.state.permanents[id].as_ref()?;
                     Some((object, permanent.controller, permanent.attached_to))
                 }
-                Affected::Player(_) => None,
+                Affected::Player(_) | Affected::NextSpell(_) => None,
             })
             .collect();
         let is_phased = |object: ObjectId| phased.iter().any(|(other, ..)| *other == object);
@@ -383,11 +386,21 @@ impl Game {
         self.refresh_control();
     }
 
-    /// `player`'s turn begins: their "until your next turn" records end.
+    /// `player`'s turn begins: their "until your next turn" records and
+    /// delayed triggers end.
     pub(crate) fn end_until_your_next_turn_effects(&mut self, player: PlayerId) {
         self.end_effects(|effect| {
             effect.duration == EffectDuration::UntilYourNextTurn && effect.controller == player
         });
+        if self.state.delayed_triggers.iter().any(|trigger| {
+            trigger.expiry == crate::state::ability::DelayedExpiry::UntilYourNextTurn
+                && trigger.controller == player
+        }) {
+            self.state.delayed_triggers_mut().retain(|trigger| {
+                !(trigger.expiry == crate::state::ability::DelayedExpiry::UntilYourNextTurn
+                    && trigger.controller == player)
+            });
+        }
     }
 
     /// CR 514.2: "until end of turn" effects end in the cleanup step.
