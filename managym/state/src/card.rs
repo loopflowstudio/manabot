@@ -859,6 +859,16 @@ impl ActivatedAbilityDefinition {
         }
     }
 
+    /// Tapping this permanent is the entire cost and producing mana its only effect.
+    pub fn is_simple_mana_tap(&self) -> bool {
+        self.tap_source
+            && self.mana_cost.mana_value == 0
+            && self.mana_cost.x == 0
+            && !self.is_use_limited()
+            && !self.mana_activation_has_side_effects()
+            && self.is_mana_ability()
+    }
+
     /// The total power of other creatures this ability taps as a cost, and
     /// the keyword that asks for it.
     pub fn tap_power(&self) -> Option<(i32, crate::payment::Toward)> {

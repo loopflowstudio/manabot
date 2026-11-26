@@ -259,8 +259,9 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     tap = next(
         a
         for a in decision.actions
-        if "Activate" in a.description and "Jasmine" in a.description
+        if "Tap Jasmine Dragon Tea Shop for any color" in a.description
     )
+    assert "Activate ability" not in tap.description
     submit_response(env, decision, tap.reference)
     modes = capture_text_decision(env)
     green = next(a for a in modes.actions if "Add {G}" in a.description)
@@ -269,6 +270,33 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     assert "Restricted mana: W 0, U 0, B 0, R 0, G 1, C 0." in text
     assert "Lesson-only" not in text and "Lesson spending" not in text
     assert "Restricted mana for Ally spells or abilities of Ally sources: G 1." in text
+
+
+def test_simple_choice_mana_taps_follow_native_description_in_text() -> None:
+    env = priority_root(
+        ("Youthful Knight",),
+        ("Kyoshi Village", "Plains", "Plains", "Plains"),
+    )
+    _choose(env, "Cast ")
+    payment = capture_text_decision(env)
+    # The dual reads exactly like the basics beside it.
+    assert [a.description for a in payment.actions[:2]] == [
+        "Tap for mana P1 (Kyoshi Village). Native description: "
+        "Tap Kyoshi Village for {G}/{W}",
+        "Tap for mana P2 (Plains). Native description: Tap Plains for {W}",
+    ]
+
+    any_color_env = priority_root(
+        ("Youthful Knight",),
+        ("Hermitic Herbalist", "Plains", "Plains"),
+    )
+    _choose(any_color_env, "Cast ")
+    herbalist = next(
+        a
+        for a in capture_text_decision(any_color_env).actions
+        if "Tap Hermitic Herbalist for any color" in a.description
+    )
+    assert herbalist.description.startswith("Tap for mana P1 (Hermitic Herbalist). ")
 
 
 def test_x_cost_definition_renders_its_x() -> None:
@@ -541,8 +569,6 @@ def test_esper_origins_text_follows_the_spell_onto_its_saga_face() -> None:
     env = priority_root(("Esper Origins",), ("Forest",) * 6)
     for from_graveyard in (False, True):
         _choose(env, "Cast ")
-        if not from_graveyard:
-            _choose(env, "Pay the offered cost")
         stack, _ = _stack_and_continuation(env)
         assert ("; cast from graveyard" in stack) == from_graveyard
         assert ("; cast with flashback" in stack) == from_graveyard
@@ -614,8 +640,6 @@ def test_a_prepared_spell_is_told_apart_from_its_copy() -> None:
     _choose(env, "Pass priority")
     _choose(env, "Cast C1 (Soul Tether)")
     _choose(env, "Tap for mana P3 (Forest)")
-    _choose(env, "Tap for mana P4 (Mountain)")
-    _choose(env, "Tap for mana P5 (Mountain)")
     _choose(env, "Pass priority")
     _choose(env, "Pass priority")
     text = capture_text_decision(env).text
@@ -657,7 +681,7 @@ def test_a_taken_optional_cost_is_named_for_what_the_card_offers() -> None:
 
 
 def test_a_chosen_sacrifice_is_committed_once_and_not_already_paid() -> None:
-    env = priority_root((), ("Hungry Ghoul", "Gray Ogre", "Swamp", "Swamp"))
+    env = priority_root((), ("Hungry Ghoul", "Gray Ogre", "Swamp", "Plains"))
     _choose(env, "Activate ability")
     _choose(env, "Sacrifice Gray Ogre")
     _, continuation = _stack_and_continuation(env)
@@ -2538,7 +2562,7 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
     )
     matchup = manifest["matchup"]
     # A seed whose uniformly random game is still live after 600 steps.
-    env = managym.Env(seed=208, decision_memory=True)
+    env = managym.Env(seed=379, decision_memory=True)
     raw, _ = env.reset(
         [
             managym.PlayerConfig(role, matchup[role]["cards"])
@@ -2546,13 +2570,13 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
         ]
     )
     keep_opening_hands(env, raw)
-    rng = random.Random(208)
+    rng = random.Random(379)
     for _ in range(600):
         env.step(rng.randrange(env.action_count()))
     memory = read_records(
         env.observation_for_player(env.current_agent_index()).decision_memory_json()
     )
-    assert len(memory) == 357
+    assert len(memory) == 428
     decision = capture_text_decision(env)
     _assert_memory_contexts(decision.text, memory)
     assert len({r.context.model_dump_json() for r in memory}) > 250
@@ -2574,7 +2598,7 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
 
 
 def test_manual_mana_sources_reach_text_commands_and_policy_input() -> None:
-    env = priority_root(("Gray Ogre",), ("Mountain", "Mountain", "Mountain", "Forest"))
+    env = priority_root(("Gray Ogre",), ("Mountain", "Mountain", "Forest", "Forest"))
     priority = capture_text_decision(env)
     cast = next(action for action in priority.actions if "Cast" in action.description)
     submit_response(env, priority, cast.reference)

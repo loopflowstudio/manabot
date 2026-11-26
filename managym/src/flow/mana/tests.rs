@@ -408,6 +408,7 @@ thread_local! {
 
 pub(in crate::flow::mana) fn tapping_ability(outputs: Vec<Mana>) -> ManaActivation {
     ManaActivation {
+        automatic: true,
         tap_source: true,
         tap_count: 0,
         tap_candidates: Arc::new(Vec::new()),
@@ -2099,7 +2100,7 @@ fn mana_ability_actions_deduplicates_equivalent_sources_and_keeps_convoke_colors
     });
 
     SEARCHED.with(|s| s.set(0));
-    let offered = game.mana_ability_actions(player);
+    let offered = game.mana_ability_actions(player, true);
     let searches = SEARCHED.with(|s| s.get());
     let expected: Vec<Action> = courtyards
         .iter()
@@ -2183,7 +2184,7 @@ fn mana_ability_actions_deduplicates_equivalent_sources_and_keeps_convoke_colors
         payment: Box::new(pay),
     });
     assert_eq!(
-        convoke_game.mana_ability_actions(player),
+        convoke_game.mana_ability_actions(player, true),
         vec![Action::ActivateAbility {
             player,
             permanent: red,
@@ -2239,7 +2240,7 @@ fn payable_fixed_sufficient_and_useful_taps_dedup_preserve_exact_semantics() {
     SEARCHED.with(|s| s.set(0));
     assert!(game.can_pay_with_mana_abilities(player, &ManaCost::parse("G"), None));
     assert!(game.can_activate_mana_ability(player, mascots[0], 0));
-    assert_eq!(game.mana_ability_actions(player).len(), 8);
+    assert_eq!(game.mana_ability_actions(player, true).len(), 8);
     assert_eq!(SEARCHED.with(|s| s.get()), 0);
 
     // Paying for Helpful Hunter ({1}{W}, Cat) with 6 Courtyards (1 Cat + 5
@@ -2274,7 +2275,12 @@ fn payable_fixed_sufficient_and_useful_taps_dedup_preserve_exact_semantics() {
         player,
         payment: Box::new(payment),
     });
-    let taps = game.useful_payment_taps(player);
+    let actions =
+        game.compute_announced_mana_actions(player, game.pending_payment(player).unwrap());
+    let taps: Vec<_> = actions
+        .into_iter()
+        .filter(|action| matches!(action, Action::TapForMana { .. }))
+        .collect();
     // Forests (2) + Courtyards (6) are all useful fixed taps toward {1}{W}.
     assert_eq!(taps.len(), 8);
     for id in courtyards {
@@ -2288,6 +2294,7 @@ fn payable_fixed_sufficient_and_useful_taps_dedup_preserve_exact_semantics() {
 #[test]
 fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
     let filter = ManaActivation {
+        automatic: false,
         tap_source: true,
         tap_count: 0,
         tap_candidates: Arc::new(Vec::new()),

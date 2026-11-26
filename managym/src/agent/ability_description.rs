@@ -1347,9 +1347,56 @@ fn value_description(triggering: TriggerText, value: &EffectValue) -> String {
 }
 
 pub(crate) fn mana_description(mana: &Mana) -> String {
+    let mut text = mana_symbols(mana);
+    describe_mana_classes(mana, &mut text);
+    text
+}
+
+/// Describe the modes of one tap. A shared restriction or rider is stated once.
+pub(crate) fn mana_choices_description(choices: &[Mana]) -> String {
+    let Some(first) = choices.first() else {
+        return "mana".into();
+    };
+    if choices.len() == 1 {
+        return mana_description(first);
+    }
+    let uniform = choices.iter().all(|mana| {
+        mana.total() == first.total()
+            && mana
+                .classes()
+                .iter()
+                .map(|(class, _)| class)
+                .eq(first.classes().iter().map(|(class, _)| class))
+    });
+    if !uniform {
+        return choices
+            .iter()
+            .map(mana_description)
+            .collect::<Vec<_>>()
+            .join("/");
+    }
+    let mut text = if first.total() == 1 {
+        let symbols: Vec<_> = choices.iter().map(mana_symbols).collect();
+        if symbols.len() == 5
+            && ["{W}", "{U}", "{B}", "{R}", "{G}"]
+                .iter()
+                .all(|pip| symbols.iter().any(|s| s == pip))
+        {
+            "any color".to_string()
+        } else {
+            symbols.join("/")
+        }
+    } else {
+        format!("{} mana", first.total())
+    };
+    describe_mana_classes(first, &mut text);
+    text
+}
+
+fn mana_symbols(mana: &Mana) -> String {
     let restricted = mana.restricted_colors();
     let unrestricted = mana.unrestricted_colors();
-    let mut text: String = ["W", "U", "B", "R", "G", "C"]
+    ["W", "U", "B", "R", "G", "C"]
         .into_iter()
         .enumerate()
         .flat_map(|(i, s)| {
@@ -1358,7 +1405,10 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
                 unrestricted[i] as usize + restricted[i] as usize,
             )
         })
-        .collect();
+        .collect()
+}
+
+fn describe_mana_classes(mana: &Mana, text: &mut String) {
     for (class, _) in mana.classes() {
         match class.expiry {
             crate::state::mana::ManaExpiry::Step => {}
@@ -1382,7 +1432,6 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
             text.push_str(&format!(" (puts {})", spend_effect_description(effect)));
         }
     }
-    text
 }
 
 fn payment_description(cost: &PaymentCost) -> String {

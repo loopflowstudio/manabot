@@ -2524,6 +2524,14 @@ impl Effect {
             || self.any_child_effect(Self::reads_resolution_count)
     }
 
+    /// Whether this program can make a permanent a creature.
+    pub fn may_become_creature(&self) -> bool {
+        match self {
+            Self::ApplyContinuous { modification, .. } => modification.grants_creature_type(),
+            _ => self.any_child_effect(Self::may_become_creature),
+        }
+    }
+
     /// Instructions within this resolution. Delayed and reflexive triggers
     /// inspect their programs when those abilities resolve.
     fn any_child_effect(&self, mut test: impl FnMut(&Effect) -> bool) -> bool {
