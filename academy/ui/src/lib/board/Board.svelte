@@ -23,23 +23,24 @@
   import ThemeSwitch from '$lib/components/ThemeSwitch.svelte';
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
-  import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
+  import type { CardState, ConnectionState, ExperienceFrame, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
   import Field from './Field.svelte';
   import Inspect from './Inspect.svelte';
   import { permissionTerms } from './inspect';
   import Lines from './Lines.svelte';
-  import { prefersReducedMotion, settle, Travel } from './motion';
+  import { animateDeathTravel, collectDeathMarks, prefersReducedMotion, settle, Travel, type DeathMark } from './motion';
   import { carriedAt, cancel as cancelGesture, dropLabel, IDLE, marqueeBounds, move as moveGesture, overlap, playable, press, promote, release, type ConnectDrag, type Gesture, type OfferTarget } from './drag';
   import { region } from './region';
-  import { BEAT_MS, beatsFor, turnAt, type Beat } from './beats';
-  import { boardAt, type StepBoard } from './boards';
-  import { moveList, type MoveTurn } from './moves';
-  import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
+  import { computeStopDeltas, cursorView, hasWalkableTurn, PACE_MS, scrubberStops, sharedLaterCount, stopHasSeq, unreadWalkStops, walkStops, type WalkPace } from './beats';
+  import { buildCombatTable } from './combat-table';
+  import { findBoard, type StepBoard } from './boards';
+  import { buildHistory, cursorReading, hasTrackHistory, recentHistory, stepCursor, turnAt, type CursorScope, type CursorSelection, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
+  import { EVIDENCE, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addAttackers, addressOf, ATTACK_INSTRUCTION, BLOCK_INSTRUCTION, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type Draft } from './combat';
   import { offerText, primaryLabel, promptHint, promptLine } from './prompt';
-  import { nameBook, recentView, boardLines, turnOwners, visibleNames, type RecentView } from './recent';
+  import { recentMarks, boardLines, turnOwners, type Endpoint, type RecentMarks } from './recent';
   import Plate from './Plate.svelte';
   import DeckTracker from './DeckTracker.svelte';
   import { buildOpponentTracker, buildSelfTracker, loadTrackerCardFaces, type TrackerCardFace } from './deck-tracker';
@@ -68,7 +69,8 @@
     /** The live connection; a recording has none. */
     connection?: ConnectionState | null;
     connectionLabel?: string;
-    log: GameLogEntry[];
+    /** Client-local automation/yield notes merged into live history. */
+    notes?: readonly HistoryNote[];
     canPassTurn: boolean;
     /** The live presentation track: what happened, as the authority reports it. */
     presentation: PresentationPlayer;
@@ -90,14 +92,20 @@
     onpassturn?: () => void;
     /** Where "since your last move" starts, when the caller knows (a recording); else the person's last commit. */
     since?: number | null;
-    /** The move list, when the caller keeps it (a recording); else read from `log`. */
-    moves?: MoveTurn[];
+    /** The history list, when the caller keeps it (a recording); else read from `presentation`. */
+    history?: HistoryTurn[];
     /** Jump to the position a move names; moves are buttons when set. */
-    onjump?: (id: string) => void;
+    onjump?: (id: string, boardSeq: number | null) => void;
     /** Nothing here can be answered (a recording, or a policy's line through it): the rail drops its answer buttons and empty stack. Defaults to `onjump` being set. */
     readOnly?: boolean;
     /** The move the shown position belongs to. */
     currentMove?: string | null;
+    /** External cursor seq (Review sub-step inside a `consequences` transition). */
+    cursorSeq?: number | null;
+    /** Error reconstructing `stepBoards` patches (surfaces "Board unavailable for this step"). */
+    stepBoardsError?: string | null;
+    /** Clear Review sub-step cursor (Esc / "Esc for now" / clicking the earlier board). */
+    onclearcursor?: () => void;
     /** The recorded policy at a recorded choice. */
     evidence?: OfferEvidence | null;
     /** An analysis's mark on each of your moves, by move id. */
@@ -131,14 +139,19 @@
     ontoggleautotap?: () => void;
     onfullcontrol?: (mode: FullControlMode) => void;
     onautotap?: (offer: InteractionOffer, note: string) => void;
+    /** Walk pace: Study (1.4 s, default), Quick (0.7 s), or Off. */
+    walkPace?: WalkPace;
+    onwalkpace?: (pace: WalkPace) => void;
   }
 
   let {
-    frame, interaction, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', log, canPassTurn,
+    frame, interaction, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', notes = [], canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
-    since: sinceGiven, moves: movesGiven, onjump, readOnly = onjump !== undefined, currentMove = null, evidence = null, moveMarks, shownMoves, recapTitle, heading = null, bottom, strip, notices, result, menu, bar, chips = [], historyHref = '/games',
+    since: sinceGiven, history: historyGiven, onjump, readOnly = onjump !== undefined, currentMove = null, cursorSeq = null, stepBoardsError = null, onclearcursor,
+    evidence = null, moveMarks, shownMoves, recapTitle, heading = null, bottom, strip, notices, result, menu, bar, chips = [], historyHref = '/games',
     combatPreview, stepBoards = [],
     autoTap = false, fullControl = 'off', ontoggleautotap, onfullcontrol, onautotap,
+    walkPace = 'study', onwalkpace,
   }: Props = $props();
 
   const live = $derived(interaction !== 'read-only');
@@ -417,17 +430,28 @@
   // ———————————————— Payment preview
 
   // The offer the board previews: the one a person points at or focuses, when
-  // the authority can preview it (a cast, a target, a tap), else the pending
-  // payment itself. Previewing is a read-only query; it commits nothing.
+  // the authority can preview it (a cast, an activation, a tap), else the
+  // pending payment itself. Target choices highlight the candidate target on
+  // the board instead of distracting with paying lands.
   let pointed = $state<PlacedOffer | null>(null);
   const payOffer = $derived(view.primary?.offer.verb === 'pay' ? view.primary : null);
+  const pointedTarget = $derived.by<Endpoint | null>(() => {
+    if (!pointed || !live || activeCursor !== null) return null;
+    if (pointed.anchor.kind === 'object') return { kind: 'object', id: pointed.anchor.id };
+    if (pointed.anchor.kind === 'player') return { kind: 'player', index: pointed.anchor.index };
+    if (pointed.anchor.kind === 'stack') return { kind: 'stack', id: pointed.anchor.id };
+    return null;
+  });
+  const pointedIsTargetChoice = $derived(pointed?.offer.action_type === 'CHOOSE_TARGET');
+  const pointedObjectIds = $derived(pointedTarget?.kind === 'object' ? new Set([pointedTarget.id]) : new Set<number>());
+  const pointedPlayerIndex = $derived(pointedTarget?.kind === 'player' ? pointedTarget.index : null);
   // Pointing at the pending payment's own row is still that payment: the
   // prompt keeps its plan and note, so nothing shifts under the pointer.
   // A card carried toward the battlefield previews its single offer for the whole drag, touch included.
   const dragOffers = $derived(carried?.offers ?? (connect?.blocker === undefined ? connect?.target?.offers ?? null : null));
   const dragOffer = $derived(dragOffers?.length === 1 && previewable(dragOffers[0].offer) ? dragOffers[0] : null);
   const previewing = $derived(!live ? null : dragOffer
-    ?? (!dragging && pointed && previewable(pointed.offer) && pointed.offer.id !== payOffer?.offer.id ? pointed : payOffer));
+    ?? (!dragging && pointed && !pointedIsTargetChoice && previewable(pointed.offer) && pointed.offer.id !== payOffer?.offer.id ? pointed : payOffer));
   $effect(() => { onpreview(previewing?.offer ?? null); });
   const answered = $derived(payment && previewing && payment.offer === previewing.offer.id && !payment.loading ? payment.preview : null);
   const payPlanned = $derived(paymentPlan(answered, frame));
@@ -463,37 +487,127 @@
   // ———————————————— What happened since your last move
 
   // The revision your last move was made at; events after it are "since your last move".
-  let since = $state.raw<{ revision: number; frame: ExperienceFrame; logLength: number } | null>(null);
-  const sinceRevision = $derived(sinceGiven !== undefined ? sinceGiven : since?.revision ?? null);
-  const book = $derived(nameBook(since && sinceGiven === undefined ? [since.frame, frame] : [frame], since && sinceGiven === undefined ? log.slice(since.logLength) : []));
-  const recent = $derived(recentView(frame, sinceRevision, presentation.events, index => presentation.labelsAt(index), players, book));
+  let since = $state.raw<number | null>(null);
+  const sinceRevision = $derived(sinceGiven !== undefined ? sinceGiven : since);
+  const recent = $derived(recentMarks(frame, sinceRevision, presentation.events, index => presentation.labelsAt(index)));
 
-  // ———————————————— The opponent's moves, one beat at a time
+  // ———————————————— History and one cursor
 
-  // Live play only (a recording has its transport). Facts already on screen
-  // when the board opens are history, not news.
+  const tellPlayers = $derived({ youSeat: projection.agent.player_index, you: players.you, opponent: players.opponent });
+  const history = $derived(historyGiven ?? buildHistory(
+    presentation.events,
+    index => presentation.labelsAt(index),
+    tellPlayers,
+    {
+      notes,
+      initialTurn: projection.turn.turn_number,
+      initialOwner: projection.turn.active_player_id === projection.agent.id ? 'you' : 'opponent',
+    },
+  ));
+
+  // One cursor into the history (`selection: { seq, scope } | null` + timer
+  // state `walking: boolean`). `selection === null` rests on now. Walking,
+  // clicking a scrubber tick, and "Replay turn" select `scope: 'stop'`
+  // (keeping multi-line stops intact when paused); clicking a history line,
+  // pressing ← →, or stepping into a Review transition selects `scope: 'line'`.
   let shownSeq = untrack(() => presentation.events.at(-1)?.seq ?? -1);
   let shownMatch = untrack(() => frame.match_id);
   let shownRevision = untrack(() => frame.revision);
   let wasConnected = untrack(() => connection === 'connected');
-  let beats = $state.raw<Beat[]>([]);
-  let beatAt = $state(0);
-  const beat = $derived(beats[beatAt] ?? null);
-  const beatSubjects = $derived(new Set(beat?.subjects ?? []));
-  // Before the DOM updates: a frame that brings beats draws the first beat's board first, never the final one.
+  let selection = $state<CursorSelection | null>(null);
+  let walking = $state(false);
+  let walkQueue = $state.raw<number[]>([]);
+  let captionHovered = $state(false);
+  let combatTableHovered = $state(false);
+  let combatRowSubjects = $state<number[]>([]);
+
+  const activePaceMs = $derived(PACE_MS[walkPace]);
+
+  const activeCursor = $derived<CursorSelection | null>(
+    connection !== null ? selection : cursorSeq !== null ? { seq: cursorSeq, scope: 'line' } : null,
+  );
+  const cursor = $derived(activeCursor?.seq ?? null);
+
+  const stopsAll = $derived(walkStops(history, stepBoards));
+  const scrubber = $derived(scrubberStops(stopsAll, cursor));
+  const hasWalkable = $derived(hasWalkableTurn(stopsAll));
+  const showWalkBar = $derived(connection !== null && (hasWalkable || selection !== null));
+  const active = $derived(cursorView(history, stopsAll, activeCursor));
+  const activeStopIndex = $derived(cursor === null ? -1 : scrubber.stops.findIndex(stop => stopHasSeq(stop, cursor)));
+
+  function blurHistoryControl(): void {
+    const focused = typeof document !== 'undefined' ? document.activeElement : null;
+    if (focused instanceof HTMLElement && focused.closest('.log, .walk-bar')) {
+      focused.blur();
+    }
+  }
+
+  function setCursor(next: number | null, scope: CursorScope = 'line'): void {
+    walking = false;
+    walkQueue = [];
+    captionHovered = false;
+    combatTableHovered = false;
+    combatRowSubjects = [];
+    selection = next === null ? null : { seq: next, scope };
+    if (next === null) blurHistoryControl();
+  }
+
+  function returnToNow(): void {
+    setCursor(null);
+  }
+
+  function selectHistoryLine(selected: HistoryLine): void {
+    const seq = selected.boardSeq ?? selected.seq;
+    if (seq !== null) setCursor(seq, 'line');
+  }
+
+  function startWalk(seqs: number[], auto: boolean): void {
+    walkQueue = seqs;
+    selection = { seq: seqs[0], scope: 'stop' };
+    captionHovered = false;
+    combatTableHovered = false;
+    combatRowSubjects = [];
+    walking = auto;
+  }
+
+  function replayTurn(): void {
+    if (!scrubber.stops.length) return;
+    startWalk(
+      scrubber.stops.map(stop => stop.seq),
+      !prefersReducedMotion() && activePaceMs !== null,
+    );
+  }
+
+  // Before the DOM updates: a frame that brings unread stops starts walking
+  // on the first stop's board instead of flashing the final frame. If a walk
+  // is already running, newly arrived stops append to its queue without
+  // cutting the current stop short or aborting on an empty frame.
   $effect.pre(() => {
-    const facts = recent.facts;
+    const currentStops = stopsAll;
     const lastSeq = presentation.events.at(-1)?.seq ?? -1;
     const { match_id, revision } = frame;
     const connected = connection === 'connected';
+    const ms = activePaceMs;
     if (connection === null) return;
     untrack(() => {
       if (!connected || !wasConnected || match_id !== shownMatch || revision < shownRevision) {
-        endReadOut();
+        returnToNow();
         shownSeq = lastSeq;
+      } else if (revision === shownRevision) {
+        // Recovery filled in history the table had already shown before a
+        // reload: those facts are read, never walked again.
+        shownSeq = Math.max(shownSeq, lastSeq);
       } else {
-        const fresh = prefersReducedMotion() ? [] : beatsFor(facts, shownSeq, players);
-        if (fresh.length || revision !== shownRevision) { beats = fresh; beatAt = 0; }
+        const fresh = prefersReducedMotion() || ms === null ? [] : unreadWalkStops(currentStops, shownSeq);
+        if (walking && selection !== null) {
+          if (fresh.length > 0) {
+            const existing = new Set(walkQueue);
+            const appended = fresh.map(stop => stop.seq).filter(seq => !existing.has(seq));
+            if (appended.length > 0) walkQueue = [...walkQueue, ...appended];
+          }
+        } else if (fresh.length > 0) {
+          startWalk(fresh.map(stop => stop.seq), true);
+        }
         shownSeq = Math.max(shownSeq, lastSeq);
       }
       shownMatch = match_id;
@@ -501,65 +615,125 @@
       wasConnected = connected;
     });
   });
+
+  // Walk timer: advances one kept board stop per pace tick; pauses while the
+  // pointer rests on the caption or combat table. Reads `walkQueue` untracked
+  // inside the timeout so appending newly arrived stops never restarts the
+  // current stop's beat.
   $effect(() => {
-    if (!beat) return;
-    const timer = setTimeout(() => { beatAt += 1; }, BEAT_MS);
+    const seq = selection?.seq ?? null;
+    const ms = activePaceMs;
+    if (!walking || seq === null || captionHovered || combatTableHovered || ms === null) return;
+    const timer = setTimeout(() => {
+      untrack(() => {
+        if (!walking || selection?.seq !== seq) return;
+        const index = walkQueue.indexOf(seq);
+        if (index >= 0 && index + 1 < walkQueue.length) {
+          selection = { seq: walkQueue[index + 1], scope: 'stop' };
+        } else {
+          returnToNow();
+        }
+      });
+    }, ms);
     return () => clearTimeout(timer);
   });
-  /**
-   * The read-out holds the whole game surface: while a beat plays, the first
-   * press, click or acting key anywhere in the game ends it and does nothing
-   * else, so the live decision answers only once the board shows its own
-   * position. Focus keys (Tab, arrows) still move.
-   */
-  const readingOut = $derived(beat !== null);
-  function endReadOut(): void { beats = []; beatAt = 0; }
-  // Damage marks and the plate's badge add up the whole window since your last
-  // move; a beat's board may be from before that damage, so they wait with the
-  // decision. So does the result card: the game ends once its last beat is read.
-  const NO_DAMAGE: RecentView['damage'] = { objects: new Map(), players: new Map() };
-  const damage = $derived(readingOut ? NO_DAMAGE : recent.damage);
-  const finished = $derived(result !== undefined && !readingOut);
 
-  // Each beat is shown on the board it happened on, when the authority sent
-  // it (`stepBoards`); else on the frame's. A past board has no offers, and the
-  // rail's choices wait until the read-out ends.
-  const beatBoard = $derived(beat ? boardAt(stepBoards, beat.seq) : null);
-  const drawn = $derived(beatBoard ? { ...frame, projection: beatBoard, offers: [] } : drafted);
-  const board = $derived(beatBoard ? boardView(drawn, players) : view);
+  // Window totals, now's `.touched` rings, the recap, and the result card wait until the cursor reaches now.
+  const NO_DAMAGE: RecentMarks['damage'] = { objects: new Map(), players: new Map() };
+  const EMPTY_TOUCHED = new Set<number>();
+  const damage = $derived(activeCursor !== null ? NO_DAMAGE : recent.damage);
+  const touched = $derived(activeCursor !== null ? EMPTY_TOUCHED : recent.touched);
+  const finished = $derived(result !== undefined && activeCursor === null);
+  const recapSource = $derived(
+    historyGiven && !hasTrackHistory(presentation.events)
+      ? buildHistory(presentation.events, index => presentation.labelsAt(index), tellPlayers)
+      : history,
+  );
+  const recentFacts = $derived(
+    activeCursor !== null ? [] : recentHistory(recapSource, sinceRevision, presentation.events.at(-1)?.seq ?? null),
+  );
+
+  // Look up the kept board for `activeCursor`: a past board has no live offers,
+  // while the rail stays live throughout.
+  const cursorHit = $derived(activeCursor !== null && !stepBoardsError ? findBoard(stepBoards, activeCursor.seq) : null);
+  const boardMissing = $derived(activeCursor !== null && !stepBoardsError && cursorHit === null);
+  const boardSharedCount = $derived(activeCursor !== null && cursorHit?.fallback ? sharedLaterCount(history, activeCursor.seq, cursorHit.last) : 0);
+  const drawn = $derived(activeCursor !== null ? { ...frame, projection: cursorHit?.projection ?? frame.projection, offers: [] } : drafted);
+  const board = $derived(activeCursor !== null ? boardView(drawn, players) : view);
   const boardProjection = $derived(drawn.projection);
-  const boardNames = $derived(beatBoard ? new Map([...beatBoard.agent.battlefield, ...beatBoard.opponent.battlefield]
-    .map(permanent => [permanent.id, permanent.name ?? 'permanent'])) : names);
-  const asked = $derived(joint ? new Set<number>() : board.asked);
+  const priorBoardProjection = $derived.by(() => {
+    if (activeCursor === null) return null;
+    const minSeq = Math.min(...active.seqs, activeCursor.seq);
+    for (let i = stepBoards.length - 1; i >= 0; i -= 1) {
+      if (stepBoards[i].first < minSeq) return stepBoards[i].projection;
+    }
+    return null;
+  });
+  const stopDeltas = $derived(computeStopDeltas(presentation.events, active.seqs, boardProjection));
+  const combatTable = $derived(
+    activeCursor !== null
+      ? buildCombatTable(
+          presentation.events,
+          active.seqs,
+          index => presentation.labelsAt(index),
+          tellPlayers,
+          boardProjection,
+          priorBoardProjection,
+        )
+      : null,
+  );
+  const activeSubjects = $derived(
+    combatRowSubjects.length ? new Set([...active.subjects, ...combatRowSubjects]) : active.subjects,
+  );
   const owners = $derived(turnOwners(frame, presentation.events));
-  // The turn the top bar and stop bar name: the beat's own while one plays. A
-  // beat's board may be a later turn's (one engine step can run from an attack
-  // into the next turn), and then no step of the beat's turn is current.
-  const turnNumber = $derived(beat ? turnAt(presentation.events, beat.seq) ?? boardProjection.turn.turn_number : boardProjection.turn.turn_number);
+  const turnNumber = $derived(activeCursor !== null ? turnAt(presentation.events, activeCursor.seq) ?? boardProjection.turn.turn_number : boardProjection.turn.turn_number);
   const turnStep = $derived(turnNumber === boardProjection.turn.turn_number ? boardProjection.turn.step : null);
   const yourTurn = $derived(turnStep !== null ? boardProjection.turn.active_player_id === boardProjection.agent.id : owners.get(turnNumber) === 'you');
   const track = $derived(phaseTrack(turnStep, stops, yourTurn, onceStops));
-  const lines = $derived(boardLines(drawn, presentation.events, recent.resolved, sinceRevision));
+  const lines = $derived(boardLines(drawn, presentation.events, activeCursor !== null ? [] : recent.resolved, activeCursor !== null ? null : sinceRevision, pointedTarget));
   const standingLines = $derived(draggedBlocker === undefined ? lines : lines.filter(line =>
     !(line.kind === 'block' && line.from.kind === 'object' && line.from.id === draggedBlocker)));
-  /** Permanents something on the stack targets: a dashed edge in the damage colour. */
-  const targeted = $derived(new Set(lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : [])));
+  /** Permanents something on the stack targets, or currently pointed at as a candidate target. */
+  const targeted = $derived(new Set([
+    ...lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : []),
+    ...pointedObjectIds,
+  ]));
+  const boardAsked = $derived(
+    joint
+      ? new Set<number>()
+      : pointedObjectIds.size
+        ? new Set([...board.asked, ...pointedObjectIds])
+        : board.asked,
+  );
   /** The person may act on the drawn board now: what they cannot act on steps back. */
-  const acting = $derived(live && !readingOut && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
-  /** The pointer press that ended a read-out; its click acts on nothing. */
-  let endedByPress = false;
+  const acting = $derived(live && activeCursor === null && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
+  const boardNotice = $derived.by<{ testid: string; text: string } | null>(() => {
+    if (activeCursor === null) return null;
+    if (stepBoardsError) return { testid: 'board-unavailable', text: 'Board unavailable for this step' };
+    if (boardMissing) return { testid: 'board-not-kept', text: 'Board not kept for this step' };
+    if (boardSharedCount > 0) {
+      return { testid: 'board-shared', text: `shared with ${boardSharedCount} later ${boardSharedCount === 1 ? 'line' : 'lines'}` };
+    }
+    return null;
+  });
+  const activeCursorReading = $derived.by<string | null>(() => {
+    if (activeCursor === null) return null;
+    const reading = cursorReading(history, presentation.events, activeCursor, players, active.stop);
+    return boardNotice && (stepBoardsError || !showWalkBar) ? `${reading} · ${boardNotice.text}` : reading;
+  });
+  function clearActiveCursor(): void {
+    if (selection !== null) returnToNow();
+    else {
+      blurHistoryControl();
+      onclearcursor?.();
+    }
+  }
   /** The click that ends a drag is the drop, not a press of what it lands on. */
   let swallowClick = false;
   function onPress(event: PointerEvent): void {
     if (event.button !== 0 || !event.isPrimary) return;
     swallowClick = false;
-    endedByPress = readingOut;
-    if (endedByPress) {
-      event.stopPropagation();
-      endReadOut();
-      return;
-    }
-    if (!canDrag || !(event.target instanceof Element)) return;
+    if (!canDrag || activeCursor !== null || !(event.target instanceof Element)) return;
     const start = { x: event.clientX, y: event.clientY };
     if (canMarquee && event.target.closest('.board .rows')) {
       gesture = press({ kind: 'marquee' }, event.pointerId, frame.revision, start);
@@ -581,16 +755,9 @@
       swallowClick = false;
       event.preventDefault();
       event.stopPropagation();
-      return;
     }
-    const endedByPointer = event.detail > 0 && endedByPress;
-    if (event.detail > 0) endedByPress = false;
-    if (!readingOut && !endedByPointer) return;
-    event.preventDefault();
-    event.stopPropagation();
-    endReadOut();
   }
-  // Capturing listeners on the whole game: board, rail, tray and menus end a read-out alike.
+  // Capturing listeners on the whole game start connect/marquee drags and swallow post-drop clicks.
   $effect(() => {
     const element = root;
     if (!element) return;
@@ -601,24 +768,45 @@
       element.removeEventListener('click', onClick, { capture: true });
     };
   });
-  // Both players' moves are narrated as Review narrates them, players named by seat.
-  const seatName = (seat: 0 | 1): string => (seat === projection.agent.player_index ? 'You' : said);
-  const named = $derived(log.map(entry => (entry.actor === 'villain' || entry.actor === 'hero' ? { ...entry, text: nameSeats(entry.text, seatName, entry.actor === 'hero') } : entry)));
-  const moves = $derived(movesGiven ?? moveList(named, players, owners, visibleNames(frame, presentation.labels)));
 
   // ———————————————— Motion
 
   let root = $state<HTMLElement | null>(null);
+  let boardEl = $state<HTMLElement | null>(null);
   const travel = new Travel();
-  // Cards travel between frames and between the boards beats are shown on.
+  let deathMarks = $state.raw<DeathMark[]>([]);
+
+  function runDeathTravel(element: HTMLElement, mark: DeathMark): { destroy: () => void } {
+    const animation = animateDeathTravel(element, mark);
+    return { destroy: () => { animation.cancel(); } };
+  }
+
+  // Cards travel between frames and between the boards stops are shown on.
   $effect.pre(() => {
     void boardProjection;
     travel.snapshot(root);
   });
   $effect(() => {
-    void boardProjection;
-    travel.play(root, prefersReducedMotion());
+    const reduced = prefersReducedMotion();
+    travel.play(root, reduced);
+    deathMarks = collectDeathMarks({
+      root,
+      boardEl,
+      travel,
+      projection: boardProjection,
+      stepBoards,
+      events: presentation.events,
+      labelsAt: index => presentation.labelsAt(index),
+      activeSeqs: active.seqs,
+      cursor,
+      sinceRevision,
+      matchId: frame.match_id,
+      revision: frame.revision,
+      reduced,
+    });
   });
+  const opponentDeaths = $derived(deathMarks.filter(mark => mark.side === 'opponent'));
+  const yourDeaths = $derived(deathMarks.filter(mark => mark.side === 'you'));
 
   // Battlefield frames are printed cards, upright or tapped on their side;
   // lands and other support permanents are smaller cards of the same frame.
@@ -629,13 +817,15 @@
   // Each half divides its height between its two rows by what they hold.
   let theirRows = $state({ width: 0, height: 0 });
   let yourRows = $state({ width: 0, height: 0 });
-  function split(side: typeof view.you, size: { width: number; height: number }): HalfSplit | null {
+  function split(side: typeof view.you, size: { width: number; height: number }, deathCount: number): HalfSplit | null {
     if (size.width <= 0 || size.height <= 0) return null;
-    return splitHalf(pileShapes(side.creatures), pileShapes(side.support), size.width - 22, size.height - 16,
+    const creatureShapes = pileShapes(side.creatures);
+    for (let i = 0; i < deathCount; i += 1) creatureShapes.push([false]);
+    return splitHalf(creatureShapes, pileShapes(side.support), size.width - 22, size.height - 16,
       { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT });
   }
-  const theirSplit = $derived(split(board.opponent, theirRows));
-  const yourSplit = $derived(split(board.you, yourRows));
+  const theirSplit = $derived(split(board.opponent, theirRows, opponentDeaths.length));
+  const yourSplit = $derived(split(board.you, yourRows, yourDeaths.length));
   const rowsStyle = (half: HalfSplit | null, size: { height: number }, creaturesFirst: boolean): string | undefined => {
     if (!half) return undefined;
     const rest = Math.max(0, size.height - 12 - ROW_GAP - half.creatures);
@@ -686,18 +876,19 @@
   }
   function send(offer: InteractionOffer): void {
     if (!live) return;
-    endReadOut();
+    returnToNow();
     gesture = promote(gesture, offer.id);
     menuAt = null;
     stopNote = null;
     hush();
-    since = { revision: frame.revision, frame, logLength: log.length };
+    since = frame.revision;
     onact(offer);
   }
 
   function passTurn(): void {
     if (!canPassTurn) return;
-    since = { revision: frame.revision, frame, logLength: log.length };
+    returnToNow();
+    since = frame.revision;
     onpassturn();
   }
 
@@ -757,6 +948,7 @@
 
   // The inspected object as it is in this frame, by id; a name alone when it has left.
   const permanents = $derived(new Map([...boardProjection.agent.battlefield, ...boardProjection.opponent.battlefield].map(permanent => [permanent.id, permanent])));
+  const boardNames = $derived(new Map([...permanents].map(([id, permanent]) => [id, permanent.name ?? 'permanent'])));
   const cards = $derived(new Map(inspectableCards([boardProjection.agent, boardProjection.opponent]).map(card => [card.id, card])));
   const shown = $derived(inspectMode === 'dock' ? docked : hovered?.subject ?? null);
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
@@ -840,14 +1032,14 @@
   const handFull = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
   // Cards offered from outside the board (a castable card in exile, Lessons outside the game) sit beside the hand, a size smaller, and take their width from it.
   const trayCard = $derived(Math.round(Math.min(handFull, 120) * 0.78));
-  const trayReserve = $derived(view.tray.length && !finished ? Math.min(Math.floor(handWidth * 0.45), view.tray.length * (trayCard + 10) + 30) : 0);
+  const trayReserve = $derived(view.tray.length && !finished && activeCursor === null ? Math.min(Math.floor(handWidth * 0.45), view.tray.length * (trayCard + 10) + 30) : 0);
   const fan = $derived(handFan(board.hand.length, handWidth - HAND_LABEL_WIDTH - 24 - trayReserve, { min: HAND_FLOOR, max: handFull }, 10));
   // Shrunk cards give the strip's spare height back to the board.
   const handTrack = $derived(board.hand.length === 0 && trayReserve === 0 ? '30px' : `${Math.min(handHeight, Math.ceil(fan.card / CARD_RATIO) + 22)}px`);
 
   // ———————————————— Pointer gestures
 
-  const canMarquee = $derived(canDrag && drafting && preview?.kind === 'attackers' && !readingOut);
+  const canMarquee = $derived(canDrag && drafting && preview?.kind === 'attackers' && activeCursor === null);
   const dropPermanents = $derived.by(() => {
     const hits = new Set<number>();
     if (snapped?.kind === 'object') hits.add(snapped.id);
@@ -869,7 +1061,7 @@
   // its slot steps back, and releasing it over the battlefield is a click on
   // it. Released anywhere else, or on Escape, it settles back with nothing sent.
   function pressHand(event: PointerEvent, item: HandItem): void {
-    if (!canDrag || readingOut || joint || event.button !== 0 || !event.isPrimary || !playable(item.offers)) return;
+    if (!canDrag || activeCursor !== null || joint || event.button !== 0 || !event.isPrimary || !playable(item.offers)) return;
     const opener = (event.currentTarget as HTMLElement).querySelector<HTMLElement>('[data-testid=board-card]');
     if (!opener) return;
     const rect = opener.getBoundingClientRect();
@@ -972,10 +1164,10 @@
     if (current.phase === 'dragging' && current.drag.kind === 'play') { settleHome(current.drag, carriedAt(current)!); return; }
     gesture = cancelGesture(gesture);
   }
-  // A read-out or the board going read-only ends an unreleased drag. A hold
+  // Looking back or the board going read-only ends an unreleased drag. A hold
   // stays: committing a drop makes the board read-only until its answer.
   $effect(() => {
-    if (!canDrag || readingOut) untrack(endDrag);
+    if (!canDrag || activeCursor !== null) untrack(endDrag);
   });
   // A gesture from an earlier revision is gone: its frame was replaced.
   $effect(() => {
@@ -1017,16 +1209,16 @@
           { key: '↑ ↓', does: 'Move within a region' },
         ]
       : [
-          { key: 'Space', does: 'The primary choice (Pass, Resolve, Done…)' },
-          { key: '1–9', does: 'The numbered choice' },
+          { key: 'Space', does: 'Primary choice; return to now while looking back' },
+          { key: '1–9', does: 'The numbered choice (returns to now and commits)' },
           { key: 'Enter', does: 'Act on the focused card or choice' },
-          { key: 'Tab', does: 'Next region: fields, hand, stack, choices, moves' },
-          { key: '← → ↑ ↓', does: 'Move within a region' },
+          { key: 'Tab', does: 'Next region: fields, hand, stack, choices, history' },
+          { key: '← →', does: 'Step history when no control has focus; move within a region' },
           { key: 'Shift Enter', does: 'Pass turn: pass every priority window until it ends (also F6)' },
           { key: 'Ctrl', does: 'Pause Auto-tap for the next payment (Full Control)' },
           { key: 'Shift Ctrl', does: 'Hold Full Control across turns' },
         ]),
-    { key: 'Esc', does: recording ? 'Close a menu or preview' : "Cancel a drag; close a menu or preview; skip the opponent's moves" },
+    { key: 'Esc', does: recording ? 'Close a menu or preview' : 'Cancel a drag; close a menu or preview; return to now' },
     ...(canDrag || combatPreview !== undefined ? [{ key: 'Drag', does: 'Play a hand card, choose a target, assign a blocker, or box-select attackers', plain: true }] : []),
     { key: 'Inspect', does: 'Focus a card, or rest the pointer on it', plain: true },
     { key: '?', does: 'Show or hide these keys' },
@@ -1045,7 +1237,7 @@
   let ctrlShift = false;
 
   $effect(() => {
-    if (recording || !live || readingOut || result || drafting || !onautotap) return;
+    if (recording || !live || activeCursor !== null || result || drafting || !onautotap) return;
     if (fullControl === 'once') {
       if (frame.action_space === 'PAY_OR_NOT') {
         wasPayingInOnce = true;
@@ -1126,9 +1318,6 @@
     (event.shiftKey ? stops.at(-1) : stops[0])?.focus();
   }
 
-  /** Keys that move focus or open help during a read-out. */
-  const MOVES_FOCUS = new Set(['Tab', 'Shift', '?', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
-  let skippedKey: string | null = null;
   function onKeydown(event: KeyboardEvent): void {
     if (!recording && onfullcontrol && !typing(event.target)) {
       if (event.key === 'Control' && !event.metaKey && !event.altKey) {
@@ -1149,16 +1338,6 @@
     }
     if (event.key === 'Tab' && !recording && !event.metaKey && !event.ctrlKey && !event.altKey) { wrapTab(event); return; }
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
-    if (!event.repeat) skippedKey = null;
-    const key = event.code || event.key;
-    if (event.repeat && key === skippedKey) { event.preventDefault(); return; }
-    // Enter on a focused choice, Space, Esc or a number key ends a read-out and acts on nothing.
-    if (readingOut && !MOVES_FOCUS.has(event.key)) {
-      event.preventDefault();
-      skippedKey = key;
-      endReadOut();
-      return;
-    }
     // Escape during a drag ends the drag and nothing else.
     if (event.key === 'Escape' && (current.phase === 'pressed' || current.phase === 'dragging')) {
       event.preventDefault();
@@ -1170,7 +1349,19 @@
     if (event.key === 'Escape' && anyTrackerOpen) { myDeckOpen = false; oppDeckOpen = false; return; }
     if (event.key === 'Escape' && running) { stopSending(); return; }
     if (event.key === 'Escape' && live && armed !== null) { armed = null; return; }
-    if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
+    if (event.key === 'Escape' && (menuAt || zoneAt || hovered)) { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
+    if (event.key === 'Escape' && activeCursor !== null) { clearActiveCursor(); return; }
+    if (!recording && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      const target = event.target as HTMLElement | null;
+      const inControl = target !== null && target !== document.body && target !== document.documentElement
+        && !target.closest('.log, .walk-bar')
+        && (target.closest('button, a, input, select, textarea, summary, [data-testid=stop-bar], [data-region]') !== null);
+      if (!inControl) {
+        event.preventDefault();
+        setCursor(stepCursor(history, cursor, event.key === 'ArrowLeft' ? -1 : 1), 'line');
+        return;
+      }
+    }
     if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
       // A combat draft declares the whole combat; its per-creature offers are not numbered shortcuts.
@@ -1179,12 +1370,17 @@
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
     }
-    // An open card menu takes Space as a press of its focused item.
-    if (event.key === ' ' && menuAt) return;
-    if (event.key === ' ' && !ownsSpace(event.target) && drafting) { event.preventDefault(); confirmDraft(); return; }
-    if (event.key === ' ' && !ownsSpace(event.target) && view.primary && live) {
-      event.preventDefault();
-      act(view.primary);
+    if (event.key === ' ') {
+      // Space while looking back (or walking) only returns to now and never acts.
+      if (!recording && cursor !== null) { event.preventDefault(); returnToNow(); return; }
+      // An open card menu takes Space as a press of its focused item.
+      if (menuAt) return;
+      // Never let Space re-activate a previously clicked history line or scrubber tick.
+      const inHistoryOrWalk = event.target instanceof HTMLElement && event.target.closest('.log, .walk-bar') !== null;
+      if (inHistoryOrWalk) event.preventDefault();
+      if (!inHistoryOrWalk && ownsSpace(event.target)) return;
+      if (drafting) { event.preventDefault(); confirmDraft(); return; }
+      if (view.primary && live) { event.preventDefault(); act(view.primary); }
     }
   }
 
@@ -1213,7 +1409,13 @@
       <span class="text-ink-3">{' vs '}</span>
       <span class="text-ink" title={[opponent.name, opponent.description].filter(Boolean).join(' — ')}>{said}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
-    <p class="turn">{#if turnStep !== null && boardProjection.turn.creature_died_this_turn}A creature died this turn{/if}</p>
+    {#if activeCursorReading}
+      <p class="turn cursor-reading" data-testid="turn-number" data-cursor={cursor} title={activeCursorReading}>
+        <span class="cursor-text" data-testid="cursor-reading">{activeCursorReading}</span><span class="cursor-sep" aria-hidden="true">&nbsp;·&nbsp;</span><button type="button" class="esc-now" data-testid="cursor-now" onclick={clearActiveCursor}>Esc for now</button>
+      </p>
+    {:else}
+      <p class="turn">{#if turnStep !== null && boardProjection.turn.creature_died_this_turn}A creature died this turn{/if}</p>
+    {/if}
     <div class="right">
       {#if connection}
         <!-- Connected says nothing: only a problem shows; the status stays for assistive technology. -->
@@ -1274,24 +1476,29 @@
     </aside>
   {/if}
 
-  <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
-    data-board={beatBoard ? 'step' : 'frame'}>
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (clicking an earlier board returns to now; Esc and Space do the same from the keyboard) -->
+  <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:this={boardEl} bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
+    data-board={activeCursor !== null ? (cursorHit ? 'step' : 'missing') : 'frame'}
+    onclick={event => { if (activeCursor !== null && !(event.target instanceof Element && event.target.closest('.zone, .combat-table-sheet'))) clearActiveCursor(); }}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.opponent.player_index} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
-        choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)}
+        stopLifeDelta={stopDeltas.players.get(boardProjection.opponent.player_index) ?? 0}
+        choosing={opponentChoosing} pointed={pointedPlayerIndex === boardProjection.opponent.player_index} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)}
         ondeck={() => { oppDeckOpen = !oppDeckOpen; }} deckOpen={oppDeckOpen} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} {asked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} {asked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={boardAsked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} {touched} beat={activeSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={boardAsked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} {touched} beat={activeSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} deaths={opponentDeaths} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={boardProjection.agent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.agent.player_index} name={you.name} caption={you.deck} offers={board.you.offers} {live} damage={damage.players.get(boardProjection.agent.player_index) ?? 0}
+        stopLifeDelta={stopDeltas.players.get(boardProjection.agent.player_index) ?? 0}
+        pointed={pointedPlayerIndex === boardProjection.agent.player_index}
         side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)}
         ondeck={selfTracker ? () => { myDeckOpen = !myDeckOpen; } : undefined} deckOpen={myDeckOpen} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} {asked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} {asked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={boardAsked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} {touched} beat={activeSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} deaths={yourDeaths} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={boardAsked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} {touched} beat={activeSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth}>
@@ -1309,7 +1516,7 @@
           </div>
         {/each}
       </div>
-      {#if view.tray.length && !finished}
+      {#if view.tray.length && !finished && activeCursor === null}
         <div class="tray" role="group" aria-label="Choices from outside the board" data-testid="tray" style:max-width={`${trayReserve}px`}>
           {#each view.tray as item (item.placed.offer.id)}
             {#if item.name}
@@ -1347,51 +1554,96 @@
         {/if}
       </section>
     {/if}
+    {#if deathMarks.some(mark => mark.animate)}
+      <div class="death-layer" aria-hidden="true">
+        {#each deathMarks as mark (mark.key)}
+          {#if mark.animate}
+            <div class="death-travel" data-testid="death-travel" data-death-object={mark.entity} data-death-rule={mark.rule ?? ''}
+              data-death-side={mark.side}
+              style:left={`${mark.x}px`} style:top={`${mark.y}px`} style:width={`${mark.width}px`} style:height={`${mark.height}px`}
+              use:runDeathTravel={mark}>
+              <span class="death-travel-name">{mark.name}</span>
+              {#if mark.rule}<span class="death-travel-rule">{mark.rule}</span>{/if}
+            </div>
+          {/if}
+        {/each}
+      </div>
+    {/if}
+    {#if combatTable}
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions (resting on the combat table holds the walk and raises a row's combatants) -->
+      <section
+        class="combat-table-sheet"
+        aria-label={combatTable.heading}
+        data-testid="combat-table"
+        data-creatures={combatTable.creatureCount}
+        onmouseenter={() => (combatTableHovered = true)}
+        onmouseleave={() => { combatTableHovered = false; combatRowSubjects = []; }}
+      >
+        <header class="combat-table-head">
+          <span class="type-heading text-ink">{combatTable.heading}</span>
+          {#if walking && combatTableHovered}<span class="type-caption text-ink-3">holding</span>{/if}
+        </header>
+        <div class="combat-table-scroll">
+          <table>
+            <thead>
+              <tr><th>Attacker</th><th>Blocked by</th><th>Dealt</th><th>Took</th><th>Result</th></tr>
+            </thead>
+            <tbody>
+              {#each combatTable.rows as row (row.attacker.entity)}
+                <tr
+                  data-testid="combat-table-row"
+                  onmouseenter={() => (combatRowSubjects = row.subjects)}
+                  onmouseleave={() => (combatRowSubjects = [])}
+                >
+                  <td><b>{row.attacker.name}</b>{#if row.attacker.pt}<span class="pt-note">{' '}{row.attacker.pt}</span>{/if}</td>
+                  <td>{#if row.blockers.length}{row.blockers.map(b => `${b.name}${b.pt ? ` ${b.pt}` : ''}`).join(', ')}{:else}<span class="text-ink-3">unblocked</span>{/if}</td>
+                  <td>{row.dealt}</td>
+                  <td class="num">{row.took}</td>
+                  <td>{row.result}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {/if}
   </div>
 
   <div class="rail-slot" id="rail-choices">
-    <Rail {view} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
+    <Rail {view} stack={board.stack} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recentFacts} resolvedSpells={recent.resolved} {history}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => point(placed ? [placed] : null)}
       onstack={onStack} {stackSources} drop={snapped?.kind === 'entry' ? snapped.id : undefined} onpreviewname={previewName} {notices} over={finished}
-      {evidence} {moveMarks} {shownMoves} {recapTitle} {onjump} recording={readOnly} {currentMove} reading={readingOut ? reading : undefined}
+      {evidence} {moveMarks} {shownMoves} {recapTitle} {onjump} recording={readOnly} {currentMove}
+      onselectline={connection !== null ? selectHistoryLine : undefined}
+      cursorLineIds={active.lineIds} cursorSourceSeq={active.sourceSeq}
       draft={joint ? combatControls : undefined} stopped={stopNote} />
   </div>
 
   {#snippet combatControls()}
     <div class="combat-draft" data-testid="combat-draft" data-kind={preview?.kind}>
       {#if running}
-        <button type="button" class="btn btn-secondary" data-testid="combat-stop" aria-disabled={readingOut || undefined} onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
+        <button type="button" class="btn btn-secondary" data-testid="combat-stop" onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
       {:else if words}
         <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={exact !== null && !exact.refused}
           aria-label={`Confirm: ${exact?.refused ? exact.refused.reason : words.plan}`} title={words.plan}
-          disabled={!live || !exact || exact.refused !== null} aria-disabled={readingOut || undefined} onclick={confirmDraft}>
+          disabled={!live || !exact || exact.refused !== null} onclick={confirmDraft}>
           <span>{words.text}</span><kbd>Space</kbd>
         </button>
         {#each counts as group (group.ids[0])}
           <div class="pile-count" data-testid="pile-count" role="group" aria-label={`${group.name}: ${group.drafted} of ${group.ids.length} attacking`}>
             <span class="type-caption"><b>{group.drafted}</b> of {group.ids.length} {group.name}</span>
-            <button type="button" class="step" aria-disabled={readingOut || undefined} aria-label={`One fewer ${group.name}`} disabled={!live || group.drafted === 0}
+            <button type="button" class="step" aria-label={`One fewer ${group.name}`} disabled={!live || group.drafted === 0}
               onclick={() => { draft = setPileCount(draft, group.ids, group.drafted - 1); }}>−</button>
-            <button type="button" class="step" aria-disabled={readingOut || undefined} aria-label={`One more ${group.name}`} disabled={!live || group.drafted === group.ids.length}
+            <button type="button" class="step" aria-label={`One more ${group.name}`} disabled={!live || group.drafted === group.ids.length}
               onclick={() => { draft = setPileCount(draft, group.ids, group.drafted + 1); }}>+</button>
           </div>
         {/each}
         {#if draft.attackers.length || draft.blocks.length}
-          <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" disabled={!live} aria-disabled={readingOut || undefined} onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
+          <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" disabled={!live} onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
         {/if}
         <p class="type-caption text-ink-3">Nothing is declared until you confirm. {preview?.kind === 'blockers' ? BLOCK_INSTRUCTION : ATTACK_INSTRUCTION}.</p>
       {/if}
     </div>
-  {/snippet}
-
-  {#snippet reading()}
-    {#if beat}
-      <button type="button" class="beat" data-testid="beat" aria-live="polite" onclick={endReadOut}
-        title="Show your decision (Space)">
-        <span class="beat-text">{beat.text}</span>
-        <span class="beat-count type-caption">{beatAt + 1} of {beats.length} · Space to skip</span>
-      </button>
-    {/if}
   {/snippet}
 
   {#snippet stripToggle()}
@@ -1401,16 +1653,67 @@
       <span aria-hidden="true">{strip!.open ? '▾' : '▸'}</span> Decisions · {strip!.marks.filter(mark => mark.decision).length}
     </button>
   {/snippet}
-  {#if bottom || strip?.open}
+  {#if showWalkBar || bottom || strip?.open}
     <div class="bottom">
+      {#if showWalkBar}
+        <div class="walk-bar" data-testid="walk-bar" data-walking={walking} data-cursor={cursor ?? undefined}>
+          <div class="walk-row">
+            <!-- svelte-ignore a11y_no_static_element_interactions (resting the pointer on the caption holds the walk) -->
+            <div class="walk-caption" data-testid="walk-caption" data-walking={walking} data-holding={walking && captionHovered}
+              aria-live="polite" title={active.caption || undefined}
+              onmouseenter={() => (captionHovered = true)} onmouseleave={() => (captionHovered = false)}>
+              {#if cursor !== null}
+                <span class="walk-text">{active.caption}</span>
+                {#if boardNotice}
+                  <span class="walk-note" data-testid={boardNotice.testid}> · {boardNotice.text}</span>
+                {/if}
+              {:else}
+                <span class="walk-idle">Turn {scrubber.turn ?? turnNumber} · {scrubber.stops.length} {scrubber.stops.length === 1 ? 'stop' : 'stops'}</span>
+              {/if}
+            </div>
+            <div class="walk-actions type-caption">
+              {#if cursor !== null}
+                {#if activeStopIndex >= 0}
+                  <span class="walk-count" data-testid="walk-count">{activeStopIndex + 1} of {scrubber.stops.length}{#if walking && (captionHovered || combatTableHovered)}{' · holding'}{/if}</span>
+                {/if}
+                <button type="button" class="walk-btn" data-testid="walk-now" onclick={returnToNow}>Now <kbd>Esc</kbd></button>
+              {/if}
+              {#if scrubber.stops.length > 0}
+                <button type="button" class="walk-btn" data-testid="walk-replay" onclick={replayTurn}>Replay turn</button>
+              {/if}
+              {#if onwalkpace}
+                <span class="walk-pace" role="group" aria-label="Move pace" data-testid="walk-pace">
+                  <button type="button" class="pace-btn" class:on={walkPace === 'study'} aria-pressed={walkPace === 'study'} data-pace="study" title="1.4 seconds per stop" onclick={() => onwalkpace('study')}>1.4s</button>
+                  <button type="button" class="pace-btn" class:on={walkPace === 'quick'} aria-pressed={walkPace === 'quick'} data-pace="quick" title="0.7 seconds per stop" onclick={() => onwalkpace('quick')}>Quick</button>
+                  <button type="button" class="pace-btn" class:on={walkPace === 'off'} aria-pressed={walkPace === 'off'} data-pace="off" title="Do not auto-walk stops" onclick={() => onwalkpace('off')}>Off</button>
+                </span>
+              {/if}
+            </div>
+          </div>
+          <div class="walk-scrubber" data-testid="walk-scrubber" role="group" aria-label={`Turn ${scrubber.turn ?? turnNumber} stops`}>
+            {#each scrubber.stops as stop, idx (stop.seq)}
+              {@const isActive = idx === activeStopIndex}
+              <button type="button" class="walk-tick" class:move={stop.moveStart} class:yours={stop.yoursOnly} class:active={isActive}
+                class:passed={activeStopIndex >= 0 && idx < activeStopIndex}
+                data-testid="walk-tick" data-stop-seq={stop.seq} data-move-start={stop.moveStart ? 'true' : undefined}
+                aria-pressed={isActive}
+                aria-label={`Stop ${idx + 1} of ${scrubber.stops.length}: ${stop.caption}`}
+                title={stop.caption}
+                onclick={() => setCursor(stop.seq, 'stop')}>
+                <span class="tick-bar" aria-hidden="true"></span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
       {@render bottom?.()}
       {#if strip?.open}<Strip marks={strip.marks} selected={strip.selected} onjump={strip.onjump} note={strip.note} scale={strip.scale} />{/if}
     </div>
   {/if}
   <nav class="stops-slot" aria-label={`Turn ${turnNumber}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
-    <StopBar {track} turn={turnNumber} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
+    <StopBar {track} turn={turnNumber} cursorActive={Boolean(activeCursorReading)} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
   </nav>
-  <Lines lines={standingLines} {draftLine} {root} revision={frame.revision} />
+  <Lines lines={standingLines} {draftLine} {root} revision={`${frame.revision}:${cursor ?? 'now'}:${pointed?.offer.id ?? 'none'}`} />
   {#if marquee}
     <div class="marquee" aria-hidden="true" data-testid="attack-marquee" style:left={`${marquee.left}px`} style:top={`${marquee.top}px`}
       style:width={`${marquee.right - marquee.left}px`} style:height={`${marquee.bottom - marquee.top}px`}></div>
@@ -1465,7 +1768,7 @@
   <section class="dock" aria-label="Inspect" data-testid="inspect-dock" tabindex="0">
     {#if docked}
       <Inspect name={docked.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? docked.text} permanent={shownPermanent} card={shownCard} {castTerms} {enteredUnder}
-        blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} art={72} />
+        blocks={shownPermanent?.blocking !== undefined ? boardNames.get(shownPermanent.blocking) ?? null : null} art={72} />
     {:else}
       <p class="type-body text-ink-3">Hover or focus a card to inspect it.</p>
     {/if}
@@ -1475,7 +1778,7 @@
 {#if inspectMode === 'float' && hovered}
   <div class="preview" aria-hidden="true" style:left={`${hovered.x}px`} style:top={`${hovered.y}px`} data-testid="card-preview">
     <Inspect name={hovered.subject.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? hovered.subject.text} permanent={shownPermanent} card={shownCard} {castTerms} {enteredUnder}
-      blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} />
+      blocks={shownPermanent?.blocking !== undefined ? boardNames.get(shownPermanent.blocking) ?? null : null} />
   </div>
 {/if}
 
@@ -1518,10 +1821,18 @@
     grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px;
     border-bottom: 1px solid var(--border); background: var(--bg-surface); min-width: 0;
   }
-  .brand { font-family: var(--font-serif); font-weight: 600; font-size: 20px; line-height: 28px; color: var(--accent-text); }
-  .matchup { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* The matchup gives way first: the turn and the controls keep their width. */
+  .brand { font-family: var(--font-serif); font-weight: 600; font-size: 20px; line-height: 28px; color: var(--accent-text); flex-shrink: 0; }
+  .matchup { min-width: 0; flex: 0 2 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The matchup gives way first: the turn and the controls keep their width; a long cursor reading truncates cleanly before Esc for now. */
   .turn { margin: 0 auto; flex-shrink: 0; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; }
+  .turn.cursor-reading {
+    display: flex; align-items: baseline; min-width: 0; flex: 0 1 auto; overflow: hidden;
+    color: var(--accent-text);
+  }
+  .cursor-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cursor-sep, .esc-now { flex: none; }
+  .esc-now { font: inherit; min-height: 0; color: var(--text-secondary); text-decoration: underline dotted; cursor: pointer; }
+  .esc-now:hover { color: var(--text); }
   .stops-slot { grid-row: 4; grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) clamp(250px, 21vw, 300px); }
   .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .connection { color: var(--warning-text); }
@@ -1584,15 +1895,70 @@
     background: var(--bg-surface); box-shadow: var(--shadow-raised);
     animation: appear var(--motion-move) ease-out;
   }
-  @keyframes appear { from { opacity: 0; } }
-  /* A beat heads the rail's decision block, above the prompt that waits for it. */
-  .beat {
-    display: grid; gap: 2px; justify-items: start; width: 100%; padding: 6px 10px; border: 1px solid var(--border-strong);
-    border-left: 3px solid var(--accent); border-radius: var(--radius-sm); background: var(--bg-field); text-align: left; cursor: pointer;
-    animation: appear var(--motion-fast) ease-out;
+  .combat-table-sheet {
+    position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: var(--layer-panel);
+    width: min(640px, calc(100% - 28px)); max-height: 46%; display: flex; flex-direction: column;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--bg-surface) 96%, transparent); box-shadow: var(--shadow-raised);
+    overflow: hidden;
   }
-  .beat-text { font-size: 14px; line-height: 20px; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
-  .beat-count { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+  .combat-table-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--bg-field);
+  }
+  .combat-table-scroll { overflow-y: auto; padding: 4px 12px 8px; }
+  .combat-table-sheet table { width: 100%; border-collapse: collapse; font: 14px/20px var(--font-sans); }
+  .combat-table-sheet th {
+    text-align: left; font: 600 12px/16px var(--font-sans);
+    color: var(--text-tertiary); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--border);
+  }
+  .combat-table-sheet td { padding: 4px 8px 4px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); vertical-align: top; color: var(--text); }
+  .combat-table-sheet td b { font-family: var(--font-serif); font-weight: 600; }
+  .combat-table-sheet td.num { font-variant-numeric: tabular-nums; }
+  .combat-table-sheet .pt-note { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+  .combat-table-sheet tbody tr:hover td { background: var(--bg-field); }
+  .combat-table-sheet tbody tr:last-child td { border-bottom: 0; }
+  @keyframes appear { from { opacity: 0; } }
+  /* Steady-height caption + scrubber bar under the board once a move has occurred. */
+  .walk-bar {
+    height: 54px; display: grid; grid-template-rows: 22px 22px; align-content: center; gap: 2px;
+    padding: 4px 14px;
+  }
+  .walk-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .walk-caption {
+    flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; white-space: nowrap; overflow: hidden;
+    font: 14px/20px var(--font-serif); color: var(--text);
+  }
+  .walk-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .walk-note, .walk-idle { flex: none; font: 12px/16px var(--font-sans); color: var(--text-secondary); }
+  .walk-actions { flex: none; display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+  .walk-count { font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
+  .walk-btn {
+    min-height: 0; display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: var(--radius-sm);
+    color: var(--text-secondary); white-space: nowrap;
+  }
+  .walk-btn:hover, .walk-btn:focus-visible { color: var(--text); background: var(--bg-field); }
+  .walk-pace { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+  .pace-btn {
+    min-height: 0; padding: 1px 6px; font: 500 12px/16px var(--font-sans); color: var(--text-secondary); background: none; border: 0; cursor: pointer;
+  }
+  .pace-btn + .pace-btn { border-left: 1px solid var(--border); }
+  .pace-btn:hover, .pace-btn:focus-visible { color: var(--text); background: var(--bg-field); }
+  .pace-btn.on { background: var(--text); color: var(--bg-surface); }
+  .walk-scrubber { display: flex; align-items: center; gap: 3px; height: 22px; min-width: 0; }
+  .walk-tick {
+    flex: 1 1 0; min-width: 8px; max-width: 56px; height: 20px; display: flex; align-items: center;
+    padding: 0; border: 0; background: none; cursor: pointer;
+  }
+  .walk-tick .tick-bar {
+    width: 100%; height: 3px; border-radius: var(--radius-sm); background: var(--border-strong);
+    transition: background-color var(--motion-fast) ease-out, height var(--motion-fast) ease-out;
+  }
+  .walk-tick.move .tick-bar { height: 6px; }
+  .walk-tick.yours .tick-bar { background: color-mix(in srgb, var(--info-text) 50%, var(--border-strong)); }
+  .walk-tick.passed .tick-bar { background: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); }
+  .walk-tick.active .tick-bar { background: var(--accent); height: 8px; }
+  .walk-tick:hover .tick-bar, .walk-tick:focus-visible .tick-bar { background: var(--text); }
   .result-card.folded { top: auto; bottom: 12px; left: auto; right: 12px; transform: none; width: auto; padding: 6px; }
   .result-card .fold { justify-self: end; color: var(--text-secondary); }
   .result-card .fold:hover { color: var(--text); }
@@ -1603,8 +1969,6 @@
   .combat-draft .primary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .combat-draft .primary kbd { flex: none; opacity: 1; }
   .combat-draft .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
-  /* A read-out holds the draft's controls as Rail holds its own: listed, dimmed, a press only ends it. */
-  .combat-draft [aria-disabled] { opacity: 0.55; cursor: default; }
   .combat-draft .secondary { width: 100%; min-height: 32px; padding-block: 5px; justify-content: flex-start; }
   .pile-count { display: flex; align-items: center; gap: 6px; }
   .pile-count span { flex: 1; }
@@ -1667,6 +2031,18 @@
   .setting, .group :global(.setting) { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; line-height: 20px; cursor: pointer; }
   .setting small, .group :global(.setting small) { display: block; font-size: 12px; line-height: 16px; color: var(--text-tertiary); }
   .setting input, .group :global(.setting input) { flex: none; accent-color: var(--accent); }
+
+  .death-layer { position: absolute; inset: 0; pointer-events: none; z-index: var(--layer-panel); overflow: hidden; }
+  .death-travel {
+    position: absolute; display: flex; flex-direction: column; justify-content: space-between; padding: 4px;
+    border-radius: var(--radius-card); border: 1px solid var(--damage);
+    background: var(--bg-surface); box-shadow: var(--shadow-raised); color: var(--text);
+  }
+  .death-travel-name { font: 600 12px/16px var(--font-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .death-travel-rule {
+    align-self: flex-start; padding: 0 5px; border-radius: var(--radius-sm);
+    font: 600 12px/16px var(--font-sans); color: var(--bg); background: var(--damage);
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .hand-card, .board { transition: none; }

@@ -28,7 +28,9 @@
   import { gameResult } from '$lib/board/result';
   import { numbersLine, type GameNumbers } from '$lib/numbers';
   import { loadAutoTap, saveAutoTap, type FullControlMode } from '$lib/board/auto-tap';
-  import { analysedEvidence, liveAnalysedMarks, logMarks } from '$lib/board/replay';
+  import { loadWalkPace, saveWalkPace, type WalkPace } from '$lib/board/beats';
+  import { trackMarks } from '$lib/board/history';
+  import { analysedEvidence, withLiveAnalysisPoints } from '$lib/board/replay';
   import { nextHeldOnce, onceHeldAt, stopStepOf, type OncePlace } from '$lib/board/phases';
   import {
     connect,
@@ -63,6 +65,12 @@
   let stopsPending = $state<number | null>(null);
   let autoTap = $state(loadAutoTap());
   let fullControl = $state<FullControlMode>('off');
+  let walkPace = $state<WalkPace>(loadWalkPace());
+
+  function setWalkPace(pace: WalkPace): void {
+    walkPace = pace;
+    saveWalkPace(pace);
+  }
 
   function toggleAutoTap(): void {
     if (fullControl !== 'off') {
@@ -77,7 +85,7 @@
 
   function handleAutoTap(action: InteractionOffer, note: string): void {
     if (participantStudying || !canSubmitLive) return;
-    gameStore.appendAutoNote(note);
+    gameStore.appendAutoNote(note, presentationPlayer.events.at(-1)?.seq ?? -1);
     sendAction(action.id);
   }
 
@@ -226,9 +234,9 @@
   // A Study branch shows its own projection with no live offers.
   const boardFrame = $derived<ExperienceFrame | null>(decisionFrame && gameStore.branchProjection
     ? { ...decisionFrame, projection: gameStore.branchProjection, offers: [], prompt: null } : decisionFrame);
-  // The boards the opponent's moves were made on, for the frame they came with.
-  const stepBoards = $derived(!gameStore.branchProjection && boardFrame && gameStore.stepBoards?.frameHash === boardFrame.frame_hash
-    ? gameStore.stepBoards.boards : []);
+  // Session-kept boards (frames and per-line boards, capped at 512) for the active match.
+  const stepBoards = $derived(!gameStore.branchProjection && boardFrame && gameStore.keptBoards?.matchId === boardFrame.match_id
+    ? gameStore.keptBoards.boards : []);
 
   $effect(() => {
     if (stopsPending !== null && (gameStore.updateSeq !== stopsPending || gameStore.connection !== 'connected')) stopsPending = null;
@@ -334,7 +342,7 @@
       );
       heldOnce = next.held;
       if (next.spend && gameStore.onceStops[next.spend.side].includes(next.spend.step)) {
-        gameStore.spendOnce(next.spend.side, next.spend.step);
+        gameStore.spendOnce(next.spend.side, next.spend.step, presentationPlayer.events.at(-1)?.seq ?? -1);
         syncStopsToServer();
       }
     });
@@ -362,8 +370,13 @@
     if (!sendPassTurn()) {
       return;
     }
-    // The log records game vocabulary, not affordances: no key hints.
-    gameStore.appendHeroAction('Pass turn');
+    // Client-local yield note anchored to the current point on the track.
+    gameStore.addHistoryNote(
+      'you',
+      gameStore.observation?.turn.turn_number ?? null,
+      presentationPlayer.events.at(-1)?.seq ?? -1,
+      'Pass turn',
+    );
   }
 
   function handleActionSelect(action: InteractionOffer): void {
@@ -416,7 +429,12 @@
     return `${shortName(liveAnalysis.policy.name)}'s ${name.toLowerCase()} (%) from your seat · ${liveAnalysis.points.length} ${liveAnalysis.points.length === 1 ? 'decision' : 'decisions'} read`;
   });
   const analysisOffered = $derived(inGame && !demoName && !gameStore.gameOver && pilotCanAct);
-  const liveMarks = $derived(liveScale ? liveAnalysedMarks(gameStore.actionLog, liveAnalysis.points) : logMarks(gameStore.actionLog));
+  const baseMarks = $derived(trackMarks(
+    presentationPlayer.events,
+    index => presentationPlayer.labelsAt(index),
+    { youSeat: boardFrame?.projection.agent.player_index ?? 0, you: 'You', opponent: shortName(opponentName) },
+  ));
+  const liveMarks = $derived(liveScale ? withLiveAnalysisPoints(baseMarks, liveAnalysis.points) : baseMarks);
   $effect(() => { if (liveAnalysis.shown) stripOpen = true; });
   const liveEvidence = $derived(liveAnalysis.shown && liveAnalysis.reading && decisionFrame && !participantStudying
     && liveAnalysis.reading.revision === decisionFrame.revision && decisionFrame.offers.length
@@ -485,6 +503,14 @@
 {/snippet}
 
 {#snippet playSettings()}
+  <div class="pace-setting" role="group" aria-label="Move pace" data-testid="menu-walk-pace">
+    <span class="type-caption text-ink-2">Move pace</span>
+    <div class="pace-options">
+      <button type="button" class="btn btn-sm" class:btn-primary={walkPace === 'study'} class:btn-secondary={walkPace !== 'study'} aria-pressed={walkPace === 'study'} onclick={() => setWalkPace('study')}>Study (1.4 s)</button>
+      <button type="button" class="btn btn-sm" class:btn-primary={walkPace === 'quick'} class:btn-secondary={walkPace !== 'quick'} aria-pressed={walkPace === 'quick'} onclick={() => setWalkPace('quick')}>Quick (0.7 s)</button>
+      <button type="button" class="btn btn-sm" class:btn-primary={walkPace === 'off'} class:btn-secondary={walkPace !== 'off'} aria-pressed={walkPace === 'off'} onclick={() => setWalkPace('off')}>Off</button>
+    </div>
+  </div>
   <!-- The stop bar under the board sets each step's stop; this holds what it has no cell for: automation on or off, the stack stop and the reset. -->
   <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''}</p>
   <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
@@ -548,7 +574,7 @@
       oncyclestop={handleCycleStop}
       connection={gameStore.connection}
       connectionLabel={gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
-      log={gameStore.actionLog}
+      notes={gameStore.historyNotes}
       {canPassTurn}
       presentation={presentationPlayer}
       {thinking}
@@ -574,6 +600,8 @@
       ontoggleautotap={toggleAutoTap}
       onfullcontrol={mode => { fullControl = mode; }}
       onautotap={handleAutoTap}
+      {walkPace}
+      onwalkpace={setWalkPace}
     />
   {:else if atHome}
     {@render notices()}
@@ -684,6 +712,8 @@
     padding: 16px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
   .last-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
   .home-matchup { line-height: 1.35; }
+  .pace-setting { display: grid; gap: 6px; }
+  .pace-options { display: flex; flex-wrap: wrap; gap: 6px; }
   .live-analysis { display: grid; gap: 6px; }
   .live-analysis select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 2px 4px; color: var(--text); max-width: 190px; }
 </style>
