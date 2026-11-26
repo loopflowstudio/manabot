@@ -29,7 +29,9 @@ export async function createCompletedStudyTrace(page: Page): Promise<string> {
     const messages: unknown[] = [];
     let receive: ((value: unknown) => void) | null = null;
     socket.onmessage = (event) => {
-      const payload = JSON.parse(event.data as string) as unknown;
+      const payload = JSON.parse(event.data as string) as { type?: string };
+      // Progress while the game loads and the opponent chooses; replies follow.
+      if (payload.type === 'work_status') return;
       if (receive) {
         const deliver = receive;
         receive = null;
