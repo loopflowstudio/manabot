@@ -1,4 +1,4 @@
-at: bf1162183e
+at: ecbe3c85bcb96ba3b258bf687b6f7e7c1703540c
 first:
   - path: managym/README.md
     why: Indistinguishable-object contract, allowlist, manual-mana rules, and live-in-zone aliases
@@ -17,7 +17,7 @@ first:
   - path: managym/experience.py
   - path: academy/ui/src/lib/types.ts
   - path: managym/src/flow/decision_group/mod.rs
-    why: Optional DecisionOffer.aliases (Vec<SubjectRef>) and target-first primary_subject
+    why: Optional DecisionOffer.aliases (Vec<SubjectRef>) and action-aware primary_subject
   - path: managym/decision_group.py
     why: Typed Offer.aliases (list[SubjectRef]) model aligned with decision_group
   - path: managym/src/flow/interchangeable.rs
@@ -37,7 +37,7 @@ first:
   - path: managym/src/decision_context.rs
     why: Viewer-safe live-in-zone SubjectRef alias projection backing DecisionOffer.aliases
   - path: managym/academy/server.py
-    why: Single Env.decision projection per hero prompt (reused by live_decision_group, skipped in autoplay)
+    why: Default Env.decision projection for recorded seats, reused by live_decision_group
   - path: academy/ui/src/lib/board/view.ts
     why: Anchoring folded SubjectRef aliases on drawn board and hand objects
   - path: academy/ui/src/lib/board/Board.svelte
