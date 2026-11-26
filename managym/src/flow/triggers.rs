@@ -56,12 +56,16 @@ struct FiredDelayedTrigger {
 }
 
 impl FiredDelayedTrigger {
-    fn simple(trigger: DelayedTrigger, context: Option<Target>) -> Self {
+    fn simple(
+        trigger: DelayedTrigger,
+        context: Option<Target>,
+        player: Option<PlayerId>,
+    ) -> Self {
         Self {
             trigger,
             context,
             remembered: Vec::new(),
-            player: None,
+            player,
             amount: 0,
         }
     }
@@ -1631,6 +1635,9 @@ impl Game {
     /// the exact object's battlefield departure instead.
     /// One-shot triggers are removed as they fire (CR 603.7c).
     fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
+        if self.state.delayed_triggers.is_empty() {
+            return;
+        }
         let dead_creature = match event {
             GameEvent::CardMoved {
                 from: Some(ZoneType::Battlefield),
@@ -1640,7 +1647,7 @@ impl Game {
                 .departed_object()
                 .and_then(|object| self.object_lki(object))
                 .filter(|lki| lki.battlefield.types.is_creature())
-                .map(|lki| Target::Permanent(lki.permanent)),
+                .map(|lki| (Target::Permanent(lki.permanent), lki.controller)),
             _ => None,
         };
         let mut fired = Vec::new();
@@ -1648,8 +1655,15 @@ impl Game {
         for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
             let before = fired.len();
             match (&trigger.event, event) {
-                (DelayedTriggerEvent::CreatureDies, _) if dead_creature.is_some() => {
-                    fired.push(FiredDelayedTrigger::simple(trigger.clone(), dead_creature));
+                (DelayedTriggerEvent::CreatureDies, _) => {
+                    let Some((target, controller)) = dead_creature else {
+                        continue;
+                    };
+                    fired.push(FiredDelayedTrigger::simple(
+                        trigger.clone(),
+                        Some(target),
+                        Some(controller),
+                    ));
                 }
                 (
                     DelayedTriggerEvent::EndStep { your_turn },
@@ -1657,7 +1671,11 @@ impl Game {
                         step: StepKind::End,
                     },
                 ) if !your_turn || self.active_player() == trigger.controller => {
-                    fired.push(FiredDelayedTrigger::simple(trigger.clone(), None));
+                    fired.push(FiredDelayedTrigger::simple(
+                        trigger.clone(),
+                        None,
+                        Some(self.active_player()),
+                    ));
                 }
                 (
                     DelayedTriggerEvent::Upkeep,
@@ -1665,7 +1683,11 @@ impl Game {
                         step: StepKind::Upkeep,
                     },
                 ) => {
-                    fired.push(FiredDelayedTrigger::simple(trigger.clone(), None));
+                    fired.push(FiredDelayedTrigger::simple(
+                        trigger.clone(),
+                        None,
+                        Some(self.active_player()),
+                    ));
                 }
                 (
                     DelayedTriggerEvent::YouCastSpell(predicate),
@@ -1680,6 +1702,7 @@ impl Game {
                     fired.push(FiredDelayedTrigger::simple(
                         trigger.clone(),
                         Some(Target::StackSpell(*object)),
+                        Some(*caster),
                     ));
                 }
                 (DelayedTriggerEvent::Whenever(condition), _) => {
@@ -1732,9 +1755,8 @@ impl Game {
             amount,
         } in fired
         {
-            let pending = self.fire_delayed_trigger(&trigger, context);
+            let pending = self.fire_delayed_trigger(&trigger, context, player);
             pending.remembered.extend(remembered);
-            pending.player = player;
             pending.triggering_amount = amount;
         }
     }
@@ -1744,6 +1766,7 @@ impl Game {
         &mut self,
         trigger: &DelayedTrigger,
         context: Option<Target>,
+        player: Option<PlayerId>,
     ) -> &mut PendingTrigger {
         let pending = self.enqueue_inline_trigger(
             trigger.source_identity,
@@ -1751,6 +1774,7 @@ impl Game {
             trigger.effects.effects().to_vec(),
             context,
         );
+        pending.player = player;
         pending.remembered = trigger.remembered.clone();
         pending.program = true;
         pending
