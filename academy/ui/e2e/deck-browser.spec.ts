@@ -8,6 +8,8 @@ const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 test('Watch uses the same browser to assign both bot seats', async ({ page }) => {
   await page.goto('/?watch=1');
   await expect(page.getByTestId('deck-browser')).toHaveCount(1);
+  await page.getByRole('combobox', { name: 'Seat 1 bot', exact: true }).selectOption('passive');
+  await page.getByRole('combobox', { name: 'Seat 2 bot', exact: true }).selectOption('passive');
   await selectDeck(page, 'hero', 'elemental_bg');
   await selectDeck(page, 'villain', 'elemental_ug');
   await expect(page.getByTestId('selected-deck-hero')).toHaveAttribute('data-deck-id', 'elemental_bg');
