@@ -305,36 +305,36 @@ aligned:
 
 ## Passes
 
-1. **Predicate, oracle, permanents** — done (`e698958617`): fail-closed exhaustive census + `Game::interchangeable` in `flow/interchangeable.rs`, `fold_action_space` + `publish_folded_action_space` across publish sites (`tick`, `search`, `scenario`, `possible_worlds`), aliases in `step` rollback and `GameSnapshot`, permanent folding (`TapForMana`, `ActivateAbility`, `WaterbendTap`, `TurnFaceUp`), `flow/mana/interchangeable.rs` moved onto the shared predicate (old scans + `names_mana_source` / `may_name_mana_source` deleted). Oracle verified 133 folded pairs (and 542 in full sweep) with zero rules divergences (noted `autotapper` `PermanentId`-order tiebreak in `scratch/questions.md`). Default-mode fold share: 10.30% (115/1116 decisions), mean actions 3.298 -> 2.968. Release `bench_steps`: 115,115 steps in 7.61s user CPU (15.1k steps/user-s; host load ~585 precluded wall-time comparison against baseline), `bench_search`: 23,296 total sims across seeds 1–3.
-2. **Cards and selections** — done (`c440b0d8a4`): extended `fold_action_space` to `PlayLand`, `CastSpell`, `ActivateCardAbility`, `Foretell`, `ChooseTarget` (permanent/graveyard), `SelectCard` (zone gate: Battlefield/Hand/Graveyard/face-up Exile/outside-game Sideboard; decision gate: never `OrderLibrary`/`DistributeCounters`), `LearnDiscard`, and `LearnTakeLesson`; deleted definition-only dedups in `resolution_cast_candidates` and `revealed_hand_objects` (`flow/decision.rs`); added `resolve_action_index` and alias-aware compound lowering in `agent/structured_offer.rs` (including `ChooseTarget` and `Waterbend` forced-suffix retirement under `skip_trivial`); updated `compound_waterbend_subset_is_order_independent_and_forced_suffix_safe` for folded forced-suffix taps. Verified `interchangeable` (16/16; oracle verified 136 folded pairs with zero rules divergences; default-mode fold share 24.07% (265/1101), mean actions 3.300 -> 2.819), `rules_tests structured_offer` (10/10), and `rules_tests decklist_disclosure` (6/6).
-3. **Combat** — done (`4c9a00ae9b`): added `declined_attackers`/`declined_blockers` to `CombatState` (`flow/combat.rs`, recorded in `combat_actions.rs`, cleared on step start and declaration end in `tick.rs`) and hashed them alongside `TurnState.graveyard_from_battlefield` in `state/hash.rs` (`MATCH_STATE_HASH_VERSION` 31 -> 32); vouched decline lists, `attacks_this_turn` (compared per object via `attack_count`), and unblocked attackers (compared by combat role, keeping `already_attacking` prefix, `first_strikers`, `blocked`, and non-empty `attacker_to_blockers` marked) in `flow/interchangeable.rs`, folding `DeclareBlocker` across interchangeable unblocked attackers and applying the declined-earlier rule for attackers and blockers in `flow/tick.rs` (preserving required blocks when decline is illegal); normalized plans in `flow/combat_preview.rs` and compound `DeclareAttackers`/`DeclareBlockers` lowering in `agent/structured_offer.rs` (re-homing marks onto asked creatures, skipping forced declines under `skip_trivial`, and transposing folded attacker aliases so split-blocks stay split and double-blocks stay paired). Verified `interchangeable` (20/20; oracle 136 folded pairs, zero divergences; default-mode fold share 25.07% (272/1085), mean actions 3.332 -> 2.832), `match_state_hash_tests` (11/11), `combat_preview` (6/6), `structured_attacker_offers` (7/7), `structured_offers` (10/10), and `cr_50` (5/5).
-4. **Academy and records** — done (`2111195908`): added optional `InteractionOffer.aliases` (`Vec<DecisionObjectView>`, omitted when empty) across `managym/src/experience.rs`, `managym/experience.py`, `academy/ui/src/lib/types.ts`, and all six `protocol/*.schema.json` schemas, populated via `Game::decision_offer_aliases` (`managym/src/decision_context.rs`) / `Env::decision_offer_aliases_json` (`managym/src/agent/env.rs`, `managym/src/python/bindings.rs`, `managym/__init__.pyi`, `tests/public_api.json`, `managym/academy/server.py`); anchored drawn-object aliases in `academy/ui/src/lib/board/view.ts` (keeping piles whole and rail/tray one per offer), kept `PAY_OR_NOT` piles stable before `payKnown` arrives (`Board.svelte`) and expanded per-creature combat choices scrollable (`Rail.svelte`); re-recorded `conformance/semantic-kernel-w17-v6/evidence-interchangeable-v1.json` (14 cases / 3,077 commands, zero reference/optimized divergence) and `tests/fixtures/pinned_pilot/{v9,v11}/game.json`; updated `managym/src/match_fixtures.rs` (`HEAVY_ACTION_SEED = 0xc10f`, `120/13/572`), `tests/academy/test_dual_land_payment.py`, `academy/ui/e2e/mana-payment.spec.ts`, `docs/engine.md`, `managym/academy/README.md`, and `conformance/README.md`; added `tests/academy/test_interchangeable_offers.py` and alias unit tests in `academy/ui/src/lib/board/view.test.ts`. Verified Rust `experience_protocol_tests`/`study_protocol_tests`/`study_index_protocol_tests`/`canonical_replay_tests` (21/21), `source_taps` (33/33), `match_fixtures` (2/2), `search_state_contract` (6/6), `semantic_conformance_tests` (20/20); Python `test_interchangeable_offers`, `test_dual_land_payment`, `test_combat_preview`, `test_experience_protocol`, `test_study_protocol`, `test_advice`, `test_pinned_pilot`, `test_choice_separability`, `test_public_api_contract` (all passed); UI Vitest (319/319), `svelte-check` (0 errors), and Playwright `mana-payment`, `drag-play`, `combat-presentation`, `laptop-comfort` (37/37); local release `bench_steps`: 118,308 steps in 7.02s (16,853.6/s, digest `4443070906626209330`). Deferred to gate/CI: full `rules_tests`, `authored-match` receipts if needed, and adopting `managym/perf/baseline.json` from the CI `Engine Budget` runner artifact (`scripts/engine_budget.py record --reason`).
+1. **Predicate, oracle, permanents** — done (`e698958617`). Oracle: 133 folded pairs, zero divergences; fold share 10.30%.
+2. **Cards and selections** — done (`c440b0d8a4`). Fold share 24.07%, mean actions 3.300 → 2.819.
+3. **Combat** — done (`4c9a00ae9b`). `declined_attackers`/`declined_blockers`, hash v31 → v32 (adds `graveyard_from_battlefield`). Fold share 25.07%, 3.332 → 2.832.
+4. **Academy and records** — done (`2111195908`). `InteractionOffer.aliases` on all wire/schema copies, drawn-object anchors, conformance `evidence-interchangeable-v1.json` (14 cases / 3,077 commands, zero divergence), pinned pilot games re-recorded. Local release `bench_steps` 118,308 steps / 7.02s, digest `4443070906626209330`.
+5. **Concept-review fixes** — next. One batched pass over the post-implementation review (`40cbc3f260`, `scratch/concept-review.html`), all headless choices below:
+   - **Combat coupling (1a).** `block_options` (`flow/block_requirements.rs`) learns which remaining blockers decline-pruning will suppress, so a MustBeBlocked/Menace attacker with identical B1, B2 (and B1, B2, B3) yields no duplicate one-blocker outcome; add that directed test. Extract one combat-plan normalizer (donor re-homing, attacker-alias transposition) shared by `flow/combat_preview.rs:205-305` and `agent/structured_offer.rs:1520-1658`, with one `skip_trivial` treatment; delete both hand-written loops.
+   - **Published decision ownership (2a).** Pair `current_action_space` and `action_aliases` behind one seam on `Game` (private `PublishedDecision { space, aliases }` or `take_/clear_published_decision`), and route `step` rollback, `apply_search_action` (`structured_offer.rs:1858`, today leaves aliases stale), `presentation_cut` (`flow/presentation.rs:232`, same), search refresh and `GameSnapshot` through it. `ActionSpace` and `SearchStateWitness` unchanged.
+   - **Cheap filter before census (2a).** In `fold_action_space` (`flow/interchangeable.rs:~2438`), drop bucket members failing `same_object_identity` + `same_permanent_state_cheap` before watching them in `ReferenceCensus::run`/`board_scan`; share one post-census equivalence helper with `all_interchangeable` (:1871) and `declined_interchangeable_permanent` (:1943).
+   - **Fail-closed SelectCard gate (3a).** `select_card_decision_allows_fold` (:2211) becomes an exhaustive `match` over `Decision` with no wildcard.
+   - **TurnFaceUp (4a).** Delete its dead arms in `same_action_shell` (:1810) and `action_fold_object` (:2185). README already corrected in this realign.
+   - Teaches: whether Option 1a changes any conformance action-space hash (re-record only if a case hits MustBeBlocked + identical blockers) and whether the cheap filter moves release `bench_steps`.
+   - Verify: `interchangeable`, `combat_preview`, `structured_attacker_offers`, `structured_offers`, `cr_50`, `semantic_conformance_tests`, `search_state_contract`; `tests/academy/test_interchangeable_offers.py`, `test_combat_preview.py`.
 
-## Concept review (28865774d1) — choices made for review
+## Concept reviews — choices made for review
 
-Each finding is now in the design above. Headless; the recommended option
-was taken for each, none confirmed by a person:
+Headless; the recommended option was taken each time, none confirmed by a person.
 
-- **1a** face-down objects never fold. Passed over: fold when the chooser
-  shares information and backings match (complex, timing leaks).
-- **2a** settled `spell_entry` compares `(payment.is_some(), kicked, x)`
-  and is history for the census. Passed over: full comparison, which stops
-  cast creatures and used lands from ever folding.
-- **3a** one fold/publish seam at every publish site, aliases in rollback
-  and snapshots, and the `decision.rs` definition dedups deleted. Passed
-  over: keeping those dedups (no aliases for resolution casts or revealed
-  hand discards).
-- **4a** combat stays in this Task with the hash bump, because the Task's
-  outcome names attackers and blockers. Passed over: 4b, single-decision
-  folding only and combat as its own Task. Pass 3 is the last engine pass,
-  so 4b remains possible by dropping it without reworking 1, 2 or 4.
-- **5a** incarnation and hand/graveyard order ignored; layered statics or
-  keyword counters block folding. Passed over: comparing incarnation (5b),
-  relaxing the timestamp rule (5c).
-- Smaller findings taken as written: exact-id census with `CardId`
-  resolution; `SelectCard` zone/decision gate; `LearnTakeLesson` through
-  `entry_object`; drawn-only alias anchors; bucketing before census with
-  a small flat reference set.
+Pre-implementation (28865774d1): **1a** face-down never folds (passed over: fold under shared information); **2a** settled `spell_entry` compares `(payment.is_some(), kicked, x)` and is census history; **3a** one fold/publish seam, `decision.rs` definition dedups deleted; **4a** combat in this Task with hash v32 (passed over: combat as its own Task); **5a** incarnation and hand/graveyard order ignored, layered statics/keyword counters block folding (passed over: 5b compare incarnation, 5c relax timestamps).
+
+Post-implementation (40cbc3f260), all into Pass 5 except 5a:
+- **1a** couple decline-pruning into `block_options` + one shared normalizer. Passed over: 1b skip pruning when blocks are coupled (simpler, leaves coupled declarations unpruned); 1c accept the redundant branch.
+- **2a** paired published-decision seam, cheap pre-census filter, one shared equivalence helper. Passed over: 2b fix only the two stale sites and the filter.
+- **3a** exhaustive `Decision` match in the SelectCard gate.
+- **4a** remove `TurnFaceUp` from foldable helpers and docs (docs done here).
+- **5a** keep kickoff rulings; compound candidates and `autotapper` tiebreak deferred (below). Passed over: 5b pull autotapper in; 5c compare incarnation.
+
+## Deferred findings
+
+- **Compound offer candidates.** `compound_offers()` (`agent/structured_offer.rs:708-958`) still lists every identical target, waterbend tap, attacker and blocker; lowering resolves aliases, so it is correct but redundant for compound policies. Takes: dedup `CandidateSource` lists through `fold_action_space` aliases, with count-based roles for identical creatures/taps.
+- **`autotapper` tiebreak.** `flow/mana/autotapper.rs` breaks equal-reluctance ties by `PermanentId`, so tapping one of two interchangeable Plains can change a later auto-payment's color; the oracle stops before autotapper shortcuts. Takes: tie-break by color/output before `PermanentId`, then let the oracle run through shortcuts.
 
 ## Acceptance check at gate
 

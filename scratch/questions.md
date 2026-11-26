@@ -43,3 +43,7 @@ questions are in that Task's branch history.
   tiebreak untouched (not a Magic rules difference) and stopped oracle
   continuations before `autotapper` shortcuts fire; worth confirming whether
   `autotapper` should instead tie-break by color/output before `PermanentId`.
+- **Post-implementation concept review 1a–5a** taken headless as
+  recommended (plan, "Concept reviews"). 1a changes combat branching under
+  MustBeBlocked/Menace; 1b (skip pruning when blocks are coupled) is the
+  simpler alternative if 1a's solver change proves costly.

@@ -974,17 +974,17 @@ Two objects in the same zone (or outside-game sideboard entries for
   counters (such as three tokens each carrying one `+1/+1` counter) still fold.
   Hand and graveyard order and card `incarnation` are not distinguishing.
 - **Eligible decision.** Folding applies to `PlayLand`, `CastSpell`,
-  `ActivateCardAbility`, `Foretell`, `ActivateAbility`, `TurnFaceUp`,
-  `TapForMana`, `WaterbendTap`, permanent and graveyard `ChooseTarget`,
-  `LearnDiscard`, `LearnTakeLesson`, cost-component selections, `DeclareBlocker`
-  over interchangeable attackers, and `SelectCard` over Battlefield, Hand,
-  Graveyard, face-up Exile or outside-game Sideboard. Positional and
-  order-sensitive choices never fold: Library cards, Stack objects as fold
-  members, `ChooseMode`, `ScryCard`, `OrderLibrary`, `ChooseTrigger`,
-  `DistributeCounters`, `PassPriority`, `PayCost` and `Decline`. Multi-pick
-  permutation orders (picking A then C versus C then A) and assigning two
-  interchangeable blockers across two different attackers in either order remain
-  separate.
+  `ActivateCardAbility`, `Foretell`, `ActivateAbility`, `TapForMana`,
+  `WaterbendTap`, permanent and graveyard `ChooseTarget`, `LearnDiscard`,
+  `LearnTakeLesson`, cost-component selections, `DeclareBlocker` over
+  interchangeable attackers, and `SelectCard` over Battlefield, Hand,
+  Graveyard, face-up Exile or outside-game Sideboard. `TurnFaceUp` never folds
+  (its object is face down), nor do positional and order-sensitive choices:
+  Library cards, Stack objects as fold members, `ChooseMode`, `ScryCard`,
+  `OrderLibrary`, `ChooseTrigger`, `DistributeCounters`, `PassPriority`,
+  `PayCost` and `Decline`. Multi-pick permutation orders (picking A then C
+  versus C then A) and assigning two interchangeable blockers across two
+  different attackers in either order remain separate.
 
 Surviving actions keep their relative order, `ActionSpace`'s shape and policy
 input layouts are unchanged, and a space folded to one action is skipped under
