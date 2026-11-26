@@ -414,7 +414,6 @@ fn drakuseth_target_relation_keeps_its_secondary_targets_distinct() {
     pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     attack_with(&mut s, drakuseth);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    let started = std::time::Instant::now();
     // Drakuseth, the Giant, 32 Ogres and both players.
     assert_eq!(offered_targets(&s).len(), 36);
     let opponent = Target::Player(PlayerId(1));
@@ -426,10 +425,6 @@ fn drakuseth_target_relation_keeps_its_secondary_targets_distinct() {
     let last = offered_targets(&s);
     assert!(!last.contains(&opponent) && !last.contains(&Target::Permanent(giant)));
     assert!(s.choose_target(Target::Permanent(ogres[1])));
-    eprintln!(
-        "Drakuseth target choices with 16 creatures a side: {:?}",
-        started.elapsed()
-    );
     let life = s.life(1);
     settle(&mut s);
     assert_eq!(s.life(1), life - 4);

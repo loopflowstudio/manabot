@@ -155,17 +155,28 @@ async function chooseDeterministicAction(page: Page): Promise<void> {
 }
 
 async function visibleSignature(page: Page): Promise<string> {
+  const gameBoard = page.getByTestId('game-board');
+  // An opponent turn auto-walks past steps (`data-board="step"`); return to the
+  // live frame without acting so both snapshots sign the authoritative board.
+  if ((await gameBoard.getAttribute('data-board')) !== 'frame') {
+    await page.keyboard.press('Escape');
+    await expect(gameBoard).toHaveAttribute('data-board', 'frame');
+  }
   const prompts = page.getByTestId('decision-prompt');
   const prompt = (await prompts.count()) > 0 ? normalize(await prompts.first().textContent()) : '';
-  const board = await page.getByTestId('game-board').evaluate((element) => {
+  const board = await gameBoard.evaluate((element) => {
     const canonical = element.cloneNode(true) as HTMLElement;
-    canonical.querySelector('[data-testid="presentation-stage"]')?.remove();
+    for (const node of canonical.querySelectorAll(
+      '[data-testid="presentation-stage"], [data-testid="death-travel"], [data-testid="death-chip"], [data-testid="player-damage"], [data-testid="damage-dealt"], [data-testid="stop-delta"]',
+    )) {
+      node.remove();
+    }
     return canonical.textContent;
   });
   const payload = {
     deckNames: normalize(await page.getByTestId('deck-names').textContent()),
-    // Optional presentation theater is transient; the proof signs the
-    // authoritative board, prompt, and legal-action projection underneath it.
+    // Optional presentation theater and transient move marks do not survive a
+    // reload; the proof signs the authoritative board, prompt, and offers.
     board: normalize(board),
     prompt,
     actions: (await page.getByTestId('action-option').allTextContents()).map(normalize),

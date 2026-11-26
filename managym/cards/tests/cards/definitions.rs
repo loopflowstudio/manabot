@@ -82,7 +82,7 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                             walk(inner, format!("{child}/{part}"), place, found);
                         }
                     }
-                    ("EntersWithPlusOneCounters", Value::Object(entry)) => {
+                    ("EntersWithCounters", Value::Object(entry)) => {
                         if let Some(condition) = entry.get("condition") {
                             walk(
                                 condition,

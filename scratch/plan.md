@@ -5,11 +5,12 @@ evidence (Demonic Pact and Maze's End already had working definitions;
 Abyssal Harvester's `blocked_by` is cleared). Slices 1–17 and `lf compress`
 (`558cc971b8`) are built.
 
-**Next: gate — fix `CI/Academy Integration (ubuntu-latest, play)` failure on PR
-#605 (`558cc971b8`), re-verify green CI, then demo.** No unbuilt slices and no
-further engine-performance iteration needed (`CI/Engine Budget` and `CI/Rust
-Tests` already passed on `558cc971b8`; all `baseline.json` digests matched
-without needing `engine_budget.py record`).
+**Next: gate — fix CI failures on PR #605 (`d9efb5411e`), publish batched fix,
+then demo.** No unbuilt slices and no further engine-performance iteration
+needed (`CI/Engine Budget`, `CI/Academy Integration`, `CI/Academy UI`,
+`CI/Protocol v1 Conformance`, `CI/Semantic Kernel Conformance`, `CI/Python Unit
+Tests`, `Release packages`, and `CI/Integration` except `model` all passed on
+`d9efb5411e`).
 
 ## Measured performance (`558cc971b8`, post-Slice-17 + compress)
 

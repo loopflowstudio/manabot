@@ -146,7 +146,7 @@ fn mauler_counts_as_an_angel_elf_advisor_and_attacking_vampire() {
     choose_mode(&mut s, 0);
     let advisor = mode_labels(&s)
         .iter()
-        .position(|name| name == "Advisor")
+        .position(|name| name == "Choose Advisor")
         .unwrap();
     choose_mode(&mut s, advisor);
     settle(&mut s);

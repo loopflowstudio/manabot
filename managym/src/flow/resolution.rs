@@ -2022,9 +2022,17 @@ impl Game {
             }
             Effect::Cascade => {
                 let player = frame.controller;
-                let below = frame
-                    .source()
-                    .map_or(0, |object_id| self.object_mana_value(object_id));
+                // CR 702.85a / CR 608.2h: if the spell with cascade left the stack
+                // before the trigger resolves, use its last known mana value there.
+                let below = frame.source().map_or(0, |object_id| {
+                    self.spell_info(object_id)
+                        .map(|spell| spell.mana_value)
+                        .or_else(|| {
+                            self.object_lki(object_id)
+                                .map(|lki| lki.battlefield.mana_value)
+                        })
+                        .unwrap_or_else(|| self.object_mana_value(object_id))
+                });
                 let mut exiled = Vec::new();
                 let mut hit = None;
                 while let Some(&top) = self

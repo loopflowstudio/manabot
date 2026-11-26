@@ -1633,7 +1633,7 @@
       {/if}
     </section>
 
-    {#if (partitioning || partitionRunning) && partition && !finished}
+    {#if (partitioning || partitionRunning) && partition && !finished && activeCursor === null}
       <!-- Over the board, foldable so the battlefield stays readable around it. -->
       <section use:region={{ across: connection !== null }} class="partition-panel" class:folded={partitionFolded} aria-label={`${partition.sourceName}: split into two piles`} data-testid="partition-panel">
         {#if partitionFolded}
@@ -1786,14 +1786,14 @@
   {#snippet partitionControls()}
     <div class="combat-draft" data-testid="partition-draft">
       {#if partitionRunning}
-        <button type="button" class="btn btn-secondary" data-testid="partition-stop" aria-disabled={activeCursor !== null || undefined} onclick={stopPartitionSending}><kbd>Esc</kbd>Stop sending</button>
+        <button type="button" class="btn btn-secondary" data-testid="partition-stop" onclick={stopPartitionSending}><kbd>Esc</kbd>Stop sending</button>
       {:else if partition && partitionSummary}
         <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready="true"
           aria-label={`Confirm: ${partitionSummary.plan}`} title={partitionSummary.plan}
-          aria-disabled={activeCursor !== null || undefined} onclick={confirmPartition}>
+          disabled={!live} onclick={confirmPartition}>
           <span>{partitionSummary.text}</span><kbd>Space</kbd>
         </button>
-        <button type="button" class="btn btn-secondary secondary" data-testid="partition-swap" aria-disabled={activeCursor !== null || undefined}
+        <button type="button" class="btn btn-secondary secondary" data-testid="partition-swap" disabled={!live}
           onclick={() => { stopNote = null; partitionFaceUp = swapPiles(partition.remaining, partitionFaceUp); }}>Swap piles</button>
         <p class="type-caption text-ink-3">Nothing is placed until you confirm. Click any card to move it between piles.</p>
       {/if}
