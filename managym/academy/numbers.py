@@ -1,16 +1,13 @@
-"""The game in numbers: what each seat of a played game did, and a record.
+"""The game in numbers: what each seat of a played game did.
 
 `game_numbers` re-executes a played game (`record_of`) once and reduces it
 with the engine's own reducers (`managym.statistics.Behaviour` and `Totals`),
 checking each step against the stored track as an analysis does. The result,
-a `GameNumbers`, is saved beside the game (`attempts.numbers_json`) once the
-game is no longer being played, so lists never re-execute; an older game gets
-its numbers the first time they are read (`GET /api/traces/{id}/numbers`).
-
-`wilson_interval` bounds a win rate for the My games record table.
+a `GameNumbers`, is saved beside the game (`attempts.numbers_json`) when it
+ends, so lists never re-execute; an unfinished or older game gets its numbers
+the first time they are read (`GET /api/traces/{id}/numbers`), and a step added
+to the game clears them.
 """
-
-import math
 
 from pydantic import BaseModel, ConfigDict
 
@@ -41,7 +38,7 @@ class GameNumbers(BaseModel):
     person's decisions committed with a live analysis shown (stored on each
     event, not re-executed; numbers saved before it existed read 0).
     `played_from` is the step a game played on from another starts at: the
-    steps before it are that game's, so My record leaves the game out."""
+    steps before it are that game's."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     complete: bool
@@ -55,8 +52,6 @@ def game_numbers(attempt: RetainedAttempt) -> GameNumbers | None:
     """The game's numbers, or None where it does not re-execute as stored
     (another build or card set, or a divergence)."""
     trace = attempt.trace
-    if trace["end_reason"] == "active":
-        raise ValueError("A game still being played has no numbers yet.")
     try:
         walker = walk(record_of(attempt), capture_cards=True)
     except REEXECUTION_ERRORS:
@@ -99,16 +94,3 @@ def seat_numbers(behaviour: BehaviourRow, totals: TotalsRow) -> SeatNumbers:
         damage_dealt=totals.damage_dealt,
         damage_taken=totals.damage_taken,
     )
-
-
-def wilson_interval(wins: int, games: int, z: float = 1.96) -> tuple[float, float]:
-    """The Wilson score interval for a win rate (95% by default); draws count
-    as games that are not wins."""
-    if games <= 0:
-        return (0.0, 1.0)
-    rate = wins / games
-    denominator = 1 + z * z / games
-    centre = (rate + z * z / (2 * games)) / denominator
-    half = z * math.sqrt(rate * (1 - rate) / games + z * z / (4 * games * games))
-    half /= denominator
-    return (max(0.0, centre - half), min(1.0, centre + half))

@@ -41,7 +41,7 @@ def _recorded_traces(directory):
 @pytest.fixture()
 def isolated_traces(monkeypatch, tmp_path):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     return tmp_path
 
 
@@ -172,7 +172,7 @@ def test_disabling_auto_pass_surfaces_every_window(isolated_traces):
     }
 
     def run(extra: dict) -> tuple[int, dict]:
-        server.SESSION_REGISTRY.clear()
+        server.LIVE_GAMES.clear()
         surfaced = 0
 
         def observe(payload):
@@ -216,7 +216,7 @@ def test_stack_nonempty_forces_surfacing(isolated_traces):
     }
 
     def run(extra: dict) -> tuple[list[dict], dict]:
-        server.SESSION_REGISTRY.clear()
+        server.LIVE_GAMES.clear()
         stack_windows: list[dict] = []
 
         def observe(payload):
@@ -386,7 +386,7 @@ def test_pass_turn_yields_until_end_of_turn(isolated_traces):
             assert _turn_side(payload) == "my"
 
     # The game is still live (no trace file yet) — inspect the session trace.
-    record = next(iter(server.SESSION_REGISTRY.values()))
+    record = next(iter(server.LIVE_GAMES.values()))
     hero_events = [e for e in record.game.trace.events if e.actor == "hero"]
     assert any(e.auto for e in hero_events)
     assert all(
@@ -618,7 +618,7 @@ def test_mana_abilities_alone_auto_pass_under_auto_pass_and_surface_in_full_cont
     }
 
     def run(auto_pass: bool) -> tuple[list[dict], list[dict]]:
-        server.SESSION_REGISTRY.clear()
+        server.LIVE_GAMES.clear()
         combat_windows: list[dict] = []
         mana_only_windows: list[dict] = []
 
@@ -655,9 +655,9 @@ def test_mana_abilities_alone_auto_pass_under_auto_pass_and_surface_in_full_cont
     (isolated_traces / "play.sqlite").unlink()
     full_combat, full_mana_only = run(auto_pass=False)
     assert full_combat, "Full control must still surface combat mana-float windows"
-    assert any(
-        "TAP_FOR_COST" in _action_types(w) for w in full_mana_only
-    ), "Expected fixed-source mana taps in Full control"
+    assert any("TAP_FOR_COST" in _action_types(w) for w in full_mana_only), (
+        "Expected fixed-source mana taps in Full control"
+    )
     assert any(
         "PRIORITY_ACTIVATE_ABILITY" in _action_types(w) for w in full_mana_only
     ), "Expected mana-producing activated abilities in Full control"

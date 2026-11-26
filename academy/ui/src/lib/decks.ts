@@ -1,5 +1,5 @@
 import { CURATED_PACK, ELEMENTAL_WORLD_PACK, JEONG_INCREMENT_PACK } from './curated-pack';
-import { isKeptDeckChoice } from './kept-decks';
+import { findKeptDeck, isKeptDeckChoice } from './kept-decks';
 
 export type ElementalDeckChoice = `elemental_${'gr' | 'gw' | 'ur' | 'ub' | 'uw' | 'ug' | 'wr' | 'wb' | 'rb' | 'bg'}`;
 export type PoolDeckChoice = `pool:${string}`;
@@ -38,6 +38,34 @@ export const DECK_CHOICES: readonly { key: DeckChoice; label: string }[] = [
 ];
 
 const DECK_KEYS = new Set<string>(DECK_CHOICES.map((deck) => deck.key));
+
+/** What the server names a closed opponent's deck until the game is over. */
+export const CLOSED_DECK_NAME = 'Closed decklist';
+
+/** A recorded deck as History and Replay name it: the stored id reads `closed` while an unfinished game keeps its opponent's deck unnamed. */
+export function recordedDeckLabel(deck: string, name?: string | null): string {
+  return deck === 'closed' ? CLOSED_DECK_NAME : name ?? deck.replaceAll('_', ' ');
+}
+
+/** A setup deck choice in words: a named deck, a pool (never the deck it last dealt) or a saved list. */
+export function deckChoiceLabel(key: unknown): string {
+  const found = DECK_CHOICES.find(deck => deck.key === key)?.label;
+  if (found) return found;
+  if (isPoolDeckChoice(key)) return `Deck pool · ${key.slice('pool:'.length)}`;
+  if (isKeptDeckChoice(key)) return findKeptDeck(key)?.name ?? 'Saved deck';
+  if (typeof key === 'string' && key && key !== 'imported' && key !== 'custom') return key;
+  return 'Imported deck';
+}
+
+/**
+ * One side of "Your last matchup", named for what Play again starts: its pool
+ * when the side was dealt from one, the dealt deck otherwise, and the deck
+ * setup still holds while a closed opponent's is unnamed.
+ */
+export function matchupDeckLabel(pool: unknown, dealt: string | undefined, chosen: unknown): string {
+  if (isPoolDeckChoice(pool)) return deckChoiceLabel(pool);
+  return dealt && dealt !== CLOSED_DECK_NAME ? dealt : deckChoiceLabel(chosen);
+}
 
 export const DECKS_STORAGE_KEY = 'etude.gui.decks';
 

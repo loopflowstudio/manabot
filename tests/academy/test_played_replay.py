@@ -14,7 +14,11 @@ from managym.academy.recording import Recording, person_board
 BOLT = {"Mountain": 10, "Lightning Bolt": 10}
 
 
-def play(game: server.GameSession, rng: random.Random, commands: int = 400) -> None:
+def play(
+    game: server.GameSession, rng: random.Random, commands: int = 400, tag: str = "c"
+) -> None:
+    """Choose at random for up to `commands` decisions; `tag` keeps Command
+    ids apart when one game is played in several calls."""
     for index in range(commands):
         frame = game.current_message()["frame"]
         if frame["status"] == "game_over":
@@ -22,7 +26,7 @@ def play(game: server.GameSession, rng: random.Random, commands: int = 400) -> N
         offer = rng.choice(frame["offers"])
         result = game.hero_command(
             {
-                "command_id": f"c.{index}",
+                "command_id": f"{tag}.{index}",
                 "match_id": frame["match_id"],
                 "expected_revision": frame["revision"],
                 "prompt_id": frame["prompt"]["id"],

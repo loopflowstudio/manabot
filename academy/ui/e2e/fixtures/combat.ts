@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { tableSnapshot } from './table';
+import { gameReply } from './game';
 import boltFixtureJson from '../../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type {
   DeclareAttackersDecisionGroup,
@@ -19,6 +19,8 @@ import type {
   RecoveryEnvelope,
 } from '../../src/lib/types';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
 
 function permanent(id: number, name: string, controller: number, power: number, toughness: number): Observation['agent']['battlefield'][number] {
@@ -196,7 +198,7 @@ export async function startCombat(
   let current = frameAt('otter', moreTigers);
   let pendingRefusal = refuseGroupOnce ?? null;
 
-  await page.route('**/api/sessions/*/decision-group-preview', async route => {
+  await page.route('**/api/games/*/decision-group-preview', async route => {
     const request = route.request().postDataJSON() as {
       match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: DecisionGroupPlan;
     };
@@ -219,7 +221,7 @@ export async function startCombat(
       },
     });
   });
-
+  const game = gameReply();
   await page.routeWebSocket('**/ws/play', (socket) => {
     socket.onMessage(async raw => {
       const message = JSON.parse(String(raw)) as {
@@ -228,8 +230,7 @@ export async function startCombat(
       };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
-          type: 'observation', table: tableSnapshot(), data: current.projection, actions: [],
-          session_id: 'combat-session', resume_token: 'combat-resume-token',
+          type: 'observation', ...game, data: current.projection, actions: [],
           decision_group: liveDecisionGroupFor(current, moreTigers),
           recovery: {
             ...structuredClone(boltFixture.recovery),
@@ -302,8 +303,7 @@ export async function startCombat(
       }
     });
   });
-
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');

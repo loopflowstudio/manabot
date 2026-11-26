@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Manage the Fly-hosted Manabot apps (mirrors kata/deploy/kata-fly.sh):
-# the manabot.gg site (fantasia-website) and hosted play (academy-play).
+# Manage the Fly-hosted Manabot website (mirrors kata/deploy/kata-fly.sh):
+# the manabot.gg site (fantasia-website).
 # DNS lives in Cloudflare; the API token comes from Doppler (manabot/prd).
 
 set -euo pipefail
@@ -20,7 +20,7 @@ Commands:
   open     Open the Fly dashboard
 
 Environment:
-  ACADEMY_FLY_APP=fantasia-website   # or academy-play
+  ACADEMY_FLY_APP=fantasia-website
   ACADEMY_FLY_ORG=loopflow-studio
   ACADEMY_FLY_REGION=sjc
 USAGE
@@ -38,22 +38,10 @@ org="${ACADEMY_FLY_ORG:-loopflow-studio}"
 region="${ACADEMY_FLY_REGION:-sjc}"
 repo="$(git rev-parse --show-toplevel)"
 website_domains=(manabot.gg www.manabot.gg etude.gg www.etude.gg etudefantasia.com www.etudefantasia.com etudefantasia.gg www.etudefantasia.gg)
-play_domains=(play.manabot.gg academy.manabot.gg play.etude.gg)
 
-case "$app" in
-  academy-play)
-    config="$repo/deploy/play/fly.toml"
-    context="$repo"
-    deploy_flags=(--ha=false) # game state is in-process; exactly one machine
-    domains=("${play_domains[@]}")
-    ;;
-  *)
-    config="$repo/website/fly.toml"
-    context="$repo/website"
-    deploy_flags=()
-    domains=("${website_domains[@]}")
-    ;;
-esac
+config="$repo/website/fly.toml"
+context="$repo/website"
+domains=("${website_domains[@]}")
 
 require_tool() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -73,8 +61,7 @@ case "$command" in
     fi
     ;;
   deploy)
-    # ${arr[@]+...} keeps `set -u` happy on bash 3.2 when the array is empty
-    flyctl deploy "$context" --config "$config" --app "$app" --regions "$region" ${deploy_flags[@]+"${deploy_flags[@]}"}
+    flyctl deploy "$context" --config "$config" --app "$app" --regions "$region"
     ;;
   certs)
     for d in "${domains[@]}"; do
@@ -94,7 +81,7 @@ case "$command" in
     flyctl logs -a "$app"
     ;;
   health)
-    for d in "${website_domains[@]}" "${play_domains[@]}"; do
+    for d in "${website_domains[@]}"; do
       printf '%-24s ' "$d"
       curl -s -o /dev/null -w '%{http_code} -> %{redirect_url}\n' "https://$d/" || echo unreachable
     done

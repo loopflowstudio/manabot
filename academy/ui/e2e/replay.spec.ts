@@ -10,12 +10,12 @@ test('replay lists recordings and steps through positions on the board', async (
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
-  await page.goto('/replay');
+  await page.goto('/games');
 
   // The recording list is fetched after mount; a frozen DOM would show the
   // initial empty state forever. The newest readable recording opens on the
-  // table (a Watch needs its participant's credential).
-  const links = page.getByTestId('recording-link');
+  // table.
+  const links = page.getByTestId('game-history-replay');
   await expect(links.first()).toBeVisible({ timeout: 15_000 });
   const hrefs = await links.evaluateAll(anchors => anchors.map(anchor => anchor.getAttribute('href')!));
   const board = page.getByTestId('game-board');

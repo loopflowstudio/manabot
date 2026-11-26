@@ -27,7 +27,7 @@ function position(kind: Position['kind'], extra: Partial<Position> = {}): Positi
 function recorded(base: Position, decision: ExperienceFrame | null): RecordedPosition {
   const viewer = decision?.projection.agent.player_index ?? 0;
   return {
-    ...base, description: null, note_key: base.key, observation: decision?.projection ?? frame.projection,
+    ...base, description: null, observation: decision?.projection ?? frame.projection,
     decision: decision ? {
       ordinal: 0, viewer, source: 'policy', revision: decision.revision, prompt_id: decision.prompt?.id ?? 0,
       offer_id: decision.offers[1].id, command_id: 'c', presentation_cursor: 0, frame: decision, offer: decision.offers[1],

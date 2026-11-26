@@ -70,7 +70,7 @@ test('Precision on the board: cards act, inspecting commits nothing, recovery an
   await page.setViewportSize({ width: 1500, height: 1100 });
   await start(page, 'precision');
   const board = (await page.getByTestId('game-board').boundingBox())!;
-  const rail = (await page.getByRole('complementary', { name: 'Stack, decision and legal choices' }).boundingBox())!;
+  const rail = (await page.getByRole('complementary', { name: 'History, stack and decision' }).boundingBox())!;
   expect(rail.x).toBeGreaterThanOrEqual(board.x + board.width - 1);
   expect(board.y + board.height).toBeLessThanOrEqual(1100);
   await expect(page.locator('details[open]')).toHaveCount(0);
@@ -97,7 +97,6 @@ test('Precision on the board: cards act, inspecting commits nothing, recovery an
   // Treasure is the only mana source left: its activation, {B} and the final
   // payment are forced, so native skipping commits them without a prompt, and
   // the passive opponent lets the spell resolve.
-  await expect(page.getByTestId('recent')).toContainText('You cast Deadly Precision, targeting Callous Inspector');
   await expect(mine.locator('[data-card-name="Treasure"]')).toHaveCount(0);
   await expect(page.getByTestId('game-log')).toContainText('Cast Deadly Precision');
   await page.screenshot({ path: testInfo.outputPath('precision-payment.png') });
@@ -125,6 +124,5 @@ test('Precision exposes the shared four-mana alternative', async ({ page }) => {
   const alternative = await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.action_type === 'PAY_COST')!);
   expect(alternative.label).toContain('{4}');
   await choose(page, alternative.id);
-  await expect(page.getByTestId('recent')).toContainText('You cast Deadly Precision');
   await expect(page.getByTestId('game-log')).toContainText('Cast Deadly Precision');
 });

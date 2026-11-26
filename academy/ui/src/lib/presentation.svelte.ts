@@ -116,6 +116,3 @@ export function createPresentationPlayer(): PresentationPlayer {
 
 /** Live board player fed only by validated protocol updates and recovery tails. */
 export const presentationPlayer = createPresentationPlayer();
-
-/** Isolated shared-table Study track; live updates continue on the board player. */
-export const studyPresentationPlayer = createPresentationPlayer();

@@ -35,13 +35,13 @@ def _pending_watch(factory: SearchFactory) -> dict[str, str]:
         )
     )
     for revision in range(3):
-        step_watch(created["id"], created["token"], revision)
+        step_watch(created["id"], revision)
     clock = Clock()
     for session in factory.sessions:
         session.clock = clock
     try:
         with patch.object(search, "time", clock):
-            step_watch(created["id"], created["token"], 3)
+            step_watch(created["id"], 3)
     except search.SearchError as error:
         assert error.reason == "mirror_deadline_exceeded"
     else:
@@ -49,7 +49,7 @@ def _pending_watch(factory: SearchFactory) -> dict[str, str]:
     finally:
         for session in factory.sessions:
             session.clock = None
-    return {"id": created["id"], "token": created["token"]}
+    return {"id": created["id"]}
 
 
 def _finished_play(key: str) -> str:

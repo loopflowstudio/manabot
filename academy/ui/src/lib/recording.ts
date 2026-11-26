@@ -63,10 +63,12 @@ export interface RecordingIndex {
   /** When the game started and, once over, ended (ISO 8601; absent from legacy records). */
   started_at?: string | null;
   ended_at?: string | null;
-  status: 'finished' | 'waiting' | 'interrupted';
+  status: 'active' | 'completed' | 'stopped';
   can_produce: boolean;
   mirror?: (SearchConfig | null)[];
   mirror_retry?: PendingSearch | null;
+  /** An unfinished played game: `/?game=<id>` takes it up again. */
+  resumable?: boolean;
   can_study: boolean;
   winner: number | null;
   players: RecordedPlayer[];
@@ -82,8 +84,6 @@ export interface RecordingIndex {
   opponent?: TraceConfig['opponent'];
   opponent_checkpoint?: TraceConfig['opponent_checkpoint'];
   watch: boolean;
-  can_feedback: boolean;
-  private_setup?: Record<string, unknown> | null;
   /** True when the recording's presentation track carries move/label/cause events. */
   track_history?: boolean;
   /** Full person-seat presentation track for recorded Play review (omitted for Watch). */
@@ -91,7 +91,6 @@ export interface RecordingIndex {
 }
 export interface RecordedPosition extends Position {
   description: string | null;
-  note_key: string;
   observation: Observation;
   decision: AddressedReplayDecision | null;
   outputs: BotDecision | null;

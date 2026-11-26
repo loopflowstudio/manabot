@@ -25,7 +25,7 @@ def runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.delenv("ACADEMY_PLAY_CHECKPOINTS", raising=False)
     monkeypatch.setenv("MANABOT_RUNS_DIR", str(tmp_path / ".runs"))
     monkeypatch.setattr("managym.academy.opponent._registry", None)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     # Catalog checkpoints sample their actions; fix the game's length.
     torch.manual_seed(0)
     current = tmp_path / ".runs" / "self-play" / "step_0.pt"
@@ -180,7 +180,7 @@ def test_chosen_checkpoint_plays_either_deck_and_is_recorded(
                 choice = actions[rng.randrange(len(actions))]
                 websocket.send_json({"type": "action", "index": choice["index"]})
                 payload = settled_message(websocket)
-    assert payload["table"]["opponent"]["sha256"] == sha256
+    assert payload["opponent"]["sha256"] == sha256
 
     [(_, trace)] = _recorded_traces(trace_store.TRACES_DIR)
     config = trace["config"]

@@ -1,9 +1,8 @@
-import { recordFetch } from './records';
 import type { WorkStatus } from './types';
 
-type Created = {id: string; token: string; finished: boolean};
+type Created = {id: string; finished: boolean};
 type SetupResult = {work: WorkStatus | null; created: Created | null; error: string | null};
-type Envelope = {handle: string; token: string; request: Record<string, unknown>};
+type Envelope = {handle: string; request: Record<string, unknown>};
 const pendingKey = 'academy.watch-setup';
 
 /** One unresolved tab-owned start. Only an explicit new start can load bots. */
@@ -25,7 +24,7 @@ export class WatchStart {
 
   private async run(request: Record<string, unknown>): Promise<Created> {
     const saved = sessionStorage.getItem(pendingKey);
-    const envelope: Envelope = saved ? JSON.parse(saved) : {handle: crypto.randomUUID(), token: crypto.randomUUID(), request};
+    const envelope: Envelope = saved ? JSON.parse(saved) : {handle: crypto.randomUUID(), request};
     // Persist before sending. A reload checks this handle, even if the current
     // form has changed. Never submit a changed configuration under its identity.
     sessionStorage.setItem(pendingKey, JSON.stringify(envelope));
@@ -34,9 +33,7 @@ export class WatchStart {
     this.work = null; this.checking = true;
     const path = `/api/watch/setups/${encodeURIComponent(envelope.handle)}`;
     const read = async (init: RequestInit = {}): Promise<SetupResult> => {
-      const headers = new Headers(init.headers);
-      headers.set('x-etude-participant-token', envelope.token);
-      const response = await recordFetch(path, {...init, headers, signal: controller.signal});
+      const response = await fetch(path, {...init, signal: controller.signal});
       const result = await response.json();
       if (!response.ok) {
         if (response.status === 404 && saved) sessionStorage.removeItem(pendingKey);
@@ -66,9 +63,6 @@ export class WatchStart {
         this.checking = false;
         if (result.error) { sessionStorage.removeItem(pendingKey); throw new Error(result.error); }
         if (result.created) {
-          // Retain the envelope until the producer credential is safely stored.
-          try { sessionStorage.setItem(`etude.watch.${result.created.id}`, result.created.token); }
-          catch { throw new Error('This browser cannot retain the watched game credential. Enable session storage to watch a live game.'); }
           sessionStorage.removeItem(pendingKey);
           return result.created;
         }

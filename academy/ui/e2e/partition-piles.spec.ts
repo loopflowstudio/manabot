@@ -2,8 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 
 import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { DecisionGroupCommand, DecisionGroupPlan, LiveDecisionGroup, PartitionPilesDecisionGroup } from '../src/lib/decision-group';
-import { tableSnapshot } from './fixtures/table';
+import { gameReply } from './fixtures/game';
 import type { CardState, Command, ExperienceFrame, FrameUpdate, InteractionOffer, RecoveryEnvelope } from '../src/lib/types';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
 const rid = (entity: number) => ({ entity, incarnation: 0 });
@@ -181,10 +184,11 @@ async function installPartitionAuthority(
 ): Promise<PartitionAuthority> {
   const authority: PartitionAuthority = { commands: [], groupCommands: [], previews: [] };
   let current = partitionFrame(0);
+  const game = gameReply();
   let currentGroup: LiveDecisionGroup | null = partitionGroup(current);
   let rejectNext = options.rejectFirstGroup ?? false;
 
-  await page.route('**/api/sessions/*/decision-group-preview', async (route) => {
+  await page.route('**/api/games/*/decision-group-preview', async (route) => {
     const request = route.request().postDataJSON() as {
       match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: DecisionGroupPlan;
     };
@@ -207,19 +211,16 @@ async function installPartitionAuthority(
       },
     });
   });
-
   await page.routeWebSocket('**/ws/play', (socket) => {
     socket.onMessage((raw) => {
       const message = JSON.parse(String(raw)) as { type?: string; command?: Command | DecisionGroupCommand };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
           type: 'observation',
-          table: tableSnapshot(),
+          ...game,
           data: current.projection,
           actions: [],
           decision_group: currentGroup,
-          session_id: 'curator-session',
-          resume_token: 'curator-resume-token',
           recovery: {
             ...structuredClone(boltFixture.recovery),
             reason: 'initial_connect',
@@ -287,9 +288,9 @@ async function startPartition(
   options: PartitionOptions = {},
 ): Promise<PartitionAuthority> {
   const authority = await installPartitionAuthority(page, options);
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'Start game' }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('partition-panel')).toBeVisible();
   return authority;
 }

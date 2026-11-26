@@ -9,7 +9,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const proof = new URL('../test-results/policy/addresses.json', import.meta.url);
-const study = (): string => (JSON.parse(readFileSync(proof, 'utf8')) as { study: string }).study;
+/** A launch address from the fixture server. Each starts one game, so a test that finishes one uses its own. */
+const launch = (name: 'study' | 'study_shown'): string => (JSON.parse(readFileSync(proof, 'utf8')) as Record<string, string>)[name];
+const study = (): string => launch('study');
 const shot = (name: string): string => fileURLToPath(new URL(`../test-results/policy/${name}.png`, import.meta.url));
 
 /** Every socket message the page receives, parsed. */
@@ -104,7 +106,8 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   expect(await shownIn(page.getByTestId('game-log'), '[data-testid=log-entry], [data-testid=pass-run]')).toBeGreaterThanOrEqual(8);
   expect(await shownIn(page.getByRole('list', { name: 'Legal choices' }), '[data-testid=action-option]')).toBeGreaterThanOrEqual(Math.min(3, options));
 
-  // (d) One line on a fixed 0–100 scale, a point per analysed decision.
+  // (d) One line on a fixed 0–100 scale, a point per analysed decision (opened as an overlay).
+  await page.getByTestId('strip-toggle').click();
   const value = page.getByTestId('strip-value');
   await expect(page.getByTestId('strip-midline')).toHaveCount(1);
   const points = Number(await value.getAttribute('data-points'));
@@ -113,6 +116,7 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   await page.getByTestId('decision-strip').locator('.lane').hover({ position: { x: 4, y: 20 } });
   await expect(page.getByTestId('strip-readout')).toHaveText(/^Turn \d+ · .+ · \d+%$/);
   await page.screenshot({ path: shot('review-chart-hover') });
+  await page.getByTestId('strip-toggle').click();
 
   // (f) The summary's agreement is the count of "same" marks, and nothing grades you.
   await page.getByTestId('game-menu').click();
@@ -132,10 +136,8 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   await expect(page.getByTestId('shown-hand').first()).toBeVisible();
 
   // Games: the row's turns, and the record's one game.
-  await page.goto('/games?scope=mine');
+  await page.goto('/games');
   await expect(page.getByTestId('game-history-numbers').first()).toContainText(/\d+ turns?/);
-  await expect(page.getByTestId('my-record-row')).toHaveCount(1);
-  await expect(page.getByTestId('my-record-row')).toContainText('1');
   await page.getByTestId('game-history-row').first().getByRole('link', { name: /^Replay game/ }).click();
   await expect(marks.first()).toBeVisible({ timeout: 30_000 });
 
@@ -154,16 +156,15 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   await playToEnd(page);
   await page.getByTestId('game-result-recording').click();
   await expect(page.getByTestId('played-from')).toContainText('Played on from');
-  await page.goto('/games?scope=mine');
+  await page.goto('/games');
   await expect(page.getByTestId('game-history-numbers').first()).toContainText('played on from another game');
-  await expect(page.getByTestId('my-record-row')).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 
 test('a decision made with analysis shown says so in Review and Games', async ({ page }) => {
   test.setTimeout(240_000);
   const messages = received(page);
-  await page.goto(study());
+  await page.goto(launch('study_shown'));
   const toggle = page.getByTestId('show-analysis');
   let shown = false;
   await playToEnd(page, async decision => {
@@ -200,7 +201,6 @@ test('a decision made with analysis shown says so in Review and Games', async ({
 
   await page.getByTestId('game-result-recording').click();
   await expect(page.getByTestId('analysis-shown')).toHaveCount(1, { timeout: 30_000 });
-  await page.goto('/games?scope=mine');
+  await page.goto('/games');
   await expect(page.getByTestId('game-history-numbers').first()).toContainText('analysis shown at 1 decision');
-  await expect(page.getByTestId('my-record-with-analysis')).toHaveText('1');
 });

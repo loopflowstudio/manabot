@@ -90,11 +90,11 @@
   }
 </script>
 
-<fieldset class="min-w-0 space-y-2 border-0 p-0">
+<fieldset class="min-w-0 space-y-1.5 border-0 p-0">
   <legend class="type-label mb-1 text-ink-2">{label}</legend>
   <select
     aria-label={label}
-    class="w-full rounded border border-line bg-panel px-3 py-2 text-ink"
+    class="w-full rounded border border-line bg-panel px-2.5 py-1.5 text-sm text-ink"
     value={selectedPreset}
     {disabled}
     onchange={(event) => selectLevel(event.currentTarget.value)}
