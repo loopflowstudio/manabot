@@ -264,7 +264,7 @@
   // Each game this tab plays becomes the next "Play again", from the setup the server started it with.
   $effect(() => {
     const config = gameStore.setup;
-    if (!config || demoName || playedFromGame || !gameStore.observation) return;
+    if (!config || demoName || !gameStore.observation) return;
     const decks = gameStore.deckNames ? { hero: gameStore.deckNames.hero, villain: gameStore.deckNames.villain } : null;
     untrack(() => saveLastMatchup({ config, opponent: opponentName, decks }));
   });
@@ -423,8 +423,6 @@
     ? analysedEvidence(decisionFrame, liveAnalysis.reading.decision, null, liveAnalysis.policy?.name ?? 'The policy') : null);
   const canShowAnalysis = $derived(!demoName && !gameStore.gameOver && gameStore.connection === 'connected' && !liveAnalysis.pending);
   const canContinue = $derived(!demoName && gameStore.setup !== null && !gameStore.newGamePending && !gameStore.stopped);
-  // A game played on from another is not a matchup to play again.
-  const playedFromGame = $derived(gameStore.setup?.played_from != null);
   const poolOf = (side: 'hero' | 'villain'): string | null => {
     const pool = gameStore.setup?.[`${side}_deck_pool`];
     return typeof pool === 'string' ? pool : null;
