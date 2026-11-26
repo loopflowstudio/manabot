@@ -206,13 +206,16 @@ def test_precision_four_mana_branch(tmp_path: Path) -> None:
             session.new_game({"demo": "precision-mana"})["frame"]
         )
         frame = _choose(session, frame, _label(frame, "Cast Deadly Precision"))
-        frame = _choose(
-            session,
-            frame,
-            next(
-                offer for offer in frame.offers if offer.action_type == "CHOOSE_TARGET"
-            ),
-        )
+        if frame.action_space == "CHOOSE_TARGET":
+            frame = _choose(
+                session,
+                frame,
+                next(
+                    offer
+                    for offer in frame.offers
+                    if offer.action_type == "CHOOSE_TARGET"
+                ),
+            )
         before = len(frame.projection.agent.battlefield)
         revision = frame.revision
         alternative = next(

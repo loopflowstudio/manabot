@@ -625,7 +625,7 @@ fn blasphemous_edict_costs_one_black_at_thirteen_creatures() {
 fn blasphemous_edict_asks_for_its_cost_and_for_the_creatures_kept() {
     use crate::support::{
         game::{five_color_unfunded_setup, force_new_card_in_hand},
-        inspect::{has_action, offered_cards, top_spell},
+        inspect::{has_action, top_spell},
         play::{cast_card, choose, pay_rest, settle},
     };
     use managym::agent::action::{Action, ActionSpaceKind};
@@ -665,7 +665,10 @@ fn blasphemous_edict_asks_for_its_cost_and_for_the_creatures_kept() {
         "the caster chooses creatures to keep".into(),
     );
     for remaining in [15, 14] {
-        assert_eq!(offered_cards(&s).len(), remaining);
+        assert_eq!(
+            crate::support::inspect::offered_cards_with_aliases(&s).len(),
+            remaining
+        );
         assert!(!has_action(&s, |a| matches!(a, Action::Decline { .. })));
         choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
     }
@@ -3093,11 +3096,16 @@ fn ingenious_leonin_grows_another_attacker_and_gives_a_cat_first_strike() {
         agent::action::{Action, ActionSpaceKind},
         state::{card::Keyword, game_object::Target},
     };
-    let mut s = five_color_setup(&["Ingenious Leonin", "Leonin Vanguard", "Gray Ogre"]);
+    let mut s = five_color_setup(&[
+        "Ingenious Leonin",
+        "Leonin Vanguard",
+        "Gray Ogre",
+        "Hill Giant",
+    ]);
     let leonin = s.force_permanent_on_battlefield(0, "Ingenious Leonin");
     let cat = s.force_permanent_on_battlefield(0, "Leonin Vanguard");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let home = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let home = s.force_permanent_on_battlefield(0, "Hill Giant");
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
     for id in [leonin, cat, ogre, home] {
         clear_summoning_sickness(&mut s, id);
@@ -4748,7 +4756,7 @@ fn foundations_5f_elementalist_adept() {
 /// the other still gets its counter.
 #[test]
 fn foundations_5f_felidar_savior() {
-    use crate::support::inspect::{counters, offered_targets};
+    use crate::support::inspect::counters;
     use crate::support::play::{choose, enter_until_target, settle};
     use managym::agent::action::Action;
     use managym::state::game_object::Target;
@@ -4763,7 +4771,7 @@ fn foundations_5f_felidar_savior() {
     ];
     let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let savior = enter_until_target(&mut s, "Felidar Savior");
-    let offers = offered_targets(&s);
+    let offers = crate::support::inspect::offered_targets_with_aliases(&s);
     assert!(offers.contains(&Target::Permanent(ogres[0])));
     assert!(offers.contains(&Target::Permanent(ogres[1])));
     assert!(!offers.contains(&Target::Permanent(enemy)));
@@ -5341,21 +5349,22 @@ fn zul_ashur_grants_one_exact_zombie_for_the_turn() {
     move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Graveyard);
     s.game_mut().scenario_refresh_priority().unwrap();
     activate(&mut s, zul, 0);
-    let targets: Vec<_> = s
-        .action_space()
-        .actions
-        .iter()
-        .filter_map(|action| match action {
-            Action::ChooseTarget {
-                target: Target::GraveyardCard(card),
-                ..
-            } => Some(*card),
-            _ => None,
-        })
-        .collect();
+    let targets = crate::support::inspect::offered_targets_with_aliases(&s);
     assert_eq!(targets.len(), 2);
-    assert!(targets.contains(&zombie) && targets.contains(&other));
+    assert!(
+        targets.contains(&Target::GraveyardCard(zombie))
+            && targets.contains(&Target::GraveyardCard(other))
+    );
     assert_choice_contract(&s);
+    let chosen = match crate::support::inspect::offered_targets(&s)[0] {
+        Target::GraveyardCard(card) => card,
+        other => panic!("expected graveyard target, got {other:?}"),
+    };
+    let (zombie, other) = if chosen == zombie {
+        (zombie, other)
+    } else {
+        (other, zombie)
+    };
     assert!(s.choose_target(Target::GraveyardCard(zombie)));
     // The activated ability resolves independently of its source.
     move_card(&mut s, zul_card, ZoneType::Graveyard);
@@ -7398,14 +7407,19 @@ fn copy_sacrifice_is_intrinsic_to_each_electroduplicate_driver() {
             resolve_top(&mut s);
             assert!(permanent_of(&s, source).is_none());
             assert_eq!(
-                offered_targets(&s).into_iter().collect::<BTreeSet<_>>(),
+                crate::support::inspect::offered_targets_with_aliases(&s)
+                    .into_iter()
+                    .collect::<BTreeSet<_>>(),
                 eligible
                     .iter()
                     .copied()
                     .map(Target::GraveyardCard)
                     .collect()
             );
-            let chosen = eligible.pop_first().unwrap();
+            let Target::GraveyardCard(chosen) = offered_targets(&s)[0] else {
+                panic!("expected graveyard target");
+            };
+            assert!(eligible.remove(&chosen));
             command(
                 &mut s,
                 |action| matches!(action, Action::ChooseTarget { target: Target::GraveyardCard(card), .. } if *card == chosen),

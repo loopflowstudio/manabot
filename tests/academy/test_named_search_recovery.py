@@ -273,9 +273,18 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             assert result["status"] == "accepted"
             pending = ExperienceFrame.model_validate(result["update"]["frame"])
             assert pending.action_space == "LOOK_AND_SELECT"
-            assert [
-                o.focus for o in pending.offers if o.action_type == "SELECT_CARD"
-            ] == [o.focus for o in choices[1:]]
+            before_ids = {
+                member
+                for o in choices
+                for member in [o.focus[0], *(a.display_id for a in o.aliases)]
+            }
+            after_ids = {
+                member
+                for o in pending.offers
+                if o.action_type == "SELECT_CARD"
+                for member in [o.focus[0], *(a.display_id for a in o.aliases)]
+            }
+            assert after_ids == before_ids - {chosen.focus[0]}
             game = server.SESSION_REGISTRY[initial["session_id"]].game
             assert game.env is not None
             assert game.obs is not None and game.trace is not None

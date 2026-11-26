@@ -414,23 +414,40 @@ fn drakuseth_target_relation_keeps_its_secondary_targets_distinct() {
     pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     attack_with(&mut s, drakuseth);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    // Drakuseth, the Giant, 32 Ogres and both players.
-    assert_eq!(offered_targets(&s).len(), 36);
+    // Drakuseth, the Giant, 32 Ogres and both players (16 friendly + 16 enemy Ogres fold).
+    assert_eq!(
+        crate::support::inspect::offered_targets_with_aliases(&s).len(),
+        36
+    );
     let opponent = Target::Player(PlayerId(1));
     assert!(s.choose_target(opponent));
-    let secondary = offered_targets(&s);
+    let secondary = crate::support::inspect::offered_targets_with_aliases(&s);
     assert_eq!(secondary.len(), 35);
     assert!(!secondary.contains(&opponent));
     assert!(s.choose_target(Target::Permanent(giant)));
-    let last = offered_targets(&s);
+    let last = crate::support::inspect::offered_targets_with_aliases(&s);
     assert!(!last.contains(&opponent) && !last.contains(&Target::Permanent(giant)));
-    assert!(s.choose_target(Target::Permanent(ogres[1])));
+    let enemy_ogre_target = offered_targets(&s)
+        .into_iter()
+        .find(|t| matches!(t, Target::Permanent(id) if ogres.iter().skip(1).step_by(2).any(|o| o == id)))
+        .unwrap();
+    let Target::Permanent(killed_ogre) = enemy_ogre_target else {
+        unreachable!()
+    };
+    assert!(s.choose_target(enemy_ogre_target));
     let life = s.life(1);
     settle(&mut s);
     assert_eq!(s.life(1), life - 4);
     assert!(s.game().state.permanents[giant].is_none());
-    assert!(s.game().state.permanents[ogres[1]].is_none());
-    assert!(s.game().state.permanents[ogres[3]].is_some());
+    assert!(s.game().state.permanents[killed_ogre].is_none());
+    let surviving_ogre = ogres
+        .iter()
+        .skip(1)
+        .step_by(2)
+        .copied()
+        .find(|&o| o != killed_ogre)
+        .unwrap();
+    assert!(s.game().state.permanents[surviving_ogre].is_some());
 }
 
 #[test]

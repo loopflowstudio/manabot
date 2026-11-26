@@ -33,10 +33,10 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-battlefield-history.json"
 )
-AUTHORITY_SHA256 = "fbb3926dfe50af21a787697ab12780cc9162c1cf966799fe6dc6345cbd31efed"
-TERMINAL_STATE = "71222db7e94cc0ab6a10deed7c5700aa57b655d144ef0cf2ee0c915e4563b78f"
+AUTHORITY_SHA256 = "fa32c9ab38dd1d1bfac5962d06870f60fd2c93f035b5634ea0950182df237024"
+TERMINAL_STATE = "e0316f66988297d972a97e47ba6d269d9968e5b45351582fcc255ce59c18fbdc"
 
-COMMAND_COUNT = 170
+COMMAND_COUNT = 228
 
 
 def _json_bytes(value: object) -> bytes:
@@ -236,15 +236,15 @@ def _capture_object_candidate(
             for candidate in choice["candidates"]["initial"]:
                 subject = candidate["value"]["subject"]
                 if subject["kind"] == "object" and subject["id"] == {
-                    "entity": 96,
-                    "incarnation": 3,
+                    "entity": 94,
+                    "incarnation": 1,
                 }:
                     rendered = dict(subject["id"])
                     role = int(choice["role"])
                     candidate_id = int(candidate["id"])
                     offer_id = int(offer["id"])
     if rendered is None:
-        raise ParityDivergence("headless", 17, "object_candidate", "96@3", "absent")
+        raise ParityDivergence("headless", 22, "object_candidate", "94@1", "absent")
     address = next(
         candidate
         for candidate in frame["object_candidates"]
@@ -305,7 +305,7 @@ def _run_engine(
             surface, revision, "offer_count", row["offer_count"], len(frame["offers"])
         )
 
-        if prove_stale and revision == 17:
+        if prove_stale and revision == 22:
             captured_address, rendered_ref = _capture_object_candidate(env, frame)
             stale_revision_command = _semantic_command(row, frame)
             current_clone = env.clone_env()
@@ -324,10 +324,10 @@ def _run_engine(
                 or current_clone.semantic_event_cursor() <= current_cursor
             ):
                 raise ParityDivergence(
-                    surface, 17, "current_object_binding", "committed", "unchanged"
+                    surface, 22, "current_object_binding", "committed", "unchanged"
                 )
 
-        if prove_stale and revision == 33:
+        if prove_stale and revision == 37:
             assert (
                 captured_address is not None
                 and rendered_ref is not None

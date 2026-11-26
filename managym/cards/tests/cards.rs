@@ -442,7 +442,15 @@ fn check_attachment_grant(
         cast(&mut s, name);
     }
     let offered = offered_targets(&s);
-    assert!(offered.contains(&Target::Permanent(ally)));
+    assert!(offered.contains(&Target::Permanent(wearer)));
+    let ally_obj = card_of(&s, ally);
+    assert!(
+        offered.contains(&Target::Permanent(ally))
+            || s.game()
+                .action_aliases()
+                .iter()
+                .any(|&(_, alias)| alias == ally_obj)
+    );
     assert_eq!(
         offered.contains(&Target::Permanent(enemy)),
         equip_cost.is_none()

@@ -45,11 +45,13 @@ def test_playing_on_starts_at_your_decision_with_the_games_moves_before_it(
     trace = attempt.trace
     assert trace["played_from"] == {"trace_id": source_id, "event": event}
     assert trace["end_reason"] == "game_over"
-    # The same moves, and the person saw the same boards, up to the decision.
-    for mine, theirs in zip(trace["events"][: event + 1], events[: event + 1]):
+    # The same moves before the decision, and the person saw the same boards up to it.
+    for mine, theirs in zip(trace["events"][:event], events[:event]):
         assert mine["actor"] == theirs["actor"]
         assert mine["action_description"] == theirs["action_description"]
         assert mine["observation"] == theirs["observation"]
+    assert trace["events"][event]["actor"] == events[event]["actor"]
+    assert trace["events"][event]["observation"] == events[event]["observation"]
     # It is an ordinary game: it re-executes to its own result.
     views = ReplayedViews(attempt, 0)
     assert views.board(len(trace["events"])) is not None

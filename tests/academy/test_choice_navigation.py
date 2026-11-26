@@ -97,9 +97,9 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
     position = POSITIONS["LEARN"]
     prefix = [
         *position.prefix,
-        PrefixStep(offer_id=5, label="Take Accumulate Wisdom"),
-        PrefixStep(offer_id=0, label="Cast Accumulate Wisdom"),
-        PrefixStep(offer_id=0, label="Put Dragonfly Swarm into your hand"),
+        PrefixStep(offer_id=4, label="Take Accumulate Wisdom"),
+        PrefixStep(offer_id=1, label="Cast Accumulate Wisdom"),
+        PrefixStep(offer_id=2, label="Put Dragonfly Swarm into your hand"),
     ]
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
@@ -164,3 +164,5 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
             socket.send_json({"type": "command", "command": command})
             assert settled_message(socket)["status"] == "duplicate"
             assert game.env.state_digest() == committed_digest
+    game.close(end_reason="test_complete")
+    server.SESSION_REGISTRY.clear()
