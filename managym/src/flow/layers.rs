@@ -9,8 +9,8 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, AbilityOrigin, Condition, Effect, EffectValue, EffectiveTrigger, Except,
-            GrantClock, ObjectProperty, ObjectSelector, Scope,
+            Ability, AbilityOrigin, Aggregate, Condition, Effect, EffectValue, EffectiveTrigger,
+            Except, GrantClock, ObjectProperty, ObjectSelector, Scope,
         },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -30,6 +30,7 @@ use crate::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ops::Range,
     sync::{Arc, OnceLock},
 };
 
@@ -506,6 +507,27 @@ impl Node {
                     && matches!(plan.scope, StaticScope::This | StaticScope::Attached)
         )
     }
+
+    fn layer_writes_and_grant_static(&self, layer: Layer) -> (u16, bool) {
+        match &self.kind {
+            NodeKind::Static { plan, .. } => {
+                let mut writes = 0;
+                let mut grants_static = false;
+                for (part_layer, op) in &plan.parts {
+                    if *part_layer == layer {
+                        writes |= op.writes();
+                        grants_static |=
+                            matches!(op, Operation::Modify(Modification::GrantStatic(_)));
+                    }
+                }
+                (writes, grants_static)
+            }
+            NodeKind::Resolved { operation, .. } => (
+                operation.writes(),
+                matches!(operation, Operation::Modify(Modification::GrantStatic(_))),
+            ),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -536,6 +558,7 @@ impl<N> Operation<N> {
             Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
             Self::Inherit | Self::CatalogTrigger(_) => 0,
             Self::Modify(m) => match m {
+                Modification::Control => CONTROL,
                 Modification::SetName(_) => NAME,
                 Modification::SetCreatureTypes(_)
                 | Modification::AddSubtypes(_)
@@ -566,10 +589,43 @@ impl<N> Operation<N> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+/// Only the state-dependent fields of a resolved instruction; fixed payloads
+/// stay borrowed from the generating `Node`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ResolvedValue {
+    None,
+    Control(PlayerId),
+    SetBasePt {
+        power: Option<i32>,
+        toughness: Option<i32>,
+    },
+    ModifyPt {
+        power: i32,
+        toughness: i32,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Instruction {
     target: PermanentId,
-    operation: Operation<i32>,
+    /// Index into `SourcePlan::parts` for `NodeKind::Static`; `0` for `NodeKind::Resolved`.
+    part: usize,
+    value: ResolvedValue,
+}
+
+/// Reused scratch buffers across all layer passes in one `Context::evaluate`.
+#[derive(Default)]
+struct LayerScratch {
+    pending: Vec<usize>,
+    applied: Vec<bool>,
+    granted: Vec<Node>,
+    instructions: Vec<Instruction>,
+    ranges: Vec<Range<usize>>,
+    selected: Vec<usize>,
+    writes: Vec<u16>,
+    probe: Vec<Instruction>,
+    dependencies: Vec<bool>,
+    reach: Vec<bool>,
 }
 
 fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
@@ -714,44 +770,46 @@ impl Context {
             reads_life,
         };
         if active_layers != 0 || has_pt_counters {
-            let mut pending = Vec::new();
-            let mut applied = Vec::new();
-            let mut granted = Vec::new();
+            let mut scratch = LayerScratch::default();
             for layer in Layer::ALL {
                 let layer_bit = layer.bit();
                 if active_layers & layer_bit != 0 {
                     let after_mask = layer.after_mask();
-                    applied.clear();
+                    scratch.applied.clear();
                     loop {
-                        pending.clear();
+                        scratch.pending.clear();
                         for (i, node) in nodes.iter().enumerate() {
-                            if !applied.get(i).copied().unwrap_or(false)
+                            if !scratch.applied.get(i).copied().unwrap_or(false)
                                 && node.has_layer(layer)
                                 && eval.exists(node)
                             {
-                                pending.push(i);
+                                scratch.pending.push(i);
                             }
                         }
-                        if pending.is_empty() {
+                        if scratch.pending.is_empty() {
                             break;
                         }
-                        let instructions: Vec<_> = pending
-                            .iter()
-                            .map(|&i| eval.instructions(&nodes[i], layer))
-                            .collect();
-                        let selected = eval.next_effects(&nodes, &pending, &instructions, layer);
-                        let all_applied = selected.len() == pending.len();
+                        scratch.instructions.clear();
+                        scratch.ranges.clear();
+                        for &i in &scratch.pending {
+                            let start = scratch.instructions.len();
+                            eval.push_instructions(&nodes[i], layer, &mut scratch.instructions);
+                            scratch.ranges.push(start..scratch.instructions.len());
+                        }
+                        eval.next_effects(&nodes, layer, &mut scratch);
+                        let all_applied = scratch.selected.len() == scratch.pending.len();
                         let mut discovered_this_layer = false;
-                        for &slot in &selected {
-                            let index = pending[slot];
+                        for &slot in &scratch.selected {
+                            let index = scratch.pending[slot];
+                            let slice = &scratch.instructions[scratch.ranges[slot].clone()];
                             if let NodeKind::Static { plan, targets } = &mut nodes[index].kind {
                                 if targets.is_none()
                                     && plan.layers & after_mask != 0
-                                    && !instructions[slot].is_empty()
+                                    && !slice.is_empty()
                                 {
                                     // Instructions already resolved the affected set. Retain
                                     // it only for effects that continue into a later layer.
-                                    let mut bound: Vec<_> = instructions[slot]
+                                    let mut bound: Vec<_> = slice
                                         .iter()
                                         .map(|instruction| instruction.target)
                                         .collect();
@@ -759,8 +817,8 @@ impl Context {
                                     *targets = Some(bound);
                                 }
                             }
-                            eval.apply(&nodes[index], &instructions[slot], Some(&mut granted));
-                            for granted_node in granted.drain(..) {
+                            eval.apply(&nodes[index], slice, Some(&mut scratch.granted));
+                            for granted_node in scratch.granted.drain(..) {
                                 let added =
                                     eval.push_node(&mut nodes, &mut active_layers, granted_node);
                                 discovered_this_layer |= added & layer_bit != 0;
@@ -768,18 +826,18 @@ impl Context {
                         }
                         if all_applied && !discovered_this_layer {
                             debug_assert!(nodes.iter().enumerate().all(|(i, node)| {
-                                applied.get(i).copied().unwrap_or(false)
-                                    || pending.contains(&i)
+                                scratch.applied.get(i).copied().unwrap_or(false)
+                                    || scratch.pending.contains(&i)
                                     || !node.has_layer(layer)
                                     || !eval.exists(node)
                             }));
                             break;
                         }
-                        if applied.len() < nodes.len() {
-                            applied.resize(nodes.len(), false);
+                        if scratch.applied.len() < nodes.len() {
+                            scratch.applied.resize(nodes.len(), false);
                         }
-                        for slot in selected {
-                            applied[pending[slot]] = true;
+                        for &slot in &scratch.selected {
+                            scratch.applied[scratch.pending[slot]] = true;
                         }
                     }
                 } else {
@@ -1075,15 +1133,23 @@ impl Eval<'_, '_> {
     /// characteristic-defining status and timestamps. Independent instructions
     /// can all apply in one pass; dependent sets return one pending index so
     /// discovery, applicability and dependency ordering are reevaluated.
-    fn next_effects(
-        &self,
-        nodes: &[Node],
-        pending: &[usize],
-        instructions: &[Vec<Instruction>],
-        layer: Layer,
-    ) -> Vec<usize> {
-        if pending.len() == 1 {
-            return vec![0];
+    fn next_effects(&self, nodes: &[Node], layer: Layer, scratch: &mut LayerScratch) {
+        let LayerScratch {
+            pending,
+            instructions,
+            ranges,
+            selected,
+            writes,
+            probe,
+            dependencies,
+            reach,
+            ..
+        } = scratch;
+        selected.clear();
+        let n = pending.len();
+        if n == 1 {
+            selected.push(0);
+            return;
         }
         let timestamp_order = |&a: &usize| {
             let node = &nodes[pending[a]];
@@ -1092,10 +1158,17 @@ impl Eval<'_, '_> {
         // A disjoint read/write pair cannot change the other's instructions.
         // Summaries are conservative; true dependencies still use CR 613.8's
         // before/after semantic comparison. Granted statics force rediscovery.
-        let writes: Vec<_> = instructions
-            .iter()
-            .map(|is| is.iter().fold(0, |fields, i| fields | i.operation.writes()))
-            .collect();
+        writes.clear();
+        let mut grants_static = false;
+        for (slot, &index) in pending.iter().enumerate() {
+            if ranges[slot].is_empty() {
+                writes.push(0);
+            } else {
+                let (w, g) = nodes[index].layer_writes_and_grant_static(layer);
+                writes.push(w);
+                grants_static |= g;
+            }
+        }
         let plausible = |a: usize, b: usize| {
             let node = &nodes[pending[a]];
             let reads = node.reads().fields | if node.is_bound() { 0 } else { ABILITIES };
@@ -1103,33 +1176,29 @@ impl Eval<'_, '_> {
             // in layer 2. Independent Auras can apply in one timestamp pass.
             if layer == Layer::Control
                 && node.is_unconditional_attached_or_self()
-                && !instructions[b].iter().any(|i| i.target == node.source)
+                && !instructions[ranges[b].clone()]
+                    .iter()
+                    .any(|i| i.target == node.source)
             {
                 return false;
             }
             a != b && node.cda() == nodes[pending[b]].cda() && reads & writes[b] != 0
         };
-        let independent = !(0..pending.len()).any(|a| (0..pending.len()).any(|b| plausible(a, b)))
-            && !instructions
-                .iter()
-                .flatten()
-                .any(|i| matches!(i.operation, Operation::Modify(Modification::GrantStatic(_))));
-        let ordered = || {
-            let mut order: Vec<_> = (0..pending.len()).collect();
-            order.sort_by_key(timestamp_order);
-            order
-        };
+        let independent = !grants_static && !(0..n).any(|a| (0..n).any(|b| plausible(a, b)));
         if independent && !cfg!(debug_assertions) {
-            return ordered();
+            selected.extend(0..n);
+            selected.sort_by_key(timestamp_order);
+            return;
         }
-        let mut dependencies = vec![vec![false; pending.len()]; pending.len()];
+        dependencies.clear();
+        dependencies.resize(n * n, false);
         #[cfg(feature = "benchmark")]
         let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
             m.dependency_passes += 1;
             m.dependency_ns += ns;
         });
         for (b, &index) in pending.iter().enumerate() {
-            if !cfg!(debug_assertions) && !(0..pending.len()).any(|a| plausible(a, b)) {
+            if !cfg!(debug_assertions) && !(0..n).any(|a| plausible(a, b)) {
                 continue;
             }
             let mut after = {
@@ -1140,22 +1209,28 @@ impl Eval<'_, '_> {
                 });
                 self.clone()
             };
-            after.apply(&nodes[index], &instructions[b], None);
+            after.apply(&nodes[index], &instructions[ranges[b].clone()], None);
             for (a, &other) in pending.iter().enumerate() {
                 if a != b && nodes[other].cda() == nodes[index].cda() {
                     if !cfg!(debug_assertions) && !plausible(a, b) {
                         continue;
                     }
-                    dependencies[a][b] = self.exists(&nodes[other]) != after.exists(&nodes[other])
-                        || instructions[a] != after.instructions(&nodes[other], layer);
+                    let changed = if self.exists(&nodes[other]) != after.exists(&nodes[other]) {
+                        true
+                    } else {
+                        probe.clear();
+                        after.push_instructions(&nodes[other], layer, probe);
+                        instructions[ranges[a].clone()] != *probe.as_slice()
+                    };
+                    dependencies[a * n + b] = changed;
                     debug_assert!(
-                        plausible(a, b) || !dependencies[a][b],
+                        plausible(a, b) || !changed,
                         "layer read/write summary missed a dependency"
                     );
                     #[cfg(feature = "benchmark")]
                     crate::benchmark_layers::record(|m| {
                         m.comparisons += 1;
-                        m.edges += u64::from(dependencies[a][b]);
+                        m.edges += u64::from(changed);
                     });
                 }
             }
@@ -1163,23 +1238,30 @@ impl Eval<'_, '_> {
         if independent {
             // Keep the complete pairwise oracle in debug, once per independent
             // batch rather than cloning the same board for every suffix.
-            debug_assert!(dependencies.iter().flatten().all(|edge| !edge));
-            return ordered();
+            debug_assert!(dependencies.iter().all(|&edge| !edge));
+            selected.extend(0..n);
+            selected.sort_by_key(timestamp_order);
+            return;
         }
         // Transitive reachability identifies only edges within dependency
         // loops; external prerequisites still precede the loop (CR 613.8b).
-        let mut reach = dependencies.clone();
-        for k in 0..pending.len() {
-            for a in 0..pending.len() {
-                for b in 0..pending.len() {
-                    reach[a][b] |= reach[a][k] && reach[k][b];
+        reach.clear();
+        reach.extend_from_slice(dependencies);
+        for k in 0..n {
+            for a in 0..n {
+                if reach[a * n + k] {
+                    for b in 0..n {
+                        reach[a * n + b] |= reach[k * n + b];
+                    }
                 }
             }
         }
-        vec![(0..pending.len())
-            .filter(|&a| !(0..pending.len()).any(|b| dependencies[a][b] && !reach[b][a]))
-            .min_by_key(timestamp_order)
-            .expect("dependency graph has a source component")]
+        selected.push(
+            (0..n)
+                .filter(|&a| !(0..n).any(|b| dependencies[a * n + b] && !reach[b * n + a]))
+                .min_by_key(timestamp_order)
+                .expect("dependency graph has a source component"),
+        );
     }
 
     fn exists(&self, node: &Node) -> bool {
@@ -1189,106 +1271,174 @@ impl Eval<'_, '_> {
                 .is_some_and(|o| o.statics.iter().any(|s| s.key == node.key))
     }
 
-    fn targets(&self, source: PermanentId, plan: &SourcePlan) -> Vec<PermanentId> {
-        if plan
-            .condition
-            .as_ref()
-            .is_some_and(|c| !self.condition(c, source))
-        {
-            return Vec::new();
-        }
-        match &plan.scope {
-            StaticScope::This => self.get(source).map_or_else(Vec::new, |_| vec![source]),
-            StaticScope::Attached => self
-                .game
-                .attached_permanent(source)
-                .filter(|&id| self.get(id).is_some())
-                .map_or_else(Vec::new, |id| vec![id]),
-            StaticScope::SpellsYouControl(_) => Vec::new(),
-            scope => {
-                let source_controller = self.controller(source);
-                self.live
-                    .iter()
-                    .copied()
-                    .filter(|&id| {
-                        matches_static_scope(
-                            scope,
-                            source,
-                            source_controller,
-                            None,
-                            id,
-                            self.controller(id),
-                            |predicate| self.matches(id, predicate, Some(source)),
-                        )
-                    })
-                    .collect()
+    fn push_target_instructions(
+        &self,
+        source: PermanentId,
+        controller: PlayerId,
+        plan: &SourcePlan,
+        layer: Layer,
+        target: PermanentId,
+        out: &mut Vec<Instruction>,
+    ) {
+        for (part, (part_layer, op)) in plan.parts.iter().enumerate() {
+            if *part_layer != layer {
+                continue;
             }
+            let value = match op {
+                Operation::Modify(Modification::Control) => ResolvedValue::Control(controller),
+                Operation::Control(player) => ResolvedValue::Control(*player),
+                Operation::Modify(Modification::SetBasePt { power, toughness }) => {
+                    ResolvedValue::SetBasePt {
+                        power: power.as_ref().map(|n| {
+                            self.layer_value(
+                                n,
+                                || self.game.live_permanent(target).object,
+                                controller,
+                                Some(source),
+                                Some(target),
+                            )
+                        }),
+                        toughness: toughness.as_ref().map(|n| {
+                            self.layer_value(
+                                n,
+                                || self.game.live_permanent(target).object,
+                                controller,
+                                Some(source),
+                                Some(target),
+                            )
+                        }),
+                    }
+                }
+                Operation::Modify(Modification::ModifyPt { power, toughness }) => {
+                    ResolvedValue::ModifyPt {
+                        power: self.layer_value(
+                            power,
+                            || self.game.live_permanent(target).object,
+                            controller,
+                            Some(source),
+                            Some(target),
+                        ),
+                        toughness: self.layer_value(
+                            toughness,
+                            || self.game.live_permanent(target).object,
+                            controller,
+                            Some(source),
+                            Some(target),
+                        ),
+                    }
+                }
+                _ => ResolvedValue::None,
+            };
+            out.push(Instruction {
+                target,
+                part,
+                value,
+            });
         }
     }
 
-    fn instructions(&self, node: &Node, layer: Layer) -> Vec<Instruction> {
+    fn push_instructions(&self, node: &Node, layer: Layer, out: &mut Vec<Instruction>) {
         let (plan, bound_targets) = match &node.kind {
             NodeKind::Resolved {
                 layer: part_layer,
                 operation,
             } => {
-                return (*part_layer == layer)
-                    .then(|| {
-                        vec![Instruction {
-                            target: node.source,
-                            operation: operation.clone(),
-                        }]
-                    })
-                    .unwrap_or_default();
+                if *part_layer == layer {
+                    let value = match operation {
+                        Operation::Control(player) => ResolvedValue::Control(*player),
+                        Operation::Modify(Modification::SetBasePt { power, toughness }) => {
+                            ResolvedValue::SetBasePt {
+                                power: *power,
+                                toughness: *toughness,
+                            }
+                        }
+                        Operation::Modify(Modification::ModifyPt { power, toughness }) => {
+                            ResolvedValue::ModifyPt {
+                                power: *power,
+                                toughness: *toughness,
+                            }
+                        }
+                        _ => ResolvedValue::None,
+                    };
+                    out.push(Instruction {
+                        target: node.source,
+                        part: 0,
+                        value,
+                    });
+                }
+                return;
             }
             NodeKind::Static { plan, targets } => (plan, targets.as_deref()),
         };
         if !self.exists(node) {
-            return Vec::new();
+            return;
         }
-        let owned_targets;
-        let targets: &[PermanentId] = match bound_targets {
-            Some(targets) => targets,
-            None => {
-                owned_targets = self.targets(node.source, plan);
-                &owned_targets
+        if let Some(targets) = bound_targets {
+            if targets.is_empty() {
+                return;
             }
-        };
-        if targets.is_empty() {
-            return Vec::new();
+            let controller = self.controller(node.source);
+            for &id in targets {
+                self.push_target_instructions(node.source, controller, plan, layer, id, out);
+            }
+            return;
         }
-        let controller = self.controller(node.source);
-        let mut out = Vec::with_capacity(targets.len());
-        for &id in targets {
-            for (part, op) in &plan.parts {
-                if *part != layer {
-                    continue;
+        if plan
+            .condition
+            .as_ref()
+            .is_some_and(|c| !self.condition(c, node.source))
+        {
+            return;
+        }
+        match &plan.scope {
+            StaticScope::This => {
+                if self.get(node.source).is_some() {
+                    let controller = self.controller(node.source);
+                    self.push_target_instructions(
+                        node.source,
+                        controller,
+                        plan,
+                        layer,
+                        node.source,
+                        out,
+                    );
                 }
-                let operation = match op {
-                    Operation::Modify(Modification::Control) => Operation::Control(controller),
-                    Operation::Modify(m) => Operation::Modify(m.resolve(|n| {
-                        self.layer_value(
-                            n,
-                            || self.game.live_permanent(id).object,
+            }
+            StaticScope::Attached => {
+                if let Some(id) = self
+                    .game
+                    .attached_permanent(node.source)
+                    .filter(|&id| self.get(id).is_some())
+                {
+                    let controller = self.controller(node.source);
+                    self.push_target_instructions(node.source, controller, plan, layer, id, out);
+                }
+            }
+            StaticScope::SpellsYouControl(_) => {}
+            scope => {
+                let controller = self.controller(node.source);
+                for &id in self.live {
+                    if matches_static_scope(
+                        scope,
+                        node.source,
+                        controller,
+                        None,
+                        id,
+                        self.controller(id),
+                        |predicate| self.matches(id, predicate, Some(node.source)),
+                    ) {
+                        self.push_target_instructions(
+                            node.source,
                             controller,
-                            Some(node.source),
-                            Some(id),
-                        )
-                    })),
-                    Operation::Control(player) => Operation::Control(*player),
-                    Operation::LandType(subtype) => Operation::LandType(subtype.clone()),
-                    Operation::Inherit => Operation::Inherit,
-                    Operation::CatalogTrigger(ability) => {
-                        Operation::CatalogTrigger(ability.clone())
+                            plan,
+                            layer,
+                            id,
+                            out,
+                        );
                     }
-                };
-                out.push(Instruction {
-                    target: id,
-                    operation,
-                });
+                }
             }
         }
-        out
     }
 
     fn controlled(
@@ -1400,14 +1550,15 @@ impl Eval<'_, '_> {
         }
     }
 
-    fn select_permanents(
+    fn for_each_selected_permanent(
         &self,
         selector: &ObjectSelector,
         source: PermanentId,
-    ) -> Vec<PermanentId> {
+        mut visit: impl FnMut(PermanentId),
+    ) {
         let controller = self.controller(source);
         match selector {
-            ObjectSelector::This => vec![source],
+            ObjectSelector::This => visit(source),
             ObjectSelector::Each {
                 of,
                 predicate,
@@ -1421,25 +1572,24 @@ impl Eval<'_, '_> {
                 let max = max_mana_value
                     .as_ref()
                     .map(|n| self.comparison_value(n, source));
-                self.live
-                    .iter()
-                    .copied()
-                    .filter(|&id| {
-                        !self.game.is_phased_out(id)
-                            && match of {
-                                Scope::YouControl => self.controller(id) == controller,
-                                Scope::OpponentsControl => self.controller(id) != controller,
-                                Scope::Battlefield => true,
-                                _ => false,
-                            }
-                            && !(id == source && *except == Some(Except::This))
-                            && self.matches(id, predicate, Some(source))
-                            && exact.is_none_or(|n| self.game.permanent_mana_value(id) == n)
-                            && max.is_none_or(|n| self.game.permanent_mana_value(id) <= n)
-                    })
-                    .collect()
+                for &id in self.live {
+                    if !self.game.is_phased_out(id)
+                        && match of {
+                            Scope::YouControl => self.controller(id) == controller,
+                            Scope::OpponentsControl => self.controller(id) != controller,
+                            Scope::Battlefield => true,
+                            _ => false,
+                        }
+                        && !(id == source && *except == Some(Except::This))
+                        && self.matches(id, predicate, Some(source))
+                        && exact.is_none_or(|n| self.game.permanent_mana_value(id) == n)
+                        && max.is_none_or(|n| self.game.permanent_mana_value(id) <= n)
+                    {
+                        visit(id);
+                    }
+                }
             }
-            _ => Vec::new(),
+            _ => {}
         }
     }
 
@@ -1457,26 +1607,42 @@ impl Eval<'_, '_> {
                 of,
                 property,
                 aggregate,
-            } => aggregate.evaluate(
-                self.select_permanents(of, source)
-                    .into_iter()
-                    .map(|id| self.property(id, *property)),
-            ),
-            EffectValue::Objects { of, predicate, .. } => self
-                .select_permanents(of, source)
-                .into_iter()
-                .filter(|&id| {
-                    predicate
+            } => match aggregate {
+                Aggregate::Sum => {
+                    let mut sum = 0;
+                    self.for_each_selected_permanent(of, source, |id| {
+                        sum += self.property(id, *property);
+                    });
+                    sum
+                }
+                Aggregate::Max => {
+                    let mut max: Option<i32> = None;
+                    self.for_each_selected_permanent(of, source, |id| {
+                        let value = self.property(id, *property);
+                        max = Some(max.map_or(value, |current| current.max(value)));
+                    });
+                    max.unwrap_or(0)
+                }
+            },
+            EffectValue::Objects { of, predicate, .. } => {
+                let mut count = 0;
+                self.for_each_selected_permanent(of, source, |id| {
+                    if predicate
                         .as_ref()
                         .is_none_or(|p| self.matches(id, p, Some(source)))
-                })
-                .count() as i32,
-            EffectValue::DistinctManaValues { of } => self
-                .select_permanents(of, source)
-                .into_iter()
-                .map(|id| self.game.permanent_mana_value(id))
-                .collect::<BTreeSet<_>>()
-                .len() as i32,
+                    {
+                        count += 1;
+                    }
+                });
+                count
+            }
+            EffectValue::DistinctManaValues { of } => {
+                let mut seen = BTreeSet::new();
+                self.for_each_selected_permanent(of, source, |id| {
+                    seen.insert(self.game.permanent_mana_value(id));
+                });
+                seen.len() as i32
+            }
             EffectValue::GreatestPowerYouControl { predicate } => controlled()
                 .filter(|&id| {
                     self.object(id).view.is_creature() && self.matches(id, predicate, None)
@@ -1589,6 +1755,55 @@ impl Eval<'_, '_> {
         instructions: &[Instruction],
         mut granted: Option<&mut Vec<Node>>,
     ) {
+        for (ordinal, instruction) in instructions.iter().enumerate() {
+            let id = instruction.target;
+            let origin = if id == node.source {
+                node.origin
+            } else {
+                AbilityOrigin::Permanent(node.source)
+            };
+            if let ResolvedValue::Control(controller) = instruction.value {
+                self.objects[id.0].as_mut().unwrap().controller = controller;
+                continue;
+            }
+            match &node.kind {
+                NodeKind::Static { plan, .. } => {
+                    self.apply_operation(
+                        node,
+                        id,
+                        origin,
+                        ordinal,
+                        &plan.parts[instruction.part].1,
+                        instruction.value,
+                        granted.as_deref_mut(),
+                    );
+                }
+                NodeKind::Resolved { operation, .. } => {
+                    self.apply_operation(
+                        node,
+                        id,
+                        origin,
+                        ordinal,
+                        operation,
+                        instruction.value,
+                        granted.as_deref_mut(),
+                    );
+                }
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn apply_operation<N>(
+        &mut self,
+        node: &Node,
+        id: PermanentId,
+        origin: AbilityOrigin,
+        ordinal: usize,
+        operation: &Operation<N>,
+        value: ResolvedValue,
+        granted: Option<&mut Vec<Node>>,
+    ) {
         let clock = |ability: &Ability, index| {
             let Ability::Triggered { condition, .. } = ability;
             let static_slot = node.key.as_slice()[1];
@@ -1599,60 +1814,257 @@ impl Eval<'_, '_> {
                 ability_index: index,
             })
         };
-        for (ordinal, instruction) in instructions.iter().enumerate() {
-            let id = instruction.target;
-            let origin = if id == node.source {
-                node.origin
-            } else {
-                AbilityOrigin::Permanent(node.source)
-            };
-            let object = self.objects[id.0].as_mut().unwrap();
-            if let Operation::Control(controller) = instruction.operation {
-                object.controller = controller;
-                continue;
+        let object = self.objects[id.0].as_mut().unwrap();
+        match operation {
+            Operation::LandType(subtype) => {
+                if !object.view.is_land() {
+                    return;
+                }
+                {
+                    let details = Arc::make_mut(&mut object.view).details_mut();
+                    details
+                        .subtypes
+                        .retain(|s| !BASIC_LANDS.iter().any(|(name, _)| s == name));
+                    details.subtypes.push(subtype.clone());
+                    details.added_subtypes.push(subtype.clone());
+                }
+                lose_all_abilities(object);
+                Arc::make_mut(&mut object.view)
+                    .details_mut()
+                    .activated_abilities
+                    .extend(intrinsic_mana_ability(|name| name == subtype));
+                object.dirty |= DIRTY_TYPES | DIRTY_ACTIVATIONS;
             }
-            match &instruction.operation {
-                Operation::LandType(subtype) => {
-                    if !object.view.is_land() {
-                        continue;
-                    }
-                    {
-                        let details = Arc::make_mut(&mut object.view).details_mut();
+            Operation::Inherit => {
+                if let Some(definition) = self.game.inherited_definition(id) {
+                    let details = Arc::make_mut(&mut object.view).details_mut();
+                    if !definition.activated_abilities.is_empty() {
                         details
-                            .subtypes
-                            .retain(|s| !BASIC_LANDS.iter().any(|(name, _)| s == name));
-                        details.subtypes.push(subtype.clone());
-                        details.added_subtypes.push(subtype.clone());
+                            .activated_abilities
+                            .extend(definition.activated_abilities.clone());
+                        object.dirty |= DIRTY_ACTIVATIONS;
                     }
+                    details.triggered_abilities.extend(
+                        definition.abilities.iter().cloned().enumerate().map(
+                            |(index, ability)| EffectiveTrigger {
+                                origin,
+                                clock: clock(&ability, index),
+                                ability,
+                                program: false,
+                            },
+                        ),
+                    );
+                }
+            }
+            Operation::CatalogTrigger(ability) => {
+                Arc::make_mut(&mut object.view)
+                    .details_mut()
+                    .triggered_abilities
+                    .push(EffectiveTrigger {
+                        origin,
+                        clock: clock(ability, 0),
+                        ability: (**ability).clone(),
+                        program: false,
+                    });
+            }
+            Operation::Modify(modification) => match modification {
+                Modification::SetName(name) => {
+                    let view = Arc::make_mut(&mut object.view);
+                    view.name_set = true;
+                    if view.name != *name {
+                        view.details_mut().name = name.clone();
+                    }
+                }
+                Modification::AllCreatureTypes => {
+                    // A later grant of every type overrides an earlier set list.
+                    if object.view.creature_types_set || !object.view.creature_types.is_all() {
+                        let view = Arc::make_mut(&mut object.view);
+                        view.creature_types_set = false;
+                        if !view.creature_types.is_all() {
+                            view.details_mut().creature_types = CreatureTypes::All;
+                            object.dirty |= DIRTY_TYPES;
+                        }
+                    }
+                }
+                Modification::SetCreatureTypes(types) => {
+                    let view = Arc::make_mut(&mut object.view);
+                    view.creature_types_set = true;
+                    let details = view.details_mut();
+                    details.creature_types = CreatureTypes::default();
+                    details.subtypes.retain(|s| !is_creature_type(s));
+                    details.subtypes.extend(types.iter().cloned());
+                    details.added_subtypes.retain(|s| !is_creature_type(s));
+                    object.dirty |= DIRTY_TYPES;
+                }
+                Modification::AddSubtypes(types) => {
+                    let gained = if object.view.is_land() {
+                        intrinsic_mana_ability(|name| {
+                            types.iter().any(|subtype| subtype == name)
+                                && !object.view.subtypes.iter().any(|subtype| subtype == name)
+                        })
+                    } else {
+                        None
+                    };
+                    let any_new = types
+                        .iter()
+                        .any(|subtype| !object.view.subtypes.contains(subtype));
+                    if gained.is_some() || any_new {
+                        let details = Arc::make_mut(&mut object.view).details_mut();
+                        details.activated_abilities.extend(gained);
+                        for subtype in types {
+                            if !details.subtypes.contains(subtype) {
+                                details.subtypes.push(subtype.clone());
+                                details.added_subtypes.push(subtype.clone());
+                            }
+                        }
+                        object.dirty |= DIRTY_TYPES;
+                    }
+                }
+                Modification::AddTypes(types) => {
+                    if types.iter().any(|t| !object.view.types.types.contains(t)) {
+                        Arc::make_mut(&mut object.view)
+                            .details_mut()
+                            .types
+                            .types
+                            .extend(types.iter().copied());
+                        object.dirty |= DIRTY_TYPES;
+                    }
+                }
+                Modification::SetTypes { types, subtypes } => {
+                    // CR 205.1a, 205.3d: a subtype survives while it
+                    // corresponds to a remaining type and the effect sets
+                    // no subtype of its kind (a basic land imprisoned as a
+                    // land stays a Forest; a Citizen loses other creature
+                    // types).
+                    let view = Arc::make_mut(&mut object.view);
+                    let keeps = |subtype: &String| {
+                        types.iter().any(|t| subtype_corresponds_to(subtype, *t))
+                            && !subtypes
+                                .iter()
+                                .any(|set| subtype_category(set) == subtype_category(subtype))
+                    };
+                    let sets_creature_types = subtypes.iter().any(|s| is_creature_type(s));
+                    if !(types.contains(&CardType::Creature) || types.contains(&CardType::Kindred))
+                        || sets_creature_types
+                    {
+                        view.creature_types_set |= sets_creature_types
+                            || view.creature_types.is_all()
+                            || view.subtypes.iter().any(|s| is_creature_type(s));
+                        view.details_mut().creature_types = CreatureTypes::default();
+                    }
+                    let details = view.details_mut();
+                    details.types.types = types.iter().copied().collect();
+                    details.subtypes.retain(keeps);
+                    details.added_subtypes.retain(keeps);
+                    for subtype in subtypes {
+                        if !details.subtypes.contains(subtype) {
+                            details.subtypes.push(subtype.clone());
+                            if !is_creature_type(subtype) {
+                                details.added_subtypes.push(subtype.clone());
+                            }
+                        }
+                    }
+                    object.dirty |= DIRTY_TYPES;
+                }
+                Modification::BecomeCreature => {
+                    if !object.view.types.types.contains(&CardType::Creature) {
+                        Arc::make_mut(&mut object.view)
+                            .details_mut()
+                            .types
+                            .types
+                            .insert(CardType::Creature);
+                        object.dirty |= DIRTY_TYPES;
+                    }
+                }
+                Modification::Nonlegendary => {
+                    if object.view.is_legendary {
+                        Arc::make_mut(&mut object.view).is_legendary = false;
+                    }
+                }
+                Modification::SetColors(colors) => {
+                    if object.view.colors != *colors {
+                        Arc::make_mut(&mut object.view).details_mut().colors = colors.clone();
+                    }
+                }
+                Modification::AddColors(colors) => {
+                    if colors.iter().any(|c| !object.view.colors.contains(c)) {
+                        Arc::make_mut(&mut object.view)
+                            .details_mut()
+                            .colors
+                            .extend(colors);
+                    }
+                }
+                Modification::AddKeywords(keywords) => {
+                    let new_keywords = keywords.without(object.view.keywords);
+                    let clears_grant = origin == AbilityOrigin::Own
+                        && object
+                            .view
+                            .keyword_grants
+                            .iter()
+                            .any(|(keyword, _)| keywords.has(*keyword));
+                    if new_keywords != Keywords::default() || clears_grant {
+                        let view = Arc::make_mut(&mut object.view);
+                        if origin != AbilityOrigin::Own {
+                            view.keyword_grants
+                                .extend(new_keywords.iter().map(|keyword| (keyword, origin)));
+                        } else {
+                            view.keyword_grants
+                                .retain(|(keyword, _)| !keywords.has(*keyword));
+                        }
+                        view.keywords = view.keywords.union(*keywords);
+                    }
+                }
+                Modification::LoseKeywords(keywords) => {
+                    let remaining = object.view.keywords.without(*keywords);
+                    let clears_grant = object
+                        .view
+                        .keyword_grants
+                        .iter()
+                        .any(|(keyword, _)| keywords.has(*keyword));
+                    if remaining != object.view.keywords || clears_grant {
+                        let view = Arc::make_mut(&mut object.view);
+                        view.keyword_grants
+                            .retain(|(keyword, _)| !keywords.has(*keyword));
+                        view.keywords = remaining;
+                    }
+                    if keywords.has(Keyword::Hexproof)
+                        && object
+                            .statics
+                            .iter()
+                            .any(|entry| matches!(entry.ability, StaticAbility::HexproofFrom(_)))
+                    {
+                        Arc::make_mut(&mut object.statics).retain(|entry| {
+                            !matches!(entry.ability, StaticAbility::HexproofFrom(_))
+                        });
+                        object.dirty |= DIRTY_STATICS;
+                    }
+                }
+                Modification::LoseNonManaAbilities => {
+                    lose_nonmana_abilities(object);
+                }
+                Modification::LoseAllAbilities => {
                     lose_all_abilities(object);
+                }
+                Modification::Firebending(n) => {
+                    let view = Arc::make_mut(&mut object.view);
+                    view.firebending = view.firebending.saturating_add(*n);
+                    view.details_mut()
+                        .triggered_abilities
+                        .push(EffectiveTrigger {
+                            origin,
+                            clock: None,
+                            ability: Ability::firebending(*n),
+                            program: true,
+                        });
+                }
+                Modification::GrantActivated(ability) => {
                     Arc::make_mut(&mut object.view)
                         .details_mut()
                         .activated_abilities
-                        .extend(intrinsic_mana_ability(|name| name == subtype));
-                    object.dirty |= DIRTY_TYPES | DIRTY_ACTIVATIONS;
+                        .push((**ability).clone());
+                    object.dirty |= DIRTY_ACTIVATIONS;
                 }
-                Operation::Inherit => {
-                    if let Some(definition) = self.game.inherited_definition(id) {
-                        let details = Arc::make_mut(&mut object.view).details_mut();
-                        if !definition.activated_abilities.is_empty() {
-                            details
-                                .activated_abilities
-                                .extend(definition.activated_abilities.clone());
-                            object.dirty |= DIRTY_ACTIVATIONS;
-                        }
-                        details.triggered_abilities.extend(
-                            definition.abilities.iter().cloned().enumerate().map(
-                                |(index, ability)| EffectiveTrigger {
-                                    origin,
-                                    clock: clock(&ability, index),
-                                    ability,
-                                    program: false,
-                                },
-                            ),
-                        );
-                    }
-                }
-                Operation::CatalogTrigger(ability) => {
+                Modification::GrantTriggered(ability) => {
                     Arc::make_mut(&mut object.view)
                         .details_mut()
                         .triggered_abilities
@@ -1660,273 +2072,69 @@ impl Eval<'_, '_> {
                             origin,
                             clock: clock(ability, 0),
                             ability: (**ability).clone(),
-                            program: false,
+                            program: true,
                         });
                 }
-                Operation::Modify(modification) => match modification {
-                    Modification::SetName(name) => {
-                        let view = Arc::make_mut(&mut object.view);
-                        view.name_set = true;
-                        if view.name != *name {
-                            view.details_mut().name = name.clone();
-                        }
-                    }
-                    Modification::AllCreatureTypes => {
-                        // A later grant of every type overrides an earlier set list.
-                        if object.view.creature_types_set || !object.view.creature_types.is_all() {
-                            let view = Arc::make_mut(&mut object.view);
-                            view.creature_types_set = false;
-                            if !view.creature_types.is_all() {
-                                view.details_mut().creature_types = CreatureTypes::All;
-                                object.dirty |= DIRTY_TYPES;
-                            }
-                        }
-                    }
-                    Modification::SetCreatureTypes(types) => {
-                        let view = Arc::make_mut(&mut object.view);
-                        view.creature_types_set = true;
-                        let details = view.details_mut();
-                        details.creature_types = CreatureTypes::default();
-                        details.subtypes.retain(|s| !is_creature_type(s));
-                        details.subtypes.extend(types.iter().cloned());
-                        details.added_subtypes.retain(|s| !is_creature_type(s));
-                        object.dirty |= DIRTY_TYPES;
-                    }
-                    Modification::AddSubtypes(types) => {
-                        let gained = if object.view.is_land() {
-                            intrinsic_mana_ability(|name| {
-                                types.iter().any(|subtype| subtype == name)
-                                    && !object.view.subtypes.iter().any(|subtype| subtype == name)
-                            })
-                        } else {
-                            None
-                        };
-                        let any_new = types
-                            .iter()
-                            .any(|subtype| !object.view.subtypes.contains(subtype));
-                        if gained.is_some() || any_new {
-                            let details = Arc::make_mut(&mut object.view).details_mut();
-                            details.activated_abilities.extend(gained);
-                            for subtype in types {
-                                if !details.subtypes.contains(subtype) {
-                                    details.subtypes.push(subtype.clone());
-                                    details.added_subtypes.push(subtype.clone());
-                                }
-                            }
-                            object.dirty |= DIRTY_TYPES;
-                        }
-                    }
-                    Modification::AddTypes(types) => {
-                        if types.iter().any(|t| !object.view.types.types.contains(t)) {
-                            Arc::make_mut(&mut object.view)
-                                .details_mut()
-                                .types
-                                .types
-                                .extend(types.iter().copied());
-                            object.dirty |= DIRTY_TYPES;
-                        }
-                    }
-                    Modification::SetTypes { types, subtypes } => {
-                        // CR 205.1a, 205.3d: a subtype survives while it
-                        // corresponds to a remaining type and the effect sets
-                        // no subtype of its kind (a basic land imprisoned as a
-                        // land stays a Forest; a Citizen loses other creature
-                        // types).
-                        let view = Arc::make_mut(&mut object.view);
-                        let keeps = |subtype: &String| {
-                            types.iter().any(|t| subtype_corresponds_to(subtype, *t))
-                                && !subtypes
-                                    .iter()
-                                    .any(|set| subtype_category(set) == subtype_category(subtype))
-                        };
-                        let sets_creature_types = subtypes.iter().any(|s| is_creature_type(s));
-                        if !(types.contains(&CardType::Creature)
-                            || types.contains(&CardType::Kindred))
-                            || sets_creature_types
-                        {
-                            view.creature_types_set |= sets_creature_types
-                                || view.creature_types.is_all()
-                                || view.subtypes.iter().any(|s| is_creature_type(s));
-                            view.details_mut().creature_types = CreatureTypes::default();
-                        }
-                        let details = view.details_mut();
-                        details.types.types = types.iter().copied().collect();
-                        details.subtypes.retain(keeps);
-                        details.added_subtypes.retain(keeps);
-                        for subtype in subtypes {
-                            if !details.subtypes.contains(subtype) {
-                                details.subtypes.push(subtype.clone());
-                                if !is_creature_type(subtype) {
-                                    details.added_subtypes.push(subtype.clone());
-                                }
-                            }
-                        }
-                        object.dirty |= DIRTY_TYPES;
-                    }
-                    Modification::BecomeCreature => {
-                        if !object.view.types.types.contains(&CardType::Creature) {
-                            Arc::make_mut(&mut object.view)
-                                .details_mut()
-                                .types
-                                .types
-                                .insert(CardType::Creature);
-                            object.dirty |= DIRTY_TYPES;
-                        }
-                    }
-                    Modification::Nonlegendary => {
-                        if object.view.is_legendary {
-                            Arc::make_mut(&mut object.view).is_legendary = false;
-                        }
-                    }
-                    Modification::SetColors(colors) => {
-                        if object.view.colors != *colors {
-                            Arc::make_mut(&mut object.view).details_mut().colors = colors.clone();
-                        }
-                    }
-                    Modification::AddColors(colors) => {
-                        if colors.iter().any(|c| !object.view.colors.contains(c)) {
-                            Arc::make_mut(&mut object.view)
-                                .details_mut()
-                                .colors
-                                .extend(colors);
-                        }
-                    }
-                    Modification::AddKeywords(keywords) => {
-                        let new_keywords = keywords.without(object.view.keywords);
-                        let clears_grant = origin == AbilityOrigin::Own
-                            && object
-                                .view
-                                .keyword_grants
-                                .iter()
-                                .any(|(keyword, _)| keywords.has(*keyword));
-                        if new_keywords != Keywords::default() || clears_grant {
-                            let view = Arc::make_mut(&mut object.view);
-                            if origin != AbilityOrigin::Own {
-                                view.keyword_grants
-                                    .extend(new_keywords.iter().map(|keyword| (keyword, origin)));
-                            } else {
-                                view.keyword_grants
-                                    .retain(|(keyword, _)| !keywords.has(*keyword));
-                            }
-                            view.keywords = view.keywords.union(*keywords);
-                        }
-                    }
-                    Modification::LoseKeywords(keywords) => {
-                        let remaining = object.view.keywords.without(*keywords);
-                        let clears_grant = object
-                            .view
-                            .keyword_grants
-                            .iter()
-                            .any(|(keyword, _)| keywords.has(*keyword));
-                        if remaining != object.view.keywords || clears_grant {
-                            let view = Arc::make_mut(&mut object.view);
-                            view.keyword_grants
-                                .retain(|(keyword, _)| !keywords.has(*keyword));
-                            view.keywords = remaining;
-                        }
-                        if keywords.has(Keyword::Hexproof)
-                            && object
-                                .statics
-                                .iter()
-                                .any(|entry| matches!(entry.ability, StaticAbility::HexproofFrom(_)))
-                        {
-                            Arc::make_mut(&mut object.statics).retain(|entry| {
-                                !matches!(entry.ability, StaticAbility::HexproofFrom(_))
-                            });
-                            object.dirty |= DIRTY_STATICS;
-                        }
-                    }
-                    Modification::LoseNonManaAbilities => {
-                        lose_nonmana_abilities(object);
-                    }
-                    Modification::LoseAllAbilities => {
-                        lose_all_abilities(object);
-                    }
-                    Modification::Firebending(n) => {
-                        let view = Arc::make_mut(&mut object.view);
-                        view.firebending = view.firebending.saturating_add(*n);
-                        view.details_mut()
-                            .triggered_abilities
-                            .push(EffectiveTrigger {
-                                origin,
-                                clock: None,
-                                ability: Ability::firebending(*n),
-                                program: true,
-                            });
-                    }
-                    Modification::GrantActivated(ability) => {
-                        Arc::make_mut(&mut object.view)
-                            .details_mut()
-                            .activated_abilities
-                            .push((**ability).clone());
-                        object.dirty |= DIRTY_ACTIVATIONS;
-                    }
-                    Modification::GrantTriggered(ability) => {
-                        Arc::make_mut(&mut object.view)
-                            .details_mut()
-                            .triggered_abilities
-                            .push(EffectiveTrigger {
-                                origin,
-                                clock: clock(ability, 0),
-                                ability: (**ability).clone(),
-                                program: true,
-                            });
-                    }
-                    Modification::GrantStatic(ability) => {
-                        object.dirty |= DIRTY_STATICS;
-                        if let StaticAbility::Ward(cost) = ability.as_ref() {
-                            let details = Arc::make_mut(&mut object.view).details_mut();
-                            details.ward = Some(cost.clone());
-                            details.triggered_abilities.push(EffectiveTrigger {
-                                origin,
-                                clock: None,
-                                ability: Ability::ward(cost.clone()),
-                                program: true,
-                            });
-                        }
-                        let key = node.key.extended(id.0, ordinal);
-                        let entry = StaticEntry {
+                Modification::GrantStatic(ability) => {
+                    object.dirty |= DIRTY_STATICS;
+                    if let StaticAbility::Ward(cost) = ability.as_ref() {
+                        let details = Arc::make_mut(&mut object.view).details_mut();
+                        details.ward = Some(cost.clone());
+                        details.triggered_abilities.push(EffectiveTrigger {
                             origin,
-                            key,
-                            timestamp: node.timestamp.max(self.game.live_permanent(id).timestamp),
-                            ability: (**ability).clone(),
-                        };
-                        if let Some(granted) = granted.as_mut() {
-                            if !self.game.is_phased_out(id) {
-                                if let Some(granted_node) = build_node(self.game, id, &entry) {
-                                    granted.push(granted_node);
-                                }
+                            clock: None,
+                            ability: Ability::ward(cost.clone()),
+                            program: true,
+                        });
+                    }
+                    let key = node.key.extended(id.0, ordinal);
+                    let entry = StaticEntry {
+                        origin,
+                        key,
+                        timestamp: node.timestamp.max(self.game.live_permanent(id).timestamp),
+                        ability: (**ability).clone(),
+                    };
+                    if let Some(granted) = granted {
+                        if !self.game.is_phased_out(id) {
+                            if let Some(granted_node) = build_node(self.game, id, &entry) {
+                                granted.push(granted_node);
                             }
                         }
-                        Arc::make_mut(&mut object.statics).push(entry);
                     }
-                    Modification::SetBasePt { power, toughness } => {
-                        let new_power = power.unwrap_or(object.view.power);
-                        let new_toughness = toughness.unwrap_or(object.view.toughness);
-                        if new_power != object.view.power || new_toughness != object.view.toughness
-                        {
-                            let view = Arc::make_mut(&mut object.view);
-                            view.power = new_power;
-                            view.toughness = new_toughness;
-                        }
+                    Arc::make_mut(&mut object.statics).push(entry);
+                }
+                Modification::SetBasePt { .. } => {
+                    let ResolvedValue::SetBasePt { power, toughness } = value else {
+                        unreachable!("SetBasePt instruction carries resolved P/T");
+                    };
+                    let new_power = power.unwrap_or(object.view.power);
+                    let new_toughness = toughness.unwrap_or(object.view.toughness);
+                    if new_power != object.view.power || new_toughness != object.view.toughness {
+                        let view = Arc::make_mut(&mut object.view);
+                        view.power = new_power;
+                        view.toughness = new_toughness;
                     }
-                    Modification::ModifyPt { power, toughness } => {
-                        if *power != 0 || *toughness != 0 {
-                            let view = Arc::make_mut(&mut object.view);
-                            view.power += power;
-                            view.toughness += toughness;
-                        }
+                }
+                Modification::ModifyPt { .. } => {
+                    let ResolvedValue::ModifyPt { power, toughness } = value else {
+                        unreachable!("ModifyPt instruction carries resolved P/T");
+                    };
+                    if power != 0 || toughness != 0 {
+                        let view = Arc::make_mut(&mut object.view);
+                        view.power += power;
+                        view.toughness += toughness;
                     }
-                    Modification::SwitchPt => {
-                        if object.view.power != object.view.toughness {
-                            let view = Arc::make_mut(&mut object.view);
-                            std::mem::swap(&mut view.power, &mut view.toughness);
-                        }
+                }
+                Modification::SwitchPt => {
+                    if object.view.power != object.view.toughness {
+                        let view = Arc::make_mut(&mut object.view);
+                        std::mem::swap(&mut view.power, &mut view.toughness);
                     }
-                    _ => unreachable!("non-layer modification in layer instruction"),
-                },
-                Operation::Control(_) => unreachable!("control handled above"),
-            }
+                }
+                Modification::Control => unreachable!("control handled above"),
+                _ => unreachable!("non-layer modification in layer instruction"),
+            },
+            Operation::Control(_) => unreachable!("control handled above"),
         }
     }
 }
