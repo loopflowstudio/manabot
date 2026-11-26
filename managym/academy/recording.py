@@ -65,6 +65,7 @@ RESOLVING_STAGES = frozenset(
         "resolution_payment",
         "private_search",
         "name_card",
+        "choose_creature_type",
         "resolution_mode",
         "discard",
         "select_cards",
@@ -934,7 +935,12 @@ def _pool_delta_mana(
         return None
     prev_mana = prev_player.get("mana")
     next_mana = next_player.get("mana")
-    if not isinstance(prev_mana, Sequence) or not isinstance(next_mana, Sequence):
+    if (
+        not isinstance(prev_mana, Sequence)
+        or not isinstance(next_mana, Sequence)
+        or len(prev_mana) < len(_MANA_SYMBOLS)
+        or len(next_mana) < len(_MANA_SYMBOLS)
+    ):
         return None
     prev_lesson = prev_player.get("lesson_mana") or (0,) * len(_MANA_SYMBOLS)
     next_lesson = next_player.get("lesson_mana") or (0,) * len(_MANA_SYMBOLS)
@@ -1042,7 +1048,9 @@ def _resolution(own: Sequence[OwnStep]) -> str:
         if (
             index + 1 < len(own)
             and own[index + 1].stage == "mana_color"
-            and (_TAP_OFFER.fullmatch(step.chosen) or step.chosen.startswith("Activate "))
+            and (
+                _TAP_OFFER.fullmatch(step.chosen) or step.chosen.startswith("Activate ")
+            )
         ):
             resolved = _resolved_mana_tap(
                 step.chosen, own[index + 1].chosen, own[index + 1].source

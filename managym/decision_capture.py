@@ -51,6 +51,7 @@ class Keywords(CaptureModel):
     menace: bool
     hexproof: bool
     indestructible: bool
+    changeling: bool = False
 
 
 class DefinitionTypes(CaptureModel):

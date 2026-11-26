@@ -22,6 +22,7 @@ impl Game {
         cost: &ManaCost,
         needed: usize,
         taps: Vec<UsefulTap<'a>>,
+        need_taps: bool,
     ) -> Option<Vec<UsefulTap<'a>>> {
         if self.state.cast_caller.is_some() {
             return None;
@@ -103,6 +104,9 @@ impl Game {
             .collect();
         if !self.all_interchangeable(&opt_objects) {
             return None;
+        }
+        if !need_taps {
+            return Some(Vec::new());
         }
 
         // `opt_indices.len() >= spare + 1`, so `1 <= count < opt_indices.len()`.

@@ -2730,6 +2730,7 @@ impl Game {
                     cost,
                     usize::from(missing),
                     useful_taps,
+                    options.need_taps,
                 ) {
                     return PaymentTaps::Determined(taps);
                 }
@@ -3049,9 +3050,9 @@ impl Game {
                 //    source can overshoot into floating mana.
                 let single_unit_remaining = model.sources.iter().all(|s| {
                     (!s.untapped || s.fixed.as_ref().is_none_or(|m| m.total() <= 1))
-                        && s.abilities
-                            .iter()
-                            .all(|a| a.outputs.iter().all(|m| m.total() <= 1))
+                        && s.abilities.iter().all(|a| {
+                            a.cost.mana_value == 0 && a.outputs.iter().all(|m| m.total() <= 1)
+                        })
                 });
                 if single_unit_remaining
                     && resolution_remaining_pips(&next_pools[0], cost).is_some_and(|first| {
@@ -3504,6 +3505,9 @@ impl Game {
         producer: PlayerId,
         tapped: &TappedForMana,
     ) -> Vec<PendingManaBonus> {
+        if tapped.matched.is_empty() {
+            return Vec::new();
+        }
         self.mana_triggers()
             .into_iter()
             .filter(|trigger| {

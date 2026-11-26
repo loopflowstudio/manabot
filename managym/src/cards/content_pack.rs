@@ -92,6 +92,21 @@ pub(crate) fn spent_mana_read(id: CardDefId) -> Option<SpentManaRead> {
         .flatten()
 }
 
+/// The printed face used to announce, pay for or stack `object` under `profile`.
+/// Reads the front or inset face directly without touching the global catalog
+/// unless `profile` selects a modal back face.
+#[inline]
+pub(crate) fn spell_face(
+    object: &Object,
+    profile: SpellProfile,
+) -> Option<&Arc<PrintedCharacteristics>> {
+    if profile == SpellProfile::BackFace && object.modal_back {
+        default_content_pack().spell_definition(object, profile)
+    } else {
+        object.front_or_inset(profile)
+    }
+}
+
 impl ContentPack {
     /// Sorted real names, including registered back faces.
     /// Built once with the catalog; decisions and search forks share the allocation.

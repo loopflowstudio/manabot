@@ -30,7 +30,7 @@ use crate::{
         payment::{CostComponent, Help, Operation, Payment, PaymentProgress},
         priority::PriorityState,
         proposed_event::{
-            EntryFace, EventBatch, EventBinding, PendingEvent, ProposedDamageTarget,
+            DiscardCause, EntryFace, EventBatch, EventBinding, PendingEvent, ProposedDamageTarget,
             ProposedEvent, ReplacementId, ZoneEntry,
         },
         statics::Characteristics,
@@ -233,6 +233,7 @@ impl<'a> ReferenceCensus<'a> {
                 id: _,
                 object: _, // own slot record
                 controller: _,
+                control_differs_from_entry: _,
                 tapped: _,
                 summoning_sick: _,
                 damage: _,
@@ -403,6 +404,7 @@ impl<'a> ReferenceCensus<'a> {
             attackers,
             attacker_to_blockers,
             already_attacking: _,
+            blocked,
             attackers_to_declare: _, // vouched candidate list for DeclareAttackers
             blockers_to_declare: _,  // vouched candidate list for DeclareBlockers
         } = combat;
@@ -410,6 +412,9 @@ impl<'a> ReferenceCensus<'a> {
             self.mark_permanent(id);
         }
         for &id in attackers {
+            self.mark_permanent(id);
+        }
+        for &id in blocked {
             self.mark_permanent(id);
         }
         for (&attacker, blockers) in attacker_to_blockers {
@@ -728,6 +733,7 @@ impl<'a> ReferenceCensus<'a> {
                 from: _,
                 to: _,
                 controller: _,
+                discarded: _,
                 face_down: _,
             } => {
                 self.mark_object(*object_id);
@@ -987,6 +993,7 @@ impl<'a> ReferenceCensus<'a> {
             source_transforms: _,
             source_identity,
             controller: _,
+            resolving_controller: _,
             resolutions_this_turn: _,
             triggering_amount: _,
             kicked: _,
@@ -1069,6 +1076,8 @@ impl<'a> ReferenceCensus<'a> {
             FrameCompletion::Priority | FrameCompletion::Continue | FrameCompletion::EndTurn => {}
             FrameCompletion::TurnFaceUp(object) => self.mark_object(*object),
             FrameCompletion::StateBased { next } => self.walk_frame_completion(next),
+            FrameCompletion::DiscardPayment(payment) => self.walk_payment(payment),
+            FrameCompletion::DiscardDuringResolution(caller) => self.walk_suspended(caller, false),
             FrameCompletion::Paid { player: _, payment } => self.walk_payment(payment),
             FrameCompletion::Activated {
                 ability,
@@ -1092,6 +1101,7 @@ impl<'a> ReferenceCensus<'a> {
 
     fn walk_event_batch(&mut self, batch: &EventBatch) {
         let EventBatch {
+            lifelink_proposed: _,
             events,
             cursor: _,
             binding,
@@ -1154,6 +1164,7 @@ impl<'a> ReferenceCensus<'a> {
         match binding {
             EventBinding::None
             | EventBinding::ThisWay
+            | EventBinding::Discard { .. }
             | EventBinding::Destroyed
             | EventBinding::LifeLost
             | EventBinding::Damage { .. }
@@ -1163,6 +1174,7 @@ impl<'a> ReferenceCensus<'a> {
             | EventBinding::Shuffle { .. }
             | EventBinding::Bending { .. }
             | EventBinding::Created { .. } => {}
+            EventBinding::Countered { by } => self.mark_opt_object(*by),
             EventBinding::Moved {
                 linked,
                 shuffle: _,
@@ -1184,10 +1196,14 @@ impl<'a> ReferenceCensus<'a> {
 
     fn walk_zone_entry(&mut self, entry: &ZoneEntry) {
         let ZoneEntry {
+            discard,
+            chosen_creature_type: _,
+            cast_from: _,
             resolving_adventure: _,
             adventure_player: _,
             profile: _,
             prepared: _,
+            shuffle_library: _,
             tapped: _,
             counters: _,
             spell,
@@ -1199,6 +1215,15 @@ impl<'a> ReferenceCensus<'a> {
             library_top_departure: _,
             inspected_library_departure: _,
         } = entry;
+        if let Some(cause) = discard {
+            match cause {
+                DiscardCause::Effect {
+                    controller: _,
+                    source,
+                } => self.mark_opt_object(*source),
+                DiscardCause::Cost(_) | DiscardCause::Cleanup => {}
+            }
+        }
         if let Some(spell) = spell.as_deref() {
             let SpellEntry {
                 kicked: _,
@@ -1259,6 +1284,11 @@ impl<'a> ReferenceCensus<'a> {
                     }
                 }
             }
+            Decision::ChooseCreatureType {
+                player: _,
+                object_id,
+                scope: _,
+            } => self.mark_object(*object_id),
             Decision::NameCard { .. }
             | Decision::ChoosePaymentX { .. }
             | Decision::SearchNamed { .. }
@@ -1527,6 +1557,7 @@ fn same_permanent_record_cheap(left: &Permanent, right: &Permanent) -> bool {
         id: _,     // unique public id
         object: _, // unique object id (compared via Object::same_object_identity)
         controller,
+        control_differs_from_entry,
         tapped,
         summoning_sick: _, // checked with layered characteristics
         damage,
@@ -1548,6 +1579,7 @@ fn same_permanent_record_cheap(left: &Permanent, right: &Permanent) -> bool {
         id: _,
         object: _,
         controller: r_controller,
+        control_differs_from_entry: r_control_differs_from_entry,
         tapped: r_tapped,
         summoning_sick: _,
         damage: r_damage,
@@ -1572,6 +1604,7 @@ fn same_permanent_record_cheap(left: &Permanent, right: &Permanent) -> bool {
     transforms == r_transforms
         && manifested == r_manifested
         && controller == r_controller
+        && control_differs_from_entry == r_control_differs_from_entry
         && tapped == r_tapped
         && damage == r_damage
         && deathtouch_damage == r_deathtouch

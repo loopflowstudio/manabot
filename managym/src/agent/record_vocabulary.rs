@@ -30,7 +30,10 @@ use crate::{
         tokens::{name_value, TokenKind},
     },
     state::{
-        card::Keyword, mana::Color, permanent::CounterKind, predicate::CardPredicate,
+        card::{Keyword, SourceQuality},
+        mana::Color,
+        permanent::CounterKind,
+        predicate::CardPredicate,
         subtype::subtypes,
     },
 };
@@ -121,6 +124,11 @@ pub fn record_names() -> Vec<RecordName> {
     }
     out.push(record(Token, "CopyEffect", None));
     out.push(record(Token, POOLED_MANA, None));
+    out.push(variant("StaticAbility::HexproofFrom"));
+    out.push(variant("StaticAbility::Protection"));
+    for quality in SourceQuality::ALL {
+        out.push(variant(&quality.token_name()));
+    }
     out.push(record(Token, WARD, None));
     out.push(record(Token, PLAY_GRANT, None));
     out.push(record(Token, PLAY_GRANT_SOURCE, None));
@@ -203,15 +211,11 @@ fn execution_names(out: &mut Vec<RecordName>) {
         // Retained execution can refer to a spell already on the stack;
         // printed card programs do not supply this zone's token.
         ("ZoneType", &["Stack"][..]),
-        ("DamageTransform", &["Prevent"][..]),
+        ("DamageTransform", &["Prevent", "PreventAll"][..]),
         // Offered only by a resolved shield record, never printed.
         (
             "ReplacementEffect",
-            &[
-                "PreventCombatDamage",
-                "AdventureExile",
-                "ExileInsteadOfGraveyard",
-            ][..],
+            &["PreventCombatDamage", "AdventureExile"][..],
         ),
         ("EventCause", &["Effect", "Cost", "TurnAction"][..]),
         (
@@ -219,6 +223,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
             &[
                 "None",
                 "ThisWay",
+                "Discard",
+                "Countered",
                 "Destroyed",
                 "LifeLost",
                 "Damage",
@@ -282,6 +288,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "replaced",
         "result",
         "second_from_top",
+        "remaining",
+        "by",
         "index",
         "kind",
         "attacking",

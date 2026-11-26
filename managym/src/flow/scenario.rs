@@ -227,6 +227,7 @@ impl Game {
                 AgentError("scenario_refresh_priority: priority space has no player".to_string())
             })?;
         self.clear_staged_announced_actions();
+        self.refresh_control();
         self.publish_action_space(self.priority_action_space(player));
         Ok(())
     }

@@ -301,6 +301,7 @@ impl Game {
                 // phased-out permanents phase in first (CR 502.1).
                 let active = self.active_player();
                 self.end_until_your_next_turn_effects(active);
+                self.refresh_control();
                 self.phase_in(active);
                 self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);
@@ -398,7 +399,6 @@ impl Game {
                 let defending = self.non_active_player();
                 let combat = self.state.combat.get_or_insert_default();
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
-                    self.cleanup_illegal_menace_blocks();
                     let assignments: Vec<_> = self
                         .state
                         .combat
@@ -427,34 +427,7 @@ impl Game {
                     }
                     return None;
                 };
-                let attackers = combat.attackers.clone();
-
-                let mut actions = Vec::with_capacity(attackers.len() + 1);
-                for attacker in &attackers {
-                    if self.blocker_can_block_attacker(blocker, *attacker) {
-                        actions.push(Action::DeclareBlocker {
-                            player: defending,
-                            blocker,
-                            attacker: Some(*attacker),
-                        });
-                    }
-                }
-                // CR 509.1c: a blocker able to block an attacker every able
-                // creature must block declares one of those blocks.
-                let required = |action: &Action| {
-                    matches!(action, Action::DeclareBlocker { attacker: Some(attacker), .. }
-                        if self.must_be_blocked_by_all_able(*attacker))
-                };
-                if actions.iter().any(required) {
-                    actions.retain(required);
-                } else {
-                    actions.push(Action::DeclareBlocker {
-                        player: defending,
-                        blocker,
-                        attacker: None,
-                    });
-                }
-
+                let actions = self.block_actions(defending, blocker);
                 Some(ActionSpace {
                     player: Some(defending),
                     kind: ActionSpaceKind::DeclareBlocker,

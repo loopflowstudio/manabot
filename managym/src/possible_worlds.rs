@@ -702,10 +702,9 @@ impl HiddenHandConstraints {
                             )
                         }) =>
                 {
-                    // All prospective entrants and replacement sources, and
-                    // the attacker, blocker and damage already assigned, are
-                    // public battlefield state; the retained alternatives stay
-                    // valid.
+                    // The sampled discard satisfies the retained replacement
+                    // predicates. Its ordering choices keep their sources and
+                    // modes, as do choices over public battlefield objects.
                 }
                 ActionSpaceKind::Learn
                 | ActionSpaceKind::Scry

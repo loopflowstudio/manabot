@@ -9,9 +9,9 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticPtBuff, StaticScope,
-        StaticTypeGrant,
+        PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticScope, StaticTypeGrant,
     },
+    effect::Modification,
     mana::ManaCost,
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -46,15 +46,11 @@ fn lumen_class_frigate() -> CardDefinition {
             power: Some(3),
             toughness: Some(5),
             statics: vec![
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::OtherYouControl(CardPredicate::creature()),
-                    condition: charged(2),
-                    power: 1,
-                    toughness: 1,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
-                }),
+                StaticAbility::continuous(
+                    StaticScope::OtherYouControl(CardPredicate::creature()),
+                    charged(2),
+                    vec![Modification::pump(1, 1)],
+                ),
                 StaticAbility::TypeGrant(StaticTypeGrant {
                     scope: StaticScope::This,
                     types: vec![CardType::Creature],
@@ -134,15 +130,11 @@ Equip {1}"#;
             subtypes: vec!["Equipment".into()],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{1}"))],
             statics: vec![
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: 1,
-                    toughness: 1,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
-                }),
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::pump(1, 1)],
+                ),
                 StaticAbility::AttachedHas(ActivatedAbilityDefinition {
                     sorcery_timing: true,
                     mana_cost: ManaCost::parse("{15}"),

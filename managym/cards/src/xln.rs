@@ -1,6 +1,7 @@
 //! Ixalan.
 use managym_state::ability::{
-    Ability, Condition, Effect, ObjectSelector, Scope, TargetSpec, TriggerCondition, TriggerSubject,
+    Ability, Condition, Effect, ObjectSelector, Scope, TargetRequirement, TargetSpec,
+    TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -8,10 +9,12 @@ use managym_state::card::{
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
+use managym_state::permanent::CounterKind;
 use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        new_horizons(),
         storm_fleet_spy(),
         pirate_s_cutlass(),
         dive_down(),
@@ -139,6 +142,44 @@ fn pirate_s_cutlass() -> CardDefinition {
                 None,
                 vec![Modification::pump(2, 1)],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn new_horizons() -> CardDefinition {
+    let land = TargetSpec::Permanent {
+        predicate: CardPredicate {
+            card_type: Some(CardType::Land),
+            ..Default::default()
+        },
+    };
+    let text_box = "Enchant land\nWhen this Aura enters, put a +1/+1 counter on target creature you control.\nEnchanted land has \"{T}: Add two mana of any one color.\"";
+    CardDefinition {
+        key: "xln.new_horizons",
+        scryfall_id: "15b12c75-1248-4c81-90cf-28e341a885cf",
+        printed: PrintedCharacteristics {
+            name: "New Horizons".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            spell_effects: vec![Effect::enchant(land.clone())],
+            targeting: vec![TargetRequirement::one(land)],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            )],
+            statics: vec![StaticAbility::AttachedHas(ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::AddOneColorManaValue { amount: 2.into() }],
+                ..Default::default()
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },
