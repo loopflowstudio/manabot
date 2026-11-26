@@ -20,14 +20,16 @@
     castTerms?: string[];
     /** The name of the attacker this permanent blocks. */
     blocks?: string | null;
+    /** Possessive name of the player this permanent entered under when control changed (e.g. "your", "Opponent's"). */
+    enteredUnder?: string | null;
     /** Art height in px; the docked pane uses a shorter strip. */
     art?: number;
   }
 
-  let { name, text, permanent = null, card = null, castTerms = [], blocks = null, art = 128 }: Props = $props();
+  let { name, text, permanent = null, card = null, castTerms = [], blocks = null, enteredUnder = null, art = 128 }: Props = $props();
 
   const face = $derived(cardFace(permanent?.copy_of?.name ?? name));
-  const badges: Badge[] = $derived(permanent ? badgesOf(permanent, face, blocks) :
+  const badges: Badge[] = $derived(permanent ? badgesOf(permanent, face, blocks, enteredUnder) :
     (face?.keywords ?? []).map(keyword => ({ kind: 'ability', label: labelText(keyword) })));
   const abilities = $derived(badges.filter(badge => badge.kind === 'ability' || badge.kind === 'status'));
   const facts = $derived(badges.filter(badge => badge.kind !== 'ability' && badge.kind !== 'status').map(badgeReading).join(' · '));

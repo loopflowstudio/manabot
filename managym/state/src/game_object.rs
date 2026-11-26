@@ -1000,10 +1000,6 @@ impl Object {
         Arc::ptr_eq(&self.definition, &other.definition)
     }
 
-    pub fn has_subtype(&self, subtype: &str) -> bool {
-        self.subtypes.iter().any(|s| s == subtype)
-    }
-
     pub fn is_legendary(&self) -> bool {
         self.supertypes
             .iter()

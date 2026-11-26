@@ -14,7 +14,7 @@ use crate::{
         },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
-            LayerValue, PowerCda, StaticAbility, StaticPtBuff, StaticScope,
+            LayerCount, LayerValue, StaticAbility, StaticScope,
         },
         effect::Modification,
         game_object::{
@@ -42,10 +42,11 @@ const BASIC_LANDS: [(&str, &str); 5] = [
 ];
 
 /// Evaluation order, including the four distinct power/toughness sublayers.
-/// Copy and control are committed by their event owners before this context.
+/// Copiable values are committed at entry, before this context.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Layer {
     Name,
+    Control,
     Type,
     Color,
     Ability,
@@ -56,8 +57,9 @@ enum Layer {
 }
 
 impl Layer {
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 9] = [
         Self::Name,
+        Self::Control,
         Self::Type,
         Self::Color,
         Self::Ability,
@@ -68,15 +70,14 @@ impl Layer {
     ];
 
     #[inline]
-    const fn bit(self) -> u8 {
-        1 << (self as u8)
+    const fn bit(self) -> u16 {
+        1u16 << (self as u8)
     }
 
     /// Bitmask of all layers strictly after `self` in evaluation order.
     #[inline]
-    const fn later_mask(self) -> u8 {
-        let bit = self.bit();
-        !(bit | (bit - 1))
+    const fn after_mask(self) -> u16 {
+        !0u16 << (self as u8 + 1)
     }
 }
 
@@ -160,14 +161,15 @@ fn empty_statics() -> Arc<Vec<StaticEntry>> {
     Arc::clone(EMPTY.get_or_init(|| Arc::new(Vec::new())))
 }
 
-const DIRTY_TYPES_SUBTYPES: u8 = 1;
-const DIRTY_ACTIVATIONS: u8 = 2;
-const DIRTY_STATICS: u8 = 4;
-const DIRTY_ALL: u8 = DIRTY_TYPES_SUBTYPES | DIRTY_ACTIVATIONS | DIRTY_STATICS;
+const DIRTY_TYPES: u8 = 1 << 0;
+const DIRTY_ACTIVATIONS: u8 = 1 << 1;
+const DIRTY_STATICS: u8 = 1 << 2;
+const DIRTY_ALL: u8 = DIRTY_TYPES | DIRTY_ACTIVATIONS | DIRTY_STATICS;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(super) struct LayerObject {
     pub view: Arc<Characteristics>,
+    pub controller: PlayerId,
     statics: Arc<Vec<StaticEntry>>,
     dirty: u8,
 }
@@ -198,37 +200,39 @@ struct Eval<'a, 'b> {
 /// Either a definition-derived static ability plan or a fixed single-target
 /// counter/effect record (which needs no `SourcePlan`, `Arc`, or target vec).
 #[derive(Clone)]
-enum NodePlan {
+enum NodeKind {
     Static {
         plan: Arc<SourcePlan>,
-        /// Populated on first application to objects (CR 613.6) if the effect
-        /// continues into a later layer.
+        /// Populated on first application for multi-layer static effects (CR 613.6).
         targets: Option<Vec<PermanentId>>,
     },
-    Resolved(Layer, Operation),
+    Resolved {
+        layer: Layer,
+        operation: Operation<i32>,
+    },
 }
 
-/// An effect keeps one identity across layers.
+/// An effect keeps one identity across layers. Resolved records already bind
+/// `source` and carry resolved `i32` amounts.
 #[derive(Clone)]
 struct Node {
     origin: AbilityOrigin,
     source: PermanentId,
     key: NodeKey,
     timestamp: PublicId,
-    plan: NodePlan,
+    kind: NodeKind,
 }
 
 /// Definition-derived instructions, shared across revisions and search forks.
 #[derive(Clone)]
 struct SourcePlan {
     cda: bool,
-    layers: u8,
+    layers: u16,
     scope: StaticScope,
     condition: Option<Condition>,
     parts: Vec<(Layer, Operation)>,
     reads: ReadSet,
 }
-
 /// One live incarnation's copiable object and bound static plans. Holding the
 /// card keeps definition identity valid even when a fixture/copy detaches it.
 #[derive(Clone)]
@@ -244,7 +248,7 @@ pub(super) struct SourceSeed {
 /// Walk each predicate/condition once, including nested alternatives.
 #[derive(Clone, Copy, Default)]
 struct ReadSet {
-    fields: u8,
+    fields: u16,
     mana: bool,
     tapped: bool,
     life: bool,
@@ -258,7 +262,11 @@ impl ReadSet {
         if p.card_type.is_some() || !p.card_types_any.is_empty() || !p.not_card_types.is_empty() {
             self.fields |= CARD_TYPES;
         }
-        if p.subtype.is_some() || !p.subtypes_any.is_empty() || !p.not_subtypes.is_empty() {
+        if p.chosen_type_of_source
+            || p.subtype.is_some()
+            || !p.subtypes_any.is_empty()
+            || !p.not_subtypes.is_empty()
+        {
             self.fields |= SUBTYPES;
         }
         if p.supertype.is_some() {
@@ -332,6 +340,22 @@ impl ReadSet {
         }
     }
 
+    fn layer_value(&mut self, value: &LayerValue) {
+        if let LayerValue::Count(count) = value {
+            match count.as_ref() {
+                LayerCount::CreatureTypes { .. } => self.fields |= SUBTYPES,
+                LayerCount::ColorsAmong(p) => {
+                    self.fields |= COLORS;
+                    self.predicate(p);
+                }
+                LayerCount::Graveyard { predicate, .. }
+                | LayerCount::YouControl(predicate)
+                | LayerCount::CountersOn { predicate, .. } => self.predicate(predicate),
+                LayerCount::SourceCounters(_) => {}
+            }
+        }
+    }
+
     fn condition(&mut self, condition: &Condition) {
         match condition {
             Condition::Compare { left, right, .. } => {
@@ -368,20 +392,19 @@ impl ReadSet {
 }
 
 impl SourcePlan {
-    fn on_source(parts: Vec<(Layer, Operation)>) -> Self {
+    fn new() -> Self {
         Self {
             cda: false,
             layers: 0,
             scope: StaticScope::This,
             condition: None,
-            parts,
+            parts: Vec::new(),
             reads: ReadSet::default(),
         }
     }
 
     fn summarize(mut self) -> Self {
         let mut reads = ReadSet::default();
-        let mut layers = 0u8;
         match &self.scope {
             StaticScope::All(p)
             | StaticScope::Other(p)
@@ -393,29 +416,23 @@ impl SourcePlan {
         if let Some(condition) = &self.condition {
             reads.condition(condition);
         }
+        let mut layers = 0u16;
         for (part_layer, operation) in &self.parts {
             layers |= part_layer.bit();
-            match operation {
-                Operation::Buff(buff) => {
-                    if buff.per_creature_type_max.is_some() {
-                        reads.fields |= SUBTYPES;
+            if let Operation::Modify(modification) = operation {
+                match modification {
+                    Modification::Control => reads.fields |= CONTROL,
+                    Modification::SetBasePt { power, toughness } => {
+                        for value in power.iter().chain(toughness.iter()) {
+                            reads.layer_value(value);
+                        }
                     }
-                    if let Some(predicate) = &buff.per_color_among {
-                        reads.fields |= COLORS;
-                        reads.predicate(predicate);
+                    Modification::ModifyPt { power, toughness } => {
+                        reads.layer_value(power);
+                        reads.layer_value(toughness);
                     }
-                    if let Some(predicate) = &buff.per_graveyard_matching {
-                        reads.predicate(predicate);
-                    }
+                    _ => {}
                 }
-                Operation::Cda { cda, .. } => match cda.as_ref() {
-                    PowerCda::CountersOnLandsYouControl | PowerCda::CreaturesYouControl => {
-                        reads.fields |= CARD_TYPES;
-                    }
-                    PowerCda::GraveyardMatching(predicate)
-                    | PowerCda::GraveyardMatchingBy { predicate, .. } => reads.predicate(predicate),
-                },
-                _ => {}
             }
         }
         self.layers = layers;
@@ -432,87 +449,91 @@ impl Node {
         source: PermanentId,
         key: NodeKey,
         timestamp: PublicId,
-        part: (Layer, Operation),
+        layer: Layer,
+        operation: Operation<i32>,
     ) -> Self {
-        debug_assert!(
-            !matches!(part.1, Operation::Buff(_) | Operation::Cda { .. }),
-            "resolved node cannot carry dynamic static expressions"
-        );
         Self {
             origin,
             source,
             key,
             timestamp,
-            plan: NodePlan::Resolved(part.0, part.1),
+            kind: NodeKind::Resolved { layer, operation },
         }
     }
 
     #[inline]
     fn cda(&self) -> bool {
-        match &self.plan {
-            NodePlan::Static { plan, .. } => plan.cda,
-            NodePlan::Resolved(..) => false,
+        match &self.kind {
+            NodeKind::Static { plan, .. } => plan.cda,
+            NodeKind::Resolved { .. } => false,
         }
     }
 
     #[inline]
-    fn layers(&self) -> u8 {
-        match &self.plan {
-            NodePlan::Static { plan, .. } => plan.layers,
-            NodePlan::Resolved(layer, _) => layer.bit(),
+    fn layers(&self) -> u16 {
+        match &self.kind {
+            NodeKind::Static { plan, .. } => plan.layers,
+            NodeKind::Resolved { layer, .. } => layer.bit(),
         }
+    }
+
+    #[inline]
+    fn has_layer(&self, layer: Layer) -> bool {
+        self.layers() & layer.bit() != 0
     }
 
     #[inline]
     fn reads(&self) -> ReadSet {
-        match &self.plan {
-            NodePlan::Static { plan, .. } => plan.reads,
-            NodePlan::Resolved(..) => ReadSet::default(),
+        match &self.kind {
+            NodeKind::Static { plan, .. } => plan.reads,
+            NodeKind::Resolved { .. } => ReadSet::default(),
         }
     }
 
     #[inline]
     fn is_bound(&self) -> bool {
-        match &self.plan {
-            NodePlan::Static { targets, .. } => targets.is_some(),
-            NodePlan::Resolved(..) => true,
+        match &self.kind {
+            NodeKind::Static { targets, .. } => targets.is_some(),
+            NodeKind::Resolved { .. } => true,
         }
+    }
+
+    fn is_unconditional_attached_or_self(&self) -> bool {
+        matches!(
+            &self.kind,
+            NodeKind::Static { plan, .. }
+                if plan.condition.is_none()
+                    && matches!(plan.scope, StaticScope::This | StaticScope::Attached)
+        )
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-enum Operation {
-    Modify(Modification<LayerValue>),
+enum Operation<N = LayerValue> {
+    Control(PlayerId),
+    Modify(Modification<N>),
     LandType(String),
-    // Expressions resolve before becoming per-target instructions. Indirection
-    // keeps their large predicates out of every small resolved modification.
-    /// A characteristic-defining count; `sets_toughness` sets toughness to
-    /// the same value ("power and toughness are each equal to").
-    Cda {
-        cda: Box<PowerCda>,
-        sets_toughness: bool,
-    },
-    Buff(Box<StaticPtBuff>),
     Inherit,
     CatalogTrigger(Box<crate::state::ability::Ability>),
 }
 // Intermediate fields that instructions can read or change. State-only reads
-// (zones, counters, mana, controller, printed mana value) cannot change during
+// (zones, counters, mana, printed mana value) cannot change during
 // a layer pass. ABILITIES includes a generating static's continued existence.
-const NAME: u8 = 1;
-const CARD_TYPES: u8 = 2;
-const SUBTYPES: u8 = 4;
-const SUPERTYPES: u8 = 8;
-const COLORS: u8 = 16;
-const KEYWORDS: u8 = 32;
-const POWER: u8 = 64;
-const ABILITIES: u8 = 128;
+const CONTROL: u16 = 256;
+const NAME: u16 = 1;
+const CARD_TYPES: u16 = 2;
+const SUBTYPES: u16 = 4;
+const SUPERTYPES: u16 = 8;
+const COLORS: u16 = 16;
+const KEYWORDS: u16 = 32;
+const POWER: u16 = 64;
+const ABILITIES: u16 = 128;
 
-impl Operation {
-    fn writes(&self) -> u8 {
+impl<N> Operation<N> {
+    fn writes(&self) -> u16 {
         match self {
+            Self::Control(_) => CONTROL,
             Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
-            Self::Cda { .. } | Self::Buff(_) => POWER,
             Self::Inherit | Self::CatalogTrigger(_) => 0,
             Self::Modify(m) => match m {
                 Modification::SetName(_) => NAME,
@@ -523,6 +544,9 @@ impl Operation {
                 Modification::SetTypes { .. } => CARD_TYPES | SUBTYPES,
                 Modification::Nonlegendary => SUPERTYPES,
                 Modification::SetColors(_) | Modification::AddColors(_) => COLORS,
+                Modification::LoseKeywords(keywords) if keywords.has(Keyword::Hexproof) => {
+                    ABILITIES | KEYWORDS
+                }
                 Modification::AddKeywords(_) | Modification::LoseKeywords(_) => KEYWORDS,
                 Modification::LoseAllAbilities | Modification::LoseNonManaAbilities => {
                     ABILITIES | KEYWORDS
@@ -536,7 +560,7 @@ impl Operation {
                 | Modification::GrantTriggered(_)
                 | Modification::HasAbilitiesOfSource => 0,
                 // Future rules payloads remain conservative until classified.
-                _ => u8::MAX,
+                _ => u16::MAX,
             },
         }
     }
@@ -545,11 +569,12 @@ impl Operation {
 #[derive(Clone, Debug, PartialEq)]
 struct Instruction {
     target: PermanentId,
-    operation: Operation,
+    operation: Operation<i32>,
 }
 
 fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
     Some(match modification {
+        Modification::Control => Layer::Control,
         Modification::SetName(_) => Layer::Name,
         Modification::SetCreatureTypes(_)
         | Modification::AddSubtypes(_)
@@ -594,7 +619,7 @@ impl Context {
         let mut reads_tapped = false;
         let mut reads_life = false;
         let mut nodes = Vec::new();
-        let mut active_layers = 0u8;
+        let mut active_layers = 0u16;
         let mut has_pt_counters = false;
         seeds.resize(slot_count, None);
         for (slot, permanent) in game.state.permanents.iter().enumerate() {
@@ -608,6 +633,7 @@ impl Context {
                 seed.source.shares_definition_with(source)
                     && seed.incarnation == p.id
                     && seed.timestamp == p.timestamp
+                    && seed.object.controller == p.entry_controller()
             });
             if !reusable {
                 seeds[slot] = Some(Arc::new(build_seed(game, id, p, source)));
@@ -642,12 +668,10 @@ impl Context {
                                     .get(&kind)
                                     .copied()
                                     .unwrap_or(p.timestamp),
-                                (
-                                    Layer::Ability,
-                                    Operation::Modify(Modification::AddKeywords(Keywords::of(&[
-                                        keyword,
-                                    ]))),
-                                ),
+                                Layer::Ability,
+                                Operation::Modify(Modification::AddKeywords(Keywords::of(&[
+                                    keyword,
+                                ]))),
                             );
                             active_layers |= node.layers();
                             nodes.push(node);
@@ -661,15 +685,18 @@ impl Context {
                 };
                 let operation = if record.modification == Modification::HasAbilitiesOfSource {
                     Operation::Inherit
+                } else if record.modification == Modification::Control {
+                    Operation::Control(record.controller)
                 } else {
-                    Operation::Modify(record.modification.map_amount(|n| LayerValue::Fixed(*n)))
+                    Operation::Modify(record.modification.clone())
                 };
                 let node = Node::resolved(
                     AbilityOrigin::Effect(record.timestamp),
                     id,
                     NodeKey::from_3(slot, usize::MAX, i),
                     record.timestamp,
-                    (layer, operation),
+                    layer,
+                    operation,
                 );
                 active_layers |= node.layers();
                 nodes.push(node);
@@ -687,22 +714,19 @@ impl Context {
             reads_life,
         };
         if active_layers != 0 || has_pt_counters {
-            let mut known: Option<BTreeSet<NodeKey>> = None;
-            let mut pending: Vec<usize> = Vec::new();
-            let mut applied: Vec<u8> = if active_layers != 0 {
-                vec![0u8; nodes.len()]
-            } else {
-                Vec::new()
-            };
+            let mut pending = Vec::new();
+            let mut applied = Vec::new();
+            let mut granted = Vec::new();
             for layer in Layer::ALL {
                 let layer_bit = layer.bit();
                 if active_layers & layer_bit != 0 {
-                    let later_mask = layer.later_mask();
+                    let after_mask = layer.after_mask();
+                    applied.clear();
                     loop {
                         pending.clear();
                         for (i, node) in nodes.iter().enumerate() {
-                            if applied[i] & layer_bit == 0
-                                && node.layers() & layer_bit != 0
+                            if !applied.get(i).copied().unwrap_or(false)
+                                && node.has_layer(layer)
                                 && eval.exists(node)
                             {
                                 pending.push(i);
@@ -715,65 +739,51 @@ impl Context {
                             .iter()
                             .map(|&i| eval.instructions(&nodes[i], layer))
                             .collect();
-                        let selected_order =
-                            eval.next_effects(&nodes, &pending, &instructions, layer);
-                        let all_pending_selected = selected_order.len() == pending.len();
-                        let mut granted_static = false;
-                        for selected in selected_order {
-                            let index = pending[selected];
-                            if let NodePlan::Static { plan, targets } = &mut nodes[index].plan {
+                        let selected = eval.next_effects(&nodes, &pending, &instructions, layer);
+                        let all_applied = selected.len() == pending.len();
+                        let mut discovered_this_layer = false;
+                        for &slot in &selected {
+                            let index = pending[slot];
+                            if let NodeKind::Static { plan, targets } = &mut nodes[index].kind {
                                 if targets.is_none()
-                                    && plan.layers & later_mask != 0
-                                    && !instructions[selected].is_empty()
+                                    && plan.layers & after_mask != 0
+                                    && !instructions[slot].is_empty()
                                 {
                                     // Instructions already resolved the affected set. Retain
                                     // it only for effects that continue into a later layer.
-                                    let mut affected: Vec<_> = instructions[selected]
+                                    let mut bound: Vec<_> = instructions[slot]
                                         .iter()
                                         .map(|instruction| instruction.target)
                                         .collect();
-                                    affected.dedup();
-                                    *targets = Some(affected);
+                                    bound.dedup();
+                                    *targets = Some(bound);
                                 }
                             }
-                            // Only a static grant introduces layer nodes. Removing abilities
-                            // changes existence, which the pending filter checks directly.
-                            let has_grant_static = instructions[selected].iter().any(|i| {
-                                matches!(i.operation, Operation::Modify(Modification::GrantStatic(_)))
-                            });
-                            if has_grant_static && known.is_none() {
-                                let mut set = BTreeSet::new();
-                                for &id in eval.live {
-                                    for entry in eval.object(id).statics.iter() {
-                                        set.insert(entry.key.clone());
-                                    }
-                                }
-                                known = Some(set);
+                            eval.apply(&nodes[index], &instructions[slot], Some(&mut granted));
+                            for granted_node in granted.drain(..) {
+                                let added =
+                                    eval.push_node(&mut nodes, &mut active_layers, granted_node);
+                                discovered_this_layer |= added & layer_bit != 0;
                             }
-                            eval.apply(&nodes[index], &instructions[selected]);
-                            if has_grant_static {
-                                granted_static = true;
-                                eval.discover(
-                                    &mut nodes,
-                                    known.as_mut().unwrap(),
-                                    &mut active_layers,
-                                );
-                                applied.resize(nodes.len(), 0);
-                            }
-                            applied[index] |= layer_bit;
                         }
-                        if all_pending_selected && !granted_static {
-                            debug_assert!(
-                                !(0..nodes.len()).any(|i| {
-                                    applied[i] & layer_bit == 0
-                                        && nodes[i].layers() & layer_bit != 0
-                                        && eval.exists(&nodes[i])
-                                }),
-                                "pending layer nodes remained after full independent pass"
-                            );
+                        if all_applied && !discovered_this_layer {
+                            debug_assert!(nodes.iter().enumerate().all(|(i, node)| {
+                                applied.get(i).copied().unwrap_or(false)
+                                    || pending.contains(&i)
+                                    || !node.has_layer(layer)
+                                    || !eval.exists(node)
+                            }));
                             break;
                         }
+                        if applied.len() < nodes.len() {
+                            applied.resize(nodes.len(), false);
+                        }
+                        for slot in selected {
+                            applied[pending[slot]] = true;
+                        }
                     }
+                } else {
+                    debug_assert!(!nodes.iter().any(|node| node.has_layer(layer)));
                 }
                 if layer == Layer::ModifyPower && has_pt_counters {
                     for &id in eval.live {
@@ -804,6 +814,11 @@ impl Context {
                 let record = &game.state[game.live_permanent(id).object];
                 finish_object(object, record, dirty);
                 object.dirty = 0;
+            }
+            #[cfg(debug_assertions)]
+            {
+                let record = &game.state[game.live_permanent(id).object];
+                assert_finished(object, record);
             }
         }
         let Eval {
@@ -845,6 +860,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         )
     };
     let mut object = LayerObject {
+        controller: permanent.entry_controller(),
         view: Arc::new(Characteristics {
             is_legendary: source.is_legendary(),
             keywords: source.keywords,
@@ -853,6 +869,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
             details: Arc::new(CharacteristicDetails {
                 name: source.name.clone(),
                 subtypes: source.subtypes.clone(),
+                creature_types: source.creature_types(),
                 types: source.types.clone(),
                 colors: source.colors(),
                 mana_abilities: source.mana_abilities.clone(),
@@ -877,7 +894,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         statics,
         dirty: 0,
     };
-    finish_object(&mut object, source, DIRTY_ALL);
+    finish_object(&mut object, source, DIRTY_ACTIVATIONS | DIRTY_STATICS);
     let nodes = object
         .statics
         .iter()
@@ -893,14 +910,14 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
 }
 
 fn finish_object(object: &mut LayerObject, record: &Object, dirty: u8) {
-    if dirty & DIRTY_TYPES_SUBTYPES != 0 {
+    if dirty & DIRTY_TYPES != 0 {
         let is_animated = object.view.is_creature() && !record.types.is_creature();
         if object.view.is_animated != is_animated {
             Arc::make_mut(&mut object.view).is_animated = is_animated;
         }
         // During the pass `CreatureTypes::All` marks a record granting all
         // creature types; a listed set is derived from the final subtypes.
-        let creature_types = if !object.view.is_creature() {
+        let creature_types = if !object.view.types.has_creature_subtypes() {
             CreatureTypes::default()
         } else if object.view.creature_types.is_all() {
             CreatureTypes::All
@@ -914,8 +931,7 @@ fn finish_object(object: &mut LayerObject, record: &Object, dirty: u8) {
     // Activations are paid as abilities of this source (CR 106.6), read
     // from its final subtypes; an unchanged source keeps sharing its
     // earlier snapshot.
-    if dirty & (DIRTY_TYPES_SUBTYPES | DIRTY_ACTIVATIONS) != 0
-        && !object.view.activated_abilities.is_empty()
+    if dirty & (DIRTY_TYPES | DIRTY_ACTIVATIONS) != 0 && !object.view.activated_abilities.is_empty()
     {
         let shared = object
             .view
@@ -970,6 +986,64 @@ fn finish_object(object: &mut LayerObject, record: &Object, dirty: u8) {
     }
 }
 
+#[cfg(debug_assertions)]
+fn assert_finished(object: &LayerObject, record: &Object) {
+    let view = &object.view;
+    debug_assert_eq!(
+        view.is_animated,
+        view.is_creature() && !record.types.is_creature(),
+        "incremental finish_object diverged on is_animated"
+    );
+    if !view.types.has_creature_subtypes() {
+        debug_assert!(
+            view.creature_types.is_empty(),
+            "incremental finish_object diverged on creature_types"
+        );
+    } else if !view.creature_types.is_all() {
+        let listed = view.creature_types.listed();
+        debug_assert!(
+            listed.windows(2).all(|w| w[0] < w[1]),
+            "creature_types must be sorted and distinct"
+        );
+        debug_assert!(
+            listed
+                .iter()
+                .all(|t| is_creature_type(t) && view.subtypes.iter().any(|s| s == t))
+                && view
+                    .subtypes
+                    .iter()
+                    .filter(|s| is_creature_type(s))
+                    .all(|s| listed.binary_search(s).is_ok()),
+            "incremental finish_object diverged on creature_types"
+        );
+    }
+    if let Some(first) = view.activated_abilities.first() {
+        let expected_purpose = &first.mana_cost.purpose;
+        debug_assert!(
+            matches!(
+                expected_purpose,
+                SpendingContext::Activate {
+                    zone: ZoneType::Battlefield,
+                    source,
+                } if source.describes(&view.subtypes, view.creature_types.is_all())
+            ),
+            "incremental finish_object diverged on activation spending context"
+        );
+        debug_assert!(
+            view.activated_abilities
+                .iter()
+                .all(|ability| ability.mana_cost.purpose == *expected_purpose),
+            "incremental finish_object diverged on shared activation spending context"
+        );
+    }
+    debug_assert!(
+        view.static_abilities
+            .iter()
+            .eq(object.statics.iter().map(|entry| &entry.ability)),
+        "incremental finish_object diverged on static_abilities"
+    );
+}
+
 impl Eval<'_, '_> {
     #[inline]
     fn get(&self, id: PermanentId) -> Option<&LayerObject> {
@@ -986,31 +1060,15 @@ impl Eval<'_, '_> {
         self.objects[id.0].as_mut().unwrap()
     }
 
-    fn discover(
-        &mut self,
-        nodes: &mut Vec<Node>,
-        known: &mut BTreeSet<NodeKey>,
-        active_layers: &mut u8,
-    ) {
-        // Occurrence provenance preserves duplicate grants, including statics
-        // discovered during layer 6 that start applying in a later layer.
-        for &id in self.live {
-            if self.game.is_phased_out(id) {
-                continue;
-            }
-            for entry in self.objects[id.0].as_ref().unwrap().statics.iter() {
-                if known.insert(entry.key.clone()) {
-                    if let Some(node) = build_node(self.game, id, entry) {
-                        let reads = node.reads();
-                        self.reads_mana |= reads.mana;
-                        self.reads_tapped |= reads.tapped;
-                        self.reads_life |= reads.life;
-                        *active_layers |= node.layers();
-                        nodes.push(node);
-                    }
-                }
-            }
-        }
+    fn push_node(&mut self, nodes: &mut Vec<Node>, active_layers: &mut u16, node: Node) -> u16 {
+        let reads = node.reads();
+        self.reads_mana |= reads.mana;
+        self.reads_tapped |= reads.tapped;
+        self.reads_life |= reads.life;
+        let layers = node.layers();
+        *active_layers |= layers;
+        nodes.push(node);
+        layers
     }
 
     /// Select a pending effect under CR 613.8: dependencies first, then
@@ -1041,6 +1099,14 @@ impl Eval<'_, '_> {
         let plausible = |a: usize, b: usize| {
             let node = &nodes[pending[a]];
             let reads = node.reads().fields | if node.is_bound() { 0 } else { ABILITIES };
+            // An unconditional attachment reads only its own controller
+            // in layer 2. Independent Auras can apply in one timestamp pass.
+            if layer == Layer::Control
+                && node.is_unconditional_attached_or_self()
+                && !instructions[b].iter().any(|i| i.target == node.source)
+            {
+                return false;
+            }
             a != b && node.cda() == nodes[pending[b]].cda() && reads & writes[b] != 0
         };
         let independent = !(0..pending.len()).any(|a| (0..pending.len()).any(|b| plausible(a, b)))
@@ -1074,7 +1140,7 @@ impl Eval<'_, '_> {
                 });
                 self.clone()
             };
-            after.apply(&nodes[index], &instructions[b]);
+            after.apply(&nodes[index], &instructions[b], None);
             for (a, &other) in pending.iter().enumerate() {
                 if a != b && nodes[other].cda() == nodes[index].cda() {
                     if !cfg!(debug_assertions) && !plausible(a, b) {
@@ -1161,116 +1227,140 @@ impl Eval<'_, '_> {
     }
 
     fn instructions(&self, node: &Node, layer: Layer) -> Vec<Instruction> {
-        match &node.plan {
-            NodePlan::Resolved(part_layer, op) => {
-                if *part_layer != layer {
-                    return Vec::new();
-                }
-                vec![Instruction {
-                    target: node.source,
-                    operation: op.clone(),
-                }]
-            }
-            NodePlan::Static { plan, targets } => {
-                if !self.exists(node) {
-                    return Vec::new();
-                }
-                let targets = match targets {
-                    Some(targets) => targets.clone(),
-                    None => self.targets(node.source, plan),
-                };
-                targets
-                    .into_iter()
-                    .flat_map(|id| {
-                        plan.parts
-                            .iter()
-                            .filter(move |(part, _)| *part == layer)
-                            .map(move |(_, op)| {
-                                let operation = match op {
-                                    Operation::Modify(m) => Operation::Modify(
-                                        m.map_amount(|n| LayerValue::Fixed(self.value(n, id))),
-                                    ),
-                                    Operation::Cda {
-                                        cda,
-                                        sets_toughness,
-                                    } => {
-                                        let value = LayerValue::Fixed(
-                                            self.cda(cda, self.controller(node.source)),
-                                        );
-                                        Operation::Modify(Modification::SetBasePt {
-                                            power: Some(value.clone()),
-                                            toughness: sets_toughness.then_some(value),
-                                        })
-                                    }
-                                    Operation::Buff(buff) => self.buff(buff, node.source, id),
-                                    op => op.clone(),
-                                };
-                                Instruction {
-                                    target: id,
-                                    operation,
-                                }
-                            })
+        let (plan, bound_targets) = match &node.kind {
+            NodeKind::Resolved {
+                layer: part_layer,
+                operation,
+            } => {
+                return (*part_layer == layer)
+                    .then(|| {
+                        vec![Instruction {
+                            target: node.source,
+                            operation: operation.clone(),
+                        }]
                     })
-                    .collect()
+                    .unwrap_or_default();
+            }
+            NodeKind::Static { plan, targets } => (plan, targets.as_deref()),
+        };
+        if !self.exists(node) {
+            return Vec::new();
+        }
+        let owned_targets;
+        let targets: &[PermanentId] = match bound_targets {
+            Some(targets) => targets,
+            None => {
+                owned_targets = self.targets(node.source, plan);
+                &owned_targets
+            }
+        };
+        if targets.is_empty() {
+            return Vec::new();
+        }
+        let controller = self.controller(node.source);
+        let mut out = Vec::with_capacity(targets.len());
+        for &id in targets {
+            for (part, op) in &plan.parts {
+                if *part != layer {
+                    continue;
+                }
+                let operation = match op {
+                    Operation::Modify(Modification::Control) => Operation::Control(controller),
+                    Operation::Modify(m) => Operation::Modify(m.resolve(|n| {
+                        self.layer_value(
+                            n,
+                            || self.game.live_permanent(id).object,
+                            controller,
+                            Some(node.source),
+                            Some(id),
+                        )
+                    })),
+                    Operation::Control(player) => Operation::Control(*player),
+                    Operation::LandType(subtype) => Operation::LandType(subtype.clone()),
+                    Operation::Inherit => Operation::Inherit,
+                    Operation::CatalogTrigger(ability) => {
+                        Operation::CatalogTrigger(ability.clone())
+                    }
+                };
+                out.push(Instruction {
+                    target: id,
+                    operation,
+                });
             }
         }
+        out
     }
 
-    fn buff(&self, buff: &StaticPtBuff, source: PermanentId, id: PermanentId) -> Operation {
-        let per_type = buff.per_creature_type_max.map_or(1, |max| {
-            let view = &self.object(id).view;
-            if view.has_all_creature_types() {
-                max
-            } else {
-                (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(max)
-            }
-        });
-        let controller = self.controller(source);
-        let per_color = buff.per_color_among.as_ref().map_or(1, |p| {
-            self.live
-                .iter()
-                .copied()
-                .filter(|&id| self.controller(id) == controller && self.matches(id, p, None))
-                .flat_map(|id| self.object(id).view.colors.iter().copied())
-                .collect::<BTreeSet<_>>()
-                .len() as i32
-        });
-        let per_card = buff
-            .per_graveyard_matching
-            .as_ref()
-            .map_or(1, |p| self.graveyard_count(controller, p));
-        let times = per_type * per_color * per_card;
-        Operation::Modify(Modification::ModifyPt {
-            power: LayerValue::Fixed(buff.power * times),
-            toughness: LayerValue::Fixed(buff.toughness * times),
+    fn controlled(
+        &self,
+        controller: PlayerId,
+    ) -> impl Iterator<Item = (PermanentId, &LayerObject)> {
+        self.live.iter().copied().filter_map(move |id| {
+            let object = self.object(id);
+            (object.controller == controller && !self.game.is_phased_out(id))
+                .then_some((id, object))
         })
     }
 
     fn controller(&self, id: PermanentId) -> PlayerId {
-        self.game.live_permanent(id).controller
+        self.object(id).controller
     }
 
-    fn value(&self, value: &LayerValue, id: PermanentId) -> i32 {
+    fn layer_value(
+        &self,
+        value: &LayerValue,
+        object: impl FnOnce() -> ObjectId,
+        controller: PlayerId,
+        source: Option<PermanentId>,
+        affected: Option<PermanentId>,
+    ) -> i32 {
         match value {
             LayerValue::Fixed(n) => *n,
-            LayerValue::ManaValue => i32::from(
-                self.game
-                    .object_mana_value(self.game.live_permanent(id).object),
-            ),
-            LayerValue::GraveyardCardTypes { offset } => {
-                [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.game.state.zone_cards(ZoneType::Graveyard, player))
-                    .flat_map(|card| {
-                        self.game.state[self.game.state.object_of(card)]
-                            .types
-                            .types
-                            .iter()
-                    })
-                    .collect::<BTreeSet<_>>()
-                    .len() as i32
-                    + offset
+            LayerValue::ManaValue => i32::from(self.game.object_mana_value(object())),
+            LayerValue::GraveyardCardTypes { offset } => self.game.graveyard_card_types() + offset,
+            LayerValue::Count(count) => self.count(count, controller, source, affected),
+        }
+    }
+
+    fn count(
+        &self,
+        count: &LayerCount,
+        controller: PlayerId,
+        source: Option<PermanentId>,
+        affected: Option<PermanentId>,
+    ) -> i32 {
+        let controlled = |p| {
+            self.controlled(controller)
+                .filter(move |(id, _)| self.matches(*id, p, source))
+        };
+        match count {
+            LayerCount::CreatureTypes { max } => {
+                let Some(id) = affected else {
+                    return 0;
+                };
+                let view = &self.object(id).view;
+                if view.has_all_creature_types() {
+                    *max
+                } else {
+                    (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(*max)
+                }
             }
+            LayerCount::ColorsAmong(p) => controlled(p)
+                .flat_map(|(_, o)| o.view.colors.iter().copied())
+                .collect::<BTreeSet<_>>()
+                .len() as i32,
+            LayerCount::Graveyard { who, predicate } => (0..self.game.state.players.len())
+                .map(PlayerId)
+                .filter(|player| who.includes(controller, *player))
+                .map(|player| self.graveyard_count(player, predicate))
+                .sum(),
+            LayerCount::YouControl(p) => controlled(p).count() as i32,
+            LayerCount::SourceCounters(kind) => source.map_or(0, |source| {
+                self.game.live_permanent(source).counter_count(*kind)
+            }),
+            LayerCount::CountersOn { kind, predicate } => controlled(predicate)
+                .map(|(id, _)| self.game.live_permanent(id).counter_count(*kind))
+                .sum(),
         }
     }
 
@@ -1281,30 +1371,6 @@ impl Eval<'_, '_> {
             .filter(|&id| self.controller(id) == controller && self.object(id).view.is_creature())
             .count()
     }
-
-    fn cda(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
-        match cda {
-            PowerCda::CountersOnLandsYouControl => self
-                .live
-                .iter()
-                .copied()
-                .filter(|&id| self.controller(id) == controller && self.object(id).view.is_land())
-                .map(|id| {
-                    self.game
-                        .live_permanent(id)
-                        .counter_count(CounterKind::PlusOnePlusOne)
-                })
-                .sum(),
-            PowerCda::CreaturesYouControl => self.creature_count(controller) as i32,
-            PowerCda::GraveyardMatching(p) => self.graveyard_count(controller, p),
-            PowerCda::GraveyardMatchingBy { who, predicate } => (0..self.game.state.players.len())
-                .map(PlayerId)
-                .filter(|player| who.includes(controller, *player))
-                .map(|player| self.graveyard_count(player, predicate))
-                .sum(),
-        }
-    }
-
     fn graveyard_count(&self, owner: PlayerId, predicate: &CardPredicate) -> i32 {
         self.game
             .state
@@ -1313,9 +1379,9 @@ impl Eval<'_, '_> {
                 let object = self.game.state.object_of(*card);
                 self.game.off_battlefield_matches(object, predicate, || {
                     let card = &self.game.state[object];
-                    card.pt_cda().map_or_else(
+                    card.pt_cda().and_then(|(power, _)| power).map_or_else(
                         || card.power.unwrap_or(0),
-                        |(cda, _)| self.cda(cda, card.owner),
+                        |value| self.layer_value(value, || object, card.owner, None, None),
                     )
                 })
             })
@@ -1380,7 +1446,7 @@ impl Eval<'_, '_> {
     /// Static comparisons see the characteristics at this point in the layer system.
     fn comparison_value(&self, value: &EffectValue, source: PermanentId) -> i32 {
         let controller = self.controller(source);
-        let controlled = || self.game.iter_battlefield_permanents(controller);
+        let controlled = || self.controlled(controller).map(|(id, _)| id);
         match value {
             EffectValue::Half(inner) => self.comparison_value(inner, source).div_euclid(2),
             EffectValue::Scaled { factor, value } => {
@@ -1513,10 +1579,16 @@ impl Eval<'_, '_> {
             predicate,
             &self.object(id).view,
             source.map(|s| self.object(s).view.name.as_str()),
+            self.game.chosen_type_for(predicate, source),
         )
     }
 
-    fn apply(&mut self, node: &Node, instructions: &[Instruction]) {
+    fn apply(
+        &mut self,
+        node: &Node,
+        instructions: &[Instruction],
+        mut granted: Option<&mut Vec<Node>>,
+    ) {
         let clock = |ability: &Ability, index| {
             let Ability::Triggered { condition, .. } = ability;
             let static_slot = node.key.as_slice()[1];
@@ -1535,6 +1607,10 @@ impl Eval<'_, '_> {
                 AbilityOrigin::Permanent(node.source)
             };
             let object = self.objects[id.0].as_mut().unwrap();
+            if let Operation::Control(controller) = instruction.operation {
+                object.controller = controller;
+                continue;
+            }
             match &instruction.operation {
                 Operation::LandType(subtype) => {
                     if !object.view.is_land() {
@@ -1553,7 +1629,7 @@ impl Eval<'_, '_> {
                         .details_mut()
                         .activated_abilities
                         .extend(intrinsic_mana_ability(|name| name == subtype));
-                    object.dirty |= DIRTY_TYPES_SUBTYPES | DIRTY_ACTIVATIONS;
+                    object.dirty |= DIRTY_TYPES | DIRTY_ACTIVATIONS;
                 }
                 Operation::Inherit => {
                     if let Some(definition) = self.game.inherited_definition(id) {
@@ -1597,11 +1673,13 @@ impl Eval<'_, '_> {
                     }
                     Modification::AllCreatureTypes => {
                         // A later grant of every type overrides an earlier set list.
-                        let view = Arc::make_mut(&mut object.view);
-                        view.creature_types_set = false;
-                        if !view.creature_types.is_all() {
-                            view.details_mut().creature_types = CreatureTypes::All;
-                            object.dirty |= DIRTY_TYPES_SUBTYPES;
+                        if object.view.creature_types_set || !object.view.creature_types.is_all() {
+                            let view = Arc::make_mut(&mut object.view);
+                            view.creature_types_set = false;
+                            if !view.creature_types.is_all() {
+                                view.details_mut().creature_types = CreatureTypes::All;
+                                object.dirty |= DIRTY_TYPES;
+                            }
                         }
                     }
                     Modification::SetCreatureTypes(types) => {
@@ -1612,7 +1690,7 @@ impl Eval<'_, '_> {
                         details.subtypes.retain(|s| !is_creature_type(s));
                         details.subtypes.extend(types.iter().cloned());
                         details.added_subtypes.retain(|s| !is_creature_type(s));
-                        object.dirty |= DIRTY_TYPES_SUBTYPES;
+                        object.dirty |= DIRTY_TYPES;
                     }
                     Modification::AddSubtypes(types) => {
                         let gained = if object.view.is_land() {
@@ -1635,7 +1713,7 @@ impl Eval<'_, '_> {
                                     details.added_subtypes.push(subtype.clone());
                                 }
                             }
-                            object.dirty |= DIRTY_TYPES_SUBTYPES;
+                            object.dirty |= DIRTY_TYPES;
                         }
                     }
                     Modification::AddTypes(types) => {
@@ -1645,7 +1723,7 @@ impl Eval<'_, '_> {
                                 .types
                                 .types
                                 .extend(types.iter().copied());
-                            object.dirty |= DIRTY_TYPES_SUBTYPES;
+                            object.dirty |= DIRTY_TYPES;
                         }
                     }
                     Modification::SetTypes { types, subtypes } => {
@@ -1662,7 +1740,10 @@ impl Eval<'_, '_> {
                                     .any(|set| subtype_category(set) == subtype_category(subtype))
                         };
                         let sets_creature_types = subtypes.iter().any(|s| is_creature_type(s));
-                        if !types.contains(&CardType::Creature) || sets_creature_types {
+                        if !(types.contains(&CardType::Creature)
+                            || types.contains(&CardType::Kindred))
+                            || sets_creature_types
+                        {
                             view.creature_types_set |= sets_creature_types
                                 || view.creature_types.is_all()
                                 || view.subtypes.iter().any(|s| is_creature_type(s));
@@ -1680,7 +1761,7 @@ impl Eval<'_, '_> {
                                 }
                             }
                         }
-                        object.dirty |= DIRTY_TYPES_SUBTYPES;
+                        object.dirty |= DIRTY_TYPES;
                     }
                     Modification::BecomeCreature => {
                         if !object.view.types.types.contains(&CardType::Creature) {
@@ -1689,7 +1770,7 @@ impl Eval<'_, '_> {
                                 .types
                                 .types
                                 .insert(CardType::Creature);
-                            object.dirty |= DIRTY_TYPES_SUBTYPES;
+                            object.dirty |= DIRTY_TYPES;
                         }
                     }
                     Modification::Nonlegendary => {
@@ -1743,6 +1824,17 @@ impl Eval<'_, '_> {
                                 .retain(|(keyword, _)| !keywords.has(*keyword));
                             view.keywords = remaining;
                         }
+                        if keywords.has(Keyword::Hexproof)
+                            && object
+                                .statics
+                                .iter()
+                                .any(|entry| matches!(entry.ability, StaticAbility::HexproofFrom(_)))
+                        {
+                            Arc::make_mut(&mut object.statics).retain(|entry| {
+                                !matches!(entry.ability, StaticAbility::HexproofFrom(_))
+                            });
+                            object.dirty |= DIRTY_STATICS;
+                        }
                     }
                     Modification::LoseNonManaAbilities => {
                         lose_nonmana_abilities(object);
@@ -1781,6 +1873,7 @@ impl Eval<'_, '_> {
                             });
                     }
                     Modification::GrantStatic(ability) => {
+                        object.dirty |= DIRTY_STATICS;
                         if let StaticAbility::Ward(cost) = ability.as_ref() {
                             let details = Arc::make_mut(&mut object.view).details_mut();
                             details.ward = Some(cost.clone());
@@ -1792,23 +1885,24 @@ impl Eval<'_, '_> {
                             });
                         }
                         let key = node.key.extended(id.0, ordinal);
-                        Arc::make_mut(&mut object.statics).push(StaticEntry {
+                        let entry = StaticEntry {
                             origin,
                             key,
                             timestamp: node.timestamp.max(self.game.live_permanent(id).timestamp),
                             ability: (**ability).clone(),
-                        });
-                        object.dirty |= DIRTY_STATICS;
+                        };
+                        if let Some(granted) = granted.as_mut() {
+                            if !self.game.is_phased_out(id) {
+                                if let Some(granted_node) = build_node(self.game, id, &entry) {
+                                    granted.push(granted_node);
+                                }
+                            }
+                        }
+                        Arc::make_mut(&mut object.statics).push(entry);
                     }
                     Modification::SetBasePt { power, toughness } => {
-                        let new_power = match power {
-                            Some(LayerValue::Fixed(p)) => *p,
-                            _ => object.view.power,
-                        };
-                        let new_toughness = match toughness {
-                            Some(LayerValue::Fixed(t)) => *t,
-                            _ => object.view.toughness,
-                        };
+                        let new_power = power.unwrap_or(object.view.power);
+                        let new_toughness = toughness.unwrap_or(object.view.toughness);
                         if new_power != object.view.power || new_toughness != object.view.toughness
                         {
                             let view = Arc::make_mut(&mut object.view);
@@ -1816,14 +1910,11 @@ impl Eval<'_, '_> {
                             view.toughness = new_toughness;
                         }
                     }
-                    Modification::ModifyPt {
-                        power: LayerValue::Fixed(p),
-                        toughness: LayerValue::Fixed(t),
-                    } => {
-                        if *p != 0 || *t != 0 {
+                    Modification::ModifyPt { power, toughness } => {
+                        if *power != 0 || *toughness != 0 {
                             let view = Arc::make_mut(&mut object.view);
-                            view.power += p;
-                            view.toughness += t;
+                            view.power += power;
+                            view.toughness += toughness;
                         }
                     }
                     Modification::SwitchPt => {
@@ -1832,16 +1923,16 @@ impl Eval<'_, '_> {
                             std::mem::swap(&mut view.power, &mut view.toughness);
                         }
                     }
-                    _ => unreachable!("layer instruction is resolved"),
+                    _ => unreachable!("non-layer modification in layer instruction"),
                 },
-                _ => unreachable!("layer instruction is resolved"),
+                Operation::Control(_) => unreachable!("control handled above"),
             }
         }
     }
 }
 
 fn build_node(game: &Game, source: PermanentId, entry: &StaticEntry) -> Option<Node> {
-    let mut plan = SourcePlan::on_source(Vec::new());
+    let mut plan = SourcePlan::new();
     let mut add = |l, m| plan.parts.push((l, Operation::Modify(m)));
     match &entry.ability {
         StaticAbility::Continuous(effect) => {
@@ -1876,22 +1967,6 @@ fn build_node(game: &Game, source: PermanentId, entry: &StaticEntry) -> Option<N
             plan.scope = g.scope.clone();
             plan.condition = g.condition.clone();
             add(Layer::Ability, Modification::AddKeywords(g.keywords));
-        }
-        StaticAbility::PtBuff(b) => {
-            plan.scope = b.scope.clone();
-            plan.condition = b.condition.clone();
-            plan.parts
-                .push((Layer::ModifyPower, Operation::Buff(Box::new(b.clone()))));
-        }
-        StaticAbility::CharacteristicPower(cda) | StaticAbility::CharacteristicPt(cda) => {
-            plan.cda = true;
-            plan.parts.push((
-                Layer::CharacteristicPower,
-                Operation::Cda {
-                    cda: Box::new(cda.clone()),
-                    sets_toughness: matches!(entry.ability, StaticAbility::CharacteristicPt(_)),
-                },
-            ));
         }
         StaticAbility::SetsLandType(set) => {
             plan.scope = StaticScope::All(set.predicate.clone());
@@ -1962,7 +2037,7 @@ fn build_node(game: &Game, source: PermanentId, entry: &StaticEntry) -> Option<N
         source,
         key: entry.key.clone(),
         timestamp: entry.timestamp,
-        plan: NodePlan::Static {
+        kind: NodeKind::Static {
             plan: Arc::new(plan.summarize()),
             targets: None,
         },
@@ -2073,6 +2148,7 @@ pub(super) fn matches_view(
     p: &CardPredicate,
     view: &Characteristics,
     source_name: Option<&str>,
+    chosen_type: Option<&str>,
 ) -> bool {
     let Some(permanent) = game.state.permanents[id].as_ref() else {
         return false;
@@ -2099,7 +2175,7 @@ pub(super) fn matches_view(
         },
         counters: &permanent.counters,
     }
-    .matches(p, source_name)
+    .matches(p, source_name, chosen_type)
 }
 
 /// The characteristics and permanent status a battlefield predicate reads,
@@ -2171,7 +2247,7 @@ pub(super) fn matches_departure(lki: &ObjectLki, p: &CardPredicate) -> bool {
         derived: DerivedStatus::Departed(facts),
         counters: &lki.counters,
     }
-    .matches(p, None)
+    .matches(p, None, None)
 }
 
 impl CharacteristicView<'_> {
@@ -2180,11 +2256,17 @@ impl CharacteristicView<'_> {
             || (self.all_creature_types && is_creature_type(subtype))
     }
 
-    fn matches(&self, p: &CardPredicate, source_name: Option<&str>) -> bool {
+    fn matches(
+        &self,
+        p: &CardPredicate,
+        source_name: Option<&str>,
+        chosen_type: Option<&str>,
+    ) -> bool {
         // A permanent is on the battlefield, never a graveyard card.
         !p.from_battlefield_this_turn
             && p.accepts_name(self.name)
             && (!p.namesake || source_name == Some(self.name))
+            && (!p.chosen_type_of_source || chosen_type.is_some_and(|name| self.has_subtype(name)))
             && (!p.deathtouch || self.keywords.has(Keyword::Deathtouch))
             && (!p.flying || self.keywords.has(Keyword::Flying))
             && (!p.not_flying || !self.keywords.has(Keyword::Flying))
@@ -2197,7 +2279,7 @@ impl CharacteristicView<'_> {
             && (p.any_of.is_empty()
                 || p.any_of
                     .iter()
-                    .any(|alternative| self.matches(alternative, source_name)))
+                    .any(|alternative| self.matches(alternative, source_name, chosen_type)))
             && p.supertype.as_ref().is_none_or(|s| {
                 if s.eq_ignore_ascii_case("legendary") {
                     self.is_legendary
