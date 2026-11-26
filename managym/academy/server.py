@@ -2302,9 +2302,11 @@ class GameSession:
         selected_offer: dict[str, Any] | None = None
         if auto:
             if context is None:
+                # Unrecorded auto-step; skip decision/alias projection.
                 context = self._build_decision_context(
                     self.obs,
                     viewer=actor_index,
+                    include_decision=False,
                 )
             matching_offer_ids = [
                 offer_id
@@ -2556,9 +2558,7 @@ class GameSession:
                 raise RuntimeError("Villain auto-play exceeded safety step limit.")
             steps += 1
 
-            context = self._build_decision_context(
-                self.obs, viewer=1 - self.human_seat, include_decision=True
-            )
+            context = self._build_decision_context(self.obs, viewer=1 - self.human_seat)
             if self._villain_offer_policy is not None:
                 offer_id = int(self._villain_offer_policy(context))
                 action_index = context.action_by_offer.get(offer_id)
@@ -2813,7 +2813,6 @@ class GameSession:
         self.published_prompt = self._build_decision_context(
             self.obs,
             viewer=self.human_seat,
-            include_decision=True,
         )
         frame = ExperienceFrame.model_validate(self.published_prompt.frame)
         address = DecisionAddressV2.from_frame(
@@ -2844,7 +2843,7 @@ class GameSession:
         obs: managym.Observation,
         *,
         viewer: int,
-        include_decision: bool = False,
+        include_decision: bool = True,
     ) -> DecisionContext:
         """Build one exact actor-safe frame and raw-action lowering map."""
         actions = trace_store.academy_actions(obs, self.human_seat)

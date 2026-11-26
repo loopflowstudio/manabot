@@ -13,11 +13,7 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, TypeAdapter
 
-from managym.experience import (
-    ObjectRenderId,
-    ProtocolModel,
-    SubjectRef,
-)
+from managym.experience import ObjectRenderId, ProtocolModel, SubjectRef
 
 LibraryEnd = Literal["top", "bottom"]
 

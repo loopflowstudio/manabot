@@ -332,42 +332,57 @@ pub fn has_action(s: &Scenario, predicate: impl Fn(&Action) -> bool) -> bool {
     s.action_space().actions.iter().any(predicate)
 }
 
+/// Find an action matching `predicate`, or fall back to a surviving action
+/// matching `same_kind` for which `object` was folded as an alias.
+pub fn find_object_action_index(
+    s: &Scenario,
+    object: ObjectId,
+    predicate: impl Fn(&Action) -> bool,
+    same_kind: impl Fn(&Action) -> bool,
+) -> Option<usize> {
+    let actions = &s.action_space().actions;
+    actions.iter().position(predicate).or_else(|| {
+        s.game().action_aliases().iter().find_map(|&(idx, alias)| {
+            (alias == object && actions.get(idx).is_some_and(&same_kind)).then_some(idx)
+        })
+    })
+}
+
 /// Whether the card behind `id` is offered as a spell to cast (directly or as a folded alias).
 pub fn can_cast(s: &Scenario, id: ObjectId) -> bool {
     let id = now(s, id);
-    let actions = &s.action_space().actions;
-    actions
-        .iter()
-        .any(|a| matches!(a, Action::CastSpell { object, .. } if *object == id))
-        || s.game().action_aliases().iter().any(|&(idx, alias)| {
-            alias == id && matches!(actions.get(idx), Some(Action::CastSpell { .. }))
-        })
+    find_object_action_index(
+        s,
+        id,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == id),
+        |a| matches!(a, Action::CastSpell { .. }),
+    )
+    .is_some()
 }
 
 pub fn can_activate(s: &Scenario, source: PermanentId) -> bool {
-    let actions = &s.action_space().actions;
-    let object = s.game().state.permanents[source].as_ref().map(|p| p.object);
-    actions
-        .iter()
-        .any(|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == source))
-        || object.is_some_and(|obj| {
-            s.game().action_aliases().iter().any(|&(idx, alias)| {
-                alias == obj && matches!(actions.get(idx), Some(Action::ActivateAbility { .. }))
-            })
+    let direct =
+        |a: &Action| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == source);
+    match s.game().state.permanents[source].as_ref().map(|p| p.object) {
+        Some(obj) => find_object_action_index(s, obj, direct, |a| {
+            matches!(a, Action::ActivateAbility { .. })
         })
+        .is_some(),
+        None => has_action(s, direct),
+    }
 }
 
 /// Whether an ability of `source` that functions from its hand or graveyard
 /// is offered (directly or as a folded alias).
 pub fn can_activate_card(s: &Scenario, source: ObjectId) -> bool {
     let source = now(s, source);
-    let actions = &s.action_space().actions;
-    actions
-        .iter()
-        .any(|a| matches!(a, Action::ActivateCardAbility { object, .. } if *object == source))
-        || s.game().action_aliases().iter().any(|&(idx, alias)| {
-            alias == source && matches!(actions.get(idx), Some(Action::ActivateCardAbility { .. }))
-        })
+    find_object_action_index(
+        s,
+        source,
+        |a| matches!(a, Action::ActivateCardAbility { object, .. } if *object == source),
+        |a| matches!(a, Action::ActivateCardAbility { .. }),
+    )
+    .is_some()
 }
 
 pub fn offered_targets(s: &Scenario) -> Vec<Target> {

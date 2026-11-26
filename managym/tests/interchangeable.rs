@@ -103,6 +103,12 @@ fn pin_object(game: &mut Game, controller: PlayerId, object: ObjectId) {
     });
 }
 
+fn create_ready_token(game: &mut Game, controller: PlayerId) -> PermanentId {
+    let id = game.create_token("token.ally", controller).unwrap();
+    game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
+    id
+}
+
 fn grant_must_be_blocked(game: &mut Game, controller: PlayerId, perm: PermanentId) {
     let object = game.permanent_object(perm).unwrap();
     let timestamp = game.state.permanents[perm].as_ref().unwrap().timestamp;
@@ -2591,15 +2597,9 @@ fn decision_group_exposes_offer_aliases_and_normalizes_combat_submit() {
     let mut atk_game = position(&["Mountain"], &combat_entries, "Gray Ogre");
     let p0 = PlayerId(0);
     let p1 = PlayerId(1);
-    let mut tokens = Vec::new();
-    for _ in 0..3 {
-        let id = atk_game.create_token("token.ally", p0).unwrap();
-        atk_game.state.permanents[id]
-            .as_mut()
-            .unwrap()
-            .summoning_sick = false;
-        tokens.push(id);
-    }
+    let tokens: Vec<_> = (0..3)
+        .map(|_| create_ready_token(&mut atk_game, p0))
+        .collect();
     atk_game.scenario_refresh_priority().unwrap();
     advance_to_step(
         &mut atk_game,
@@ -2624,19 +2624,12 @@ fn decision_group_exposes_offer_aliases_and_normalizes_combat_submit() {
     // 3. Game::submit on grouped DeclareBlockers normalizes split blocks over
     //    non-canonical blockers and a folded attacker alias.
     let mut blk_game = position(&["Mountain"], &combat_entries, "Gray Ogre");
-    let mut att = Vec::new();
-    for _ in 0..2 {
-        let id = blk_game.create_token("token.ally", p0).unwrap();
-        blk_game.state.permanents[id]
-            .as_mut()
-            .unwrap()
-            .summoning_sick = false;
-        att.push(id);
-    }
-    let mut blk = Vec::new();
-    for _ in 0..3 {
-        blk.push(blk_game.create_token("token.ally", p1).unwrap());
-    }
+    let att: Vec<_> = (0..2)
+        .map(|_| create_ready_token(&mut blk_game, p0))
+        .collect();
+    let blk: Vec<_> = (0..3)
+        .map(|_| blk_game.create_token("token.ally", p1).unwrap())
+        .collect();
     declare_all_attackers_and_advance_to_blockers(&mut blk_game, p0);
     let blk_decision = blk_game.decision(Some(p1)).expect("blockers group");
     let blk_events_from = blk_game.state.observation_events.len();
@@ -2670,12 +2663,7 @@ fn declare_blocker_offer_source_and_aliases_name_folded_attackers() {
     let mut game = position(&["Mountain"], &entries, "Gray Ogre");
     let p0 = PlayerId(0);
     let p1 = PlayerId(1);
-    let mut attackers = Vec::new();
-    for _ in 0..2 {
-        let id = game.create_token("token.ally", p0).unwrap();
-        game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
-        attackers.push(id);
-    }
+    let attackers: Vec<_> = (0..2).map(|_| create_ready_token(&mut game, p0)).collect();
     let blocker = game
         .scenario_force_battlefield(p1, "Gray Ogre", true)
         .unwrap();
@@ -2776,23 +2764,10 @@ fn combat_describe_respects_committed_declines_for_blockers_and_attackers() {
         }
 
         // Raw-decline Token1: Token2 is now suppressed by combat.declined_blockers.
-        let decline_idx = game
-            .action_space()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| {
-                matches!(
-                    a,
-                    Action::DeclareBlocker {
-                        blocker,
-                        attacker: None,
-                        ..
-                    } if *blocker == token1
-                )
-            })
-            .expect("Token1 can decline because Ogre1 and Ogre2 cover A1 and A2");
-        game.step(decline_idx).unwrap();
+        step_matching(
+            &mut game,
+            |a| matches!(a, Action::DeclareBlocker { blocker, attacker: None, .. } if *blocker == token1),
+        );
 
         // Now Ogre1 is asked: its live offers allow only blocking A1 or A2 (no decline, no A3).
         let live_targets: Vec<Option<PermanentId>> = game
@@ -2837,19 +2812,11 @@ fn combat_describe_respects_committed_declines_for_blockers_and_attackers() {
     //    -> raw-decline Token1 -> decision drops to Single (describe returns None).
     {
         let mut game = position(&["Mountain"], &entries, "Gray Ogre");
-        let token2 = game.create_token("token.ally", p0).unwrap();
-        game.state.permanents[token2]
-            .as_mut()
-            .unwrap()
-            .summoning_sick = false;
+        let token2 = create_ready_token(&mut game, p0);
         let ogre1 = game
             .scenario_force_battlefield(p0, "Gray Ogre", true)
             .unwrap();
-        let token1 = game.create_token("token.ally", p0).unwrap();
-        game.state.permanents[token1]
-            .as_mut()
-            .unwrap()
-            .summoning_sick = false;
+        let token1 = create_ready_token(&mut game, p0);
         game.scenario_refresh_priority().unwrap();
         advance_to_step(
             &mut game,
@@ -2860,23 +2827,10 @@ fn combat_describe_respects_committed_declines_for_blockers_and_attackers() {
         let r_ogre1 = render_perm(&game, ogre1);
         let r_tok2 = render_perm(&game, token2);
 
-        let decline_idx = game
-            .action_space()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| {
-                matches!(
-                    a,
-                    Action::DeclareAttacker {
-                        permanent,
-                        attack: None,
-                        ..
-                    } if *permanent == token1
-                )
-            })
-            .expect("Token1 can decline");
-        game.step(decline_idx).unwrap();
+        step_matching(
+            &mut game,
+            |a| matches!(a, Action::DeclareAttacker { permanent, attack: None, .. } if *permanent == token1),
+        );
 
         let after = game
             .decision(Some(p0))
@@ -2893,16 +2847,8 @@ fn combat_describe_respects_committed_declines_for_blockers_and_attackers() {
 
     {
         let mut game = position_with_skip(&["Mountain"], &entries, "Gray Ogre", false);
-        let token2 = game.create_token("token.ally", p0).unwrap();
-        game.state.permanents[token2]
-            .as_mut()
-            .unwrap()
-            .summoning_sick = false;
-        let token1 = game.create_token("token.ally", p0).unwrap();
-        game.state.permanents[token1]
-            .as_mut()
-            .unwrap()
-            .summoning_sick = false;
+        let _token2 = create_ready_token(&mut game, p0);
+        let token1 = create_ready_token(&mut game, p0);
         game.scenario_refresh_priority().unwrap();
         advance_to_step(
             &mut game,
@@ -2910,23 +2856,10 @@ fn combat_describe_respects_committed_declines_for_blockers_and_attackers() {
             managym::flow::turn::StepKind::DeclareAttackers,
         );
 
-        let decline_idx = game
-            .action_space()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| {
-                matches!(
-                    a,
-                    Action::DeclareAttacker {
-                        permanent,
-                        attack: None,
-                        ..
-                    } if *permanent == token1
-                )
-            })
-            .expect("Token1 can decline");
-        game.step(decline_idx).unwrap();
+        step_matching(
+            &mut game,
+            |a| matches!(a, Action::DeclareAttacker { permanent, attack: None, .. } if *permanent == token1),
+        );
 
         // Only suppressed Token2 remains -> describe returns None -> Single.
         let after = game

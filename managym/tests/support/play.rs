@@ -29,8 +29,8 @@ use crate::support::{
         force_new_card_in_hand, move_to_hand, Scenario,
     },
     inspect::{
-        can_cast, card_of, find_owned_card, has_action, library, library_card, now, offered_cards,
-        permanent_named, tapped, top_spell, zone_of,
+        can_cast, card_of, find_object_action_index, find_owned_card, has_action, library,
+        library_card, now, offered_cards, permanent_named, tapped, top_spell, zone_of,
     },
 };
 
@@ -148,28 +148,18 @@ impl Scenario {
     // -----------------------------------------------------------------------
 
     pub fn choose_target(&mut self, target: Target) -> bool {
-        let index = self
-            .action_space()
-            .actions
-            .iter()
-            .position(
-                |action| matches!(action, Action::ChooseTarget { target: t, .. } if *t == target),
-            )
-            .or_else(|| {
-                let target_object = match target {
-                    Target::Permanent(id) => self.game.state.permanents[id].as_ref()?.object,
-                    Target::GraveyardCard(obj) => obj,
-                    _ => return None,
-                };
-                self.game.action_aliases().iter().find_map(|&(idx, alias)| {
-                    (alias == target_object
-                        && matches!(
-                            self.action_space().actions.get(idx),
-                            Some(Action::ChooseTarget { .. })
-                        ))
-                    .then_some(idx)
-                })
-            });
+        let direct = |action: &Action| matches!(action, Action::ChooseTarget { target: t, .. } if *t == target);
+        let alias_object = match target {
+            Target::Permanent(id) => self.game.state.permanents[id].as_ref().map(|p| p.object),
+            Target::GraveyardCard(obj) => Some(obj),
+            _ => None,
+        };
+        let index = match alias_object {
+            Some(obj) => find_object_action_index(self, obj, direct, |a| {
+                matches!(a, Action::ChooseTarget { .. })
+            }),
+            None => self.action_space().actions.iter().position(direct),
+        };
         let Some(index) = index else {
             return false;
         };
@@ -428,28 +418,17 @@ pub fn spend_colorless(s: &mut Scenario) {
     panic!("colorless payment did not complete");
 }
 
-/// Select the card behind `object` wherever it is offered.
-/// Find an action matching `predicate`, or fall back to a surviving action
-/// matching `same_kind` for which `object` was folded as an alias.
 fn find_object_action(
     s: &Scenario,
     object: ObjectId,
     predicate: impl Fn(&Action) -> bool,
     same_kind: impl Fn(&Action) -> bool,
 ) -> usize {
-    s.action_space()
-        .actions
-        .iter()
-        .position(predicate)
-        .or_else(|| {
-            s.game().action_aliases().iter().find_map(|&(idx, alias)| {
-                (alias == object && s.action_space().actions.get(idx).is_some_and(&same_kind))
-                    .then_some(idx)
-            })
-        })
+    find_object_action_index(s, object, predicate, same_kind)
         .unwrap_or_else(|| panic!("missing action for {object:?}: {:?}", s.action_space()))
 }
 
+/// Select the card behind `object` wherever it is offered.
 pub fn select_card(s: &mut Scenario, object: ObjectId) {
     let object = now(s, object);
     let i = find_object_action(

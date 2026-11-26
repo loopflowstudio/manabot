@@ -232,82 +232,66 @@ impl DecisionGroupKind for CombatGroup {
             .ok_or_else(|| AgentError("declaration has no legal actions".into()))?;
         match (self.role, choice) {
             (CombatRole::Attackers, DecisionChoice::DeclareAttackers { attackers }) => {
-                let mut working_attackers = Vec::new();
-                for attack in attackers {
+                let to_entry = |attack: PlannedAttack, force_committed: bool| {
                     let perm = game
                         .permanent_by_render_id(attack.creature)
-                        .expect("verified by validate");
+                        .expect("verified attacker");
                     let defender = match attack.defender {
                         Some(object) => AttackTarget::Permanent(
                             game.permanent_object(
                                 game.permanent_by_render_id(object)
-                                    .expect("verified by validate"),
+                                    .expect("verified defender"),
                             )
                             .expect("battlefield defender"),
                         ),
                         None => AttackTarget::Player(game.non_active_player()),
                     };
-                    working_attackers.push(PlannedAttackEntry {
+                    PlannedAttackEntry {
                         attacker: perm,
                         defender,
                         raw_defender: attack.defender,
-                        committed: !order.contains(&perm),
-                    });
-                }
-                for attack in game.declared_attackers() {
-                    if !attackers.contains(&attack) {
-                        let perm = game
-                            .permanent_by_render_id(attack.creature)
-                            .expect("declared attacker");
-                        let defender = match attack.defender {
-                            Some(object) => AttackTarget::Permanent(
-                                game.permanent_object(
-                                    game.permanent_by_render_id(object)
-                                        .expect("declared defender"),
-                                )
-                                .expect("battlefield defender"),
-                            ),
-                            None => AttackTarget::Player(game.non_active_player()),
-                        };
-                        working_attackers.push(PlannedAttackEntry {
-                            attacker: perm,
-                            defender,
-                            raw_defender: attack.defender,
-                            committed: true,
-                        });
+                        committed: force_committed || !order.contains(&perm),
                     }
-                }
+                };
+                let working_attackers = attackers
+                    .iter()
+                    .copied()
+                    .map(|attack| to_entry(attack, false))
+                    .chain(
+                        game.declared_attackers()
+                            .into_iter()
+                            .filter(|attack| !attackers.contains(attack))
+                            .map(|attack| to_entry(attack, true)),
+                    )
+                    .collect();
                 Ok(CombatProgress::Attackers {
                     rules_player,
                     normalizer: AttackPlanNormalizer::new(order, working_attackers),
                 })
             }
             (CombatRole::Blockers, DecisionChoice::DeclareBlockers { blocks }) => {
-                let mut working_blocks = Vec::new();
-                for block in blocks {
+                let to_entry = |block: PlannedBlock, force_committed: bool| {
                     let blocker = game
                         .permanent_by_render_id(block.blocker)
-                        .expect("verified by validate");
-                    working_blocks.push(PlannedBlockEntry {
+                        .expect("verified blocker");
+                    PlannedBlockEntry {
                         blocker,
                         attacker: game.permanent_by_render_id(block.attacker),
                         raw_attacker: Some(block.attacker),
-                        committed: !order.contains(&blocker),
-                    });
-                }
-                for block in game.declared_blocks() {
-                    if !blocks.contains(&block) {
-                        let blocker = game
-                            .permanent_by_render_id(block.blocker)
-                            .expect("declared blocker");
-                        working_blocks.push(PlannedBlockEntry {
-                            blocker,
-                            attacker: game.permanent_by_render_id(block.attacker),
-                            raw_attacker: Some(block.attacker),
-                            committed: true,
-                        });
+                        committed: force_committed || !order.contains(&blocker),
                     }
-                }
+                };
+                let working_blocks = blocks
+                    .iter()
+                    .copied()
+                    .map(|block| to_entry(block, false))
+                    .chain(
+                        game.declared_blocks()
+                            .into_iter()
+                            .filter(|block| !blocks.contains(block))
+                            .map(|block| to_entry(block, true)),
+                    )
+                    .collect();
                 Ok(CombatProgress::Blockers {
                     rules_player,
                     normalizer: BlockPlanNormalizer::new(order, working_blocks),

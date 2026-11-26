@@ -288,7 +288,7 @@ def step_watch(
     context = (
         game._publish_current_prompt()
         if seat == 0
-        else game._build_decision_context(game.obs, viewer=seat, include_decision=True)
+        else game._build_decision_context(game.obs, viewer=seat)
     )
     assert context is not None
     assert game.watch_policies is not None
@@ -465,9 +465,7 @@ def import_game(game_record: dict[str, Any]) -> dict[str, Any]:
             context = (
                 game._publish_current_prompt()
                 if seat == 0
-                else game._build_decision_context(
-                    game.obs, viewer=seat, include_decision=True
-                )
+                else game._build_decision_context(game.obs, viewer=seat)
             )
             assert context is not None
             index = int(expected["command"]["offer_id"])
@@ -564,9 +562,7 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
             context = (
                 session._publish_current_prompt()
                 if seat == 0
-                else session._build_decision_context(
-                    session.obs, viewer=seat, include_decision=True
-                )
+                else session._build_decision_context(session.obs, viewer=seat)
             )
             assert context is not None
             annotation = decision.annotation
