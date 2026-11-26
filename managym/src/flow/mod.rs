@@ -7,6 +7,7 @@ pub mod combat_actions;
 pub mod combat_preview;
 pub mod damage;
 pub mod decision;
+pub mod decision_group;
 pub mod effects;
 pub mod event;
 pub mod functioning_abilities;

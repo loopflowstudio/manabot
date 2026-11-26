@@ -1,28 +1,18 @@
 """Typed, read-only previews of a whole combat declaration.
 
-The engine declares attackers and blockers one creature at a time. A preview
-replays its own per-creature answers to a drafted plan on a native clone and
-returns the exact offers that declare it, or the first creature it refuses and
-why. The semantic address authorizes the query; nothing is committed.
+Deprecated wrapper over :meth:`managym.Env.preview` (scheduled for removal in
+0.3.0). New callers should use ``env.decision()``, ``env.preview(choice)``, and
+``env.submit(choice)``.
 """
 
 from typing import Literal
+import warnings
 
 from pydantic import BaseModel, ConfigDict
 
 import managym
+from managym.decision_group import PlannedAttack, PlannedBlock
 from managym.experience import ObjectRenderId
-
-
-class PlannedAttack(ObjectRenderId):
-    model_config = ConfigDict(extra="forbid", from_attributes=True)
-    defender: ObjectRenderId | None = None
-
-
-class PlannedBlock(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    blocker: ObjectRenderId
-    attacker: ObjectRenderId
 
 
 class CombatPlan(BaseModel):
@@ -82,6 +72,15 @@ def preview_combat(
     plan: CombatPlan,
 ) -> CombatPreview:
     """Reject stale/non-actor requests without advancing the native game."""
-    return CombatPreview.model_validate_json(
-        env.combat_preview_json(viewer, revision, fingerprint, plan.model_dump_json())
+    warnings.warn(
+        "managym.combat.preview_combat is deprecated and removed in 0.3.0; "
+        "use env.preview(choice, at=...)",
+        DeprecationWarning,
+        stacklevel=2,
     )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        raw = env.combat_preview_json(
+            viewer, revision, fingerprint, plan.model_dump_json()
+        )
+    return CombatPreview.model_validate_json(raw)

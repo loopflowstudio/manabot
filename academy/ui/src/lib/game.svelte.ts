@@ -12,6 +12,7 @@ import { mergeBoards, type SeqRange, type StepBoard } from './board/boards';
 import type { HistoryNote } from './board/history';
 import { findKeptDeck, isKeptDeckChoice } from './kept-decks';
 import { LIVE_ANALYSIS_OFF, type LiveAnalysis } from './analysis';
+import type { LiveDecisionGroup } from './decision-group';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
 import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
@@ -141,6 +142,8 @@ export class GameStore {
   branchProjection = $state.raw<Observation | null>(null);
   tableAnnouncement = $state('');
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
+  /** The active live grouped-decision descriptor for `protocolFrame`, or null. */
+  liveDecisionGroup = $state.raw<LiveDecisionGroup | null>(null);
   /** Session-kept boards for `matchId` (frames and per-line boards, capped at 512). */
   keptBoards = $state.raw<{ matchId: string; boards: StepBoard[] } | null>(null);
   /** A policy's live reading of your decisions, while you show it; off at the start of every game. */
@@ -265,6 +268,15 @@ export class GameStore {
 
   setError(message: string | null): void {
     this.errorMessage = message;
+  }
+
+  /** Clear a command rejection and its matching rail error banner once the player edits the draft. */
+  dismissCommandRejection(commandId: string): void {
+    if (this.lastCommandRejection?.command_id !== commandId) return;
+    if (this.errorMessage === this.lastCommandRejection.message) {
+      this.errorMessage = null;
+    }
+    this.lastCommandRejection = null;
   }
 
   setOpponentChoice(next: PlayerChoice): void {
@@ -501,6 +513,14 @@ export class GameStore {
     this.keptBoards = { matchId: frame.match_id, boards: next };
   }
 
+  applyLiveDecisionGroup(group: LiveDecisionGroup | null | undefined): void {
+    const frame = this.protocolFrame;
+    this.liveDecisionGroup =
+      group && frame && group.frame_hash === frame.frame_hash && group.match_id === frame.match_id
+        ? group
+        : null;
+  }
+
   applyFrame(
     frame: ExperienceFrame,
     sessionId?: string,
@@ -508,6 +528,9 @@ export class GameStore {
   ): void {
     this.lastCommandRejection = null;
     this.protocolFrame = frame;
+    if (this.liveDecisionGroup && (this.liveDecisionGroup.frame_hash !== frame.frame_hash || this.liveDecisionGroup.match_id !== frame.match_id)) {
+      this.liveDecisionGroup = null;
+    }
     const actions = frame.offers.map((offer) => ({
       index: offer.id,
       type: offer.action_type,
@@ -545,6 +568,7 @@ export class GameStore {
     this.actions = [];
     this.actionSpaceKind = '';
     this.gameOver = true;
+    this.liveDecisionGroup = null;
     this.winner = winner;
     this.errorMessage = null;
     this.resumeFailed = false;
@@ -575,6 +599,7 @@ export class GameStore {
     this.work = null;
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
+    this.liveDecisionGroup = null;
     if (this.table?.opponent || this.table?.opponent_label) this.interruptedIdentity = {opponent: this.table.opponent, opponent_label: this.table.opponent_label};
     this.table = null;
     this.restoredDecision = null;
@@ -633,6 +658,7 @@ export class GameStore {
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
     this.protocolFrame = null;
+    this.liveDecisionGroup = null;
     this.keptBoards = null;
     this.observation = null;
     this.actions = [];

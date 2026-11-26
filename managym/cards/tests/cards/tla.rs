@@ -34,9 +34,9 @@ use managym::state::game_object::ObjectKind;
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind, ActionType},
+        decision_surface::{AtomicCommand, DecisionSubmission, DecisionSurfaceError},
         observation::{EventEntityKind, KeywordData, Observation},
         policy_history::HistoryReference,
-        structured_offer::{AtomicCommand, OfferSubmission, StructuredOfferError},
     },
     cards::setups::authored_setup,
     decision::Command,
@@ -12451,9 +12451,9 @@ fn wan_shi_tong_enters_with_x_counters_and_draws_half_x() {
 /// attributed to a stale command. The witness covers costs, zones, pending
 /// decisions, events, RNG, legal offers and both viewers' observations.
 fn assert_unavailable_wan_x_unchanged(s: &mut Scenario, values: &[usize]) {
-    let offers = s.game().structured_search_offers().unwrap();
+    let offers = s.game().decision_surface().unwrap();
     let command = offers
-        .decode(&OfferSubmission {
+        .decode(&DecisionSubmission {
             offer_id: offers.projection().offers[0].id,
             answers: vec![],
         })
@@ -12471,7 +12471,7 @@ fn assert_unavailable_wan_x_unchanged(s: &mut Scenario, values: &[usize]) {
         assert!(
             matches!(
                 s.game_mut().apply_atomic_command(&command),
-                Err(StructuredOfferError::StaleOrIllegal(_))
+                Err(DecisionSurfaceError::StaleOrIllegal(_))
             ),
             "unavailable X={mode} must reject"
         );
@@ -16860,11 +16860,7 @@ fn secret_of_bloodbending_overlap_resolves_the_chooser_once_and_latest_control_w
             caster as u8
         );
         assert_eq!(
-            s.game()
-                .structured_search_offers()
-                .unwrap()
-                .projection()
-                .actor,
+            s.game().decision_surface().unwrap().projection().actor,
             caster as u8
         );
         assert!(!Observation::for_player(s.game(), PlayerId(caster))

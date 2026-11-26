@@ -19,6 +19,7 @@ pub mod cr_614_replacement;
 pub mod cr_702_keywords;
 pub mod cr_704_sba;
 pub mod cr_712_modal_faces;
+pub mod decision_group;
 pub mod decklist_disclosure;
 pub mod engine_events;
 pub mod event_observations;
