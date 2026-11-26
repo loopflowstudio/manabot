@@ -4,20 +4,20 @@
 
   interface Props {
     value?: Decklists;
-    // A search opponent keeps Closed listed, disabled, with why.
-    opponent?: PlayerChoice;
+    // The bots that will play. A search bot keeps Closed listed, disabled, with why.
+    players?: PlayerChoice[];
     disabled?: boolean;
     onChange?: (value: Decklists) => void;
   }
 
   let {
     value = 'open',
-    opponent = 'search-64',
+    players = ['search-64'],
     disabled = false,
     onChange = undefined,
   }: Props = $props();
 
-  const closedUnavailable = $derived(isSearchChoice(opponent));
+  const closedUnavailable = $derived(players.some(isSearchChoice));
 </script>
 
 <label class="type-caption flex min-w-0 max-w-full items-center gap-2 text-ink-2" data-testid="decklists-choice">

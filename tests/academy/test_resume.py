@@ -70,7 +70,19 @@ def test_a_game_resumes_as_the_same_game_at_its_pending_decision(
 
     assert resumed.match_id == frame["match_id"] == identifier
     assert resumed.env.state_digest() == digest
-    assert frame["revision"] == pending["revision"]
+    # Taking the game up is a new revision: nothing addressed to it before
+    # addresses it now.
+    assert frame["revision"] == pending["revision"] + 1
+    assert row(tmp_path, identifier)["revision"] == frame["revision"]
+    held = {
+        "command_id": "held",
+        "match_id": identifier,
+        "expected_revision": pending["revision"],
+        "prompt_id": pending["prompt"]["id"],
+        "offer_id": pending["offers"][0]["id"],
+        "answers": [],
+    }
+    assert resumed.hero_command(held)["rejection"]["code"] == "stale_revision"
     assert frame["offers"] == pending["offers"]
     assert frame["projection"] == pending["projection"]
     assert frame["prompt"]["id"] > max(row["prompt_id"] for row in decisions)
@@ -165,7 +177,7 @@ def test_stops_changed_during_the_game_are_the_stops_it_resumes_with(
 
     frame = server.GameSession(tmp_path).resume(game.match_id)["frame"]
 
-    assert frame["revision"] == live["revision"]
+    assert frame["revision"] == live["revision"] + 1
     assert frame["stops"] == live["stops"]
     assert frame["stops"]["my"] == ["main1"] and not frame["stops"]["stop_on_stack"]
     assert frame["offers"] == live["offers"]
@@ -196,7 +208,7 @@ def test_a_record_the_engine_no_longer_plays_ends_and_stays_replayable(
     assert attempt is not None and attempt.trace["end_reason"] == "record_diverged"
     recording = Recording("game", attempt.trace, attempt)
     assert recording.read("latest")["observation"] == trace["final_observation"]
-    with pytest.raises(ValueError, match="resume_unavailable"):
+    with pytest.raises(ValueError, match="game_stopped"):
         resumed.resume(identifier)
 
 
@@ -265,12 +277,20 @@ def test_only_an_unfinished_played_game_resumes(tmp_path: Path) -> None:
     game = start(tmp_path, commands=400)
     assert row(tmp_path, game.match_id)["status"] == "completed"
     other = server.GameSession(tmp_path)
-    for identifier in (game.match_id, "no-such-game"):
-        with pytest.raises(ValueError, match="resume_unavailable"):
-            other.resume(identifier)
+    with pytest.raises(ValueError, match="^game_finished: "):
+        other.resume(game.match_id)
+    with pytest.raises(ValueError, match="^game_not_found: "):
+        other.resume("no-such-game")
     stopped = start(tmp_path)
     stopped.close("error")
-    with pytest.raises(ValueError, match="resume_unavailable"):
+    with pytest.raises(ValueError, match="^game_stopped: "):
+        other.resume(stopped.match_id)
+    rewrite(
+        tmp_path,
+        stopped.match_id,
+        "UPDATE attempt_players SET kind='bot' WHERE attempt_id=?",
+    )
+    with pytest.raises(ValueError, match="^game_is_watch: "):
         other.resume(stopped.match_id)
 
 

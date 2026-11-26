@@ -554,11 +554,18 @@ completion (`game_over`) or a replay error (`record_diverged`) does.
   `?played_from=`, a Watch launch address (`managym academy watch`), or
   `?hero`/`?villain`/`?opponent` opens what the address asked for; any
   unfinished game remembered in `academy.game` stays resumable in **History**.
-- **Finished or unknown `?game=<id>`.** Opening `/?game=<id>` for a finished
-  game redirects to its Replay (`/replay?trace=<id>`). An unknown game id
-  clears `academy.game` and shows setup.
-- **Two tabs on the same game.** Resuming a game that is already live in
-  another tab hands control to the new tab and closes the older socket.
+- **A game with nothing to resume.** The server refuses a resume with a code:
+  `game_finished`, `game_is_watch`, `game_stopped` or `game_not_found`.
+  Opening `/?game=<id>` for a finished or watched game redirects to its Replay
+  (`/replay?trace=<id>`), except that a game just finished shows its result
+  card, with **Rematch**, until it idles out of server memory; for a stopped
+  one it shows setup with the reason and
+  a link to its Replay. An unknown game id, or a game `/` remembered that is
+  finished or stopped, clears `academy.game` and opens setup without comment.
+- **Two tabs on the same game.** Opening `/` while another tab holds the game
+  in progress opens setup with a **Play it here instead** link and leaves the
+  other tab playing. Opening `/?game=<id>` (that link, or **Resume** in
+  History) takes the game over and closes the older tab's socket.
   `localStorage['academy.game']` stores only the current game id, while each
   tab keeps its own in-flight Command envelope and last frame in
   `sessionStorage['academy.tab.<game>']`, so two tabs never overwrite each
@@ -984,12 +991,15 @@ do not repeat a step just because its reply was lost. If that read fails,
 After a bot failure, recorded navigation remains available, but playback stops
 at the live edge. Only **Retry bot decision** or **Retry search** retries it.
 
-**Across idle eviction and server restarts.** Neither 15 minutes of idle
-eviction nor a server restart ends a played game. Reloading the page, opening
-`/`, or pressing **Resume** in **History** rebuilds the live game by stepping
-the engine through the stored record and resumes at the exact pending decision
-with the same game id and history. Academy never silently deals a replacement
-or replays a stale submission into a newer state. If the opponent's policy
+**Across idle eviction and server restarts.** A game with an open board never
+idles out, however long you think. A game nobody has open leaves server memory
+after 15 minutes, and neither that nor a server restart ends it. Reloading the
+page, opening `/`, or pressing **Resume** in **History** rebuilds the live game
+by stepping the engine through the stored record and resumes at the exact
+pending decision with the same game id and history. Rebuilding a game advances
+its revision, so a choice submitted before the game left memory is refused as
+stale and the board shows the recovered decision to choose again. Academy never
+silently deals a replacement or replays a stale submission into a newer state. If the opponent's policy
 cannot be loaded on resume, Academy shows the error with a link to **Replay**
 and leaves the game unfinished so you can restart with the policy and resume.
 If the engine contradicts the stored steps, Academy refuses with
@@ -1515,7 +1525,9 @@ and opens an isolated branch on the same board: the historical offers become
 live, and choosing one plays it against the branch. **Return to recorded decision** restores that
 exact choice and its history; the original recording and result stay unchanged.
 Study roots live in server memory only, so **Try another line** appears only
-while that game's roots are in memory. After idle eviction or a server restart,
+while that game's roots are in memory. Starting a rematch or a new game leaves
+the game just played in memory until it idles out, so its lines stay open to
+Study. After idle eviction or a server restart,
 **Resume** (or **Play on from here**) on a played game rebuilds Study roots for
 every recorded decision; on a game nobody has resumed yet, recorded playback
 and **Play on from here** remain available while **Try another line** waits
@@ -2152,9 +2164,11 @@ read-only. Each game is keyed by its id (`attempts.id`) and saved at start and
 at each surfaced revision. Disconnecting, starting another game, 15-minute idle
 eviction and server restart do not end a game — only authoritative rules
 completion (`game_over`) or a runtime/divergence error (`record_diverged`) does.
-Existing databases keep legacy `interrupted` rows and legacy `stopped` rows
-(`server_restart`, `server_shutdown`, `session_expired`, `new_game`) readable
-and resumable without rewriting them, and leave legacy tables/columns unread so
+History and Replay name three statuses: `active` (in progress), `completed`
+and `stopped`. Existing databases keep legacy `interrupted` rows and legacy
+`stopped` rows (`server_restart`, `server_shutdown`, `session_expired`,
+`new_game`) readable and resumable without rewriting them; they read as
+`active`, and leave legacy tables/columns unread so
 an older binary can still open the file.
 
 Fresh databases create `attempts`, `attempt_players` (both seats: public

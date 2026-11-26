@@ -193,7 +193,7 @@ test('Replay keeps playing through a live producer save and resumes at its saved
   await page.route('**/api/traces/pending/recording', route => route.fulfill({json: {
     id: 'pending', positions: committed ? [choice, consequences, latest] : [latest],
     total: committed ? 3 : 1, next_offset: null, revision: committed ? 12 : 11,
-    status: 'waiting', can_produce: true, winner: null, players: [], source_kind: null, watch: true,
+    status: 'active', can_produce: true, winner: null, players: [], source_kind: null, watch: true,
   }}));
   await page.route('**/api/traces/pending/positions/**', route => {
     const key = decodeURIComponent(new URL(route.request().url()).pathname.split('/positions/')[1]);

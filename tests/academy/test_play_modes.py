@@ -22,6 +22,7 @@ from managym import experience_projection
 # Local imports
 from managym.academy import server, trace as trace_store
 from managym.academy.attempts import AttemptStore
+from managym.academy.game_setup import setup_draft, shown_setup
 from managym.academy.opponent import set_policy_registry
 from managym.academy.recording import Recording
 from managym.academy.server import app
@@ -889,9 +890,10 @@ def test_rematch_starts_from_the_played_setup_and_leaves_the_game_unfinished(
         assert played is not None
         assert played.config.hero_deck == CONFIG["hero_deck"]
         assert played.config.seed == 2**64 - 1
-        # The game left behind is dropped from memory and stays resumable.
+        # The game left behind stays as it was, in memory until it idles out.
         store = AttemptStore(isolated_traces / "play.sqlite")
-        assert list(server.LIVE_GAMES) == [swapped["game"]]
+        assert list(server.LIVE_GAMES) == [first["game"], swapped["game"]]
+        assert server.LIVE_GAMES[first["game"]].websocket is None
         assert store.unfinished(first["game"]) and store.unfinished(swapped["game"])
 
         # A rematch reads the setup of the game it names, in memory or not.
@@ -910,7 +912,8 @@ def test_rematch_starts_from_the_played_setup_and_leaves_the_game_unfinished(
             )
         assert _rematch(ws, "no-such-game")["message"].startswith("rematch_unavailable")
         # A refused rematch starts nothing: the game in play still takes Commands.
-        assert list(server.LIVE_GAMES) == [again["game"]]
+        assert list(server.LIVE_GAMES)[-1] == again["game"]
+        assert len(server.LIVE_GAMES) == 3
         frame = again["recovery"]["frame"]
         keep = _offer(frame, action_type="CHOOSE_MODE", label="Keep hand")
         ws.send_json({"type": "command", "command": _command(frame, keep, "keep")})
@@ -966,7 +969,16 @@ def test_rematch_keeps_imported_sideboards_and_takes_a_named_opponent(
             ws.send_json({"type": "new_game", "config": config})
             start = settled_message(ws)
             assert first.sessions[-1].seat == 1 - seat
-            source = server.LIVE_GAMES[start["game"]].game.trace.config.hero_source
+            recorded = server.LIVE_GAMES[start["game"]].game.trace.config
+            source = recorded.hero_source
+            # Closed lists stay closed in the setup the browser keeps, until
+            # the game is over; the rematch below reads them from the game.
+            assert "villain_deck" not in start["setup"]
+            assert list(start["setup"]["deck_import"]) == ["hero"]
+            assert "Mountain" not in json.dumps(start["setup"])
+            over = shown_setup(recorded, game_over=True)
+            assert over == setup_draft(recorded)
+            assert "Mountain" in over["deck_import"]["villain"]["source"]
             ws.send_json(
                 {
                     "type": "rematch",

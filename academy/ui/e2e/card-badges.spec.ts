@@ -211,7 +211,7 @@ test('recorded Watch badges leave the policy percentage visible', async ({ page 
   const choice = { key: 'mai', kind: 'choice', turn: 9, phase: 'PRECOMBAT_MAIN', step: 'PRECOMBAT_MAIN_STEP',
     actor: 0, automatic: false, can_reveal: false, revision: frame.revision };
   await page.route('**/api/traces/badges/recording', route => route.fulfill({ json: {
-    id: 'badges', positions: [choice], total: 1, next_offset: null, revision: frame.revision, status: 'finished',
+    id: 'badges', positions: [choice], total: 1, next_offset: null, revision: frame.revision, status: 'completed',
     can_produce: false, can_study: false, winner: null, players: [], source_kind: null, watch: true,
   } }));
   await page.route('**/api/traces/badges/positions/**', route => route.fulfill({ json: {

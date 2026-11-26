@@ -27,6 +27,7 @@
   import { builtinOpponentName, shortName } from '$lib/opponent-name';
   import { scoreName } from '$lib/analysis';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
+  import { refusalAction, type ResumeRefusal } from '$lib/resume-refusal';
   import { gameResult } from '$lib/board/result';
   import { numbersLine, type GameNumbers } from '$lib/numbers';
   import { loadAutoTap, saveAutoTap, type FullControlMode } from '$lib/board/auto-tap';
@@ -51,7 +52,7 @@
     fetchPaymentPreview,
     fetchCombatPreview,
   } from '$lib/socket.svelte';
-  import type { GameSummary, InteractionOffer, StopSide } from '$lib/types';
+  import type { InteractionOffer, StopSide } from '$lib/types';
 
   onDestroy(() => watchStart.cancel());
 
@@ -106,7 +107,8 @@
     addressed = explicit;
     if (askedGame) { resumeGame(askedGame); return; }
     if (!explicit) {
-      if (stored) resumeGame(stored);
+      // The remembered game, unless another tab holds it.
+      if (stored) resumeGame(stored, false);
       else connect();
       return;
     }
@@ -146,27 +148,17 @@
     untrack(() => replaceState('/', {}));
   });
 
-  /**
-   * A game the server would not take up. A finished one the address asked for
-   * opens in Replay; an unknown one is dropped; any other keeps its reason and
-   * a way to its Replay, and stays unfinished in History.
-   */
-  let refused = $state<{ game: string; message: string } | null>(null);
+  /** A game the server would not take up, where setup opens with something to say about it (`refusalAction`). */
+  let refused = $state<ResumeRefusal | null>(null);
   $effect(() => {
     const refusal = gameStore.resumeRefused;
     if (!refusal) { refused = null; return; }
     untrack(() => {
+      const action = refusalAction(refusal.code, askedGame === refusal.game);
+      if (action === 'replay') { void goto(`/replay?trace=${encodeURIComponent(refusal.game)}`, { replaceState: true }); return; }
       replaceState(demoAddress(), {});
-      void fetch(`/api/traces?q=${encodeURIComponent(refusal.game)}&limit=20`)
-        .then(async response => (response.ok ? await response.json() as GameSummary[] : []))
-        .catch(() => [] as GameSummary[])
-        .then(rows => {
-          if (gameStore.resumeRefused !== refusal) return;
-          const row = rows.find(candidate => candidate.id === refusal.game);
-          if (row?.status === 'completed' && askedGame === refusal.game) void goto(`/replay?trace=${encodeURIComponent(refusal.game)}`, { replaceState: true });
-          else if (row && row.status !== 'completed') refused = refusal;
-          else gameStore.resumeRefused = null;
-        });
+      if (action === 'setup') gameStore.resumeRefused = null;
+      else refused = refusal;
     });
   });
 
@@ -444,7 +436,12 @@
       <button class="btn btn-primary btn-sm mt-1" data-testid="start-played-from" disabled={gameStore.newGamePending} onclick={playOn}>{gameStore.newGamePending ? 'Preparing game…' : 'Play on'}</button>
     </section>
   {/if}
-  {#if refused}
+  {#if refused?.code === 'game_open_elsewhere'}
+    <section role="status" class="notice" data-testid="game-open-elsewhere">
+      Your game in progress is open in another tab.
+      <a class="underline" href={`/?game=${encodeURIComponent(refused.game)}`}>Play it here instead</a>
+    </section>
+  {:else if refused}
     <section role="alert" aria-atomic="true" class="notice error" data-testid="resume-refused">
       {refused.message} The game is still in History.
       <a class="underline" href={`/replay?trace=${encodeURIComponent(refused.game)}`}>Open its Replay</a>

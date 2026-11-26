@@ -61,7 +61,7 @@ export interface RecordingIndex {
   /** When the game started and, once over, ended (ISO 8601; absent from legacy records). */
   started_at?: string | null;
   ended_at?: string | null;
-  status: 'finished' | 'waiting' | 'interrupted';
+  status: 'active' | 'completed' | 'stopped';
   can_produce: boolean;
   mirror?: (SearchConfig | null)[];
   mirror_retry?: PendingSearch | null;

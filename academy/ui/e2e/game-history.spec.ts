@@ -103,7 +103,7 @@ test('an unfinished game stays in History, replays without a credential and resu
   expect(errors).toEqual([]);
 });
 
-test('a finished game offers Rematch and Swap sides, and its address opens its Replay', async ({ page }, testInfo) => {
+test('a finished game offers Rematch and Swap sides, and its address returns to its result', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -141,10 +141,11 @@ test('a finished game offers Rematch and Swap sides, and its address opens its R
   await expect(historyRow(page, first).getByTestId('game-history-status')).not.toHaveText('In progress');
   await expect(historyRow(page, third).getByTestId('game-history-resume')).toHaveCount(1);
   await page.screenshot({ path: testInfo.outputPath('history.png') });
-  // A finished game's Play address opens its Replay.
+  // A rematch left the finished game in memory: its address still shows its result.
+  // (Once it idles out, the address opens its Replay: `game_finished`.)
   await page.goto(`/?game=${encodeURIComponent(first)}`);
-  await expect(page).toHaveURL(new RegExp(`/replay\\?trace=${first}`));
-  await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('main')).toHaveAttribute('data-game', first, { timeout: 30_000 });
+  await expect(page.getByTestId('game-result')).toBeVisible();
   // An unknown game opens setup, silently.
   await page.goto('/?game=no-such-game');
   await expect(page.getByTestId('home')).toBeVisible();

@@ -255,8 +255,8 @@
   const status = $derived(!index ? ''
     : replayStore.busy ? 'Reading saved recording…'
       : index.record_stop?.status === 'diverged' ? `Stopped at decision ${index.record_stop.index} · saved recording only`
-        : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `${saidOf(index.winner)} wins`}`
-          : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'In progress · the moves so far'
+        : index.status === 'completed' ? `Finished · ${index.winner === null ? 'Draw' : `${saidOf(index.winner)} wins`}`
+          : index.status === 'active' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'In progress · the moves so far'
             : 'Stopped · saved recording only');
   const sourceLabel = $derived(index?.source_kind === 'play' ? 'Recorded Play game' : index?.source_kind === 'training' ? 'Training game'
     : index?.source_kind ? 'Evaluation game' : index?.watch && !index.record_stop ? 'Watch' : 'Recorded game');
@@ -307,7 +307,7 @@
     try {
       const choices = opening ? await replayStore.api<AnalysisChoices>(`${path}/policies`) : analysisChoices;
       let list = (await replayStore.api<{ analyses: Analysis[] }>(path)).analyses;
-      if (opening && !list.length && choices?.default && played && index.status === 'finished') {
+      if (opening && !list.length && choices?.default && played && index.status === 'completed') {
         await replayStore.api(path, { policy: choices.default });
         list = (await replayStore.api<{ analyses: Analysis[] }>(path)).analyses;
       }
@@ -689,7 +689,7 @@
               <thead><tr><th scope="col"><span class="sr-only">Count</span></th><th scope="col">{saidOf(heroSeat)}</th><th scope="col">{saidOf(1 - heroSeat)}</th></tr></thead>
               <tbody>{#each numbersRows as row (row.label)}<tr><th scope="row">{row.label}</th><td>{row.you}</td><td>{row.opponent}</td></tr>{/each}</tbody>
             </table>
-            {#if numbers && !numbers.complete}<p class="text-ink-3">{index.status === 'waiting' ? 'Counted to the moves so far.' : 'Counted to where the game stopped.'}</p>{/if}
+            {#if numbers && !numbers.complete}<p class="text-ink-3">{index.status === 'active' ? 'Counted to the moves so far.' : 'Counted to where the game stopped.'}</p>{/if}
             {#if numbers?.analysis_shown}<p class="text-ink-2" data-testid="analysis-shown-count">Chosen with analysis shown: {numbers.analysis_shown} {numbers.analysis_shown === 1 ? 'decision' : 'decisions'}</p>{/if}
           {:else}<p class="text-ink-3">Counts need the build that recorded this game.</p>{/if}
           {#if analysis && agreed}

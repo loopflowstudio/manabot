@@ -56,7 +56,7 @@ const positions: RecordingIndex['positions'] = [
   {key: 'latest', kind: 'state', turn: 2, phase: 'COMBAT', step: 'DAMAGE', actor: null, automatic: false, can_reveal: false},
 ];
 function index(canProduce = false): RecordingIndex {
-  return {id: 'trace-1', positions: [...positions], total: 3, next_offset: null, revision: 91, status: canProduce ? 'waiting' : 'finished', can_produce: canProduce, can_study: true, winner: 0, players: [], source_kind: null, watch: true};
+  return {id: 'trace-1', positions: [...positions], total: 3, next_offset: null, revision: 91, status: canProduce ? 'active' : 'completed', can_produce: canProduce, can_study: true, winner: 0, players: [], source_kind: null, watch: true};
 }
 function current(key: string): RecordedPosition {
   return {description: null, note_key: key, ...positions.find(position => position.key === key)!, observation: makeObservation(2, key === 'latest'), decision: null, outputs: null, viewer: 0, revealed: false, can_reveal: false, history: [], history_labels: [], history_before: null, cursor: 0, transition_start: 0, consequences_recorded: true};

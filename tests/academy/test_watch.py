@@ -440,6 +440,6 @@ def test_unified_watch_reads_are_bounded_and_do_not_produce(
     assert len(game.canonical_decisions) == 2
     server.end_game(trace_id, "expired")
     interrupted = client.get(f"{url}/recording").json()
-    assert interrupted["status"] == "interrupted"
+    assert interrupted["status"] == "stopped"
     assert not interrupted["can_produce"] and not interrupted["can_study"]
     assert client.get(f"{url}/positions/{key}").json()["decision"] == choice["decision"]

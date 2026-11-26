@@ -1,7 +1,8 @@
 """The setup a game was started from, as a request that starts it again.
 
-`setup_draft` reads it from a game's recorded config; `continuation_config`
-applies a rematch's seat swap and edits to it.
+`setup_draft` reads it from a game's recorded config; `shown_setup` is the
+part of it the person playing may see; `continuation_config` applies a
+rematch's seat swap and edits to it.
 """
 
 from __future__ import annotations
@@ -58,6 +59,19 @@ def setup_draft(config: GameConfig) -> dict[str, Any]:
         draft["hero_deck_pool"] = config.hero_deck_pool
     if config.villain_deck_pool is not None:
         draft["villain_deck_pool"] = config.villain_deck_pool
+    return draft
+
+
+def shown_setup(config: GameConfig, game_over: bool) -> dict[str, Any]:
+    """The setup as the browser gets it. While decklists are closed and the
+    game is not over, the opponent's deck and imported list are left out (a
+    deck pool it was drawn from stays); a rematch reads them from the stored
+    game."""
+    draft = setup_draft(config)
+    if config.decklists == "closed" and not game_over:
+        del draft["villain_deck"]
+        if "deck_import" in draft:
+            draft["deck_import"] = {"hero": draft["deck_import"]["hero"]}
     return draft
 
 

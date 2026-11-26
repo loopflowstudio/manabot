@@ -78,7 +78,7 @@
 
   /** In progress covers every unfinished game, however an earlier build labelled it. */
   function resultLabel(game: GameSummary): string {
-    if (game.resumable || game.status === 'active') return 'In progress';
+    if (game.status === 'active') return 'In progress';
     if (game.status !== 'completed') return 'Stopped';
     if (game.winner === null) return 'Draw';
     const winner = game.players.find(player => player.seat === game.winner);
@@ -169,7 +169,7 @@
                   {:else}<span class="text-ink-2">Unknown player</span>{/if}
                 </td>
               {/each}
-              <td class="p-4"><span class="font-semibold" data-testid="game-history-status">{resultLabel(game)}</span>{#if game.status === 'stopped' && !game.resumable && game.end_reason}<div class="text-sm text-ink-2">{game.end_reason.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2" data-testid="game-history-numbers">{[game.numbers ? `${game.numbers.turns} ${game.numbers.turns === 1 ? 'turn' : 'turns'}` : null, duration(game.timestamp, game.ended_at), `${game.num_events} recorded steps`, game.numbers?.analysis_shown ? `analysis shown at ${count(game.numbers.analysis_shown, 'decision')}` : null, game.numbers?.played_from != null ? 'played on from another game' : null].filter(Boolean).join(' · ')}</div></td>
+              <td class="p-4"><span class="font-semibold" data-testid="game-history-status">{resultLabel(game)}</span>{#if game.status === 'stopped' && game.end_reason}<div class="text-sm text-ink-2">{game.end_reason.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2" data-testid="game-history-numbers">{[game.numbers ? `${game.numbers.turns} ${game.numbers.turns === 1 ? 'turn' : 'turns'}` : null, duration(game.timestamp, game.ended_at), `${game.num_events} recorded steps`, game.numbers?.analysis_shown ? `analysis shown at ${count(game.numbers.analysis_shown, 'decision')}` : null, game.numbers?.played_from != null ? 'played on from another game' : null].filter(Boolean).join(' · ')}</div></td>
               <td class="p-4">
                 {#if game.resumable}<a href={`/?game=${encodeURIComponent(game.id)}`} class="mr-3 font-semibold underline" data-testid="game-history-resume" aria-label={`Resume game ${game.id}`}>Resume</a>{/if}
                 <a href={replayUrl(game.id)} class="underline" data-testid="game-history-replay" aria-label={`Replay game ${game.id}`}>Replay</a>

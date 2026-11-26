@@ -102,6 +102,7 @@ from .attempts import (
     RetainedAttempt,
     decode_cursor,
     page_cursor,
+    shown_status,
 )
 from .curated_pack import (
     CURATED_PACK,
@@ -121,7 +122,7 @@ from .deck_pools import (
     resolve_deck_pool,
     set_deck_pools,
 )
-from .game_setup import continuation_config, setup_draft
+from .game_setup import continuation_config, setup_draft, shown_setup
 from .numbers import game_numbers
 from .opponent import (
     Opponent,
@@ -1375,14 +1376,23 @@ class GameSession:
         so a game stopped during the opponent's turn gets its reply now.
 
         Raises ValueError and changes nothing where the game is not an
-        unfinished played game or its opponent cannot be loaded, so it can be
-        resumed once that is put right. Where the engine no longer plays the
-        stored steps, the game ends as `record_diverged` and stays replayable.
+        unfinished played game (`game_not_found`, `game_is_watch`,
+        `game_finished`, `game_stopped`) or its opponent cannot be loaded, so
+        it can be resumed once that is put right. Where the engine no longer
+        plays the stored steps, the game ends as `record_diverged` and stays
+        replayable.
         """
         store = self.attempt_store
-        retained = store.load_attempt(game) if store.unfinished(game) else None
+        metadata = store.metadata(game)
+        if not metadata:
+            raise ValueError("game_not_found: That game is not saved here.")
+        if not any(player["kind"] == "human" for player in metadata["players"]):
+            raise ValueError("game_is_watch: A watched game has no seat of yours.")
+        if metadata["status"] == "completed":
+            raise ValueError("game_finished: That game is over.")
+        retained = store.load_attempt(game) if metadata["resumable"] else None
         if retained is None:
-            raise ValueError("resume_unavailable: That game is not one to resume.")
+            raise ValueError("game_stopped: That game stopped and cannot be resumed.")
         source = retained.trace
         replay = source.get("canonical_replay")
         config = GameConfig(**source["config"])
@@ -1451,11 +1461,10 @@ class GameSession:
             self.canonical_presentation[self.human_seat][-MAX_PRESENTATION_EVENTS:]
         )
         self._study_roots = roots
-        metadata = store.metadata(game)
-        self.revision = int(metadata["revision"])
+        # Taking a game up is a new revision, stored with the reopening, so a
+        # Command held from before it is stale wherever the game was rebuilt.
+        self.revision = store.reopen(game)
         # Above every id the record holds, so nothing recorded is named twice.
-        # A Command held from before for this same revision names this same
-        # decision: the record, the revision and the stops fix it.
         self._next_prompt_id = 1 + max(
             (row.prompt_id for row in self.canonical_decisions), default=0
         )
@@ -1465,7 +1474,6 @@ class GameSession:
         ]
         if source["end_reason"] == "active":
             self._persisted = (game, self.revision, len(events))
-        store.reopen(game)
         self._advance()
         return self.current_message()
 
@@ -3193,11 +3201,13 @@ def evict_game(game_id: str, watch_end_reason: str) -> None:
 
 
 def _cleanup_expired_games() -> None:
+    """Release idle games. A game with a connection is never idle: the person
+    may be thinking, and its board still asks for previews."""
     now = _now_utc()
     expired = [
         game_id
         for game_id, live in LIVE_GAMES.items()
-        if live.expires_at <= now and not live.lock.locked()
+        if live.expires_at <= now and live.websocket is None and not live.lock.locked()
     ]
     for game_id in expired:
         evict_game(game_id, SESSION_EXPIRED_END_REASON)
@@ -3224,7 +3234,7 @@ async def take_up_game(game_id: str) -> LiveGame:
                 game.work.finish()
             live = LIVE_GAMES[game_id] = LiveGame(game)
     if live.game.watch_mode:
-        raise ValueError("resume_unavailable: A watched game has no seat of yours.")
+        raise ValueError("game_is_watch: A watched game has no seat of yours.")
     return live
 
 
@@ -3255,11 +3265,10 @@ def _reply(live: LiveGame, response: dict[str, Any]) -> dict[str, Any]:
         payload["game"] = game.match_id
         payload["opponent"] = trace.config.opponent
         payload["opponent_label"] = _opponent_label(trace.config)
-        payload["mode"] = (
-            "study" if game.obs is not None and game.obs.game_over else "live"
-        )
         # What Rematch, Swap sides and Play again start from.
-        payload["setup"] = setup_draft(trace.config)
+        payload["setup"] = shown_setup(
+            trace.config, game.obs is not None and game.obs.game_over
+        )
     return payload
 
 
@@ -3525,6 +3534,13 @@ async def play_socket(websocket: WebSocket) -> None:
                 parsed = _parse_request(request)
                 if isinstance(parsed, ResumeMessage):
                     live = await take_up_game(parsed.game)
+                    if not parsed.take_over and live.websocket not in (
+                        None,
+                        websocket,
+                    ):
+                        raise ValueError(
+                            "game_open_elsewhere: This game is open in another tab."
+                        )
                     if attached != parsed.game:
                         _detach_websocket(attached, websocket)
                     await _attach_websocket(live, websocket)
@@ -3550,11 +3566,10 @@ async def play_socket(websocket: WebSocket) -> None:
                         ) from exc
                     previous, attached = attached, live.game.match_id
                     if previous != attached:
-                        # The game left behind stays unfinished and resumable.
+                        # The game left behind stays as it is, in memory until
+                        # it idles out: unfinished and resumable, or finished
+                        # and still open to Study.
                         _detach_websocket(previous, websocket)
-                        left = LIVE_GAMES.get(previous) if previous else None
-                        if left and left.websocket is None and not left.lock.locked():
-                            evict_game(previous, SESSION_EXPIRED_END_REASON)
                     continue
 
                 if attached is None:
@@ -3990,11 +4005,9 @@ def get_recording_index(
         "started_at": metadata.get("started_at"),
         "ended_at": metadata.get("ended_at"),
         # The stored status: a game dropped from memory is still in progress.
-        "status": "finished"
+        "status": "completed"
         if finished
-        else "waiting"
-        if metadata.get("status") == "active" or metadata.get("resumable")
-        else "interrupted",
+        else shown_status(str(metadata.get("status")), bool(metadata.get("resumable"))),
         "resumable": bool(metadata.get("resumable")),
         "can_produce": available,
         "mirror": _recorded_mirrors(players),
@@ -4449,6 +4462,18 @@ def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
     }
 
 
+async def _previewed_game(game_id: str) -> LiveGame:
+    """The game a preview reads, rebuilt from its record when it left memory
+    (its prompt is then a new one, so the preview answers stale)."""
+    live = LIVE_GAMES.get(game_id)
+    if live is None:
+        try:
+            live = await take_up_game(game_id)
+        except ValueError as exc:
+            raise HTTPException(404, "game_not_found") from exc
+    return live
+
+
 class PaymentPreviewRequest(BaseModel):
     """One current offer, with every Academy authority coordinate."""
 
@@ -4465,9 +4490,7 @@ async def get_payment_preview(
     game_id: str,
     payload: PaymentPreviewRequest,
 ) -> dict[str, Any]:
-    live = LIVE_GAMES.get(game_id)
-    if live is None:
-        raise HTTPException(404, "game_not_found")
+    live = await _previewed_game(game_id)
     async with live.lock:
         game = live.game
         context = game.published_prompt
@@ -4530,9 +4553,7 @@ async def get_combat_preview(
     Academy offer ids enumerate the native actions in order
     (`_build_decision_context`), so a step's native action index is its offer.
     """
-    live = LIVE_GAMES.get(game_id)
-    if live is None:
-        raise HTTPException(404, "game_not_found")
+    live = await _previewed_game(game_id)
     async with live.lock:
         game = live.game
         context = game.published_prompt

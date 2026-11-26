@@ -33,7 +33,7 @@ it('retains a legacy search selection enabled on open decklists', () => {
 
 it('a search opponent disables closed decklists with the reason', () => {
   const { body } = render(DecklistsSelector, {
-    props: { value: 'open', opponent: 'search-64' },
+    props: { value: 'open', players: ['random', 'search-64'] },
   });
   const closed = optionTag(body, 'closed');
   expect(closed).toContain('disabled');
@@ -42,7 +42,7 @@ it('a search opponent disables closed decklists with the reason', () => {
 
 it('a non-search opponent offers closed decklists', () => {
   for (const opponent of ['random', 'passive', 'policy:abc'] as const) {
-    const { body } = render(DecklistsSelector, { props: { value: 'open', opponent } });
+    const { body } = render(DecklistsSelector, { props: { value: 'open', players: [opponent] } });
     expect(optionTag(body, 'closed')).not.toContain('disabled');
   }
 });

@@ -279,10 +279,10 @@ describe('unresolved Command recovery', () => {
     gameStore.applyFrame(boltProtocolFixture.recovery.frame);
     state.game = 'game-a';
     state.pendingResume = true;
-    deliver(controller, {type: 'error', message: 'resume_unavailable: That game is not one to resume.'});
+    deliver(controller, {type: 'error', message: 'game_stopped: That game stopped and cannot be resumed.'});
     expect(sent).toEqual([]);
     expect(gameStore.protocolFrame).toBeNull();
-    expect(gameStore.resumeRefused).toEqual({ game: 'game-a', message: 'That game is not one to resume.' });
+    expect(gameStore.resumeRefused).toEqual({ game: 'game-a', code: 'game_stopped', message: 'That game stopped and cannot be resumed.' });
     expect(gameStore.stopped).toBe(false);
     expect(gameStore.commandPending).toBe(false);
     expect(state.game).toBeNull();

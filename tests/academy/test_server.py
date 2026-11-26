@@ -568,13 +568,14 @@ def test_websocket_refuses_to_resume_a_game_it_has_no_record_of(monkeypatch, tmp
             resumed.send_json({"type": "resume", "game": "no-such-game"})
             error_payload = settled_message(resumed)
             assert error_payload["type"] == "error"
-            assert error_payload["message"].startswith("resume_unavailable")
+            assert error_payload["message"].startswith("game_not_found: ")
     assert not server.LIVE_GAMES
 
 
 def test_websocket_resumes_a_game_dropped_from_memory(monkeypatch, tmp_path):
-    """Idling out frees the game and ends nothing: named again, on a new
-    connection or by the next request on the old one, it is rebuilt."""
+    """A game with a connection never idles out. Once its connection is gone,
+    idling out frees it and ends nothing: a preview or a resume rebuilds it,
+    at a new revision."""
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     monkeypatch.setattr(server, "SESSION_TTL", timedelta(seconds=0))
     server.LIVE_GAMES.clear()
@@ -589,20 +590,55 @@ def test_websocket_resumes_a_game_dropped_from_memory(monkeypatch, tmp_path):
             websocket.send_json(
                 {"type": "command", "command": _command(frame, keep, "keep")}
             )
-            # The expired game was dropped before this Command and rebuilt for it.
+            # Its time is up, but its connection keeps it: the Command meets
+            # the prompt it was sent for.
+            live = server.LIVE_GAMES[payload["game"]]
             kept = settled_message(websocket)
             assert kept["status"] == "accepted"
-            assert kept["game"] == payload["game"]
+            assert server.LIVE_GAMES[payload["game"]] is live
+            held = kept["update"]["frame"]
+
+        server._cleanup_expired_games()
+        assert payload["game"] not in server.LIVE_GAMES
+        # A preview finds the game again; the prompt it names is gone.
+        preview = client.post(
+            f"/api/games/{payload['game']}/payment-preview",
+            json={
+                "match_id": held["match_id"],
+                "revision": held["revision"],
+                "prompt_id": held["prompt"]["id"],
+                "frame_hash": held["frame_hash"],
+                "offer_id": held["offers"][0]["id"],
+            },
+        )
+        assert (preview.status_code, preview.json()["detail"]) == (
+            409,
+            "payment_preview_stale",
+        )
+        assert payload["game"] in server.LIVE_GAMES
 
         with client.websocket_connect("/ws/play") as resumed:
             resumed.send_json({"type": "resume", "game": payload["game"]})
             resumed_payload = settled_message(resumed)
             assert resumed_payload["type"] == "observation"
             assert resumed_payload["game"] == payload["game"]
-            assert (
-                resumed_payload["recovery"]["frame"]["frame_hash"]
-                == kept["update"]["frame"]["frame_hash"]
+            frame = resumed_payload["recovery"]["frame"]
+            assert frame["revision"] > held["revision"]
+            assert frame["offers"] == held["offers"]
+            # A Command held from before the game left memory is stale.
+            resumed.send_json(
+                {"type": "command", "command": _command(held, held["offers"][0], "x")}
             )
+            assert settled_message(resumed)["rejection"]["code"] == "stale_revision"
+
+            # A second tab at `/` leaves the game with the tab that holds it.
+            with client.websocket_connect("/ws/play") as other:
+                other.send_json(
+                    {"type": "resume", "game": payload["game"], "take_over": False}
+                )
+                refused = settled_message(other)
+                assert refused["message"].startswith("game_open_elsewhere: ")
+            assert server.LIVE_GAMES[payload["game"]].websocket is not None
 
     trace_files = _recorded_traces(tmp_path)
     assert len(trace_files) == 1

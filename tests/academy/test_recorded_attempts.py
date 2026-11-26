@@ -64,7 +64,7 @@ def test_an_unfinished_game_reads_without_credentials_and_survives_restart(
     assert not {"mine", "replay_available", "feedback", "play_session_id"} & set(listed)
     assert client.get(f"/api/traces/{attempt}/decisions").status_code == 200
     index = client.get(f"/api/traces/{attempt}/recording").json()
-    assert index["status"] == "waiting" and index["resumable"]
+    assert index["status"] == "active" and index["resumable"]
     assert "can_feedback" not in index
     payload = client.get(f"/api/traces/{attempt}?reveal_hidden=true").json()
     assert "seed" not in payload["config"]
@@ -88,7 +88,7 @@ def test_an_unfinished_game_reads_without_credentials_and_survives_restart(
     # A game dropped from memory is still in progress, not interrupted.
     game.release()
     index = client.get(f"/api/traces/{attempt}/recording").json()
-    assert index["status"] == "waiting" and not index["can_study"]
+    assert index["status"] == "active" and not index["can_study"]
 
 
 def retained(*, ended=True, winner=0):
@@ -193,6 +193,10 @@ def test_history_lists_every_game_and_filters_by_bot_pairing_deck_and_status(
             "UPDATE attempts SET status='interrupted', ending_reason='server_restart' WHERE id='game-c'"
         )
     assert ids(status="active") == ["game-c"] and ids(status="stopped") == []
+    # Every row names one of three statuses, whatever an earlier build stored.
+    listed = {row["id"]: row["status"] for row in client.get("/api/traces").json()}
+    assert listed["game-c"] == "active"
+    assert set(listed.values()) <= {"active", "completed", "stopped"}
 
 
 EARLIER_SCHEMA = """

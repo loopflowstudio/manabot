@@ -124,11 +124,34 @@ describe('taking up a game by its id', () => {
 
     expect(storedGame()).toBeNull();
     expect(gameStore.observation).toBeNull();
-    expect(gameStore.resumeRefused).toEqual({ game: GAME, message: 'This game no longer plays as recorded at step 12.' });
+    expect(gameStore.resumeRefused).toEqual({ game: GAME, code: 'record_diverged', message: 'This game no longer plays as recorded at step 12.' });
     latest().drop();
     vi.advanceTimersByTime(1000);
     latest().open();
     expect(latest().sent).toEqual([]);
+  });
+
+  it('leaves a remembered game with the tab that holds it, and keeps it remembered', () => {
+    window.localStorage.setItem('academy.game', GAME);
+    const controller = new GameSocketController();
+    controller.resume(GAME, false);
+    latest().open();
+    expect(latest().sent).toEqual([{ type: 'resume', game: GAME, take_over: false }]);
+    latest().receive({ type: 'error', message: 'game_open_elsewhere: This game is open in another tab.' });
+
+    expect(gameStore.resumeRefused).toEqual({ game: GAME, code: 'game_open_elsewhere', message: 'This game is open in another tab.' });
+    expect(storedGame()).toBe(GAME);
+  });
+
+  it('takes its own game back on reconnect after a resume that would not take one over', () => {
+    const controller = new GameSocketController();
+    controller.resume(GAME, false);
+    latest().open();
+    latest().receive(board());
+    latest().drop();
+    vi.advanceTimersByTime(1000);
+    latest().open();
+    expect(latest().sent[0]).not.toHaveProperty('take_over');
   });
 
   it('opens setup once the game is over', () => {

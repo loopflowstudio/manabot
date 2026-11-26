@@ -37,7 +37,7 @@ class GameNumbers(BaseModel):
     person's decisions committed with a live analysis shown (stored on each
     event, not re-executed; numbers saved before it existed read 0).
     `played_from` is the step a game played on from another starts at: the
-    steps before it are that game's, so My record leaves the game out."""
+    steps before it are that game's."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     complete: bool

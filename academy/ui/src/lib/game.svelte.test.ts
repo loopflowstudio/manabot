@@ -215,6 +215,15 @@ describe('GameStore', () => {
     expect(store.newGameConfig()).toMatchObject(draft);
   });
 
+  it('keeps the opponent deck chosen here when a closed game names none', () => {
+    const store = createGameStore();
+    store.setHeroDeck('gw_allies');
+    store.setVillainDeck('gw_allies');
+    store.applySetupDraft({hero_deck:'ur_lessons', decklists:'closed', villain_type:'random'});
+    expect(store.decks).toEqual({hero:'ur_lessons', villain:'gw_allies'});
+    expect(store.decklists).toBe('closed');
+  });
+
   it('does not invite a decision while waiting, disconnected or finished', () => {
     const store = createGameStore();
     store.connection = 'connected';

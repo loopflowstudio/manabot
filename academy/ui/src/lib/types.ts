@@ -863,7 +863,7 @@ export interface RecordedPlayer {
 
 export interface GameSummary extends TraceSummary {
   /** `active` is a game in progress; a legacy record may still say `interrupted`. */
-  status: 'active' | 'completed' | 'stopped' | 'interrupted';
+  status: 'active' | 'completed' | 'stopped';
   /** An unfinished played game: `/?game=<id>` takes it up again. */
   resumable: boolean;
   ended_at: string | null;
@@ -1108,7 +1108,6 @@ export type ServerMessage = (
   game?: string;
   opponent?: GameOpponent | null;
   opponent_label?: string | null;
-  mode?: 'live' | 'study';
   setup?: Record<string, unknown>;
   launch?: string;
   launch_setup?: LaunchSetup;
@@ -1127,7 +1126,7 @@ export interface LaunchSetup {
 
 /** What the browser sends on `/ws/play` (`managym/academy/play_protocol.py`). */
 export type ClientMessage =
-  | { type: 'resume'; game: string; presentation_cursor?: number | null }
+  | { type: 'resume'; game: string; presentation_cursor?: number | null; take_over?: boolean }
   | { type: 'new_game'; config?: Record<string, unknown> }
   | { type: 'rematch'; game: string; intent: 'rematch' | 'swap_sides'; config?: Record<string, unknown> }
   | { type: 'command'; command: Command }

@@ -193,7 +193,8 @@ test('a game survives closing the tab and restarting the server, and resumes fro
     await expect(returned.getByTestId('action-option').first()).toBeEnabled({ timeout: 60_000 });
     // The same game, at the decision that was pending, with its history and its opponent.
     await expect(returned.locator('main')).toHaveAttribute('data-game', game);
-    await expect(returned.locator('main')).toHaveAttribute('data-frame-revision', String(frame.revision));
+    // Taking the game up from its record is a new revision of the same decision.
+    await expect(returned.locator('main')).toHaveAttribute('data-frame-revision', String(frame.revision + 1));
     const resumed = (await tabState(returned))!.last_frame!;
     expect(resumed.match_id).toBe(frame.match_id);
     expect(resumed.offers.map(offer => offer.label)).toEqual(frame.offers.map(offer => offer.label));
@@ -236,6 +237,18 @@ test('two tabs on two games each keep their own Command in flight', async ({ con
   await expect(page.locator('main')).toHaveAttribute('data-game', first, { timeout: 30_000 });
   await other.reload();
   await expect(other.locator('main')).toHaveAttribute('data-game', second, { timeout: 30_000 });
+
+  // A third tab at bare `/` leaves the remembered game with the tab that holds it.
+  const third = await context.newPage();
+  await third.goto(`${origin}/`);
+  await expect(third.getByTestId('home')).toBeVisible();
+  const takeOver = third.getByTestId('game-open-elsewhere').getByRole('link');
+  await expect(takeOver).toHaveAttribute('href', `/?game=${encodeURIComponent(second)}`);
+  await decide(other);
+  // Its link takes the game over, and the tab that held it says so.
+  await takeOver.click();
+  await expect(third.locator('main')).toHaveAttribute('data-game', second, { timeout: 30_000 });
+  await expect(other.getByText('open in another tab')).toBeVisible();
 });
 
 test('session storage failure leaves the game usable with an honest warning', async ({ page }) => {

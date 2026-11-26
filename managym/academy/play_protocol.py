@@ -20,6 +20,9 @@ class ResumeMessage(ProtocolModel):
     game: str = Field(min_length=1, max_length=128)
     # Strict: a cursor is an address, never a coerced boolean or string.
     presentation_cursor: UInt64 | None = Field(default=None, strict=True)
+    # False leaves a game another connection holds with that connection
+    # (`game_open_elsewhere`); otherwise this one takes it over.
+    take_over: bool = True
 
 
 class NewGameMessage(ProtocolModel):

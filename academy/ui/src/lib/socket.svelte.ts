@@ -166,6 +166,8 @@ export class GameSocketController {
   private reconnectAttempts = 0;
   private intentionallyClosed = false;
   private pendingResume = false;
+  /** Whether the resume in flight takes the game from a tab that holds it. */
+  private takeOver = true;
   private outboundQueue: ClientMessage[] = [];
   private pendingCommand: PendingCommand | null = null;
   private presentationCursor: number | null = null;
@@ -249,8 +251,12 @@ export class GameSocketController {
     gameStore.setConnection('disconnected');
   }
 
-  /** Take up `game` at its pending decision, in memory or from its stored record. */
-  resume(game: string): void {
+  /**
+   * Take up `game` at its pending decision, in memory or from its stored
+   * record. With `takeOver` false, a game another tab holds stays there and
+   * the resume is refused (`game_open_elsewhere`).
+   */
+  resume(game: string, takeOver = true): void {
     const open = this.socket?.readyState === WebSocket.OPEN;
     if (this.game === game && (this.pendingResume || (open && gameStore.gameId === game))) return;
     if (this.game !== game) this.presentationCursor = null;
@@ -263,6 +269,7 @@ export class GameSocketController {
       gameStore.applyFrame(tab.last_frame);
     }
     this.pendingCommand = tab.pending_command ?? null;
+    this.takeOver = takeOver;
     gameStore.resumeRefused = null;
     if (open) this.sendResume();
     else this.connect();
@@ -278,6 +285,7 @@ export class GameSocketController {
       type: 'resume',
       game: this.game,
       ...(this.presentationCursor === null ? {} : { presentation_cursor: this.presentationCursor }),
+      ...(this.takeOver ? {} : { take_over: false }),
     } satisfies ClientMessage));
   }
 
@@ -463,6 +471,8 @@ export class GameSocketController {
       this.starting = null;
       gameStore.newGamePending = false;
       this.pendingResume = false;
+      // Once attached, the game is this tab's: its reconnects take it back.
+      this.takeOver = true;
       gameStore.applyGame(message);
       if (message.game && message.game !== this.game) this.attach(message.game);
       if (!this.pendingCommand) gameStore.endCommand();
@@ -539,9 +549,9 @@ export class GameSocketController {
     }
 
     // An error or a control error: a request was refused.
-    const { text } = refusal(message.message);
+    const { code, text } = refusal(message.message);
     if (this.pendingResume) {
-      this.refuseResume(text);
+      this.refuseResume(code, text);
       return;
     }
     this.starting = null;
@@ -564,8 +574,11 @@ export class GameSocketController {
     this.game = game;
   }
 
-  /** The server will not take the game up: no board, the reason, and a way to its Replay. */
-  private refuseResume(reason: string): void {
+  /**
+   * The server will not take the game up: no board, and the refusal for the
+   * page to act on. A game another tab holds is still this browser's game.
+   */
+  private refuseResume(code: string | null, reason: string): void {
     const game = this.game;
     this.pendingResume = false;
     this.pendingCommand = null;
@@ -574,10 +587,11 @@ export class GameSocketController {
     this.game = null;
     presentationPlayer.clear();
     gameStore.leaveGame();
+    this.takeOver = true;
     if (!game) return;
-    forgetGame(game);
+    if (code !== 'game_open_elsewhere') forgetGame(game);
     writeTabValue(tabStorageKey(game), null);
-    gameStore.resumeRefused = { game, message: reason };
+    gameStore.resumeRefused = { game, code, message: reason };
   }
 
   /** The game broke while a request ran. Its last board stays readable; nothing resumes it. */
@@ -754,8 +768,8 @@ export function disconnect(): void {
   controller.disconnect();
 }
 
-export function resumeGame(game: string): void {
-  controller.resume(game);
+export function resumeGame(game: string, takeOver = true): void {
+  controller.resume(game, takeOver);
 }
 
 export function leaveGame(options: { forget: boolean } = { forget: true }): void {

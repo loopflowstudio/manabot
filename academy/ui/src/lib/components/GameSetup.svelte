@@ -235,7 +235,7 @@
         </label>
       <PlayerPicker label="Seat 2 bot" value={setup.opponentChoice} {trained} {extension} {catalogError} {disabled}
         decklists={setup.decklists} manaPayment={setup.manaPayment} manaFloats={setup.manaFloats}
-        setup={{ human_seat: setup.humanSeat, hero_deck: setup.decks.hero, villain_deck: setup.decks.villain, ...(setup.deckImport ? { deck_import: setup.deckImport } : {}) }}
+        setup={{ human_seat: setup.watchMode ? 0 : setup.humanSeat, hero_deck: setup.decks.hero, villain_deck: setup.decks.villain, ...(setup.deckImport ? { deck_import: setup.deckImport } : {}) }}
         onChange={value => { setup.setOpponentChoice(value); }}
         search={setup.searchConfig}
         onSearchChange={value => { setup.searchConfig = value; }} />
@@ -262,7 +262,7 @@
       {:else}
         <button type="button" class="btn btn-secondary btn-sm" {disabled} onclick={swapWatchBots}>⇄ Swap bots</button>
       {/if}
-      <DecklistsSelector value={setup.decklists} opponent={setup.opponentChoice} {disabled} onChange={value => setup.setDecklists(value)} />
+      <DecklistsSelector value={setup.decklists} players={setup.watchMode ? [setup.watchPlayerChoice, setup.opponentChoice] : [setup.opponentChoice]} {disabled} onChange={value => setup.setDecklists(value)} />
       <label class="flex flex-col gap-1">
         <span class="type-label text-ink-2">Deal mode</span>
         <select aria-label="Deal mode" class="rounded border border-line bg-field p-2" bind:value={setup.dealMode}>

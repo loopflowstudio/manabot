@@ -8,6 +8,7 @@ import {
 } from './decks';
 import { mergeBoards, type SeqRange, type StepBoard } from './board/boards';
 import type { HistoryNote } from './board/history';
+import type { ResumeRefusal } from './resume-refusal';
 import { findKeptDeck, isKeptDeckChoice } from './kept-decks';
 import { LIVE_ANALYSIS_OFF, type LiveAnalysis } from './analysis';
 export { DECISION_PROMPTS } from './prompt-instructions';
@@ -101,10 +102,13 @@ export class GameStore {
     this.turnOrder = draft.human_seat === 1 ? 'draw' : 'play';
     this.dealMode = draft.seed == null ? 'fresh' : 'repeat';
     this.seed = String(draft.seed ?? '0');
-    this.deckImport = (draft.deck_import as typeof this.deckImport) ?? null;
+    // A game with closed decklists names no opponent deck or imported list
+    // until it is over: the opponent deck chosen here stays as it is.
+    const imported = draft.deck_import as { villain?: unknown } | undefined;
+    if (!imported || imported.villain) this.deckImport = (imported as typeof this.deckImport) ?? null;
     const named = sanitizeDeckSelection({
       hero: draft.hero_deck_pool ?? draft.hero_deck,
-      villain: draft.villain_deck_pool ?? draft.villain_deck,
+      villain: draft.villain_deck_pool ?? draft.villain_deck ?? this.decks.villain,
     });
     if (named) { this.setHeroDeck(named.hero); this.setVillainDeck(named.villain); }
     this.decklists = draft.decklists === 'closed' ? 'closed' : 'open';
@@ -149,7 +153,7 @@ export class GameStore {
   /** The game broke while a request ran: its last board stays readable and takes no input. */
   stopped = $state(false);
   /** A game the server would not take up again, and why; its Replay still opens. */
-  resumeRefused = $state<{ game: string; message: string } | null>(null);
+  resumeRefused = $state<ResumeRefusal | null>(null);
   selectedTargetId = $state<number | null>(null);
   opponentChoice = $state<PlayerChoice>('random');
   decklists = $state<Decklists>('open');

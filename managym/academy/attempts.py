@@ -45,6 +45,15 @@ UNFINISHED_SQL = """(
         ('server_restart', 'server_shutdown', 'session_expired', 'new_game'))))"""
 
 
+def shown_status(status: str, resumable: bool) -> str:
+    """A game's status as History and Replay name it: `active` (in progress),
+    `completed` (the rules ended it) or `stopped`. The stored value keeps an
+    earlier build's spelling (`interrupted`, a resumable `stopped`)."""
+    if resumable or status == "active":
+        return "active"
+    return "completed" if status == "completed" else "stopped"
+
+
 # The one person who plays here: every human seat is recorded as this player.
 HUMAN_PLAYER_ID = "human:local"
 HUMAN_PLAYER_NAME = "You"
@@ -378,15 +387,22 @@ class AttemptStore:
                 is not None
             )
 
-    def reopen(self, attempt: str) -> None:
+    def reopen(self, attempt: str) -> int:
         """Make an unfinished game this process's active one, so `save` appends
-        to it. The only write that changes a row an earlier build closed."""
+        to it, and return its revision, advanced by one: nothing addressed to
+        the game before it was reopened addresses it now. The only write that
+        changes a row an earlier build closed."""
         with self.connect() as db:
             db.execute(
                 f"""UPDATE attempts AS a SET status='active', ending_reason=NULL,
-                ended_at=NULL, process_id=? WHERE a.id=? AND {UNFINISHED_SQL}""",
+                ended_at=NULL, process_id=?, revision=revision+1
+                WHERE a.id=? AND {UNFINISHED_SQL}""",
                 (PROCESS_ID, attempt),
             )
+            row = db.execute(
+                "SELECT revision FROM attempts WHERE id=?", (attempt,)
+            ).fetchone()
+        return int(row["revision"])
 
     def diverge(self, attempt: str) -> None:
         """End an unfinished game whose record no longer replays. Its stored
@@ -530,7 +546,7 @@ class AttemptStore:
                 "timestamp": row["started_at"],
                 "ended_at": row["ended_at"],
                 "winner": row["winner"],
-                "status": row["status"],
+                "status": shown_status(row["status"], bool(row["resumable"])),
                 "end_reason": row["ending_reason"] or "active",
                 "num_events": row["num_events"],
                 "numbers": json.loads(row["numbers_json"])
