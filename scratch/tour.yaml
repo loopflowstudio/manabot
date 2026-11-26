@@ -1,19 +1,19 @@
-at: 716d7ed377
+at: bf6209ae7ce27d4ddc3291978a97928d3be0022f
 first:
   - path: docs/academy.md
     why: User behavior, grouped-decision invariants, and reclassified multi-step audit
   - path: managym/README.md
     why: Unified Env.decision/preview/submit contract and 0.3.0 deprecations
   - path: managym/src/flow/group/mod.rs
-    why: Unified ActiveDecision/DecisionChoice/DecisionOutcome types, generic driver, and purity boundary
+    why: Unified ActiveDecision/DecisionChoice/DecisionOutcome types, shared driver, and purity boundary
   - path: managym/src/flow/group/combat.rs
     why: DeclareAttackers and DeclareBlockers compiled through the shared driver
   - path: managym/src/flow/group/library.rs
-    why: Scry, Surveil, and OrderLibrary compilation, GroupCard committed labels, and bottom-order reversal
+    why: Scry, Surveil, and OrderLibrary over shared LibraryProgress and GroupCard labels
   - path: managym/src/agent/env.rs
-    why: Env::decision, preview, and submit with step/settle_players parity
+    why: Env::decision, preview, and submit sharing verify_step and settle logic
   - path: managym/src/python/bindings.rs
-    why: PyO3 Env.decision/preview/submit bindings and 0.3.0 deprecation warnings on structured/combat_preview
+    why: PyO3 Env.decision/preview/submit bindings and 0.3.0 deprecation warnings
   - path: managym/group.py
     why: Typed Pydantic Decision, Choice, DecisionAddress, Offer, and DecisionPreview models
   - path: managym/__init__.pyi
