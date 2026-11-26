@@ -1,12 +1,13 @@
 //! Morningtide.
 use managym_state::{
-    ability::{Effect, ObjectSelector, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes, Keyword, PrintedCharacteristics},
+    ability::{Ability, Actor, Effect, ObjectSelector, PaymentCost, TargetSpec, TriggerCondition},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![kindled_fury(), negate()]
+    vec![taurean_mauler(), kindled_fury(), negate()]
 }
 
 fn negate() -> CardDefinition {
@@ -45,6 +46,39 @@ fn kindled_fury() -> CardDefinition {
                 0,
                 Keyword::FirstStrike,
             ),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn taurean_mauler() -> CardDefinition {
+    let text_box = "Changeling (This card is every creature type.)\nWhenever an opponent casts a spell, you may put a +1/+1 counter on this creature.";
+    CardDefinition {
+        key: "mor.taurean_mauler",
+        scryfall_id: "d50b5df1-b658-4df0-900e-79c44599b93e",
+        printed: PrintedCharacteristics {
+            name: "Taurean Mauler".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Shapeshifter".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Changeling]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::casts(Actor::Opponent, CardPredicate::default()),
+                intervening_if: None,
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::default()),
+                    if_paid: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                    if_declined: vec![],
+                }],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

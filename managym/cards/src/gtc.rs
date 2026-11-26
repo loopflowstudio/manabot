@@ -1,19 +1,21 @@
 //! Gatecrash.
 use super::rtr::guildgate;
 use managym_state::ability::{
-    Ability, Actor, AttackSize, Effect, ObjectSelector, Per, PlayerSelector, Scope, TargetSpec,
-    TriggerCondition, TriggerSubject,
+    Ability, Actor, AttackSize, Effect, EffectValue, ObjectSelector, Per, PlayerSelector, Scope,
+    TargetSpec, TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
-    CardDefinition, CardType, CardTypes, Keyword, Keywords, PowerCda, PrintedCharacteristics,
-    StaticAbility,
+    CardDefinition, CardType, CardTypes, EntryScope, Keyword, Keywords, LayerCount, LayerValue,
+    PrintedCharacteristics, ReplacementEffect, StaticAbility,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
+use managym_state::permanent::CounterKind;
 use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        prime_speaker_zegana(),
         aurelia_the_warleader(),
         boros_guildgate(),
         consuming_aberration(),
@@ -112,6 +114,10 @@ fn aurelia_the_warleader() -> CardDefinition {
 
 fn consuming_aberration() -> CardDefinition {
     let text_box = "Consuming Aberration's power and toughness are each equal to the number of cards in your opponents' graveyards.\nWhenever you cast a spell, each opponent reveals cards from the top of their library until they reveal a land card, then puts those cards into their graveyard.";
+    let count = LayerValue::count(LayerCount::Graveyard {
+        who: Actor::Opponent,
+        predicate: CardPredicate::default(),
+    });
     CardDefinition {
         key: "gtc.consuming_aberration",
         scryfall_id: "6354de66-f7f8-4e33-98d0-52624d3d7828",
@@ -120,12 +126,10 @@ fn consuming_aberration() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{3}{U}{B}")),
             types: CardTypes::new([CardType::Creature]),
             subtypes: vec!["Horror".into()],
-            statics: vec![StaticAbility::CharacteristicPt(
-                PowerCda::GraveyardMatchingBy {
-                    who: Actor::Opponent,
-                    predicate: Box::default(),
-                },
-            )],
+            statics: vec![StaticAbility::cda(vec![Modification::SetBasePt {
+                power: Some(count.clone()),
+                toughness: Some(count),
+            }])],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::casts(Actor::You, CardPredicate::default()),
                 intervening_if: None,
@@ -214,6 +218,40 @@ fn boros_charm() -> CardDefinition {
                     )],
                 ],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn prime_speaker_zegana() -> CardDefinition {
+    let text_box = "Prime Speaker Zegana enters with X +1/+1 counters on it, where X is the greatest power among other creatures you control.\nWhen Prime Speaker Zegana enters, draw cards equal to its power.";
+    CardDefinition {
+        key: "gtc.prime_speaker_zegana",
+        scryfall_id: "f30dfb8e-f540-45ab-a4e8-63425099646a",
+        printed: PrintedCharacteristics {
+            name: "Prime Speaker Zegana".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{G}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Merfolk".into(), "Wizard".into()],
+            power: Some(1),
+            toughness: Some(1),
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                kind: CounterKind::PlusOnePlusOne,
+                count: EffectValue::GreatestPowerYouControl {
+                    predicate: CardPredicate::creature(),
+                },
+                condition: None,
+            }],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::DrawCards {
+                    count: EffectValue::SourcePower,
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

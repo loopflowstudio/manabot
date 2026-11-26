@@ -52,9 +52,7 @@ fn payable_x_values(least: u8, can_pay: impl Fn(u8) -> bool) -> Vec<u8> {
 
 impl CastChoices {
     pub(crate) fn spell(self, object: &Object) -> &Arc<PrintedCharacteristics> {
-        crate::cards::content_pack::default_content_pack()
-            .spell_definition(object, self.profile)
-            .expect("offered spell profile")
+        crate::cards::content_pack::spell_face(object, self.profile).expect("offered spell profile")
     }
 
     pub(super) fn matches_spell(
@@ -116,8 +114,7 @@ impl Game {
         profile: SpellProfile,
         authority: CastAuthority<'_>,
     ) -> Option<CastChoices> {
-        let spell = crate::cards::content_pack::default_content_pack()
-            .spell_definition(&self.state[object], profile)?;
+        let spell = crate::cards::content_pack::spell_face(&self.state[object], profile)?;
         let route = match authority {
             CastAuthority::Resolution { offer, paid } => {
                 // The instruction supplies timing and zone permission for
@@ -334,8 +331,7 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> bool {
-        let Some(face) = crate::cards::content_pack::default_content_pack()
-            .spell_definition(&self.state[object], cast.profile)
+        let Some(face) = crate::cards::content_pack::spell_face(&self.state[object], cast.profile)
         else {
             return false;
         };
@@ -583,9 +579,8 @@ impl Game {
             let applies = match targets {
                 Some(targets) => targets.iter().any(earns),
                 None => card_ref.target_requirements().iter().any(|requirement| {
-                    self.legal_targets_for_requirement(player, object, requirement)
-                        .iter()
-                        .any(earns)
+                    self.legal_spell_targets(player, object, card_ref, requirement)
+                        .any(|target| earns(&target))
                 }),
             };
             if applies {
@@ -849,10 +844,13 @@ impl Game {
             self.can_pay_cast(player, object, CastChoices { x, ..cast })
         }));
         // "X targets" (CR 601.2c): X can't exceed the legal candidates.
-        for requirement in cast.spell(&self.state[object]).target_requirements() {
+        let spell = cast.spell(&self.state[object]);
+        for requirement in spell.target_requirements() {
             if requirement.exact_x() {
-                let legal = self.legal_targets_for_requirement(player, object, &requirement);
-                values.retain(|x| usize::from(*x) <= legal.len());
+                let legal = self
+                    .legal_spell_targets(player, object, spell, &requirement)
+                    .count();
+                values.retain(|x| usize::from(*x) <= legal);
             }
         }
         values
@@ -1071,9 +1069,9 @@ impl Game {
                         .all(|req| {
                             req.min == 0
                                 || self
-                                    .legal_targets_for_requirement(player, object, req)
-                                    .len()
-                                    >= req.min
+                                    .legal_spell_targets(player, object, spell, req)
+                                    .nth(req.min - 1)
+                                    .is_some()
                         })
                 })
                 .collect()
@@ -1355,8 +1353,8 @@ impl Game {
         requirement: &TargetRequirement,
     ) -> Vec<Target> {
         let x = i32::from(targeting.cast.x);
-        self.legal_targets_for_requirement(targeting.player, targeting.object, requirement)
-            .into_iter()
+        let spell = targeting.cast.spell(&self.state[targeting.object]);
+        self.legal_spell_targets(targeting.player, targeting.object, spell, requirement)
             .filter(|target| {
                 self.can_add_clause_target(
                     requirement,
@@ -1888,7 +1886,10 @@ impl Game {
         let mut ability = ability.clone();
         ability.mana_cost.purpose = SpendingContext::Activate {
             zone: ability.zone.zone(),
-            source: SpendingObject::new(definition.subtypes.iter().map(String::as_str), false),
+            source: SpendingObject::new(
+                definition.subtypes.iter().map(String::as_str),
+                definition.has_all_creature_types(),
+            ),
         };
         self.price_activation(player, &mut ability);
         Some(ability)
@@ -2336,17 +2337,20 @@ impl Game {
         })
     }
 
-    /// Legal targets for one targeting requirement of `card`, cast by
-    /// `player`. The card being cast is excluded from stack-spell targets
-    /// (it is not on the stack yet while targets are chosen).
-    pub(crate) fn legal_targets_for_requirement(
-        &self,
+    /// Legal targets for one targeting requirement of `object` with already
+    /// resolved `face`, excluding `object` itself from stack-spell targets.
+    pub(crate) fn legal_spell_targets<'a>(
+        &'a self,
         player: PlayerId,
         object: ObjectId,
-        requirement: &TargetRequirement,
-    ) -> Vec<Target> {
-        self.legal_clause_targets(requirement, player, AbilitySource::new(object, None))
-            .filter(|target| *target != Target::StackSpell(object))
-            .collect()
+        face: &PrintedCharacteristics,
+        requirement: &'a TargetRequirement,
+    ) -> impl Iterator<Item = Target> + 'a {
+        self.targets_for_characteristics(
+            requirement,
+            AbilitySource::new(object, None),
+            super::resolution::TargetingSource::printed(player, face),
+        )
+        .filter(move |target| *target != Target::StackSpell(object))
     }
 }

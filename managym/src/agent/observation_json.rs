@@ -841,6 +841,10 @@ pub(super) struct WirePermanentData {
     pub attacking: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub first_strike_participant: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_controller_id: Option<i32>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub blocked: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -885,6 +889,10 @@ pub(super) struct WirePermanentData {
     /// Aura sets its characteristics.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hexproof_from: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub protection_from: Vec<String>,
     /// Face down (CR 708.2); omitted when face up.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub face_down: bool,
@@ -1034,6 +1042,8 @@ impl From<WirePermanentData> for PermanentData {
             is_animated: w.is_animated,
             has_exile_link: w.has_exile_link,
             exile_if_dies_this_turn: w.exile_if_dies_this_turn,
+            blocked: w.blocked,
+            entry_controller_id: w.entry_controller_id,
             first_strike_participant: w.first_strike_participant,
             attacking: w.attacking,
             exhausted_abilities: w.exhausted_abilities,
@@ -1049,6 +1059,8 @@ impl From<WirePermanentData> for PermanentData {
             blocking: w.blocking,
             attacked_permanent: w.attacked_permanent,
             abilities_lost: w.abilities_lost,
+            hexproof_from: w.hexproof_from,
+            protection_from: w.protection_from,
             face_down: w.face_down,
             combat_damage_to_players: w.combat_damage_to_players,
             damaged_permanents: w.damaged_permanents,
@@ -1112,6 +1124,8 @@ impl Serialize for PermanentData {
             is_animated: self.is_animated,
             has_exile_link: self.has_exile_link,
             exile_if_dies_this_turn: self.exile_if_dies_this_turn,
+            blocked: self.blocked,
+            entry_controller_id: self.entry_controller_id,
             first_strike_participant: self.first_strike_participant,
             attacking: self.attacking,
             exhausted_abilities: self.exhausted_abilities,
@@ -1127,6 +1141,8 @@ impl Serialize for PermanentData {
             blocking: self.blocking,
             attacked_permanent: self.attacked_permanent,
             abilities_lost: self.abilities_lost,
+            hexproof_from: self.hexproof_from.clone(),
+            protection_from: self.protection_from.clone(),
             face_down: self.face_down,
             combat_damage_to_players: self.combat_damage_to_players.clone(),
             damaged_permanents: self.damaged_permanents.clone(),

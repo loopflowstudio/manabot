@@ -10,9 +10,9 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardDefinition, CardType,
-        CardTypes, InsetSpell, Keyword, Keywords, LayerValue, PrintedCharacteristics,
+        CardTypes, InsetSpell, Keyword, Keywords, LayerCount, LayerValue, PrintedCharacteristics,
         ReplacementEffect, Restriction, SacrificeCost, StateBasedAction, StaticAbility,
-        StaticContinuous, StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope,
+        StaticContinuous, StaticKeywordGrant, StaticRestriction, StaticScope,
     },
     effect::{CopyException, EffectDuration, Modification},
     mana::{Color, Mana, ManaCost, ManaRestriction},
@@ -2990,15 +2990,17 @@ fn winter_tormented_loner() -> CardDefinition {
                     }],
                 }]),
             ])],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: None,
-                power: 1,
-                toughness: 0,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: Some(CardPredicate::creature_or_planeswalker()),
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                None,
+                vec![Modification::ModifyPt {
+                    power: LayerValue::count(LayerCount::Graveyard {
+                        who: Actor::You,
+                        predicate: CardPredicate::creature_or_planeswalker(),
+                    }),
+                    toughness: LayerValue::Fixed(0),
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -3261,15 +3263,14 @@ fn lichs_relic() -> CardDefinition {
                 }],
                 if_declined: Vec::new(),
             }])],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 2,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(2),
+                    toughness: LayerValue::Fixed(1),
+                }],
+            )],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
             text_box: text_box.into(),
             ..Default::default()

@@ -8985,3 +8985,211 @@ fn chandra_flameshaper_loyalty_abilities() {
     settle(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
 }
+
+#[test]
+fn vampire_soulcaller_returns_only_its_owners_creature_card() {
+    use crate::support::{
+        game::plant_in_graveyard,
+        inspect::{offered_targets, zone_of},
+        play::enter_until_target,
+    };
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Vampire Soulcaller", "Gray Ogre", "Stab"]);
+    let mine = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    plant_in_graveyard(&mut s, 1, "Gray Ogre");
+    plant_in_graveyard(&mut s, 0, "Stab");
+    enter_until_target(&mut s, "Vampire Soulcaller");
+    assert_eq!(offered_targets(&s), [Target::GraveyardCard(mine)]);
+    assert!(s.choose_target(Target::GraveyardCard(mine)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, mine), Some(ZoneType::Hand));
+}
+
+#[test]
+fn elenda_checks_the_spell_type_and_both_life_thresholds() {
+    use crate::support::{inspect::offered_targets, play::cast};
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&[
+        "Elenda, Saint of Dusk",
+        "Gray Ogre",
+        "Stab",
+        "Feed the Swarm",
+    ]);
+    let elenda = s.force_permanent_on_battlefield(1, "Elenda, Saint of Dusk");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    for (life, pt, menace) in [
+        (20, 4, false),
+        (21, 5, true),
+        (29, 5, true),
+        (30, 10, true),
+        (19, 4, false),
+    ] {
+        s.game_mut().state.players[1].life = life;
+        let view = s.game().characteristics(elenda);
+        assert_eq!(view.pt(), (pt, pt));
+        assert_eq!(view.keywords.has(Keyword::Menace), menace);
+    }
+    for (spell, legal) in [("Stab", false), ("Feed the Swarm", true)] {
+        let mut line = s.clone();
+        cast(&mut line, spell);
+        assert_eq!(
+            offered_targets(&line).contains(&Target::Permanent(elenda)),
+            legal
+        );
+    }
+}
+
+#[test]
+fn crystal_barricade_gives_its_controller_hexproof() {
+    use crate::support::{inspect::offered_targets, play::cast};
+    use managym::{agent::observation::Observation, state::game_object::Target};
+    let mut s = five_color_setup(&["Crystal Barricade", "Lightning Bolt"]);
+    let barricade = s.force_permanent_on_battlefield(1, "Crystal Barricade");
+    let mut line = s.clone();
+    cast(&mut line, "Lightning Bolt");
+    let targets = offered_targets(&line);
+    assert!(targets.contains(&Target::Player(PlayerId(0))));
+    assert!(targets.contains(&Target::Permanent(barricade)));
+    assert!(!targets.contains(&Target::Player(PlayerId(1))));
+    assert!(
+        Observation::for_player(line.game(), PlayerId(0))
+            .opponent
+            .hexproof
+    );
+    let object = card_of(&s, barricade);
+    move_card(&mut s, object, ZoneType::Hand);
+    cast(&mut s, "Lightning Bolt");
+    assert!(offered_targets(&s).contains(&Target::Player(PlayerId(1))));
+}
+
+#[test]
+fn dreadwing_scavenger_loots_across_the_threshold_on_attack() {
+    use crate::support::{game::clear_summoning_sickness, play::pass_until};
+    use managym::agent::action::ActionSpaceKind;
+    let mut s = five_color_setup(&["Dreadwing Scavenger"]);
+    graveyard_of(&mut s, 0, 5);
+    let card = enter_and_settle(&mut s, "Dreadwing Scavenger");
+    let bird = permanent_of(&s, card).unwrap();
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 6);
+    assert_eq!(s.game().characteristics(bird).pt(), (2, 2));
+    assert!(!s
+        .game()
+        .characteristics(bird)
+        .keywords
+        .has(Keyword::Deathtouch));
+    clear_summoning_sickness(&mut s, bird);
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, bird);
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    s.step_action(0);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 7);
+    assert_eq!(s.game().characteristics(bird).pt(), (3, 3));
+    assert!(s
+        .game()
+        .characteristics(bird)
+        .keywords
+        .has(Keyword::Deathtouch));
+}
+
+#[test]
+fn mossborn_hydra_doubles_current_counters_for_each_landfall() {
+    use crate::support::inspect::counters;
+    let mut s = five_color_setup(&["Mossborn Hydra"]);
+    enter_and_settle(&mut s, "Mossborn Hydra");
+    let hydra = permanent_named(&s, "Mossborn Hydra");
+    assert_eq!(counters(&s, hydra), 1);
+    for expected in [2, 4] {
+        enter_and_settle(&mut s, "Forest");
+        assert_eq!(counters(&s, hydra), expected);
+    }
+}
+
+#[test]
+fn banner_of_kinship_offers_every_type_and_counts_changelings() {
+    use crate::support::{
+        inspect::{counters_of, mode_labels},
+        play::{choose_mode, pass_until},
+    };
+    use managym::{agent::action::ActionSpaceKind, state::subtype::creature_type_names};
+    let mut s = five_color_setup(&["Banner of Kinship", "Taurean Mauler", "Llanowar Elves"]);
+    let mauler = s.force_permanent_on_battlefield(0, "Taurean Mauler");
+    for _ in 0..2 {
+        s.force_permanent_on_battlefield(0, "Llanowar Elves");
+    }
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    cast(&mut s, "Banner of Kinship");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let mut offered = Vec::new();
+    for group in 0..mode_labels(&s).len() {
+        let mut branch = s.clone();
+        choose_mode(&mut branch, group);
+        let labels = mode_labels(&branch);
+        offered.extend(labels.iter().cloned());
+        if let Some(index) = labels.iter().position(|name| name == "Elf") {
+            choose_mode(&mut branch, index);
+            settle(&mut branch);
+            let banner = permanent_named(&branch, "Banner of Kinship");
+            assert_eq!(counters_of(&branch, banner, CounterKind::Fellowship), 3);
+            assert_eq!(branch.game().characteristics(mauler).pt(), (5, 5));
+            for viewer in [PlayerId(0), PlayerId(1)] {
+                let view =
+                    managym::agent::observation::Observation::for_player(branch.game(), viewer);
+                assert!(view.to_json().contains("chosen type: Elf"));
+            }
+        }
+    }
+    assert_eq!(offered, creature_type_names());
+}
+
+#[test]
+fn crystal_barricade_orders_noncombat_prevention_only_for_other_creatures() {
+    use crate::support::{
+        inspect::{mode_labels, permanent},
+        play::{choose_mode, pass_until},
+    };
+    use managym::agent::action::ActionSpaceKind;
+    let mut s = five_color_setup(&[
+        "Crystal Barricade",
+        "Twinflame Tyrant",
+        "Craw Wurm",
+        "Lightning Bolt",
+    ]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let wall = s.force_permanent_on_battlefield(1, "Crystal Barricade");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let mut unprotected = s.clone();
+    cast(&mut unprotected, "Lightning Bolt");
+    assert!(unprotected.choose_target(Target::Permanent(wall)));
+    settle(&mut unprotected);
+    assert_eq!(permanent(&unprotected, wall).damage, 3);
+    s.force_permanent_on_battlefield(0, "Twinflame Tyrant");
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    assert_eq!(mode_labels(&s).len(), 2);
+    for mode in 0..2 {
+        let mut branch = s.clone();
+        choose_mode(&mut branch, mode);
+        settle(&mut branch);
+        assert_eq!(permanent(&branch, wurm).damage, 0);
+    }
+}
+
+#[test]
+fn crystal_barricade_allows_combat_damage_to_another_blocker() {
+    use crate::support::{game::clear_summoning_sickness, inspect::permanent};
+    let mut s = five_color_setup(&["Crystal Barricade", "Gray Ogre", "Craw Wurm"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let wall = s.force_permanent_on_battlefield(1, "Crystal Barricade");
+    s.game_mut().state.permanents[wall].as_mut().unwrap().tapped = true;
+    clear_summoning_sickness(&mut s, ogre);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, ogre);
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    s.declare_block();
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!(permanent(&s, wurm).damage, 2);
+}

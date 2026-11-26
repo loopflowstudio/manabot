@@ -1150,6 +1150,8 @@ pub struct PyPlayer {
     #[pyo3(get, set)]
     pub no_maximum_hand_size: bool,
     #[pyo3(get, set)]
+    pub hexproof: bool,
+    #[pyo3(get, set)]
     pub combat_mana: i32,
     #[pyo3(get)]
     pub mana: [i32; 6],
@@ -1426,6 +1428,7 @@ impl From<PlayerData> for PyPlayer {
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
+            hexproof: value.hexproof,
             no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
@@ -1471,6 +1474,7 @@ impl From<PyPlayer> for PlayerData {
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
+            hexproof: value.hexproof,
             no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
@@ -1636,6 +1640,8 @@ pub struct PyKeywords {
     pub hexproof: bool,
     #[pyo3(get, set)]
     pub indestructible: bool,
+    #[pyo3(get, set)]
+    pub changeling: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1656,6 +1662,7 @@ impl From<KeywordData> for PyKeywords {
             menace: value.menace,
             hexproof: value.hexproof,
             indestructible: value.indestructible,
+            changeling: value.changeling,
         }
     }
 }
@@ -2178,6 +2185,7 @@ impl From<PyKeywords> for KeywordData {
             menace: value.menace,
             hexproof: value.hexproof,
             indestructible: value.indestructible,
+            changeling: value.changeling,
         }
     }
 }
@@ -2330,6 +2338,14 @@ impl PyPermanent {
         self.data.exile_if_dies_this_turn = value;
     }
     #[getter]
+    fn blocked(&self) -> bool {
+        self.data.blocked
+    }
+    #[getter]
+    fn entry_controller_id(&self) -> Option<i32> {
+        self.data.entry_controller_id
+    }
+    #[getter]
     fn first_strike_participant(&self) -> bool {
         self.data.first_strike_participant
     }
@@ -2439,6 +2455,14 @@ impl PyPermanent {
     #[setter]
     fn set_blocking(&mut self, value: Option<i32>) {
         self.data.blocking = value;
+    }
+    #[getter]
+    fn hexproof_from(&self) -> Vec<String> {
+        self.data.hexproof_from.clone()
+    }
+    #[getter]
+    fn protection_from(&self) -> Vec<String> {
+        self.data.protection_from.clone()
     }
     #[getter]
     fn abilities_lost(&self) -> bool {

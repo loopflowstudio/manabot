@@ -65,6 +65,7 @@ fn observation_preserves_committed_card_move_zones() {
             to: ZoneType::Graveyard,
             controller: PlayerId(1),
             face_down: false,
+            discarded: false,
         }],
     );
 

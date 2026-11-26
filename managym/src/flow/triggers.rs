@@ -240,11 +240,8 @@ fn performed_action(event: &GameEvent) -> Option<(PlayerId, KeywordAction)> {
                 Bending::Air => KeywordAction::Airbend,
             },
         )),
-        // The engine discards by moving a card from hand to its owner's
-        // graveyard, the event's controller.
         GameEvent::CardMoved {
-            from: Some(ZoneType::Hand),
-            to: ZoneType::Graveyard,
+            discarded: true,
             controller,
             ..
         } => Some((*controller, KeywordAction::Discard)),
@@ -422,7 +419,12 @@ impl Game {
             .get(trigger.requirement_index)
             .ok_or_else(|| AgentError("no pending target requirement".into()))?;
         if trigger.controller != player
-            || !self.target_fits_clause(target, requirement, player, trigger.source_identity)
+            || !self.target_fits_clause(
+                target,
+                requirement,
+                &self.targeting_source(player, trigger.source_identity.object()),
+                trigger.source_identity,
+            )
             || !self.can_add_clause_target(requirement, trigger.x, trigger.clause_targets(), target)
         {
             return Err(AgentError("illegal trigger target".into()));
@@ -788,7 +790,7 @@ impl Game {
         controller: PlayerId,
     ) -> Vec<Target> {
         let mut candidates = self.target_candidates(spec, controller);
-        candidates.retain(|target| self.target_is_legal(*target, spec, controller));
+        candidates.retain(|target| self.test_target_is_legal(*target, spec, controller));
         candidates
     }
 
@@ -798,9 +800,19 @@ impl Game {
         controller: PlayerId,
         source: AbilitySource,
     ) -> impl Iterator<Item = Target> + 'a {
-        self.target_candidates(&requirement.spec, controller)
+        let targeting = self.targeting_source(controller, source.object());
+        self.targets_for_characteristics(requirement, source, targeting)
+    }
+
+    pub(super) fn targets_for_characteristics<'a>(
+        &'a self,
+        requirement: &'a TargetRequirement,
+        source: AbilitySource,
+        targeting: super::resolution::TargetingSource,
+    ) -> impl Iterator<Item = Target> + 'a {
+        self.target_candidates(&requirement.spec, targeting.controller)
             .into_iter()
-            .filter(move |target| self.target_fits_clause(*target, requirement, controller, source))
+            .filter(move |target| self.target_fits_clause(*target, requirement, &targeting, source))
     }
 
     fn target_candidates(&self, target_spec: &TargetSpec, controller: PlayerId) -> Vec<Target> {

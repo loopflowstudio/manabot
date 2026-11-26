@@ -208,12 +208,11 @@ fn a_lone_block_of_a_menace_creature_is_refused_with_the_reason() {
         }],
     };
     let result = preview(game, 1, &plan);
-    let refused = result.refused.expect("menace removes a lone block");
-    assert_eq!(refused.creature, render(game, blockers[0]));
+    let refused = result
+        .refused
+        .expect("a lone block cannot complete the declaration");
     assert!(
-        refused
-            .reason
-            .starts_with("Boggart Brute can't be blocked that way"),
+        refused.reason.contains("block") && refused.reason.contains("Boggart Brute"),
         "{}",
         refused.reason
     );

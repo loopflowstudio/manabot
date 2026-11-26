@@ -589,7 +589,14 @@ mod card_history_tests {
                 .unwrap();
             let game = branch.game.as_mut().unwrap();
             game.move_object(source, ZoneType::Graveyard);
-            game.change_control(token, victim);
+            let affected = game.affected_permanent(token);
+            game.apply_continuous(
+                None,
+                victim,
+                affected,
+                crate::state::effect::Modification::Control,
+                crate::state::effect::EffectDuration::Indefinite,
+            );
             let pending = branch.snapshot().unwrap();
             let mut restored = pending.restore(RestoreOptions::default()).unwrap();
             assert_eq!(

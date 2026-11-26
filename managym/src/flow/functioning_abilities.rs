@@ -9,7 +9,7 @@ use crate::{
     flow::game::Game,
     state::{
         ability::TriggerCondition,
-        card::{ReplacementEffect, StaticAbility},
+        card::{EntryScope, GraveyardMover, ReplacementEffect, StaticAbility},
         game_object::{ObjectId, ObjectKind, PermanentId, PlayerId},
         zone::ZoneType,
     },
@@ -98,9 +98,6 @@ pub(crate) fn ability_functions_in(
 /// Exhaustive CR 113.6 zone-of-function classification for static abilities.
 pub(crate) fn static_ability_zones(ability: &StaticAbility) -> FunctionZones {
     match ability {
-        StaticAbility::CharacteristicPower(_) | StaticAbility::CharacteristicPt(_) => {
-            FunctionZones::AllZones
-        }
         StaticAbility::Continuous(effect) if effect.characteristic_defining => {
             FunctionZones::AllZones
         }
@@ -117,6 +114,10 @@ pub(crate) fn static_ability_zones(ability: &StaticAbility) -> FunctionZones {
         | StaticAbility::CostsLessIfTargets(_)
         | StaticAbility::FlashIf(_) => FunctionZones::Casting,
         StaticAbility::Continuous(_)
+        | StaticAbility::HexproofFrom(_)
+        | StaticAbility::Protection(_)
+        | StaticAbility::ControllerHas(_)
+        | StaticAbility::SpellsCantBeCountered(_)
         | StaticAbility::GraveyardSpellsHaveFlashback
         | StaticAbility::CastFromHandWithoutManaCost
         | StaticAbility::CastSpellsAsThoughFlash(_)
@@ -132,7 +133,6 @@ pub(crate) fn static_ability_zones(ability: &StaticAbility) -> FunctionZones {
         | StaticAbility::AdditionalLandPlay
         | StaticAbility::CantLoseAndOpponentsCantWin
         | StaticAbility::ActivatedAbilitiesCostLess { .. }
-        | StaticAbility::PtBuff(_)
         | StaticAbility::Ward(_)
         | StaticAbility::LookAtLibraryTop
         | StaticAbility::CastFromLibraryTop(_)
@@ -206,21 +206,33 @@ pub(crate) fn trigger_condition_zones(condition: &TriggerCondition) -> FunctionZ
 /// Exhaustive CR 113.6 / CR 614.12 zone-of-function classification for replacement effects.
 pub(crate) fn replacement_effect_zones(effect: &ReplacementEffect) -> FunctionZones {
     match effect {
-        ReplacementEffect::AdventureExile | ReplacementEffect::ExileInsteadOfGraveyard => {
-            FunctionZones::Stack
-        }
+        ReplacementEffect::AdventureExile => FunctionZones::Stack,
+        ReplacementEffect::GraveyardInstead {
+            what: GraveyardMover::This,
+            ..
+        } => FunctionZones::AllZones,
+        ReplacementEffect::DiscardedInstead { .. } => FunctionZones::Hand,
         ReplacementEffect::EntersPrepared
+        | ReplacementEffect::AsEntersChoose(_)
         | ReplacementEffect::EntersTapped
         | ReplacementEffect::EntersTappedUnlessControls { .. }
-        | ReplacementEffect::EntersWithPlusOneCounters { .. }
-        | ReplacementEffect::EntersWithXCounters { .. }
-        | ReplacementEffect::EntersWithCounters { .. }
+        | ReplacementEffect::EntersWithCounters {
+            on: EntryScope::This,
+            ..
+        }
         | ReplacementEffect::EntersAsCopy { .. } => FunctionZones::EnteringBattlefield,
         ReplacementEffect::ExileIfWouldDie { .. }
-        | ReplacementEffect::PreventCombatDamageToOrFromSelf
+        | ReplacementEffect::GraveyardInstead {
+            what: GraveyardMover::Matching(_),
+            ..
+        }
+        | ReplacementEffect::EntersWithCounters {
+            on: EntryScope::OtherYouControl(_),
+            ..
+        }
+        | ReplacementEffect::ModifyLifeGain { .. }
         | ReplacementEffect::PreventCombatDamage
         | ReplacementEffect::ModifyDamage { .. }
-        | ReplacementEffect::OpponentDamagePlusCounters { .. }
         | ReplacementEffect::UnspentManaBecomesRed
         | ReplacementEffect::ModifyCounters { .. }
         | ReplacementEffect::MultiplyTokens { .. } => FunctionZones::Battlefield,
@@ -459,7 +471,8 @@ mod tests {
                 ObjectSelector, TriggerSubject,
             },
             card::{
-                ActivatedAbilityDefinition, DamageTransform, PowerCda, StaticPtBuff, StaticScope,
+                ActivatedAbilityDefinition, DamageRecipient, DamageSource, DamageTransform,
+                LayerCount, LayerValue, StaticScope,
             },
             effect::{EffectDuration, Modification},
             player::PlayerConfig,
@@ -514,15 +527,14 @@ mod tests {
         // a triggered ability (whenever you draw a card, gain 1 life), and a
         // damage-doubling replacement effect on `source`.
         game.state[source_obj].statics = vec![
-            StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(CardPredicate::creature()),
-                power: 1,
-                toughness: 1,
-                condition: None,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            }),
+            StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate::creature()),
+                None,
+                vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(1),
+                    toughness: LayerValue::Fixed(1),
+                }],
+            ),
             StaticAbility::PlayersCantGainLife,
         ];
         game.state[source_obj].abilities = vec![Ability::Triggered {
@@ -534,9 +546,9 @@ mod tests {
             effects: vec![Effect::gain_life(1)],
         }];
         game.state[source_obj].replacement_effects = vec![ReplacementEffect::ModifyDamage {
-            creature_source: false,
-            source_by: Actor::You,
-            recipient_by: Actor::AnyPlayer,
+            source: DamageSource::any(Actor::You),
+            recipient: DamageRecipient::any(Actor::AnyPlayer),
+            combat: None,
             transform: DamageTransform::Double,
         }];
 
@@ -607,15 +619,14 @@ mod tests {
             .unwrap();
         game.state
             .place_object(card_in_cmd, PlayerId(0), ZoneType::Command);
-        game.state[card_in_cmd].statics = vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::YouControl(CardPredicate::creature()),
-            power: 2,
-            toughness: 2,
-            condition: None,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })];
+        game.state[card_in_cmd].statics = vec![StaticAbility::continuous(
+            StaticScope::YouControl(CardPredicate::creature()),
+            None,
+            vec![Modification::ModifyPt {
+                power: LayerValue::Fixed(2),
+                toughness: LayerValue::Fixed(2),
+            }],
+        )];
         game.state[card_in_cmd].abilities = vec![Ability::Triggered {
             condition: TriggerCondition::Draws {
                 who: Actor::You,
@@ -625,9 +636,9 @@ mod tests {
             effects: vec![Effect::gain_life(1)],
         }];
         game.state[card_in_cmd].replacement_effects = vec![ReplacementEffect::ModifyDamage {
-            creature_source: false,
-            source_by: Actor::You,
-            recipient_by: Actor::AnyPlayer,
+            source: DamageSource::any(Actor::You),
+            recipient: DamageRecipient::any(Actor::AnyPlayer),
+            combat: None,
             transform: DamageTransform::Double,
         }];
 
@@ -654,15 +665,14 @@ mod tests {
 
         // Now create a real emblem in the command zone and give it the same abilities.
         let emblem = game.create_emblem("emblem.chandra_torch_of_defiance", PlayerId(0));
-        game.state[emblem].statics = vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::YouControl(CardPredicate::creature()),
-            power: 2,
-            toughness: 2,
-            condition: None,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })];
+        game.state[emblem].statics = vec![StaticAbility::continuous(
+            StaticScope::YouControl(CardPredicate::creature()),
+            None,
+            vec![Modification::ModifyPt {
+                power: LayerValue::Fixed(2),
+                toughness: LayerValue::Fixed(2),
+            }],
+        )];
         game.state[emblem].abilities = vec![Ability::Triggered {
             condition: TriggerCondition::Draws {
                 who: Actor::You,
@@ -672,9 +682,9 @@ mod tests {
             effects: vec![Effect::gain_life(1)],
         }];
         game.state[emblem].replacement_effects = vec![ReplacementEffect::ModifyDamage {
-            creature_source: false,
-            source_by: Actor::You,
-            recipient_by: Actor::AnyPlayer,
+            source: DamageSource::any(Actor::You),
+            recipient: DamageRecipient::any(Actor::AnyPlayer),
+            combat: None,
             transform: DamageTransform::Double,
         }];
 
@@ -713,7 +723,11 @@ mod tests {
             .unwrap();
 
         // 1. CDA functions in every zone (Hand, Graveyard, Exile, Library, Stack).
-        let cda_static = StaticAbility::CharacteristicPt(PowerCda::CreaturesYouControl);
+        let count = LayerValue::count(LayerCount::YouControl(CardPredicate::creature()));
+        let cda_static = StaticAbility::cda(vec![Modification::SetBasePt {
+            power: Some(count.clone()),
+            toughness: Some(count),
+        }]);
         let cda_obj = game
             .state
             .zones
@@ -752,7 +766,8 @@ mod tests {
             CastChoices::default(),
         );
         assert!(game.static_ability_functions(spell_on_stack, &StaticAbility::CantBeCountered));
-        game.counter_spell(spell_on_stack, None, ZoneType::Graveyard);
+        let mut batch = game.counter_spells([spell_on_stack], None, ZoneType::Graveyard);
+        let _ = game.advance_event_batch(&mut batch, None);
         assert_eq!(
             game.state.zones.zone_of(spell_on_stack),
             Some(ZoneType::Stack),

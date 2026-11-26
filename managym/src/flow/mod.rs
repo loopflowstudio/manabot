@@ -1,4 +1,5 @@
 pub mod action;
+mod block_requirements;
 pub mod card_capture;
 pub mod cast_permission;
 pub mod combat;

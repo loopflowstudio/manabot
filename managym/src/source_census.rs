@@ -558,7 +558,7 @@ fn census_functioning_abilities_gates_command_zone_statics_and_replacements() {
         }),
         &[
             ("flow/functioning_abilities.rs", 1),
-            ("flow/proposed_event.rs", 4),
+            ("flow/proposed_event.rs", 7),
         ],
     );
 
@@ -570,11 +570,11 @@ fn census_functioning_abilities_gates_command_zone_statics_and_replacements() {
         census_collapsed_pattern("flow/", |code| count_field_access(code, "statics")),
         &[
             ("flow/functioning_abilities.rs", 2),
-            ("flow/layers.rs", 13),
+            ("flow/layers.rs", 17),
             ("flow/opening.rs", 1),
             ("flow/play.rs", 1),
             ("flow/resolution.rs", 1),
-            ("flow/statics.rs", 2),
+            ("flow/statics.rs", 3),
         ],
     );
 }

@@ -2582,6 +2582,9 @@
       "Keywords": {
         "kind": "class",
         "members": {
+          "changeling": {
+            "kind": "attribute"
+          },
           "deathtouch": {
             "kind": "attribute"
           },
@@ -3023,6 +3026,9 @@
           "attacking": {
             "kind": "attribute"
           },
+          "blocked": {
+            "kind": "attribute"
+          },
           "blocking": {
             "kind": "attribute"
           },
@@ -3069,6 +3075,9 @@
           "entered_this_turn": {
             "kind": "attribute"
           },
+          "entry_controller_id": {
+            "kind": "attribute"
+          },
           "exhausted_abilities": {
             "kind": "attribute"
           },
@@ -3085,6 +3094,9 @@
             "kind": "attribute"
           },
           "has_exile_link": {
+            "kind": "attribute"
+          },
+          "hexproof_from": {
             "kind": "attribute"
           },
           "id": {
@@ -3130,6 +3142,9 @@
             "kind": "attribute"
           },
           "power": {
+            "kind": "attribute"
+          },
+          "protection_from": {
             "kind": "attribute"
           },
           "registry_key": {
@@ -3202,6 +3217,9 @@
             "kind": "attribute"
           },
           "hand_only_until": {
+            "kind": "attribute"
+          },
+          "hexproof": {
             "kind": "attribute"
           },
           "id": {

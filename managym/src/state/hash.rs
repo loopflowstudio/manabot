@@ -164,6 +164,8 @@ struct CanonicalCombat {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     non_player_defenders: Vec<(PermanentId, Option<crate::flow::combat::AttackTarget>)>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    blocked: Vec<PermanentId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     already_attacking: Option<usize>,
     attackers_to_declare: Vec<PermanentId>,
@@ -182,6 +184,7 @@ impl From<&CombatState> for CanonicalCombat {
                 .copied()
                 .filter(|(_, t)| !matches!(t, Some(crate::flow::combat::AttackTarget::Player(_))))
                 .collect(),
+            blocked: combat.blocked.clone(),
             attacker_to_blockers: combat
                 .attacker_to_blockers
                 .iter()

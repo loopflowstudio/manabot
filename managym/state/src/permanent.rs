@@ -53,6 +53,8 @@ pub enum CounterKind {
     /// exiled cards that have one.
     Stash,
     Revival,
+    Divinity,
+    Fellowship,
 }
 
 impl CounterKind {
@@ -76,6 +78,8 @@ impl CounterKind {
             CounterKind::Poison => "poison",
             CounterKind::Plan => "plan",
             CounterKind::Revival => "revival",
+            CounterKind::Divinity => "divinity",
+            CounterKind::Fellowship => "fellowship",
             CounterKind::Incubation => "incubation",
             CounterKind::Page => "page",
             CounterKind::Soul => "soul",
@@ -93,7 +97,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 23] = [
+    pub const ALL: [CounterKind; 25] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -117,6 +121,8 @@ impl CounterKind {
         CounterKind::Bait,
         CounterKind::Stash,
         CounterKind::Revival,
+        CounterKind::Divinity,
+        CounterKind::Fellowship,
     ];
 }
 
@@ -222,6 +228,10 @@ pub struct Permanent {
     #[serde(rename = "card")]
     pub object: ObjectId,
     pub controller: PlayerId,
+    /// In a two-seat game this bit and the current controller retain the
+    /// entry controller (CR 110.2) across any number of layer-2 changes.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub control_differs_from_entry: bool,
     pub tapped: bool,
     pub summoning_sick: bool,
     pub damage: i32,
@@ -313,6 +323,14 @@ impl Permanent {
         }
     }
 
+    pub fn entry_controller(&self) -> PlayerId {
+        if self.control_differs_from_entry {
+            PlayerId(1 - self.controller.0)
+        } else {
+            self.controller
+        }
+    }
+
     pub fn new(id: PublicId, object_id: ObjectId, object: &Object) -> Self {
         Self {
             transforms: 0,
@@ -320,6 +338,7 @@ impl Permanent {
             id,
             object: object_id,
             controller: object.owner,
+            control_differs_from_entry: false,
             tapped: false,
             // CR 302.6: control since the turn began, whatever the
             // permanent is now; `permanent_can_tap` reads whether it is a

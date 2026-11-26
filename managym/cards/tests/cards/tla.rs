@@ -11413,7 +11413,17 @@ fn printed_trample_first_strike_lifelink_and_menace_affect_combat() {
         s.advance_to_active_step(0, StepKind::DeclareAttackers);
         s.declare_attack();
         s.advance_to_active_step(0, StepKind::DeclareBlockers);
-        s.declare_block();
+        if name == "Callous Inspector" {
+            assert!(
+                !s.action_space().actions.iter().any(|a| matches!(
+                    a,
+                    Action::DeclareBlocker { attacker: Some(id), .. } if *id == attacker
+                )),
+                "lone Gray Ogre should not be offered a block against menace Callous Inspector"
+            );
+        } else {
+            s.declare_block();
+        }
         s.advance_to_active_step(0, StepKind::EndOfCombat);
         match name {
             "Earth King's Lieutenant" => assert_eq!(s.life(1), 18),
@@ -17109,7 +17119,7 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
     use managym::flow::event::DamageTarget;
     use managym::state::{
         ability::Actor,
-        card::{DamageTransform, ReplacementEffect},
+        card::{DamageRecipient, DamageSource, DamageTransform, ReplacementEffect},
     };
 
     // Preventing first absorbs the hit. Doubling first leaves two damage,
@@ -17133,15 +17143,15 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
         let object = card_of(&s, shield);
         s.game_mut().state[object].replacement_effects = vec![
             ReplacementEffect::ModifyDamage {
-                creature_source: false,
-                source_by: Actor::AnyPlayer,
-                recipient_by: Actor::You,
+                source: DamageSource::any(Actor::AnyPlayer),
+                recipient: DamageRecipient::any(Actor::You),
+                combat: None,
                 transform: DamageTransform::Prevent(2),
             },
             ReplacementEffect::ModifyDamage {
-                creature_source: false,
-                source_by: Actor::AnyPlayer,
-                recipient_by: Actor::You,
+                source: DamageSource::any(Actor::AnyPlayer),
+                recipient: DamageRecipient::any(Actor::You),
+                combat: None,
                 transform: DamageTransform::Double,
             },
         ];

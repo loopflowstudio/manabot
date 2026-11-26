@@ -39,15 +39,23 @@ const STATES: &[(&str, &str)] = &[
     ("diverse-mana", "cycle of seven modal/fixed/filter/restricted sources; diversity saturates at seven. Avoids counted-tap scans on ordinary activations; residual nested-filter branches need an exact bound accounting for upfront spending purposes and saved outputs"),
     ("restricted-filter", "Tea Shop, Hideout, Herbalist + Prism; expensive nested filters; defaults 2,3,4. Repeats three restrictions. Residual branch pruning must keep restricted mana that can fund a filter but not the parent; subtracting fees from gross output is not a safe bound"),
     ("distinct-restrictions", "2/3/4 pairwise-distinct restrictions + paid Prism: Powerstone, Tea Shop, Hideout, Herbalist. Catalog maximum four; cannot construct arbitrary N or claim 2^(N+1) growth. Nested filters retain the same pruning limitation as restricted-filter"),
+    ("counted-buffs", "N Tempest Djinn and Blanchwood Armor buffs across both seats, over sixteen basic lands"),
     ("diverse-statics", "White Lotus Reinforcements, Earth King's Lieutenant, Kyoshi Warriors, Badgermole Cub; diversity saturates at four"),
+    ("control-auras", "Each Confiscate controls one opposing Gray Ogre"),
+    ("joraga-blocks", "Joraga Invocation on a mixed flying and ground attack against reach and ground blockers"),
+    ("quality-targets", "Eight targeting spells against a battlefield of Knights, Elenda and ordinary creatures"),
     ("attachments", "Gray Ogre + Kyoshi Battle Fan + Avatar Destiny, attached, with counters"),
     ("face-down", "N manifests from the library beside N Gray Ogres on both sides; hidden-card aliases in observation, combat and search"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
     ("collector-food", "N Cat Collectors and N Foods; resolve one Food and order first-gain triggers"),
+    ("angel-life-gain", "Food's gain under N Angels of Vitality, including the last choice that commits the batch"),
+    ("giada-entry", "Rise of the Dark Realms returns N Angels under four Giadas and Sakashima, including the last choice that commits the batch"),
+    ("banner-choice", "Banner of Kinship enters beside N Elves and offers every creature type in two decisions"),
     ("mixed-life-gain", "Same Food activation with N listeners cycling Cat Collector, Fiendish Panda, Vanguard Seraph and Exemplar of Light"),
     ("fumigate-panda", "Fumigate destroys Panda and N Ogres, leaves N indestructible Oozes, then offers eligible graveyard targets within Panda's last power. Pre-batch listener checks grow quadratically across the departures"),
     ("venom-team", "Venom Connoisseur with N Gray Ogres and two entering Allies; resolve the second ability and grant the whole team deathtouch"),
     ("blast-discard", "Incinerating Blast damages an Ogre; N individually selectable cards remain in hand beside decline"),
+    ("myojin-discard", "Myojin of Night's Reach makes an opponent simultaneously discard N Wilt-Leaf Lieges and N Gray Ogres"),
     ("lathril-elves", "Lathril and N other untapped Elves; the planner checks a complete payment per next tap. Defaults 10,11,12"),
     ("entry-cascade", "Arahbo, Impact Tremors, Doubling Season, Gratuitous Violence and Goblin Oriflamme beside N creatures cycling Helpful Hunter, Ajani's Pridemate, Hinterland Sanctifier, Felidar Savior and Fog Bank; a Cat token's entry orders Tremors and N/5 Sanctifiers, whose life gains trigger every Pridemate (rules-quadratic); Fog Bank's prevention competes with Violence's doubling in combat"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
@@ -61,6 +69,7 @@ const STATES: &[(&str, &str)] = &[
     ("float-origins", "diverse-mana with mana_floats = all; the floated checkpoint has every mana ability used at priority, so the pool holds one origin per unit and a clone copies each unit's class"),
     ("crew-saddle", "Cultivator's Caravan, Alacrian Jaguar and Lumen-Class Frigate with N creatures cycling eight names; crew, saddle and station tap choices, one offer per creature"),
     ("bargain-forage", "Archon's Glory + Feed the Cycle; N artifacts and tokens cycling five kinds and N graveyard cards; bargain's sacrifice and forage's exile are single picks among N, never subsets"),
+    ("militant-mill", "Dread Summons mills eight cards from each library with N Dryad Militants on the battlefield"),
     ("graveyard-routes", "Muldrotha and Zul Ashur over N graveyard cards cycling artifact, creature, Zombie and land kinds; the granted checkpoint overlaps Zul's exact-object grant with Muldrotha's type routes on one Zombie"),
     ("profile-hand", "N hand cards cycling Omen and Adventure creatures, N + 6 lands cycling basics and two restricted sources, N opposing Gray Ogres; every card offers two profiles, each inset spell targets every Ogre. Offers stay linear; search grows about N cubed only through the restricted sources' payment search (with basics alone it makes no payment calls), the residual of restricted-filter"),
     ("prepared-copies", "N Emergency Phytomedics entered prepared, each holding its own Seed Suture copy in exile, N Plains and N Gray Ogres per side; one cast offer per copy, each targeting every creature. Size 64 exceeds the harness's 4096 fact rows (5376); 32 is the largest"),
@@ -185,6 +194,36 @@ struct Recipe {
 fn recipe(name: &str, size: usize) -> Recipe {
     let mut seats = [Seat::default(), Seat::default()];
     match name {
+        "joraga-blocks" => {
+            seats[0].cycle(&["Wind Drake", "Gray Ogre"], size);
+            seats[1].cycle(&["Giant Spider", "Gray Ogre"], size);
+            seats[0].add("Forest", 6);
+            seats[0].hand.push("Joraga Invocation".into());
+            // Give each seat a priority stop so the root is before combat.
+            seats[1].add("Mountain", 1);
+            seats[1].hand.push("Lightning Bolt".into());
+        }
+        "quality-targets" => {
+            seats[1].cycle(
+                &["Knight of Grace", "Knight of Malice", "Gray Ogre"],
+                size.saturating_sub(1),
+            );
+            seats[1].add("Elenda, Saint of Dusk", 1);
+            seats[0].cycle(&["Plains", "Swamp", "Forest", "Mountain", "Island"], 10);
+            seats[0].hand.extend(
+                [
+                    "Stab",
+                    "Giant Growth",
+                    "Luminous Rebuke",
+                    "Adamant Will",
+                    "Unsummon",
+                    "Lightning Strike",
+                    "Fleeting Flight",
+                    "Feed the Swarm",
+                ]
+                .map(String::from),
+            );
+        }
         "duplicate-lands" | "herbalist" | "paid-filter" | "counted-tap" | "waterbend-x" => {
             let seat = &mut seats[0];
             seat.add("Forest", size);
@@ -215,11 +254,27 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 }
             }
         }
-        "collector-food" | "mixed-life-gain" => {
+        "giada-entry" => {
+            seats[0].add("Sakashima of a Thousand Faces", 1);
+            seats[0].add("Giada, Font of Hope", 4);
+            seats[0].add("Swamp", 9);
+            seats[0].hand.push("Rise of the Dark Realms".into());
+            seats[0]
+                .graveyard
+                .extend(std::iter::repeat_n("Serra Angel".into(), size));
+        }
+        "banner-choice" => {
+            seats[0].add("Llanowar Elves", size);
+            seats[0].add("Forest", 5);
+            seats[0].hand.push("Banner of Kinship".into());
+        }
+        "collector-food" | "mixed-life-gain" | "angel-life-gain" => {
             let seat = &mut seats[0];
             seat.add("Plains", 2);
             if name == "collector-food" {
                 seat.add("Cat Collector", size);
+            } else if name == "angel-life-gain" {
+                seat.add("Angel of Vitality", size);
             } else {
                 seat.cycle(
                     &[
@@ -265,6 +320,11 @@ fn recipe(name: &str, size: usize) -> Recipe {
             seats[0].add("Venom Connoisseur", 1);
             seats[0].add("Gray Ogre", size);
         }
+        "militant-mill" => {
+            seats[0].add("Swamp", 10);
+            seats[0].hand.push("Dread Summons".into());
+            seats[1].add("Dryad Militant", size);
+        }
         "blast-discard" => {
             seats[0].add("Mountain", 5);
             seats[0].hand.push("Incinerating Blast".into());
@@ -272,6 +332,15 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 .hand
                 .extend(GRAVEYARD.iter().cycle().take(size).map(|s| s.to_string()));
             seats[1].add("Gray Ogre", 1);
+        }
+        "myojin-discard" => {
+            seats[0].add("Myojin of Night's Reach", 1);
+            seats[1]
+                .hand
+                .extend(std::iter::repeat_n("Wilt-Leaf Liege".into(), size));
+            seats[1]
+                .hand
+                .extend(std::iter::repeat_n("Gray Ogre".into(), size));
         }
         "lathril-elves" => {
             seats[0].add("Lathril, Blade of the Elves", 1);
@@ -421,11 +490,21 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 "Waterbending Lesson".into(),
             ]);
         }
+        "counted-buffs" => {
+            for (i, seat) in seats.iter_mut().enumerate() {
+                seat.add("Island", 4);
+                seat.add("Forest", 4);
+                let count = (size + 1 - i) / 2;
+                seat.add("Tempest Djinn", count.div_ceil(2));
+                seat.add("Blanchwood Armor", count / 2);
+            }
+        }
         "duplicate-creatures"
         | "herald-statics"
         | "herald-healthy"
         | "duplicate-tokens"
         | "diverse-statics"
+        | "control-auras"
         | "attachments"
         | "face-down"
         | "triggers"
@@ -479,6 +558,12 @@ fn recipe(name: &str, size: usize) -> Recipe {
                         seat.manifests = size;
                     }
                     _ => seat.add("Gray Ogre", size),
+                }
+                if name == "control-auras" {
+                    seat.add("Confiscate", size);
+                    seat.add("Plains", 2);
+                    seat.hand.push("Disenchant".into());
+                    continue;
                 }
                 if name == "attachments" {
                     seat.add("Kyoshi Battle Fan", size);
@@ -563,7 +648,16 @@ fn recipe(name: &str, size: usize) -> Recipe {
     // A real response keeps the opponent's final priority pass visible.
     if matches!(
         name,
-        "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team" | "blast-discard"
+        "collector-food"
+            | "mixed-life-gain"
+            | "angel-life-gain"
+            | "giada-entry"
+            | "banner-choice"
+            | "fumigate-panda"
+            | "venom-team"
+            | "blast-discard"
+            | "myojin-discard"
+            | "militant-mill"
     ) {
         seats[1].add("Mountain", 1);
         seats[1].hand.push("Lightning Bolt".into());
@@ -657,7 +751,16 @@ fn build(recipe: &Recipe) -> Env {
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         }
     }
-    if recipe.state == "attachments" {
+    if matches!(
+        recipe.state.as_str(),
+        "attachments" | "control-auras" | "counted-buffs"
+    ) {
+        let creature = if recipe.state == "counted-buffs" {
+            "Tempest Djinn"
+        } else {
+            "Gray Ogre"
+        };
+        let swap = recipe.state == "control-auras";
         let game = env.fixture_game_mut();
         for i in 0..2 {
             let creatures: Vec<_> = game
@@ -667,7 +770,7 @@ fn build(recipe: &Recipe) -> Env {
                 .flatten()
                 .filter(|p| {
                     let card = &game.state[p.object];
-                    card.owner == PlayerId(i) && card.name == "Gray Ogre"
+                    card.owner == PlayerId(if swap { 1 - i } else { i }) && card.name == creature
                 })
                 .map(|p| p.object)
                 .collect();
@@ -685,20 +788,20 @@ fn build(recipe: &Recipe) -> Env {
                         let object = &state[p.object];
                         (
                             object.owner,
-                            object.name == "Gray Ogre",
-                            object.name == "Forest",
+                            object.name == creature,
+                            object.types.is_land(),
                         )
                     })
                 })
                 .collect();
             for (p, role) in state.permanents.iter_mut().zip(roles) {
-                let (Some(p), Some((owner, ogre, forest))) = (p.as_mut(), role) else {
+                let (Some(p), Some((owner, ogre, land))) = (p.as_mut(), role) else {
                     continue;
                 };
                 if owner == PlayerId(i) {
-                    if ogre {
+                    if ogre && recipe.state == "attachments" {
                         p.change_counters(CounterKind::PlusOnePlusOne, 1);
-                    } else if !forest {
+                    } else if !ogre && !land {
                         p.attached_to = Some(targets[index % targets.len()]);
                         index += 1;
                     }
@@ -706,7 +809,11 @@ fn build(recipe: &Recipe) -> Env {
             }
         }
     }
-    if recipe.state == "names" {
+    if let Some((name, counter)) = match recipe.state.as_str() {
+        "names" => Some(("The Rise of Sozin", CounterKind::Lore)),
+        "myojin-discard" => Some(("Myojin of Night's Reach", CounterKind::Divinity)),
+        _ => None,
+    } {
         let game = env.fixture_game_mut();
         let id = game
             .state
@@ -715,14 +822,14 @@ fn build(recipe: &Recipe) -> Env {
             .enumerate()
             .find_map(|(i, p)| {
                 p.as_ref()
-                    .filter(|p| game.state[p.object].name == "The Rise of Sozin")
+                    .filter(|p| game.state[p.object].name == name)
                     .map(|_| i)
             })
             .unwrap();
         game.state.permanents[managym::state::game_object::PermanentId(id)]
             .as_mut()
             .unwrap()
-            .change_counters(CounterKind::Lore, 1);
+            .change_counters(counter, 1);
     }
     if recipe.state == "herald-statics" {
         env.fixture_game_mut().state.players[0].life = 0;
@@ -1024,10 +1131,46 @@ fn before_resolution(mut env: Env, after_first: bool) -> Env {
 fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     let mut result = vec![("priority".into(), root.fork().unwrap())];
     match recipe.state.as_str() {
-        "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team"
-        | "blast-discard" => {
+        "joraga-blocks" => {
+            let cast = follow(root, &[("cast", 0)]);
+            let resolution = before_resolution(cast, false);
+            let resolved = follow(&resolution, &[("resolve", 0)]);
+            let Some(mut env) = combat(&resolved, true) else {
+                // Trivial declarations are skipped in ordinary play.
+                return result;
+            };
+            let mut step = 0;
+            while env.action_space_kind() == Some(ActionSpaceKind::DeclareBlocker) {
+                result.push((format!("block-{step}"), env.fork().unwrap()));
+                env.step(0).unwrap();
+                step += 1;
+            }
+            return result;
+        }
+        "quality-targets" => {
+            // One fork per spell so every enumeration sees the same battlefield.
+            let mut priority = root.fork().unwrap();
+            for (index, action) in actions(&mut priority).iter().enumerate() {
+                let Action::CastSpell { object, .. } = action else {
+                    continue;
+                };
+                let name = priority.fixture_game_mut().state[*object].name.clone();
+                let mut cast = root.fork().unwrap();
+                cast.step(index as i64).unwrap();
+                if cast.action_space_kind() == Some(ActionSpaceKind::ChooseTarget) {
+                    result.push((format!("cast-{name}"), cast));
+                }
+            }
+            return result;
+        }
+        "angel-life-gain" | "giada-entry" | "banner-choice" | "collector-food"
+        | "mixed-life-gain" | "fumigate-panda" | "venom-team" | "blast-discard"
+        | "myojin-discard" | "control-auras" | "militant-mill" => {
             let env = match recipe.state.as_str() {
-                "collector-food" | "mixed-life-gain" => follow(root, &[("activate", 0)]),
+                "militant-mill" => follow(root, &[("cast", 0), ("choice", 8)]),
+                "angel-life-gain" | "collector-food" | "mixed-life-gain" | "myojin-discard" => {
+                    follow(root, &[("activate", 0)])
+                }
                 "venom-team" => {
                     let mut env = root.fork().unwrap();
                     for _ in 0..2 {
@@ -1045,6 +1188,20 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
             };
             let resolution = before_resolution(env, recipe.state == "venom-team");
             let resolved = follow(&resolution, &[("resolve", 0)]);
+            if recipe.state == "banner-choice" {
+                result.push(("type-group".into(), follow(&resolved, &[("choice", 0)])));
+            }
+            if matches!(recipe.state.as_str(), "giada-entry" | "angel-life-gain") {
+                let mut current = resolved.fork().unwrap();
+                while current.action_space_kind() == Some(ActionSpaceKind::Modal) {
+                    let next = follow(&current, &[("choice", 0)]);
+                    if next.action_space_kind() != Some(ActionSpaceKind::Modal) {
+                        result.push(("last-replacement".into(), current));
+                        break;
+                    }
+                    current = next;
+                }
+            }
             result.push(("resolution".into(), resolution));
             result.push(("after-resolution".into(), resolved));
             return result;
@@ -1264,7 +1421,14 @@ fn run(
         {
             continue;
         }
-        if layer == "actions" && root.action_space_kind() != Some(ActionSpaceKind::Priority) {
+        let cast_targets = recipe.state == "quality-targets" && checkpoint.starts_with("cast-");
+        if layer == "actions"
+            && !cast_targets
+            && !matches!(
+                root.action_space_kind(),
+                Some(ActionSpaceKind::Priority | ActionSpaceKind::DeclareBlocker)
+            )
+        {
             continue;
         }
         if (layer == "step:damage" && checkpoint != "damage")
@@ -1310,7 +1474,11 @@ fn run(
             let start = Instant::now();
             let output = match layer {
                 "actions" => Output::Actions {
-                    actions: benchmark_layers::actions(env.fixture_game_mut(), PlayerId(actor)),
+                    actions: if cast_targets {
+                        benchmark_layers::cast_targets(env.fixture_game_mut())
+                    } else {
+                        benchmark_layers::actions(env.fixture_game_mut(), PlayerId(actor))
+                    },
                 },
                 "characteristics" => Output::Views {
                     views: benchmark_layers::characteristics(env.fixture_game_mut()),
@@ -1342,6 +1510,7 @@ fn run(
                                 to: ZoneType::Battlefield,
                                 controller: PlayerId(actor),
                                 face_down: false,
+                                discarded: false,
                             },
                         );
                     }
