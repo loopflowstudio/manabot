@@ -1,4 +1,4 @@
-"""Authority tests for Academy grouped decisions (`live_group`, `/decision-group-preview`, `decision_group_command`)."""
+"""Authority tests for Academy grouped decisions (`live_decision_group`, `/decision-group-preview`, `decision_group_command`)."""
 
 from __future__ import annotations
 
@@ -261,7 +261,9 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
                 headers=headers,
             )
             assert no_group_resp.status_code == 409
-            assert no_group_resp.json()["detail"] == "decision_group_preview_unavailable"
+            assert (
+                no_group_resp.json()["detail"] == "decision_group_preview_unavailable"
+            )
 
             frame = _advance_session_to_three_ogres_attack(game)
             assert frame.prompt is not None

@@ -11,8 +11,8 @@ import warnings
 from pydantic import BaseModel, ConfigDict
 
 import managym
-from managym.experience import ObjectRenderId
 from managym.decision_group import PlannedAttack, PlannedBlock
+from managym.experience import ObjectRenderId
 
 
 class CombatPlan(BaseModel):

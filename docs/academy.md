@@ -861,8 +861,9 @@ outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
 ### Grouped decisions
 
 Multi-part decisions that belong to one rules choice — declaring attackers,
-declaring blockers, and arranging looked-at cards for **Scry**, **Surveil** and
-**OrderLibrary** — are drafted whole and committed in one **Confirm**.
+declaring blockers, arranging looked-at cards for **Scry**, **Surveil** and
+**OrderLibrary**, and splitting piles for **PartitionPiles** — are drafted whole
+and committed in one **Confirm**.
 
 **Declaring attackers and blockers.** When you enter Declare Attackers with
 three creatures that can attack, each declarable creature is outlined on the
@@ -2008,7 +2009,7 @@ before creating the existing bound Command; stale or illegal outputs commit noth
 Sessions close on replacement, completion, failed setup and server shutdown.
 
 The descriptor identity pins provider, adapter contract, runner/source, artifacts
-and semantic/runtime configuration. Providers author optional `decision_group` (defaults
+and semantic/runtime configuration. Providers author optional `group` (defaults
 to the provider name), ordered `PolicyDetail(label, value)` lines and `alias` on
 `PolicyDescriptor`. Academy renders these labels and values verbatim; presentation
 never changes the Policy ID. Use a stable alias in launch code and saved-spec
@@ -2177,7 +2178,7 @@ them is a source of game facts, and none can alter or delay the committed frame.
 | `cause` | Optional; omitted when root. The `seq` of the earlier event this one follows from. A move is one of the player-choice kinds (`cast`, `activated`, `land_played`, `attack_group`, `blocked`, `passed`) with no `cause` and no `rule`. |
 | `rule` | Optional; omitted when chosen by a player. The state-based, turn-based, or resolution rule (`illegal_targets`) that did it. |
 | `labels` | Optional; omitted on older recordings or when no object or stack entry is cited. Viewer-safe `PresentationLabels` (`objects`, `stacks`) naming only the objects and stack entries this event mentions, at exact incarnation. |
-| `decision_group` | The `seq` of the event's root, its move. It is not a turn identifier; `turn_started` events establish turn headings. |
+| `group` | The `seq` of the event's root, its move. It is not a turn identifier; `turn_started` events establish turn headings. |
 | `caused_by` | The Command that committed the step, or null. A move by the viewer's seat with a null `caused_by` is automation. |
 | `from_revision`, `to_revision` | The frame revisions the event lies between. |
 
@@ -2204,7 +2205,7 @@ positions and clears the sink after both seats have read it.
 (`managym/academy/presentation.py`) per viewer seat (`0` and `1`); each reads
 its own filtered stream, assigns its own monotonic `seq`, resolves each `cause`
 to a `seq` on that viewer's track (climbing to the nearest told ancestor, or
-omitting it), sets `decision_group` to the root ancestor's `seq`, and attaches `labels`
+omitting it), sets `group` to the root ancestor's `seq`, and attaches `labels`
 directly to the event. The projector never diffs observations or boards. The
 sink is not observation state: the policy input, the LLM text observation,
 learning tokens, state hashes and a recording's replay identity do not include

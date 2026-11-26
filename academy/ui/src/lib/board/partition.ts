@@ -6,7 +6,7 @@
  * `committed_face_up`, `committed_face_down`), validates the drafted split via
  * `/decision-group-preview`, and executes all sequential steps atomically on one
  * `decision_group_command`. Draft persistence uses the unified `academy.table.decision-group-draft`
- * store in `group.ts`.
+ * store in `decision-group.ts`.
  */
 import { sanitizeEntityIds, type DecisionCard, type PartitionPilesDecisionGroup, type PartitionPilesPlan } from '$lib/decision-group';
 

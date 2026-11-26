@@ -46,6 +46,16 @@ from managym.decision import (
     SemanticTransition,
     TransitionReceipt,
 )
+from managym.decision_group import (
+    DecisionAddress,
+    DecisionGroupChoice,
+    DecisionPreview,
+    OrderLibraryChoice,
+    OrderLibraryDecision,
+    ScryChoice,
+    ScryDecision,
+    SingleDecision,
+)
 from managym.enums import (
     ActionSpaceEnum,
     EventTypeEnum,
@@ -67,16 +77,6 @@ from managym.experience_projection import (
     offer_verb,
     redact_observation,
     serialize_observation,
-)
-from managym.decision_group import (
-    DecisionAddress,
-    DecisionGroupChoice,
-    DecisionPreview,
-    OrderLibraryChoice,
-    OrderLibraryDecision,
-    ScryChoice,
-    ScryDecision,
-    SingleDecision,
 )
 from managym.payment import preview_payment
 from managym.policy import PolicyRunner
@@ -4200,7 +4200,9 @@ def _dispatch_table_request(
         try:
             raw_command = request.command.model_dump(mode="json")
             if isinstance(request, DecisionGroupCommandMessage):
-                response = record.game.hero_decision_group(raw_command, committed=committed)
+                response = record.game.hero_decision_group(
+                    raw_command, committed=committed
+                )
             else:
                 response = record.game.hero_command(raw_command, committed=committed)
         finally:

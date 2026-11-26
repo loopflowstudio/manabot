@@ -14,8 +14,8 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import ConfigDict, Field, TypeAdapter
 
-from managym.experience import Command, ProtocolModel, UInt64
 from managym.decision_group import DecisionGroupChoice
+from managym.experience import Command, ProtocolModel, UInt64
 
 from .advice_identity import AdviceIdentity
 
