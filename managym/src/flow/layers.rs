@@ -2065,11 +2065,7 @@ impl Eval<'_, '_, '_> {
                         all += 1;
                         continue;
                     }
-                    for subtype in view
-                        .subtypes
-                        .iter()
-                        .filter(|s| is_creature_type(s))
-                    {
+                    for subtype in view.subtypes.iter().filter(|s| is_creature_type(s)) {
                         *counts.entry(subtype).or_insert(0) += 1;
                     }
                 }

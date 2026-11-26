@@ -759,11 +759,12 @@ in layer, dependency and timestamp order; callers read its fields, and rules
 questions (`permanent_can_tap`, lethal damage) use it rather than re-deriving.
 Its `activated_abilities` follow layer/timestamp order; activation, payment and
 offer code indexes only that list, never `card.activated_abilities`. Resolution
-consumes the effects captured at activation. `flow/layers.rs::Context` evaluates
+consumes the effects captured at activation. `flow/layers.rs::evaluate_board` evaluates
 the board without calling the public view; `flow/statics.rs` caches that board
 and finalizes activation costs and dynamic mana outputs. Each immutable view is
 shared as an `Arc<Characteristics>`. Whole-board readers use `characteristics_many`
-(or internal `layer_views` when activation finalization is unnecessary), preserving
+(or internal `with_layer_board`/`with_layer_view` for non-reentrant borrowed reads
+and `layer_views` when activation finalization is unnecessary), preserving
 their input order and validating the shared board once per immutable scan.
 `Game::state` is a `TrackedState` with
 `Revisions` (`characteristics`, `mana_pools`, `tapped`, `triggers`): `DerefMut`
