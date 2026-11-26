@@ -1,7 +1,7 @@
-at: 7143d7b212
+at: bf1162183e
 first:
   - path: managym/README.md
-    why: Indistinguishable-object contract, allowlist, and manual-mana rules
+    why: Indistinguishable-object contract, allowlist, manual-mana rules, and live-in-zone aliases
   - path: docs/academy.md
     why: Board/hand alias interaction, piles, and payment preview contract
   - path: docs/engine.md
@@ -11,15 +11,15 @@ first:
   - path: managym/src/flow/combat.rs
     why: Declined attacker/blocker tracking for combat symmetry breaking
   - path: managym/src/state/hash.rs
-    why: Hash v32 adding combat declines and graveyard_from_battlefield
+    why: Hash v34 adding combat declines and graveyard_arrivals
   - path: managym/src/experience.rs
-    why: Optional InteractionOffer.aliases wire field
+    why: Optional InteractionOffer.aliases (Vec<SubjectRef>) wire field
   - path: managym/experience.py
   - path: academy/ui/src/lib/types.ts
   - path: managym/src/flow/decision_group/mod.rs
-    why: Optional DecisionOffer.aliases projected onto unified Env.decision offers
+    why: Optional DecisionOffer.aliases (Vec<SubjectRef>) and target-first primary_subject
   - path: managym/decision_group.py
-    why: Typed Offer.aliases model aligned with decision_group
+    why: Typed Offer.aliases (list[SubjectRef]) model aligned with decision_group
   - path: managym/src/flow/interchangeable.rs
     why: Fail-closed reference census, equivalence predicate, and action folding
   - path: managym/src/flow/mana/interchangeable.rs
@@ -31,15 +31,15 @@ first:
   - path: managym/src/flow/block_requirements.rs
     why: Blocker decline-pruning coupled into Menace and MustBeBlocked solver
   - path: managym/src/flow/decision_group/combat.rs
-    why: Shared AttackPlanNormalizer and BlockPlanNormalizer for grouped combat
+    why: Shared combat normalizers and committed-decline filtering in CombatGroup::describe
   - path: managym/src/agent/decision_surface.rs
     why: Legacy compound lowering through aliases and shared combat normalizer
   - path: managym/src/decision_context.rs
-    why: Viewer-safe alias projection backing DecisionOffer.aliases
+    why: Viewer-safe live-in-zone SubjectRef alias projection backing DecisionOffer.aliases
   - path: managym/academy/server.py
-    why: Reading offer aliases from Env.decision onto live Academy wire frames
+    why: Single Env.decision projection per hero prompt (reused by live_decision_group, skipped in autoplay)
   - path: academy/ui/src/lib/board/view.ts
-    why: Anchoring folded offers on drawn board and hand aliases
+    why: Anchoring folded SubjectRef aliases on drawn board and hand objects
   - path: academy/ui/src/lib/board/Board.svelte
   - path: academy/ui/src/lib/board/Rail.svelte
   - path: academy/ui/src/routes/replay/+page.svelte
@@ -52,7 +52,7 @@ first:
     why: Drawn-alias anchoring and pile stability unit tests
 hide:
   - path: conformance/authored-matches/
-    why: Regenerated authored-match replay fixtures for hash v32
+    why: Regenerated authored-match replay fixtures for hash bump
   - path: conformance/semantic-kernel-w17-v6/evidence-interchangeable-v1.json
     why: Recorded semantic conformance evidence (14 cases, zero divergence)
   - path: managym/academy/fixtures/
