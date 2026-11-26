@@ -840,11 +840,12 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
     zero_branch.execute_semantic_command_json(
         Command("announce-zero", frame.revision, zero["id"]).to_json()
     )
-    payment = decision_frame(zero_branch)
-    pay = next(offer for offer in payment.offers if offer["verb"] == "pay_cost")
-    zero_branch.execute_semantic_command_json(
-        Command("pay-two", payment.revision, pay["id"]).to_json()
-    )
+    if not zero_branch.observation_for_player(0).stack_objects:
+        payment = decision_frame(zero_branch)
+        pay = next(offer for offer in payment.offers if offer["verb"] == "pay_cost")
+        zero_branch.execute_semantic_command_json(
+            Command("pay-two", payment.revision, pay["id"]).to_json()
+        )
     [zero_spell] = zero_branch.observation_for_player(0).stack_objects
     assert zero_spell.effective_mana_value == 2
     assert (
@@ -1040,10 +1041,11 @@ def test_transferred_seed_suture_replays_payment_and_surviving_link() -> None:
     target = decision_frame(env)
     command = Command("target", target.revision, target.offers[0]["id"]).to_json()
     assert_replayed_command(env, restored, command)
-    payment = decision_frame(env)
-    pay = next(o for o in payment.offers if o["verb"] == "pay_cost")
-    command = Command("pay", payment.revision, pay["id"]).to_json()
-    assert_replayed_command(env, restored, command)
+    if not env.observation_for_player(1).stack_objects:
+        payment = decision_frame(env)
+        pay = next(o for o in payment.offers if o["verb"] == "pay_cost")
+        command = Command("pay", payment.revision, pay["id"]).to_json()
+        assert_replayed_command(env, restored, command)
     for branch in (env, restored):
         obs = branch.observation_for_player(1)
         [paid] = [p for p in obs.agent_permanents if p.tapped and p.id in untapped]

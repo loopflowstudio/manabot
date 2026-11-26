@@ -146,23 +146,50 @@ async function chooseDeterministicAction(page: Page): Promise<void> {
   await expect(actions.first()).toBeEnabled({ timeout: OPPONENT_REPLY_LIMIT_MS });
 }
 
-async function visibleSignature(page: Page): Promise<string> {
+interface VisibleState {
+  deckNames: string;
+  board: string;
+  prompt: string;
+  actions: string[];
+}
+
+const TRANSIENT_BOARD_SELECTORS = [
+  '[data-testid="presentation-stage"]',
+  '[data-testid="damage-dealt"]',
+  '[data-testid="player-damage"]',
+  // Printed card faces and art fallbacks populate asynchronously from
+  // /api/card-faces and /api/card-art independently of the WebSocket frame.
+  '.no-art',
+  '.type',
+  '.cost',
+  '.bar-cost',
+].join(', ');
+
+async function visibleState(page: Page): Promise<VisibleState> {
+  await page.evaluate(
+    () =>
+      document.fonts.ready.then(
+        () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+      ),
+  );
   const prompts = page.getByTestId('decision-prompt');
   const prompt = (await prompts.count()) > 0 ? normalize(await prompts.first().textContent()) : '';
-  const board = await page.getByTestId('game-board').evaluate((element) => {
+  const board = await page.getByTestId('game-board').evaluate((element, selectors) => {
     const canonical = element.cloneNode(true) as HTMLElement;
-    canonical.querySelector('[data-testid="presentation-stage"]')?.remove();
+    for (const node of canonical.querySelectorAll(selectors)) {
+      node.remove();
+    }
     return canonical.textContent;
-  });
-  const payload = {
+  }, TRANSIENT_BOARD_SELECTORS);
+  return {
     deckNames: normalize(await page.getByTestId('deck-names').textContent()),
-    // Optional presentation theater is transient; the proof signs the
-    // authoritative board, prompt, and legal-action projection underneath it.
+    // Optional presentation theater, "since your last move" damage counters,
+    // and async card-face/art decorations are transient; the proof checks the
+    // authoritative board, prompt, and legal-action projection underneath them.
     board: normalize(board),
     prompt,
     actions: (await page.getByTestId('action-option').allTextContents()).map(normalize),
   };
-  return sha256(JSON.stringify(payload));
 }
 
 function toolVersion(executable: string): string {
@@ -276,7 +303,7 @@ test('clean command reaches pinned play and reloads without public network', asy
   await chooseDeterministicAction(page);
   const gameBefore = await gameOnBoard(page);
   expect(gameBefore, 'the address does not name the game on the board').not.toBeNull();
-  const signatureBefore = await visibleSignature(page);
+  const stateBefore = await visibleState(page);
 
   await page.reload();
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
@@ -285,9 +312,17 @@ test('clean command reaches pinned play and reloads without public network', asy
   await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Random · GW Allies');
   await expect(page.getByTestId('action-option').first()).toBeEnabled({ timeout: 30_000 });
   const gameAfter = await gameOnBoard(page);
-  const signatureAfter = await visibleSignature(page);
   expect(gameAfter).toBe(gameBefore);
-  expect(signatureAfter).toBe(signatureBefore);
+  let stateAfter: VisibleState | null = null;
+  await expect
+    .poll(
+      async () => {
+        stateAfter = await visibleState(page);
+        return stateAfter;
+      },
+      { timeout: 15_000 },
+    )
+    .toEqual(stateBefore);
   await expect.poll(() => latestBrowserPack(page), { timeout: 15_000 }).toEqual(expected);
 
   await expect(board.getByTestId('board-card').first()).toBeVisible();
@@ -333,8 +368,8 @@ test('clean command reaches pinned play and reloads without public network', asy
       hero_deck: 'ur_lessons',
       villain_deck: 'gw_allies',
       asset_pack: expected,
-      same_session_after_reload: credentialsAfter === credentialsBefore,
-      same_visible_state_after_reload: signatureAfter === signatureBefore,
+      same_session_after_reload: gameAfter === gameBefore,
+      same_visible_state_after_reload: JSON.stringify(stateAfter) === JSON.stringify(stateBefore),
       post_reload_action_accepted: true,
       public_requests: publicRequests,
     },

@@ -59,13 +59,14 @@ describe('promptLine', () => {
     expect(committed(pay)).toEqual([]);
   });
 
-  it('names a tap-pays choice, combat damage and replacement order by what they ask, other modal choices as modes', () => {
+  it('names a tap-pays choice, a mana color, combat damage and replacement order by what they ask, other modal choices as modes', () => {
     const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost)!;
     const modal = (stage: string): ExperienceFrame => ({ ...pay, action_space: 'MODAL', projection: { ...pay.projection,
       decision_context: { ...pay.projection.decision_context!, stage, source: { ...pay.projection.decision_context!.source!, label: 'Appeal to Eirdu' } } } });
     const line = (frame: ExperienceFrame): string => promptLine(frame, boardView(frame, PLAYERS));
     expect(line(modal('payment'))).toBe('Choose what the tap pays for Appeal to Eirdu');
     expect(line(modal('mode'))).toBe('Choose a mode for Appeal to Eirdu');
+    expect(line(modal('mana_color'))).toBe('Choose the mana to add');
     expect(line(modal('assign_combat_damage'))).toBe('Assign combat damage');
     expect(line(modal('choose_creature_type'))).toBe('Choose a creature type');
     expect(line(modal('order_replacement'))).toBe('Choose which replacement applies next');

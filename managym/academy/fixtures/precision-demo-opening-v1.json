@@ -40,11 +40,6 @@
       "before_digest": "ddb0691cc8b6dea4e27174bead6002fabec76a0d8b13a4fe5b81ffa8346bbe99"
     },
     {
-      "label": "Pay the cost",
-      "offer_id": 2,
-      "before_digest": "5f2e53210b992fe04c4e1cb2dc5032a000a35f64d76a14e78f492cb05e9bc7ea"
-    },
-    {
       "label": "Pass priority",
       "offer_id": 2,
       "before_digest": "d387d14211841546c60b207a67ffc06b91778b66a460f90200a3aa0130b2b5d5"
@@ -73,11 +68,6 @@
       "label": "Cast Callous Inspector",
       "offer_id": 3,
       "before_digest": "02ce4316cfd5dc5684f5fc83533f29099bc36fd37b97df1d243ea9560371ae1f"
-    },
-    {
-      "label": "Pay the cost",
-      "offer_id": 2,
-      "before_digest": "cb2615243f38de0f43841c68bd210c41ab0ad09137ae4084069225611c2afa02"
     },
     {
       "label": "Pass priority",
@@ -120,11 +110,6 @@
       "before_digest": "bdb14bc3a61dea28d1b17ef182ed930d4eb959b9a246c1e5295a56d8792b12d0"
     },
     {
-      "label": "Pay the cost",
-      "offer_id": 3,
-      "before_digest": "f30c86699920195a38b35ab030fa66e6630be49722776e9c0784a108470b84e2"
-    },
-    {
       "label": "Cast Deadly Dispute",
       "offer_id": 0,
       "before_digest": "180f7092d91ac59b53fa0d1cccb27852c572e8608af7adbd214b2523ca066f7b"
@@ -136,7 +121,7 @@
     }
   ],
   "decision_digest": "cd2708dfae2d5e7cb50c4ae4f119f8e9ec7c763d3bc624589df081f79cc63ac6",
-  "decision_revision": 34,
+  "decision_revision": 31,
   "decision_kind": "PRIORITY",
   "manifest_digest": "77714497a53bc0b2ee9a45b6f3e94643e46640d676f8746539ee207d3f0eac0c"
 }
