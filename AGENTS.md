@@ -93,10 +93,10 @@ them in the browser. Preserve Command binding, stale rejection, actual pending
 decisions on reconnect, replay/fork identity and accessibility. Cancellation or
 undo requires an explicit shared action and cannot erase committed costs or
 revealed information. Keep priority-stop automation distinct from deliberate
-human decisions. Live combat drafts jointly on the board over sequential
-per-creature Commands: fold raw per-creature offers into a collapsed disclosure
-while drafting, and keep them listed in Replay and Study for recorded policy
-probabilities. Play's retained `hero_*`/`villain_*` setup fields name
+human decisions. Keep multi-step choices (combat, pile partitions) as sequential
+Commands for agents while drafting them holistically in Academy over verified
+steps: fold raw step offers into a collapsed disclosure while drafting, and keep
+them listed in Replay and Study for recorded policy probabilities. Play's retained `hero_*`/`villain_*` setup fields name
 human/opponent roles; `GameConfig.human_seat` orders them at the native
 boundary. Record and project actual native seats; Watch keeps its two-seat
 acting-view contract. Scope resume credentials and the started-launch marker
