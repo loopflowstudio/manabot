@@ -1436,7 +1436,7 @@ impl Game {
                 let cast = self
                     .action_space()
                     .filter(|space| space.kind == ActionSpaceKind::Priority)
-                    .and_then(|space| space.actions.iter().position(|legal| legal == &action))
+                    .and_then(|space| self.resolve_action_index(space, &action))
                     .ok_or(StructuredOfferError::WrongDecision)?;
                 // Trivial-decision skipping may commit the sole target during the cast step.
                 let wanted = self.resolve_bound_target(targets[0])?;
@@ -1453,24 +1453,18 @@ impl Game {
 
                 // With skip_trivial enabled, a sole legal target may already
                 // have been collapsed by tick(). Otherwise walk the explicit
-                // ChooseTarget prompt exactly as the legacy caller does.
+                // ChooseTarget prompt, resolving folded target aliases.
                 if self
                     .action_space()
                     .is_some_and(|space| space.kind == ActionSpaceKind::ChooseTarget)
                 {
+                    let target_action = Action::ChooseTarget {
+                        player: *player,
+                        target: wanted,
+                    };
                     let target = self
                         .action_space()
-                        .and_then(|space| {
-                            space.actions.iter().position(|action| {
-                                matches!(
-                                    action,
-                                    Action::ChooseTarget {
-                                        player: legal_player,
-                                        target: legal_target,
-                                    } if legal_player == player && legal_target == &wanted
-                                )
-                            })
-                        })
+                        .and_then(|space| self.resolve_action_index(space, &target_action))
                         .ok_or_else(|| {
                             StructuredOfferError::StaleOrIllegal(
                                 "structured target is absent from the legacy prompt".to_string(),
@@ -1549,34 +1543,108 @@ impl Game {
             AtomicCommand::DeclarationSequence { kind, actions, .. } => {
                 let mut done = false;
                 let mut executed = 0;
-                for action in actions {
-                    // tick() may have consumed forced payment suffix factors.
-                    // Only these known, effect-free taps/remainder can be omitted.
-                    if *kind == ActionSpaceKind::Waterbend && self.skip_trivial {
-                        match action {
-                            Action::WaterbendTap { permanent, .. }
-                                if self.state.permanents[*permanent]
-                                    .as_ref()
-                                    .is_some_and(|permanent| permanent.tapped) =>
-                            {
-                                continue
+                if *kind == ActionSpaceKind::Waterbend {
+                    let mut remaining_taps: Vec<PermanentId> = Vec::new();
+                    let mut want_pay_cost = false;
+                    for action in actions {
+                        match *action {
+                            Action::WaterbendTap { permanent, .. } => {
+                                remaining_taps.push(permanent);
                             }
-                            Action::PayCost { .. }
-                                if !self
-                                    .paying()
-                                    .is_some_and(|(_, payment, _)| payment.waterbends()) =>
-                            {
-                                continue
+                            Action::PayCost { .. } => {
+                                want_pay_cost = true;
                             }
-                            _ => {}
+                            _ => return Err(StructuredOfferError::WrongDecision),
                         }
                     }
+                    let player = actions
+                        .first()
+                        .map(Action::player)
+                        .ok_or(StructuredOfferError::WrongDecision)?;
+                    while let Some(permanent) = remaining_taps.first().copied() {
+                        remaining_taps.remove(0);
+                        // tick() with skip_trivial may have consumed forced
+                        // tap suffix factors (either this permanent or an
+                        // interchangeable representative).
+                        if self.skip_trivial {
+                            if !self
+                                .paying()
+                                .is_some_and(|(_, payment, _)| payment.waterbends())
+                            {
+                                break;
+                            }
+                            if self.state.permanents[permanent]
+                                .as_ref()
+                                .is_some_and(|perm| perm.tapped)
+                            {
+                                continue;
+                            }
+                        }
+                        let generic_before = self.paying().map(|(_, payment, _)| payment.mana().1);
+                        let wanted = Action::WaterbendTap { player, permanent };
+                        let index = self
+                            .action_space()
+                            .filter(|space| space.kind == ActionSpaceKind::Waterbend)
+                            .and_then(|space| self.resolve_action_index(space, &wanted))
+                            .ok_or(StructuredOfferError::WrongDecision)?;
+                        done = self.record_compound_step(index, commands)?;
+                        executed += 1;
+                        if self.skip_trivial {
+                            let Some(before) = generic_before else {
+                                continue;
+                            };
+                            let Some((_, payment, _)) =
+                                self.paying().filter(|(_, payment, _)| payment.waterbends())
+                            else {
+                                remaining_taps.clear();
+                                break;
+                            };
+                            let after = payment.mana().1;
+                            let auto_taps =
+                                usize::from(before.saturating_sub(1).saturating_sub(after));
+                            if auto_taps > 0 {
+                                let mut retired = 0usize;
+                                remaining_taps.retain(|&id| {
+                                    if retired < auto_taps
+                                        && self.state.permanents[id]
+                                            .as_ref()
+                                            .is_some_and(|perm| perm.tapped)
+                                    {
+                                        retired += 1;
+                                        false
+                                    } else {
+                                        true
+                                    }
+                                });
+                                let extra = (auto_taps - retired).min(remaining_taps.len());
+                                remaining_taps.drain(0..extra);
+                            }
+                        }
+                    }
+                    if want_pay_cost
+                        && (!self.skip_trivial
+                            || self
+                                .paying()
+                                .is_some_and(|(_, payment, _)| payment.waterbends()))
+                    {
+                        let wanted = Action::PayCost { player };
+                        let index = self
+                            .action_space()
+                            .filter(|space| space.kind == ActionSpaceKind::Waterbend)
+                            .and_then(|space| self.resolve_action_index(space, &wanted))
+                            .ok_or(StructuredOfferError::WrongDecision)?;
+                        done = self.record_compound_step(index, commands)?;
+                        executed += 1;
+                    }
+                    return Ok((done, executed));
+                }
+                for action in actions {
                     // Exact action equality includes its rules player. Keep
                     // the decision kind too: never cross into another window.
                     let index = self
                         .action_space()
                         .filter(|space| space.kind == *kind)
-                        .and_then(|space| space.actions.iter().position(|legal| legal == action))
+                        .and_then(|space| self.resolve_action_index(space, action))
                         .ok_or(StructuredOfferError::WrongDecision)?;
                     done = self.record_compound_step(index, commands)?;
                     executed += 1;
@@ -1586,7 +1654,7 @@ impl Game {
             AtomicCommand::SearchAction { action, .. } => {
                 let index = self
                     .action_space()
-                    .and_then(|space| space.actions.iter().position(|legal| legal == action))
+                    .and_then(|space| self.resolve_action_index(space, action))
                     .ok_or(StructuredOfferError::WrongDecision)?;
                 Ok((self.record_compound_step(index, commands)?, 1))
             }

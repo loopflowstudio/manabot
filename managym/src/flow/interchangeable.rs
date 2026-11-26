@@ -42,7 +42,7 @@ use crate::{
     state::{
         ability::Effect,
         binding::ObjectBinding,
-        card::{AbilityGrant, CardDefId, CardType, StaticAbility},
+        card::{AbilityGrant, CardDefId, CardType, SpellProfile, StaticAbility},
         effect::{Affected, ContinuousEffect, Modification},
         game_object::{CardId, ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId, Target},
         permanent::{Permanent, SpellEntry},
@@ -1639,41 +1639,202 @@ pub(crate) fn can_become_creature(view: &Characteristics) -> bool {
         })
 }
 
-/// Cheap bucket key for foldable actions in Pass 1 (permanent actions).
+/// Cheap bucket key for permanent actions.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct PermanentBucket {
+    def: CardDefId,
+    owner: PlayerId,
+    kind: ObjectKind,
+    controller: PlayerId,
+    tapped: bool,
+}
+
+/// Cheap bucket key for non-battlefield zone cards and outside-game sideboard
+/// cards (`zone == None`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct CardBucket {
+    zone: Option<ZoneType>,
+    def: CardDefId,
+    owner: PlayerId,
+    kind: ObjectKind,
+}
+
+/// Cheap bucket key for foldable actions.
 /// Two actions can fold only if they share a `FoldKey`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FoldKey {
     TapForMana {
         player: PlayerId,
-        def: CardDefId,
-        owner: PlayerId,
-        kind: ObjectKind,
-        controller: PlayerId,
-        tapped: bool,
+        perm: PermanentBucket,
     },
     ActivateAbility {
         player: PlayerId,
         ability_index: usize,
-        def: CardDefId,
-        owner: PlayerId,
-        kind: ObjectKind,
-        controller: PlayerId,
-        tapped: bool,
+        perm: PermanentBucket,
     },
     WaterbendTap {
         player: PlayerId,
-        def: CardDefId,
-        owner: PlayerId,
-        kind: ObjectKind,
-        controller: PlayerId,
-        tapped: bool,
+        perm: PermanentBucket,
     },
-    TurnFaceUp {
+    PlayLand {
         player: PlayerId,
-        def: CardDefId,
-        owner: PlayerId,
-        kind: ObjectKind,
+        profile: SpellProfile,
+        route: Option<PlayRoute>,
+        card: CardBucket,
     },
+    CastSpell {
+        player: PlayerId,
+        profile: SpellProfile,
+        route: Option<PlayRoute>,
+        card: CardBucket,
+    },
+    ActivateCardAbility {
+        player: PlayerId,
+        ability_index: usize,
+        card: CardBucket,
+    },
+    Foretell {
+        player: PlayerId,
+        card: CardBucket,
+    },
+    ChooseTargetPermanent {
+        player: PlayerId,
+        perm: PermanentBucket,
+    },
+    ChooseTargetGraveyard {
+        player: PlayerId,
+        card: CardBucket,
+    },
+    SelectCardPermanent {
+        player: PlayerId,
+        perm: PermanentBucket,
+    },
+    SelectCard {
+        player: PlayerId,
+        card: CardBucket,
+    },
+    LearnDiscard {
+        player: PlayerId,
+        card: CardBucket,
+    },
+    LearnTakeLesson {
+        player: PlayerId,
+        card: CardBucket,
+    },
+}
+
+impl FoldKey {
+    #[inline]
+    fn is_permanent(self) -> bool {
+        matches!(
+            self,
+            Self::TapForMana { .. }
+                | Self::ActivateAbility { .. }
+                | Self::WaterbendTap { .. }
+                | Self::ChooseTargetPermanent { .. }
+                | Self::SelectCardPermanent { .. }
+        )
+    }
+}
+
+/// Whether two actions differ at most in the object/permanent they name,
+/// sharing the same action variant, player, profile, route, ability index,
+/// and target kind.
+fn same_action_shell(left: &Action, right: &Action) -> bool {
+    match (left, right) {
+        (
+            Action::PlayLand {
+                profile: lp,
+                player: lpl,
+                route: lr,
+                ..
+            },
+            Action::PlayLand {
+                profile: rp,
+                player: rpl,
+                route: rr,
+                ..
+            },
+        )
+        | (
+            Action::CastSpell {
+                profile: lp,
+                player: lpl,
+                route: lr,
+                ..
+            },
+            Action::CastSpell {
+                profile: rp,
+                player: rpl,
+                route: rr,
+                ..
+            },
+        ) => lp == rp && lpl == rpl && lr == rr,
+        (
+            Action::ActivateAbility {
+                player: lpl,
+                ability_index: li,
+                ..
+            },
+            Action::ActivateAbility {
+                player: rpl,
+                ability_index: ri,
+                ..
+            },
+        )
+        | (
+            Action::ActivateCardAbility {
+                player: lpl,
+                ability_index: li,
+                ..
+            },
+            Action::ActivateCardAbility {
+                player: rpl,
+                ability_index: ri,
+                ..
+            },
+        ) => lpl == rpl && li == ri,
+        (Action::Foretell { player: lpl, .. }, Action::Foretell { player: rpl, .. })
+        | (Action::TurnFaceUp { player: lpl, .. }, Action::TurnFaceUp { player: rpl, .. })
+        | (Action::TapForMana { player: lpl, .. }, Action::TapForMana { player: rpl, .. })
+        | (Action::WaterbendTap { player: lpl, .. }, Action::WaterbendTap { player: rpl, .. })
+        | (Action::SelectCard { player: lpl, .. }, Action::SelectCard { player: rpl, .. })
+        | (Action::LearnDiscard { player: lpl, .. }, Action::LearnDiscard { player: rpl, .. })
+        | (
+            Action::LearnTakeLesson { player: lpl, .. },
+            Action::LearnTakeLesson { player: rpl, .. },
+        ) => lpl == rpl,
+        (
+            Action::ChooseTarget {
+                player: lpl,
+                target: lt,
+            },
+            Action::ChooseTarget {
+                player: rpl,
+                target: rt,
+            },
+        ) => {
+            lpl == rpl
+                && matches!(
+                    (lt, rt),
+                    (Target::Permanent(_), Target::Permanent(_))
+                        | (Target::GraveyardCard(_), Target::GraveyardCard(_))
+                )
+        }
+        (
+            Action::DeclareBlocker {
+                player: lpl,
+                blocker: lb,
+                attacker: Some(_),
+            },
+            Action::DeclareBlocker {
+                player: rpl,
+                blocker: rb,
+                attacker: Some(_),
+            },
+        ) => lpl == rpl && lb == rb,
+        _ => false,
+    }
 }
 
 impl Game {
@@ -1839,84 +2000,258 @@ impl Game {
         true
     }
 
+    /// Find `wanted` in `space`, falling back to `self.action_aliases()` when
+    /// folding replaced `wanted`'s object with an interchangeable representative.
+    pub(crate) fn resolve_action_index(&self, space: &ActionSpace, wanted: &Action) -> Option<usize> {
+        if let Some(index) = space.actions.iter().position(|legal| legal == wanted) {
+            return Some(index);
+        }
+        let wanted_object = self.action_fold_object(wanted)?;
+        for &(surviving_idx, alias_object) in self.action_aliases() {
+            if alias_object != wanted_object {
+                continue;
+            }
+            if let Some(surviving) = space.actions.get(surviving_idx) {
+                if same_action_shell(surviving, wanted) {
+                    return Some(surviving_idx);
+                }
+            }
+        }
+        None
+    }
+
+    fn action_fold_object(&self, action: &Action) -> Option<ObjectId> {
+        match *action {
+            Action::PlayLand { object, .. }
+            | Action::CastSpell { object, .. }
+            | Action::ActivateCardAbility { object, .. }
+            | Action::Foretell { object, .. }
+            | Action::TurnFaceUp { object, .. }
+            | Action::SelectCard { object, .. }
+            | Action::LearnDiscard { object, .. }
+            | Action::LearnTakeLesson { object, .. } => Some(object),
+            Action::TapForMana { permanent, .. }
+            | Action::ActivateAbility { permanent, .. }
+            | Action::WaterbendTap { permanent, .. } => self.permanent_object(permanent),
+            Action::ChooseTarget {
+                target: Target::Permanent(permanent),
+                ..
+            } => self.permanent_object(permanent),
+            Action::ChooseTarget {
+                target: Target::GraveyardCard(object),
+                ..
+            } => Some(object),
+            Action::DeclareBlocker {
+                attacker: Some(attacker),
+                ..
+            } => self.permanent_object(attacker),
+            _ => None,
+        }
+    }
+
+    /// Whether the active decision allows folding `Action::SelectCard`.
+    /// `OrderLibrary` and `DistributeCounters` are never folded even when
+    /// their candidates would otherwise look identical.
+    fn select_card_decision_allows_fold(&self) -> bool {
+        if self.state.opening().is_some() || self.pending_choice.is_some() {
+            return true;
+        }
+        let Some(suspended) = &self.state.suspended_decision else {
+            return true;
+        };
+        !matches!(
+            suspended.decision,
+            Decision::OrderLibrary { .. } | Decision::DistributeCounters { .. }
+        )
+    }
+
+    fn permanent_bucket(&self, permanent: PermanentId) -> Option<(PermanentBucket, ObjectId)> {
+        let perm = self.state.permanents.get(permanent.0)?.as_ref()?;
+        let obj = self.state.object(perm.object).ok()?;
+        if obj.is_face_down() || !perm.keyword_counter_timestamps.is_empty() {
+            return None;
+        }
+        Some((
+            PermanentBucket {
+                def: obj.definition_id,
+                owner: obj.owner,
+                kind: obj.kind(),
+                controller: perm.controller,
+                tapped: perm.tapped,
+            },
+            perm.object,
+        ))
+    }
+
+    fn zone_card_bucket(&self, object: ObjectId, expected: Option<ZoneType>) -> Option<CardBucket> {
+        let zone = self.state.zones.zone_of(object)?;
+        if !matches!(zone, ZoneType::Hand | ZoneType::Graveyard | ZoneType::Exile) {
+            return None;
+        }
+        if expected.is_some_and(|want| want != zone) {
+            return None;
+        }
+        let obj = self.state.object(object).ok()?;
+        if obj.is_face_down() {
+            return None;
+        }
+        Some(CardBucket {
+            zone: Some(zone),
+            def: obj.definition_id,
+            owner: obj.owner,
+            kind: obj.kind(),
+        })
+    }
+
+    fn sideboard_card_bucket(&self, object: ObjectId) -> Option<CardBucket> {
+        if self.state.zones.zone_of(object).is_some() || !self.state.zones.is_latest(object) {
+            return None;
+        }
+        let card = self.state.card_id(object)?;
+        let owner = self.state.cards[card].owner;
+        if !self.state.players[owner.0].sideboard.contains(&card) {
+            return None;
+        }
+        let obj = self.state.entry_object(object);
+        if obj.is_face_down() {
+            return None;
+        }
+        Some(CardBucket {
+            zone: None,
+            def: obj.definition_id,
+            owner: obj.owner,
+            kind: obj.kind(),
+        })
+    }
+
     /// Extract the cheap bucket key and object id for a foldable action.
-    /// Face-down objects return `None` immediately (never folded).
-    fn fold_candidate(&self, action: &Action) -> Option<(FoldKey, ObjectId)> {
+    /// Face-down objects, library/stack candidates, and disallowed decisions
+    /// return `None` immediately (never folded).
+    fn fold_candidate(
+        &self,
+        action: &Action,
+        allow_select_card: bool,
+    ) -> Option<(FoldKey, ObjectId)> {
         match *action {
             Action::TapForMana { player, permanent } => {
-                let perm = self.state.permanents.get(permanent.0)?.as_ref()?;
-                let obj = self.state.object(perm.object).ok()?;
-                if obj.is_face_down() || !perm.keyword_counter_timestamps.is_empty() {
-                    return None;
-                }
-                Some((
-                    FoldKey::TapForMana {
-                        player,
-                        def: obj.definition_id,
-                        owner: obj.owner,
-                        kind: obj.kind(),
-                        controller: perm.controller,
-                        tapped: perm.tapped,
-                    },
-                    perm.object,
-                ))
+                let (perm, object) = self.permanent_bucket(permanent)?;
+                Some((FoldKey::TapForMana { player, perm }, object))
             }
             Action::ActivateAbility {
                 player,
                 permanent,
                 ability_index,
             } => {
-                let perm = self.state.permanents.get(permanent.0)?.as_ref()?;
-                let obj = self.state.object(perm.object).ok()?;
-                if obj.is_face_down() || !perm.keyword_counter_timestamps.is_empty() {
-                    return None;
-                }
+                let (perm, object) = self.permanent_bucket(permanent)?;
                 Some((
                     FoldKey::ActivateAbility {
                         player,
                         ability_index,
-                        def: obj.definition_id,
-                        owner: obj.owner,
-                        kind: obj.kind(),
-                        controller: perm.controller,
-                        tapped: perm.tapped,
-                    },
-                    perm.object,
-                ))
-            }
-            Action::WaterbendTap { player, permanent } => {
-                let perm = self.state.permanents.get(permanent.0)?.as_ref()?;
-                let obj = self.state.object(perm.object).ok()?;
-                if obj.is_face_down() || !perm.keyword_counter_timestamps.is_empty() {
-                    return None;
-                }
-                Some((
-                    FoldKey::WaterbendTap {
-                        player,
-                        def: obj.definition_id,
-                        owner: obj.owner,
-                        kind: obj.kind(),
-                        controller: perm.controller,
-                        tapped: perm.tapped,
-                    },
-                    perm.object,
-                ))
-            }
-            Action::TurnFaceUp { player, object } => {
-                let obj = self.state.object(object).ok()?;
-                if obj.is_face_down() {
-                    return None;
-                }
-                Some((
-                    FoldKey::TurnFaceUp {
-                        player,
-                        def: obj.definition_id,
-                        owner: obj.owner,
-                        kind: obj.kind(),
+                        perm,
                     },
                     object,
                 ))
             }
+            Action::WaterbendTap { player, permanent } => {
+                let (perm, object) = self.permanent_bucket(permanent)?;
+                Some((FoldKey::WaterbendTap { player, perm }, object))
+            }
+            Action::PlayLand {
+                profile,
+                player,
+                object,
+                route,
+            } => {
+                let card = self.zone_card_bucket(object, None)?;
+                Some((
+                    FoldKey::PlayLand {
+                        player,
+                        profile,
+                        route,
+                        card,
+                    },
+                    object,
+                ))
+            }
+            Action::CastSpell {
+                profile,
+                player,
+                object,
+                route,
+            } => {
+                let card = self.zone_card_bucket(object, None)?;
+                Some((
+                    FoldKey::CastSpell {
+                        player,
+                        profile,
+                        route,
+                        card,
+                    },
+                    object,
+                ))
+            }
+            Action::ActivateCardAbility {
+                player,
+                object,
+                ability_index,
+            } => {
+                let card = self.zone_card_bucket(object, None)?;
+                Some((
+                    FoldKey::ActivateCardAbility {
+                        player,
+                        ability_index,
+                        card,
+                    },
+                    object,
+                ))
+            }
+            Action::Foretell { player, object } => {
+                let card = self.zone_card_bucket(object, Some(ZoneType::Hand))?;
+                Some((FoldKey::Foretell { player, card }, object))
+            }
+            Action::ChooseTarget {
+                player,
+                target: Target::Permanent(permanent),
+            } => {
+                let (perm, object) = self.permanent_bucket(permanent)?;
+                Some((FoldKey::ChooseTargetPermanent { player, perm }, object))
+            }
+            Action::ChooseTarget {
+                player,
+                target: Target::GraveyardCard(object),
+            } => {
+                let card = self.zone_card_bucket(object, Some(ZoneType::Graveyard))?;
+                Some((FoldKey::ChooseTargetGraveyard { player, card }, object))
+            }
+            Action::SelectCard { player, object } if allow_select_card => {
+                match self.state.zones.zone_of(object) {
+                    Some(ZoneType::Battlefield) => {
+                        let permanent = self.state.permanent_of(object)?;
+                        let (perm, obj) = self.permanent_bucket(permanent)?;
+                        Some((FoldKey::SelectCardPermanent { player, perm }, obj))
+                    }
+                    Some(ZoneType::Hand | ZoneType::Graveyard | ZoneType::Exile) => {
+                        let card = self.zone_card_bucket(object, None)?;
+                        Some((FoldKey::SelectCard { player, card }, object))
+                    }
+                    None => {
+                        let card = self.sideboard_card_bucket(object)?;
+                        Some((FoldKey::SelectCard { player, card }, object))
+                    }
+                    Some(ZoneType::Library | ZoneType::Stack | ZoneType::Command) => None,
+                }
+            }
+            Action::LearnDiscard { player, object } => {
+                let card = self.zone_card_bucket(object, Some(ZoneType::Hand))?;
+                Some((FoldKey::LearnDiscard { player, card }, object))
+            }
+            Action::LearnTakeLesson { player, object } => {
+                let card = self.sideboard_card_bucket(object)?;
+                Some((FoldKey::LearnTakeLesson { player, card }, object))
+            }
+            // Face-down TurnFaceUp, Library/Stack targets, ChooseMode,
+            // ScryCard, ChooseTrigger, PassPriority, PayCost, Decline, and
+            // combat declarations (Pass 3) never fold here.
             _ => None,
         }
     }
@@ -1933,6 +2268,8 @@ impl Game {
             return (space, None);
         }
 
+        let allow_select_card = self.select_card_decision_allows_fold();
+
         // Stack-buffered candidate scan: avoids any heap allocation in the
         // common case where no two foldable actions share a bucket key.
         let mut inline: [Option<(FoldKey, usize, ObjectId)>; 24] = [None; 24];
@@ -1941,7 +2278,7 @@ impl Game {
         let mut has_dup = false;
 
         for (index, action) in space.actions.iter().enumerate() {
-            let Some((key, object)) = self.fold_candidate(action) else {
+            let Some((key, object)) = self.fold_candidate(action, allow_select_card) else {
                 continue;
             };
             if spill.is_empty() {
@@ -1979,10 +2316,21 @@ impl Game {
             spill
         };
 
-        // Mark which candidate entries belong to a bucket of size >= 2.
+        // Mark which candidate entries belong to a bucket of size >= 2 and
+        // build a deduplicated watch list for the reference census.
         let mut in_dup_bucket = vec![false; candidates.len()];
         let mut watch: Vec<ObjectId> = Vec::with_capacity(candidates.len());
         let mut watch_slot: Vec<usize> = vec![usize::MAX; candidates.len()];
+        let mut has_perm_dup = false;
+        let mut watch_index = |object: ObjectId| -> usize {
+            if let Some(pos) = watch.iter().position(|&w| w == object) {
+                pos
+            } else {
+                let pos = watch.len();
+                watch.push(object);
+                pos
+            }
+        };
         for i in 0..candidates.len() {
             if in_dup_bucket[i] {
                 continue;
@@ -1993,13 +2341,12 @@ impl Game {
                 if candidates[j].0 == key {
                     if !found {
                         found = true;
+                        has_perm_dup |= key.is_permanent();
                         in_dup_bucket[i] = true;
-                        watch_slot[i] = watch.len();
-                        watch.push(candidates[i].2);
+                        watch_slot[i] = watch_index(candidates[i].2);
                     }
                     in_dup_bucket[j] = true;
-                    watch_slot[j] = watch.len();
-                    watch.push(candidates[j].2);
+                    watch_slot[j] = watch_index(candidates[j].2);
                 }
             }
         }
@@ -2009,60 +2356,82 @@ impl Game {
             return (space, None);
         }
 
-        let _scan = self.board_scan();
+        let _scan = has_perm_dup.then(|| self.board_scan());
 
         // Map original action index -> (representative original action index, folded object)
         // for actions that fold into an earlier representative.
         let mut folded_into: Vec<Option<(usize, ObjectId)>> = vec![None; space.actions.len()];
         let mut any_folded = false;
 
-        // Track representatives per duplicate bucket: (bucket_key, rep_orig_index, rep_object, rep_perm, rep_view).
-        let mut reps: Vec<(
+        // Track representatives per duplicate bucket.
+        let mut perm_reps: Vec<(
             FoldKey,
             usize,
             ObjectId,
             PermanentId,
             std::sync::Arc<Characteristics>,
         )> = Vec::new();
+        let mut card_reps: Vec<(FoldKey, usize, ObjectId)> = Vec::new();
 
         for (ci, &(key, orig_idx, object)) in candidates.iter().enumerate() {
             if !in_dup_bucket[ci] || census.is_named(watch_slot[ci]) {
                 continue;
             }
-            let Some(perm_id) = self.state.permanent_of(object) else {
-                continue;
-            };
-            let Some(perm) = self.state.permanents[perm_id].as_ref() else {
-                continue;
-            };
-            let obj = &self.state[object];
+            if key.is_permanent() {
+                let Some(perm_id) = self.state.permanent_of(object) else {
+                    continue;
+                };
+                let Some(perm) = self.state.permanents[perm_id].as_ref() else {
+                    continue;
+                };
+                let obj = &self.state[object];
 
-            let mut matched_rep = None;
-            for &(rep_key, rep_orig_idx, rep_object, rep_perm_id, ref rep_view) in &reps {
-                if rep_key != key {
-                    continue;
+                let mut matched_rep = None;
+                for &(rep_key, rep_orig_idx, rep_object, rep_perm_id, ref rep_view) in &perm_reps {
+                    if rep_key != key {
+                        continue;
+                    }
+                    let rep_obj = &self.state[rep_object];
+                    if !rep_obj.same_object_identity(obj) {
+                        continue;
+                    }
+                    let rep_perm = self.state.permanents[rep_perm_id].as_ref().unwrap();
+                    if !same_permanent_record_cheap(rep_perm, perm) {
+                        continue;
+                    }
+                    if self.same_layered_pair(rep_perm_id, rep_view, perm_id) {
+                        matched_rep = Some(rep_orig_idx);
+                        break;
+                    }
                 }
-                let rep_obj = &self.state[rep_object];
-                if !rep_obj.same_object_identity(obj) {
-                    continue;
-                }
-                let rep_perm = self.state.permanents[rep_perm_id].as_ref().unwrap();
-                if !same_permanent_record_cheap(rep_perm, perm) {
-                    continue;
-                }
-                if self.same_layered_pair(rep_perm_id, rep_view, perm_id) {
-                    matched_rep = Some(rep_orig_idx);
-                    break;
-                }
-            }
 
-            if let Some(rep_orig_idx) = matched_rep {
-                folded_into[orig_idx] = Some((rep_orig_idx, object));
-                any_folded = true;
+                if let Some(rep_orig_idx) = matched_rep {
+                    folded_into[orig_idx] = Some((rep_orig_idx, object));
+                    any_folded = true;
+                } else {
+                    let view = self.characteristics(perm_id);
+                    if view.static_abilities.is_empty() {
+                        perm_reps.push((key, orig_idx, object, perm_id, view));
+                    }
+                }
             } else {
-                let view = self.characteristics(perm_id);
-                if view.static_abilities.is_empty() {
-                    reps.push((key, orig_idx, object, perm_id, view));
+                let obj = self.state.entry_object(object);
+                let mut matched_rep = None;
+                for &(rep_key, rep_orig_idx, rep_object) in &card_reps {
+                    if rep_key != key {
+                        continue;
+                    }
+                    if self.state.entry_object(rep_object).same_object_identity(obj) {
+                        matched_rep = Some(rep_orig_idx);
+                        break;
+                    }
+                }
+
+                if let Some(rep_orig_idx) = matched_rep {
+                    folded_into[orig_idx] = Some((rep_orig_idx, object));
+                    any_folded = true;
+                } else {
+                    card_reps.push((key, orig_idx, object));
                 }
             }
         }

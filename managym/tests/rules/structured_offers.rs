@@ -546,7 +546,9 @@ fn compound_waterbend_subset_is_order_independent_and_forced_suffix_safe() {
             }],
         };
         let commands = root.compound_commands(&offers, &submission).unwrap();
-        assert_eq!(commands.len(), if skip_trivial { 4 } else { 5 });
+        // With skip_trivial enabled, tapping Rallier leaves 4 identical Gray
+        // Ogres whose folded 1-action prompts auto-complete as forced suffix taps.
+        assert_eq!(commands.len(), if skip_trivial { 1 } else { 5 });
         selected.reverse();
         let reversed = OfferSubmission {
             offer_id: offer.id,

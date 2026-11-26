@@ -7,7 +7,7 @@
 use crate::state::card::SpellProfile;
 #[cfg(test)]
 use crate::state::player::ManaFloats;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 use rand::seq::SliceRandom;
 
@@ -699,8 +699,8 @@ pub enum Decision {
         end: DistinctSearchEnd,
     },
     /// `player` chooses a card matching `predicate` from `owner`'s revealed
-    /// hand; `owner` discards it. Candidates are read from the current hand,
-    /// one per definition, so resampled physical copies stay consistent.
+    /// hand; `owner` discards it. Candidates are read from the current hand;
+    /// indistinguishable copies fold through the shared action-space folder.
     DiscardFromRevealedHand {
         player: PlayerId,
         owner: PlayerId,
@@ -3504,8 +3504,8 @@ impl Game {
         }
     }
 
-    /// Playable card and profile pairs. Graveyard choices bind each public
-    /// object. Existing free-hand offers group interchangeable copies by definition.
+    /// Playable card and profile pairs. Indistinguishable copies fold when
+    /// the action space is published so aliases cover every copy.
     pub(crate) fn resolution_cast_candidates(
         &self,
         decision: &Decision,
@@ -3607,22 +3607,12 @@ impl Game {
                 }
             }
         }
-        if !matches!(
-            offer,
-            ResolutionCastOffer::Graveyard { .. } | ResolutionCastOffer::AmongExiled { .. }
-        ) {
-            let mut offered = HashSet::new();
-            candidates.retain(|(card, profile)| {
-                offered.insert((
-                    self.state[self.state.object_of(*card)].definition_id,
-                    *profile,
-                ))
-            });
-        }
         candidates
     }
 
-    /// One hand card per matching definition for `DiscardFromRevealedHand`.
+    /// Matching hand objects for `DiscardFromRevealedHand`. Indistinguishable
+    /// copies fold when the action space is published so aliases cover every
+    /// copy and pinned/referenced copies stay distinct.
     pub(crate) fn revealed_hand_objects(&self, decision: &Decision) -> Vec<ObjectId> {
         let Decision::DiscardFromRevealedHand {
             owner, predicate, ..
@@ -3639,7 +3629,6 @@ impl Game {
             .filter(|object| self.object_matches_predicate(*object, predicate))
             .collect();
         candidates.sort_unstable_by_key(|object| (self.state[*object].definition_id, *object));
-        candidates.dedup_by_key(|object| self.state[*object].definition_id);
         candidates
     }
 
