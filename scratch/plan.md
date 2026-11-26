@@ -95,3 +95,7 @@ an ordinary end; the finished game appears once in Games, counts in My record
 by its result, exposes only their own `CLIENT` decisions through every API, and
 opens in Review with truthful pilot names, decks, dividers, and analysis at
 every position before and after each swap.
+
+## Ship review 2026-11-25 (headless)
+
+Page: `scratch/ship-review.html`. Fixed here: Swap sides caption explains the disabled state (`9ef04a852c`). Filed Task 784fa8 for pre-existing stale Playwright specs + Settings Space focus. Open questions 1–3 on the page are still Jack's. Next: gate (PR #622 is DIRTY against main, no checks yet).

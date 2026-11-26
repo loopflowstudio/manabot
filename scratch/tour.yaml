@@ -1,0 +1,31 @@
+at: 9ef04a852c907edaf0a7d8942fd04571416926dd
+first:
+  - path: docs/academy.md
+    why: what Swap sides does, in the person's terms
+  - path: managym/academy/trace.py
+    why: seat_swaps and human_seat_at, the one model
+  - path: protocol/testing-house-v1.schema.json
+    why: the swap_sides control message on the wire
+  - path: managym/academy/shared_table_protocol.py
+  - path: managym/academy/server.py
+    why: GameSession.swap_sides commit boundary and shadow bot
+  - path: managym/academy/attempts.py
+    why: persisted players and matchup after a swap
+  - path: managym/academy/recording.py
+    why: CLIENT decisions across both seats
+  - path: managym/academy/replay_index.py
+  - path: managym/academy/analysis.py
+    why: analysis per piloted seat
+  - path: academy/ui/src/lib/board/replay.ts
+    why: Review seat-versus-pilot (humanSeatAt, pilotSeatAt)
+  - path: academy/ui/src/routes/replay/+page.svelte
+  - path: academy/ui/src/routes/+page.svelte
+    why: Settings This game / Next game control
+  - path: academy/ui/src/lib/socket.svelte.ts
+    why: live line restarts on seat change
+  - path: tests/academy/test_swap_sides.py
+    why: server acceptance tests
+  - path: academy/ui/e2e/swap-sides.spec.ts
+hide:
+  - path: protocol/fixtures/
+    why: fixture regenerated from the schema change
