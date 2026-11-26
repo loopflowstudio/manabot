@@ -306,15 +306,7 @@ aligned:
 ## Passes
 
 1. **Predicate, oracle, permanents** — done (`e698958617`): fail-closed exhaustive census + `Game::interchangeable` in `flow/interchangeable.rs`, `fold_action_space` + `publish_folded_action_space` across publish sites (`tick`, `search`, `scenario`, `possible_worlds`), aliases in `step` rollback and `GameSnapshot`, permanent folding (`TapForMana`, `ActivateAbility`, `WaterbendTap`, `TurnFaceUp`), `flow/mana/interchangeable.rs` moved onto the shared predicate (old scans + `names_mana_source` / `may_name_mana_source` deleted). Oracle verified 133 folded pairs (and 542 in full sweep) with zero rules divergences (noted `autotapper` `PermanentId`-order tiebreak in `scratch/questions.md`). Default-mode fold share: 10.30% (115/1116 decisions), mean actions 3.298 -> 2.968. Release `bench_steps`: 115,115 steps in 7.61s user CPU (15.1k steps/user-s; host load ~585 precluded wall-time comparison against baseline), `bench_search`: 23,296 total sims across seeds 1–3.
-2. **Cards and selections.** Hand and graveyard objects: `PlayLand`,
-   `CastSpell`, card abilities, `Foretell`, targets, `SelectCard`, discard,
-   Learn (sideboard via `entry_object`), cost components, delve, with the
-   zone and decision gate on `SelectCard`; the two definition-only dedups
-   in `decision.rs` deleted. Constructed tests for each row of the
-   table and each distinguishing case (pinned reveal, cast permission,
-   `graveyard_from_battlefield`, chosen-so-far in a multi-target spell,
-   face-down manifests, granted static ability).
-   Compound lowering through aliases. Oracle extended to these spaces.
+2. **Cards and selections** — done (`c440b0d8a4`): extended `fold_action_space` to `PlayLand`, `CastSpell`, `ActivateCardAbility`, `Foretell`, `ChooseTarget` (permanent/graveyard), `SelectCard` (zone gate: Battlefield/Hand/Graveyard/face-up Exile/outside-game Sideboard; decision gate: never `OrderLibrary`/`DistributeCounters`), `LearnDiscard`, and `LearnTakeLesson`; deleted definition-only dedups in `resolution_cast_candidates` and `revealed_hand_objects` (`flow/decision.rs`); added `resolve_action_index` and alias-aware compound lowering in `agent/structured_offer.rs` (including `ChooseTarget` and `Waterbend` forced-suffix retirement under `skip_trivial`); updated `compound_waterbend_subset_is_order_independent_and_forced_suffix_safe` for folded forced-suffix taps. Verified `interchangeable` (16/16; oracle verified 136 folded pairs with zero rules divergences; default-mode fold share 24.07% (265/1101), mean actions 3.300 -> 2.819), `rules_tests structured_offer` (10/10), and `rules_tests decklist_disclosure` (6/6).
 3. **Combat.** Decline lists in `CombatState` and the hash (v32, with
    `graveyard_from_battlefield`), declined-earlier rule for attackers and
    blockers, combat-role comparison for block targets, normalization in
