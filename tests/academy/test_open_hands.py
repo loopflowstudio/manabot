@@ -237,8 +237,8 @@ def test_playing_on_keeps_each_prefix_mark_and_starts_blind(tmp_path: Path) -> N
     assert "open_hands" not in stored_config(tmp_path, game)
     stored = game.attempt_store.load_attempt(game.match_id)
     assert stored is not None
-    assert [
-        bool(event.get("open_hands")) for event in stored.trace["events"]
-    ] == marks[:upto]
+    assert [bool(event.get("open_hands")) for event in stored.trace["events"]] == marks[
+        :upto
+    ]
     play(game, random.Random(5), commands=1)
     assert not game.trace.events[upto].open_hands
