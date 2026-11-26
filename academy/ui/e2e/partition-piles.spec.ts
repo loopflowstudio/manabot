@@ -163,6 +163,12 @@ function acceptedUpdate(
   };
 }
 
+interface PartitionOptions {
+  rejectFirstGroup?: boolean;
+  /** Keep the fixture's earlier presentation events so the history can be walked. */
+  withHistory?: boolean;
+}
+
 interface PartitionAuthority {
   commands: Command[];
   groupCommands: GroupCommand[];
@@ -171,7 +177,7 @@ interface PartitionAuthority {
 
 async function installPartitionAuthority(
   page: Page,
-  options: { rejectFirstGroup?: boolean } = {},
+  options: PartitionOptions = {},
 ): Promise<PartitionAuthority> {
   const authority: PartitionAuthority = { commands: [], groupCommands: [], previews: [] };
   let current = partitionFrame(0);
@@ -218,8 +224,8 @@ async function installPartitionAuthority(
             ...structuredClone(boltFixture.recovery),
             reason: 'initial_connect',
             frame: current,
-            presentation_tail: [],
-            presentation_cursor: 0,
+            presentation_tail: options.withHistory ? boltFixture.recovery.presentation_tail : [],
+            presentation_cursor: options.withHistory ? boltFixture.recovery.presentation_cursor : 0,
             accepted_commands: [],
             replay_cursor: current.revision,
           },
@@ -278,7 +284,7 @@ async function installPartitionAuthority(
 
 async function startPartition(
   page: Page,
-  options: { rejectFirstGroup?: boolean } = {},
+  options: PartitionOptions = {},
 ): Promise<PartitionAuthority> {
   const authority = await installPartitionAuthority(page, options);
   await page.goto('/?setup=1');
@@ -359,4 +365,21 @@ test('group rejection banner and inline refusal clear together on draft edit, an
   expect(authority.commands[0].offer_id).toBe(0);
   await expect(page.getByTestId('partition-committed')).toContainText('Face-up: Gray Ogre');
   await expect(page.locator('[data-testid=partition-card]')).toHaveCount(4);
+});
+
+test('looking back hides the pile split and holds its Confirm until the board returns to now', async ({ page }) => {
+  const authority = await startPartition(page, { withHistory: true });
+  const confirm = page.getByTestId('primary-action');
+  await expect(confirm).toHaveAttribute('data-draft-ready', 'true');
+
+  await page.getByRole('button', { name: /^Stop 1 of 1/ }).click();
+  await expect(page.getByTestId('turn-number')).toContainText('Esc for now');
+  await expect(page.getByTestId('partition-panel')).toHaveCount(0);
+  await expect(confirm).toBeDisabled();
+  await expect(confirm).toHaveAttribute('data-draft-ready', 'false');
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('partition-panel')).toBeVisible();
+  await expect(confirm).toBeEnabled();
+  expect(authority.groupCommands).toHaveLength(0);
 });

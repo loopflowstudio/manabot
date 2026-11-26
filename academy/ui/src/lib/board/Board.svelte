@@ -345,9 +345,6 @@
     }
     return null;
   });
-  const groupReady = $derived(
-    exactPreview !== null && exactPreview.complete && activeRefusal === null,
-  );
 
   const words = $derived(combatGroup ? draftWords(combatGroup, draft, names) : null);
   const arrangeSummary = $derived(
@@ -635,6 +632,12 @@
     connection !== null ? selection : cursorSeq !== null ? { seq: cursorSeq, scope: 'line' } : null,
   );
   const cursor = $derived(activeCursor?.seq ?? null);
+  // Arrange and pile panels hide while the board walks the past; their Confirm
+  // waits for them so a click never commits cards nobody has seen.
+  const groupShown = $derived(combatGroup !== null || activeCursor === null);
+  const groupReady = $derived(
+    groupShown && exactPreview !== null && exactPreview.complete && activeRefusal === null,
+  );
 
   const stopsAll = $derived(walkStops(history, stepBoards));
   const scrubber = $derived(scrubberStops(stopsAll, cursor));

@@ -121,6 +121,10 @@ Types live in `managym/group.py`; the native layer is `managym/src/flow/group/`
 
 ## Remaining (after Pass 5, in gate / ship-review)
 
+- QA after Pass 5 (`scratch/qa.html`): the API, digest parity and live Curator
+  split all work. An arrange or pile Confirm is now held while its panel is
+  hidden during a board walk.
+
 - Pass 5 left no recorded test results in `scratch/`: gate runs debug
   `cargo nextest` for `managym/tests/rules/group.rs`, `uv run python -m pytest
   tests/env/test_group.py tests/academy/test_group_command.py`, vitest for

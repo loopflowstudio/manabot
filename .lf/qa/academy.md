@@ -99,14 +99,17 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   New game page.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
-  path), open the frontend URL, press Start game, play a land and Pass Turn.
+  path), open the frontend URL, press Deal & Play (the landing's start button;
+  mocked e2e setups at `/?setup=1` still say Start game), play a land and Pass Turn.
   Stop with SIGINT to the `scripts/play.py` Python process (`pgrep -f
   'scripts/play.py'`); SIGINT to the `./scripts/play` shell wrapper's PID
   leaves both servers running. To play specific cards, open "Import decklist
   files", check "Use imported decks for the next game", set both files
   (`setInputFiles` with counted lines such as `4 Heartbeat of Spring`), press
-  "Check decklists", wait for `Ready —`, pick the `passive` opponent and press
-  Start game; imported decks take any number of copies.
+  "Check decklists", wait for `Ready —`, pick the `passive` opponent with
+  `getByTestId('opponent-select').selectOption('passive')`, set
+  `getByLabel('Mana payment')` to `auto` so scripts need not pay, and press
+  Deal & Play; imported decks take any number of copies.
   Under heavy host load the first frontend probe in `scripts/play.py` keeps a
   fixed 30-second deadline whatever `--ready-timeout` says, so the launch
   fails with `ready.timeout`. Then start the two servers as it does: from the
@@ -205,6 +208,17 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `bottom` on Scry 2): the server answers `rejected` with "Place remaining
   cards before confirming", the game stays at the Scry, and Confirm stays
   disabled until the draft is edited.
+- PartitionPiles live: import `24 Island / 36 Curator of Destinies` against
+  `60 Plains`, passive opponent, automatic mana; a script that clicks "Keep",
+  "Play Island" and "Cast Curator of Destinies" reaches the split in about a
+  minute. The `group` arrives while the board still walks the cast and
+  trigger: `[data-testid=partition-panel]` (like ArrangePanel) is absent and
+  the rail Confirm is disabled until the walk ends, so detect the decision from
+  received WebSocket messages (`group.kind === 'partition_piles'`), never by
+  clicking `primary-action` as "pass" — it becomes the split's Confirm. Toggle
+  a card with its `[data-testid=partition-card] [data-testid=board-card]`.
+  Recorded rows are `Put <card> in the face-down|face-up pile` under
+  `authority.group.<id>.<n>`, then the opponent's `Choose … pile`.
 - Payment previews (`[data-testid=payment-preview]`, `POST
   /api/sessions/<id>/payment-preview`): the panel exists only once a payment
   offer has been previewed in the current decision, so read it with a count
