@@ -8,9 +8,9 @@ observations and complete legal action space clear without hiding strategic
 choices, silently selecting actions, revealing unavailable information or
 introducing human-only game semantics. Preserve Command binding, stale
 rejection, actual pending decisions on reconnect, replay/fork identity and
-keyboard accessibility. Draft multi-step choices (combat, pile partitions)
-holistically over verified sequential Commands, reserve preview space so hover
-never shifts layout, frame policy
+keyboard accessibility. Draft multi-step choices through `managym`'s `decision_group` API and one
+`decision_group_command` (no browser send loops or label scraping), reserve
+preview space so hover never shifts layout, frame policy
 comparisons neutrally, send original JSON source spans on game-file import
 (avoid JS u64 rounding), and scope resume credentials with the started-launch
 marker in `sessionStorage`.

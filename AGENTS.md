@@ -45,10 +45,11 @@ domain unit (`decision_weights`, `SnapshotScorer`). Do not reuse established
 terms (`recipe` for training recipes, `manifest` for content packs, `replay`
 for seed-and-action replays) for unrelated concepts, even internally, and avoid
 duplicating module filenames across packages. When renaming or replacing a
-published API, convert remaining callers, emit a `DeprecationWarning` targeting
-the next minor release (e.g. `0.3.0` on `0.2.x`), and tag the whole deletable
-compatibility graph with that version so rollover finds it; serialized keys,
-checkpoint fields and frozen evidence keep their spelling.
+published API, rename surviving core modules and functions into the new
+vocabulary, convert callers, and keep the old names only on thin compatibility
+wrappers emitting a `DeprecationWarning` targeting the next minor release (e.g.
+`0.3.0` on `0.2.x`), tagged as one deletable compatibility graph; serialized
+keys, checkpoint fields and frozen evidence keep their spelling.
 
 Published library API and patch-clean `main`: `manabot`'s published surface is
 the fifteen modules in `PUBLIC_MODULES` (`scripts/public_api.py`, mirrored in
@@ -486,16 +487,14 @@ it. Discard replacements use that controller to determine who caused the
 discard, including a discard paid during resolution.
 
 Native `semantic_decision_frame_json` and `execute_semantic_command_json`
-use action-aligned `structured_search_offers`: these offers have no choices
-and reject nonempty `Command.answers`. Compound submissions belong to the
-separate `compound_offers` / `step_structured` API. Grouped input
-(`flow/decision_group/`, `managym.decision_group`, Academy `decision_group_command`) compiles a typed choice
-to sequential native `Action`s on a clone before stepping the live game and
-never widens an action space, observation, or digest. Do not infer supported
-atomic answers from the `Command` field alone, or pass compound offer ids to
-the semantic executor. Recording preserves the original native Command and
-its object preconditions; Academy's presentation Command has a separate
-revision scope.
+project the action-aligned `decision_surface` (no choices; rejects nonempty
+`Command.answers`; prefer `decision` / `decision_group` vocabulary over `offer`
+in new core engine code). Grouped input (`flow/decision_group/`,
+`managym.decision_group`, Academy `decision_group_command`) compiles a typed
+choice to sequential native `Action`s on a clone before stepping the live game
+without widening action spaces, observations or digests. Recording preserves
+the original native Command and its object preconditions; Academy's
+presentation Command has a separate revision scope.
 
 Native snapshot v1 cold replay reads action indices or Commands. Issued object
 candidates bind the entire action-aligned offer projection, and the final state
