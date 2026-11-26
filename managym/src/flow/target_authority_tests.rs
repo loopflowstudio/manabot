@@ -1117,7 +1117,7 @@ fn retained_departure_spell_delayed_and_child_reflexive_keep_one_source() {
         expiry: DelayedExpiry::Never,
     };
     game.move_object(bolt, ZoneType::Graveyard);
-    game.fire_delayed_trigger(&delayed, None);
+    game.fire_delayed_trigger(&delayed, None, None);
     let pending = game.state.pending_triggers.last().unwrap();
     assert_eq!(pending.source_identity, source);
     game.place_triggered_ability_on_stack(pending.clone());
@@ -1182,7 +1182,7 @@ fn retained_departure_recorded_card_and_spell_predicates_ignore_later_copy() {
     };
     let mut frame = EffectFrame::new(PlayerId(1), vec![]);
     frame.this_way = vec![bolt];
-    frame.context_target = Some(Target::StackSpell(bolt));
+    frame.context = Some(Target::StackSpell(bolt));
     assert!(game.check_condition(
         &Condition::CardsThisWayMatch(predicate.clone()),
         PlayerId(1),

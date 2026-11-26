@@ -1248,15 +1248,15 @@ impl Game {
                     .into_iter()
                     .partition(watches);
             *self.state.delayed_triggers_mut() = kept;
-            let departed = self
-                .object_lki(departing_object)
-                .map(|lki| Target::Permanent(lki.permanent));
+            let lki = self.object_lki(departing_object);
+            let departed = lki.map(|lki| Target::Permanent(lki.permanent));
+            let player = lki.map(|lki| lki.controller);
             for trigger in watching {
                 let DelayedTriggerEvent::Leaves { or_exiled, .. } = trigger.event else {
                     continue;
                 };
                 if to_zone == ZoneType::Graveyard || (or_exiled && to_zone == ZoneType::Exile) {
-                    self.fire_delayed_trigger(&trigger, departed);
+                    self.fire_delayed_trigger(&trigger, departed, player);
                 }
             }
         }

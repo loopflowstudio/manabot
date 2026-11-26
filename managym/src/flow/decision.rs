@@ -219,10 +219,10 @@ pub struct EffectFrame {
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
-    /// Trigger-context object: the object of the triggering event (e.g. the
-    /// spell that targeted a warded permanent), used as the primary target
-    /// when none was chosen. Never the source's attachment.
-    pub context_target: Option<Target>,
+    /// Trigger-context object: the triggering event's object, never a chosen
+    /// target or the source's attachment.
+    #[serde(rename = "context_target")]
+    pub context: Option<Target>,
     /// The exact object an activated Aura or Equipment ability's source was
     /// attached to as it was activated (CR 602.2, last known information once
     /// the source has left). Triggered abilities leave it empty and read the
@@ -316,7 +316,7 @@ impl EffectFrame {
             created: Vec::new(),
             targets: Vec::new(),
             active_requirement: 0,
-            context_target: None,
+            context: None,
             attached: None,
             triggering_player: None,
             grantor: None,
@@ -346,7 +346,7 @@ impl EffectFrame {
             spent: self.spent.clone(),
             targets: self.targets.clone(),
             active_requirement: self.active_requirement,
-            context_target: self.context_target,
+            context: self.context,
             attached: self.attached,
             triggering_player: self.triggering_player,
             grantor: self.grantor,
@@ -387,7 +387,6 @@ impl EffectFrame {
             ..target
         }];
         child.active_requirement = 0;
-        child.context_target = None;
         child.completion = FrameCompletion::Frame(Box::new(self));
         child
     }
@@ -407,12 +406,9 @@ impl EffectFrame {
             .filter(|slot| slot.legal && slot.requirement == self.active_requirement)
     }
 
-    /// Trigger context is untargeted; it cannot replace an illegal chosen slot.
+    /// First legal chosen target of the active requirement, if any.
     pub fn primary_target(&self) -> Option<Target> {
-        self.active_targets()
-            .next()
-            .map(|slot| slot.target)
-            .or_else(|| self.context_target.filter(|_| self.targets.is_empty()))
+        self.active_targets().next().map(|slot| slot.target)
     }
 }
 
@@ -1066,7 +1062,7 @@ impl SuspendedResolution {
                 || completion_names
                 || [f.source(), f.source_ref(), f.chosen, f.attached, f.grantor]
                     .contains(&Some(object))
-                || f.context_target == Some(target)
+                || f.context == Some(target)
                 || f.targets.iter().any(|t| t.target == target)
                 || f.remembered.iter().any(|b| b.object == object)
                 || [
