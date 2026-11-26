@@ -465,7 +465,11 @@ With closed decklists, the opponent's deck reads **Closed decklist** on the
 board, in **History** (where the Deck filter does not find it) and in Replay
 until the rules end the game; a finished game names both decks everywhere. A
 side dealt from a deck pool is remembered as its pool, so **Play again** and
-**New game** deal fresh decks, while **Rematch** keeps the decks just played.
+**New game** deal fresh decks, while **Rematch** keeps the decks just played;
+"Your last matchup" names that side by its pool, never by the deck it dealt.
+
+A deck saved from an import starts **Watch Bot vs Bot** as it starts a played
+game, on either seat, against a named deck, a pool or another saved deck.
 
 From a live board, clicking **New game** opens setup in place, with the matchup
 just played selected and no confirmation dialog; the game you left stays
@@ -1057,7 +1061,9 @@ or **Blockers** waits for a combat with attacking creatures before spending
 itself. The Menu shows a once stop as checked. The stops are one Tab stop: arrow
 keys move between them, up and down between the two turns, and Space or Enter
 presses one. Stops are a setting of live play: a recording's bar shows only the
-steps of the turn, with the current one marked.
+steps of the turn, with the current one marked. A stops change on a finished
+game's result card is this browser's preference for the next game; the finished
+game and its record do not change.
 
 **Your turn** and **Opponent turn** say whose turn contains the window. The
 available steps are upkeep, draw, first main, beginning of combat, declare

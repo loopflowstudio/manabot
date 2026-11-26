@@ -8,12 +8,13 @@ import { watchStart } from './watch-start.svelte';
  */
 export async function startConfiguredWatch(setup: GameStore): Promise<string> {
   if (setup.seedError) throw new Error(setup.seedError);
+  const deckImport = setup.resolveDeckImport();
   const result = await watchStart.start({
     players:[setup.watchPlayerChoice, setup.opponentChoice],
     mirror:[setup.watchSearchConfig, setup.searchConfig],
     hero_deck:setup.decks.hero,
     villain_deck:setup.decks.villain,
-    ...(setup.deckImport ? {deck_import:setup.deckImport} : {}),
+    ...(deckImport ? {deck_import:deckImport} : {}),
     decklists:setup.decklists,
     seed:setup.dealMode === 'repeat' ? setup.seed : null,
   });

@@ -23,7 +23,7 @@
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import { policyChoice, gameStore, type PlayerChoice } from '$lib/game.svelte';
   import { presentationPlayer } from '$lib/presentation.svelte';
-  import { sanitizeDeckSelection, DECK_CHOICES } from '$lib/decks';
+  import { sanitizeDeckSelection, DECK_CHOICES, deckChoiceLabel, matchupDeckLabel } from '$lib/decks';
   import { builtinOpponentName, shortName } from '$lib/opponent-name';
   import { scoreName } from '$lib/analysis';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
@@ -267,22 +267,19 @@
   $effect(() => {
     const config = gameStore.setup;
     if (!config || demoName || !gameStore.observation) return;
-    const decks = gameStore.deckNames ? { hero: gameStore.deckNames.hero, villain: gameStore.deckNames.villain } : null;
+    const decks = {
+      hero: matchupDeckLabel(config.hero_deck_pool, gameStore.deckNames?.hero, gameStore.decks.hero),
+      villain: matchupDeckLabel(config.villain_deck_pool, gameStore.deckNames?.villain, gameStore.decks.villain),
+    };
     untrack(() => {
       lastMatchup = { config, opponent: opponentName, decks };
       saveLastMatchup(lastMatchup);
     });
   });
-  const deckLabel = (key: unknown): string => {
-    const found = DECK_CHOICES.find(deck => deck.key === key)?.label;
-    if (found) return found;
-    if (typeof key === 'string' && key && key !== 'imported' && key !== 'custom') return key;
-    return 'Imported deck';
-  };
   const homeMatchup = $derived(lastMatchup ?? {
     config: gameStore.setupConfig(),
     opponent: builtinOpponentName(gameStore.opponentChoice) ?? 'Registered policy',
-    decks: { hero: deckLabel(gameStore.decks.hero), villain: deckLabel(gameStore.decks.villain) },
+    decks: { hero: deckChoiceLabel(gameStore.decks.hero), villain: deckChoiceLabel(gameStore.decks.villain) },
   });
   function playAgain(): void {
     if (gameStore.newGamePending) return;
@@ -293,7 +290,9 @@
   }
 
   function syncStopsToServer(): void {
-    if (gameStore.observation) {
+    // A finished game is never changed: its stops are this browser's
+    // preference for the next game, already saved by the store.
+    if (gameStore.observation && !gameStore.observation.game_over) {
       stopsPending = gameStore.updateSeq;
       sendSetStops();
     }

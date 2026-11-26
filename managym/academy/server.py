@@ -1472,9 +1472,9 @@ class GameSession:
             (row.prompt_id for row in self.canonical_decisions), default=0
         )
         self._authority_command_seq = len(events)
-        self.record_players = [
-            RecordedPlayer(**player) for player in metadata["players"]
-        ]
+        # From the stored setup: the store's reading of the players leaves a
+        # closed opponent's deck unnamed, and the next save writes these back.
+        self.record_players = AttemptStore.players_for_game(config.to_record())
         if source["end_reason"] == "active":
             self._persisted = (game, self.revision, len(events))
         self._advance()
@@ -1747,6 +1747,8 @@ class GameSession:
         longer stops, fast-forward immediately."""
         if self.env is None or self.obs is None or self.trace is None:
             raise ValueError("No active game session. Send new_game first.")
+        if self.obs.game_over:
+            raise ValueError("Game is already over. Start a new game.")
 
         if raw_stops is not None:
             self.stops = _parse_stops(raw_stops)
@@ -3243,10 +3245,12 @@ async def _rebuild_game(game_id: str) -> LiveGame:
     return live
 
 
-async def held_game(game_id: str) -> LiveGame:
-    """The played game `game_id` in memory, rebuilt from its stored record
-    when it is not there. Raises ValueError where it is a watched game, or is
-    not in memory and cannot be rebuilt (`GameSession.resume`)."""
+async def take_up_game(game_id: str) -> LiveGame:
+    """The unfinished played game `game_id`, in memory or rebuilt from its
+    stored record, for a connection that asks for it by id or by its launch.
+    A finished game is refused whether or not it is still in memory, so its
+    address always means its Replay. Raises ValueError where it is a watched
+    game, or is not in memory and cannot be rebuilt (`GameSession.resume`)."""
     live = LIVE_GAMES.get(game_id)
     if live is None:
         rebuild = _REBUILDS.get(game_id)
@@ -3257,14 +3261,6 @@ async def held_game(game_id: str) -> LiveGame:
         live = await asyncio.shield(rebuild)
     if live.game.watch_mode:
         raise ValueError("game_is_watch: A watched game has no seat of yours.")
-    return live
-
-
-async def take_up_game(game_id: str) -> LiveGame:
-    """The unfinished played game `game_id`, for a connection that asks for it
-    by id or by its launch. A finished game is refused whether or not it is
-    still in memory, so its address always means its Replay."""
-    live = await held_game(game_id)
     if live.game.obs is not None and live.game.obs.game_over:
         raise ValueError("game_finished: That game is over.")
     return live
@@ -3606,9 +3602,10 @@ async def play_socket(websocket: WebSocket) -> None:
 
                 if attached is None:
                     raise ValueError("No active game session. Send new_game first.")
-                # A game dropped from memory while this connection idled is
-                # rebuilt from its record.
-                live = await held_game(attached)
+                # The game this connection holds, finished or not; one dropped
+                # from memory while the connection idled is rebuilt from its
+                # record.
+                live = LIVE_GAMES.get(attached) or await take_up_game(attached)
                 if live.websocket is not websocket:
                     await _attach_websocket(live, websocket)
                 game = live.game

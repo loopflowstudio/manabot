@@ -62,6 +62,8 @@ def test_a_closed_deck_is_named_nowhere_until_the_game_is_over(traces: Path) -> 
         recording = client.get(f"/api/traces/{game}/recording").json()
         assert bot_deck(recording["players"])["deck"] == "closed"
         assert bot_deck(recording["players"])["deck_name"] == "Closed decklist"
+        config = client.get(f"/api/traces/{game}").json()["config"]
+        assert config["villain_deck_name"] == "closed"
 
         finish(live.game)
 
@@ -73,6 +75,68 @@ def test_a_closed_deck_is_named_nowhere_until_the_game_is_over(traces: Path) -> 
         assert bot_deck(row["players"])["deck"] == "Red"
         recording = client.get(f"/api/traces/{game}/recording").json()
         assert bot_deck(recording["players"])["deck_name"] == "Red"
+        # The trace names the deck as its players do; the list stays hidden.
+        trace = client.get(f"/api/traces/{game}").json()
+        assert bot_deck(trace["players"])["deck"] == "Red"
+        assert trace["config"]["villain_deck_name"] == "Red"
+        assert trace["config"]["villain_deck"] == {}
+
+
+def test_a_closed_game_taken_up_from_its_record_keeps_its_deck_names(
+    traces: Path,
+) -> None:
+    with TestClient(server.app) as client:
+        with client.websocket_connect("/ws/play") as ws:
+            game = new_game(ws, decklists="closed")["game"]
+        server.evict_game(game, "session_expired")
+        with client.websocket_connect("/ws/play") as ws:
+            ws.send_json({"type": "resume", "game": game})
+            assert settled_message(ws)["game"] == game
+            session = server.LIVE_GAMES[game].game
+            assert session.record_players is not None
+            assert {player.deck for player in session.record_players} == {"Blue", "Red"}
+
+            finish(session)
+
+        (row,) = client.get("/api/traces", params={"deck": "Red"}).json()
+        assert (row["id"], row["status"]) == (game, "completed")
+
+
+def test_a_finished_game_refuses_a_stops_change(traces: Path) -> None:
+    with TestClient(server.app) as client, client.websocket_connect("/ws/play") as ws:
+        game = new_game(ws)["game"]
+        session = server.LIVE_GAMES[game].game
+        finish(session)
+        assert session.trace is not None
+        stops = session.trace.config.stops
+        revision = stored_revision(traces, game)
+
+        ws.send_json({"type": "set_stops", "stops": {"my": [], "opponent": []}})
+        refused = settled_message(ws)
+
+        assert refused["type"] == "error"
+        assert refused["message"] == "Game is already over. Start a new game."
+        assert session.trace.config.stops == stops
+        assert stored_revision(traces, game) == revision
+        assert client.get(f"/api/traces/{game}").json()["config"]["stops"] == stops
+
+
+def test_watch_starts_a_list_on_one_side_against_a_named_deck(traces: Path) -> None:
+    with TestClient(server.app) as client:
+        created = client.post(
+            "/api/watch",
+            json={
+                "players": ["random", "passive"],
+                "hero_deck": "kept:mine",
+                "villain_deck": "gw_allies",
+                "deck_import": {"hero": ISLANDS},
+                "seed": 3,
+            },
+        )
+        assert created.status_code == 200, created.text
+        config = client.get(f"/api/traces/{created.json()['id']}").json()["config"]
+        assert config["hero_deck_name"] == "Blue"
+        assert client.post("/api/watch", json={"deck_import": {}}).status_code == 400
 
 
 def test_a_database_without_the_disclosure_column_learns_it_from_its_traces(

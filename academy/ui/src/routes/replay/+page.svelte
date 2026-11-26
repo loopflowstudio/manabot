@@ -17,6 +17,7 @@
    * The read cursor, Watch production and Study authority are the stores';
    * this page only binds them to the board.
    */
+  import { recordedDeckLabel } from '$lib/decks';
   import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { tick, untrack } from 'svelte';
@@ -99,7 +100,7 @@
   };
   const deckOf = (seat: number): string | null => {
     const player = index?.players.find(candidate => candidate.seat === seat);
-    return player && player.deck !== 'closed' ? player.deck_name ?? player.deck : null;
+    return player ? recordedDeckLabel(player.deck, player.deck_name) : null;
   };
 
   // ———————————————— What the board draws

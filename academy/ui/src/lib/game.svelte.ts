@@ -265,16 +265,21 @@ export class GameStore {
     return { ...base, human_seat: resolvedSeat };
   }
 
+  /**
+   * The lists setup sends as `deck_import`: the imported pair, or the saved
+   * list behind each `kept:<id>` side. Null when both sides are named decks.
+   */
+  resolveDeckImport(): Record<string, unknown> | null {
+    if (this.deckImport) return { ...this.deckImport };
+    const sides = Object.fromEntries((['hero', 'villain'] as const).flatMap(side => {
+      const kept = findKeptDeck(this.decks[side]);
+      return kept ? [[side, { source: kept.source, filename: kept.filename, name: kept.name }]] : [];
+    }));
+    return Object.keys(sides).length > 0 ? sides : null;
+  }
+
   setupConfig(): Record<string, unknown> {
-    let resolvedImport: Record<string, unknown> | null = this.deckImport ? { ...this.deckImport } : null;
-    if (!resolvedImport && (isKeptDeckChoice(this.decks.hero) || isKeptDeckChoice(this.decks.villain))) {
-      const partial: Record<string, unknown> = {};
-      const heroKept = findKeptDeck(this.decks.hero);
-      const villainKept = findKeptDeck(this.decks.villain);
-      if (heroKept) partial.hero = { source: heroKept.source, filename: heroKept.filename, name: heroKept.name };
-      if (villainKept) partial.villain = { source: villainKept.source, filename: villainKept.filename, name: villainKept.name };
-      if (partial.hero || partial.villain) resolvedImport = partial;
-    }
+    const resolvedImport = this.resolveDeckImport();
     return {
       ...this.opponentConfig(),
       human_seat: this.turnOrder === 'draw' ? 1 : this.humanSeat,

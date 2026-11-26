@@ -473,16 +473,18 @@ def prepare_trace_payload(
         # still expose exactly the public information in the shared contract.
         for key in ("hero_deck", "villain_deck", "hero_sideboard", "villain_sideboard"):
             config[key] = {}
-    reveal_hidden = (
-        reveal_hidden
-        and payload.get("end_reason") == "game_over"
-        and bool(payload.get("final_observation", {}).get("game_over"))
+    finished = payload.get("end_reason") == "game_over" and bool(
+        payload.get("final_observation", {}).get("game_over")
     )
+    reveal_hidden = reveal_hidden and finished
     if config.get("decklists") == "closed" and not reveal_hidden:
         config["villain_deck"] = {}
         config["villain_sideboard"] = {}
-        config["villain_deck_name"] = "closed"
         config.pop("asset_pack", None)
+        # A finished game names the deck, as its players do; the list itself
+        # stays with the hidden hands.
+        if not finished:
+            config["villain_deck_name"] = "closed"
 
     observations = [
         event.get("observation", {}) for event in prepared.get("events", [])

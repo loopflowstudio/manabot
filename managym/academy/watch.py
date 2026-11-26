@@ -24,7 +24,7 @@ from managym.search import SearchConfig, SearchError
 
 from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
-from .deck_import import DeckImportInput
+from .deck_import import DeckImportSides
 from .extensions import bot_extension
 from .opponent import policy_registry
 from .replay_index import DecisionAddressV2
@@ -49,7 +49,7 @@ class WatchRequest(BaseModel):
     hero_deck: str = "ur_lessons"
     villain_deck: str = "gw_allies"
     seed: int | None = Field(default=0, ge=0, lt=2**64)
-    deck_import: DeckImportInput | None = None
+    deck_import: DeckImportSides | None = None
     villain_sims: int = Field(default=16, ge=1, le=4096)
     mirror: list[SearchConfig | None] | None = Field(
         default=None, min_length=2, max_length=2
@@ -92,10 +92,12 @@ def create_watch(
         expanded = server.resolve_pool_decks(request.model_dump(), seed=request.seed)
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    if expanded.get("deck_import") is not None and request.deck_import is None:
+    if expanded.get("deck_import") is not None:
+        # Both lists from here on: a pool side is dealt, a named side is its
+        # bundled list, beside whichever list the request carried.
         request = request.model_copy(
             update={
-                "deck_import": DeckImportInput.model_validate(expanded["deck_import"])
+                "deck_import": DeckImportSides.model_validate(expanded["deck_import"])
             }
         )
     with ExitStack() as candidates:

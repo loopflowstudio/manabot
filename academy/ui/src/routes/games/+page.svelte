@@ -4,6 +4,7 @@
    * in Replay; an unfinished played game also resumes at `/?game=<id>`. The
    * address holds the search and filters.
    */
+  import { recordedDeckLabel } from '$lib/decks';
   import GameFileImport from '$lib/components/GameFileImport.svelte';
   import PlayerName from '$lib/components/PlayerName.svelte';
   import { recordedIdentity, shortHash } from '$lib/player-identity';
@@ -164,7 +165,7 @@
                     {#if player.kind === 'bot'}
                       <a href={filterUrl('bot', player.player_id)} class="font-semibold underline decoration-line underline-offset-4"><PlayerName identity={recordedIdentity(player)} chip={false} /></a>
                     {:else}<span class="font-semibold"><PlayerName identity={recordedIdentity(player)} chip={false} /></span>{/if}
-                    <div class="mt-1 text-sm text-ink-2">{player.kind === 'human' ? 'Human' : 'Bot'} · {player.deck.replaceAll('_', ' ')}</div>
+                    <div class="mt-1 text-sm text-ink-2">{player.kind === 'human' ? 'Human' : 'Bot'} · {recordedDeckLabel(player.deck)}</div>
                     {#if player.version}<span title={player.version} class="mt-1 block font-mono text-xs text-ink-2">{shortHash(player.version)}</span>{/if}
                   {:else}<span class="text-ink-2">Unknown player</span>{/if}
                 </td>
