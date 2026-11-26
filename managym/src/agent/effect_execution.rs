@@ -97,6 +97,9 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "enters transformed",
     "entry X",
     "entry controller",
+    "entry cast from",
+    "creature type choice",
+    "chosen creature type",
     "entry counters",
     "event",
     "event ordinal",
@@ -157,6 +160,13 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "ordered prefix",
     "paid activation",
     "paid announcement",
+    "resume discard payment",
+    "discard cause",
+    "discard controller",
+    "resolving controller",
+    "discard source",
+    "shuffle library after move",
+    "countered by",
     "paid by",
     "paid source",
     "turn face up",
@@ -509,6 +519,14 @@ impl<'a> Projection<'a> {
                     self.object("attach to", *object);
                 }
             }
+            FrameCompletion::DiscardDuringResolution(_) => {
+                self.field("return", &"resume discard payment")
+            }
+            FrameCompletion::DiscardPayment(payment) => {
+                self.field("return", &"resume discard payment");
+                self.receipt(&payment.receipt, None);
+                self.payment(payment);
+            }
             FrameCompletion::Paid { player, payment } => {
                 self.paid_summary();
                 // Unfinished: the source's own printed cost is paid last.
@@ -809,6 +827,32 @@ impl<'a> Projection<'a> {
         // ZoneEntry's default terms have no effect. Encode only present terms,
         // preserving the same defaults instead of repeating six zero values
         // for every member of a simultaneous token group.
+        if let Some(cause) = entry.discard {
+            use crate::flow::proposed_event::{DiscardCause, EventCause};
+            let (kind, controller) = match cause {
+                DiscardCause::Effect { controller, source } => {
+                    if let Some(source) = source {
+                        self.object("discard source", source);
+                    }
+                    (EventCause::Effect, Some(controller))
+                }
+                DiscardCause::Cost(player) => (EventCause::Cost, Some(player)),
+                DiscardCause::Cleanup => (EventCause::TurnAction, None),
+            };
+            self.field("discard cause", &kind);
+            if let Some(player) = controller {
+                self.field("discard controller", &player);
+            }
+        }
+        if let Some(reveal) = entry.shuffle_library {
+            self.field("shuffle library after move", &reveal);
+        }
+        if let Some(name) = entry.chosen_creature_type {
+            self.field("chosen creature type", &name);
+        }
+        if let Some(zone) = entry.cast_from {
+            self.field("entry cast from", &zone);
+        }
         if entry.tapped {
             self.field("enters tapped", &true);
         }
@@ -1012,6 +1056,12 @@ impl<'a> Projection<'a> {
             }
         }
         match &batch.binding {
+            EventBinding::Countered { by } => {
+                self.field("bind result", &EventBinding::Countered { by: None });
+                if let Some(source) = by {
+                    self.object("countered by", *source);
+                }
+            }
             EventBinding::Moved {
                 linked,
                 shuffle,
@@ -1317,6 +1367,9 @@ pub(crate) fn project_frame(
     text: bool,
 ) {
     let mut out = Projection::new(game, viewer, text);
+    if let Some(controller) = effect.resolving_controller {
+        out.field("resolving controller", &controller);
+    }
     // Source/trigger quantities can read departed characteristics after another
     // instruction has suspended. Their definition join alone cannot carry LKI.
     if let Some(source) = effect.source_ref() {
@@ -1521,6 +1574,27 @@ pub(crate) fn project_decision(
             out.field("remaining", remaining);
             out.field("last blocker", last);
             out.field("assigned combat damage", assigned);
+        }
+        Decision::ChooseCreatureType {
+            object_id, scope, ..
+        } => {
+            out.object("moving object", *object_id);
+            let names = crate::state::subtype::creature_type_names();
+            if scope.is_leaf() {
+                out.field("creature type choice", &&names[scope.start..scope.end]);
+            } else {
+                let bounds: Vec<_> = (0..scope.option_count())
+                    .map(|mode| {
+                        let Some(crate::cards::names::NameOption::Group(group)) =
+                            scope.option(mode)
+                        else {
+                            unreachable!("non-leaf creature type scope")
+                        };
+                        (names[group.start], names[group.end - 1])
+                    })
+                    .collect();
+                out.field("creature type choice", &bounds);
+            }
         }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {

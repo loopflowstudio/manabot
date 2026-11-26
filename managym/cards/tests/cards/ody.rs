@@ -116,7 +116,10 @@ fn tarnished_citadel_damage_is_prevented_under_teferis_protection() {
     cast(&mut s, "Teferi's Protection");
     settle(&mut s);
     let citadel = s.force_permanent_on_battlefield(0, "Tarnished Citadel");
-    assert!(s.game().has_protection_from_everything(PlayerId(0)));
+    assert!(s.game().player_has(
+        PlayerId(0),
+        &managym::state::effect::Modification::ProtectionFromEverything
+    ));
     activate(&mut s, citadel, 0);
     choose_mode(&mut s, 0);
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("W"));
