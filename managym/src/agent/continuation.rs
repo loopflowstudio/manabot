@@ -16,7 +16,7 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, ManaProduction, ResolutionRef, SuspendedResolution},
         game::{ActivationSource, Game, PendingChoice},
-        payment::{CostComponent, Operation},
+        payment::{AnnouncedSpell, CostComponent, Operation},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
@@ -371,7 +371,8 @@ impl Game {
         };
         let (owner, zone) = (self.state[object].owner, self.state.zones.zone_of(object));
         suspended.decisions().any(|decision| {
-            self.shares_information(viewer, decision.player())
+            matches!(decision, Decision::ChoosePile { owner, looked, .. } if self.shares_information(viewer, *owner) && looked.contains(&object))
+                || self.shares_information(viewer, decision.player())
                 && (decision.revealed_objects().contains(&object)
                     || matches!(decision, Decision::SelectCards { from: Some(source), .. }
                         if source.owner == owner && Some(source.zone) == zone))
@@ -845,6 +846,16 @@ impl Game {
                 frame.active_clause = Some(*requirement_index);
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
             }
+            PendingChoice::DivideAmongTargets { spell, .. } => {
+                frame.source = self.object_reference(spell.object, viewer);
+                frame.kicked = spell.cast.kicked;
+                frame.spell_profile = spell_profile_code(spell.cast.profile);
+                frame.x = spell.cast.x;
+                frame.mode = spell.mode;
+                frame.targets =
+                    self.clause_targets(&spell.targets, &spell.target_req_indices, viewer);
+                super::effect_execution::project_division(self, spell, viewer, &mut frame, false);
+            }
             PendingChoice::SpellMode { object, cast, .. } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
@@ -966,6 +977,13 @@ impl Game {
         {
             return;
         }
+        if let Some(PendingChoice::DivideAmongTargets { spell, .. }) = &self.pending_choice {
+            let frame = frames
+                .iter_mut()
+                .find(|frame| frame.kind == 4)
+                .expect("announcing division");
+            super::effect_execution::project_division(self, spell, viewer, frame, true);
+        }
         if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
             let frame = frames
                 .iter_mut()
@@ -1018,7 +1036,7 @@ impl Game {
                 frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
             }
             Decision::Payment(progress) => {
-                if let CostComponent::Mana { cost, .. } = &progress.owed {
+                if let Some(CostComponent::Mana { cost, .. }) = progress.owed.first() {
                     frame.cost(cost);
                 }
                 frame.waterbend = progress.waterbends();
@@ -1100,14 +1118,14 @@ impl Game {
         frame: &mut ContinuationFrame,
     ) {
         match operation {
-            Operation::Spell {
+            Operation::Spell(AnnouncedSpell {
                 object,
                 cast,
                 mode,
                 targets,
                 target_req_indices,
                 ..
-            } => {
+            }) => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.spell_profile = spell_profile_code(cast.profile);
@@ -1132,7 +1150,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 34;
+pub const MAX_DECISION_CODE: u8 = 38;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -1141,6 +1159,10 @@ pub fn decision_code(decision: &Decision) -> u8 {
     match decision {
         Decision::AssignCombatDamage { .. } => 32,
         Decision::OrderMeldedCards { .. } => 34,
+        Decision::OrderEntryChoices { .. } => 35,
+        Decision::PartitionPiles { .. } => 37,
+        Decision::ChoosePile { .. } => 38,
+        Decision::ChooseEntryValue { .. } => 36,
         Decision::OrderReplacement { .. } => 29,
         Decision::EnterAsCopy { .. } => 30,
         Decision::ChoosePaymentX { .. } => 24,
@@ -1153,9 +1175,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::SelectCards { .. } => 28,
         Decision::Scry { .. } => 8,
         Decision::LookAndSelect { .. } => 9,
-        Decision::ChooseCreatureType { .. }
-        | Decision::Modal { .. }
-        | Decision::NameCard { .. } => 10,
+        Decision::Modal { .. } | Decision::NameCard { .. } => 10,
         Decision::Learn { .. } => 11,
         Decision::Discard { .. } => 12,
         Decision::LegendRule { .. } => 13,
@@ -1165,7 +1185,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::CastDuringResolution { .. } => 17,
         Decision::ExileLinked { .. } => 18,
         Decision::DistributeCounters { .. } => 19,
-        Decision::KeepCreatures { .. } => 20,
+        Decision::KeepPermanents { .. } => 20,
         Decision::Retarget { .. } => 21,
         Decision::ManifestDread { .. } => 33,
         Decision::Surveil { .. } => 22,
@@ -1469,7 +1489,20 @@ mod tests {
         let predicate = CardPredicate::default();
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.
+        let question = crate::flow::proposed_event::EntryQuestion {
+            object: game.state.zones.latest().next().unwrap(),
+            kind: crate::state::card::EntryChoiceKind::Color,
+        };
         let decisions = [
+            Decision::OrderEntryChoices {
+                player,
+                questions: Vec::new(),
+            },
+            Decision::ChooseEntryValue {
+                player,
+                question,
+                scope: crate::cards::names::NameScope { start: 0, end: 5 },
+            },
             Decision::OrderMeldedCards {
                 player,
                 cards: [game.state.players[0].deck[0], game.state.players[0].deck[1]],
@@ -1531,7 +1564,7 @@ mod tests {
             Decision::ChooseObject {
                 player,
                 predicate: predicate.clone(),
-                excluded: None,
+                excluded: Vec::new(),
                 optional: false,
                 effect: Box::new(crate::state::ability::Effect::tap(
                     crate::state::ability::ObjectSelector::chosen(predicate.clone()),
@@ -1546,6 +1579,8 @@ mod tests {
                 origin: crate::flow::decision::SelectionOrigin::Other,
                 player,
                 from: None,
+                pool: vec![],
+                inspected: false,
                 candidates: vec![],
                 selected: vec![],
                 min: 0,
@@ -1604,6 +1639,18 @@ mod tests {
                 owner: player,
                 predicate: predicate.clone(),
             },
+            Decision::PartitionPiles {
+                player,
+                looked: vec![],
+                next: 0,
+                face_up: vec![],
+            },
+            Decision::ChoosePile {
+                player,
+                owner: player,
+                looked: vec![],
+                face_up: vec![],
+            },
             Decision::OpponentSplitsRevealed {
                 player,
                 owner: player,
@@ -1637,10 +1684,9 @@ mod tests {
                 player,
                 remaining: 1,
             },
-            Decision::KeepCreatures {
+            Decision::KeepPermanents {
                 player,
-                max_total_power: 0,
-                sacrifice: None,
+                limit: crate::flow::decision::KeepLimit::TotalCreaturePower(0),
                 kept: vec![],
             },
             Decision::ChooseToExile {
@@ -1652,7 +1698,7 @@ mod tests {
             Decision::Retarget {
                 player,
                 object: Target::Player(player),
-                slot: 0,
+                chosen: Vec::new(),
                 may_keep: false,
             },
             Decision::LegendRule {

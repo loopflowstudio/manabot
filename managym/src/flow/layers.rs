@@ -158,7 +158,9 @@ struct StaticEntry {
     timestamp: PublicId,
     ability: StaticAbility,
 }
-
+// Derived fields written by `finish_object`: tracked per object so
+// Layer 5-7-only mutations skip recomputing creature types, activation
+// purposes and static lists.
 const DIRTY_TYPES: u8 = 1 << 0;
 const DIRTY_ACTIVATIONS: u8 = 1 << 1;
 const DIRTY_STATICS: u8 = 1 << 2;
@@ -178,13 +180,15 @@ struct LayerObject {
     statics_override: Option<Vec<StaticEntry>>,
     dirty: u8,
 }
-
 /// Borrowed result of one CR 613 pass handed to [`Game::compute_board`] before
 /// the thread-local scratch buffers are cleared.
 pub(super) struct EvaluatedBoard<'a> {
     objects: &'a mut [Option<LayerObject>],
     owned_views: &'a mut [Option<Characteristics>],
     seeds: &'a [Option<Arc<SourceSeed>>],
+    /// Land-type overwrites active in layer 4, including when the battlefield
+    /// has no matching land yet. Entry consults them before a land exists.
+    pub land_type_overwrites: Vec<CardPredicate>,
     pub reads_mana: bool,
     pub reads_tapped: bool,
     pub reads_life: bool,
@@ -301,6 +305,7 @@ pub(super) struct SourceSeed {
     source: Object,
     incarnation: PublicId,
     timestamp: PublicId,
+    chosen: Option<Arc<crate::state::permanent::EntryChoice>>,
     controller: PlayerId,
     view: Arc<Characteristics>,
     statics: Vec<StaticEntry>,
@@ -326,13 +331,13 @@ struct ReadSet {
 
 impl ReadSet {
     fn predicate(&mut self, p: &CardPredicate) {
-        if p.namesake || p.named.is_some() {
+        if p.chosen_name || p.namesake || p.named.is_some() {
             self.fields |= NAME;
         }
         if p.card_type.is_some() || !p.card_types_any.is_empty() || !p.not_card_types.is_empty() {
             self.fields |= CARD_TYPES;
         }
-        if p.chosen_type_of_source
+        if p.chosen_subtype
             || p.subtype.is_some()
             || !p.subtypes_any.is_empty()
             || !p.not_subtypes.is_empty()
@@ -342,10 +347,10 @@ impl ReadSet {
         if p.supertype.is_some() {
             self.fields |= SUPERTYPES;
         }
-        if !p.colors_any.is_empty() {
+        if p.chosen_color || !p.colors_any.is_empty() {
             self.fields |= COLORS;
         }
-        if p.flying || p.not_flying || p.deathtouch {
+        if p.keyword.is_some() || p.not_flying {
             self.fields |= KEYWORDS;
         }
         if p.min_power.is_some() || p.max_power.is_some() || p.min_toughness.is_some() {
@@ -918,6 +923,7 @@ pub(super) fn evaluate_board(
     owned_views.clear();
     live.clear();
     nodes.clear();
+    let mut land_type_overwrites = Vec::new();
     let mut reads_mana = false;
     let mut reads_tapped = false;
     let mut reads_life = false;
@@ -939,6 +945,11 @@ pub(super) fn evaluate_board(
             seed.source.shares_definition_with(source)
                 && seed.incarnation == p.id
                 && seed.timestamp == p.timestamp
+                && match (&seed.chosen, &p.chosen) {
+                    (None, None) => true,
+                    (Some(a), Some(b)) => Arc::ptr_eq(a, b) || a == b,
+                    _ => false,
+                }
                 && seed.controller == p.entry_controller()
         });
         if !reusable {
@@ -1062,6 +1073,23 @@ pub(super) fn evaluate_board(
                     let mut discovered_this_layer = false;
                     for &slot in &pass.selected {
                         let index = pass.pending[slot];
+                        if layer == Layer::Type {
+                            if let Some(plan) = nodes[index].plan(seeds_slice) {
+                                // A layer-6 ability loss can remove the printed static
+                                // after its type effect has already applied (CR 613.6).
+                                let source = nodes[index].source();
+                                if matches!(plan.parts.as_slice(), [(_, Operation::LandType(_))])
+                                    && plan
+                                        .condition
+                                        .as_ref()
+                                        .is_none_or(|c| eval.condition(c, source))
+                                {
+                                    if let StaticScope::All(predicate) = &plan.scope {
+                                        land_type_overwrites.push(predicate.clone());
+                                    }
+                                }
+                            }
+                        }
                         let slice = &pass.instructions[pass.ranges[slot].clone()];
                         nodes[index].bind_targets(seeds_slice, after_mask, slice);
                         eval.apply(&nodes[index], slice, Some(&mut pass.granted));
@@ -1118,7 +1146,8 @@ pub(super) fn evaluate_board(
             (object.view_index, dirty)
         };
         if dirty != 0 {
-            let record = &game.state[game.live_permanent(id).object];
+            let permanent = game.live_permanent(id);
+            let record = &game.state[permanent.object];
             let statics = eval.objects[id.0]
                 .as_ref()
                 .unwrap()
@@ -1130,7 +1159,13 @@ pub(super) fn evaluate_board(
             } else {
                 Cow::Borrowed(&*seeds_slice[id.0].as_ref().unwrap().view)
             };
-            finish_object(&mut view, statics, record, dirty);
+            finish_object(
+                &mut view,
+                statics,
+                record,
+                dirty,
+                permanent.chosen.as_deref(),
+            );
             if let Cow::Owned(v) = view {
                 if view_index != SEED_VIEW {
                     eval.owned_views[view_index as usize] = Some(v);
@@ -1163,6 +1198,7 @@ pub(super) fn evaluate_board(
         objects: objects.as_mut_slice(),
         owned_views: owned_views.as_mut_slice(),
         seeds: seeds_slice,
+        land_type_overwrites,
         reads_mana,
         reads_tapped,
         reads_life,
@@ -1220,6 +1256,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         &statics,
         source,
         DIRTY_ACTIVATIONS | DIRTY_STATICS,
+        permanent.chosen.as_deref(),
     );
     let view = view.into_owned();
     let nodes: Vec<SeedNode> = statics
@@ -1243,6 +1280,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         source: source.clone(),
         incarnation: permanent.id,
         timestamp: permanent.timestamp,
+        chosen: permanent.chosen.clone(),
         controller,
         view: Arc::new(view),
         statics,
@@ -1262,6 +1300,7 @@ fn finish_object(
     statics: &[StaticEntry],
     record: &Object,
     dirty: u8,
+    chosen: Option<&crate::state::permanent::EntryChoice>,
 ) {
     if dirty & DIRTY_TYPES != 0 {
         let is_animated = view.is_creature() && !record.types.is_creature();
@@ -1283,7 +1322,9 @@ fn finish_object(
     }
     // Activations are paid as abilities of this source (CR 106.6), read
     // from its final subtypes; an unchanged source keeps sharing its
-    // earlier snapshot.
+    // earlier snapshot. Fixed entry-choice mana abilities materialize once
+    // here so `characteristics()` shares this immutable view without
+    // cloning or rebuilding restrictions.
     if dirty & (DIRTY_TYPES | DIRTY_ACTIVATIONS) != 0 && !view.activated_abilities.is_empty() {
         let shared = view
             .activated_abilities
@@ -1293,7 +1334,7 @@ fn finish_object(
                 matches!(purpose, SpendingContext::Activate {
                     zone: ZoneType::Battlefield,
                     source,
-                } if source.describes(&view.subtypes, view.creature_types.is_all()))
+                } if source.describes(&view.subtypes, view.creature_types.is_all(), view.is_creature()))
             })
             .cloned();
         let purpose = shared.unwrap_or_else(|| SpendingContext::Activate {
@@ -1301,14 +1342,29 @@ fn finish_object(
             source: SpendingObject::new(
                 view.subtypes.iter().map(String::as_str),
                 view.creature_types.is_all(),
+                view.is_creature(),
             ),
         });
-        if view
-            .activated_abilities
-            .iter()
-            .any(|ability| ability.mana_cost.purpose != purpose)
+        let resolve_entry_mana = dirty & DIRTY_ACTIVATIONS != 0
+            && view.activated_abilities.iter().any(|ability| {
+                matches!(
+                    ability.effects.first(),
+                    Some(Effect::AddOneColorManaValue {
+                        amount: EffectValue::Fixed(_),
+                        ..
+                    })
+                )
+            });
+        if resolve_entry_mana
+            || view
+                .activated_abilities
+                .iter()
+                .any(|ability| ability.mana_cost.purpose != purpose)
         {
             for ability in &mut view.to_mut().details_mut().activated_abilities {
+                if resolve_entry_mana {
+                    ability.resolve_fixed_entry_mana(chosen);
+                }
                 if ability.mana_cost.purpose != purpose {
                     ability.mana_cost.purpose = purpose.clone();
                 }
@@ -1367,7 +1423,7 @@ fn assert_finished(view: &Characteristics, statics: &[StaticEntry], record: &Obj
                 SpendingContext::Activate {
                     zone: ZoneType::Battlefield,
                     source,
-                } if source.describes(&view.subtypes, view.creature_types.is_all())
+                } if source.describes(&view.subtypes, view.creature_types.is_all(), view.is_creature())
             ),
             "incremental finish_object diverged on activation spending context"
         );
@@ -1760,12 +1816,13 @@ impl Eval<'_, '_, '_> {
         {
             return;
         }
-        match &plan.scope {
+        let (predicate, only_other, only_controlled) = match &plan.scope {
             StaticScope::This => {
                 if self.get(source).is_some() {
                     let controller = self.controller(source);
                     self.push_target_instructions(source, controller, plan, layer, source, out);
                 }
+                return;
             }
             StaticScope::Attached => {
                 if let Some(id) = self
@@ -1776,23 +1833,22 @@ impl Eval<'_, '_, '_> {
                     let controller = self.controller(source);
                     self.push_target_instructions(source, controller, plan, layer, id, out);
                 }
+                return;
             }
-            StaticScope::SpellsYouControl(_) => {}
-            scope => {
-                let controller = self.controller(source);
-                for &id in self.live {
-                    if matches_static_scope(
-                        scope,
-                        source,
-                        controller,
-                        None,
-                        id,
-                        self.controller(id),
-                        |predicate| self.matches(id, predicate, Some(source)),
-                    ) {
-                        self.push_target_instructions(source, controller, plan, layer, id, out);
-                    }
-                }
+            StaticScope::SpellsYouControl(_) => return,
+            StaticScope::OtherYouControl(p) => (p, true, true),
+            StaticScope::YouControl(p) => (p, false, true),
+            StaticScope::Other(p) => (p, true, false),
+            StaticScope::All(p) => (p, false, false),
+        };
+        let controller = self.controller(source);
+        let pred_source = self.predicate_source(predicate, Some(source));
+        for &id in self.live {
+            if (!only_other || id != source)
+                && (!only_controlled || self.controller(id) == controller)
+                && matches_view(self.game, id, predicate, self.view(id), pred_source)
+            {
+                self.push_target_instructions(source, controller, plan, layer, id, out);
             }
         }
     }
@@ -2002,9 +2058,14 @@ impl Eval<'_, '_, '_> {
                 .max(0),
             EffectValue::GreatestSharedCreatureType => {
                 let mut counts = BTreeMap::new();
+                let mut all = 0;
                 for id in controlled().filter(|&id| self.view(id).is_creature()) {
-                    for subtype in self
-                        .view(id)
+                    let view = self.view(id);
+                    if view.has_all_creature_types() {
+                        all += 1;
+                        continue;
+                    }
+                    for subtype in view
                         .subtypes
                         .iter()
                         .filter(|s| is_creature_type(s))
@@ -2012,7 +2073,7 @@ impl Eval<'_, '_, '_> {
                         *counts.entry(subtype).or_insert(0) += 1;
                     }
                 }
-                counts.into_values().max().unwrap_or(0)
+                all + counts.into_values().max().unwrap_or(0)
             }
             EffectValue::CreaturesWithCounters => controlled()
                 .filter(|&id| {
@@ -2080,6 +2141,18 @@ impl Eval<'_, '_, '_> {
                 .layer_state_condition(condition, self.controller(source), source),
         }
     }
+    fn predicate_source(
+        &self,
+        predicate: &CardPredicate,
+        source: Option<PermanentId>,
+    ) -> Option<PredicateSource<'_>> {
+        source
+            .filter(|_| predicate.reads_source())
+            .map(|s| PredicateSource {
+                name: self.view(s).name.as_str(),
+                chosen: self.game.live_permanent(s).chosen.as_deref(),
+            })
+    }
 
     fn matches(
         &self,
@@ -2092,11 +2165,9 @@ impl Eval<'_, '_, '_> {
             id,
             predicate,
             self.view(id),
-            source.map(|s| self.view(s).name.as_str()),
-            self.game.chosen_type_for(predicate, source),
+            self.predicate_source(predicate, source),
         )
     }
-
     fn apply(
         &mut self,
         node: &EvalNode,
@@ -2593,6 +2664,14 @@ fn build_source_plan(game: &Game, source: PermanentId, entry: &StaticEntry) -> O
                 }
             }
         }
+        StaticAbility::HasChosenCreatureType => {
+            let Some(crate::state::permanent::EntryChoice::CreatureType(name)) =
+                game.live_permanent(source).chosen.as_deref()
+            else {
+                return None;
+            };
+            add(Layer::Type, Modification::AddSubtypes(vec![name.clone()]));
+        }
         StaticAbility::TypeGrant(g) => {
             plan.scope = g.scope.clone();
             plan.condition = g.condition.clone();
@@ -2700,7 +2779,7 @@ fn build_dynamic_node(
 
 impl Game {
     /// Layer evaluation only visits battlefield slots, which are always live.
-    fn live_permanent(&self, id: PermanentId) -> &Permanent {
+    pub(super) fn live_permanent(&self, id: PermanentId) -> &Permanent {
         self.state.permanents[id].as_ref().unwrap()
     }
 }
@@ -2755,6 +2834,13 @@ pub(super) fn matches_static_scope(
     matches(predicate)
 }
 
+/// Source-permanent facts read by source-relative predicates (`namesake`, `chosen_*`).
+#[derive(Clone, Copy)]
+pub(super) struct PredicateSource<'a> {
+    pub name: &'a str,
+    pub chosen: Option<&'a crate::state::permanent::EntryChoice>,
+}
+
 /// A live permanent under `view` (an intermediate layer context or its
 /// final view).
 pub(super) fn matches_view(
@@ -2762,8 +2848,7 @@ pub(super) fn matches_view(
     id: PermanentId,
     p: &CardPredicate,
     view: &Characteristics,
-    source_name: Option<&str>,
-    chosen_type: Option<&str>,
+    source: Option<PredicateSource<'_>>,
 ) -> bool {
     let Some(permanent) = game.state.permanents[id].as_ref() else {
         return false;
@@ -2790,7 +2875,7 @@ pub(super) fn matches_view(
         },
         counters: &permanent.counters,
     }
-    .matches(p, source_name, chosen_type)
+    .matches(p, source)
 }
 
 /// The characteristics and permanent status a battlefield predicate reads,
@@ -2862,7 +2947,7 @@ pub(super) fn matches_departure(lki: &ObjectLki, p: &CardPredicate) -> bool {
         derived: DerivedStatus::Departed(facts),
         counters: &lki.counters,
     }
-    .matches(p, None, None)
+    .matches(p, None)
 }
 
 impl CharacteristicView<'_> {
@@ -2871,19 +2956,19 @@ impl CharacteristicView<'_> {
             || (self.all_creature_types && is_creature_type(subtype))
     }
 
-    fn matches(
-        &self,
-        p: &CardPredicate,
-        source_name: Option<&str>,
-        chosen_type: Option<&str>,
-    ) -> bool {
+    fn matches(&self, p: &CardPredicate, source: Option<PredicateSource<'_>>) -> bool {
         // A permanent is on the battlefield, never a graveyard card.
         !p.from_battlefield_this_turn
+            && !p.put_into_graveyard_this_turn
             && p.accepts_name(self.name)
-            && (!p.namesake || source_name == Some(self.name))
-            && (!p.chosen_type_of_source || chosen_type.is_some_and(|name| self.has_subtype(name)))
-            && (!p.deathtouch || self.keywords.has(Keyword::Deathtouch))
-            && (!p.flying || self.keywords.has(Keyword::Flying))
+            && (!p.namesake || source.map(|s| s.name) == Some(self.name))
+            && p.matches_choice(
+                source.and_then(|s| s.chosen),
+                self.name,
+                |c| self.colors.contains(&c),
+                |s| self.has_subtype(s),
+            )
+            && p.keyword.is_none_or(|k| self.keywords.has(k))
             && (!p.not_flying || !self.keywords.has(Keyword::Flying))
             && (!p.no_counters || self.counters.is_empty())
             && (!p.in_combat || self.derived.in_combat())
@@ -2894,7 +2979,7 @@ impl CharacteristicView<'_> {
             && (p.any_of.is_empty()
                 || p.any_of
                     .iter()
-                    .any(|alternative| self.matches(alternative, source_name, chosen_type)))
+                    .any(|alternative| self.matches(alternative, source)))
             && p.supertype.as_ref().is_none_or(|s| {
                 if s.eq_ignore_ascii_case("legendary") {
                     self.is_legendary

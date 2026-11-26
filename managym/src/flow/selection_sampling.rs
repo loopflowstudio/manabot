@@ -470,6 +470,11 @@ impl Game {
                 .map(|binding| binding.object),
         );
         if let Some(suspended) = &self.state.suspended_decision {
+            for decision in suspended.decisions() {
+                if let Decision::ChoosePile { face_up, .. } = decision {
+                    pinned.extend(face_up);
+                }
+            }
             // The announced spell is public and already committed to its cost.
             // Its hand slot cannot become another sampled card while paying.
             for part in suspended.continuation() {
@@ -1083,6 +1088,7 @@ impl Game {
             }
         }
         rebind(frame.selected.iter_mut(), objects);
+        rebind(frame.unselected.iter_mut(), objects);
         rebind(
             frame
                 .remembered
@@ -1091,6 +1097,7 @@ impl Game {
             objects,
         );
         rebind(frame.moved.iter_mut(), objects);
+        rebind(frame.moved_from.iter_mut(), objects);
         rebind(frame.this_way.iter_mut(), objects);
         rebind(frame.created.iter_mut(), objects);
         self.rebind_completion_selection(&mut frame.completion, rebinding);
@@ -1116,11 +1123,13 @@ impl Game {
         match decision {
             Decision::SelectCards {
                 from,
+                pool,
                 candidates,
                 selected,
                 ..
             } => {
                 rebind(selected.iter_mut(), &rebinding.objects);
+                rebind(pool.iter_mut(), &rebinding.objects);
                 if let Some(source) = from
                     .as_ref()
                     .filter(|source| hidden_from(self, source, rebinding.viewer))
@@ -1156,6 +1165,15 @@ impl Game {
             } => {
                 rebind(looked.iter_mut(), &rebinding.objects);
                 rebind(graveyard.iter_mut(), &rebinding.objects);
+            }
+            Decision::PartitionPiles {
+                looked, face_up, ..
+            }
+            | Decision::ChoosePile {
+                looked, face_up, ..
+            } => {
+                rebind(looked.iter_mut(), &rebinding.objects);
+                rebind(face_up.iter_mut(), &rebinding.objects);
             }
             Decision::ManifestDread { looked, .. } | Decision::LookAndSelect { looked, .. } => {
                 rebind(looked.iter_mut(), &rebinding.objects)

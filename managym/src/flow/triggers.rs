@@ -17,8 +17,8 @@ use crate::{
     state::{
         ability::{
             Ability, Actor, DamageRecipientFilter, DelayedFrequency, Effect, EffectiveTrigger,
-            KeywordAction, Per, SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition,
-            TriggerSubject, TurnStep,
+            KeywordAction, Per, SpellTargetFilter, TargetRelation, TargetRequirement, TargetSpec,
+            TriggerCondition, TriggerSubject, TurnStep,
         },
         card::{CardDefId, PrintedCharacteristics},
         effect::{EffectDuration, Modification},
@@ -367,6 +367,101 @@ impl Game {
                 || self.targets_share_creature_type(chosen.chain([target])))
     }
 
+    /// Whether `target`, in clause `clause`, keeps the clause's relation to
+    /// the targets `others` holds as `(clause, target)` pairs. Controllers
+    /// are last known (CR 608.2h) so a departed target still compares.
+    pub(crate) fn relation_admits(
+        &self,
+        requirement: &TargetRequirement,
+        clause: usize,
+        target: Target,
+        others: impl IntoIterator<Item = (usize, Target)>,
+    ) -> bool {
+        let Some(relation) = requirement.relation else {
+            return true;
+        };
+        let mut others = others.into_iter();
+        match relation {
+            TargetRelation::DistinctFromEarlier => {
+                others.all(|(other, chosen)| other >= clause || chosen != target)
+            }
+            TargetRelation::AttachedToEarlier(host) => others
+                .filter(|(other, _)| *other == host)
+                .any(|(_, chosen)| self.target_attached_to(target, chosen)),
+            TargetRelation::DifferentControllerFrom(other_clause) => {
+                let mine = self.target_last_known_controller(target);
+                mine.is_some()
+                    && others
+                        .filter(|(other, _)| *other == other_clause)
+                        .all(|(_, chosen)| self.target_last_known_controller(chosen) != mine)
+            }
+        }
+    }
+
+    /// Adding `target` to clause `clause` while choosing: it relates to the
+    /// earlier `chosen` targets, and every later required clause whose
+    /// relation reads this one keeps a candidate (`candidates`) relating to
+    /// the choice. Lookahead is one clause deep, as relations name one
+    /// earlier clause.
+    pub(crate) fn relations_admit(
+        &self,
+        requirements: &[TargetRequirement],
+        clause: usize,
+        target: Target,
+        chosen: &[(usize, Target)],
+        candidates: impl Fn(&TargetRequirement) -> Vec<Target>,
+    ) -> bool {
+        let Some(requirement) = requirements.get(clause) else {
+            return true;
+        };
+        if !self.relation_admits(requirement, clause, target, chosen.iter().copied()) {
+            return false;
+        }
+        let with: Vec<(usize, Target)> = chosen.iter().copied().chain([(clause, target)]).collect();
+        requirements
+            .iter()
+            .enumerate()
+            .skip(clause + 1)
+            .filter(|(_, later)| {
+                later.min > 0
+                    && match later.relation {
+                        Some(TargetRelation::DistinctFromEarlier) => true,
+                        Some(
+                            TargetRelation::AttachedToEarlier(host)
+                            | TargetRelation::DifferentControllerFrom(host),
+                        ) => host == clause,
+                        None => false,
+                    }
+            })
+            .all(|(index, later)| {
+                candidates(later).into_iter().any(|candidate| {
+                    self.relation_admits(later, index, candidate, with.iter().copied())
+                })
+            })
+    }
+
+    /// Whether permanent target `attachment` is attached to permanent
+    /// target `host` now.
+    fn target_attached_to(&self, attachment: Target, host: Target) -> bool {
+        let (Target::Permanent(attachment), Target::Permanent(host)) = (attachment, host) else {
+            return false;
+        };
+        let Some(host) = self.permanent_object(host) else {
+            return false;
+        };
+        self.state.permanents[attachment]
+            .as_ref()
+            .is_some_and(|permanent| permanent.attached_to == Some(host))
+    }
+
+    /// A permanent target's controller, or its last known controller.
+    fn target_last_known_controller(&self, target: Target) -> Option<PlayerId> {
+        match target {
+            Target::Permanent(id) => self.last_known_controller(id),
+            _ => None,
+        }
+    }
+
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
         match target {
             Target::GraveyardCard(object) => u32::from(self.object_mana_value(object)),
@@ -376,6 +471,30 @@ impl Game {
             Target::StackSpell(object_id) => u32::from(self.object_mana_value(object_id)),
             _ => 0,
         }
+    }
+
+    fn trigger_relations_admit(
+        &self,
+        trigger: &PendingTrigger,
+        requirements: &[TargetRequirement],
+        target: Target,
+    ) -> bool {
+        let chosen: Vec<(usize, Target)> = trigger
+            .target_req_indices
+            .iter()
+            .copied()
+            .zip(trigger.targets.iter().copied())
+            .collect();
+        self.relations_admit(
+            requirements,
+            trigger.requirement_index,
+            target,
+            &chosen,
+            |later| {
+                self.legal_clause_targets(later, trigger.controller, trigger.source_identity)
+                    .collect()
+            },
+        )
     }
 
     pub(crate) fn choose_trigger_target(
@@ -400,6 +519,7 @@ impl Game {
                 trigger.source_identity,
             )
             || !self.can_add_clause_target(requirement, trigger.x, trigger.clause_targets(), target)
+            || !self.trigger_relations_admit(trigger, &requirements, target)
         {
             return Err(AgentError("illegal trigger target".into()));
         }
@@ -512,7 +632,7 @@ impl Game {
                             trigger.x,
                             trigger.clause_targets(),
                             *target,
-                        )
+                        ) && self.trigger_relations_admit(&trigger, &requirements, *target)
                     })
                     .map(|target| Action::ChooseTarget {
                         player: controller,
@@ -840,7 +960,8 @@ impl Game {
         // owns restrictions at selection (CR 601.2c) and resolution (608.2b).
         if matches!(
             target_spec,
-            TargetSpec::PermanentYouControl { .. }
+            TargetSpec::PermanentYouOwn { .. }
+                | TargetSpec::PermanentYouControl { .. }
                 | TargetSpec::Permanent { .. }
                 | TargetSpec::Creature
                 | TargetSpec::AnyTarget
@@ -1560,6 +1681,17 @@ impl Game {
         }
     }
 
+    /// All occurrences waiting to join the stack, including the group being ordered.
+    pub(crate) fn unplaced_triggers(&self) -> impl Iterator<Item = &PendingTrigger> {
+        let placing = self
+            .state
+            .trigger_placement
+            .as_deref()
+            .into_iter()
+            .flat_map(|placement| placement.remaining.iter().chain(placement.placing.as_ref()));
+        self.state.pending_triggers.iter().chain(placing)
+    }
+
     /// CR 603.8: a state trigger doesn't trigger again while that exact
     /// source's occurrence waits to be put on the stack or is on it.
     fn state_trigger_waiting(&self, source: Option<ObjectId>, ability_index: usize) -> bool {
@@ -1570,13 +1702,7 @@ impl Game {
                 && trigger.ability_index == ability_index
                 && trigger.inline_effects.is_none()
         };
-        let placing = self
-            .state
-            .trigger_placement
-            .as_deref()
-            .into_iter()
-            .flat_map(|placement| placement.remaining.iter().chain(placement.placing.as_ref()));
-        self.state.pending_triggers.iter().chain(placing).any(same)
+        self.unplaced_triggers().any(same)
             || self.state.stack_objects.iter().any(|item| {
                 matches!(item, StackObject::TriggeredAbility(trigger)
                     if trigger.source_ref() == source
@@ -1615,7 +1741,7 @@ impl Game {
             return;
         };
         let replicated = if self.state[object].replicate().is_some() {
-            usize::from(spell.x)
+            spell.x
         } else {
             0
         };
@@ -1633,8 +1759,16 @@ impl Game {
         // CR 702.56a: replicate copies the spell once per payment, each copy
         // with a chance to choose new targets.
         if replicated > 0 {
-            let copies = vec![Effect::CopyTriggeringObject; replicated];
-            self.enqueue_inline_trigger(source, caster, copies, Some(Target::StackSpell(object)));
+            let copies = Effect::Repeat {
+                count: i32::from(replicated).into(),
+                effect: Box::new(Effect::CopyTriggeringObject),
+            };
+            self.enqueue_inline_trigger(
+                source,
+                caster,
+                vec![copies],
+                Some(Target::StackSpell(object)),
+            );
         }
     }
 
@@ -1652,6 +1786,7 @@ impl Game {
                 for (ability_index, ability) in self.state[object].abilities.iter().enumerate() {
                     let Ability::Triggered {
                         condition: TriggerCondition::InGraveyard { condition },
+                        intervening_if,
                         ..
                     } = ability
                     else {
@@ -1663,13 +1798,20 @@ impl Game {
                         continue;
                     };
                     let key = (object, self.state[object].definition_id, ability_index);
+                    let source_present = !matches!(
+                        event,
+                        GameEvent::CardMoved { object_id, .. } if *object_id == object
+                    );
                     if !(once
                         && self
                             .state
                             .turn
                             .ability_triggers_this_turn
                             .contains_key(&key))
-                        && self.trigger_condition_fires(leaf, object, owner, false, event)
+                        && self.trigger_condition_fires(leaf, object, owner, source_present, event)
+                        && intervening_if.as_ref().is_none_or(|condition| {
+                            self.check_intervening_if(condition, owner, Some(object), None)
+                        })
                     {
                         fired.push((object, ability_index, owner, once.then_some(key)));
                     }
@@ -2147,7 +2289,11 @@ impl Game {
             ) => {
                 let caster = *caster;
                 who.includes(source_controller, caster)
-                    && self.object_matches_predicate(*object, predicate)
+                    && self.object_matches_with_source(
+                        *object,
+                        predicate,
+                        self.state.permanent_of(source_object),
+                    )
                     && match filter {
                         SpellTargetFilter::Any => true,
                         SpellTargetFilter::TargetsThis => {
@@ -2156,9 +2302,10 @@ impl Game {
                         }
                     }
                     && nth.is_none_or(|n| {
-                        self.state.turn.spells_cast[caster.0]
-                            .iter()
-                            .position(|cast| cast.object == *object)
+                        self.state
+                            .turn
+                            .casts_before(caster, *object)
+                            .map(<[_]>::len)
                             == Some(n as usize - 1)
                     })
             }

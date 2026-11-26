@@ -163,8 +163,11 @@ interface VisibleState {
 
 const TRANSIENT_BOARD_SELECTORS = [
   '[data-testid="presentation-stage"]',
+  '[data-testid="death-travel"]',
+  '[data-testid="death-chip"]',
   '[data-testid="damage-dealt"]',
   '[data-testid="player-damage"]',
+  '[data-testid="stop-delta"]',
   // Printed card faces and art fallbacks populate asynchronously from
   // /api/card-faces and /api/card-art independently of the WebSocket frame.
   '.no-art',
@@ -174,6 +177,13 @@ const TRANSIENT_BOARD_SELECTORS = [
 ].join(', ');
 
 async function visibleState(page: Page): Promise<VisibleState> {
+  const gameBoard = page.getByTestId('game-board');
+  // An opponent turn auto-walks past steps (`data-board="step"`); return to the
+  // live frame without acting so both snapshots sign the authoritative board.
+  if ((await gameBoard.getAttribute('data-board')) !== 'frame') {
+    await page.keyboard.press('Escape');
+    await expect(gameBoard).toHaveAttribute('data-board', 'frame');
+  }
   await page.evaluate(
     () =>
       document.fonts.ready.then(
@@ -182,7 +192,7 @@ async function visibleState(page: Page): Promise<VisibleState> {
   );
   const prompts = page.getByTestId('decision-prompt');
   const prompt = (await prompts.count()) > 0 ? normalize(await prompts.first().textContent()) : '';
-  const board = await page.getByTestId('game-board').evaluate((element, selectors) => {
+  const board = await gameBoard.evaluate((element, selectors) => {
     const canonical = element.cloneNode(true) as HTMLElement;
     for (const node of canonical.querySelectorAll(selectors)) {
       node.remove();
@@ -191,9 +201,9 @@ async function visibleState(page: Page): Promise<VisibleState> {
   }, TRANSIENT_BOARD_SELECTORS);
   return {
     deckNames: normalize(await page.getByTestId('deck-names').textContent()),
-    // Optional presentation theater, "since your last move" damage counters,
-    // and async card-face/art decorations are transient; the proof checks the
-    // authoritative board, prompt, and legal-action projection underneath them.
+    // Optional presentation theater, transient move marks / damage counters,
+    // and async card-face/art decorations do not survive a reload; the proof
+    // checks the authoritative board, prompt, and legal-action projection.
     board: normalize(board),
     prompt,
     actions: (await page.getByTestId('action-option').allTextContents()).map(normalize),
