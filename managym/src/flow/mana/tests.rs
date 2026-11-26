@@ -410,6 +410,7 @@ thread_local! {
 
 pub(in crate::flow::mana) fn tapping_ability(outputs: Vec<Mana>) -> ManaActivation {
     ManaActivation {
+        automatic: true,
         tap_source: true,
         tap_count: 0,
         tap_candidates: Arc::new(Vec::new()),

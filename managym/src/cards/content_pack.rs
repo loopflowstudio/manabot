@@ -65,6 +65,36 @@ pub fn default_content_pack() -> &'static ContentPack {
     DEFAULT_CONTENT_PACK.get_or_init(ContentPack::default)
 }
 
+/// What the definition can read from the mana on its payment receipt.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SpentManaRead {
+    Amount,
+    Colors,
+}
+
+pub(crate) fn spent_mana_read(id: CardDefId) -> Option<SpentManaRead> {
+    static READS: OnceLock<Vec<Option<SpentManaRead>>> = OnceLock::new();
+    READS
+        .get_or_init(|| {
+            default_content_pack()
+                .definitions()
+                .map(|definition| {
+                    let json = serde_json::to_string(definition).expect("serializable definition");
+                    if json.contains("ColorsSpentToCast") {
+                        Some(SpentManaRead::Colors)
+                    } else if json.contains("ManaSpentToCast") {
+                        Some(SpentManaRead::Amount)
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .get(id.0 as usize)
+        .copied()
+        .flatten()
+}
+
 /// The printed face used to announce, pay for or stack `object` under `profile`.
 /// Reads the front or inset face directly without touching the global catalog
 /// unless `profile` selects a modal back face.

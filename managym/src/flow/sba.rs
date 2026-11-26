@@ -2,6 +2,7 @@
 // State-based actions.
 
 use crate::{
+    experience::PresentationRule,
     flow::{
         decision::{EffectFrame, FrameCompletion},
         game::{Game, GameOutcome, GameProcedure, LossCauses},
@@ -60,6 +61,7 @@ impl Game {
 
     pub fn lose_game(&mut self, player: PlayerId) {
         if !self.is_game_over() && !self.protected_from_loss(player) {
+            self.presentation_lost(player, None);
             let mut losses = [LossCauses::default(); 2];
             losses[player.0].instructed = true;
             self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
@@ -95,6 +97,19 @@ impl Game {
             }
         }
         if losses.iter().any(|causes| causes.any()) {
+            for (seat, causes) in losses.iter().enumerate() {
+                if !causes.any() {
+                    continue;
+                }
+                let rule = if causes.life_total {
+                    PresentationRule::ZeroLife
+                } else if causes.deck_empty {
+                    PresentationRule::EmptyLibrary
+                } else {
+                    PresentationRule::Poison
+                };
+                self.presentation_lost(PlayerId(seat), Some(rule));
+            }
             self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
             return true;
         }
@@ -155,9 +170,10 @@ impl Game {
         // Candidate discovery uses exact object identities. The mutable
         // storage slot is resolved only while inspecting the current object;
         // no later commit can accidentally follow a re-entered card.
-        let events: Vec<_> = {
+        let (events, rules): (Vec<_>, Vec<_>) = {
             let _scan = self.board_scan();
             let mut candidates = Vec::new();
+            let mut rules = Vec::new();
             for (permanent_id, characteristics) in
                 self.layer_views((0..self.state.permanents.len()).map(PermanentId))
             {
@@ -193,6 +209,20 @@ impl Game {
                 let Some(object_ref) = self.permanent_object(permanent_id) else {
                     continue;
                 };
+                let rule = if zero_toughness {
+                    PresentationRule::ZeroToughness
+                } else if zero_counters && characteristics.types.is_planeswalker() {
+                    PresentationRule::ZeroLoyalty
+                } else if zero_counters {
+                    PresentationRule::ZeroDefense
+                } else if legend_loser {
+                    PresentationRule::LegendRule
+                } else if illegal_aura {
+                    PresentationRule::UnattachedAura
+                } else {
+                    PresentationRule::LethalDamage
+                };
+                rules.push((object_ref, rule));
                 candidates.push((object_ref, destroy));
             }
             candidates.sort_by_key(|(object_ref, _)| *object_ref);
@@ -213,8 +243,11 @@ impl Game {
                     .filter_map(|id| self.permanent_object(id))
                     .map(|target| ProposedEvent::Sacrifice { target }),
             );
-            events
+            (events, rules)
         };
+        for (object, rule) in rules {
+            self.presentation_rule(object, rule);
+        }
         if !events.is_empty() {
             let batch = self.event_batch(EventBinding::Deaths, events);
             let mut frame = EffectFrame::new(self.active_player(), Vec::new());

@@ -239,10 +239,53 @@ function side(player: PlayerState, items: ReadonlyMap<number, PermanentItem>, of
   };
 }
 
+/**
+ * Order blockers opposite the attackers they block so combat pairs stand
+ * across the centre line without crossing block lines. Leaves both rows in
+ * their original order whenever no blocks are declared.
+ */
+function alignCombatRows(a: SideView, b: SideView): void {
+  const hasBlock = (sideView: SideView): boolean =>
+    sideView.creatures.some(pile => pile.items.some(item => item.permanent.blocking !== undefined));
+  const [defender, attacker] = hasBlock(a) ? [a, b] : hasBlock(b) ? [b, a] : [null, null];
+  if (!defender || !attacker) return;
+
+  const blockedIds = new Set<number>();
+  for (const pile of defender.creatures) {
+    for (const item of pile.items) {
+      if (item.permanent.blocking !== undefined) blockedIds.add(item.permanent.blocking);
+    }
+  }
+  const blockedAttackers: Pile[] = [];
+  const unblockedAttackers: Pile[] = [];
+  const idleAttackers: Pile[] = [];
+  for (const pile of attacker.creatures) {
+    if (pile.items.some(item => blockedIds.has(item.permanent.id))) blockedAttackers.push(pile);
+    else if (pile.items.some(item => item.permanent.attacking)) unblockedAttackers.push(pile);
+    else idleAttackers.push(pile);
+  }
+  attacker.creatures = [...blockedAttackers, ...unblockedAttackers, ...idleAttackers];
+
+  const rank = new Map<number, number>();
+  attacker.creatures.forEach((pile, index) => {
+    for (const item of pile.items) rank.set(item.permanent.id, index);
+  });
+  const blockers: { pile: Pile; targetRank: number; order: number }[] = [];
+  const idleDefenders: Pile[] = [];
+  defender.creatures.forEach((pile, order) => {
+    const target = pile.items.find(item => item.permanent.blocking !== undefined)?.permanent.blocking;
+    if (target !== undefined) blockers.push({ pile, targetRank: rank.get(target) ?? Number.MAX_SAFE_INTEGER, order });
+    else idleDefenders.push(pile);
+  });
+  blockers.sort((x, y) => x.targetRank - y.targetRank || x.order - y.order);
+  defender.creatures = [...blockers.map(entry => entry.pile), ...idleDefenders];
+}
+
 /** Stack entries in display order (top first) with their spell cards. */
 function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => PlacedOffer[]): StackItem[] {
   const cards = [...frame.projection.agent.stack, ...frame.projection.opponent.stack];
   const used = new Set<number>();
+  // `projection.stack_objects` is already top-first (managym observation.rs iterates stack_objects.rev()).
   const entries = frame.projection.stack_objects ?? [];
   const items: StackItem[] = entries.map(entry => {
     const card = entry.kind === 'spell'
@@ -253,18 +296,20 @@ function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => Placed
     return { entry, card, offers };
   });
   // Spells the projection lists without a stack entry (historical frames).
+  const fallbackSpells: StackItem[] = [];
   for (const card of cards) {
     if (used.has(card.id)) continue;
-    items.push({ entry: { id: -card.id - 1, kind: 'spell', controller: card.owner_id, label: card.name }, card,
+    fallbackSpells.push({ entry: { id: -card.id - 1, kind: 'spell', controller: card.owner_id, label: card.name }, card,
       offers: offersAt({ kind: 'object', id: card.id }) });
   }
+  if (fallbackSpells.length) items.push(...fallbackSpells.reverse());
   const announced = announcement(frame);
   if (announced) {
     const { source, kind } = announced;
     // A spell's card is drawn here rather than in its zone (hand, graveyard, exile); an ability's source stays on the battlefield.
     const players = [frame.projection.agent, frame.projection.opponent];
     const card = kind === 'spell' ? inspectableCards(players).find(candidate => candidate.id === source.display_id) ?? null : null;
-    items.push({
+    items.unshift({
       entry: { id: -source.display_id - 1, kind, controller: frame.projection.decision_context!.actor, label: source.label,
         ...(kind === 'activated_ability' ? { source_permanent: source.display_id } : {}) },
       card,
@@ -272,7 +317,7 @@ function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => Placed
       announcing: kind,
     });
   }
-  return items.reverse();
+  return items;
 }
 
 /** The spell or ability the acting viewer is announcing, if any. */
@@ -356,6 +401,7 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   const items = attachedItems([agent, opponent], offersAt, paid);
   const you = side(agent, items, offersAt);
   const them = side(opponent, items, offersAt);
+  alignCombatRows(you, them);
   const stack = stackItems(frame, offersAt);
   const onStack = new Set(stack.map(item => item.card?.id));
   const hand = agent.hand.filter(card => !onStack.has(card.id))

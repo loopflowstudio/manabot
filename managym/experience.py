@@ -889,6 +889,12 @@ class LandPlayedPresentation(ProtocolModel):
     player: UInt8
 
 
+class DrewPresentation(ProtocolModel):
+    kind: Literal["drew"]
+    player: UInt8
+    object: ObjectRenderId | None = Field(default=None, exclude_if=lambda v: v is None)
+
+
 class DiscardedPresentation(ProtocolModel):
     kind: Literal["discarded"]
     objects: list[ObjectRenderId]
@@ -899,6 +905,98 @@ class RevealedPresentation(ProtocolModel):
     kind: Literal["revealed"]
     cards: list[str]
     player: UInt8
+
+
+class ActivatedPresentation(ProtocolModel):
+    kind: Literal["activated"]
+    source: ObjectRenderId
+    controller: UInt8
+    stack: UInt64
+
+
+class TriggeredPresentation(ProtocolModel):
+    kind: Literal["triggered"]
+    source: ObjectRenderId
+    controller: UInt8
+    stack: UInt64
+
+
+class AbilityResolvedPresentation(ProtocolModel):
+    kind: Literal["ability_resolved"]
+    source: ObjectRenderId
+    stack: UInt64
+
+
+class CounteredPresentation(ProtocolModel):
+    kind: Literal["countered"]
+    stack: UInt64
+
+
+class PassedPresentation(ProtocolModel):
+    kind: Literal["passed"]
+    player: UInt8
+
+
+class CountersPresentation(ProtocolModel):
+    kind: Literal["counters"]
+    object: ObjectRenderId
+    counter: str
+    count: Int32
+    total: Int32
+
+
+class SearchedPresentation(ProtocolModel):
+    kind: Literal["searched"]
+    player: UInt8
+
+
+class LookedPresentation(ProtocolModel):
+    kind: Literal["looked"]
+    player: UInt8
+    action: Literal["scry", "surveil"]
+
+
+class SacrificedPresentation(ProtocolModel):
+    kind: Literal["sacrificed"]
+    objects: list[ObjectRenderId]
+    player: UInt8
+
+
+class LostPresentation(ProtocolModel):
+    kind: Literal["lost"]
+    player: UInt8
+
+
+class LifePresentation(ProtocolModel):
+    kind: Literal["life"]
+    player: UInt8
+    amount: Int32
+    total: Int32
+
+
+class ExiledPresentation(ProtocolModel):
+    kind: Literal["exiled"]
+    objects: list[ObjectRenderId]
+
+
+class TokenCreatedPresentation(ProtocolModel):
+    kind: Literal["token_created"]
+    objects: list[ObjectRenderId]
+    player: UInt8
+
+
+class PtChangedPresentation(ProtocolModel):
+    kind: Literal["pt_changed"]
+    objects: list[ObjectRenderId]
+    power: Int32
+    toughness: Int32
+
+
+class ControlChangedPresentation(ProtocolModel):
+    kind: Literal["control_changed"]
+    object: ObjectRenderId
+    controller: UInt8
+    returned: bool
 
 
 PresentationKind: TypeAlias = Annotated[
@@ -912,13 +1010,52 @@ PresentationKind: TypeAlias = Annotated[
     | BlockedPresentation
     | TurnStartedPresentation
     | LandPlayedPresentation
+    | DrewPresentation
     | DiscardedPresentation
-    | RevealedPresentation,
+    | RevealedPresentation
+    | ActivatedPresentation
+    | TriggeredPresentation
+    | AbilityResolvedPresentation
+    | CounteredPresentation
+    | PassedPresentation
+    | CountersPresentation
+    | SearchedPresentation
+    | LookedPresentation
+    | SacrificedPresentation
+    | LostPresentation
+    | LifePresentation
+    | ExiledPresentation
+    | TokenCreatedPresentation
+    | PtChangedPresentation
+    | ControlChangedPresentation,
     Field(discriminator="kind"),
 ]
 
+PresentationRule: TypeAlias = Literal[
+    "draw_step",
+    "cleanup",
+    "lethal_damage",
+    "zero_toughness",
+    "zero_loyalty",
+    "zero_defense",
+    "legend_rule",
+    "unattached_aura",
+    "zero_life",
+    "empty_library",
+    "poison",
+    "illegal_targets",
+]
+
+
+class PresentationLabels(ProtocolModel):
+    objects: dict[str, str] = Field(default_factory=dict, exclude_if=lambda v: not v)
+    stacks: dict[str, str] = Field(default_factory=dict, exclude_if=lambda v: not v)
+
 
 class PresentationEvent(ProtocolModel):
+    labels: PresentationLabels | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     seq: UInt64
     from_revision: UInt64
     to_revision: UInt64
@@ -928,6 +1065,10 @@ class PresentationEvent(ProtocolModel):
     suggested_ms: UInt32
     sound: str | None
     kind: PresentationKind
+    cause: UInt64 | None = Field(default=None, exclude_if=lambda value: value is None)
+    rule: PresentationRule | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class CommandReceipt(ProtocolModel):

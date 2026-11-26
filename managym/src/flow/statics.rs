@@ -498,6 +498,14 @@ impl Game {
     /// Commit layer 2 before subsequent instructions, triggers or choices.
     /// A change can end an effect lasting while its source is controlled.
     pub(crate) fn refresh_control(&mut self) {
+        self.refresh_control_with(None, None);
+    }
+
+    pub(crate) fn refresh_control_with(
+        &mut self,
+        returned: Option<bool>,
+        rule: Option<crate::experience::PresentationRule>,
+    ) {
         loop {
             let cached = self
                 .derived
@@ -532,7 +540,7 @@ impl Game {
                 return;
             }
             for &(id, controller) in &board.control_changes {
-                self.commit_control_change(id, controller);
+                self.commit_control_change(id, controller, returned, rule);
             }
         }
     }

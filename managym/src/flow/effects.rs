@@ -17,6 +17,7 @@
 
 use crate::{
     cards::content_pack::default_content_pack,
+    experience::PresentationRule,
     flow::game::Game,
     state::{
         card::{CardDefId, Keyword, Keywords, PrintedCharacteristics},
@@ -40,7 +41,7 @@ impl Game {
         let changes_control = modification == Modification::Control;
         self.record_continuous(source, None, controller, affected, modification, duration);
         if changes_control {
-            self.refresh_control();
+            self.refresh_control_with(Some(false), None);
         }
     }
 
@@ -59,11 +60,25 @@ impl Game {
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source = source.and_then(|object| self.observed_source_definition(object));
         let timestamp = self.state.id_gen_mut().next_id();
+        let pt_delta = self
+            .presentation
+            .is_some()
+            .then_some(&modification)
+            .and_then(|m| match *m {
+                Modification::ModifyPt { power, toughness } if power != 0 || toughness != 0 => {
+                    Some((power, toughness))
+                }
+                _ => None,
+            });
+        let mut pt_objects = Vec::new();
         let phasing_out = modification == Modification::PhasedOut;
         let mut phased_out = Vec::new();
         self.push_effects(affected.into_iter().map(|affected| {
-            if phasing_out {
-                if let Affected::Object(object) = affected {
+            if let Affected::Object(object) = affected {
+                if pt_delta.is_some() {
+                    pt_objects.push(object);
+                }
+                if phasing_out {
                     phased_out.push(object);
                 }
             }
@@ -77,6 +92,9 @@ impl Game {
                 source_object,
             }
         }));
+        if let Some((power, toughness)) = pt_delta {
+            self.presentation_pt_changed(&pt_objects, power, toughness);
+        }
         // CR 506.4, 702.26b: a phased-out permanent leaves combat.
         for object in phased_out {
             if let Ok(id) = self.lookup_current_permanent(object) {
@@ -385,7 +403,9 @@ impl Game {
 
     /// CR 514.2: "until end of turn" effects end in the cleanup step.
     pub(crate) fn end_turn_effects(&mut self) {
-        self.end_effects(|effect| effect.duration == EffectDuration::EndOfTurn);
+        if self.end_effects(|effect| effect.duration == EffectDuration::EndOfTurn) {
+            self.refresh_control_with(Some(true), Some(PresentationRule::Cleanup));
+        }
     }
 
     /// CR 400.7: the object that left is a new object; effects on it end,
@@ -408,10 +428,11 @@ impl Game {
         });
     }
 
-    fn end_effects(&mut self, ends: impl Fn(&ContinuousEffect) -> bool) {
+    fn end_effects(&mut self, ends: impl Fn(&ContinuousEffect) -> bool) -> bool {
         if !self.state.effects.iter().any(&ends) {
-            return;
+            return false;
         }
         self.state.effects.retain(|effect| !ends(effect));
+        true
     }
 }

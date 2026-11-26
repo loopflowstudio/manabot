@@ -40,11 +40,6 @@
       "before_digest": "4960f7660b1c2955185c1d0e37492477ee10ded5ad3dbe7cb074b15cd6ebc3ca"
     },
     {
-      "label": "Pay the cost",
-      "offer_id": 2,
-      "before_digest": "03e030e276739ad2330a968fa5d909f45e55247d49e77ddd443fdedf5bfd8671"
-    },
-    {
       "label": "Do not attack with Callous Inspector",
       "offer_id": 1,
       "before_digest": "a6926102c1ed5cff1b696143cb8b661b1181f191aa50cabea9301033006cc52d"
@@ -296,7 +291,7 @@
     }
   ],
   "decision_digest": "64cb68ba4b23385a9dcc58d136501b7148c5d37ac71b91174195a8dc02d4be04",
-  "decision_revision": 69,
+  "decision_revision": 68,
   "decision_kind": "PRIORITY",
   "manifest_digest": "bf758f23157ef6471f03bb0954afceba380f82cf7e4c08aa43606139e0a9343c"
 }

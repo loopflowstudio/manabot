@@ -36,7 +36,7 @@ RECEIPT_PATH = (
 AUTHORITY_SHA256 = "e423396533b73229ded3a6b068edb057c65894ac635a9cb397eef499eb5d1b5c"
 TERMINAL_STATE = "c3947b7f2c1cc675a34b8884daa2a5efe280ba937c970faf0cad8d5ea974492d"
 
-COMMAND_COUNT = 174
+COMMAND_COUNT = 170
 
 
 def _json_bytes(value: object) -> bytes:
@@ -580,6 +580,16 @@ def _run_live(
                 row["presentation_events"],
                 transition.presentation_events,
             )
+            _equal(
+                "live",
+                revision,
+                "ordered_presentation_events_by_viewer",
+                row["presentation_events_by_viewer"],
+                {
+                    "0": transition.viewer_presentation_events[0],
+                    "1": transition.viewer_presentation_events[1],
+                },
+            )
             if ordinal == 0:
                 root = session._study_roots[0]
                 checkpoints.append(_checkpoint(root, "live", 0, []))
@@ -601,11 +611,9 @@ def _run_live(
         expected_presentation: dict[int, list[dict[str, Any]]] = {0: [], 1: []}
         for row in decisions:
             for viewer in (0, 1):
-                for event in row["presentation_events"]:
-                    projected = deepcopy(event)
-                    if viewer != int(row["actor"]):
-                        projected["caused_by"] = None
-                    expected_presentation[viewer].append(projected)
+                expected_presentation[viewer].extend(
+                    deepcopy(row["presentation_events_by_viewer"][str(viewer)])
+                )
         actual_tracks = {
             track.viewer: track.events for track in replay.presentation_tracks
         }

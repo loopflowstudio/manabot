@@ -1,0 +1,582 @@
+//! Academy's presentation sink: the committed facts of one native step, in
+//! order, each with the earlier fact it follows from and the rule that did
+//! it when no player chose it.
+//!
+//! The sink is optional, private and unhashed, like `statistics`: search
+//! clones omit it, rollback snapshots keep it, and nothing a policy reads
+//! comes from it. It mirrors every [`GameEvent`] `emit` commits and adds the
+//! notes no event carries (an activation reaching the stack, a stack object
+//! beginning to resolve, priority passes, state-based losses). Each fact is
+//! projected eagerly for both viewer seats in `presentation_lines` at commit
+//! time, attaching only viewer-safe labels from that moment; [`Game::presentation_facts`]
+//! reads one viewer's lines non-destructively.
+//!
+//! Causes: while a stack object resolves, and through the stabilization after
+//! it, every fact follows from that resolution; outside a resolution, a death
+//! to lethal damage follows from the last damage dealt to that permanent
+//! (combat damage, say); a trigger follows from the event that triggered it;
+//! anything else is a root. The resolution cause and the damage record end
+//! when stabilization reaches priority (`sba_done`).
+//!
+//! Positions: the sink keeps a copy of the game (a *position*) each time the
+//! game reaches a whole state after at least one new non-pass fact: an action
+//! finished (and before the next one starts), a stack object finished
+//! resolving, stabilization began (after combat damage or a turn-based action),
+//! a state-based batch was performed, a round of triggers reached the stack.
+//! Each fact names the position cut after it, so a person can see the board
+//! as it was after each told line; facts after the last cut are on the board
+//! the step ends with. A position has no presentation sink and no published
+//! decision, so it shows a board and never a stale choice. Priority passes are
+//! recorded on the track without marking `uncut` and so never cut a position.
+
+use serde::Serialize;
+
+use crate::{
+    experience::{PresentationKind, PresentationLabels, PresentationRule},
+    flow::{
+        event::{DamageTarget, GameEvent, ObjectEventRef},
+        game::Game,
+        trigger::TriggerId,
+    },
+    state::{
+        game_object::{ObjectId, PlayerId},
+        stack_object::StackObject,
+        zone::ZoneType,
+    },
+};
+
+/// A fact's place in the game's told order; never reused, so a cause can
+/// name a fact taken in an earlier step.
+pub type FactId = u32;
+
+#[derive(Clone, Debug)]
+enum Note {
+    Event(GameEvent),
+    /// Combat damage (CR 510.2): the rules' `DamageDealt` and the
+    /// `CombatDamageDealt` the observation tells it by, one fact.
+    CombatDamage {
+        dealt: GameEvent,
+        told: GameEvent,
+    },
+    /// Permanents destroyed by a spell or ability (`EventBinding::Destroyed`).
+    Destroyed(Vec<ObjectEventRef>),
+}
+
+#[derive(Clone, Debug)]
+struct Fact {
+    id: FactId,
+    cause: Option<FactId>,
+    rule: Option<PresentationRule>,
+    /// Retained only for facts later events in the same step match against
+    /// (combat damage merge, draw/cleanup tagging, trigger attribution, life-loss suppression).
+    note: Option<Note>,
+    lines: [Vec<PresentationLine>; 2],
+    /// Index of the position cut after this fact, once one is.
+    position: Option<u32>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PresentationSink {
+    facts: Vec<Fact>,
+    pub(super) land_play: Option<ObjectId>,
+    next_id: FactId,
+    /// The resolution every fact follows from until stabilization ends.
+    resolution: Option<FactId>,
+    /// The cause of the next fact, set by a trigger reaching the stack.
+    next_cause: Option<FactId>,
+    /// Triggers waiting to be put on the stack, by the event that made them.
+    trigger_causes: Vec<(TriggerId, FactId)>,
+    /// State-based reasons for the batch being performed.
+    rules: Vec<(ObjectEventRef, PresentationRule)>,
+    /// Permanents already told as sacrificed in the current batch so a
+    /// simultaneous `PermanentsDied` (finished Saga) does not tell them twice.
+    pub(super) sacrificed: Vec<ObjectEventRef>,
+    /// The last damage fact dealt to each permanent since priority.
+    damaged: Vec<(ObjectEventRef, FactId)>,
+    /// The last damage fact dealt to each player since priority.
+    player_damaged: [Option<FactId>; 2],
+    /// Positions cut since the last take, oldest first.
+    positions: Vec<Game>,
+    /// Some fact has no position yet.
+    uncut: bool,
+}
+
+impl PresentationSink {
+    fn push(
+        &mut self,
+        cause: Option<FactId>,
+        rule: Option<PresentationRule>,
+        note: Option<Note>,
+        lines: [Vec<PresentationLine>; 2],
+        cut: bool,
+    ) -> FactId {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.facts.push(Fact {
+            id,
+            cause,
+            rule,
+            note,
+            lines,
+            position: None,
+        });
+        if cut {
+            self.uncut = true;
+        }
+        id
+    }
+
+    /// Push a root fact with no cause (e.g., a CR 608.2b illegal-target fizzle).
+    fn push_root(
+        &mut self,
+        rule: Option<PresentationRule>,
+        note: Option<Note>,
+        lines: [Vec<PresentationLine>; 2],
+    ) -> FactId {
+        self.resolution = None;
+        self.push(None, rule, note, lines, true)
+    }
+
+    /// Push a fact whose cause, absent a trigger's or a resolution's, is
+    /// `fallback`.
+    fn push_caused(
+        &mut self,
+        fallback: Option<FactId>,
+        rule: Option<PresentationRule>,
+        note: Option<Note>,
+        lines: [Vec<PresentationLine>; 2],
+    ) -> FactId {
+        let cause = self.next_cause.take().or(self.resolution).or(fallback);
+        self.push(cause, rule, note, lines, true)
+    }
+
+    /// A life loss that only commits the damage the previous fact told
+    /// (CR 120.3a); a gain from lifelink or any other change stays told.
+    fn follows_player_damage(&self, event: &GameEvent) -> bool {
+        let GameEvent::LifeChanged {
+            player, old, new, ..
+        } = event
+        else {
+            return false;
+        };
+        let dealt = match self.facts.last().and_then(|fact| fact.note.as_ref()) {
+            Some(Note::Event(dealt) | Note::CombatDamage { dealt, .. }) => dealt,
+            _ => return false,
+        };
+        matches!(dealt, GameEvent::DamageDealt {
+            target: DamageTarget::Player(target),
+            amount,
+            ..
+        } if target == player && i64::from(*old) - i64::from(*new) == i64::from(*amount))
+    }
+
+    /// The rule behind a state-based death, and for lethal damage the
+    /// damage fact that dealt it.
+    fn event_rule(&self, event: &GameEvent) -> (Option<PresentationRule>, Option<FactId>) {
+        let GameEvent::PermanentsDied { objects } = event else {
+            return (None, None);
+        };
+        let Some((object, rule)) = objects.iter().find_map(|object| {
+            self.rules
+                .iter()
+                .find(|(died, _)| died == object)
+                .map(|(_, rule)| (object, *rule))
+        }) else {
+            return (None, None);
+        };
+        let damage = (rule == PresentationRule::LethalDamage)
+            .then(|| {
+                self.damaged
+                    .iter()
+                    .rev()
+                    .find(|(damaged, _)| damaged == object)
+                    .map(|(_, fact)| *fact)
+            })
+            .flatten();
+        (Some(rule), damage)
+    }
+}
+
+/// Committed lines for one viewer. An untold fact still binds its cause.
+#[derive(Clone, Debug, Serialize)]
+pub struct PresentationFact {
+    pub id: FactId,
+    pub cause: Option<FactId>,
+    pub rule: Option<PresentationRule>,
+    pub lines: Vec<PresentationLine>,
+    pub position: Option<u32>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct PresentationLine {
+    pub kind: PresentationKind,
+    pub labels: PresentationLabels,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub combat: bool,
+}
+
+impl Game {
+    /// Start telling this game's facts; Academy alone turns it on.
+    pub fn enable_presentation(&mut self) {
+        self.presentation = Some(Box::default());
+    }
+
+    /// Keep the board as it is now if a fact was told since the last cut;
+    /// called only where the game is a whole state (see the module docs).
+    pub(crate) fn presentation_cut(&mut self) {
+        if !self.presentation.as_deref().is_some_and(|sink| sink.uncut) {
+            return;
+        }
+        // `Game::clone` omits the sink, as for search.
+        let mut position = self.clone();
+        position.current_action_space = None;
+        let sink = self.presentation.as_deref_mut().expect("checked above");
+        let index = sink.positions.len() as u32;
+        sink.positions.push(position);
+        for fact in sink.facts.iter_mut().rev() {
+            if fact.position.is_some() {
+                break;
+            }
+            fact.position = Some(index);
+        }
+        sink.uncut = false;
+    }
+
+    pub(crate) fn presentation_event(&mut self, event: &GameEvent) {
+        if self.presentation.is_none() {
+            return;
+        }
+        let damaged = match event {
+            GameEvent::DamageDealt {
+                target: DamageTarget::Permanent(permanent),
+                ..
+            } => self.permanent_event_ref(*permanent),
+            _ => None,
+        };
+        let damaged_player = match event {
+            GameEvent::DamageDealt {
+                target: DamageTarget::Player(player),
+                ..
+            } => Some(*player),
+            _ => None,
+        };
+        let sacrificed = match event {
+            GameEvent::PermanentSacrificed { object_id, .. } => self.object_event_ref(*object_id),
+            _ => None,
+        };
+        let lines = if self
+            .presentation
+            .as_deref()
+            .is_some_and(|sink| sink.follows_player_damage(event))
+        {
+            [Vec::new(), Vec::new()]
+        } else {
+            [PlayerId(0), PlayerId(1)].map(|viewer| self.event_lines(event, viewer))
+        };
+        let sink = self.presentation.as_deref_mut().expect("checked above");
+        // Combat damage is one fact: the observation tells it by the
+        // `CombatDamageDealt` emitted right after its `DamageDealt`.
+        if let GameEvent::CombatDamageDealt { .. } = event {
+            if let Some(last) = sink.facts.last_mut() {
+                if let Some(Note::Event(dealt @ GameEvent::DamageDealt { combat: true, .. })) =
+                    &last.note
+                {
+                    last.note = Some(Note::CombatDamage {
+                        dealt: dealt.clone(),
+                        told: event.clone(),
+                    });
+                    last.lines = lines;
+                    return;
+                }
+            }
+        }
+        let (rule, damage) = sink.event_rule(event);
+        if matches!(
+            event,
+            GameEvent::CardMoved {
+                departed: Some(departed),
+                to: ZoneType::Battlefield,
+                ..
+            } if sink.land_play == Some(*departed)
+        ) {
+            sink.land_play = None;
+        }
+        let id = if matches!(event, GameEvent::SpellCountered { by: None, .. }) {
+            sink.push_root(
+                Some(PresentationRule::IllegalTargets),
+                Some(Note::Event(event.clone())),
+                lines,
+            )
+        } else {
+            sink.push_caused(damage, rule, Some(Note::Event(event.clone())), lines)
+        };
+        if let Some(object) = damaged {
+            sink.damaged.push((object, id));
+        }
+        if let Some(player) = damaged_player {
+            sink.player_damaged[player.0] = Some(id);
+        }
+        if let Some(object) = sacrificed {
+            sink.sacrificed.push(object);
+        }
+    }
+
+    pub(crate) fn presentation_activated(&mut self, ability: &StackObject) {
+        if self.presentation.is_none() {
+            return;
+        }
+        let lines =
+            [PlayerId(0), PlayerId(1)].map(|viewer| self.stack_line(ability, viewer, false));
+        self.presentation
+            .as_deref_mut()
+            .unwrap()
+            .push_caused(None, None, None, lines);
+    }
+
+    /// Priority passes are told on the track without cutting a board position.
+    pub(crate) fn presentation_passed(&mut self, player: PlayerId) {
+        let Some(sink) = self.presentation.as_deref_mut() else {
+            return;
+        };
+        let lines = [PlayerId(0), PlayerId(1)].map(|_| Self::pass_line(player));
+        sink.push(None, None, None, lines, false);
+    }
+
+    pub(crate) fn presentation_resolving(&mut self, stacked: &StackObject) {
+        if self.presentation.is_none() {
+            return;
+        }
+        let lines = [PlayerId(0), PlayerId(1)].map(|viewer| self.stack_line(stacked, viewer, true));
+        let sink = self.presentation.as_deref_mut().unwrap();
+        sink.resolution = None;
+        let id = sink.push_caused(None, None, None, lines);
+        sink.resolution = Some(id);
+    }
+
+    /// Note an activated or triggered ability leaving the stack without
+    /// resolving because all of its targets became illegal (CR 608.2b).
+    pub(crate) fn presentation_ability_fizzled(&mut self, stacked: &StackObject) {
+        if self.presentation.is_none() {
+            return;
+        }
+        let lines =
+            [PlayerId(0), PlayerId(1)].map(|viewer| self.ability_fizzled_line(stacked, viewer));
+        self.presentation.as_deref_mut().unwrap().push_root(
+            Some(PresentationRule::IllegalTargets),
+            None,
+            lines,
+        );
+    }
+
+    /// Attach the hand appearance to the CardDrawn fact before another effect can move it.
+    pub(super) fn presentation_drawn(&mut self, player: PlayerId, card: ObjectId, draw_step: bool) {
+        if self.presentation.is_none() {
+            return;
+        }
+        let lines = [PlayerId(0), PlayerId(1)].map(|viewer| self.draw_line(player, card, viewer));
+        let fact = self
+            .presentation
+            .as_deref_mut()
+            .unwrap()
+            .facts
+            .last_mut()
+            .unwrap();
+        debug_assert!(matches!(
+            fact.note,
+            Some(Note::Event(GameEvent::CardDrawn { .. }))
+        ));
+        fact.lines = lines;
+        fact.rule = draw_step.then_some(PresentationRule::DrawStep);
+    }
+
+    /// Note permanents destroyed by a spell or ability (`EventBinding::Destroyed`).
+    pub(crate) fn presentation_destroyed(&mut self, objects: &[ObjectEventRef]) {
+        if self.presentation.is_none() || objects.is_empty() {
+            return;
+        }
+        let line = self.destroyed_line(objects);
+        self.presentation.as_deref_mut().unwrap().push_caused(
+            None,
+            None,
+            Some(Note::Destroyed(objects.to_vec())),
+            [line.clone(), line],
+        );
+    }
+
+    /// Note a spell/ability P/T modification applied to battlefield permanents.
+    pub(crate) fn presentation_pt_changed(
+        &mut self,
+        objects: &[ObjectId],
+        power: i32,
+        toughness: i32,
+    ) {
+        if self.presentation.is_none() || objects.is_empty() || (power == 0 && toughness == 0) {
+            return;
+        }
+        let lines = [PlayerId(0), PlayerId(1)]
+            .map(|viewer| self.pt_changed_line(objects, power, toughness, viewer));
+        if lines.iter().all(Vec::is_empty) {
+            return;
+        }
+        self.presentation
+            .as_deref_mut()
+            .unwrap()
+            .push_caused(None, None, None, lines);
+    }
+
+    /// Note a battlefield permanent changing controller (or returning when a
+    /// temporary control effect expires).
+    pub(crate) fn presentation_control_changed(
+        &mut self,
+        object: ObjectId,
+        controller: PlayerId,
+        returned: bool,
+        rule: Option<PresentationRule>,
+    ) {
+        if self.presentation.is_none() {
+            return;
+        }
+        let lines = [PlayerId(0), PlayerId(1)]
+            .map(|viewer| self.control_changed_line(object, controller, returned, viewer));
+        if lines.iter().all(Vec::is_empty) {
+            return;
+        }
+        self.presentation
+            .as_deref_mut()
+            .unwrap()
+            .push_caused(None, rule, None, lines);
+    }
+
+    /// Note a player losing the game (CR 104.3, 704.5a–c).
+    pub(crate) fn presentation_lost(&mut self, player: PlayerId, rule: Option<PresentationRule>) {
+        let Some(sink) = self.presentation.as_deref_mut() else {
+            return;
+        };
+        let lines = [PlayerId(0), PlayerId(1)].map(|_| Self::lost_line(player));
+        let fallback = (rule == Some(PresentationRule::ZeroLife))
+            .then(|| sink.player_damaged[player.0])
+            .flatten();
+        sink.push_caused(fallback, rule, None, lines);
+    }
+
+    /// Tag the just-emitted hand-to-graveyard discard as a cleanup-step rule action.
+    pub(crate) fn presentation_cleanup_discard(&mut self) {
+        let Some(sink) = self.presentation.as_deref_mut() else {
+            return;
+        };
+        if let Some(fact) = sink.facts.last_mut() {
+            if matches!(
+                fact.note,
+                Some(Note::Event(GameEvent::CardMoved {
+                    from: Some(ZoneType::Hand),
+                    to: ZoneType::Graveyard,
+                    ..
+                }))
+            ) {
+                fact.rule = Some(PresentationRule::Cleanup);
+            }
+        }
+    }
+
+    /// Stabilization reached priority: the resolution's consequences end.
+    pub(crate) fn presentation_settled(&mut self) {
+        if let Some(sink) = self.presentation.as_deref_mut() {
+            sink.resolution = None;
+            sink.rules.clear();
+            sink.sacrificed.clear();
+            sink.damaged.clear();
+            sink.player_damaged = [None, None];
+        }
+    }
+
+    pub(crate) fn presentation_rule(&mut self, object: ObjectId, rule: PresentationRule) {
+        if self.presentation.is_none() {
+            return;
+        }
+        let Some(reference) = self.object_event_ref(object) else {
+            return;
+        };
+        if let Some(sink) = self.presentation.as_deref_mut() {
+            sink.rules.push((reference, rule));
+        }
+    }
+
+    /// Bind the triggers `event` added from index `from` of the pending list
+    /// to the fact that told `event`. A permanent leaving the battlefield for
+    /// a graveyard is told as the death that names it ("dies", CR 700.4).
+    pub(crate) fn presentation_triggers(&mut self, event: &GameEvent, from: usize) {
+        if self.presentation.is_none() || self.state.pending_triggers.len() <= from {
+            return;
+        }
+        let (departed_obj, died) = match event {
+            GameEvent::CardMoved {
+                departed: Some(departed),
+                from: Some(ZoneType::Battlefield),
+                to: ZoneType::Graveyard,
+                ..
+            } => (Some(*departed), self.object_event_ref(*departed)),
+            _ => (None, None),
+        };
+        let Some(sink) = self.presentation.as_deref_mut() else {
+            return;
+        };
+        let found = died.and_then(|died| {
+            sink.facts.iter().rev().find(|fact| {
+                matches!(&fact.note, Some(Note::Event(GameEvent::PermanentsDied { objects })) if objects.contains(&died))
+                    || matches!(&fact.note, Some(Note::Destroyed(objects)) if objects.contains(&died))
+                    || matches!(&fact.note, Some(Note::Event(GameEvent::PermanentSacrificed { object_id, .. })) if Some(*object_id) == departed_obj)
+            })
+        });
+        let same = |fact: &&Fact| match &fact.note {
+            Some(Note::Event(told)) => told == event,
+            Some(Note::CombatDamage { dealt, told }) => dealt == event || told == event,
+            _ => false,
+        };
+        let Some(fact) = found
+            .or_else(|| sink.facts.iter().rev().find(same))
+            .map(|fact| fact.id)
+        else {
+            return;
+        };
+        for trigger in self.state.pending_triggers.iter().skip(from) {
+            sink.trigger_causes.push((trigger.id, fact));
+        }
+    }
+
+    /// The next fact is a trigger `id` reaching the stack.
+    pub(crate) fn presentation_placing(&mut self, id: TriggerId) {
+        if let Some(sink) = self.presentation.as_deref_mut() {
+            if let Some(index) = sink.trigger_causes.iter().position(|(t, _)| *t == id) {
+                sink.next_cause = Some(sink.trigger_causes.swap_remove(index).1);
+            }
+        }
+    }
+
+    pub fn presentation_facts(&self, viewer: PlayerId) -> Vec<PresentationFact> {
+        let Some(sink) = self.presentation.as_deref() else {
+            return Vec::new();
+        };
+        sink.facts
+            .iter()
+            .map(|fact| PresentationFact {
+                id: fact.id,
+                cause: fact.cause,
+                rule: fact.rule,
+                lines: fact.lines[viewer.0].clone(),
+                position: fact.position,
+            })
+            .collect()
+    }
+
+    /// Release one step after all viewers have read their tracks.
+    pub fn take_presentation_positions(&mut self) -> Vec<Game> {
+        let Some(sink) = self.presentation.as_deref_mut() else {
+            return Vec::new();
+        };
+        sink.facts.clear();
+        sink.sacrificed.clear();
+        sink.land_play = None;
+        sink.uncut = false;
+        std::mem::take(&mut sink.positions)
+    }
+}

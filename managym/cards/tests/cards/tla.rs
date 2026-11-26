@@ -470,33 +470,27 @@ fn airbend_permission_ends_when_the_card_leaves_exile() {
 }
 
 #[test]
-fn kyoshi_village_priority_levels_preserve_both_payment_routes() {
+fn kyoshi_village_funds_an_exact_cost_with_priority_floats_off() {
     use managym::state::player::ManaFloats;
-    for manual in [false, true] {
-        let mut s = five_color_unfunded_setup(&["Kyoshi Village", "Healer's Hawk"]);
-        let land = s.force_permanent_on_battlefield(0, "Kyoshi Village");
-        for (mode, offered) in [(ManaFloats::All, true), (ManaFloats::Usable, false)] {
-            s.game_mut().mana_floats[0] = mode;
-            assert_eq!(offers_ability(&mut s, land, 1), offered);
-        }
-        let hawk = move_to_hand(&mut s, "Healer's Hawk");
-        assert!(offers_ability(&mut s, land, 1));
-        s.game_mut().mana_floats[0] = ManaFloats::Off;
-        assert!(!offers_ability(&mut s, land, 1));
-        choose(
-            &mut s,
-            |a| matches!(a, Action::CastSpell { object, .. } if *object == hawk),
-        );
-        if manual {
-            activate(&mut s, land, 1);
-        } else {
-            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
-        }
-        settle(&mut s);
-        assert!(tapped(&s, land));
-        assert_eq!(s.battlefield_permanents_named(0, "Healer's Hawk").len(), 1);
-        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    let mut s = five_color_unfunded_setup(&["Kyoshi Village", "Healer's Hawk"]);
+    let land = s.force_permanent_on_battlefield(0, "Kyoshi Village");
+    for (mode, offered) in [(ManaFloats::All, true), (ManaFloats::Usable, false)] {
+        s.game_mut().mana_floats[0] = mode;
+        assert_eq!(offers_ability(&mut s, land, 1), offered);
     }
+    let hawk = move_to_hand(&mut s, "Healer's Hawk");
+    assert!(offers_ability(&mut s, land, 1));
+    s.game_mut().mana_floats[0] = ManaFloats::Off;
+    assert!(!offers_ability(&mut s, land, 1));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == hawk),
+    );
+    assert!(s.game().pending_choice.is_none());
+    settle(&mut s);
+    assert!(tapped(&s, land));
+    assert_eq!(s.battlefield_permanents_named(0, "Healer's Hawk").len(), 1);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }
 
 #[test]
@@ -514,7 +508,7 @@ fn kyoshi_payment_and_priority_floats_are_independent() {
                 &mut s,
                 |a| matches!(a, Action::CastSpell { object, .. } if *object == hawk),
             );
-            if payment == ManaPayment::Manual {
+            if payment == ManaPayment::Manual && floats != ManaFloats::Off {
                 activate(&mut s, land, 1);
             }
             assert!(tapped(&s, land));
@@ -7642,6 +7636,9 @@ fn a_committed_nonlesson_cost_excludes_herbalists_restricted_activation() {
     enter_and_settle(&mut s, "Hermitic Herbalist");
     ready(&mut s, "Hermitic Herbalist");
     s.set_player_mana_pool(0, "R");
+    // The player may float during this payment, but only a mode that
+    // leaves the Strike payable can be activated.
+    s.allow_priority_floats();
     cast(&mut s, "Lightning Strike");
     choose(&mut s, |a| {
         matches!(
@@ -14318,7 +14315,9 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
         choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     }
     assert!(s.choose_target(Target::Permanent(zhao)));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    if s.action_space().kind == ActionSpaceKind::PayOrNot {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
     assert!(tapped(&s, temple), "paid with the Mountain");
     assert!(
         !s.game().characteristics(forest).abilities_lost,

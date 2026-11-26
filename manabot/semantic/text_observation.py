@@ -665,6 +665,17 @@ class _Renderer:
             and not first
         ):
             raise TextEncodingError("action missing required visible focus")
+        # A simple choice-of-color mana tap is the same act as tapping a fixed
+        # source, and reads like one: the native description ("Tap Kyoshi
+        # Village for {G}/{W}") marks it and already names its ability.
+        simple_choice_tap = bool(
+            kind == "activate_ability"
+            and action.description
+            and action.description.startswith("Tap ")
+            and len(focus) == 1
+        )
+        if simple_choice_tap:
+            kind = "tap_for_mana"
         if kind == "declare_attacker":
             if action.declared is None or len(focus) not in (1, 2):
                 raise TextEncodingError("attack declaration missing")
@@ -706,7 +717,9 @@ class _Renderer:
             label = verb + (" " + ", ".join(focus) if focus else "")
         # Attack/block verbs already express participation. Keep other declared
         # values and every present selector; omit absent optional metadata.
-        details = _selectors(action.mode_index, action.ability_index)
+        details = _selectors(
+            action.mode_index, None if simple_choice_tap else action.ability_index
+        )
         if action.declared is not None and kind not in (
             "declare_attacker",
             "declare_blocker",

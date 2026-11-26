@@ -2022,6 +2022,14 @@
         "agent_player_id"
       ]
     },
+    "LookAction": {
+      "description": "Which library-looking keyword action `PresentationKind::Looked` tells.",
+      "type": "string",
+      "enum": [
+        "scry",
+        "surveil"
+      ]
+    },
     "ObjectRenderId": {
       "type": "object",
       "properties": {
@@ -2258,6 +2266,15 @@
     "PresentationEvent": {
       "type": "object",
       "properties": {
+        "cause": {
+          "description": "The earlier event on this viewer's track this one follows from;\nabsent for a move or a turn heading. `group` is its root.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "caused_by": {
           "$ref": "#/$defs/RequiredNullable3"
         },
@@ -2276,6 +2293,26 @@
         },
         "kind": {
           "$ref": "#/$defs/PresentationKind"
+        },
+        "labels": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresentationLabels"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresentationRule"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "seq": {
           "type": "integer",
@@ -2557,6 +2594,37 @@
           ]
         },
         {
+          "description": "The card is named only for a viewer who saw it enter the hand.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "drew"
+            },
+            "object": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ObjectRenderId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player"
+          ]
+        },
+        {
           "description": "Cards a player discarded (CR 701.9a), named as the graveyard objects\nthey became.",
           "type": "object",
           "properties": {
@@ -2611,7 +2679,437 @@
             "cards",
             "player"
           ]
+        },
+        {
+          "description": "An activated ability put on the stack (CR 602.2) from `source`.",
+          "type": "object",
+          "properties": {
+            "controller": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "activated"
+            },
+            "source": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "stack": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "controller",
+            "stack"
+          ]
+        },
+        {
+          "description": "A triggered ability put on the stack (CR 603.3) from `source`.",
+          "type": "object",
+          "properties": {
+            "controller": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "triggered"
+            },
+            "source": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "stack": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "controller",
+            "stack"
+          ]
+        },
+        {
+          "description": "An activated or triggered ability began to resolve (CR 608.2).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "ability_resolved"
+            },
+            "source": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "stack": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "stack"
+          ]
+        },
+        {
+          "description": "A spell or ability left the stack without resolving (CR 701.6a, 608.2b).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "countered"
+            },
+            "stack": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "stack"
+          ]
+        },
+        {
+          "description": "A player passed priority (CR 117.3d).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "passed"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player"
+          ]
+        },
+        {
+          "description": "Counters put on a permanent (CR 122.6); `total` is its count after.",
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "counter": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "counters"
+            },
+            "object": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "total": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "object",
+            "counter",
+            "count",
+            "total"
+          ]
+        },
+        {
+          "description": "A player searched their library (CR 701.23).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "searched"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player"
+          ]
+        },
+        {
+          "description": "A player scried (CR 701.22) or surveilled (CR 701.25).",
+          "type": "object",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/LookAction"
+            },
+            "kind": {
+              "type": "string",
+              "const": "looked"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player",
+            "action"
+          ]
+        },
+        {
+          "description": "Permanents a player sacrificed (CR 701.17a).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "sacrificed"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects",
+            "player"
+          ]
+        },
+        {
+          "description": "A player lost the game (CR 104.3).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "lost"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player"
+          ]
+        },
+        {
+          "description": "A player's life total changed other than by damage (CR 119.3,\n119.4): `amount` is signed (positive gained, negative lost) and\n`total` the life total after.",
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "kind": {
+              "type": "string",
+              "const": "life"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player",
+            "amount",
+            "total"
+          ]
+        },
+        {
+          "description": "Permanents or cards exiled face up (CR 406.1).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "exiled"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects"
+          ]
+        },
+        {
+          "description": "Tokens created on the battlefield (CR 111.1).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "token_created"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects",
+            "player"
+          ]
+        },
+        {
+          "description": "One or more permanents' power and/or toughness were modified by a\nresolving spell or ability (CR 613.4c).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pt_changed"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            },
+            "power": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "toughness": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects",
+            "power",
+            "toughness"
+          ]
+        },
+        {
+          "description": "Control of a battlefield permanent changed (CR 108.4, 613.1b);\n`returned` is true when an expiring control effect handed it back.",
+          "type": "object",
+          "properties": {
+            "controller": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "control_changed"
+            },
+            "object": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "returned": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "object",
+            "controller",
+            "returned"
+          ]
         }
+      ]
+    },
+    "PresentationLabels": {
+      "type": "object",
+      "properties": {
+        "objects": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "stacks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "PresentationRule": {
+      "description": "The state-based, turn-based, or resolution rule (CR 704.5, 504, 514,\n608.2b) that did what an event tells, when no player chose it.",
+      "type": "string",
+      "enum": [
+        "draw_step",
+        "cleanup",
+        "lethal_damage",
+        "zero_toughness",
+        "zero_loyalty",
+        "zero_defense",
+        "legend_rule",
+        "unattached_aura",
+        "zero_life",
+        "empty_library",
+        "poison",
+        "illegal_targets"
       ]
     },
     "PromptView": {

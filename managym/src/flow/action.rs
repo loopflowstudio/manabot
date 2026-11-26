@@ -2,7 +2,8 @@
 // Player action computation and action space construction.
 
 use crate::agent::ability_description::{
-    counter_description, effects_description, mana_description, pending_trigger_description,
+    counter_description, effects_description, mana_choices_description, mana_description,
+    pending_trigger_description,
 };
 use crate::state::ability::LibraryEnd;
 
@@ -165,6 +166,13 @@ impl Game {
                         effects_description(&ability.effects)
                     ));
                 }
+                if ability.is_simple_mana_tap() {
+                    let name = self.observed_object_name(self.permanent_object(*permanent)?);
+                    return Some(format!(
+                        "Tap {name} for {}",
+                        mana_choices_description(&ability.mana_choices()?)
+                    ));
+                }
                 if !ability.has_grantor_cost() {
                     return None;
                 }
@@ -217,11 +225,15 @@ impl Game {
                 let name = self.observed_object_name(self.permanent_object(*permanent)?);
                 Some(format!("Tap {name} to pay {}", tap_payments_text(&options)))
             }
-            // A fixed source tapped while an announced cost is paid: its mana
-            // pays toward that cost as it is made (`commit_produced_mana`).
+            // A fixed source tapped while an announced or resolution mana cost is paid.
             Action::TapForMana { permanent, .. }
-                if self.state.suspended_decision.is_none()
-                    && matches!(self.paying(), Some((_, _, CostComponent::Mana { .. }))) =>
+                if (self.state.suspended_decision.is_none()
+                    && matches!(self.paying(), Some((_, _, CostComponent::Mana { .. }))))
+                    || matches!(
+                        self.state.suspended_decision.as_ref().map(|s| &s.decision),
+                        Some(Decision::Payment(payment))
+                            if matches!(payment.owed, CostComponent::Mana { .. })
+                    ) =>
             {
                 let name = self.observed_object_name(self.permanent_object(*permanent)?);
                 let output = crate::flow::mana::fixed_output(&self.characteristics(*permanent));
@@ -1255,14 +1267,7 @@ impl Game {
                 (ActionSpaceKind::LookAndSelect, actions, Vec::new())
             }
             CostComponent::Mana { .. } => {
-                let owed = payment.mana().0;
-                let mut actions = self.mana_ability_actions(player);
-                actions.extend(self.useful_payment_taps(player));
-                actions.extend(self.help_actions(player));
-                if self.can_pay_mana_cost(player, owed) {
-                    actions.push(Action::PayCost { player });
-                }
-                self.append_mana_floats(player, &mut actions);
+                let actions = self.take_announced_mana_actions(player, payment);
                 if payment.waterbends() {
                     (ActionSpaceKind::Waterbend, actions, source_focus())
                 } else {
@@ -1331,10 +1336,17 @@ impl Game {
     }
 
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
+        self.clear_staged_announced_actions();
+        // What came before this action is a whole state (turn-based
+        // actions, the last resolution); so is what the action leaves.
+        self.presentation_cut();
         if self.state.opening().is_some() {
-            return self.choose_opening(action);
+            self.choose_opening(action)?;
+            self.presentation_cut();
+            return Ok(());
         }
         self.dispatch_action(action)?;
+        self.presentation_cut();
         if matches!(
             action,
             Action::PlayLand { .. }
@@ -1455,6 +1467,7 @@ impl Game {
                 if self.state.priority.holder != *player {
                     return Err(AgentError("player does not have priority".to_string()));
                 }
+                self.presentation_passed(*player);
                 let next = self.next_player(*player);
                 self.state.priority_mut().on_pass(next);
                 Ok(())

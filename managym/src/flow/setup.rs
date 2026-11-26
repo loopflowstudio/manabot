@@ -190,6 +190,7 @@ impl Game {
             skipped_priority_passes: 0,
             card_capture: None,
             statistics: None,
+            presentation: None,
             capture_drawing: None,
             capture_originals: Default::default(),
         };

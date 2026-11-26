@@ -976,6 +976,57 @@ pub(crate) enum ResolutionRef<'a> {
 }
 
 impl SuspendedResolution {
+    /// A simple output choice resumes an empty root frame. Other continuations
+    /// can still use their selected objects, batches and callers after payment.
+    pub(super) fn may_name_mana_source(&self, id: PermanentId, object: ObjectId) -> bool {
+        let payment_names = |progress: &PaymentProgress| {
+            let f = &self.frame;
+            let target = Target::Permanent(id);
+            let completion_names = match f.completion {
+                FrameCompletion::Priority | FrameCompletion::Continue => false,
+                FrameCompletion::TurnFaceUp(o) => o == object,
+                FrameCompletion::Spell {
+                    object: o,
+                    attach_to,
+                } => o == object || attach_to == Some(object),
+                _ => true,
+            };
+            f.batch.is_some()
+                || f.iteration.is_some()
+                || completion_names
+                || [f.source(), f.source_ref(), f.chosen, f.attached, f.grantor]
+                    .contains(&Some(object))
+                || f.context_target == Some(target)
+                || f.targets.iter().any(|t| t.target == target)
+                || f.remembered.iter().any(|b| b.object == object)
+                || [&f.selected, &f.moved, &f.created, &f.this_way]
+                    .iter()
+                    .any(|v| v.contains(&object))
+                || f.spent.names_object(object)
+                || progress.receipt.names_object(object)
+                || progress.spends.is_some_and(|key| key.0 == object)
+                || progress.counters_on_decline == Some(target)
+        };
+        match &self.decision {
+            Decision::ManaChoice {
+                player,
+                production: ManaProduction::Output { source, .. },
+                resume: None,
+                ..
+            } => *source == Some(object) || self.frame != EffectFrame::new(*player, Vec::new()),
+            Decision::ManaChoice {
+                production: ManaProduction::Output { source, .. },
+                resume: Some(resume),
+                ..
+            } => match resume.as_ref() {
+                Decision::Payment(progress) => *source == Some(object) || payment_names(progress),
+                _ => true,
+            },
+            Decision::Payment(progress) => payment_names(progress),
+            _ => true,
+        }
+    }
+
     /// Walk the complete caller chain, outermost first. Projection and private
     /// inspection use this same order across both child scopes and mana costs.
     pub(crate) fn continuation(&self) -> Vec<ResolutionRef<'_>> {
@@ -1538,9 +1589,10 @@ impl Game {
                                 counters_removed: (-change).max(0) as u32,
                             }
                         });
-                        self.push_to_stack(
-                            crate::state::stack_object::StackObject::ActivatedAbility(ability),
-                        );
+                        let ability =
+                            crate::state::stack_object::StackObject::ActivatedAbility(ability);
+                        self.presentation_activated(&ability);
+                        self.push_to_stack(ability);
                         // CR 602.2i: the ability is activated once on the stack and paid for.
                         if let Some(event) = loyalty {
                             self.emit(event);
@@ -1893,7 +1945,7 @@ impl Game {
                         self.mana_tap_cost_actions(*player),
                     )
                 } else {
-                    let mut actions = self.mana_ability_actions(*player);
+                    let mut actions = self.mana_ability_actions(*player, true);
                     if self.offers_extra_payment_taps(*player) && self.can_pay_mana_upfront(*player)
                     {
                         actions.push(Action::PayCost { player: *player });
@@ -1958,26 +2010,7 @@ impl Game {
                         focus: source_focus,
                     });
                 }
-                let mut actions = self.mana_ability_actions(player);
-                actions.extend(
-                    self.help_taps(
-                        player,
-                        cost,
-                        help,
-                        waterbend,
-                        &self.waterbend_candidates(player),
-                        None,
-                    )
-                    .into_iter()
-                    .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
-                );
-                if self.can_pay_mana_cost(player, cost) {
-                    actions.push(Action::PayCost { player });
-                }
-                if payment.can_decline() {
-                    actions.push(Action::Decline { player });
-                }
-                self.append_mana_floats(player, &mut actions);
+                let actions = self.resolution_mana_actions(player, payment, cost, help, waterbend);
                 ActionSpace {
                     player: Some(player),
                     kind: if payment.waterbends() {
@@ -2009,13 +2042,7 @@ impl Game {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
                 focus: source_focus,
-                actions: (0..choices.len())
-                    .filter(|mode| self.mana_choice_completes_payment(*player, &choices[*mode]))
-                    .map(|mode| Action::ChooseMode {
-                        player: *player,
-                        mode,
-                    })
-                    .collect(),
+                actions: self.mana_choice_actions(*player, choices),
             },
             Decision::ChooseObject {
                 player, optional, ..
