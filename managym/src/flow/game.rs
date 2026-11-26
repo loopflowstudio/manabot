@@ -850,6 +850,9 @@ pub struct Game {
         std::collections::BTreeMap<usize, crate::flow::card_capture::CardSnapshot>,
     pub(crate) capture_drawing: Option<ObjectId>,
     pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
+    /// Academy's told facts; like `statistics`, omitted by search clones,
+    /// kept by rollback snapshots, never hashed.
+    pub(crate) presentation: Option<Box<crate::flow::presentation::PresentationSink>>,
     pub state: TrackedState,
     /// Characteristics, static sources and trigger sources derived from
     /// `state` at its current revisions; cloned with it (its `Arc`s are
@@ -929,6 +932,7 @@ impl Clone for Game {
             skipped_priority_passes: self.skipped_priority_passes,
             card_capture: None,
             statistics: None,
+            presentation: None,
             capture_drawing: None,
             capture_originals: Default::default(),
         }

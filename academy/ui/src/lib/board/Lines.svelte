@@ -15,8 +15,8 @@
     lines: BoardLine[];
     draftLine?: DraftLine | null;
     root: HTMLElement | null;
-    /** Changes whenever the board may have moved underneath the lines. */
-    revision: number;
+    /** Changes whenever the board or cursor stop may have moved underneath the lines. */
+    revision: number | string;
   }
 
   let { lines, root, revision, draftLine = null }: Props = $props();
@@ -111,7 +111,7 @@
 
 <style>
   .lines { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: var(--layer-lines); pointer-events: none; overflow: visible; }
-  .line { fill: none; stroke-width: 2.25; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; animation: draw calc(var(--motion-move) * 2) var(--motion-move-ease); }
+  .line { fill: none; stroke-width: 2.25; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; animation: draw var(--motion-move) var(--motion-move-ease); }
   .line.target { stroke: var(--accent); }
   .line.block { stroke: var(--text-secondary); stroke-dasharray: 0.02 0.018; animation: none; }
   .line.draft { animation: none; }
