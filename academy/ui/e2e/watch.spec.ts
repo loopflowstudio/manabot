@@ -18,17 +18,34 @@ test('watch reads choices and consequences on the board, then returns from Study
   await expect(perspective).toHaveValue('0');
   await expect(bothHands).toBeChecked();
   await expect(page.getByTestId('replay-perspective')).toContainText('Both hands · spectator view');
-  await expect(page.getByTestId('shown-hand')).toHaveCount(1);
+  // Both hands are ribbons on the board's edges, the top one face-up: no backs, no popup on the plate.
+  const topHand = page.locator('[data-testid="hand-ribbon"][data-ribbon="top"]');
+  const bothFaceUp = async (): Promise<void> => {
+    await expect(page.getByTestId('hand-ribbon')).toHaveCount(2);
+    await expect(topHand.getByTestId('board-card')).not.toHaveCount(0);
+    await expect(page.getByTestId('card-back')).toHaveCount(0);
+  };
+  await bothFaceUp();
+  // The seat choosing is marked on its plate, and its hand is the one out.
+  await expect(page.getByTestId('plate-choosing')).toHaveCount(1);
+  await expect(page.locator('[data-testid="hand-ribbon"][data-out="true"]')).toHaveCount(1);
+  const rowsTop = await page.locator('.half.opponent .rows').boundingBox();
   const top = await topSeat();
   await page.getByRole('button', {name: 'Next', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
   await expect(page.getByTestId('replay-perspective')).toHaveText('Both hands · spectator view');
-  await expect(page.getByTestId('shown-hand')).toHaveCount(1);
+  await bothFaceUp();
   await page.getByRole('button', {name: 'Next', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 3 / 3');
   await expect(bothHands).toBeChecked();
-  await expect(page.getByTestId('shown-hand')).toHaveCount(1);
+  await bothFaceUp();
   expect(await topSeat()).toBe(top);
+  // Stepping moved hands, never the battlefield under them.
+  expect(await page.locator('.half.opponent .rows').boundingBox()).toEqual(rowsTop);
+  // Show hand on the waiting plate brings both hands out.
+  await page.getByTestId('hand-toggle').first().click();
+  await expect(page.locator('[data-testid="hand-ribbon"][data-out="true"]')).toHaveCount(2);
+  await page.getByTestId('hand-toggle').first().click();
   await page.getByRole('button', {name: 'Previous', exact: true}).click();
   await expect(rows).toHaveCount(0);
   await page.getByRole('button', {name: 'Previous', exact: true}).click();

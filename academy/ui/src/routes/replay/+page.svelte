@@ -29,7 +29,7 @@
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
-    analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, humanSeatAt, moveAt, moveMarks, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, seatIdentity, sinceRevision, stripMarks, swapHistoryNotes, type Perspective,
+    activeRibbonSeat, analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, choosingSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, humanSeatAt, moveAt, moveMarks, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, seatIdentity, sinceRevision, stripMarks, swapHistoryNotes, type Perspective,
   } from '$lib/board/replay';
   import { analysisStatus, byEvent, keyMoments, scoreName, type AgentLine, type Analysis, type AnalysisChoices } from '$lib/analysis';
   import { agreement, duration, estimateArc, numberRows, playOrDraw, seatColumnLabel, type GameNumbers } from '$lib/numbers';
@@ -124,6 +124,10 @@
   const studying = $derived(studyFrame !== null);
   const branched = $derived(studying || lineFrame !== null);
   const viewerSeat = $derived<0 | 1>(branched ? (frame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
+  // Who is marked as choosing, and whose hand is out, at the recorded position; a branch off the record marks nobody.
+  const gameOver = $derived(frame?.projection.game_over ?? false);
+  const seatChoosing = $derived(branched || gameOver ? null : choosingSeat(positions, replayStore.selected));
+  const seatActing = $derived(branched ? null : activeRibbonSeat(positions, replayStore.selected, gameOver));
   // ———————————————— Analysis: a policy's reading of your decisions
 
   let analyses = $state.raw<Analysis[] | null>(null);
@@ -794,6 +798,7 @@
   <Board
     {frame}
     interaction={studying && canRetry ? 'study' : 'read-only'}
+    handLayout={studying ? 'workspace' : 'ribbons'}
     status={replayStore.busy || atLiveEdge || studying ? status : ''}
     you={{ name: nameOf(pilotAt(viewerSeat)), deck: deckOf(viewerSeat) }}
     opponent={{ name: nameOf(pilotAt(otherSeat(viewerSeat))), deck: deckOf(otherSeat(viewerSeat)), description: identity(pilotAt(otherSeat(viewerSeat))).description }}
@@ -801,7 +806,8 @@
     canPassTurn={false}
     {presentation}
     thinking={null}
-    opponentChoosing={false}
+    choosingSeat={seatChoosing}
+    ribbonSeat={seatActing}
     workStarted={null}
     interrupted={false}
     onact={offer => void retryStudyOffer(offer)}

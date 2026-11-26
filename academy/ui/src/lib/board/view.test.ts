@@ -120,11 +120,28 @@ describe('where decisions land', () => {
 
   it('draws Learn: discards on hand cards, Lessons in the tray by name, declining as a button', () => {
     const view = boardView(navigation.LEARN.frame, PLAYERS);
-    expect(view.hand.filter(item => item.offers.length).length).toBe(6);
+    expect(view.you.hand.filter(item => item.offers.length).length).toBe(6);
     expect(view.tray.map(item => item.name)).toEqual(['Accumulate Wisdom', 'Firebending Lesson', "It'll Quench Ya!"]);
     expect(view.buttons.map(placed => placed.offer.label)).toEqual(['Decline Learn']);
     // A click on the Learn spell on the stack never declines.
     expect(view.stack.flatMap(item => item.offers)).toEqual([]);
+  });
+
+  it('draws a top-seat chooser\'s offers on its own hand, and unseen hand cards as backs', () => {
+    const { frame } = navigation.LEARN;
+    const { agent, opponent } = frame.projection;
+    // The same decision seen from the other seat's side of the table, hands face-up.
+    const view = boardView({ ...frame, projection: { ...frame.projection, agent: opponent, opponent: agent } }, PLAYERS);
+    expect(view.opponent.hand.filter(item => item.offers.length).length).toBe(6);
+    expect(view.opponent.hiddenHand).toBe(0);
+    expect(view.tray.map(item => item.name)).toEqual(['Accumulate Wisdom', 'Firebending Lesson', "It'll Quench Ya!"]);
+    expect([...offerPlacements(view).values()].every(count => count === 1)).toBe(true);
+    // Closed: the count stays, the cards are backs, and their offers fall back to the tray.
+    const closed = boardView({ ...frame, projection: { ...frame.projection, agent: opponent,
+      opponent: { ...agent, hand: [], hand_hidden_count: agent.hand.length, zone_counts: { ...agent.zone_counts, HAND: agent.hand.length } } } }, PLAYERS);
+    expect(closed.opponent.hand).toEqual([]);
+    expect(closed.opponent.hiddenHand).toBe(agent.hand.length);
+    expect(closed.tray.length).toBe(view.tray.length + 6);
   });
 
   it('inspects tray cards as themselves: stash counters, a condition, a controlled opponent\'s hand', () => {
@@ -370,7 +387,7 @@ describe('the spell being cast', () => {
     expect(view.stack[0].card?.id).toBe(source.display_id);
     expect(view.stack[0].entry.label).toBe(source.label);
     expect(view.stack.length).toBe((frame.projection.stack_objects ?? []).length + 1);
-    expect(view.hand.map(item => item.card.id)).not.toContain(source.display_id);
+    expect(view.you.hand.map(item => item.card.id)).not.toContain(source.display_id);
   });
 
   it('draws a spell announced from outside the hand with its card', () => {

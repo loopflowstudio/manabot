@@ -133,7 +133,7 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
 
   // (e) Show both hands turns the opponent's hand up.
   await page.getByLabel('Show both hands').check();
-  await expect(page.getByTestId('shown-hand').first()).toBeVisible();
+  await expect(page.locator('[data-testid="hand-ribbon"][data-ribbon="top"]').getByTestId('board-card').first()).toBeVisible();
 
   // Games: the row's turns, and the record's one game.
   await page.goto('/games');

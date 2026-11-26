@@ -4,7 +4,8 @@
  * `boardView(frame)` is the one place that decides where each legal offer
  * appears: on the card or player it acts on (an anchor), as a button beside
  * the prompt, or in the tray for subjects the board does not draw (Lessons
- * outside the game, cards in hidden or collapsed zones). Every offer is also a
+ * outside the game, cards in hidden or collapsed zones). Both players' hands
+ * are drawn, so a top-seat chooser's offers sit on its own hand cards. Every offer is also a
  * row of the full list, in authority order, so nothing strategic is reachable
  * only by the board. The view chooses nothing: a commit is always one offer.
  *
@@ -62,6 +63,10 @@ export interface SideView {
   /** Lands, then other noncreature permanents: the row nearest the player. */
   support: Pile[];
   offers: PlacedOffer[];
+  /** The hand cards this viewer sees, less a spell being announced (drawn on the stack). */
+  hand: HandItem[];
+  /** Hand cards this viewer cannot see: drawn as backs. */
+  hiddenHand: number;
 }
 
 export interface HandItem {
@@ -90,7 +95,6 @@ export interface TrayItem {
 export interface BoardView {
   you: SideView;
   opponent: SideView;
-  hand: HandItem[];
   stack: StackItem[];
   /** Subject-less and declining offers, in list order; the first pass/pay is primary. */
   buttons: PlacedOffer[];
@@ -115,7 +119,7 @@ const ROLE_ORDER = ['target', 'source', 'choice'];
 function drawnObjects(frame: ExperienceFrame): Set<number> {
   const { agent, opponent } = frame.projection;
   return new Set([
-    ...agent.hand, ...agent.stack, ...opponent.stack,
+    ...agent.hand, ...opponent.hand, ...agent.stack, ...opponent.stack,
     ...agent.battlefield, ...opponent.battlefield,
   ].map(card => card.id));
 }
@@ -222,7 +226,7 @@ function attachedItems(players: readonly PlayerState[], offersAt: (anchor: Ancho
   return items;
 }
 
-/** One player's rows. An Aura or Equipment sits with its host, on the host's side (an opponent's Aura on your creature is drawn with your creature). */
+/** One player's rows; its hand is filled in once the stack is known. An Aura or Equipment sits with its host, on the host's side (an opponent's Aura on your creature is drawn with your creature). */
 function side(player: PlayerState, items: ReadonlyMap<number, PermanentItem>, offersAt: (anchor: Anchor) => PlacedOffer[]): SideView {
   const hosts = player.battlefield.map(permanent => items.get(permanent.id)!).filter(item => {
     const host = item.permanent.attached_to === undefined ? undefined : items.get(item.permanent.attached_to);
@@ -236,6 +240,8 @@ function side(player: PlayerState, items: ReadonlyMap<number, PermanentItem>, of
     creatures: piles(creatures),
     support: piles(support),
     offers: offersAt({ kind: 'player', index: player.player_index }),
+    hand: [],
+    hiddenHand: Math.max(0, (player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0)) - player.hand.length),
   };
 }
 
@@ -404,8 +410,10 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   alignCombatRows(you, them);
   const stack = stackItems(frame, offersAt);
   const onStack = new Set(stack.map(item => item.card?.id));
-  const hand = agent.hand.filter(card => !onStack.has(card.id))
-    .map(card => ({ card, offers: offersAt({ kind: 'object', id: card.id }) }));
+  for (const drawn of [you, them]) {
+    drawn.hand = drawn.player.hand.filter(card => !onStack.has(card.id))
+      .map(card => ({ card, offers: offersAt({ kind: 'object', id: card.id }) }));
+  }
 
   const buttons = offersAt({ kind: 'button' });
   // Anything anchored to something not drawn falls back to the tray.
@@ -414,7 +422,6 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   return {
     you,
     opponent: them,
-    hand,
     stack,
     buttons,
     primary: buttons.find(placed => PRIMARY_VERBS.has(placed.offer.verb)) ?? null,
@@ -436,8 +443,8 @@ export function offerPlacements(view: BoardView): Map<number, number> {
   for (const s of [view.you, view.opponent]) {
     s.offers.forEach(count);
     fieldItems(s).forEach(item => item.offers.forEach(count));
+    s.hand.forEach(item => item.offers.forEach(count));
   }
-  view.hand.forEach(item => item.offers.forEach(count));
   view.stack.forEach(item => item.offers.forEach(count));
   view.buttons.forEach(count);
   view.tray.forEach(item => count(item.placed));

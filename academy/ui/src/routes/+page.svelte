@@ -612,6 +612,7 @@
     <Board
       frame={decisionFrame}
       interaction={canSubmitLive ? 'play' : 'read-only'}
+      handLayout="workspace"
       status={gameStore.decisionStatus}
       you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
       opponent={{ name: opponentName, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}
@@ -624,7 +625,7 @@
       {canPassTurn}
       presentation={presentationPlayer}
       {thinking}
-      {opponentChoosing}
+      choosingSeat={opponentChoosing && heroSeat !== null ? (heroSeat === 0 ? 1 : 0) : null}
       evidence={liveEvidence}
       workStarted={gameStore.work?.state === 'running' && gameStore.connection === 'connected' ? gameStore.work.started_at : null}
       interrupted={gameStore.stopped}
