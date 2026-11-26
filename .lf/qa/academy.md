@@ -130,10 +130,11 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
-  The configured-launch table (`managym academy play`) has no Rematch in its
-  header, so detect the end by the right panel's "Game over — no next
-  decision." text (or one Rematch button), not by counting two Rematch
-  buttons, and bound play loops by time, since the bot can win first. Live bot work
+  The configured-launch table (`managym academy play`) keeps a Rematch
+  button inside the closed Settings menu (`details.game-menu`) all game, so
+  `button:has-text("Rematch")` matches from the first frame: detect the end
+  by the right panel's "Game over — no next decision." text or
+  `button:visible:has-text("Rematch")`, and bound play loops by time, since the bot can win first. Live bot work
   ("Searching · Seat 2") shows in the table masthead. Opening `/games?session=`
   needs the owner credential from the same browser profile; a fresh browser
   context gets 403. Games-page Replay links are labelled `Replay game <id>`;
@@ -364,8 +365,10 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `villain_source`, `seed_was_requested`). Rebuild the static SPA
   after any `academy/ui` change; a configured launch serves the stale build silently.
 - Folded offers over identical objects in a real game: the offer's
-  `subjects[0]` is the copy the engine acts on and `aliases[].display_id`
-  are the other copies; a click or drag on any copy sends the one offer and
+  `subjects[0]` is the copy the engine acts on and `aliases[]` are the other
+  copies as `SubjectRef`s (`alias.id.entity` is the board card's
+  `data-object-id`); a `DeclareBlocker` offer's subjects are
+  `choice:<blocker>`, `target:<attacker>` and its aliases are attackers; a click or drag on any copy sends the one offer and
   the engine plays, taps, targets or blocks the canonical copy. Read frames
   from the WebSocket (`payload.recovery?.frame ?? payload.update?.frame ??
   payload.frame`) and click rows by `[data-testid=action-option][data-offer-id=N]`
@@ -383,8 +386,14 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   entered on different turns stay separate. Hand cards lose `.playable`
   during the turn read-out: wait for `[data-testid=walk-now]` to disappear
   before clicking or dragging board cards. After game over the captured
-  frame may still show the last decision; detect the end by the "Rematch"
-  button. Which goblin each prompt named is in `attempts.trace_json`
+  frame may still show the last decision; detect the end by the visible "Rematch"
+  button. Attack and block drafts confirm as one `decision_group_command`
+  (no `command` messages); its `plan` may name an alias, which the engine
+  resolves. `60 Plains` against `60 Plains` passive, seed 3, passing every
+  priority, reaches a cleanup discard from eight identical Plains on turn 2:
+  there is no prompt, the graveyard simply gains one. `managym academy watch
+  --player heuristic --player heuristic` opens paused at position 1/1: press
+  Start watching if shown, then the replay bar's **Play**. Which goblin each prompt named is in `attempts.trace_json`
   `events[].actions[].focus`. To record a game on the pre-change engine,
   `git worktree add --detach /private/tmp/<x> <base>`, build its wheel with
   this checkout's `.venv/bin/maturin build --release` and `CARGO_TARGET_DIR`
