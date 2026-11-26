@@ -114,80 +114,10 @@ Types live in `managym/group.py`; the native layer is `managym/src/flow/group/`
 4. Unified `Env.decision`/`preview`/`submit`, `GroupCard` `committed*` labels,
    `0.3.0` deprecations, Academy alignment, PR #623 CI fixes — `716d7ed377`,
    compressed in `bf6209ae7c`, QA'd in `dda8c2d532`.
-5. **Next pass (from post-Pass 4 concept review, `scratch/concept-review.html`):**
-   Close the two real conceptual mismatches left at `dda8c2d532` plus one small
-   UX polish caught in Pass 4 QA:
-
-   - **5a. Self-describing `Offer`s on `Env.decision()` (zero fingerprint drift):**
-     - In `managym/src/flow/group/mod.rs`, switch `DecisionOffer.source` from
-       `crate::agent::structured_offer::SubjectRef` to
-       `crate::experience::SubjectRef` (matching `managym/group.py`, which
-       already imports `SubjectRef` from `managym.experience`).
-     - Enrich `project_offers()` in `Game::build_decision` using
-       `self.decision_offer_subjects(actor)` and `self.action_space()` without
-       touching `structured_search_offers()` or `semantic_decision_frame()`.
-       Populate `source` with the offer's primary `SubjectRef` (`Object`,
-       `Stack`, or `Player` when present) and format readable `label`s when
-       `action_description(action)` is `None` (e.g. `"Play <card>"`,
-       `"Cast <card>"`, `"Attack with <creature>"` / `"Don't attack with <creature>"`,
-       `"Block <attacker> with <blocker>"`, `"Select <card>"`,
-       `"Pass priority"`, `"Pay cost"`).
-     - Verify in `managym/tests/rules/group.rs` and `tests/env/test_group.py`
-       that two different lands/spells in hand produce distinct readable labels
-       and non-`None` `source`s on `SingleDecision.offers`, and that
-       `semantic_decision_frame().fingerprint` is completely unchanged.
-
-   - **5b. Port `PartitionPiles` (`Decision::PartitionPiles`, Curator of Destinies) onto the unified `Decision` / `group_command` pipeline and delete the last browser send loop:**
-     - Foundations (`10217a2f08`) merged `Decision::PartitionPiles` onto `main`,
-       leaving `Board.svelte:455-543` running a legacy browser-side
-       `partitionRunning` send loop with `FACE_UP_RE` regex scraping,
-       `Stop sending`, `academy.table.partition-draft`, and `Rail.svelte`'s
-       `stopped` prop beside the new `group_command` path.
-     - Rust (`managym/src/flow/group/mod.rs` + `library.rs`): add
-       `DecisionSpec::PartitionPiles { items: Vec<GroupCard>, committed_face_up: Vec<GroupCard>, committed_face_down: Vec<GroupCard> }`
-       (threshold `remaining.len() >= 2`),
-       `DecisionChoice::PartitionPiles { face_up: Vec<ObjectRenderId> }`, and
-       `DecisionOutcome::PartitionPiles { face_up: Vec<ObjectRenderId>, face_down: Vec<ObjectRenderId> }`.
-       Compile each remaining card in cursor order (`looked[*next..]`) to
-       `Action::ChooseMode { mode: 0 }` (face-up) or `mode: 1` (face-down).
-       Validate `face_up` IDs are distinct members of `items` (refusing unknown
-       or already-committed cards). `continues()` stays true while
-       `suspended_decision` is `Decision::PartitionPiles { player, .. }` for
-       `viewer`; on the final card it transitions to `ChoosePile` and emits
-       `CardRevealed` after `!continues()`, keeping the inter-step purity
-       boundary clean.
-     - Python & protocol: add `PartitionPilesDecision`, `PartitionPilesChoice`,
-       `PartitionPilesOutcome` to `managym/group.py`, update
-       `protocol/testing-house-v1.schema.json` (and fixture if needed), and
-       verify `uv run python scripts/public_api.py check`. Academy's
-       `live_group()`, `/group-preview`, and `hero_group()` require no new
-       transport or recording code.
-     - Browser (`academy/ui/src/lib/`): add `PartitionPilesGroup` /
-       `PartitionPilesPlan` / `PartitionPilesOutcome` to `group.ts`; drive the
-       existing two-pile partition UI in `Board.svelte` from `activeGroup`
-       (`kind === 'partition_piles'`), `/group-preview`,
-       `academy.table.group-draft`, and `ongroupact` (`group_command`). Delete
-       `partitionRunning`, `stopPartitionSending()`, `FACE_UP_RE`,
-       `FACE_DOWN_RE`, `partitionContext()`, `partitionOffer()`,
-       `partitionSteps()`, `savePartitionDraft`/`loadPartitionDraft`
-       (`academy.table.partition-draft`), and the `stopped` prop on
-       `Rail.svelte`. Update `partition.test.ts` and
-       `academy/ui/e2e/partition-piles.spec.ts` to assert 1-RTT atomic
-       `group_command` submission, preview, refusal, and raw-offer disclosure.
-     - Add Rust (`managym/tests/rules/group.rs`), Python
-       (`tests/env/test_group.py`), and Academy
-       (`tests/academy/test_group_command.py`) tests for `PartitionPiles`
-       parity, mid-group raw stepping, watcher privacy, and `ChoosePile`
-       transition.
-
-   - **5c. Clear stale rail rejection banner on draft edit & sync docs:**
-     - When `Board.svelte` calls `dismissRejection()` on editing a drafted group
-       after a `group_refused` / `group_incomplete` rejection, clear the
-       matching rejection error on `gameStore` (in `+page.svelte`) so the red
-       banner in the rail disappears along with the inline panel refusal.
-     - Update `AGENTS.md`, `docs/academy.md`, `managym/README.md`, and
-       `scratch/questions.md` to reflect that `PartitionPiles` is ported (no
-       browser send loops remain) and `Offer.label`/`source` are populated.
+5. Self-describing `Offer` labels & `SubjectRef` sources (zero fingerprint
+   drift), `PartitionPiles` ported onto native `Decision` / `group_command`
+   with legacy browser send loop & `FACE_UP_RE` deleted, rail rejection banner
+   cleared on draft edit, and docs synced — `3261629f55`.
 
 ## Remaining (after Pass 5, in gate / ship-review)
 
