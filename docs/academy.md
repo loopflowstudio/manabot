@@ -457,8 +457,8 @@ Open Academy (`/`): if this browser remembers an unfinished played game
 (`localStorage['academy.game']`), `/` opens straight onto its board at the
 pending decision. Otherwise `/` shows the setup screen:
 
-- **Play again** starts the same opponent, decks, play/draw seat, deal mode and
-  stops as your last matchup in one click (or **Play** with the default matchup
+- **Play again** starts the same opponent, decks, play/draw seat, deal mode,
+  stops and **Open hands** setting as your last matchup in one click (or **Play** with the default matchup
   the first time). The last matchup is a browser preference
   (`academy.last-matchup` in local storage).
 - Choose **Play vs Bot** or **Watch Bot vs Bot**, pick decks, an opponent,
@@ -642,9 +642,10 @@ opponent's hand runs along the top edge past their plate as a tucked ribbon of
 card backs; any card the rules revealed (such as from Learn or Duress) sits
 upright and face-up among those backs so you can hover or focus it to inspect
 it, and turning on [Open hands](#open-hands-while-you-play) glides their actual
-cards down face-up without shifting the battlefield. A plate at the left of
-each half shows the player, life, zone counts (**Hand** is a count only) and
-floating mana as mana
+cards down face-up over their back row without shifting the battlefield. A
+plate at the left of each half shows the player, life, zone counts (**Hand** is
+a count only, or **Show hand / Tuck hand** on the opponent's plate while Open
+hands is on) and floating mana as mana
 symbols, with any restriction or expiry written under them and wrapped within
 the plate ("Floating {R}{R} normally expires at step end" shows its pips, not
 braces, and is never cut off); open a graveyard or
@@ -1698,6 +1699,13 @@ shifting the battlefield, and an **Open hands ×** chip appears in the top bar.
 Click the chip or switch **Open hands** off to glide them back into card backs
 (keeping any rules-revealed cards face-up).
 
+The face-up hand is out in full and lies over the middle of the opponent's back
+row. While **Open hands** is on, the **Hand** line on the opponent's plate is a
+**Tuck hand / Show hand** button: tuck the hand to its name bars to see the
+lands under it (hover or focus a tucked card to bring that card alone out), and
+show it again when you want the whole cards. Nothing on the battlefield moves
+either way.
+
 - **Works with closed decklists.** Open hands is available in both open- and
   closed-decklist Play games (including the default TLA Trophies setup). It
   sends only the bot's current hand to your live board; canonical frames,
@@ -1711,14 +1719,16 @@ Click the chip or switch **Open hands** off to glide them back into card backs
   were drawn or cast. Returning to now restores the live open hand.
 - **Resume, rematch and game over.** Toggling **Open hands** during an active
   game saves it on the game's configuration, so reloading, reconnecting,
-  resuming from **History**, **Rematch** and **Swap sides** preserve your
-  setting. After game over, toggling **Open hands** lets you peek at the bot's
+  resuming from **History**, **Rematch**, **Swap sides** and the next **Play
+  again** keep the setting as you last left it. After game over, **Settings →
+  Analysis** holds only **Open hands**: toggling it lets you peek at the bot's
   remaining hand without changing the finished game's saved configuration.
 - **Counted in Review.** Every deliberate decision you commit while **Open
   hands** is on is recorded on that decision, and Review's **Settings → This
   game** reports **Played with open hands: N decisions** beside **Chosen with
-  analysis shown**. Opening an unfinished played game in Review still hides the
-  opponent's hand regardless of whether **Open hands** was on.
+  analysis shown**. **History** rows do not show this count. Opening an
+  unfinished played game in Review still hides the opponent's hand regardless
+  of whether **Open hands** was on.
 
 #### The game in numbers
 

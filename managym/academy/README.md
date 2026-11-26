@@ -525,7 +525,14 @@ Every frame-bearing `/ws/play` reply (`observation`, `game_over` and
 `{"type": "open_hands_state"}` reply carry the side-channel field
 `open_hand: {"revision": int, "hand": CardState[]} | null` attached in
 `_reply` (`OPEN_HAND_REPLIES`), computed directly from the bot seat's
-`env.observation_for_player`. The
+`env.observation_for_player`. A frame-bearing reply is named by its type, not
+by a top-level `frame` key: an accepted Command's frame is nested in
+`command_outcome.update.frame`. `set_stops` answers an `observation`, so it
+carries the hand; `analysis_state` does not. The `open_hands_state` reply also
+carries `setup`, like every reply, so Play again and Rematch read the setting
+as last left. The client has no separate flag: the switch and the top-bar chip
+are on while `gameStore.openHand` is not null, and the opponent's plate then
+offers Show hand / Tuck hand over the face-up ribbon. The
 client draws `open_hand` in place of top-ribbon card backs only at now
 (`activeCursor === null`) when `open_hand.revision` matches the current frame
 revision; beat playback and history lookback draw that historical board's own
