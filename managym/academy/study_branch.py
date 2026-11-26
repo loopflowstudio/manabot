@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 import managym
 from managym.decision import Command as SemanticCommand, DecisionFrame
 from managym.experience import Command
-from managym.experience_projection import decision_surface_view, definition_names
+from managym.experience_projection import decision_surface_view
 
 from .replay_index import (
     CanonicalReplayV1,
@@ -66,6 +66,7 @@ class StudyBranch:
         source: managym.Env,
         source_digest: str,
     ) -> None:
+        env.enable_presentation()
         self._env: managym.Env | None = env
         self._restored: RestoredReplayDecision | None = restored.model_copy(deep=True)
         self._source: managym.Env | None = source
@@ -110,15 +111,12 @@ class StudyBranch:
         self._published_offer_sets += 1
         return projection
 
-    def presentation_subjects(self) -> dict[str, dict[str, Any]]:
-        """Native public event-address map, captured at the transition boundary."""
-        env, _ = self._require_open()
-        return json.loads(env.presentation_subjects_json())
-
-    def definition_names(self) -> dict[int, str]:
-        """The branch game's card definitions by id (`definition_names`)."""
-        env, _ = self._require_open()
-        return definition_names(env)
+    def presentation_facts(self) -> str:
+        """Take the retry's committed facts for its historical viewer."""
+        env, restored = self._require_open()
+        facts = env.presentation_facts_json(restored.viewer)
+        env.take_presentation_positions()
+        return facts
 
     def current_projection(self) -> dict[str, Any]:
         """Project the isolated root with the same native explanation as play."""

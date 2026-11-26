@@ -102,7 +102,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   }
   const regions = stops.slice(0, stops.indexOf(stops[0], 1) > 0 ? stops.indexOf(stops[0], 1) : stops.length);
   expect(new Set(regions).size).toBe(regions.length);
-  for (const name of [/battlefield$/, /^Your battlefield$/, /^Your hand/, /^Decision$/, /^All legal choices$/, /^Moves$/]) {
+  for (const name of [/battlefield$/, /^Your battlefield$/, /^Your hand/, /^Decision$/, /^All legal choices$/, /^History$/]) {
     expect(regions.some(region => name.test(region)), `${name} in ${regions.join(' → ')}`).toBe(true);
   }
 
@@ -122,8 +122,8 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   for (let decision = 0; decision < 40 && (byEnter < 3 || bySpace < 6); decision += 1) {
     await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
     if (await page.getByTestId('result-card').isVisible()) break;
-    // Beats are tested on their own; here every key is a move, so wait out the opponent's read-out.
-    await expect(page.locator('[data-testid=action-panel].reading-out')).toHaveCount(0, { timeout: 30_000 });
+    // Beats are tested on their own; here every key is a move, so wait out any active walk.
+    await expect(page.locator('[data-testid=walk-bar][data-walking=true]')).toHaveCount(0, { timeout: 30_000 });
     const before = await revision(page);
     const commands = sent.length;
     const space = await page.getByTestId('action-panel').getAttribute('data-action-space-kind');

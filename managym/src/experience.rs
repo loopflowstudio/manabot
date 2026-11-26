@@ -982,6 +982,12 @@ pub enum PresentationKind {
         object: ObjectRenderId,
         player: PlayerId,
     },
+    /// The card is named only for a viewer who saw it enter the hand.
+    Drew {
+        player: PlayerId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        object: Option<ObjectRenderId>,
+    },
     /// Cards a player discarded (CR 701.9a), named as the graveyard objects
     /// they became.
     Discarded {
@@ -995,6 +1001,123 @@ pub enum PresentationKind {
         cards: Vec<String>,
         player: PlayerId,
     },
+    /// An activated ability put on the stack (CR 602.2) from `source`.
+    Activated {
+        source: ObjectRenderId,
+        controller: PlayerId,
+        stack: StackRenderId,
+    },
+    /// A triggered ability put on the stack (CR 603.3) from `source`.
+    Triggered {
+        source: ObjectRenderId,
+        controller: PlayerId,
+        stack: StackRenderId,
+    },
+    /// An activated or triggered ability began to resolve (CR 608.2).
+    AbilityResolved {
+        source: ObjectRenderId,
+        stack: StackRenderId,
+    },
+    /// A spell or ability left the stack without resolving (CR 701.6a, 608.2b).
+    Countered {
+        stack: StackRenderId,
+    },
+    /// A player passed priority (CR 117.3d).
+    Passed {
+        player: PlayerId,
+    },
+    /// Counters put on a permanent (CR 122.6); `total` is its count after.
+    Counters {
+        object: ObjectRenderId,
+        counter: String,
+        count: i32,
+        total: i32,
+    },
+    /// A player searched their library (CR 701.23).
+    Searched {
+        player: PlayerId,
+    },
+    /// A player scried (CR 701.22) or surveilled (CR 701.25).
+    Looked {
+        player: PlayerId,
+        action: LookAction,
+    },
+    /// Permanents a player sacrificed (CR 701.17a).
+    Sacrificed {
+        objects: Vec<ObjectRenderId>,
+        player: PlayerId,
+    },
+    /// A player lost the game (CR 104.3).
+    Lost {
+        player: PlayerId,
+    },
+    /// A player's life total changed other than by damage (CR 119.3,
+    /// 119.4): `amount` is signed (positive gained, negative lost) and
+    /// `total` the life total after.
+    Life {
+        player: PlayerId,
+        amount: i32,
+        total: i32,
+    },
+    /// Permanents or cards exiled face up (CR 406.1).
+    Exiled {
+        objects: Vec<ObjectRenderId>,
+    },
+    /// Tokens created on the battlefield (CR 111.1).
+    TokenCreated {
+        objects: Vec<ObjectRenderId>,
+        player: PlayerId,
+    },
+    /// One or more permanents' power and/or toughness were modified by a
+    /// resolving spell or ability (CR 613.4c).
+    PtChanged {
+        objects: Vec<ObjectRenderId>,
+        power: i32,
+        toughness: i32,
+    },
+    /// Control of a battlefield permanent changed (CR 108.4, 613.1b);
+    /// `returned` is true when an expiring control effect handed it back.
+    ControlChanged {
+        object: ObjectRenderId,
+        controller: PlayerId,
+        returned: bool,
+    },
+}
+
+/// Which library-looking keyword action `PresentationKind::Looked` tells.
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LookAction {
+    Scry,
+    Surveil,
+}
+
+/// The state-based, turn-based, or resolution rule (CR 704.5, 504, 514,
+/// 608.2b) that did what an event tells, when no player chose it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PresentationRule {
+    DrawStep,
+    Cleanup,
+    LethalDamage,
+    ZeroToughness,
+    ZeroLoyalty,
+    ZeroDefense,
+    LegendRule,
+    UnattachedAura,
+    ZeroLife,
+    EmptyLibrary,
+    Poison,
+    IllegalTargets,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PresentationLabels {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub objects: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub stacks: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -1011,6 +1134,14 @@ pub struct PresentationEvent {
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub sound: RequiredNullable<String>,
     pub kind: PresentationKind,
+    /// The earlier event on this viewer's track this one follows from;
+    /// absent for a move or a turn heading. `group` is its root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cause: Option<PresentationSeq>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule: Option<PresentationRule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub labels: Option<PresentationLabels>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
