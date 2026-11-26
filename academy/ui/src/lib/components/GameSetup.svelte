@@ -163,7 +163,7 @@
     {#if imported}
       <span class="text-sm">Imported · {imported.name ?? imported.filename}</span>
     {:else}
-      <select aria-label={label} class="rounded border border-line bg-panel p-2" value={current}
+      <select aria-label={label} class="rounded border border-line bg-panel px-2.5 py-1.5 text-sm" value={current}
         onchange={e => { deckEdited = true; onSelect(e.currentTarget.value as DeckChoice); }}>
         {#if deckPools.length > 0}
           <optgroup label="Deck pools">
@@ -186,12 +186,12 @@
   </label>
 {/snippet}
 
-<section aria-label="Game setup" class="my-4 min-w-0 space-y-4">
-  <div class="flex flex-wrap items-center justify-between gap-3">
+<section aria-label="Game setup" class="my-1 min-w-0 space-y-2.5">
+  <div class="flex flex-wrap items-center justify-between gap-2">
       <div class="inline-flex overflow-hidden rounded border border-line bg-field" role="group" aria-label="Match mode">
-        <button type="button" class={`px-3 py-1.5 text-sm font-medium ${!setup.watchMode ? 'bg-action text-on-action' : 'text-ink-2 hover:text-ink'}`}
+        <button type="button" class={`px-3 py-1 text-sm font-medium ${!setup.watchMode ? 'bg-action text-on-action' : 'text-ink-2 hover:text-ink'}`}
           aria-pressed={!setup.watchMode} {disabled} onclick={() => setMode(false)}>Play vs Bot</button>
-        <button type="button" class={`border-l border-line px-3 py-1.5 text-sm font-medium ${setup.watchMode ? 'bg-action text-on-action' : 'text-ink-2 hover:text-ink'}`}
+        <button type="button" class={`border-l border-line px-3 py-1 text-sm font-medium ${setup.watchMode ? 'bg-action text-on-action' : 'text-ink-2 hover:text-ink'}`}
           aria-pressed={setup.watchMode} {disabled} onclick={() => setMode(true)}>Watch Bot vs Bot</button>
       </div>
       {#if hasTrophyPool}
@@ -203,8 +203,8 @@
       {/if}
   </div>
 
-  <div class="grid gap-3 md:grid-cols-2">
-      <fieldset {disabled} class="min-w-0 space-y-2.5 rounded border border-line bg-field p-3">
+  <div class="grid gap-2.5 md:grid-cols-2">
+      <fieldset {disabled} class="min-w-0 space-y-2 rounded border border-line bg-field p-2.5">
         <legend class="type-label px-2">{setup.watchMode ? 'Seat 1 · Bot 1' : 'Seat 1 · You'}</legend>
         {@render deckField('hero', 'Seat 1 deck', value => setup.setHeroDeck(value))}
         {#if setup.watchMode}
@@ -215,17 +215,17 @@
             search={setup.watchSearchConfig}
             onSearchChange={value => { setup.watchSearchConfig = value; }} />
         {:else}
-          <div class="flex flex-wrap gap-3">
+          <div class="flex flex-wrap gap-2.5">
             <label class="flex flex-col gap-1">
               <span class="type-label text-ink-2">Mana payment</span>
-              <select bind:value={setup.manaPayment} class="rounded border border-line bg-panel p-2">
+              <select bind:value={setup.manaPayment} class="rounded border border-line bg-panel px-2.5 py-1.5 text-sm">
                 <option value="manual">Manual</option>
                 <option value="auto">Automatic</option>
               </select>
             </label>
             <label class="flex flex-col gap-1">
               <span class="type-label text-ink-2">Mana floats</span>
-              <select bind:value={setup.manaFloats} class="rounded border border-line bg-panel p-2">
+              <select bind:value={setup.manaFloats} class="rounded border border-line bg-panel px-2.5 py-1.5 text-sm">
                 <option value="off">Off</option>
                 <option value="usable">Only when usable</option>
                 <option value="all">All</option>
@@ -235,7 +235,7 @@
         {/if}
       </fieldset>
 
-    <fieldset {disabled} class="min-w-0 space-y-2.5 rounded border border-line bg-field p-3">
+    <fieldset {disabled} class="min-w-0 space-y-2 rounded border border-line bg-field p-2.5">
       <legend class="type-label px-2">{setup.watchMode ? 'Seat 2 · Bot 2' : 'Seat 2 · Opponent'}</legend>
       {@render deckField('villain', 'Seat 2 deck', value => setup.setVillainDeck(value))}
       <PlayerPicker label="Seat 2 bot" value={setup.opponentChoice} {trained} {extension} {catalogError} {disabled}
@@ -247,14 +247,14 @@
     </fieldset>
   </div>
 
-    <div class="flex flex-wrap items-end gap-4 rounded border border-line bg-panel p-3">
+    <div class="flex flex-wrap items-end gap-3 rounded border border-line bg-panel p-2.5">
       {#if !setup.watchMode}
         <div class="flex flex-col gap-1">
           <span class="type-label text-ink-2">Your turn order</span>
           <div class="inline-flex overflow-hidden rounded border border-line bg-field" role="group" aria-label="Your turn order">
             {#each [['play', 'Play first'], ['random', 'Random'], ['draw', 'Draw']] as [value, text]}
               <button type="button"
-                class={`px-2.5 py-1.5 text-sm ${setup.turnOrder === value ? 'bg-action text-on-action font-medium' : 'text-ink-2 hover:text-ink'} ${value !== 'play' ? 'border-l border-line' : ''}`}
+                class={`px-2.5 py-1 text-sm ${setup.turnOrder === value ? 'bg-action text-on-action font-medium' : 'text-ink-2 hover:text-ink'} ${value !== 'play' ? 'border-l border-line' : ''}`}
                 aria-pressed={setup.turnOrder === value} {disabled}
                 onclick={() => {
                   setup.turnOrder = value as 'play' | 'random' | 'draw';
@@ -270,7 +270,7 @@
       <DecklistsSelector value={setup.decklists} players={setup.watchMode ? [setup.watchPlayerChoice, setup.opponentChoice] : [setup.opponentChoice]} {disabled} onChange={value => { decklistsEdited = true; setup.setDecklists(value); }} />
       <label class="flex flex-col gap-1">
         <span class="type-label text-ink-2">Deal mode</span>
-        <select aria-label="Deal mode" class="rounded border border-line bg-field p-2" bind:value={setup.dealMode}>
+        <select aria-label="Deal mode" class="rounded border border-line bg-field px-2.5 py-1.5 text-sm" bind:value={setup.dealMode}>
           <option value="fresh">Fresh deal</option>
           <option value="repeat">Repeat seed</option>
         </select>
@@ -278,7 +278,7 @@
       {#if setup.dealMode === 'repeat'}
         <label class="flex flex-col gap-1">
           <span class="type-label text-ink-2">Seed</span>
-          <input class="rounded border border-line bg-field p-2" inputmode="numeric" bind:value={setup.seed} />
+          <input class="w-28 rounded border border-line bg-field px-2.5 py-1.5 text-sm" inputmode="numeric" bind:value={setup.seed} />
         </label>
       {/if}
         <button class="btn btn-primary ml-auto" {disabled} onclick={onStart}>{startLabel}</button>

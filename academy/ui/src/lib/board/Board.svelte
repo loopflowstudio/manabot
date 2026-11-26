@@ -27,6 +27,7 @@
   import type { CardState, ConnectionState, ExperienceFrame, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
   import Field from './Field.svelte';
   import Inspect from './Inspect.svelte';
+  import ManaText from './ManaText.svelte';
   import { permissionTerms } from './inspect';
   import Lines from './Lines.svelte';
   import { animateDeathTravel, collectDeathMarks, prefersReducedMotion, settle, Travel, type DeathMark } from './motion';
@@ -35,7 +36,7 @@
   import { computeStopDeltas, cursorView, hasWalkableTurn, PACE_MS, scrubberStops, sharedLaterCount, stopHasSeq, unreadWalkStops, walkStops, type WalkPace } from './beats';
   import { buildCombatTable } from './combat-table';
   import { findBoard, type StepBoard } from './boards';
-  import { buildHistory, cursorReading, hasTrackHistory, recentHistory, stepCursor, turnAt, type CursorScope, type CursorSelection, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
+  import { buildHistory, cursorReading, hasTrackHistory, stepCursor, turnAt, type CursorScope, type CursorSelection, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
   import { EVIDENCE, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addAttackers, addressOf, ATTACK_INSTRUCTION, BLOCK_INSTRUCTION, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
@@ -117,8 +118,6 @@
     moveMarks?: ReadonlyMap<string, DecisionMark>;
     /** Your moves chosen with a live analysis shown (Review), by move id. */
     shownMoves?: ReadonlySet<string>;
-    /** The recap's heading, when it is not the person's last move. */
-    recapTitle?: string;
     /** What the shown position is, when the caller knows (a recording): "After Heuristic's move". */
     heading?: string | null;
     /** Under the board: a recording's transport. */
@@ -153,7 +152,7 @@
     frame, interaction, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', notes = [], canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
     since: sinceGiven, history: historyGiven, onjump, readOnly = onjump !== undefined, currentMove = null, cursorSeq = null, stepBoardsError = null, onclearcursor,
-    evidence = null, moveMarks, shownMoves, recapTitle, heading = null, bottom, strip, notices, result, menu, bar, chips = [], historyHref = '/games',
+    evidence = null, moveMarks, shownMoves, heading = null, bottom, strip, notices, result, menu, bar, chips = [], historyHref = '/games',
     combatPreview, stepBoards = [],
     autoTap = false, fullControl = 'off', ontoggleautotap, onfullcontrol, onautotap,
     walkPace = 'study', onwalkpace,
@@ -734,20 +733,12 @@
     return () => clearTimeout(timer);
   });
 
-  // Window totals, now's `.touched` rings, the recap, and the result card wait until the cursor reaches now.
+  // Window totals, now's `.touched` rings, and the result card wait until the cursor reaches now.
   const NO_DAMAGE: RecentMarks['damage'] = { objects: new Map(), players: new Map() };
   const EMPTY_TOUCHED = new Set<number>();
   const damage = $derived(activeCursor !== null ? NO_DAMAGE : recent.damage);
   const touched = $derived(activeCursor !== null ? EMPTY_TOUCHED : recent.touched);
   const finished = $derived(result !== undefined && activeCursor === null);
-  const recapSource = $derived(
-    historyGiven && !hasTrackHistory(presentation.events)
-      ? buildHistory(presentation.events, index => presentation.labelsAt(index), tellPlayers)
-      : history,
-  );
-  const recentFacts = $derived(
-    activeCursor !== null ? [] : recentHistory(recapSource, sinceRevision, presentation.events.at(-1)?.seq ?? null),
-  );
 
   // Look up the kept board for `activeCursor`: a past board has no live offers,
   // while the rail stays live throughout.
@@ -1100,24 +1091,27 @@
 
   // ———————————————— Hand
 
-  // Hand cards are large, 136 to 150 px wide (`HAND_MIN`, `HAND_MAX`): the
-  // board gives the hand that height before its rows grow, and a crowded
-  // board (24 permanents or more) may take it back down to `HAND_CROWDED`
-  // when its rows need it (`handStrip`). A long hand's cards shrink before
-  // they overlap (`handFan`), and the strip shrinks with them. An empty hand is a label.
+  // Hand cards keep one steady size across turns (~124 px wide, fitting a full
+  // 7-card hand on a laptop without pumping as cards are drawn/played or as
+  // permanents tap/untap). Only a genuinely crowded board (16+ permanents)
+  // reclaims height down toward `HAND_CROWDED`. An empty hand collapses to its label.
   /** Strip heights, px: the card is the strip less 22 px of lift and padding, at 63:88. */
-  const HAND_MIN = 212;
-  const HAND_MAX = 232;
+  const HAND_STEADY = 196;
   const HAND_CROWDED = 160;
-  /** The hand's most of the board's height: at 1280×800 it reaches `HAND_MAX` under the 64 px stop bar. */
-  const HAND_SHARE = 0.35;
-  const boardCount = $derived(boardProjection.agent.battlefield.length + boardProjection.opponent.battlefield.length);
+  const HAND_CARD_MAX = 124;
+  const HAND_SHARE = 0.30;
+  const liveBoardCount = $derived(frame.projection.agent.battlefield.length + frame.projection.opponent.battlefield.length);
   let boardHeight = $state(0);
-  const handHeight = $derived(handStrip(boardHeight, [
-    { creatures: pileShapes(board.opponent.creatures), support: pileShapes(board.opponent.support), width: theirRows.width },
-    { creatures: pileShapes(board.you.creatures), support: pileShapes(board.you.support), width: yourRows.width },
-  ], { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT },
-  { min: boardCount >= 24 ? HAND_CROWDED : HAND_MIN, max: Math.max(HAND_MIN, Math.min(HAND_MAX, Math.round(boardHeight * HAND_SHARE))), step: 8 }));
+  const steadyHandHeight = $derived(Math.max(HAND_CROWDED, Math.min(HAND_STEADY, Math.round((boardHeight || 660) * HAND_SHARE))));
+  const handHeight = $derived(
+    liveBoardCount >= 16
+      ? handStrip(boardHeight, [
+          { creatures: pileShapes(view.opponent.creatures), support: pileShapes(view.opponent.support), width: theirRows.width },
+          { creatures: pileShapes(view.you.creatures), support: pileShapes(view.you.support), width: yourRows.width },
+        ], { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT },
+        { min: liveBoardCount >= 24 ? HAND_CROWDED : 176, max: steadyHandHeight, step: 8 })
+      : steadyHandHeight,
+  );
   /** The players' plates' column. */
   const PLATE_WIDTH = 148;
   /** The hand's cards keep clear of its label at the left edge. */
@@ -1125,13 +1119,13 @@
   let handWidth = $state(0);
   /** A crowded hand's cards shrink to the width of a card in the crowded strip before they overlap. */
   const HAND_FLOOR = Math.floor((HAND_CROWDED - 22) * CARD_RATIO);
-  const handFull = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
+  const handFull = $derived(Math.max(56, Math.min(HAND_CARD_MAX, Math.floor((handHeight - 22) * CARD_RATIO))));
   // Cards offered from outside the board (a castable card in exile, Lessons outside the game) sit beside the hand, a size smaller, and take their width from it.
   const trayCard = $derived(Math.round(Math.min(handFull, 120) * 0.78));
   const trayReserve = $derived(view.tray.length && !finished && activeCursor === null ? Math.min(Math.floor(handWidth * 0.45), view.tray.length * (trayCard + 10) + 30) : 0);
   const fan = $derived(handFan(board.hand.length, handWidth - HAND_LABEL_WIDTH - 24 - trayReserve, { min: HAND_FLOOR, max: handFull }, 10));
-  // Shrunk cards give the strip's spare height back to the board.
-  const handTrack = $derived(board.hand.length === 0 && trayReserve === 0 ? '30px' : `${Math.min(handHeight, Math.ceil(fan.card / CARD_RATIO) + 22)}px`);
+  // Keep the hand track steady while cards are in hand so drawing/playing never pumps the battlefield.
+  const handTrack = $derived(board.hand.length === 0 && trayReserve === 0 ? '30px' : `${handHeight}px`);
 
   // ———————————————— Pointer gestures
 
@@ -1442,6 +1436,7 @@
     }
     if (event.key === '?') { event.preventDefault(); keysOpen = !keysOpen; return; }
     if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
+    if (event.key === 'Escape' && strip?.open) { strip.ontoggle(); return; }
     if (event.key === 'Escape' && anyTrackerOpen) { myDeckOpen = false; oppDeckOpen = false; return; }
     if (event.key === 'Escape' && running) { stopSending(); return; }
     if (event.key === 'Escape' && partitionRunning) { stopPartitionSending(); return; }
@@ -1620,14 +1615,14 @@
           {#each view.tray as item (item.placed.offer.id)}
             {#if item.name}
               <div class="tray-card" style:width={`${trayCard}px`}>
-                <span class="type-caption tray-caption" title={offerText(item.placed.offer)}>{offerText(item.placed.offer)}</span>
+                <span class="type-caption tray-caption" title={offerText(item.placed.offer)}><ManaText text={offerText(item.placed.offer)} size={12} /></span>
                 <BoardCard name={item.name} width={trayCard} offers={[item.placed]} {live}
                   onactivate={() => act(item.placed)}
                   onpreview={element => previewTray(item, element)} />
               </div>
             {:else}
               <button type="button" class="btn btn-secondary btn-sm" disabled={!live} onclick={() => act(item.placed)}>
-                <kbd>{item.placed.number}</kbd>{offerText(item.placed.offer)}
+                <kbd>{item.placed.number}</kbd><ManaText text={offerText(item.placed.offer)} size={13} />
               </button>
             {/if}
           {/each}
@@ -1773,13 +1768,18 @@
         </div>
       </section>
     {/if}
+    {#if strip?.open}
+      <div class="strip-overlay">
+        <Strip marks={strip.marks} selected={strip.selected} onjump={strip.onjump} note={strip.note} scale={strip.scale} onclose={strip.ontoggle} />
+      </div>
+    {/if}
   </div>
 
   <div class="rail-slot" id="rail-choices">
-    <Rail {view} stack={board.stack} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recentFacts} resolvedSpells={recent.resolved} {history}
+    <Rail {view} stack={board.stack} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {history}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => point(placed ? [placed] : null)}
       onstack={onStack} {stackSources} drop={snapped?.kind === 'entry' ? snapped.id : undefined} onpreviewname={previewName} {notices} over={finished}
-      {evidence} {moveMarks} {shownMoves} {recapTitle} {onjump} recording={readOnly} {currentMove}
+      {evidence} {moveMarks} {shownMoves} {onjump} recording={readOnly} {currentMove}
       onselectline={connection !== null ? selectHistoryLine : undefined}
       cursorLineIds={active.lineIds} cursorSourceSeq={active.sourceSeq}
       draft={joint ? combatControls : partitioning || partitionRunning ? partitionControls : undefined} stopped={stopNote} />
@@ -1836,7 +1836,7 @@
       <span aria-hidden="true">{strip!.open ? '▾' : '▸'}</span> Decisions · {strip!.marks.filter(mark => mark.decision).length}
     </button>
   {/snippet}
-  {#if showWalkBar || bottom || strip?.open}
+  {#if showWalkBar || bottom}
     <div class="bottom">
       {#if showWalkBar}
         <div class="walk-bar" data-testid="walk-bar" data-walking={walking} data-cursor={cursor ?? undefined}>
@@ -1890,7 +1890,6 @@
         </div>
       {/if}
       {@render bottom?.()}
-      {#if strip?.open}<Strip marks={strip.marks} selected={strip.selected} onjump={strip.onjump} note={strip.note} scale={strip.scale} />{/if}
     </div>
   {/if}
   <nav class="stops-slot" aria-label={`Turn ${turnNumber}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
@@ -1915,7 +1914,7 @@
     style:left={`${menuAt.x}px`} style:top={`${menuAt.y}px`}>
     <p class="type-heading text-ink-2">{menuAt.title}</p>
     {#each menuAt.offers as placed (placed.offer.id)}
-      <button type="button" role="menuitem" onclick={() => act(placed)} data-offer-id={placed.offer.id}><kbd>{placed.number}</kbd>{offerText(placed.offer)}</button>
+      <button type="button" role="menuitem" onclick={() => act(placed)} data-offer-id={placed.offer.id}><kbd>{placed.number}</kbd><ManaText text={offerText(placed.offer)} size={13} /></button>
     {/each}
     <button type="button" role="menuitem" class="cancel" onclick={closeMenu}><kbd>Esc</kbd>Cancel</button>
   </div>
@@ -2185,6 +2184,15 @@
   .strip-toggle:hover { color: var(--text); }
   .bottom { grid-row: 3; grid-column: 1; min-width: 0; border-top: 1px solid var(--border); background: var(--bg-surface); }
   .game.with-sidebar .bottom { grid-column: 2; }
+  /* Decision / analysis strip floats over the lower board so opening it never squishes the battlefield. */
+  .strip-overlay {
+    position: absolute; left: 12px; right: 12px; bottom: 10px; z-index: var(--layer-panel);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--bg-surface) 95%, transparent);
+    backdrop-filter: blur(6px);
+    box-shadow: var(--shadow-raised);
+    animation: appear var(--motion-fast) ease-out;
+  }
 
   .menu {
     position: fixed; z-index: 300; min-width: 220px; max-width: 320px; padding: 8px; display: grid; gap: 2px;

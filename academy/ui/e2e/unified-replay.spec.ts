@@ -65,14 +65,16 @@ test('verified evaluation import reads the same timeline without producing a pol
   // The move list and the strip name the recording's moves and jump to them.
   const moves = page.getByTestId('game-log').locator('button[data-move]');
   expect(await moves.count()).toBeGreaterThan(1);
+  // One line: folded by default, the transport's ticked scrubber is the slider; opening Decisions shows the overlay strip.
+  await expect(page.getByTestId('decision-strip')).toHaveCount(0);
+  await expect(page.getByTestId('replay-transport').getByRole('slider')).toHaveValue(String(last - 1));
+  await page.getByTestId('strip-toggle').click();
   await expect(page.getByTestId('decision-strip')).toHaveAttribute('data-open', 'true');
-  // One line: the open strip is the slider; folded, the transport's ticked scrubber returns.
   await expect(slider).toHaveCount(1);
   await expect(page.getByTestId('decision-strip').getByRole('slider')).toHaveCount(1);
   await expect(page.getByTestId('replay-transport').getByRole('slider')).toHaveCount(0);
   await page.getByTestId('strip-toggle').click();
   await expect(page.getByTestId('replay-transport').getByRole('slider')).toHaveValue(String(last - 1));
-  await page.getByTestId('strip-toggle').click();
   await expect(slider).toHaveCount(1);
   // Every position says what it is; the end says who won.
   await expect(page.getByTestId('action-panel')).toContainText('Game over ·');

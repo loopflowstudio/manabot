@@ -11,6 +11,7 @@
   import { counterTerms, labelText, ptProvenance, signed } from './inspect';
   import { badgeReading, badgesOf, type Badge } from './badges';
   import Pips from './Pips.svelte';
+  import ManaText from './ManaText.svelte';
 
   interface Props {
     name: string;
@@ -56,7 +57,7 @@
       {/each}
     </p>
   {/if}
-  {#if text}<p class="text" data-testid="card-rules-text">{text}</p>{/if}
+  {#if text}<p class="text" data-testid="card-rules-text"><ManaText text={text} size={14} /></p>{/if}
   {#if !permanent}{#each counterTerms(card?.counters) as term (term)}<p class="state">{term}</p>{/each}{/if}
   {#each castTerms as term}<p class="state">{term}</p>{/each}
   {#if pt}

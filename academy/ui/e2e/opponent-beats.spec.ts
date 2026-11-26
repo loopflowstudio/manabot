@@ -173,12 +173,12 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
   await expect.poll(() => sent.count, { timeout: 15_000 }).toBe(beforeNum + 1);
   await expect(main).not.toHaveAttribute('data-frame-revision', revBeforeNum!, { timeout: 15_000 });
   await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true', { timeout: 15_000 });
-  // Once any resulting walk finishes (or is skipped with Esc), the recap is visible at now.
+  // Once any resulting walk finishes (or is skipped with Esc), History holds the moves at now.
   if (await board.getAttribute('data-board') === 'step') {
     await page.keyboard.press('Escape');
   }
   await expect(board).toHaveAttribute('data-board', 'frame');
-  await expect(page.getByTestId('recent')).toBeVisible();
+  await expect(page.getByTestId('game-log')).toBeVisible();
 
   // Pace control defaults to Study (1.4s), switches to Quick (0.7s) and Off.
   const pace = page.getByTestId('walk-pace');
@@ -244,7 +244,7 @@ test('reduced motion does not auto-walk, while scrubber and Show their turn agai
   await startAgainstRandom(page);
   await playUntil(page, async () => {
     expect(await page.locator('[data-testid=walk-bar][data-walking=true]').count()).toBe(0);
-    return await page.locator('[data-testid=recent-fact].theirs').count() > 0;
+    return await page.locator('[data-testid=game-log] [data-testid=log-entry][data-actor=opponent]').count() > 0;
   }, 120);
   await expect(page.getByTestId('game-board')).toHaveAttribute('data-board', 'frame');
   await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');

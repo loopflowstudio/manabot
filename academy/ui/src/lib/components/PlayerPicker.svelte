@@ -117,10 +117,10 @@
   }
 </script>
 
-<div class="flex min-w-0 max-w-full flex-wrap items-end gap-3">
-  <label class="flex min-w-0 max-w-full flex-col gap-1.5">
+<div class="flex min-w-0 max-w-full flex-wrap items-end gap-2">
+  <label class="flex min-w-0 flex-none flex-col gap-1">
     <span class="type-label text-ink-2">{label}</span>
-    <select data-testid="opponent-select" class="w-full min-w-0 max-w-[28rem] rounded border border-line bg-field px-3 py-2"
+    <select data-testid="opponent-select" class="min-w-0 rounded border border-line bg-panel px-2.5 py-1.5 text-sm"
       value={custom ? 'policy' : value} {disabled} aria-describedby={`${uid}-details`}
       onchange={event => {
         const next = event.currentTarget.value;
@@ -144,9 +144,9 @@
     </select>
   </label>
   {#if custom}
-    <label class="flex min-w-0 max-w-full flex-col gap-1.5">
+    <label class="flex min-w-0 flex-1 flex-col gap-1">
       <span class="type-label text-ink-2">Policy</span>
-      <select data-testid="checkpoint-select" class="min-w-0 max-w-[36rem] rounded border border-line bg-field px-3 py-2" {value} {disabled}
+      <select data-testid="checkpoint-select" class="w-full min-w-0 rounded border border-line bg-panel px-2.5 py-1.5 text-sm" {value} {disabled}
         onchange={event => onChange?.(event.currentTarget.value as PlayerChoice)}>
         <option value="policy:" disabled>Choose a policy</option>
         {#if groupedTrained.length > 1}
@@ -166,7 +166,7 @@
       </select>
     </label>
   {/if}
-  <p id={`${uid}-details`} data-testid="opponent-details" class="type-caption min-w-0 w-full break-words text-ink-2">
+  <p id={`${uid}-details`} data-testid="opponent-details" class="type-caption min-w-0 w-full truncate text-ink-2" title={selected?.summary ?? undefined}>
     {#if selected}
       {#if selected.summary}{selected.summary} · {/if}
       <span class="text-ink-3">Policy ID: {selected.sha256.length > 16 ? `${selected.sha256.slice(0, 12)}…` : selected.sha256}</span>
