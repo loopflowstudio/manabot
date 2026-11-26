@@ -160,7 +160,10 @@ test('after combat, the block stays drawn and damage shows on the cards it lande
   const authority = await startCombat(page);
   await page.getByTestId('primary-action').click();
   await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'DECLARE_BLOCKER');
+  // The board takes no draft while the accepted declaration's work still runs.
+  await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
   await card(page, 83).click();
+  await expect(card(page, 83)).toHaveAttribute('data-draft', 'in');
   await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
   await page.getByTestId('primary-action').click();
   await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'PRIORITY');
@@ -169,11 +172,9 @@ test('after combat, the block stays drawn and damage shows on the cards it lande
   await expect(card(page, 84).getByTestId('damage-dealt')).toHaveText('−2');
   await expect(card(page, 83).getByTestId('damage-dealt')).toHaveText('−1');
   await expect(card(page, 84)).toHaveAccessibleName(/dealt 2 since your last move/);
-  await expect(page.getByTestId('recent-fact')).toHaveText([
-    'Otter-Penguin blocked Badgermole Cub',
-    'Badgermole Cub dealt 1 to Otter-Penguin',
-    'Otter-Penguin dealt 2 to Badgermole Cub',
-  ]);
+  await expect(page.getByTestId('game-log')).toContainText('Otter-Penguin blocked Badgermole Cub');
+  await expect(page.getByTestId('game-log')).toContainText('Badgermole Cub dealt 1');
+  await expect(page.getByTestId('game-log')).toContainText('Otter-Penguin dealt 2');
   await page.screenshot({ path: testInfo.outputPath('after-combat.png') });
   // Passing is the person's next move: the marks of the last one go.
   await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
@@ -200,13 +201,13 @@ test('Replay keeps playing through a live producer save and resumes at its saved
   await page.route('**/api/traces/pending/recording', route => route.fulfill({json: {
     id: 'pending', positions: committed ? [choice, consequences, latest] : [latest],
     total: committed ? 3 : 1, next_offset: null, revision: committed ? 12 : 11,
-    status: 'waiting', can_produce: true, winner: null, players: [], source_kind: null, watch: true, can_feedback: false,
+    status: 'active', can_produce: true, winner: null, players: [], source_kind: null, watch: true,
   }}));
   await page.route('**/api/traces/pending/positions/**', route => {
     const key = decodeURIComponent(new URL(route.request().url()).pathname.split('/positions/')[1]);
     const position = [choice, consequences, latest].find(position => position.key === key)!;
     return route.fulfill({json: {...position, observation, decision: null, outputs: null,
-      description: position.kind === 'choice' ? 'Saved producer choice' : null, note_key: key, viewer: 0, revealed: false, history: [], history_labels: [], history_before: null,
+      description: position.kind === 'choice' ? 'Saved producer choice' : null, viewer: 0, revealed: false, history: [], history_labels: [], history_before: null,
       cursor: 0, transition_start: 0, consequences_recorded: true,
     }});
   });

@@ -22,7 +22,6 @@ from managym.academy.analysis import (
     analyse_game,
     analysed_events,
 )
-from managym.academy.attempts import participant_id
 from managym.academy.numbers import game_numbers
 from managym.academy.opponent import set_policy_registry
 from managym.academy.recording import Recording, ReplayedViews
@@ -40,7 +39,6 @@ from tests.academy.socket_messages import settled_message
 from tests.academy.test_played_analysis import ReadingFactory
 from tests.academy.test_played_replay import BOLT, play
 
-TOKEN = "s" * 36
 OTHER_BOLT = {"Mountain": 8, "Lightning Bolt": 12}
 
 
@@ -117,12 +115,12 @@ def registry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[PolicyRegistry]:
     monkeypatch.setattr(trace_module, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     reg = PolicyRegistry(providers={})
     set_policy_registry(reg)
     yield reg
     set_policy_registry(None)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
 
 
 def _play_steps(game: server.GameSession, rng: random.Random, count: int) -> None:
@@ -179,7 +177,6 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
     factory = ReadingFactory(name="Reader")
     policy_key = registry.register(factory)
     game = server.GameSession(tmp_path)
-    game.attempt_owner = participant_id(TOKEN)
 
     start_msg = game.new_game(
         {
@@ -381,29 +378,19 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
         finally:
             server.close_policies((r, opp))
 
-    # AttemptStore.record counts the game ONCE under the final seat (seat 1).
-    owners = {game.attempt_owner}
-    summaries = game.attempt_store.summaries(owners)
+    # History lists the game ONCE under the final seat (seat 1).
+    summaries = game.attempt_store.summaries()
     assert len(summaries) == 1
     assert summaries[0]["id"] == original_match_id
     human_row = next(p for p in summaries[0]["players"] if p["kind"] == "human")
     bot_row = next(p for p in summaries[0]["players"] if p["kind"] == "bot")
     assert human_row["seat"] == 1
     assert bot_row["seat"] == 0
-    rec = game.attempt_store.record(owners)
-    assert len(rec) == 1
-    assert rec[0]["games"] == 1
-    winner = attempt.trace["winner"]
-    assert rec[0]["wins"] == (1 if winner == 1 else 0)
-    assert rec[0]["losses"] == (1 if winner == 0 else 0)
 
     # HTTP recording index exposes seat_swaps and starting_human_seat; Study decision restore
     # authorizes pre-swap and post-swap human decisions and refuses bot decisions.
     client = TestClient(server.app)
-    headers = {"x-etude-participant-token": TOKEN}
-    index_res = client.get(
-        f"/api/traces/{original_match_id}/recording", headers=headers
-    )
+    index_res = client.get(f"/api/traces/{original_match_id}/recording")
     assert index_res.status_code == 200
     index_body = index_res.json()
     assert index_body["starting_human_seat"] == 0
@@ -412,9 +399,7 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
 
     # GET /api/traces/{id}/decisions exposes every CLIENT decision across both seats,
     # zero POLICY decisions, and every returned address restores 200.
-    decisions_res = client.get(
-        f"/api/traces/{original_match_id}/decisions", headers=headers
-    )
+    decisions_res = client.get(f"/api/traces/{original_match_id}/decisions")
     assert decisions_res.status_code == 200
     decisions_body = decisions_res.json()
     decision_rows = decisions_body["decisions"]
@@ -423,7 +408,6 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
     for row in decision_rows:
         restored_res = client.get(
             f"/api/traces/{original_match_id}/decisions/{row['address']}",
-            headers=headers,
         )
         assert restored_res.status_code == 200
         assert restored_res.json()["viewer"] == row["viewer"]
@@ -441,14 +425,12 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
     assert (
         client.get(
             f"/api/traces/{original_match_id}/decisions/{pre_choice.key}",
-            headers=headers,
         ).status_code
         == 200
     )
     assert (
         client.get(
             f"/api/traces/{original_match_id}/decisions/{post_choice.key}",
-            headers=headers,
         ).status_code
         == 200
     )
@@ -462,14 +444,12 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
     assert (
         client.get(
             f"/api/traces/{original_match_id}/decisions/{bot_addr}",
-            headers=headers,
         ).status_code
         == 404
     )
 
     # Play on from a post-swap decision lands in seat 1!
     play_on_game = server.GameSession(tmp_path)
-    play_on_game.attempt_owner = game.attempt_owner
     play_on_msg = play_on_game.new_game(
         {"played_from": {"trace_id": original_match_id, "event": post_decision.event}}
     )
@@ -566,7 +546,6 @@ def test_double_swap_produces_one_attempt_reexecutes_and_counts_under_seat_zero(
     tmp_path: Path, registry: PolicyRegistry
 ) -> None:
     game = server.GameSession(tmp_path)
-    game.attempt_owner = participant_id(TOKEN)
     game.new_game(
         {
             "hero_deck": BOLT,
@@ -605,59 +584,13 @@ def test_double_swap_produces_one_attempt_reexecutes_and_counts_under_seat_zero(
     assert views.board(len(attempt.trace["events"])) is not None
     assert views.stop is not None and views.stop.status == "complete"
 
-    owners = {game.attempt_owner}
-    summaries = game.attempt_store.summaries(owners)
+    summaries = game.attempt_store.summaries()
     assert len(summaries) == 1
     human_row = next(p for p in summaries[0]["players"] if p["kind"] == "human")
     assert human_row["seat"] == 0
-    rec = game.attempt_store.record(owners)
-    assert len(rec) == 1
-    assert rec[0]["games"] == 1
-    assert rec[0]["wins"] == (1 if attempt.trace["winner"] == 0 else 0)
 
 
-def test_played_from_game_that_swaps_sides_stays_out_of_my_record(
-    tmp_path: Path, registry: PolicyRegistry
-) -> None:
-    game = server.GameSession(tmp_path)
-    game.attempt_owner = participant_id(TOKEN)
-    game.new_game(
-        {
-            "hero_deck": BOLT,
-            "villain_deck": OTHER_BOLT,
-            "villain_type": "random",
-            "seed": 53,
-            "auto_pass": False,
-        }
-    )
-    play(game, random.Random(11))
-    source_id = game.match_id
-    owners = {game.attempt_owner}
-    before_record = game.attempt_store.record(owners)
-    assert len(before_record) == 1
-
-    source = game.attempt_store.load(source_id)
-    assert source is not None
-    first_hero_event = next(
-        i
-        for i, e in enumerate(source["events"])
-        if e["actor"] == "hero" and not e.get("auto")
-    )
-
-    game.new_game({"played_from": {"trace_id": source_id, "event": first_hero_event}})
-    _play_steps(game, random.Random(12), 1)
-    assert game.obs is not None and not game.obs.game_over
-    game.swap_sides(
-        request_id="played-from-swap",
-        match_id=game.match_id,
-        expected_revision=game.revision,
-    )
-    play(game, random.Random(14))
-
-    assert game.attempt_store.record(owners) == before_record
-
-
-def test_websocket_swap_sides_broadcasts_and_forbids_watcher(
+def test_websocket_swap_sides_flips_seat_and_resumes_from_stored_record(
     tmp_path: Path, registry: PolicyRegistry
 ) -> None:
     client = TestClient(server.app)
@@ -676,58 +609,31 @@ def test_websocket_swap_sides_broadcasts_and_forbids_watcher(
         )
         started = settled_message(pilot_ws)
         assert started["type"] == "observation"
-        table = started["table"]
-        assert table["access"]["identity"]["rules_viewer"] == 0
-        invite_fragment = table["watcher_invite"]
-        assert invite_fragment
-        invite_token = invite_fragment.split("watch=")[1]
+        assert started["frame"]["projection"]["agent"]["player_index"] == 0
+        game_id = started["game"]
 
-        with client.websocket_connect("/ws/play") as watcher_ws:
-            watcher_ws.send_json(
-                {
-                    "type": "join_table",
-                    "table_id": table["table_id"],
-                    "invite_token": invite_token,
-                }
-            )
-            watcher_joined = settled_message(watcher_ws)
-            # Pilot also receives presence broadcast.
-            pilot_presence = settled_message(pilot_ws)
-            assert pilot_presence["type"] == "observation"
+        pilot_ws.send_json(
+            {
+                "type": "swap_sides",
+                "request_id": "pilot-swap",
+                "match_id": started["frame"]["match_id"],
+                "expected_revision": started["frame"]["revision"],
+            }
+        )
+        swapped_pilot = settled_message(pilot_ws)
+        assert swapped_pilot["type"] == "observation"
+        assert swapped_pilot["frame"]["projection"]["agent"]["player_index"] == 1
 
-            # Watcher is forbidden from swapping sides.
-            watcher_ws.send_json(
-                {
-                    "type": "swap_sides",
-                    "grant_revision": watcher_joined["table"]["access"][
-                        "grant_revision"
-                    ],
-                    "request_id": "watcher-swap",
-                    "match_id": started["frame"]["match_id"],
-                    "expected_revision": started["frame"]["revision"],
-                }
-            )
-            denied = settled_message(watcher_ws)
-            assert denied["type"] == "control_error"
-            assert denied["code"] == "forbidden"
-
-            # Pilot swaps sides; both pilot and watcher receive updated rules_viewer == 1.
-            pilot_ws.send_json(
-                {
-                    "type": "swap_sides",
-                    "grant_revision": table["access"]["grant_revision"],
-                    "request_id": "pilot-swap",
-                    "match_id": started["frame"]["match_id"],
-                    "expected_revision": started["frame"]["revision"],
-                }
-            )
-            swapped_pilot = settled_message(pilot_ws)
-            swapped_watcher = settled_message(watcher_ws)
-            assert swapped_pilot["type"] == "observation"
-            assert swapped_pilot["table"]["access"]["identity"]["rules_viewer"] == 1
-            assert swapped_pilot["frame"]["projection"]["agent"]["player_index"] == 1
-            assert swapped_watcher["type"] == "observation"
-            assert swapped_watcher["table"]["access"]["identity"]["rules_viewer"] == 1
+    # Evicting from memory and resuming rebuilds in the swapped seat (seat 1).
+    server.evict_game(game_id, server.SESSION_EXPIRED_END_REASON)
+    assert game_id not in server.LIVE_GAMES
+    with client.websocket_connect("/ws/play") as resumed_ws:
+        resumed_ws.send_json({"type": "resume", "game": game_id})
+        resumed = settled_message(resumed_ws)
+        assert resumed["type"] == "observation"
+        assert resumed["game"] == game_id
+        assert resumed["frame"]["projection"]["agent"]["player_index"] == 1
+        assert resumed["deck_names"] == swapped_pilot["deck_names"]
 
 
 @dataclass
@@ -799,15 +705,12 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
             )
             started = settled_message(pilot_ws)
             assert started["type"] == "observation"
-            table = started["table"]
-            assert table["access"]["identity"]["rules_viewer"] == 0
-            invite_token = table["watcher_invite"].split("watch=")[1]
+            assert started["frame"]["projection"]["agent"]["player_index"] == 0
 
             # Turn on live analysis so we verify the early committed frame does not flicker it off.
             pilot_ws.send_json(
                 {
                     "type": "show_analysis",
-                    "grant_revision": table["access"]["grant_revision"],
                     "shown": True,
                     "policy": reader_key,
                 }
@@ -816,64 +719,43 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
             assert analysis_reply["type"] == "analysis_state"
             assert analysis_reply["shown"] is True
 
-            with client.websocket_connect("/ws/play") as watcher_ws:
-                watcher_ws.send_json(
-                    {
-                        "type": "join_table",
-                        "table_id": table["table_id"],
-                        "invite_token": invite_token,
-                    }
-                )
-                settled_message(watcher_ws)
-                _next_message(pilot_ws)
+            pilot_ws.send_json(
+                {
+                    "type": "swap_sides",
+                    "request_id": "slow-swap",
+                    "match_id": started["frame"]["match_id"],
+                    "expected_revision": started["frame"]["revision"],
+                }
+            )
+            # The bot blocks in seat 0's choose() during _advance().
+            assert entering.wait(timeout=5.0), "slow bot did not enter choose()"
 
-                pilot_ws.send_json(
-                    {
-                        "type": "swap_sides",
-                        "grant_revision": table["access"]["grant_revision"],
-                        "request_id": "slow-swap",
-                        "match_id": started["frame"]["match_id"],
-                        "expected_revision": started["frame"]["revision"],
-                    }
-                )
-                # The bot blocks in seat 0's choose() during _advance().
-                assert entering.wait(timeout=5.0), "slow bot did not enter choose()"
+            # Client already received the committed flipped board BEFORE the slow bot finished choosing.
+            early_pilot = _next_message(pilot_ws)
+            assert early_pilot["type"] == "observation"
+            assert early_pilot["frame"]["projection"]["agent"]["player_index"] == 1
+            assert (early_pilot.get("work") or {}).get("state") == "running"
+            assert (
+                early_pilot.get("analysis", {}).get("policy", {}).get("sha256")
+                == reader_key
+            )
+            early_tail = early_pilot["recovery"]["presentation_tail"]
+            early_cursor = early_pilot["recovery"]["presentation_cursor"]
+            assert [event["seq"] for event in early_tail] == list(
+                range(early_cursor, early_cursor + len(early_tail))
+            )
 
-                # Both pilot and watcher already received the committed flipped board
-                # BEFORE the slow bot finished choosing.
-                early_pilot = _next_message(pilot_ws)
-                early_watcher = _next_message(watcher_ws)
-                assert early_pilot["type"] == "observation"
-                assert early_pilot["table"]["access"]["identity"]["rules_viewer"] == 1
-                assert early_pilot["frame"]["projection"]["agent"]["player_index"] == 1
-                assert (early_pilot.get("work") or {}).get("state") == "running"
-                assert (
-                    early_pilot.get("analysis", {}).get("policy", {}).get("sha256")
-                    == reader_key
-                )
-                early_tail = early_pilot["recovery"]["presentation_tail"]
-                early_cursor = early_pilot["recovery"]["presentation_cursor"]
-                assert [event["seq"] for event in early_tail] == list(
-                    range(early_cursor, early_cursor + len(early_tail))
-                )
-                assert early_watcher["type"] == "observation"
-                assert early_watcher["table"]["access"]["identity"]["rules_viewer"] == 1
-                assert (early_watcher.get("work") or {}).get("state") == "running"
-
-                # Release the slow bot and verify the settled post-advance frame arrives.
-                release.set()
-                settled_pilot = _next_message(pilot_ws)
-                settled_watcher = _next_message(watcher_ws)
-                assert settled_pilot["type"] in {"observation", "game_over"}
-                assert (settled_pilot.get("work") or {}).get("state") != "running"
-                assert (
-                    settled_pilot["frame"]["projection"]["agent"]["player_index"] == 1
-                )
-                assert settled_pilot["recovery"][
-                    "presentation_cursor"
-                ] >= early_cursor + len(early_tail)
-                assert settled_watcher["type"] in {"observation", "game_over"}
-                assert (settled_watcher.get("work") or {}).get("state") != "running"
+            # Release the slow bot and verify the settled post-advance frame arrives.
+            release.set()
+            settled_pilot = _next_message(pilot_ws)
+            assert settled_pilot["type"] in {"observation", "game_over"}
+            assert (settled_pilot.get("work") or {}).get("state") != "running"
+            assert (
+                settled_pilot["frame"]["projection"]["agent"]["player_index"] == 1
+            )
+            assert settled_pilot["recovery"][
+                "presentation_cursor"
+            ] >= early_cursor + len(early_tail)
     finally:
         release.set()
 
@@ -882,7 +764,6 @@ def test_closed_decklists_swap_redacts_current_bot_seat_consistently(
     tmp_path: Path, registry: PolicyRegistry
 ) -> None:
     game = server.GameSession(tmp_path)
-    game.attempt_owner = participant_id(TOKEN)
     game.new_game(
         {
             "hero_deck": BOLT,
@@ -905,11 +786,10 @@ def test_closed_decklists_swap_redacts_current_bot_seat_consistently(
     assert game.human_seat == 1
 
     client = TestClient(server.app)
-    headers = {"x-etude-participant-token": TOKEN}
 
     # While hidden info is not revealed, both /api/traces/{id} and /recording redact
     # the current bot seat (seat 0 / starting hero_* role) and keep the current human seat visible.
-    trace_res = client.get(f"/api/traces/{match_id}", headers=headers)
+    trace_res = client.get(f"/api/traces/{match_id}")
     assert trace_res.status_code == 200
     trace_cfg = trace_res.json()["config"]
     assert trace_cfg["hero_deck"] == {}
@@ -918,7 +798,7 @@ def test_closed_decklists_swap_redacts_current_bot_seat_consistently(
     assert trace_cfg["villain_deck"] == OTHER_BOLT
     assert trace_cfg["villain_deck_name"] != "closed"
 
-    rec_res = client.get(f"/api/traces/{match_id}/recording", headers=headers)
+    rec_res = client.get(f"/api/traces/{match_id}/recording")
     assert rec_res.status_code == 200
     players = {p["seat"]: p for p in rec_res.json()["players"]}
     assert players[0]["kind"] == "bot"

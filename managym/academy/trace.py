@@ -56,10 +56,10 @@ class GameConfig:
     # Historical checkpoint provenance, or a managym-policy-1 descriptor with
     # complete provider/runner/config/artifact identity. Read without a loader.
     opponent_checkpoint: dict[str, Any] | None = None
-    # Priority-stop configuration at game start.
+    # Priority-stop configuration, as last set in the game (`set_stops`), so a
+    # game continued from its record stops where the person asked.
     # ``stops`` maps "my"/"opponent" to the stop step names that surface;
-    # None means the server defaults. set_stops updates the live session,
-    # not this record.
+    # None means the server defaults.
     stops: dict[str, list[str]] | None = None
     stop_on_stack: bool = True  # always surface when the stack is non-empty
     auto_pass: bool = True  # master switch; False = surface every window
@@ -351,6 +351,22 @@ def event_record(event: TraceEvent) -> dict[str, Any]:
     return record
 
 
+def stored_event(record: dict[str, Any]) -> TraceEvent:
+    """A stored event record as the event a live game holds, for a game
+    continued from its record. Payloads stay the stored JSON values (a bot
+    decision's factors and belief are dicts); fields this build does not know
+    are dropped."""
+    names = {item.name for item in fields(TraceEvent)}
+    values = {key: value for key, value in record.items() if key in names}
+    decision = values.get("bot_decision")
+    if decision is not None:
+        known = {item.name for item in fields(BotDecision)}
+        values["bot_decision"] = BotDecision(
+            **{key: value for key, value in decision.items() if key in known}
+        )
+    return TraceEvent(**values)
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -474,11 +490,10 @@ def prepare_trace_payload(
         # still expose exactly the public information in the shared contract.
         for key in ("hero_deck", "villain_deck", "hero_sideboard", "villain_sideboard"):
             config[key] = {}
-    reveal_hidden = (
-        reveal_hidden
-        and payload.get("end_reason") == "game_over"
-        and bool(payload.get("final_observation", {}).get("game_over"))
+    finished = payload.get("end_reason") == "game_over" and bool(
+        payload.get("final_observation", {}).get("game_over")
     )
+    reveal_hidden = reveal_hidden and finished
     if config.get("decklists") == "closed" and not reveal_hidden:
         starting_seat = int(config.get("human_seat", 0))
         bot_role = (
@@ -486,8 +501,11 @@ def prepare_trace_payload(
         )
         config[f"{bot_role}_deck"] = {}
         config[f"{bot_role}_sideboard"] = {}
-        config[f"{bot_role}_deck_name"] = "closed"
         config.pop("asset_pack", None)
+        # A finished game names the deck, as its players do; the list itself
+        # stays with the hidden hands.
+        if not finished:
+            config[f"{bot_role}_deck_name"] = "closed"
 
     events = prepared.get("events", [])
     if not reveal_hidden:

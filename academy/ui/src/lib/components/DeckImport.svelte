@@ -97,8 +97,8 @@
   }
 </script>
 
-<details open={imported} class="mt-4 rounded-lg border border-line bg-panel p-4">
-  <summary class="cursor-pointer font-medium">Import decklist files</summary>
+<details open={imported} class="type-caption text-ink-2 open:rounded-lg open:border open:border-line open:bg-panel open:p-3">
+  <summary class="cursor-pointer">Import decklist files</summary>
   <p class="mt-2 text-sm text-ink-2">Development format — supported cards only, no tournament legality claim. Sideboards are fixed outside-game copies. Registered policies check the complete imported matchup before starting.</p>
   <label class="mt-3 flex items-center gap-2"><input type="checkbox" bind:checked={enabled} onchange={update} /> Use imported decks for the next game</label>
   {#if enabled}

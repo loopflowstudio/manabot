@@ -1,30 +1,33 @@
 <script lang="ts">
-  import { currentGame } from '$lib/current-game.svelte';
-  import { goto } from '$app/navigation';
+  /**
+   * Play: the board of the game in progress, or the one setup screen.
+   *
+   * The address chooses what opens: `?game=<id>` takes that game up,
+   * `?launch=<id>` starts a configured launch once, `?watch=1` fills in Watch
+   * setup, and `/` alone returns to the unfinished game this browser
+   * remembers. Once a game is on the board the address names it, so a reload
+   * returns to it.
+   */
+  import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
+  import { onDestroy, onMount, untrack } from 'svelte';
+
+  import ArtCredits from '$lib/components/ArtCredits.svelte';
   import GameSetup from '$lib/components/GameSetup.svelte';
   import { startConfiguredWatch } from '$lib/new-game';
-  import { onDestroy } from 'svelte';
-  onDestroy(() => watchStart.cancel());
   import { watchStart } from '$lib/watch-start.svelte';
-  import { onMount, untrack } from 'svelte';
-
   import Board from '$lib/board/Board.svelte';
   import { PaymentPreviewController, type PreviewState } from '$lib/payment-preview';
-  import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
-  import { playerToken, recordFetch } from '$lib/records';
-  import type { PlaySession } from '$lib/play-session';
   import { checkpointIdentity, playerIdentity } from '$lib/player-identity';
-  import Feedback from '$lib/components/Feedback.svelte';
   import WorkStatus from '$lib/components/WorkStatus.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
-  import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
-  import { policyChoice, gameStore, type GameStore } from '$lib/game.svelte';
+  import { policyChoice, gameStore, type PlayerChoice } from '$lib/game.svelte';
   import { presentationPlayer } from '$lib/presentation.svelte';
-  import { sanitizeDeckSelection, DECK_CHOICES } from '$lib/decks';
+  import { sanitizeDeckSelection, deckChoiceLabel, matchupDeckLabel } from '$lib/decks';
   import { builtinOpponentName, shortName } from '$lib/opponent-name';
   import { scoreName } from '$lib/analysis';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
+  import { refusalAction, type ResumeRefusal } from '$lib/resume-refusal';
   import { gameResult } from '$lib/board/result';
   import { numbersLine, type GameNumbers } from '$lib/numbers';
   import { loadAutoTap, saveAutoTap, type FullControlMode } from '$lib/board/auto-tap';
@@ -32,38 +35,159 @@
   import { trackMarks } from '$lib/board/history';
   import { analysedEvidence, withLiveAnalysisPoints } from '$lib/board/replay';
   import { nextHeldOnce, onceHeldAt, stopStepOf, type OncePlace } from '$lib/board/phases';
+  import { parseSearchConfigs } from '$lib/search';
   import {
     connect,
     disconnect,
+    leaveGame,
+    resumeGame,
     sendAction,
     sendDecisionGroupCommand,
     sendNewGame,
-    sendContinuation,
+    sendRematch,
     sendPassTurn,
     sendRetrySearch,
-    sendRestoreDecision,
-    sendRetryDecision,
-    sendReturnFromBranch,
-    sendReturnToLive,
     sendSetStops,
     sendShowAnalysis,
     sendSwapSides,
-    sendTransferPilot,
+    storedGame,
     fetchPaymentPreview,
     fetchDecisionGroupPreview,
   } from '$lib/socket.svelte';
   import type { DecisionGroupPlan } from '$lib/decision-group';
-  import type { ExperienceFrame, InteractionOffer, StopSide } from '$lib/types';
+  import type { InteractionOffer, StopSide } from '$lib/types';
+
+  onDestroy(() => watchStart.cancel());
 
   let demoName = $state<string | null>(null);
   // Review's "Play on from here": a game whose moves before `event` are another game's.
   let playedFrom = $state<{trace_id: string; event: number} | null>(null);
   let learnDemo = $state(false);
-  type Editor = {kind:'closed'} | {kind:'new' | 'next'; setup:GameStore; opponentOnly:boolean; pendingAttempt?:string | null};
-  let editor = $state<Editor>({kind:'closed'});
-  let mounted = $state(false);
-  let awaitingRecovery = $state(false);
-  let setupStatus = $state('');
+  /** The game `?game=` asked for: a finished one opens in Replay instead. */
+  let askedGame: string | null = null;
+  /** A configured launch was sent and has not started or been refused yet. */
+  let launching = $state(false);
+  let setupNotice = $state('');
+  /** The address chose the matchup, so first-visit defaults must not replace it. */
+  let addressed = $state(false);
+  let routed: string | null = null;
+
+  /** Fill Watch setup from a launcher's address; no game starts until Start. */
+  async function prefillWatch(params: URLSearchParams): Promise<void> {
+    const launch = params.get('launch');
+    if (launch) {
+      try {
+        const response = await fetch(`/api/launch/${encodeURIComponent(launch)}`);
+        if (response.ok) gameStore.applySetupDraft(await response.json() as Record<string, unknown>);
+        else setupNotice = 'This launch is unknown; run the launch command again or choose a matchup here.';
+      } catch { setupNotice = 'The launched matchup could not be read; choose one here.'; }
+    }
+    gameStore.watchMode = true;
+    gameStore.watchPlayerChoice = (params.get('seat1') ?? gameStore.watchPlayerChoice) as PlayerChoice;
+    gameStore.setOpponentChoice((params.get('seat2') ?? gameStore.opponentChoice) as PlayerChoice);
+    const search = params.get('search');
+    if (search !== null) {
+      try { [gameStore.watchSearchConfig, gameStore.searchConfig] = parseSearchConfigs(JSON.parse(search)); }
+      catch { setupNotice = 'The launched search settings could not be read.'; }
+    }
+  }
+
+  /** Open what the address asks for. An explicit address wins over the remembered game, which stays in History. */
+  function route(params: URLSearchParams): void {
+    demoName = params.get('demo');
+    learnDemo = demoName === 'learn';
+    const from = params.get('played_from'), at = Number(params.get('event'));
+    playedFrom = from && Number.isInteger(at) && at >= 0 ? {trace_id: from, event: at} : null;
+    askedGame = params.get('game');
+    launching = false;
+    setupNotice = '';
+    const stored = storedGame();
+    const decks = sanitizeDeckSelection({ hero: params.get('hero'), villain: params.get('villain') });
+    const opponent = params.get('opponent');
+    const launch = params.get('launch');
+    const watch = params.get('watch') === '1';
+    const explicit = demoName !== null || playedFrom !== null || watch || launch !== null || decks !== null || opponent !== null;
+    addressed = explicit;
+    if (askedGame) { resumeGame(askedGame); return; }
+    if (!explicit) {
+      // The remembered game, unless another tab holds it.
+      if (stored) resumeGame(stored, false);
+      else connect();
+      return;
+    }
+    if (gameStore.gameId) leaveGame({ forget: false });
+    if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
+    if (decks) { gameStore.setHeroDeck(decks.hero); gameStore.setVillainDeck(decks.villain); }
+    if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(policyChoice(opponent));
+    // Watch setup starts its game over HTTP: it opens no Play connection.
+    if (watch) { void prefillWatch(params); return; }
+    if (launch) { launching = true; sendNewGame({ launch }); return; }
+    connect();
+  }
+
+  /** Tidy the address without routing it: what it names is already on the page. */
+  function setAddress(address: string): void {
+    routed = new URL(address, window.location.href).search;
+    replaceState(address, {});
+  }
+
+  onMount(() => disconnect);
+  $effect(() => {
+    const search = page.url.search;
+    if (search === routed) return;
+    routed = search;
+    untrack(() => route(new URLSearchParams(search)));
+  });
+
+  // The address names the game on the board, so a reload returns to it. A demo keeps its name beside the game.
+  const demoAddress = (): string => (demoName ? `/?demo=${encodeURIComponent(demoName)}` : '/');
+  $effect(() => {
+    const game = gameStore.gameId;
+    if (!game || !gameStore.observation) return;
+    launching = false;
+    untrack(() => {
+      const address = `${demoAddress()}${demoName ? '&' : '?'}game=${encodeURIComponent(game)}`;
+      if (window.location.pathname + window.location.search !== address) setAddress(address);
+    });
+  });
+  // A launch that already started a game is that game's address.
+  $effect(() => {
+    const game = gameStore.launchedGame;
+    if (!game) return;
+    gameStore.launchedGame = null;
+    launching = false;
+    untrack(() => void goto(`/?game=${encodeURIComponent(game)}`, { replaceState: true }));
+  });
+  // A launch that was refused starts nothing: ordinary setup, at the ordinary address.
+  $effect(() => {
+    if (!launching || gameStore.newGamePending || gameStore.gameId || gameStore.launchedGame) return;
+    launching = false;
+    untrack(() => setAddress('/'));
+  });
+
+  /** A game the server would not take up, where setup opens with something to say about it (`refusalAction`). */
+  let refused = $state<ResumeRefusal | null>(null);
+  $effect(() => {
+    const refusal = gameStore.resumeRefused;
+    if (!refusal) { refused = null; return; }
+    untrack(() => {
+      const action = refusalAction(refusal.code, askedGame === refusal.game);
+      if (action === 'replay') { void goto(`/replay?trace=${encodeURIComponent(refusal.game)}`, { replaceState: true }); return; }
+      setAddress(demoAddress());
+      if (action === 'setup') gameStore.resumeRefused = null;
+      else refused = refusal;
+    });
+  });
+
+  /** New game: setup in place, with the matchup just played selected. The game left stays unfinished in History. */
+  function openSetup(): void {
+    if (gameStore.setup && !demoName) {
+      gameStore.watchMode = false;
+      gameStore.applySetupDraft(gameStore.setup);
+    }
+    leaveGame();
+    setAddress(demoAddress());
+  }
 
   let stopsPending = $state<number | null>(null);
   let autoTap = $state(loadAutoTap());
@@ -87,37 +211,12 @@
   }
 
   function handleAutoTap(action: InteractionOffer, note: string): void {
-    if (participantStudying || !canSubmitLive) return;
+    if (!canSubmitLive) return;
     gameStore.appendAutoNote(note, presentationPlayer.events.at(-1)?.seq ?? -1);
     sendAction(action.id);
   }
 
-  onMount(() => {
-    const params = new URLSearchParams(window.location.search);
-    demoName = params.get('demo');
-    const from = params.get('played_from'), at = Number(params.get('event'));
-    playedFrom = from && Number.isInteger(at) && at >= 0 ? {trace_id: from, event: at} : null;
-    if (!demoName) {
-      const decks = sanitizeDeckSelection({ hero: params.get('hero'), villain: params.get('villain') });
-      if (decks) {
-        gameStore.setHeroDeck(decks.hero);
-        gameStore.setVillainDeck(decks.villain);
-      }
-      const opponent = params.get('opponent');
-      if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(policyChoice(opponent));
-    }
-    learnDemo = demoName === 'learn';
-    if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
-    try { awaitingRecovery = !gameStore.resumeToken && sessionStorage.getItem('etude.gui.resume') !== null; } catch { /* In-memory setup remains usable. */ }
-    mounted = true;
-    connect(params.get('launch'));
-
-    return () => {
-      disconnect();
-    };
-  });
-
-  const decisionFrame = $derived(gameStore.restoredDecision?.frame ?? gameStore.protocolFrame);
+  const decisionFrame = $derived(gameStore.protocolFrame);
 
   // The automatic payer's plan for the offer the board asks about: a
   // read-only query bound to this exact decision. The controller drops an
@@ -130,115 +229,33 @@
     else payments.clear();
   }
 
-  function openEditor(kind: 'new' | 'next', opponentOnly = false): void {
-    const draft = kind === 'next' ? gameStore.playSession?.draft : undefined;
-    editor = {kind, opponentOnly, setup:gameStore.editableSetup(draft)};
-    setupStatus = '';
-    gameStore.setError(null);
-  }
-
-  function cancelEditor(): void {
-    const destination = editor.kind === 'new' ? currentGame.href ?? '/' : '/';
-    editor = {kind:'closed'};
-    setupStatus = '';
-    gameStore.setError(null);
-    if (page.url.searchParams.has('setup')) void goto(destination);
-  }
-
   function playOn(): void {
     if (!playedFrom || gameStore.newGamePending) return;
-    sendNewGame({played_from:playedFrom, player_token:playerToken()});
-    // One start per link: a reload resumes the game rather than replaying again.
+    // One start per link: the address then names the game it started.
+    sendNewGame({ played_from: playedFrom });
     playedFrom = null;
-    void goto('/', {replaceState: true, keepFocus: true});
   }
 
-  function startNewGame(): void {
+  function startGame(): void {
     if (gameStore.newGamePending) return;
-    if (demoName) { sendNewGame({demo:demoName}); return; }
-    if (editor.kind === 'closed') { openEditor('new'); return; }
-    const setup = editor.setup;
-    if (setup.seedError) { gameStore.setError(setup.seedError); return; }
-    if (setup.watchMode) {
+    if (demoName) { sendNewGame({ demo: demoName }); return; }
+    if (gameStore.seedError) { gameStore.setError(gameStore.seedError); return; }
+    gameStore.setError(null);
+    if (gameStore.watchMode) {
       gameStore.newGamePending = true;
-      gameStore.setError(null);
-      void startConfiguredWatch(setup).then(id => goto(`/replay?trace=${encodeURIComponent(id)}`))
+      void startConfiguredWatch(gameStore).then(id => goto(`/replay?trace=${encodeURIComponent(id)}`))
         .catch(error => gameStore.setError(error.message)).finally(() => gameStore.newGamePending = false);
       return;
     }
-    if (!gameStore.hasCapability('configure_match')) { gameStore.setError('Only the acting pilot can start or reset the match.'); return; }
-    if (gameActive && !window.confirm('Stop the current game and start a new session?')) return;
-    editor.pendingAttempt = gameStore.table?.attempt_id ?? null;
-    sendNewGame(setup.newGameConfig());
+    sendNewGame(gameStore.newGameConfig());
   }
 
-  function editorConfig(): Record<string, unknown> {
-    if (editor.kind === 'closed') return {};
-    const setup = editor.setup;
-    return editor.opponentOnly ? {...setup.opponentConfig(), mirror:setup.searchConfig} : setup.setupConfig();
-  }
-
-  async function saveNextSetup(): Promise<void> {
-    const session = gameStore.playSession;
-    const table = gameStore.table;
-    if (editor.kind !== 'next' || editor.setup.watchMode || !session || !table || !gameStore.resumeToken) return;
-    if (editor.setup.seedError) { gameStore.setError(editor.setup.seedError); return; }
-    gameStore.setError(null);
-    try {
-      const response = await recordFetch(`/api/play-sessions/${encodeURIComponent(session.id)}`, {
-        method: 'PUT', headers: {'content-type':'application/json', 'x-etude-participant-token':gameStore.resumeToken},
-        body: JSON.stringify({table_id:table.table_id, grant_revision:table.access.grant_revision, revision:session.revision, config:editorConfig()}),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Setup could not be saved.');
-      gameStore.applyPlaySession(payload as PlaySession);
-      setupStatus = 'Next-game setup saved. The current game is unchanged; admission is checked when starting.';
-      gameStore.tableAnnouncement = setupStatus;
-    } catch (error) { gameStore.setError(error instanceof Error ? error.message : 'Setup could not be saved.'); }
-  }
-
-  function continueWithSetup(): void {
-    if (editor.kind !== 'next' || editor.setup.watchMode || gameStore.newGamePending) return;
-    if (editor.setup.seedError) { gameStore.setError(editor.setup.seedError); return; }
-    if (gameActive && !window.confirm('Stop the current game and start the next game in this session?')) return;
-    editor.pendingAttempt = gameStore.table?.attempt_id ?? null;
-    sendContinuation(editor.opponentOnly ? 'change_opponent' : 'rematch', editorConfig());
-  }
-
-  $effect(() => {
-    if (awaitingRecovery && (gameStore.resumeToken || gameStore.resumeFailed || gameStore.tableUnavailable)) awaitingRecovery = false;
-    if (!mounted || awaitingRecovery || demoName || page.url.searchParams.has('launch')) return;
-    // A setup address, or one naming decks or an opponent, opens setup; `/` alone is home.
-    const wantsNew = ['setup', 'hero', 'villain', 'opponent'].some(key => page.url.searchParams.has(key));
-    untrack(() => {
-      if (wantsNew) openEditor('new');
-      else if (editor.kind === 'new') editor = {kind:'closed'};
-    });
-  });
-
-  // A refusal leaves intent and edits intact. Only a new authoritative attempt closes it.
-  $effect(() => {
-    if (editor.kind !== 'closed' && editor.pendingAttempt !== undefined && !gameStore.newGamePending) {
-      const attempt = gameStore.table?.attempt_id;
-      if (attempt && attempt !== editor.pendingAttempt) untrack(cancelEditor);
-      else editor.pendingAttempt = undefined;
-    }
-  });
-
-  const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver && !gameStore.resumeFailed);
-  const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
-  const participantStudying = $derived(gameStore.restoredDecision !== null);
+  const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver && !gameStore.stopped);
   const inputReady = $derived(!gameStore.commandPending && gameStore.work?.state !== 'running' && stopsPending === null && gameStore.connection === 'connected');
-  // Study retains its separate retry capability; live play is one authority gate.
-  const liveTable = $derived(gameActive && pilotCanAct && !participantStudying && !gameStore.branchProjection);
-  const canSubmitLive = $derived(liveTable && !gameStore.newGamePending && inputReady);
+  const canSubmitLive = $derived(gameActive && !gameStore.newGamePending && inputReady);
   const canPassTurn = $derived(canSubmitLive && decisionFrame?.action_space === 'PRIORITY' && (decisionFrame?.offers.length ?? 0) > 0);
-  const canStudyRetry = $derived(participantStudying && !gameStore.branchAttemptId && gameStore.hasCapability('explore_study') && inputReady);
-  // A Study branch shows its own projection with no live offers.
-  const boardFrame = $derived<ExperienceFrame | null>(decisionFrame && gameStore.branchProjection
-    ? { ...decisionFrame, projection: gameStore.branchProjection, offers: [], prompt: null } : decisionFrame);
-  // Session-kept boards (frames and per-line boards, capped at 512) for the active match.
-  const stepBoards = $derived(!gameStore.branchProjection && boardFrame && gameStore.keptBoards?.matchId === boardFrame.match_id
+  // Boards kept this visit (frames and per-line boards, capped at 512) for the game shown.
+  const stepBoards = $derived(decisionFrame && gameStore.keptBoards?.matchId === decisionFrame.match_id
     ? gameStore.keptBoards.boards : []);
 
   $effect(() => {
@@ -246,56 +263,39 @@
   });
 
   // The opponent is named with how it decides ("Heuristic · scripted",
-  // "Search 64 · search"): the server's label once a table exists, the
+  // "Search 64 · search"): the server's label once a game is on the board, the
   // built-in name before. The identity keeps the digest for its description.
-  const tableIdentity = $derived(gameStore.table ?? gameStore.interruptedIdentity);
-  const opponentIdentity = $derived(tableIdentity?.opponent
-    ? checkpointIdentity(tableIdentity.opponent)
-    : playerIdentity({ name: tableIdentity?.opponent_label ?? builtinOpponentName(gameStore.opponentChoice) ?? 'Opponent' }));
-  const opponentName = $derived(tableIdentity?.opponent_label ?? opponentIdentity.compact);
+  const opponentIdentity = $derived(gameStore.opponent
+    ? checkpointIdentity(gameStore.opponent)
+    : playerIdentity({ name: gameStore.opponentLabel ?? builtinOpponentName(gameStore.opponentChoice) ?? 'Opponent' }));
+  const opponentName = $derived(gameStore.opponentLabel ?? opponentIdentity.compact);
 
-  // ———————————————— Home: play the last matchup again
+  // ———————————————— Setup: play the last matchup again
 
   let lastMatchup = $state<LastMatchup | null>(null);
   onMount(() => { lastMatchup = loadLastMatchup(); });
-  // Each game this tab plays becomes the next "Play again", as the session echoed its setup.
+  // Each game this tab plays becomes the next "Play again", from the setup the server started it with.
   $effect(() => {
-    const config = gameStore.playSession?.config;
-    if (!config || demoName || !gameStore.observation || !tableIdentity) return;
-    // The session's setup keeps its seats after Swap sides, which changes only this game; name its decks the same way.
+    const config = gameStore.setup;
+    if (!config || demoName || !gameStore.observation) return;
+    // The game's setup keeps its starting seats after Swap sides, which changes only this game; name its decks the same way.
     const swapped = gameStore.observation.agent.player_index !== (config.human_seat === 1 ? 1 : 0);
-    const names = gameStore.deckNames;
-    const decks = names ? (swapped ? { hero: names.villain, villain: names.hero } : { hero: names.hero, villain: names.villain }) : null;
-    untrack(() => saveLastMatchup({ config, opponent: opponentName, decks }));
+    const heroName = swapped ? gameStore.deckNames?.villain : gameStore.deckNames?.hero;
+    const villainName = swapped ? gameStore.deckNames?.hero : gameStore.deckNames?.villain;
+    const decks = {
+      hero: matchupDeckLabel(config.hero_deck_pool, heroName, gameStore.decks.hero),
+      villain: matchupDeckLabel(config.villain_deck_pool, villainName, gameStore.decks.villain),
+    };
+    untrack(() => {
+      lastMatchup = { config, opponent: opponentName, decks };
+      saveLastMatchup(lastMatchup);
+    });
   });
-  const deckLabel = (key: unknown): string => {
-    const found = DECK_CHOICES.find(deck => deck.key === key)?.label;
-    if (found) return found;
-    if (typeof key === 'string' && key && key !== 'imported' && key !== 'custom') return key;
-    return 'Imported deck';
-  };
   const homeMatchup = $derived(lastMatchup ?? {
     config: gameStore.setupConfig(),
     opponent: builtinOpponentName(gameStore.opponentChoice) ?? 'Registered policy',
-    decks: { hero: deckLabel(gameStore.decks.hero), villain: deckLabel(gameStore.decks.villain) },
+    decks: { hero: deckChoiceLabel(gameStore.decks.hero), villain: deckChoiceLabel(gameStore.decks.villain) },
   });
-  const atHome = $derived(mounted && !awaitingRecovery && !demoName && !page.url.searchParams.has('launch')
-    && !gameStore.observation && editor.kind === 'closed');
-
-  function startHomeTable(): void {
-    if (gameStore.newGamePending) return;
-    if (gameStore.seedError) { gameStore.setError(gameStore.seedError); return; }
-    if (gameStore.watchMode) {
-      gameStore.newGamePending = true;
-      gameStore.setError(null);
-      void startConfiguredWatch(gameStore).then(id => goto(`/replay?trace=${encodeURIComponent(id)}`))
-        .catch(error => gameStore.setError(error.message)).finally(() => gameStore.newGamePending = false);
-      return;
-    }
-    gameStore.setError(null);
-    sendNewGame(gameStore.newGameConfig());
-  }
-
   function playAgain(): void {
     if (gameStore.newGamePending) return;
     gameStore.watchMode = false;
@@ -305,10 +305,9 @@
   }
 
   function syncStopsToServer(): void {
-    if (!gameStore.observation && editor.kind !== 'closed') {
-      editor.setup.applyServerStops({ ...gameStore.stops, my: [...gameStore.stops.my], opponent: [...gameStore.stops.opponent] });
-    }
-    if (gameStore.observation && gameStore.hasCapability('configure_match')) {
+    // A finished game is never changed: its stops are this browser's
+    // preference for the next game, already saved by the store.
+    if (gameStore.observation && !gameStore.observation.game_over) {
       stopsPending = gameStore.updateSeq;
       sendSetStops();
     }
@@ -387,29 +386,25 @@
   }
 
   function handleActionSelect(action: InteractionOffer): void {
-    if (participantStudying) {
-      if (canStudyRetry) sendRetryDecision(action.id);
-      return;
-    }
     if (!canSubmitLive) return;
     // The move list names it when the server narrates the move.
     sendAction(action.id);
   }
 
   function handleGroupSubmit(plan: DecisionGroupPlan): void {
-    if (participantStudying || !canSubmitLive) return;
+    if (!canSubmitLive) return;
     sendDecisionGroupCommand(plan);
   }
 
   const groupRejection = $derived(
-    liveTable
+    gameActive
       && (gameStore.lastCommandRejection?.code === 'decision_group_refused'
         || gameStore.lastCommandRejection?.code === 'decision_group_incomplete')
       ? gameStore.lastCommandRejection
       : null,
   );
 
-  const inGame = $derived(gameStore.observation !== null && editor.kind === 'closed' && boardFrame !== null);
+  const inGame = $derived(gameStore.observation !== null && decisionFrame !== null);
 
   // Who is deciding while you wait: the opponent's search or policy, or the board itself.
   const heroSeat = $derived(gameStore.observation?.agent.player_index ?? null);
@@ -421,15 +416,15 @@
     : opponentChoosing ? `${shortName(opponentName)} is ${gameStore.work?.kind === 'search' ? 'searching' : 'choosing'}`
       : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The board is working' : null);
 
-  const ending = $derived(gameStore.gameOver && boardFrame
-    ? gameResult(boardFrame, { you: 'You', opponent: shortName(opponentName) }, gameStore.winner) : null);
+  const ending = $derived(gameStore.gameOver && decisionFrame
+    ? gameResult(decisionFrame, { you: 'You', opponent: shortName(opponentName) }, gameStore.winner) : null);
   // The game's numbers, read once it is over: the server re-executes it.
   let numbers = $state<{ id: string; value: GameNumbers | null } | null>(null);
   $effect(() => {
-    const id = gameStore.gameOver ? gameStore.recordingId : null;
+    const id = gameStore.gameOver ? gameStore.gameId : null;
     if (!id || numbers?.id === id) return;
     numbers = { id, value: null };
-    void recordFetch(`/api/traces/${encodeURIComponent(id)}/numbers`)
+    void fetch(`/api/traces/${encodeURIComponent(id)}/numbers`)
       .then(async response => (response.ok ? (await response.json() as { numbers: GameNumbers | null }).numbers : null))
       .then(value => { if (numbers?.id === id) numbers = { id, value }; })
       .catch(() => { /* The result card stands without its numbers. */ });
@@ -448,22 +443,25 @@
     if (!name || !liveAnalysis.policy) return null;
     return `${shortName(liveAnalysis.policy.name)}'s ${name.toLowerCase()} (%) from your seat · ${liveAnalysis.points.length} ${liveAnalysis.points.length === 1 ? 'decision' : 'decisions'} read`;
   });
-  const analysisOffered = $derived(inGame && !demoName && !gameStore.gameOver && pilotCanAct);
+  const analysisOffered = $derived(inGame && !demoName && !gameStore.gameOver);
   const baseMarks = $derived(trackMarks(
     presentationPlayer.events,
     index => presentationPlayer.labelsAt(index),
-    { youSeat: boardFrame?.projection.agent.player_index ?? 0, you: 'You', opponent: shortName(opponentName) },
+    { youSeat: decisionFrame?.projection.agent.player_index ?? 0, you: 'You', opponent: shortName(opponentName) },
   ));
   const liveMarks = $derived(liveScale ? withLiveAnalysisPoints(baseMarks, liveAnalysis.points) : baseMarks);
   $effect(() => { if (liveAnalysis.shown) stripOpen = true; });
-  const liveEvidence = $derived(liveAnalysis.shown && liveAnalysis.reading && decisionFrame && !participantStudying
+  const liveEvidence = $derived(liveAnalysis.shown && liveAnalysis.reading && decisionFrame
     && liveAnalysis.reading.revision === decisionFrame.revision && decisionFrame.offers.length
     ? analysedEvidence(decisionFrame, liveAnalysis.reading.decision, null, liveAnalysis.policy?.name ?? 'The policy') : null);
-  const canShowAnalysis = $derived(!demoName && !gameStore.gameOver && pilotCanAct && gameStore.connection === 'connected' && !liveAnalysis.pending);
-  const canContinue = $derived(!demoName && gameStore.playSession !== null && !!gameStore.table?.attempt_id && !gameStore.newGamePending && !gameStore.resumeFailed);
+  const canShowAnalysis = $derived(!demoName && !gameStore.gameOver && gameStore.connection === 'connected' && !liveAnalysis.pending);
+  const canContinue = $derived(!demoName && gameStore.setup !== null && !gameStore.newGamePending && !gameStore.stopped);
+  const poolOf = (side: 'hero' | 'villain'): string | null => {
+    const pool = gameStore.setup?.[`${side}_deck_pool`];
+    return typeof pool === 'string' ? pool : null;
+  };
   const canSwapSides = $derived(
-    gameActive && !demoName && gameStore.hasCapability('configure_match')
-    && !participantStudying && !gameStore.branchProjection && !gameStore.searchRetry
+    gameActive && !demoName && !gameStore.searchRetry
     && !gameStore.newGamePending && !gameStore.swapPending && inputReady
   );
   // Close the Settings sheet automatically once a mid-game swap commits so the
@@ -485,28 +483,38 @@
 {#snippet notices()}
   {#if playedFrom}
     <section class="notice" data-testid="played-from-origin">
-      <p>Play on from a recorded game: its moves are replayed to your decision, then you choose.{gameActive ? ' This stops the current game.' : ''}</p>
-      <button class="btn btn-primary btn-sm mt-1" data-testid="start-played-from" disabled={gameStore.newGamePending || gameStore.connection !== 'connected'} onclick={playOn}>{gameStore.newGamePending ? 'Preparing game…' : 'Play on'}</button>
+      <p>Play on from a recorded game: its moves are replayed to your decision, then you choose.</p>
+      <button class="btn btn-primary btn-sm mt-1" data-testid="start-played-from" disabled={gameStore.newGamePending} onclick={playOn}>{gameStore.newGamePending ? 'Preparing game…' : 'Play on'}</button>
+    </section>
+  {/if}
+  {#if refused?.code === 'game_open_elsewhere'}
+    <section role="status" class="notice" data-testid="game-open-elsewhere">
+      Your game in progress is open in another tab.
+      <a class="underline" href={`/?game=${encodeURIComponent(refused.game)}`}>Play it here instead</a>
+    </section>
+  {:else if refused}
+    <section role="alert" aria-atomic="true" class="notice error" data-testid="resume-refused">
+      {refused.message} The game is still in History.
+      <a class="underline" href={`/replay?trace=${encodeURIComponent(refused.game)}`}>Open its Replay</a>
     </section>
   {/if}
   {#if gameStore.errorMessage}
     <section role="alert" aria-atomic="true" class="notice error">
-      {#if gameStore.resumeFailed}<strong>Interrupted.</strong>{' '}{/if}{gameStore.errorMessage}
-      {#if gameStore.resumeFailed && gameStore.recordingId}
-        <a class="underline" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}`}>Open saved recording</a>
+      {#if gameStore.stopped}<strong>Stopped.</strong>{' '}{/if}{gameStore.errorMessage}
+      {#if gameStore.stopped && gameStore.gameId}
+        <a class="underline" href={`/replay?trace=${encodeURIComponent(gameStore.gameId)}`}>Open its Replay</a>
       {/if}
     </section>
   {/if}
   {#if gameStore.searchRetry}
     <section role="alert" class="notice">
       <p>{gameStore.submissionAccepted ? 'Your choice was accepted. ' : ''}{gameStore.searchRetry.message}</p>
-      <button class="btn btn-secondary btn-sm mt-1" disabled={gameStore.commandPending || !pilotCanAct || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{(gameStore.searchRetry.code.startsWith('search_') || gameStore.searchRetry.code.startsWith('mirror_')) ? 'Retry search' : 'Retry bot decision'}</button>
+      <button class="btn btn-secondary btn-sm mt-1" disabled={gameStore.commandPending || gameStore.connection !== 'connected'} onclick={sendRetrySearch}>{(gameStore.searchRetry.code.startsWith('search_') || gameStore.searchRetry.code.startsWith('mirror_')) ? 'Retry search' : 'Retry bot decision'}</button>
     </section>
   {/if}
   {#if !inGame}<WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />{/if}
-  {#if gameStore.tableUnavailable}<p role="status" class="type-caption">The previous game is no longer live. Its recording is retained; start the next game explicitly.</p>{/if}
+  {#if setupNotice && !inGame}<p role="status" class="type-caption">{setupNotice}</p>{/if}
   {#if gameStore.storageWarning}<p role="status" class="type-caption">{gameStore.storageWarning}</p>{/if}
-  {#if participantStudying}<p class="type-caption text-ink-2">Study position. {gameStore.branchProjection ? 'Alternate action played; return to the recorded decision to try another.' : 'Choosing an offer tries it in a separate branch.'}</p>{/if}
 {/snippet}
 
 {#snippet result()}
@@ -520,21 +528,20 @@
     {/if}
     <div class="result-actions">
       {#if demoName}
-        <button data-testid="game-result-action" class="btn btn-primary" onclick={startNewGame}>Play again</button>
+        <button data-testid="game-result-action" class="btn btn-primary" onclick={startGame}>Play again</button>
       {:else}
-        {@const heroPool = typeof gameStore.playSession?.draft.hero_deck_pool === 'string' ? gameStore.playSession.draft.hero_deck_pool : null}
-        {@const villainPool = typeof gameStore.playSession?.draft.villain_deck_pool === 'string' ? gameStore.playSession.draft.villain_deck_pool : null}
+        {@const heroPool = poolOf('hero')}
+        {@const villainPool = poolOf('villain')}
         {#if heroPool || villainPool}
-          <button data-testid="game-result-deal-new" class="btn btn-primary" disabled={!canContinue} onclick={() => sendContinuation('rematch', { hero_deck: heroPool ?? gameStore.playSession?.draft.hero_deck, villain_deck: villainPool ?? gameStore.playSession?.draft.villain_deck, seed: null })}>Deal new decks</button>
+          <button data-testid="game-result-deal-new" class="btn btn-primary" disabled={!canContinue} onclick={() => sendRematch('rematch', { hero_deck: heroPool ?? gameStore.setup?.hero_deck, villain_deck: villainPool ?? gameStore.setup?.villain_deck, seed: null })}>Deal new decks</button>
         {/if}
-        <button data-testid="game-result-action" class={(heroPool || villainPool) ? 'btn btn-secondary' : 'btn btn-primary'} disabled={!canContinue} onclick={() => sendContinuation('rematch')}>Rematch</button>
-        <button data-testid="game-result-swap" class="btn btn-secondary" disabled={!canContinue} onclick={() => sendContinuation('swap_sides')}>Swap play/draw</button>
-        <button data-testid="game-result-change" class="btn btn-secondary" disabled={!canContinue} onclick={() => openEditor('next', true)}>Change opponent</button>
+        <button data-testid="game-result-action" class={(heroPool || villainPool) ? 'btn btn-secondary' : 'btn btn-primary'} disabled={!canContinue} onclick={() => sendRematch('rematch')}>Rematch</button>
+        <button data-testid="game-result-swap" class="btn btn-secondary" disabled={!canContinue} onclick={() => sendRematch('swap_sides')}>Swap play/draw</button>
       {/if}
     </div>
     <p class="type-caption result-links">
-      {#if gameStore.recordingId}<a class="underline" data-testid="game-result-recording" href={`/replay?trace=${encodeURIComponent(gameStore.recordingId)}&review=1`}>Review this game</a> · {/if}
-      <a class="underline" href="/?setup=1">New game</a>
+      {#if gameStore.gameId}<a class="underline" data-testid="game-result-recording" href={`/replay?trace=${encodeURIComponent(gameStore.gameId)}&review=1`}>Review this game</a> · {/if}
+      <button class="underline" data-testid="game-result-new" onclick={openSetup}>New game</button>
     </p>
     {#if gameStore.newGamePending}<p role="status" class="type-caption text-ink-2">Preparing the next game…</p>{/if}
   </div>
@@ -551,8 +558,8 @@
   </div>
   <!-- The stop bar under the board sets each step's stop; this holds what it has no cell for: automation on or off, the stack stop and the reset. -->
   <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''}</p>
-  <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
-    <legend class="sr-only">Pilot stop controls</legend>
+  <fieldset disabled={!inputReady}>
+    <legend class="sr-only">Stop controls</legend>
     <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
       onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
   </fieldset>
@@ -590,35 +597,21 @@
       </div>
     </section>
   {/if}
-  <section aria-label="Next game" class="game-group">
-    <p class="type-label text-ink-2">Next game</p>
-    {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
-    <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
-  </section>
-  {#if gameStore.table}
-    <details><summary class="type-label cursor-pointer">Sharing and Study tools</summary>
-      <SharedTablePanel table={gameStore.table} restored={gameStore.restoredDecision} branchAttemptId={gameStore.branchAttemptId}
-        announcement={gameStore.tableAnnouncement} onTransferPilot={sendTransferPilot} onRestoreDecision={sendRestoreDecision}
-        onReturnFromBranch={sendReturnFromBranch} onReturnToLive={sendReturnToLive} />
-    </details>
-  {/if}
-  {#if gameStore.table?.attempt_id && gameStore.hasCapability('configure_match')}
-    {#key gameStore.table.attempt_id}<Feedback attemptId={gameStore.table.attempt_id} />{/key}
-  {/if}
+  <button class="btn btn-secondary btn-sm" data-testid="new-game" onclick={openSetup}>New game</button>
 {/snippet}
 
 <main
-  class="play-page mx-auto w-full max-w-[1600px] px-4 py-4"
+  class="play-page mx-auto w-full max-w-[1600px] px-4 py-2"
   data-update-seq={gameStore.updateSeq}
   data-frame-revision={gameStore.protocolFrame?.revision ?? -1}
-  data-table-revision={gameStore.table?.table_revision ?? -1}
+  data-game={gameStore.gameId ?? ''}
 >
-  <h1 class="sr-only">{inGame ? 'Current game' : 'New game'}</h1>
+  <h1 class="sr-only">{inGame ? 'Game' : 'Play'}</h1>
 
-  {#if inGame && boardFrame}
+  {#if inGame && decisionFrame}
     <Board
-      frame={boardFrame}
-      interaction={canSubmitLive ? 'play' : canStudyRetry ? 'study' : 'read-only'}
+      frame={decisionFrame}
+      interaction={canSubmitLive ? 'play' : 'read-only'}
       status={gameStore.decisionStatus}
       you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
       opponent={{ name: opponentName, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}
@@ -626,7 +619,7 @@
       onceStops={gameStore.onceStops}
       oncyclestop={handleCycleStop}
       connection={gameStore.connection}
-      connectionLabel={gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
+      connectionLabel={gameStore.stopped ? 'Stopped' : gameStore.connection}
       notes={gameStore.historyNotes}
       {canPassTurn}
       presentation={presentationPlayer}
@@ -634,11 +627,11 @@
       {opponentChoosing}
       evidence={liveEvidence}
       workStarted={gameStore.work?.state === 'running' && gameStore.connection === 'connected' ? gameStore.work.started_at : null}
-      interrupted={gameStore.resumeFailed}
+      interrupted={gameStore.stopped}
       payment={paymentState}
       onpreview={previewPayment}
-      group={liveTable ? gameStore.liveDecisionGroup : null}
-      groupPreview={liveTable ? fetchDecisionGroupPreview : undefined}
+      group={gameActive ? gameStore.liveDecisionGroup : null}
+      groupPreview={gameActive ? fetchDecisionGroupPreview : undefined}
       ongroupact={handleGroupSubmit}
       {groupRejection}
       ondismissgrouprejection={rejection => gameStore.dismissCommandRejection(rejection.command_id)}
@@ -660,101 +653,54 @@
       {walkPace}
       onwalkpace={setWalkPace}
     />
-  {:else if atHome}
-    {@render notices()}
-    <section class="home-table" aria-label="Play" data-testid="home">
-      {#if lastMatchup}
-        <div class="last-strip">
-          <div>
-            <p class="type-label text-ink-3">Your last matchup</p>
-            <p class="home-matchup type-title" data-testid="home-matchup">
-              <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">{', '}{matchupSeat(homeMatchup.config)}</span>
-              <span class="text-ink-3">{' vs '}</span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.villain}</span>{/if}
-            </p>
-          </div>
-          <button class="btn btn-primary" data-testid="play-again" disabled={gameStore.newGamePending || gameStore.connection !== 'connected'}
-            onclick={playAgain}>{gameStore.newGamePending ? 'Preparing the game…' : 'Play again'}</button>
-        </div>
-      {:else}
-        <div class="flex flex-wrap items-baseline justify-between gap-3">
-          <div>
-            <p class="type-label text-ink-3">Academy · Seat Table</p>
-            <h2 class="type-display text-display">Choose seats and start</h2>
-          </div>
-          <button class="btn btn-secondary btn-sm" data-testid="play-again" disabled={gameStore.newGamePending || gameStore.connection !== 'connected'}
-            onclick={startHomeTable}>{gameStore.newGamePending ? 'Preparing the game…' : 'Quick Play'}</button>
-        </div>
-      {/if}
-      <GameSetup setup={gameStore} onStart={startHomeTable} disabled={gameStore.newGamePending || gameStore.connection !== 'connected'}
-        applySmartDefaults={!lastMatchup} />
-      <p class="type-caption text-ink-2">
-        <a class="underline" data-testid="home-setup" href="/?setup=1">Full setup sheet</a> ·
-        <a class="underline" href="/games">Games</a>
-        <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
-          aria-label={`Connection status: ${gameStore.connection}`} class="type-label uppercase text-ink-3"> · {gameStore.connection}</span>
-      </p>
-    </section>
   {:else}
     {@render notices()}
     <WorkStatus work={watchStart.work} connected={!watchStart.checking} />
     {#if watchStart.checking}<p role="status">Checking the same Watch setup; loading status is unavailable.</p>{/if}
-    <div class="play-sheet overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
-      <div class="sheet-content px-5 pb-4 pt-3">
-        <div data-testid="game-header" class="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-line pb-4">
-          <span class="type-body text-ink-2">{gameStore.observation ? 'A game is in progress' : 'No game in progress'}</span>
-          <div class="flex min-w-0 max-w-full flex-wrap items-end gap-x-5 gap-y-3">
-            {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; Start game repeats it.</p>
-            {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Start game repeats setup.</p>{/if}
-            {#if demoName}<button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startNewGame}>{gameStore.newGamePending ? 'Preparing game…' : 'Start game'}</button>{/if}
-            <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
-              aria-label={gameStore.resumeFailed ? 'Session status: interrupted' : `Connection status: ${gameStore.connection}`}
-              class="type-label uppercase text-ink-3">{gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}</span>
-          </div>
+    <section class="home-table" aria-label="Play" data-testid="home">
+      {#if demoName}
+        <div class="last-strip" data-testid="game-header">
+          {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; Start game repeats it.</p>
+          {:else}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Start game repeats setup.</p>{/if}
+          <button class="btn btn-primary" disabled={gameStore.newGamePending} onclick={startGame}>{gameStore.newGamePending ? 'Preparing game…' : 'Start game'}</button>
         </div>
-        {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
-        {#if !gameStore.observation}
-          <p class="mt-3 text-sm text-ink-2">New games appear in shared <a href="/games" class="underline">Games history</a>, where you can set your player name. Completed replays are shared; feedback stays private.</p>
-        {/if}
-        {#if !demoName && editor.kind !== 'closed' && gameStore.hasCapability('configure_match')}
-          <section aria-label={editor.kind === 'new' ? 'New session setup' : 'Next game setup'} class="mt-4 border-b border-line pb-4">
-            <h2 class="type-title">{editor.kind === 'new' ? 'New session' : editor.opponentOnly ? 'Change opponent' : 'Edit next game'}</h2>
-            <p class="type-caption mt-2">{editor.kind === 'new'
-              ? gameStore.playSession
-                ? 'Start a separate session. These edits do not change your current session draft.'
-                : 'Choose your setup to start a new session.'
-              : 'Setup for the next game in this Play session. Earlier games keep their recorded configuration.'}</p>
-            {#key editor.setup}
-              <GameSetup setup={editor.setup} onStart={startNewGame} disabled={gameStore.newGamePending}
-                opponentOnly={editor.opponentOnly} showStart={editor.kind === 'new'} />
-            {/key}
-            {#if setupStatus}<p role="status" class="type-caption mt-2">{setupStatus}</p>{/if}
-            {#if editor.kind === 'next'}
-              {#if editor.setup.watchMode}
-                <p class="type-caption">Two bots start a separate watched game. Your Play session and its current game stay available in Games.</p>
-                <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={startNewGame}>Start new watched game</button>
-              {:else}
-                <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={saveNextSetup}>Save next setup</button>
-                <button class="btn btn-primary mt-3" disabled={gameStore.newGamePending} onclick={continueWithSetup}>Start next game</button>
-              {/if}
-            {/if}
-            <button class="btn btn-secondary mt-3" disabled={gameStore.newGamePending} onclick={cancelEditor}>{gameStore.observation ? 'Back to the game' : 'Cancel'}</button>
-          </section>
-        {/if}
-        {#if !gameStore.observation}
-          <div class="mx-auto max-w-xl py-12 text-center">
-            <p class="type-body mb-1 text-ink-2">The board is set.</p>
-            <p role="status" class="type-caption mb-5 text-ink-2">{gameStore.newGamePending ? 'Preparing the game. This may take a moment…' : 'Start a game to begin.'}</p>
-            <div class="mx-auto mt-10 max-w-sm border-t border-line pt-4 text-left">
-              <fieldset disabled={!gameStore.hasCapability('configure_match')}>
-                <legend class="sr-only">Pilot stop controls</legend>
-                <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
-                  onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
-              </fieldset>
+      {:else}
+        {#if lastMatchup}
+          <div class="last-strip">
+            <div>
+              <p class="type-label text-ink-3">Your last matchup</p>
+              <p class="home-matchup type-title" data-testid="home-matchup">
+                <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">{', '}{matchupSeat(homeMatchup.config)}</span>
+                <span class="text-ink-3">{' vs '}</span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.villain}</span>{/if}
+              </p>
             </div>
+            <button class="btn btn-primary btn-sm" data-testid="play-again" disabled={gameStore.newGamePending}
+              onclick={playAgain}>{gameStore.newGamePending ? 'Preparing the game…' : 'Play again'}</button>
           </div>
         {/if}
-      </div>
-    </div>
+        <GameSetup setup={gameStore} onStart={startGame} disabled={gameStore.newGamePending} applySmartDefaults={!lastMatchup && !addressed} />
+        <div class="setup-extras">
+          <details>
+            <summary class="type-caption cursor-pointer text-ink-2">Priority stops</summary>
+            <div class="mt-2">
+              <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
+                onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
+            </div>
+          </details>
+          <ArtCredits />
+          {#if gameStore.newGamePending}<span class="type-caption text-ink-2" role="status">Preparing the game. This may take a moment…</span>{/if}
+          <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
+            aria-label={`Connection status: ${gameStore.connection}`} class="type-label ml-auto uppercase text-ink-3" class:sr-only={gameStore.connection === 'connected'}>{gameStore.connection}</span>
+        </div>
+      {/if}
+      {#if demoName}
+        <div class="setup-extras">
+          {#if gameStore.newGamePending}<span class="type-caption text-ink-2" role="status">Preparing the game. This may take a moment…</span>{/if}
+          <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
+            aria-label={`Connection status: ${gameStore.connection}`} class="type-label ml-auto uppercase text-ink-3" class:sr-only={gameStore.connection === 'connected'}>{gameStore.connection}</span>
+        </div>
+      {/if}
+    </section>
   {/if}
 </main>
 
@@ -765,10 +711,13 @@
   .result h2 { line-height: 1.1; }
   .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
   .result-links { color: var(--text-secondary); }
-  .home-table { max-width: 960px; margin: 16px auto 0; display: grid; gap: 10px;
-    padding: 16px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
-  .last-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-  .home-matchup { line-height: 1.35; }
+  /* One shrinkable column: a wide control inside never widens the page. */
+  .home-table { max-width: 960px; margin: 4px auto 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px;
+    padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
+  .last-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .last-strip > div { min-width: 0; }
+  .home-matchup { line-height: 1.3; overflow-wrap: anywhere; }
+  .setup-extras { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 16px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
   .pace-setting { display: grid; gap: 6px; }
   .pace-options { display: flex; flex-wrap: wrap; gap: 6px; }
   .live-analysis { display: grid; gap: 6px; }

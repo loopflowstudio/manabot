@@ -496,7 +496,7 @@ def _run_live(
         )
         original_factory = server._new_game_session
         server._new_game_session = lambda: session
-        server.SESSION_REGISTRY.clear()
+        server.LIVE_GAMES.clear()
         try:
             with TestClient(server.app) as client:
                 with client.websocket_connect("/ws/play") as websocket:
@@ -538,7 +538,7 @@ def _run_live(
                         payload = {"frame": payload["update"]["frame"]}
         finally:
             server._new_game_session = original_factory
-            server.SESSION_REGISTRY.clear()
+            server.LIVE_GAMES.clear()
 
         _equal(
             "live",

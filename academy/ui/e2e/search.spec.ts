@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 interface Addresses { play: string; timeout: string; watch: string; watch_timeout: string;
-  pending_watch: { id: string; token: string };
+  pending_watch: { id: string };
   saved: string; saved_ordinal: number; ids: Record<string, string>; }
 const proof = new URL('../test-results/search/addresses.json', import.meta.url);
 for (const theme of ['light', 'dark'] as const) {
@@ -124,12 +124,11 @@ test('timeouts retain Play and initial Watch choices across reload and explicit 
 
 test('Watch reload retains timeout and exact position while history stays navigable', async ({ page }) => {
   const { pending_watch: watch } = JSON.parse(readFileSync(proof, 'utf8')) as Addresses;
-  await page.addInitScript(watch => sessionStorage.setItem(`etude.watch.${watch.id}`, watch.token), watch);
   const steps: number[] = [];
   page.on('request', request => {
     if (request.url().endsWith(`/api/watch/${watch.id}/step`)) steps.push(request.postDataJSON().revision);
   });
-  const url = `/replay?watch=1&trace=${watch.id}`;
+  const url = `/replay?trace=${watch.id}`;
   await page.goto(`${url}&position=latest`);
   const counter = page.getByTestId('position-counter');
   await expect(counter).toHaveText('Position 7 / 7');

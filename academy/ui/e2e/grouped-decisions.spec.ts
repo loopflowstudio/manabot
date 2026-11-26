@@ -14,7 +14,10 @@ import type {
   Observation,
   RecoveryEnvelope,
 } from '../src/lib/types';
-import { tableSnapshot } from './fixtures/table';
+import { gameReply } from './fixtures/game';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
 const rid = (entity: number) => ({ entity, incarnation: 0 });
@@ -88,7 +91,7 @@ async function mountScenario(
   const recorded: RecordedMessages = { commands: [], groupCommands: [], previews: [] };
   let state = initial;
 
-  await page.route('**/api/sessions/*/decision-group-preview', async route => {
+  await page.route('**/api/games/*/decision-group-preview', async route => {
     const request = route.request().postDataJSON() as {
       match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: DecisionGroupPlan;
     };
@@ -152,12 +155,10 @@ async function mountScenario(
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
           type: 'observation',
-          table: tableSnapshot(),
+          ...gameReply(),
           data: state.frame.projection,
           actions: [],
           decision_group: state.group,
-          session_id: 'grouped-session',
-          resume_token: 'grouped-resume-token',
           recovery: recovery(state.frame),
         }));
         return;
@@ -210,7 +211,7 @@ async function mountScenario(
     });
   });
 
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');

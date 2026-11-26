@@ -11,6 +11,7 @@
    * positions to show yet, so its marks only count.
    */
   import { labelledTurns, type StripMark } from './replay';
+  import ManaText from './ManaText.svelte';
 
   interface Props {
     marks: StripMark[];
@@ -20,9 +21,11 @@
     note?: string | null;
     /** With an analysis: the caption, and values are 0–1 scores on a fixed 0–100 axis. */
     scale?: string | null;
+    /** Close the overlay strip. */
+    onclose?: () => void;
   }
 
-  let { marks, selected, onjump, note = null, scale = null }: Props = $props();
+  let { marks, selected, onjump, note = null, scale = null, onclose }: Props = $props();
 
   const HEIGHT = $derived(scale !== null ? 80 : 44);
   const decisions = $derived(marks.filter(mark => mark.decision));
@@ -75,8 +78,15 @@
 </script>
 
 <section class="strip" aria-label="Decisions" data-testid="decision-strip" data-open="true">
-  {#if values.length || note || scale !== null}
-    <p class="caption type-caption text-ink-3" data-testid="strip-caption">{#if scale !== null}{scale}{:else if values.length}Value recorded at {values.length} of {decisions.length} decisions{/if}{#if note}<span class="note">{note}</span>{/if}</p>
+  {#if values.length || note || scale !== null || onclose}
+    <div class="header">
+      {#if values.length || note || scale !== null}
+        <p class="caption type-caption text-ink-3" data-testid="strip-caption">{#if scale !== null}{scale}{:else if values.length}Value recorded at {values.length} of {decisions.length} decisions{/if}{#if note}<span class="note">{note}</span>{/if}</p>
+      {/if}
+      {#if onclose}
+        <button type="button" class="close type-caption" aria-label="Close analysis overlay" title="Close (Esc)" onclick={onclose}>×</button>
+      {/if}
+    </div>
   {/if}
   <div class="plot" class:chart={scale !== null}>
   {#if scale !== null}
@@ -113,7 +123,7 @@
   </svg>
   {#if hover}
     <span class="dot" style:left={`${hover.left}%`} style:top={`${y(hover.mark.value!)}px`}></span>
-    <p class="readout type-caption" data-testid="strip-readout" class:flip={hover.left > 60} class:low={scale !== null && (hover.mark.value ?? 0) > 0.5} style:left={`${hover.left}%`}>{readout(hover.mark)}</p>
+    <p class="readout type-caption" data-testid="strip-readout" class:flip={hover.left > 60} class:low={scale !== null && (hover.mark.value ?? 0) > 0.5} style:left={`${hover.left}%`}><ManaText text={readout(hover.mark)} size={12} /></p>
   {/if}
   {#if onjump && selected !== null}
     <input type="range" class="seek" aria-label="Replay position" min="0" max={Math.max(0, marks.length - 1)} value={selected}
@@ -128,8 +138,11 @@
 </section>
 
 <style>
-  .strip { padding: 8px 12px 4px; border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
-  .caption { display: flex; gap: 12px; margin: 0 0 4px; }
+  .strip { padding: 8px 12px 6px; }
+  .header { display: flex; align-items: baseline; gap: 10px; margin: 0 0 4px; }
+  .caption { display: flex; flex: 1 1 auto; min-width: 0; gap: 12px; margin: 0; }
+  .close { flex: none; margin-left: auto; padding: 0 5px; border-radius: var(--radius-sm); color: var(--text-tertiary); font-size: 14px; line-height: 20px; }
+  .close:hover, .close:focus-visible { color: var(--text); background: var(--bg-field); }
   .note { margin-left: auto; }
   .lane { position: relative; border-radius: var(--radius-sm); }
   .lane:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }

@@ -156,9 +156,14 @@ def test_reconnect_to_restored_blast(
     position = pending_blast("Plains").snapshot()
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
 
+    start = GameSession.new_game
+
     def restored(session: GameSession, config: dict[str, Any]) -> dict[str, Any]:
+        # A recorded game gives the position an id to resume by.
+        start(session, config)
         session.env = position.restore()
         session.obs = session.env.observation_for_player(0)
+        session.published_prompt = None
         return session._wire_message()
 
     monkeypatch.setattr(GameSession, "new_game", restored)
@@ -170,8 +175,7 @@ def test_reconnect_to_restored_blast(
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": opened["session_id"],
-                    "resume_token": opened["resume_token"],
+                    "game": opened["game"],
                 }
             )
             recovered = settled_message(socket)["recovery"]["frame"]

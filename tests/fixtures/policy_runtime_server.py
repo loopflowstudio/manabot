@@ -70,7 +70,7 @@ def short_game(url: str) -> str:
     """The launch at `url` with Mountain and Lightning Bolt decks, whose games
     end in a few turns."""
     (launch,) = parse_qs(urlsplit(url).query)["launch"]
-    config = server.LAUNCH_CONFIGS[launch]
+    config = server.LAUNCHES[launch].config
     config.update(hero_deck=dict(BOLT), villain_deck=dict(BOLT))
     server._parse_game_config(config)
     return url
@@ -104,6 +104,11 @@ def main() -> None:
                     "refused": refused_url,
                     "play": academy.new_game(opponent="independent", seed=7).url,
                     "study": short_game(
+                        academy.new_game(opponent="reader", seed=5).url
+                    ),
+                    # A launch starts one game, so each test that plays one
+                    # to its end has its own.
+                    "study_shown": short_game(
                         academy.new_game(opponent="reader", seed=5).url
                     ),
                     "watch": academy.watch(players=("independent", "baseline")).url,

@@ -28,12 +28,11 @@ infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config vars)
 keeps manabot names. Frozen evidence — experiment IDs, contracts,
 receipts, wandb history — is never renamed, and neither are the compatibility
 surfaces that predate the Academy name: the `x-etude-*` wire headers,
-`etude.*` browser storage keys and schema identifiers. Hosted services are
-`academy-play` and `fantasia-website`, with deployment secrets in Doppler
-`manabot/prd` (Jack Heart, 2026-10-14). `etude.gg` and its legacy aliases
-redirect to `manabot.gg`, preserving paths and queries; hosted play is
-available at both `play.manabot.gg` and `academy.manabot.gg` (equivalent
-addresses selected by Jack Heart, 2026-10-14). Namecheap is the registrar and
+`etude.*` browser storage keys and schema identifiers. The hosted website is
+`fantasia-website` (`manabot.gg`), with deployment secrets in Doppler
+`manabot/prd` (Jack Heart, 2026-10-14); `etude.gg` and its legacy aliases
+redirect to `manabot.gg`, preserving paths and queries. Academy runs locally
+and has no hosted play service. Namecheap is the registrar and
 Cloudflare manages DNS. "Sepia Etude" remains the name of the visual language.
 
 Name a thing for what it is where it is produced (`catalog_tokens`,
@@ -100,22 +99,29 @@ two-pile partition panel) are drafted whole and committed in one `decision_group
 compiled to sequential native `Action`s with no engine action-space change:
 fold raw single-step offers under a collapsed disclosure while drafting (not
 beside the draft), and keep them listed in Replay and Study where recorded
-policy probabilities attach. Play's retained `hero_*`/`villain_*` setup
-fields name human/opponent roles; `GameConfig.human_seat` orders them at the
-native boundary. Record and project actual native seats; Watch keeps its
-two-seat acting-view contract. Scope Academy resume credentials and the
-started-launch marker together in `sessionStorage` so a launch never resumes
-another tab's or launch's game.
+policy probabilities attach. Play's retained `hero_*`/`villain_*` setup fields name
+human/opponent roles; `GameConfig.human_seat` orders them at the native
+boundary. Record and project actual native seats; Watch keeps its two-seat
+acting-view contract. A game is named by its id and nothing else identifies a
+player or grants access: `/?game=<id>` resumes it, the server rebuilds one that
+left memory from its stored record, and a launch starts one game however often
+its address is opened. `localStorage['academy.game']` holds only the unfinished
+game `/` returns to; each tab keeps its Command in flight and last frame in
+`sessionStorage['academy.tab.<game>']`, so two tabs never overwrite each
+other's submission. First-visit setup defaults never replace a matchup the
+address or the game just played chose.
 Game-file imports send original JSON source spans: JS numeric re-encoding can
 round u64 identities and invalidate digests. Watch history is the selected
 acting viewer's recorded track strictly before that decision's
 `presentation_cursor`; spectator reveal never supplies history labels. Event
-emphasis stays separate from choice focus and lane navigation; board marks at
-now must be true now—show transient deltas (damage, life changes, touched
-outlines) on the stop and turn they happen, then clear them at now and across
-turn boundaries. Frame policy comparisons neutrally—never grade disagreements
-as mistakes. Default trained policies to `PolicyDescriptor.recommended` before
-the first eligible one. Reserve preview space so hover never shifts layout.
+emphasis stays separate from choice focus and lane navigation; show transient
+board deltas (damage, life changes, touched outlines) only on the stop and turn
+they happen, clearing them at now and across turns. Frame policy comparisons
+neutrally. Default trained policies to `PolicyDescriptor.recommended` before the
+first eligible one. Reserve preview space so hover never shifts layout, render
+braced mana/tap symbols (`{W}`–`{G}`, `{T}`, `{Q}`) through `ManaText`/`Pips`
+rather than raw text, and fit primary views into one 1280×800 screen with
+floating board overlays closed by default.
 
 ## Style
 

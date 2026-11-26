@@ -2,10 +2,12 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { CardState, Command, DecisionObjectView, ExperienceFrame, InteractionOffer, Observation, RecoveryEnvelope, SubjectRef } from '../src/lib/types';
-import type { RestoredReplayDecision } from '../src/lib/replay-index';
 import type { DecisionGroupCommand, DecisionGroupPlan, LiveDecisionGroup } from '../src/lib/decision-group';
 import { startCombat } from './fixtures/combat';
-import { tableSnapshot } from './fixtures/table';
+import { gameReply } from './fixtures/game';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 // Dragging on the board: a drop goes where a click goes. These drive the
 // real pointer against a controlled authority and read the Commands it got.
@@ -61,12 +63,11 @@ interface Authority { commands: Command[]; groupCommands: DecisionGroupCommand[]
 
 /** Accepts every Command but `refuse`'s offers, which it rejects at the same revision. */
 async function installAuthority(page: Page, {
-  refuse = [], initial = mainPhase(REVISION), initialGroup = null, after, afterGroup, study, stopEcho, commandReply,
+  refuse = [], initial = mainPhase(REVISION), initialGroup = null, after, afterGroup, stopEcho, commandReply,
 }: {
   refuse?: number[];
   initial?: ExperienceFrame;
   initialGroup?: LiveDecisionGroup | null;
-  study?: RestoredReplayDecision;
   stopEcho?: Promise<void>;
   commandReply?: Promise<void>;
   after?: (command: Command) => ExperienceFrame;
@@ -75,7 +76,7 @@ async function installAuthority(page: Page, {
   const authority: Authority = { commands: [], groupCommands: [], previews: [] };
   let current = initial;
   let currentGroup: LiveDecisionGroup | null = initialGroup;
-  await page.route('**/api/sessions/*/payment-preview', async route => {
+  await page.route('**/api/games/*/payment-preview', async route => {
     const request = route.request().postDataJSON() as { offer_id: number } & Record<string, unknown>;
     authority.previews.push(request.offer_id);
     await route.fulfill({ json: { ...request, viewer: 0, preview: {
@@ -86,7 +87,7 @@ async function installAuthority(page: Page, {
   await page.routeWebSocket('**/ws/play', socket => {
     const recovery = (frame: ExperienceFrame): RecoveryEnvelope => ({ ...structuredClone(boltFixture.recovery), reason: 'initial_connect', frame,
       presentation_tail: [], presentation_cursor: 0, accepted_commands: [], replay_cursor: frame.revision });
-    const table = tableSnapshot();
+    const game = gameReply();
     socket.onMessage(async raw => {
       const message = JSON.parse(String(raw)) as { type?: string; command?: Command | DecisionGroupCommand; stops?: Pick<ExperienceFrame['stops'], 'my' | 'opponent'> };
       if (message.type === 'new_game' || message.type === 'resume' || message.type === 'set_stops') {
@@ -94,9 +95,8 @@ async function installAuthority(page: Page, {
           await stopEcho;
           current = { ...current, stops: { ...current.stops, ...message.stops } };
         }
-        socket.send(JSON.stringify({ type: 'observation', table, data: current.projection, actions: [], decision_group: currentGroup,
-          session_id: 'drag-session', resume_token: 'drag-resume-token', recovery: recovery(current) }));
-        if (study) socket.send(JSON.stringify({ type: 'decision_restored', address: study.address, restored: study }));
+        socket.send(JSON.stringify({ type: 'observation', ...game, data: current.projection, actions: [],
+          decision_group: currentGroup, recovery: recovery(current) }));
         return;
       }
       if (message.type === 'decision_group_command' && message.command) {
@@ -132,7 +132,7 @@ async function installAuthority(page: Page, {
       current = next;
     });
   });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
@@ -485,26 +485,6 @@ test('dragging a drafted block reassigns it and Escape restores the click-select
       blocks: [{ blocker: renderId(otter.display_id), attacker: renderId(ally.display_id) }],
     },
   });
-});
-
-test('a restored Study decision keeps clickable choices without a targeting drag', async ({ page }) => {
-  const frame = targets('spell');
-  const first = frame.offers[0];
-  frame.offers.push({ ...first, id: 18, label: 'Choose the second offer' });
-  const study: RestoredReplayDecision = {
-    address: 'drag-study', frame, revision: frame.revision, ordinal: 0, viewer: 0, presentation_cursor: 0, continuation: [], offer: first,
-    command: { command_id: 'recorded', match_id: frame.match_id, expected_revision: frame.revision, prompt_id: frame.prompt!.id, offer_id: first.id, answers: [] },
-  };
-  const authority = await installAuthority(page, { initial: frame, study });
-  await expect(page.getByText(/Study position\. Choosing an offer/)).toBeVisible();
-  const recipient = permanent(page, cub.display_id);
-  await carry(page, page.locator('[data-announcing=spell]'), await center(recipient));
-  await expect(page.getByTestId('draft-line')).toHaveCount(0);
-  await page.mouse.up();
-  await expect(page.getByTestId('card-menu')).toHaveCount(0);
-  await recipient.click();
-  await expect(page.getByTestId('card-menu').getByRole('menuitem', { name: /Choose the second offer/ })).toBeVisible();
-  expect(authority.commands).toEqual([]);
 });
 
 test('a targeted creature with two offers opens its choices from an asked stack ability', async ({ page }) => {

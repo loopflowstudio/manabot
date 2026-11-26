@@ -37,14 +37,12 @@ identity and replay evidence. `work_status` names an operation, sequence, kind,
 wall-clock start and running/complete/failed state. Its scope is `setup`
 (with setup ID and optional loading seat, no chooser) or `match` (with exact
 match/revision and optional chooser). It proves no submission outcome. A reconnect during mutable work receives
-only its participant's cached safe recovery envelope plus that status. It cannot
+only the cached safe recovery envelope plus that status. It cannot
 inspect the Env or enable another submission until authority is confirmed and
 work finishes. Watch status reads do not produce decisions; a failed frontier
 requires an explicit revision-bound retry. Watch progressive setup uses
 `POST /api/watch/setups/{handle}` once, binding a tab-owned high-entropy handle
-to one configuration. A separate tab credential in `x-etude-participant-token`
-authorizes setup reads and starts; it never appears in public work metadata.
-Repeated identical POSTs reconcile it; changed setup is
+to one configuration. Repeated identical POSTs reconcile it; changed setup is
 rejected. GET reads the retained work/result without starting or retrying work.
 Finished retention is bounded and aged at admission after 15 minutes;
 active attempts are never evicted, with a maximum of 16 admitted concurrently.
