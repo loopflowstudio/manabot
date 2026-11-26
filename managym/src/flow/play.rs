@@ -250,12 +250,14 @@ impl Game {
                 }
             }
             Some(zone @ (ZoneType::Exile | ZoneType::Graveyard)) => {
+                // Evaluate PlayGrant conditions before borrowing the cached layer
+                // board; arbitrary grant conditions may populate derived caches.
+                let mut routes: Vec<_> = self
+                    .live_grants(player, object)
+                    .map(|grant| PlayRoute::Grant(grant.key))
+                    .collect();
                 self.with_layer_board(|board| {
                     let permissions = &board.play_permissions[player.0];
-                    let mut routes: Vec<_> = self
-                        .live_grants(player, object)
-                        .map(|grant| PlayRoute::Grant(grant.key))
-                        .collect();
                     if zone == ZoneType::Exile && active && !own {
                         if let Some(counters) = self.state.object_counters.get(&object) {
                             routes.extend(

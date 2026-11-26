@@ -5,7 +5,7 @@ use crate::{
     flow::{
         decision::EffectFrame,
         game::{Game, Revisions},
-        layers::{evaluate_board, matches_view, SourceSeed},
+        layers::{evaluate_board, matches_view, SourceSeed, SEED_VIEW},
         proposed_event::{EntryFace, ZoneEntry},
         triggers::TriggerIndex,
         turn::RecordedCast,
@@ -143,6 +143,11 @@ impl Deref for Characteristics {
     fn deref(&self) -> &Self::Target {
         &self.details
     }
+}
+
+fn default_characteristics_arc() -> Arc<Characteristics> {
+    static DEFAULT: OnceLock<Arc<Characteristics>> = OnceLock::new();
+    Arc::clone(DEFAULT.get_or_init(|| Arc::new(Characteristics::default())))
 }
 
 fn default_characteristics() -> &'static Characteristics {
@@ -333,6 +338,26 @@ impl LayerBoard {
             .and_then(Option::as_deref)
             .unwrap_or_else(|| default_characteristics())
     }
+
+    #[inline]
+    pub(super) fn view_arc(&self, id: PermanentId) -> Arc<Characteristics> {
+        self.objects
+            .get(id.0)
+            .and_then(Clone::clone)
+            .unwrap_or_else(default_characteristics_arc)
+    }
+
+    #[inline]
+    pub(super) fn needs_finalization(&self) -> bool {
+        self.dynamic_activations
+            || self.has_activated_cost_reduction[0]
+            || self.has_activated_cost_reduction[1]
+    }
+
+    #[inline]
+    pub(super) fn needs_finalization_for(&self, player: PlayerId) -> bool {
+        self.dynamic_activations || self.has_activated_cost_reduction[player.0]
+    }
 }
 impl std::fmt::Debug for DerivedCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -387,8 +412,8 @@ impl Game {
         evaluate_board(
             self,
             sources,
-            |context_objects, live, seeds, reads_mana, reads_tapped, reads_life| {
-                let mut objects = vec![None; self.state.permanents.len()];
+            |context_objects, owned_views, seeds, reads_mana, reads_tapped, reads_life| {
+                let mut objects = Vec::with_capacity(context_objects.len());
                 let mut restrictions = Vec::new();
                 let mut control_changes = Vec::new();
                 let mut player_modifications: [Vec<Modification>; 2] = Default::default();
@@ -397,29 +422,50 @@ impl Game {
                 let mut dynamic_activations = false;
                 let mut has_activated_cost_reduction = [false; 2];
                 let mut has_triggered_mana_abilities = false;
-                for &id in live {
-                    let object = context_objects[id.0].take().unwrap();
+                for (slot, slot_object) in context_objects.iter_mut().enumerate() {
+                    let Some(object) = slot_object.take() else {
+                        objects.push(None);
+                        continue;
+                    };
+                    let id = PermanentId(slot);
                     let permanent = self.state.permanents[id].as_ref().unwrap();
                     if object.controller != permanent.controller && !self.is_phased_out(id) {
                         control_changes.push((id, object.controller));
                     }
-                    let seed = seeds[id.0].as_ref().unwrap();
-                    let scan_statics =
-                        if use_seed_summaries && seed.view_details_ptr_eq(&object.view) {
+                    let seed = seeds[slot].as_ref().unwrap();
+                    let (view_arc, scan_statics) = if object.view_index == SEED_VIEW {
+                        let scan_statics = if use_seed_summaries {
                             dynamic_activations |= seed.has_dynamic_activations;
                             has_triggered_mana_abilities |= seed.has_triggered_mana_abilities;
                             seed.has_board_statics
                         } else {
                             dynamic_activations =
-                                dynamic_activations || object.view.has_dynamic_activations();
+                                dynamic_activations || seed.view.has_dynamic_activations();
                             has_triggered_mana_abilities = has_triggered_mana_abilities
-                                || !object.view.triggered_mana_abilities.is_empty();
-                            !object.view.static_abilities.is_empty()
+                                || !seed.view.triggered_mana_abilities.is_empty();
+                            !seed.view.static_abilities.is_empty()
                         };
+                        (Arc::clone(&seed.view), scan_statics)
+                    } else {
+                        let owned = owned_views[object.view_index as usize].take().unwrap();
+                        let scan_statics = if use_seed_summaries && seed.view_details_ptr_eq(&owned)
+                        {
+                            dynamic_activations |= seed.has_dynamic_activations;
+                            has_triggered_mana_abilities |= seed.has_triggered_mana_abilities;
+                            seed.has_board_statics
+                        } else {
+                            dynamic_activations =
+                                dynamic_activations || owned.has_dynamic_activations();
+                            has_triggered_mana_abilities = has_triggered_mana_abilities
+                                || !owned.triggered_mana_abilities.is_empty();
+                            !owned.static_abilities.is_empty()
+                        };
+                        (Arc::new(owned), scan_statics)
+                    };
                     if scan_statics && !self.is_phased_out(id) {
                         let controller = object.controller;
                         let permissions = &mut play_permissions[controller.0];
-                        for ability in &object.view.static_abilities {
+                        for ability in &view_arc.static_abilities {
                             match ability {
                                 StaticAbility::ControllerHas(grant) => {
                                     player_modifications[controller.0].push((**grant).clone())
@@ -464,7 +510,7 @@ impl Game {
                             }
                         }
                     }
-                    objects[id.0] = Some(object.view);
+                    objects.push(Some(view_arc));
                 }
                 for permissions in &mut play_permissions {
                     permissions.extra_land_plays += land_plays_each_player;
@@ -647,13 +693,7 @@ impl Game {
     }
 
     pub(super) fn layer_view(&self, id: PermanentId) -> Arc<Characteristics> {
-        self.with_layer_board(|board| {
-            board
-                .objects
-                .get(id.0)
-                .and_then(Clone::clone)
-                .unwrap_or_default()
-        })
+        self.with_layer_board(|board| board.view_arc(id))
     }
     /// One immutable board read for a whole-board consumer. In debug this
     /// validates the entire board once, rather than once per permanent.
@@ -671,6 +711,26 @@ impl Game {
         })
     }
     pub fn characteristics(&self, id: PermanentId) -> Arc<Characteristics> {
+        let fast = self.with_layer_board(|board| {
+            let raw = board.view(id);
+            if !board.needs_finalization() || raw.activated_abilities.is_empty() {
+                Some(board.view_arc(id))
+            } else {
+                None
+            }
+        });
+        if let Some(view) = fast {
+            #[cfg(debug_assertions)]
+            {
+                let _scan = self.board_scan();
+                debug_assert_eq!(
+                    view,
+                    self.finalize_characteristics(id, self.layer_view(id)),
+                    "characteristics fast path diverged"
+                );
+            }
+            return view;
+        }
         self.characteristics_from(id, || self.layer_view(id))
     }
     /// Read several final views at one immutable game state, preserving the
@@ -680,10 +740,28 @@ impl Game {
         &'a self,
         ids: impl Iterator<Item = PermanentId> + 'a,
     ) -> impl Iterator<Item = (PermanentId, Arc<Characteristics>)> + 'a {
-        self.layer_views(ids)
-            .map(move |(id, raw)| (id, self.characteristics_from(id, || raw)))
+        let board = self.layer_board();
+        let needs_finalization = board.needs_finalization();
+        ids.filter_map(move |id| {
+            let raw = board.objects.get(id.0).and_then(Clone::clone)?;
+            let view = if !needs_finalization || raw.activated_abilities.is_empty() {
+                #[cfg(debug_assertions)]
+                {
+                    let _scan = self.board_scan();
+                    debug_assert_eq!(
+                        raw,
+                        self.finalize_characteristics(id, raw.clone()),
+                        "characteristics_many fast path diverged"
+                    );
+                }
+                raw
+            } else {
+                self.characteristics_from(id, || raw)
+            };
+            Some((id, view))
+        })
     }
-    fn characteristics_from(
+    pub(super) fn characteristics_from(
         &self,
         id: PermanentId,
         raw: impl FnOnce() -> Arc<Characteristics>,
@@ -1750,9 +1828,10 @@ impl Game {
             return false;
         }
         !permanent.summoning_sick
-            || !self
-                .characteristics(permanent_id)
-                .restricted_by_summoning_sickness()
+            || !self.with_layer_view(
+                permanent_id,
+                Characteristics::restricted_by_summoning_sickness,
+            )
     }
 
     /// Lethal-damage check (CR 704.5g) against the permanent's
@@ -2145,5 +2224,48 @@ mod cache_tests {
             0
         );
         assert!(!Arc::ptr_eq(&board, &game.layer_board()));
+    }
+
+    #[test]
+    fn play_routes_evaluates_conditional_grant_outside_layer_borrow() {
+        use crate::{
+            flow::cast_permission::{PlayGrant, PlayRoute},
+            state::ability::{Aggregate, CompareOp, ObjectProperty, ObjectSelector},
+        };
+        let deck = [("Gray Ogre".into(), 40)].into();
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            244,
+            true,
+        );
+        game.play();
+        let player = PlayerId(0);
+        game.scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        let card = game
+            .state
+            .zone_cards(ZoneType::Hand, player)
+            .next()
+            .expect("opening hand card");
+        let object = game.state.object_of(card);
+        let object = game.move_object(object, ZoneType::Exile);
+        game.state.cast_permissions.grant(PlayGrant {
+            this_turn: true,
+            condition: Some(Condition::compare(
+                ObjectSelector::each_you_control(CardPredicate::creature())
+                    .property(ObjectProperty::Power, Aggregate::Sum),
+                CompareOp::Ge,
+                2,
+            )),
+            ..PlayGrant::new(object, player)
+        });
+        // Warm the layer board so `with_layer_board` takes the `RefCell::borrow()`
+        // fast path; a reentrant `live_grants` inside it would panic with BorrowMutError.
+        let _board = game.layer_board();
+        let routes = game.play_routes(player, object);
+        assert!(routes.iter().any(|r| matches!(r, PlayRoute::Grant(_))));
     }
 }

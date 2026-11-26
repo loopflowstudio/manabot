@@ -163,9 +163,14 @@ const DIRTY_ACTIVATIONS: u8 = 1 << 1;
 const DIRTY_STATICS: u8 = 1 << 2;
 const DIRTY_ALL: u8 = DIRTY_TYPES | DIRTY_ACTIVATIONS | DIRTY_STATICS;
 
+/// Sentinel `LayerObject::view_index` meaning the permanent still shares
+/// `seeds[slot].view` without cloning or materializing an owned `Characteristics`.
+pub(super) const SEED_VIEW: u32 = u32::MAX;
+
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct LayerObject {
-    pub view: Arc<Characteristics>,
+    /// `SEED_VIEW` borrows `seeds[slot].view`; otherwise indexes `owned_views`.
+    pub view_index: u32,
     pub controller: PlayerId,
     /// `None` borrows `seeds[slot].statics`; `Some(v)` holds owned post-mutation
     /// statics (after ability loss, hexproof removal, or `GrantStatic`).
@@ -174,12 +179,14 @@ pub(super) struct LayerObject {
 }
 
 /// Active evaluator state during CR 613 pass. Borrowing `live` and `seeds`
-/// keeps dependency-probe clones to a single `Vec<Option<LayerObject>>` copy
-/// (reusing a scratch buffer) with zero per-permanent `statics` refcount churn.
+/// keeps unmodified permanents atomic-free during evaluation and dependency
+/// probes; modified permanents materialize inline in `owned_views` with no
+/// `Arc::make_mut` refcount checks.
 struct Eval<'a, 'b, 's> {
     game: &'a Game,
     seeds: &'s [Option<Arc<SourceSeed>>],
     objects: Vec<Option<LayerObject>>,
+    owned_views: Vec<Option<Characteristics>>,
     live: &'b [PermanentId],
     reads_mana: bool,
     reads_tapped: bool,
@@ -250,7 +257,7 @@ pub(super) struct SourceSeed {
     incarnation: PublicId,
     timestamp: PublicId,
     controller: PlayerId,
-    view: Arc<Characteristics>,
+    pub(super) view: Arc<Characteristics>,
     statics: Vec<StaticEntry>,
     nodes: Vec<SeedNode>,
     nodes_layers: u16,
@@ -726,6 +733,7 @@ struct PassScratch {
     writes: Vec<u16>,
     probe: Vec<Instruction>,
     probe_objects: Vec<Option<LayerObject>>,
+    probe_views: Vec<Option<Characteristics>>,
     dependencies: Vec<bool>,
     reach: Vec<bool>,
 }
@@ -734,6 +742,7 @@ struct PassScratch {
 #[derive(Default)]
 struct LayerScratch {
     objects: Vec<Option<LayerObject>>,
+    owned_views: Vec<Option<Characteristics>>,
     live: Vec<PermanentId>,
     nodes: Vec<EvalNode>,
     pass: PassScratch,
@@ -756,10 +765,12 @@ impl ScratchGuard {
 impl Drop for ScratchGuard {
     fn drop(&mut self) {
         self.0.objects.clear();
+        self.0.owned_views.clear();
         self.0.live.clear();
         self.0.nodes.clear();
         self.0.pass.granted.clear();
         self.0.pass.probe_objects.clear();
+        self.0.pass.probe_views.clear();
         let scratch = std::mem::take(&mut self.0);
         let _ = LAYER_SCRATCH.try_with(|cell| {
             let prev = cell.take();
@@ -805,7 +816,7 @@ pub(super) fn evaluate_board(
     seeds: Option<&mut Vec<Option<Arc<SourceSeed>>>>,
     build: impl FnOnce(
         &mut [Option<LayerObject>],
-        &[PermanentId],
+        &mut [Option<Characteristics>],
         &[Option<Arc<SourceSeed>>],
         bool,
         bool,
@@ -826,12 +837,14 @@ pub(super) fn evaluate_board(
     let mut guard = ScratchGuard::take();
     let LayerScratch {
         objects,
+        owned_views,
         live,
         nodes,
         pass,
     } = &mut guard.0;
     objects.clear();
-    objects.resize(slot_count, None);
+    objects.reserve(slot_count);
+    owned_views.clear();
     live.clear();
     nodes.clear();
     let mut reads_mana = false;
@@ -843,7 +856,10 @@ pub(super) fn evaluate_board(
     seeds.resize(slot_count, None);
     for (slot, permanent) in game.state.permanents.iter().enumerate() {
         let Some(p) = permanent else {
-            seeds[slot] = None;
+            if seeds[slot].is_some() {
+                seeds[slot] = None;
+            }
+            objects.push(None);
             continue;
         };
         let id = PermanentId(slot);
@@ -858,12 +874,12 @@ pub(super) fn evaluate_board(
             seeds[slot] = Some(Arc::new(build_seed(game, id, p, source)));
         }
         let seed = seeds[slot].as_ref().unwrap();
-        objects[slot] = Some(LayerObject {
-            view: Arc::clone(&seed.view),
+        objects.push(Some(LayerObject {
+            view_index: SEED_VIEW,
             controller: seed.controller,
             statics_override: None,
             dirty: 0,
-        });
+        }));
         live.push(id);
         // A phased-out permanent's static abilities apply to nothing
         // (CR 702.26b); its own view still takes the records on it.
@@ -938,6 +954,7 @@ pub(super) fn evaluate_board(
         game,
         seeds: seeds_slice,
         objects: std::mem::take(objects),
+        owned_views: std::mem::take(owned_views),
         live: live.as_slice(),
         reads_mana,
         reads_tapped,
@@ -1055,7 +1072,7 @@ pub(super) fn evaluate_board(
                     let count = permanent.counter_count(CounterKind::PlusOnePlusOne)
                         - permanent.counter_count(CounterKind::MinusOneMinusOne);
                     if count != 0 {
-                        let view = Arc::make_mut(&mut eval.object_mut(id).view);
+                        let view = eval.view_mut(id);
                         view.power += count;
                         view.toughness += count;
                     }
@@ -1064,38 +1081,63 @@ pub(super) fn evaluate_board(
         }
     }
     for &id in eval.live {
-        let object = eval.objects[id.0].as_mut().unwrap();
-        let dirty = if retain_sources {
-            object.dirty
-        } else {
-            DIRTY_ALL
+        let (view_index, dirty) = {
+            let object = eval.objects[id.0].as_ref().unwrap();
+            let dirty = if retain_sources {
+                object.dirty
+            } else {
+                DIRTY_ALL
+            };
+            (object.view_index, dirty)
         };
-        let statics = object
-            .statics_override
-            .as_deref()
-            .unwrap_or(&seeds_slice[id.0].as_ref().unwrap().statics);
         if dirty != 0 {
             let record = &game.state[game.live_permanent(id).object];
-            finish_object(&mut object.view, statics, record, dirty);
-            object.dirty = 0;
+            let statics = eval.objects[id.0]
+                .as_ref()
+                .unwrap()
+                .statics_override
+                .as_deref()
+                .unwrap_or(&seeds_slice[id.0].as_ref().unwrap().statics);
+            if view_index != SEED_VIEW {
+                let view = eval.owned_views[view_index as usize].as_mut().unwrap();
+                finish_object(&mut CowCharacteristics::Owned(view), statics, record, dirty);
+            } else {
+                let mut cow = CowCharacteristics::Seed {
+                    seed: &seeds_slice[id.0].as_ref().unwrap().view,
+                    owned: None,
+                };
+                finish_object(&mut cow, statics, record, dirty);
+                if let CowCharacteristics::Seed {
+                    owned: Some(view), ..
+                } = cow
+                {
+                    let idx = eval.owned_views.len() as u32;
+                    eval.owned_views.push(Some(view));
+                    eval.objects[id.0].as_mut().unwrap().view_index = idx;
+                }
+            }
+            eval.objects[id.0].as_mut().unwrap().dirty = 0;
         }
         #[cfg(debug_assertions)]
         {
             let record = &game.state[game.live_permanent(id).object];
-            assert_finished(&object.view, statics, record);
+            let statics = eval.statics(id);
+            assert_finished(eval.view(id), statics, record);
         }
     }
     let Eval {
         objects: eval_objects,
+        owned_views: eval_owned_views,
         reads_mana,
         reads_tapped,
         reads_life,
         ..
     } = eval;
     *objects = eval_objects;
+    *owned_views = eval_owned_views;
     build(
         objects.as_mut_slice(),
-        live.as_slice(),
+        owned_views.as_mut_slice(),
         seeds_slice,
         reads_mana,
         reads_tapped,
@@ -1119,43 +1161,38 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         })
         .collect();
     let controller = permanent.entry_controller();
-    let mut object = LayerObject {
-        controller,
-        view: Arc::new(Characteristics {
-            is_legendary: source.is_legendary(),
-            keywords: source.keywords,
-            power: source.power.unwrap_or(0),
-            toughness: source.toughness.unwrap_or(0),
-            details: Arc::new(CharacteristicDetails {
-                name: source.name.clone(),
-                subtypes: source.subtypes.clone(),
-                creature_types: source.creature_types(),
-                types: source.types.clone(),
-                colors: source.colors(),
-                mana_abilities: source.mana_abilities.clone(),
-                triggered_mana_abilities: source.triggered_mana_abilities.clone(),
-                ward: source.ward().cloned(),
-                activated_abilities: source.activated_abilities.clone(),
-                triggered_abilities: source
-                    .abilities
-                    .iter()
-                    .cloned()
-                    .map(|ability| EffectiveTrigger {
-                        origin: AbilityOrigin::Own,
-                        clock: None,
-                        ability,
-                        program: false,
-                    })
-                    .collect(),
-                ..Default::default()
-            }),
+    let mut view = Characteristics {
+        is_legendary: source.is_legendary(),
+        keywords: source.keywords,
+        power: source.power.unwrap_or(0),
+        toughness: source.toughness.unwrap_or(0),
+        details: Arc::new(CharacteristicDetails {
+            name: source.name.clone(),
+            subtypes: source.subtypes.clone(),
+            creature_types: source.creature_types(),
+            types: source.types.clone(),
+            colors: source.colors(),
+            mana_abilities: source.mana_abilities.clone(),
+            triggered_mana_abilities: source.triggered_mana_abilities.clone(),
+            ward: source.ward().cloned(),
+            activated_abilities: source.activated_abilities.clone(),
+            triggered_abilities: source
+                .abilities
+                .iter()
+                .cloned()
+                .map(|ability| EffectiveTrigger {
+                    origin: AbilityOrigin::Own,
+                    clock: None,
+                    ability,
+                    program: false,
+                })
+                .collect(),
             ..Default::default()
         }),
-        statics_override: None,
-        dirty: 0,
+        ..Default::default()
     };
     finish_object(
-        &mut object.view,
+        &mut CowCharacteristics::Owned(&mut view),
         &statics,
         source,
         DIRTY_ACTIVATIONS | DIRTY_STATICS,
@@ -1174,15 +1211,15 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         nodes_reads_tapped |= node.plan.reads.tapped;
         nodes_reads_life |= node.plan.reads.life;
     }
-    let has_dynamic_activations = object.view.has_dynamic_activations();
-    let has_board_statics = has_board_statics(&object.view.static_abilities);
-    let has_triggered_mana_abilities = !object.view.triggered_mana_abilities.is_empty();
+    let has_dynamic_activations = view.has_dynamic_activations();
+    let has_board_statics = has_board_statics(&view.static_abilities);
+    let has_triggered_mana_abilities = !view.triggered_mana_abilities.is_empty();
     SourceSeed {
         source: source.clone(),
         incarnation: permanent.id,
         timestamp: permanent.timestamp,
         controller,
-        view: object.view,
+        view: Arc::new(view),
         statics,
         nodes,
         nodes_layers,
@@ -1195,8 +1232,41 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
     }
 }
 
+enum CowCharacteristics<'a> {
+    Seed {
+        seed: &'a Characteristics,
+        owned: Option<Characteristics>,
+    },
+    Owned(&'a mut Characteristics),
+}
+
+impl std::ops::Deref for CowCharacteristics<'_> {
+    type Target = Characteristics;
+
+    #[inline]
+    fn deref(&self) -> &Characteristics {
+        match self {
+            Self::Seed {
+                owned: Some(view), ..
+            } => view,
+            Self::Seed { seed, owned: None } => seed,
+            Self::Owned(view) => view,
+        }
+    }
+}
+
+impl CowCharacteristics<'_> {
+    #[inline]
+    fn to_mut(&mut self) -> &mut Characteristics {
+        match self {
+            Self::Seed { seed, owned } => owned.get_or_insert_with(|| (*seed).clone()),
+            Self::Owned(view) => view,
+        }
+    }
+}
+
 fn finish_object(
-    view: &mut Arc<Characteristics>,
+    view: &mut CowCharacteristics<'_>,
     statics: &[StaticEntry],
     record: &Object,
     dirty: u8,
@@ -1204,7 +1274,7 @@ fn finish_object(
     if dirty & DIRTY_TYPES != 0 {
         let is_animated = view.is_creature() && !record.types.is_creature();
         if view.is_animated != is_animated {
-            Arc::make_mut(view).is_animated = is_animated;
+            view.to_mut().is_animated = is_animated;
         }
         // During the pass `CreatureTypes::All` marks a record granting all
         // creature types; a listed set is derived from the final subtypes.
@@ -1216,7 +1286,7 @@ fn finish_object(
             CreatureTypes::among(&view.subtypes)
         };
         if view.creature_types != creature_types {
-            Arc::make_mut(view).details_mut().creature_types = creature_types;
+            view.to_mut().details_mut().creature_types = creature_types;
         }
     }
     // Activations are paid as abilities of this source (CR 106.6), read
@@ -1246,7 +1316,7 @@ fn finish_object(
             .iter()
             .any(|ability| ability.mana_cost.purpose != purpose)
         {
-            for ability in &mut Arc::make_mut(view).details_mut().activated_abilities {
+            for ability in &mut view.to_mut().details_mut().activated_abilities {
                 if ability.mana_cost.purpose != purpose {
                     ability.mana_cost.purpose = purpose.clone();
                 }
@@ -1261,7 +1331,7 @@ fn finish_object(
                 .zip(statics.iter())
                 .any(|(ability, entry)| ability != &entry.ability);
         if statics_differ {
-            Arc::make_mut(view).details_mut().static_abilities =
+            view.to_mut().details_mut().static_abilities =
                 statics.iter().map(|entry| entry.ability.clone()).collect();
         }
     }
@@ -1341,6 +1411,31 @@ impl Eval<'_, '_, '_> {
     }
 
     #[inline]
+    fn view(&self, id: PermanentId) -> &Characteristics {
+        let idx = self.object(id).view_index;
+        if idx == SEED_VIEW {
+            &self.seeds[id.0].as_ref().unwrap().view
+        } else {
+            self.owned_views[idx as usize].as_ref().unwrap()
+        }
+    }
+
+    #[inline]
+    fn view_mut(&mut self, id: PermanentId) -> &mut Characteristics {
+        let object = self.objects[id.0].as_mut().unwrap();
+        let idx = if object.view_index == SEED_VIEW {
+            let idx = self.owned_views.len() as u32;
+            let seed_view: &Characteristics = &self.seeds[id.0].as_ref().unwrap().view;
+            self.owned_views.push(Some(seed_view.clone()));
+            object.view_index = idx;
+            idx
+        } else {
+            object.view_index
+        };
+        self.owned_views[idx as usize].as_mut().unwrap()
+    }
+
+    #[inline]
     fn statics(&self, id: PermanentId) -> &[StaticEntry] {
         match &self.object(id).statics_override {
             Some(v) => v.as_slice(),
@@ -1386,6 +1481,7 @@ impl Eval<'_, '_, '_> {
             writes,
             probe,
             probe_objects,
+            probe_views,
             dependencies,
             reach,
             ..
@@ -1451,11 +1547,13 @@ impl Eval<'_, '_, '_> {
                     m.clone_ns += ns;
                 });
                 probe_objects.clone_from(&self.objects);
+                probe_views.clone_from(&self.owned_views);
             }
             let mut after = Eval {
                 game: self.game,
                 seeds: self.seeds,
                 objects: std::mem::take(probe_objects),
+                owned_views: std::mem::take(probe_views),
                 live: self.live,
                 reads_mana: self.reads_mana,
                 reads_tapped: self.reads_tapped,
@@ -1489,6 +1587,7 @@ impl Eval<'_, '_, '_> {
                 }
             }
             *probe_objects = after.objects;
+            *probe_views = after.owned_views;
         }
         if independent {
             // Keep the complete pairwise oracle in debug, once per independent
@@ -1727,14 +1826,9 @@ impl Eval<'_, '_, '_> {
         }
     }
 
-    fn controlled(
-        &self,
-        controller: PlayerId,
-    ) -> impl Iterator<Item = (PermanentId, &LayerObject)> {
-        self.live.iter().copied().filter_map(move |id| {
-            let object = self.object(id);
-            (object.controller == controller && !self.game.is_phased_out(id))
-                .then_some((id, object))
+    fn controlled(&self, controller: PlayerId) -> impl Iterator<Item = PermanentId> + '_ {
+        self.live.iter().copied().filter(move |&id| {
+            self.object(id).controller == controller && !self.game.is_phased_out(id)
         })
     }
 
@@ -1767,14 +1861,14 @@ impl Eval<'_, '_, '_> {
     ) -> i32 {
         let controlled = |p| {
             self.controlled(controller)
-                .filter(move |(id, _)| self.matches(*id, p, source))
+                .filter(move |&id| self.matches(id, p, source))
         };
         match count {
             LayerCount::CreatureTypes { max } => {
                 let Some(id) = affected else {
                     return 0;
                 };
-                let view = &self.object(id).view;
+                let view = self.view(id);
                 if view.has_all_creature_types() {
                     *max
                 } else {
@@ -1782,7 +1876,7 @@ impl Eval<'_, '_, '_> {
                 }
             }
             LayerCount::ColorsAmong(p) => controlled(p)
-                .flat_map(|(_, o)| o.view.colors.iter().copied())
+                .flat_map(|id| self.view(id).colors.iter().copied())
                 .collect::<BTreeSet<_>>()
                 .len() as i32,
             LayerCount::Graveyard { who, predicate } => (0..self.game.state.players.len())
@@ -1795,7 +1889,7 @@ impl Eval<'_, '_, '_> {
                 self.game.live_permanent(source).counter_count(*kind)
             }),
             LayerCount::CountersOn { kind, predicate } => controlled(predicate)
-                .map(|(id, _)| self.game.live_permanent(id).counter_count(*kind))
+                .map(|id| self.game.live_permanent(id).counter_count(*kind))
                 .sum(),
         }
     }
@@ -1804,7 +1898,7 @@ impl Eval<'_, '_, '_> {
         self.live
             .iter()
             .copied()
-            .filter(|&id| self.controller(id) == controller && self.object(id).view.is_creature())
+            .filter(|&id| self.controller(id) == controller && self.view(id).is_creature())
             .count()
     }
     fn graveyard_count(&self, owner: PlayerId, predicate: &CardPredicate) -> i32 {
@@ -1826,10 +1920,10 @@ impl Eval<'_, '_, '_> {
 
     fn property(&self, id: PermanentId, property: ObjectProperty) -> i32 {
         match property {
-            ObjectProperty::Power => self.object(id).view.power,
-            ObjectProperty::Toughness => self.object(id).view.toughness,
+            ObjectProperty::Power => self.view(id).power,
+            ObjectProperty::Toughness => self.view(id).toughness,
             ObjectProperty::ManaValue => self.game.permanent_mana_value(id),
-            ObjectProperty::Colors => self.object(id).view.colors.len() as i32,
+            ObjectProperty::Colors => self.view(id).colors.len() as i32,
             ObjectProperty::Counters(kind) => self.game.state.permanents[id]
                 .as_ref()
                 .map_or(0, |permanent| permanent.counter_count(kind)),
@@ -1882,13 +1976,13 @@ impl Eval<'_, '_, '_> {
     /// Static comparisons see the characteristics at this point in the layer system.
     fn comparison_value(&self, value: &EffectValue, source: PermanentId) -> i32 {
         let controller = self.controller(source);
-        let controlled = || self.controlled(controller).map(|(id, _)| id);
+        let controlled = || self.controlled(controller);
         match value {
             EffectValue::Half(inner) => self.comparison_value(inner, source).div_euclid(2),
             EffectValue::Scaled { factor, value } => {
                 factor.saturating_mul(self.comparison_value(value, source))
             }
-            EffectValue::SourcePower => self.object(source).view.power,
+            EffectValue::SourcePower => self.view(source).power,
             EffectValue::Property {
                 of,
                 property,
@@ -1930,19 +2024,16 @@ impl Eval<'_, '_, '_> {
                 seen.len() as i32
             }
             EffectValue::GreatestPowerYouControl { predicate } => controlled()
-                .filter(|&id| {
-                    self.object(id).view.is_creature() && self.matches(id, predicate, None)
-                })
-                .map(|id| self.object(id).view.power)
+                .filter(|&id| self.view(id).is_creature() && self.matches(id, predicate, None))
+                .map(|id| self.view(id).power)
                 .max()
                 .unwrap_or(0)
                 .max(0),
             EffectValue::GreatestSharedCreatureType => {
                 let mut counts = BTreeMap::new();
-                for id in controlled().filter(|&id| self.object(id).view.is_creature()) {
+                for id in controlled().filter(|&id| self.view(id).is_creature()) {
                     for subtype in self
-                        .object(id)
-                        .view
+                        .view(id)
                         .subtypes
                         .iter()
                         .filter(|s| is_creature_type(s))
@@ -1954,7 +2045,7 @@ impl Eval<'_, '_, '_> {
             }
             EffectValue::CreaturesWithCounters => controlled()
                 .filter(|&id| {
-                    self.object(id).view.is_creature()
+                    self.view(id).is_creature()
                         && self
                             .game
                             .live_permanent(id)
@@ -2005,7 +2096,7 @@ impl Eval<'_, '_, '_> {
                     self.controller(id) == controller && self.matches(id, predicate, Some(source))
                 });
                 super::statics::controlled_threshold(matching, *count, *distinct_names, |id| {
-                    self.object(id).view.name.as_str()
+                    self.view(id).name.as_str()
                 })
             }
             Condition::SourceMatches(predicate) => self.matches(source, predicate, Some(source)),
@@ -2029,8 +2120,8 @@ impl Eval<'_, '_, '_> {
             self.game,
             id,
             predicate,
-            &self.object(id).view,
-            source.map(|s| self.object(s).view.name.as_str()),
+            self.view(id),
+            source.map(|s| self.view(s).name.as_str()),
             self.game.chosen_type_for(predicate, source),
         )
     }
@@ -2139,11 +2230,11 @@ impl Eval<'_, '_, '_> {
         };
         match operation {
             Operation::LandType(subtype) => {
-                if !self.object(id).view.is_land() {
+                if !self.view(id).is_land() {
                     return;
                 }
                 {
-                    let details = Arc::make_mut(&mut self.object_mut(id).view).details_mut();
+                    let details = self.view_mut(id).details_mut();
                     details
                         .subtypes
                         .retain(|s| !BASIC_LANDS.iter().any(|(name, _)| s == name));
@@ -2151,22 +2242,20 @@ impl Eval<'_, '_, '_> {
                     details.added_subtypes.push(subtype.clone());
                 }
                 self.lose_all_abilities(id);
-                let object = self.object_mut(id);
-                Arc::make_mut(&mut object.view)
+                self.view_mut(id)
                     .details_mut()
                     .activated_abilities
                     .extend(intrinsic_mana_ability(|name| name == subtype));
-                object.dirty |= DIRTY_TYPES | DIRTY_ACTIVATIONS;
+                self.object_mut(id).dirty |= DIRTY_TYPES | DIRTY_ACTIVATIONS;
             }
             Operation::Inherit => {
                 if let Some(definition) = self.game.inherited_definition(id) {
-                    let object = self.object_mut(id);
-                    let details = Arc::make_mut(&mut object.view).details_mut();
-                    if !definition.activated_abilities.is_empty() {
+                    let has_activated = !definition.activated_abilities.is_empty();
+                    let details = self.view_mut(id).details_mut();
+                    if has_activated {
                         details
                             .activated_abilities
                             .extend(definition.activated_abilities.clone());
-                        object.dirty |= DIRTY_ACTIVATIONS;
                     }
                     details.triggered_abilities.extend(
                         definition
@@ -2181,10 +2270,13 @@ impl Eval<'_, '_, '_> {
                                 program: false,
                             }),
                     );
+                    if has_activated {
+                        self.object_mut(id).dirty |= DIRTY_ACTIVATIONS;
+                    }
                 }
             }
             Operation::CatalogTrigger(ability) => {
-                Arc::make_mut(&mut self.object_mut(id).view)
+                self.view_mut(id)
                     .details_mut()
                     .triggered_abilities
                     .push(EffectiveTrigger {
@@ -2196,7 +2288,7 @@ impl Eval<'_, '_, '_> {
             }
             Operation::Modify(modification) => match modification {
                 Modification::SetName(name) => {
-                    let view = Arc::make_mut(&mut self.object_mut(id).view);
+                    let view = self.view_mut(id);
                     view.name_set = true;
                     if view.name != *name {
                         view.details_mut().name = name.clone();
@@ -2204,42 +2296,39 @@ impl Eval<'_, '_, '_> {
                 }
                 Modification::AllCreatureTypes => {
                     // A later grant of every type overrides an earlier set list.
-                    let object = self.object_mut(id);
-                    if object.view.creature_types_set || !object.view.creature_types.is_all() {
-                        let view = Arc::make_mut(&mut object.view);
+                    let view = self.view(id);
+                    if view.creature_types_set || !view.creature_types.is_all() {
+                        let view = self.view_mut(id);
                         view.creature_types_set = false;
                         if !view.creature_types.is_all() {
                             view.details_mut().creature_types = CreatureTypes::All;
-                            object.dirty |= DIRTY_TYPES;
+                            self.object_mut(id).dirty |= DIRTY_TYPES;
                         }
                     }
                 }
                 Modification::SetCreatureTypes(types) => {
-                    let object = self.object_mut(id);
-                    let view = Arc::make_mut(&mut object.view);
+                    let view = self.view_mut(id);
                     view.creature_types_set = true;
                     let details = view.details_mut();
                     details.creature_types = CreatureTypes::default();
                     details.subtypes.retain(|s| !is_creature_type(s));
                     details.subtypes.extend(types.iter().cloned());
                     details.added_subtypes.retain(|s| !is_creature_type(s));
-                    object.dirty |= DIRTY_TYPES;
+                    self.object_mut(id).dirty |= DIRTY_TYPES;
                 }
                 Modification::AddSubtypes(types) => {
-                    let object = self.object_mut(id);
-                    let gained = if object.view.is_land() {
+                    let view = self.view(id);
+                    let gained = if view.is_land() {
                         intrinsic_mana_ability(|name| {
                             types.iter().any(|subtype| subtype == name)
-                                && !object.view.subtypes.iter().any(|subtype| subtype == name)
+                                && !view.subtypes.iter().any(|subtype| subtype == name)
                         })
                     } else {
                         None
                     };
-                    let any_new = types
-                        .iter()
-                        .any(|subtype| !object.view.subtypes.contains(subtype));
+                    let any_new = types.iter().any(|subtype| !view.subtypes.contains(subtype));
                     if gained.is_some() || any_new {
-                        let details = Arc::make_mut(&mut object.view).details_mut();
+                        let details = self.view_mut(id).details_mut();
                         details.activated_abilities.extend(gained);
                         for subtype in types {
                             if !details.subtypes.contains(subtype) {
@@ -2247,18 +2336,17 @@ impl Eval<'_, '_, '_> {
                                 details.added_subtypes.push(subtype.clone());
                             }
                         }
-                        object.dirty |= DIRTY_TYPES;
+                        self.object_mut(id).dirty |= DIRTY_TYPES;
                     }
                 }
                 Modification::AddTypes(types) => {
-                    let object = self.object_mut(id);
-                    if types.iter().any(|t| !object.view.types.types.contains(t)) {
-                        Arc::make_mut(&mut object.view)
+                    if types.iter().any(|t| !self.view(id).types.types.contains(t)) {
+                        self.view_mut(id)
                             .details_mut()
                             .types
                             .types
                             .extend(types.iter().copied());
-                        object.dirty |= DIRTY_TYPES;
+                        self.object_mut(id).dirty |= DIRTY_TYPES;
                     }
                 }
                 Modification::SetTypes { types, subtypes } => {
@@ -2267,8 +2355,7 @@ impl Eval<'_, '_, '_> {
                     // no subtype of its kind (a basic land imprisoned as a
                     // land stays a Forest; a Citizen loses other creature
                     // types).
-                    let object = self.object_mut(id);
-                    let view = Arc::make_mut(&mut object.view);
+                    let view = self.view_mut(id);
                     let keeps = |subtype: &String| {
                         types.iter().any(|t| subtype_corresponds_to(subtype, *t))
                             && !subtypes
@@ -2296,51 +2383,43 @@ impl Eval<'_, '_, '_> {
                             }
                         }
                     }
-                    object.dirty |= DIRTY_TYPES;
+                    self.object_mut(id).dirty |= DIRTY_TYPES;
                 }
                 Modification::BecomeCreature => {
-                    let object = self.object_mut(id);
-                    if !object.view.types.types.contains(&CardType::Creature) {
-                        Arc::make_mut(&mut object.view)
+                    if !self.view(id).types.types.contains(&CardType::Creature) {
+                        self.view_mut(id)
                             .details_mut()
                             .types
                             .types
                             .insert(CardType::Creature);
-                        object.dirty |= DIRTY_TYPES;
+                        self.object_mut(id).dirty |= DIRTY_TYPES;
                     }
                 }
                 Modification::Nonlegendary => {
-                    let object = self.object_mut(id);
-                    if object.view.is_legendary {
-                        Arc::make_mut(&mut object.view).is_legendary = false;
+                    if self.view(id).is_legendary {
+                        self.view_mut(id).is_legendary = false;
                     }
                 }
                 Modification::SetColors(colors) => {
-                    let object = self.object_mut(id);
-                    if object.view.colors != *colors {
-                        Arc::make_mut(&mut object.view).details_mut().colors = colors.clone();
+                    if self.view(id).colors != *colors {
+                        self.view_mut(id).details_mut().colors = colors.clone();
                     }
                 }
                 Modification::AddColors(colors) => {
-                    let object = self.object_mut(id);
-                    if colors.iter().any(|c| !object.view.colors.contains(c)) {
-                        Arc::make_mut(&mut object.view)
-                            .details_mut()
-                            .colors
-                            .extend(colors);
+                    if colors.iter().any(|c| !self.view(id).colors.contains(c)) {
+                        self.view_mut(id).details_mut().colors.extend(colors);
                     }
                 }
                 Modification::AddKeywords(keywords) => {
-                    let object = self.object_mut(id);
-                    let new_keywords = keywords.without(object.view.keywords);
+                    let view = self.view(id);
+                    let new_keywords = keywords.without(view.keywords);
                     let clears_grant = origin == AbilityOrigin::Own
-                        && object
-                            .view
+                        && view
                             .keyword_grants
                             .iter()
                             .any(|(keyword, _)| keywords.has(*keyword));
                     if new_keywords != Keywords::default() || clears_grant {
-                        let view = Arc::make_mut(&mut object.view);
+                        let view = self.view_mut(id);
                         if origin != AbilityOrigin::Own {
                             view.keyword_grants
                                 .extend(new_keywords.iter().map(|keyword| (keyword, origin)));
@@ -2353,15 +2432,14 @@ impl Eval<'_, '_, '_> {
                 }
                 Modification::LoseKeywords(keywords) => {
                     {
-                        let object = self.object_mut(id);
-                        let remaining = object.view.keywords.without(*keywords);
-                        let clears_grant = object
-                            .view
+                        let view = self.view(id);
+                        let remaining = view.keywords.without(*keywords);
+                        let clears_grant = view
                             .keyword_grants
                             .iter()
                             .any(|(keyword, _)| keywords.has(*keyword));
-                        if remaining != object.view.keywords || clears_grant {
-                            let view = Arc::make_mut(&mut object.view);
+                        if remaining != view.keywords || clears_grant {
+                            let view = self.view_mut(id);
                             view.keyword_grants
                                 .retain(|(keyword, _)| !keywords.has(*keyword));
                             view.keywords = remaining;
@@ -2386,7 +2464,7 @@ impl Eval<'_, '_, '_> {
                     self.lose_all_abilities(id);
                 }
                 Modification::Firebending(n) => {
-                    let view = Arc::make_mut(&mut self.object_mut(id).view);
+                    let view = self.view_mut(id);
                     view.firebending = view.firebending.saturating_add(*n);
                     view.details_mut()
                         .triggered_abilities
@@ -2398,15 +2476,14 @@ impl Eval<'_, '_, '_> {
                         });
                 }
                 Modification::GrantActivated(ability) => {
-                    let object = self.object_mut(id);
-                    Arc::make_mut(&mut object.view)
+                    self.view_mut(id)
                         .details_mut()
                         .activated_abilities
                         .push((**ability).clone());
-                    object.dirty |= DIRTY_ACTIVATIONS;
+                    self.object_mut(id).dirty |= DIRTY_ACTIVATIONS;
                 }
                 Modification::GrantTriggered(ability) => {
-                    Arc::make_mut(&mut self.object_mut(id).view)
+                    self.view_mut(id)
                         .details_mut()
                         .triggered_abilities
                         .push(EffectiveTrigger {
@@ -2419,7 +2496,7 @@ impl Eval<'_, '_, '_> {
                 Modification::GrantStatic(ability) => {
                     self.object_mut(id).dirty |= DIRTY_STATICS;
                     if let StaticAbility::Ward(cost) = ability.as_ref() {
-                        let details = Arc::make_mut(&mut self.object_mut(id).view).details_mut();
+                        let details = self.view_mut(id).details_mut();
                         details.ward = Some(cost.clone());
                         details.triggered_abilities.push(EffectiveTrigger {
                             origin,
@@ -2448,11 +2525,11 @@ impl Eval<'_, '_, '_> {
                     let ResolvedValue::SetBasePt { power, toughness } = value else {
                         unreachable!("SetBasePt instruction carries resolved P/T");
                     };
-                    let object = self.object_mut(id);
-                    let new_power = power.unwrap_or(object.view.power);
-                    let new_toughness = toughness.unwrap_or(object.view.toughness);
-                    if new_power != object.view.power || new_toughness != object.view.toughness {
-                        let view = Arc::make_mut(&mut object.view);
+                    let view = self.view(id);
+                    let new_power = power.unwrap_or(view.power);
+                    let new_toughness = toughness.unwrap_or(view.toughness);
+                    if new_power != view.power || new_toughness != view.toughness {
+                        let view = self.view_mut(id);
                         view.power = new_power;
                         view.toughness = new_toughness;
                     }
@@ -2462,15 +2539,15 @@ impl Eval<'_, '_, '_> {
                         unreachable!("ModifyPt instruction carries resolved P/T");
                     };
                     if power != 0 || toughness != 0 {
-                        let view = Arc::make_mut(&mut self.object_mut(id).view);
+                        let view = self.view_mut(id);
                         view.power += power;
                         view.toughness += toughness;
                     }
                 }
                 Modification::SwitchPt => {
-                    let object = self.object_mut(id);
-                    if object.view.power != object.view.toughness {
-                        let view = Arc::make_mut(&mut object.view);
+                    let view = self.view(id);
+                    if view.power != view.toughness {
+                        let view = self.view_mut(id);
                         std::mem::swap(&mut view.power, &mut view.toughness);
                     }
                 }
@@ -2483,8 +2560,7 @@ impl Eval<'_, '_, '_> {
 
     fn lose_nonmana_abilities(&mut self, id: PermanentId) {
         let seed_has_statics = !self.seeds[id.0].as_ref().unwrap().statics.is_empty();
-        let object = self.object_mut(id);
-        let view = Arc::make_mut(&mut object.view);
+        let view = self.view_mut(id);
         view.abilities_lost = true;
         view.keywords = Keywords::default();
         view.keyword_grants.clear();
@@ -2503,6 +2579,7 @@ impl Eval<'_, '_, '_> {
                 .retain(ActivatedAbilityDefinition::is_mana_ability);
             details.triggered_abilities.clear();
         }
+        let object = self.object_mut(id);
         let had_statics = match &object.statics_override {
             Some(v) => !v.is_empty(),
             None => seed_has_statics,
@@ -2517,12 +2594,12 @@ impl Eval<'_, '_, '_> {
     }
 
     fn lose_all_abilities(&mut self, id: PermanentId) {
-        let object = self.object_mut(id);
-        if !object.view.mana_abilities.is_empty()
-            || !object.view.triggered_mana_abilities.is_empty()
-            || !object.view.activated_abilities.is_empty()
+        let view = self.view(id);
+        if !view.mana_abilities.is_empty()
+            || !view.triggered_mana_abilities.is_empty()
+            || !view.activated_abilities.is_empty()
         {
-            let details = Arc::make_mut(&mut object.view).details_mut();
+            let details = self.view_mut(id).details_mut();
             details.mana_abilities.clear();
             details.triggered_mana_abilities.clear();
             details.activated_abilities.clear();

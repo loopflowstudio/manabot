@@ -1859,14 +1859,29 @@ impl Game {
     fn payment_sources(&self, player: PlayerId) -> Vec<ManaSource> {
         let _scan = self.board_scan();
         let triggers = self.mana_triggers();
-        self.characteristics_many(self.iter_battlefield_permanents(player))
-            .map(|(permanent, characteristics)| {
+        let board = self.layer_board();
+        let needs_finalization = board.needs_finalization_for(player);
+        self.iter_battlefield_permanents(player)
+            .filter_map(|permanent| {
+                let raw = board.objects.get(permanent.0).and_then(Option::as_deref)?;
+                let finalized;
+                let characteristics: &Characteristics =
+                    if needs_finalization && !raw.activated_abilities.is_empty() {
+                        finalized = self.characteristics_from(permanent, || {
+                            board.objects[permanent.0].clone().unwrap()
+                        });
+                        &finalized
+                    } else {
+                        raw
+                    };
                 let source = self.state.permanents[permanent].as_ref().unwrap();
                 // A source that lost its abilities offers no zero-mana tap.
-                let can_tap = self.permanent_can_tap(permanent);
+                let can_tap = !source.tapped
+                    && (!source.summoning_sick
+                        || !characteristics.restricted_by_summoning_sickness());
                 let prohibited = self.activations_prohibited(permanent);
                 let fixed = (can_tap && !prohibited && !characteristics.mana_abilities.is_empty())
-                    .then(|| self.fixed_source_mana(player, permanent, &characteristics, &triggers))
+                    .then(|| self.fixed_source_mana(player, permanent, characteristics, &triggers))
                     .flatten();
                 let abilities = characteristics
                     .activated_abilities
@@ -1901,7 +1916,7 @@ impl Game {
                         })
                     })
                     .collect();
-                ManaSource {
+                Some(ManaSource {
                     permanent,
                     object: source.object,
                     untapped: !source.tapped,
@@ -1910,7 +1925,7 @@ impl Game {
                     keyword: false,
                     waterbend: !source.tapped
                         && (characteristics.types.is_artifact() || characteristics.is_creature()),
-                }
+                })
             })
             .collect()
     }
@@ -3812,33 +3827,39 @@ impl Game {
     fn source_reluctance(&self, model: &PaymentModel) -> Vec<autotapper::Reluctance> {
         use autotapper::Reluctance;
         let _scan = self.board_scan();
-        self.characteristics_many(model.sources.iter().map(|source| source.permanent))
-            .zip(model.sources.iter())
-            .map(|((id, view), source)| {
-                debug_assert_eq!(id, source.permanent);
-                let basic = || {
-                    self.state[source.object]
-                        .supertypes
+        self.with_layer_board(|board| {
+            model
+                .sources
+                .iter()
+                .filter_map(|source| {
+                    let view = board
+                        .objects
+                        .get(source.permanent.0)
+                        .and_then(Option::as_deref)?;
+                    let basic = || {
+                        self.state[source.object]
+                            .supertypes
+                            .iter()
+                            .any(|supertype| supertype.eq_ignore_ascii_case("basic"))
+                    };
+                    Some(if view.is_creature() {
+                        Reluctance::Creature
+                    } else if !view.is_land() {
+                        Reluctance::Permanent
+                    } else if view
+                        .activated_abilities
                         .iter()
-                        .any(|supertype| supertype.eq_ignore_ascii_case("basic"))
-                };
-                if view.is_creature() {
-                    Reluctance::Creature
-                } else if !view.is_land() {
-                    Reluctance::Permanent
-                } else if view
-                    .activated_abilities
-                    .iter()
-                    .any(|ability| ability.zone == ActivationZone::Battlefield)
-                {
-                    Reluctance::UtilityLand
-                } else if basic() {
-                    Reluctance::BasicLand
-                } else {
-                    Reluctance::Land
-                }
-            })
-            .collect()
+                        .any(|ability| ability.zone == ActivationZone::Battlefield)
+                    {
+                        Reluctance::UtilityLand
+                    } else if basic() {
+                        Reluctance::BasicLand
+                    } else {
+                        Reluctance::Land
+                    })
+                })
+                .collect()
+        })
     }
 
     /// Bounded mana-cost options for automatic source preference. Hand costs
@@ -3910,19 +3931,36 @@ impl Game {
         // One validated board for every view; a permanent with no activated
         // ability (a basic land's mana ability is not one) costs nothing more.
         let _scan = self.board_scan();
-        let views = self.characteristics_many(model.sources.iter().map(|source| source.permanent));
-        for (index, (id, view)) in views.enumerate() {
-            if view.activated_abilities.is_empty() {
+        let board = self.layer_board();
+        let needs_finalization = board.needs_finalization_for(player);
+        for (index, source) in model.sources.iter().enumerate() {
+            let Some(raw) = board
+                .objects
+                .get(source.permanent.0)
+                .and_then(Option::as_deref)
+            else {
+                continue;
+            };
+            if raw.activated_abilities.is_empty() {
                 continue;
             }
-            let source = &model.sources[index];
-            debug_assert_eq!(id, source.permanent);
             let Some(permanent) = self.state.permanents[source.permanent].as_ref() else {
                 continue;
             };
             if self.activations_prohibited(source.permanent) {
                 continue;
             }
+            let finalized;
+            let view: &Characteristics = if needs_finalization {
+                finalized = self.characteristics_from(source.permanent, || {
+                    board.objects[source.permanent.0].clone().unwrap()
+                });
+                &finalized
+            } else {
+                raw
+            };
+            let can_tap = !permanent.tapped
+                && (!permanent.summoning_sick || !view.restricted_by_summoning_sickness());
             for (ability_index, ability) in view.activated_abilities.iter().enumerate() {
                 if probe.followups.len() == autotapper::FOLLOWUPS {
                     return probe;
@@ -3934,7 +3972,7 @@ impl Game {
                     || ability.mana_choices().is_some()
                     || permanent.activation_used(ability_index, ability)
                     || self.check_activation_terms(player, ability).is_err()
-                    || (ability.tap_source && !self.permanent_can_tap(source.permanent))
+                    || (ability.tap_source && !can_tap)
                     || (single_use && ability.mana_cost == *cost)
                 {
                     continue;

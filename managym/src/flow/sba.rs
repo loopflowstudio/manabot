@@ -181,11 +181,14 @@ impl Game {
         // no later commit can accidentally follow a re-entered card.
         let (events, rules): (Vec<_>, Vec<_>) = {
             let _scan = self.board_scan();
+            let board = self.layer_board();
             let mut candidates = Vec::new();
             let mut rules = Vec::new();
-            for (permanent_id, characteristics) in
-                self.layer_views((0..self.state.permanents.len()).map(PermanentId))
-            {
+            for (slot, characteristics) in board.objects.iter().enumerate() {
+                let Some(characteristics) = characteristics.as_deref() else {
+                    continue;
+                };
+                let permanent_id = PermanentId(slot);
                 let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
                 // CR 704.5f — A creature with toughness 0 or less is put into
                 // its owner's graveyard (an earthbent land losing its counters
@@ -201,13 +204,13 @@ impl Game {
                 let legend_loser = legend_losers.contains(&permanent.object);
                 // CR 704.5m — An Aura attached to an illegal object or to
                 // nothing is put into its owner's graveyard.
-                let illegal_aura = self.aura_attachment_illegal(permanent_id, &characteristics);
+                let illegal_aura = self.aura_attachment_illegal(permanent_id, characteristics);
                 let put_in_graveyard =
                     zero_toughness || zero_counters || legend_loser || illegal_aura;
                 // CR 704.5g — Lethal damage destroys. The other graveyard SBAs
                 // above do not destroy, even when lethal damage also applies.
                 let destroy = !put_in_graveyard
-                    && self.has_lethal_damage(permanent_id, &characteristics)
+                    && self.has_lethal_damage(permanent_id, characteristics)
                     && !characteristics.keywords.has(Keyword::Indestructible);
                 if !put_in_graveyard && !destroy {
                     continue;
@@ -320,16 +323,20 @@ impl Game {
         let detached: Vec<PermanentId> = if attached.is_empty() {
             Vec::new()
         } else {
-            self.layer_views(attached.into_iter())
-                .filter(|(id, view)| {
+            let board = self.layer_board();
+            attached
+                .into_iter()
+                .filter(|&id| {
+                    let Some(view) = board.objects.get(id.0).and_then(Option::as_deref) else {
+                        return false;
+                    };
                     !view.has_subtype("Aura")
                         && !(view.has_subtype("Equipment")
                             && !view.is_creature()
                             && self
-                                .attached_creature(*id)
-                                .is_some_and(|target| !self.protected_from_permanent(target, *id)))
+                                .attached_creature(id)
+                                .is_some_and(|target| !self.protected_from_permanent(target, id)))
                 })
-                .map(|(id, _)| id)
                 .collect()
         };
         for permanent_id in detached {
