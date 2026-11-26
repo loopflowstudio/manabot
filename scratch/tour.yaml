@@ -1,15 +1,17 @@
-at: ba306254103d90052a05f8ec556a5bf59698e4a3
+at: 735620f5a6d0674959f6672a99c4627d5c51bef4
 first:
   - path: docs/engine.md
     why: Planeswalker, loyalty, attack-target, empower and emblem contracts
   - path: managym/state/src/card.rs
     why: Printed loyalty, LoyaltyCost, EmblemDefinition and unified StateBasedActionDoesntApply
   - path: managym/state/src/ability.rs
-    why: DelayedEvent::Whenever, two-axis Attacks, LibraryTop(n), Fight, RevealUntil and TargetDivision
+    why: DelayedEvent::Whenever, two-axis Attacks, AbilityProvenance, LinkedAbilitySource, Fight, RevealUntil and TargetDivision
   - path: managym/state/src/permanent.rs
     why: Per-turn loyalty activation quota and available loyalty accounting
   - path: managym/src/flow/game.rs
     why: SpellTargeting, ActivatedTargeting, DivisionParent and counter/life revisions
+  - path: managym/src/flow/functioning_abilities.rs
+    why: Single CR 113.6/114.4/702.26b authority gating statics, triggers, replacements and emblems
   - path: managym/src/flow/play.rs
     why: Loyalty X filtering, sorcery/instant timing and sequential target division
   - path: managym/src/flow/combat.rs
@@ -19,9 +21,9 @@ first:
   - path: managym/src/flow/proposed_event.rs
     why: CR 508.4 attacking-token entry and unified death-to-exile replacements
   - path: managym/src/flow/layers.rs
-    why: Command-zone emblem statics, Way grants, SBA exemptions, StateReads and NodeSource
+    why: Command-zone emblem statics, Way grants, SBA exemptions, StateReads, NodeSource and condition-independent StaticSourceIndex
   - path: managym/src/flow/statics.rs
-    why: LayerBoard invalidation on StateReads and dynamic activation cache tests
+    why: LayerBoard invalidation on StateReads, StaticSourceIndex board reads and dynamic activation cache tests
   - path: managym/src/flow/sba.rs
     why: Layer-projected zero-loyalty and legend-rule SBA exemptions and streaming checks
   - path: managym/src/flow/triggers.rs
@@ -40,6 +42,8 @@ first:
     why: Registered planeswalker emblem definitions
   - path: managym/cards/src/fra.rs
     why: Reality Fracture planeswalkers, Ways, empower cards and adjacent support
+  - path: managym/src/source_census.rs
+    why: Comment-aware single-authority source-census guards across managym/src/
   - path: managym/src/flow/target_authority_tests.rs
     why: Directed -X target filtering and TargetDivision isolation witnesses
   - path: managym/cards/tests/cards/fra.rs

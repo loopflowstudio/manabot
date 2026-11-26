@@ -180,30 +180,28 @@ batch `DeclareAttackers`.
   `tla::boiling_rock`, `fdn::`, `fra::`) 248/248 green; Python extension
   rebuild + pinned pilot check deferred to Slice R2.
 
-### Slice R2 — Condition-independent `StaticSourceIndex` & `source_census.rs` architectural guards
-
-- **Condition-independent `StaticSourceIndex` (`managym/src/flow/layers.rs` / `statics.rs`):**
-  Complement `StateReads` + revision skipping (which skip rebuilds) with a
-  condition-independent generator pre-filter for *when* a layer rebuild runs:
-  collect `battlefield` + `command_zone` objects whose base definitions carry
-  continuous statics (over-including, never under-including, rebuilt at top of
-  rebuild after base reset / before repeated per-layer gathers) so layer passes
-  scale with `O(|generators|)` instead of `O(|battlefield|)` on wide token/anthem
-  boards. Verify byte-identical output and no regression on `bench_steps`,
-  `bench_search`, and `bench_states`.
-- **Comment-aware `source_census.rs` architectural guard tests (`managym/src/source_census.rs`, `#[cfg(test)]`):**
-  Shared comment-stripping helper (excluding leading `/* ... */` and trailing
-  `//` outside string literals so prose edits never cause false positives and
-  deleted call sites cannot be masked by comments) plus source-census guard
-  tests pinning exact counts of sensitive single-authority sites across
-  `managym/src/` (e.g., `collect_replacements()`, `structured_offer.rs` attack
-  defender binding, `ZoneEntry` battlefield entry, emblem/token creation, and
-  direct static/trigger/replacement gather sites bypassing
-  `functioning_abilities.rs`).
-- **Verification:** focused `managym` unit/rules/card tests, `source_census`
-  guard tests, `bench_states` scaling check, pinned pilot zero-drift check, and
-  refresh `scratch/tour.yaml` before advancing to `card-review` → `card-perf` →
-  `compress` → `pr-publish` → `ship-review`.
+- Slice R2 (`735620f5a6`): added condition-independent `StaticSourceIndex`
+  (plus `Layer` active bitmask and `pt_counters` pre-collection) in
+  `managym/src/flow/layers.rs`, `statics.rs`, and `functioning_abilities.rs` so
+  layer rebuilds, Layer-6 `discover()`, `compute_board`, and
+  `for_each_functioning_static`/`has_functioning_static` scale with
+  `O(|generators|)` instead of `O(|battlefield|)` while over-including
+  conservatively and validating completeness under `debug_assertions`; added
+  comment- and `#[cfg(test)]`-aware `managym/src/source_census.rs` architectural
+  guard tests pinning single-authority counts across `managym/src/` (and fixed a
+  main-merge `create_token` arity in `agent/observation.rs`). Verified:
+  `managym --lib` 428/428 (including `static_source_index_scales_with_generators_and_is_condition_independent`
+  and 7 `source_census` tests), `match_state_hash_tests` 11/11, `rules_tests`
+  214/214 (2 ignored), `managym-cards` (`fdn::`, `fra::`) 243/243, `cargo fmt --check`,
+  release `bench_steps` digest `10601622128491155944` (`46.157B` instructions,
+  −0.35% vs Pass 2), `bench_steps --layers` digest `1064912348938184597`,
+  `bench_search --layers` digest `17627308883250227726` / BLAKE3 `0eaa372c...`
+  (`16.336B` instructions), `bench_states --features benchmark --allocations`
+  linear scaling (`duplicate-tokens` 10/13/19 allocs, `attack-planeswalkers`
+  10/11/14 allocs at N=8/16/32), cp313 `maturin develop` rebuild, and
+  `tests/model/test_pinned_pilot.py` (2 passed, 1 skipped, zero drift).
+  Refreshed `scratch/tour.yaml`; ready to advance to `card-review` → `card-perf`
+  → `compress` → `pr-publish` → `ship-review`.
 
 ## Prior PR publish verification (baseline before redo)
 

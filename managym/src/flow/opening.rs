@@ -123,8 +123,10 @@ impl Game {
             .copied()
             .filter(|&id| {
                 self.state[id].statics.iter().any(|ability| {
-                    matches!(ability, crate::state::card::StaticAbility::BeginOnBattlefield)
-                        && self.static_ability_functions(id, ability)
+                    matches!(
+                        ability,
+                        crate::state::card::StaticAbility::BeginOnBattlefield
+                    ) && self.static_ability_functions(id, ability)
                 })
             })
     }
