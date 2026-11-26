@@ -126,7 +126,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
       const box = land.getBoundingClientRect();
       return { ownId: land.dataset.objectId!, x: box.left + 6, y: box.top + box.height / 2 };
     });
-    expect(mountainOffer.aliases?.some(alias => String(alias.display_id) === ownId)).toBe(true);
+    expect(mountainOffer.aliases?.some(alias => alias.kind === 'object' && String(alias.id.entity) === ownId)).toBe(true);
     await page.mouse.move(x, y);
     await expect(page.locator(`[data-object-id="${canonicalMountainId}"][data-payment-source="1"]`)).toHaveCount(1);
     await expect(primary).toHaveText(/^Auto pay \{1\}\{R\}\s*Space$/);

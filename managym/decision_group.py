@@ -14,7 +14,6 @@ from typing import Annotated, Literal
 from pydantic import ConfigDict, Field, TypeAdapter
 
 from managym.experience import (
-    DecisionObjectView,
     ObjectRenderId,
     ProtocolModel,
     SubjectRef,
@@ -61,13 +60,18 @@ class DecisionAddress(ProtocolModel):
 
 
 class Offer(ProtocolModel):
-    """One raw single-step legal offer available at the current decision."""
+    """One raw single-step legal offer available at the current decision.
+
+    ``aliases`` lists live in-zone copies folded into this offer (omitted when
+    empty); folded sideboard ``LearnTakeLesson`` copies stay engine-internal
+    for lowering.
+    """
 
     id: int
     verb: str
     label: str
     source: SubjectRef | None = None
-    aliases: list[DecisionObjectView] = Field(
+    aliases: list[SubjectRef] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
 

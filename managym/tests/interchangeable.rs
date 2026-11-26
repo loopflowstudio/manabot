@@ -35,7 +35,12 @@ fn deck(entries: &[(&str, usize)]) -> BTreeMap<String, usize> {
         .collect()
 }
 
-fn position(lands: &[&str], entries: &[(&str, usize)], spell: &str) -> Game {
+fn position_with_skip(
+    lands: &[&str],
+    entries: &[(&str, usize)],
+    spell: &str,
+    skip_trivial: bool,
+) -> Game {
     let list = deck(entries);
     let mut game = Game::new(
         vec![
@@ -43,9 +48,9 @@ fn position(lands: &[&str], entries: &[(&str, usize)], spell: &str) -> Game {
             PlayerConfig::new("p1", list),
         ],
         487,
-        true,
+        skip_trivial,
     );
-    for _ in 0..2 {
+    while game.action_space().is_some_and(|s| s.kind != ActionSpaceKind::Priority) {
         game.step(0).unwrap();
     }
     let player = PlayerId(0);
@@ -56,6 +61,10 @@ fn position(lands: &[&str], entries: &[(&str, usize)], spell: &str) -> Game {
     }
     game.scenario_refresh_priority().unwrap();
     game
+}
+
+fn position(lands: &[&str], entries: &[(&str, usize)], spell: &str) -> Game {
+    position_with_skip(lands, entries, spell, true)
 }
 
 fn try_step_matching(game: &mut Game, pred: impl Fn(&Action) -> bool) -> bool {
@@ -2648,4 +2657,274 @@ fn decision_group_exposes_offer_aliases_and_normalizes_combat_submit() {
         declared_blocker_counts(&blk_game, blk_events_from, 2),
         vec![1, 1]
     );
+}
+
+#[test]
+fn declare_blocker_offer_source_and_aliases_name_folded_attackers() {
+    use managym::experience::SubjectRef;
+
+    let entries = [("Mountain", 24), ("Gray Ogre", 16)];
+    let mut game = position(&["Mountain"], &entries, "Gray Ogre");
+    let p0 = PlayerId(0);
+    let p1 = PlayerId(1);
+    let mut attackers = Vec::new();
+    for _ in 0..2 {
+        let id = game.create_token("token.ally", p0).unwrap();
+        game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
+        attackers.push(id);
+    }
+    let blocker = game
+        .scenario_force_battlefield(p1, "Gray Ogre", true)
+        .unwrap();
+    declare_all_attackers_and_advance_to_blockers(&mut game, p0);
+
+    let decision = game.decision(Some(p1)).expect("blocker decision");
+    let block_offers: Vec<_> = decision
+        .offers
+        .iter()
+        .filter(|o| o.label.starts_with("Block "))
+        .collect();
+    assert_eq!(block_offers.len(), 1);
+    let offer = block_offers[0];
+    let attacker_refs: std::collections::BTreeSet<_> = attackers
+        .iter()
+        .map(|&a| {
+            let r = render_perm(&game, a);
+            (r.entity, r.incarnation)
+        })
+        .collect();
+    let blocker_render = render_perm(&game, blocker);
+    let source_render = match offer.source {
+        Some(SubjectRef::Object { id }) => id,
+        other => panic!("expected Object SubjectRef source, got {other:?}"),
+    };
+    assert_ne!(
+        source_render, blocker_render,
+        "DeclareBlocker offer source must name the canonical attacker, not the blocker"
+    );
+    assert_eq!(offer.aliases.len(), 1);
+    let alias_render = match offer.aliases[0] {
+        SubjectRef::Object { id } => id,
+        other => panic!("expected Object SubjectRef alias, got {other:?}"),
+    };
+    let combined: std::collections::BTreeSet<_> = [source_render, alias_render]
+        .into_iter()
+        .map(|r| (r.entity, r.incarnation))
+        .collect();
+    assert_eq!(combined, attacker_refs);
+}
+
+#[test]
+fn combat_describe_respects_committed_declines_for_blockers_and_attackers() {
+    use managym::flow::decision_group::DecisionSpec;
+
+    let entries = [("Mountain", 24), ("Gray Ogre", 16)];
+    let p0 = PlayerId(0);
+    let p1 = PlayerId(1);
+
+    // 1. Blockers MustBeBlocked repro:
+    //    Attackers: A1, A2 (MustBeBlocked), A3 (ordinary).
+    //    Blockers asked in order: [Token1, Ogre1, Ogre2, Token2]
+    //    (created in reverse because blockers_to_declare pops from the back).
+    {
+        let mut game = position(&["Mountain"], &entries, "Gray Ogre");
+        let a1 = game
+            .scenario_force_battlefield(p0, "Gray Ogre", true)
+            .unwrap();
+        let a2 = game
+            .scenario_force_battlefield(p0, "Gray Ogre", true)
+            .unwrap();
+        let a3 = game
+            .scenario_force_battlefield(p0, "Gray Ogre", true)
+            .unwrap();
+        grant_must_be_blocked(&mut game, p0, a1);
+        grant_must_be_blocked(&mut game, p0, a2);
+
+        let token2 = game.create_token("token.ally", p1).unwrap();
+        let ogre2 = game
+            .scenario_force_battlefield(p1, "Gray Ogre", true)
+            .unwrap();
+        let ogre1 = game
+            .scenario_force_battlefield(p1, "Gray Ogre", true)
+            .unwrap();
+        let token1 = game.create_token("token.ally", p1).unwrap();
+
+        declare_all_attackers_and_advance_to_blockers(&mut game, p0);
+
+        let r_a1 = render_perm(&game, a1);
+        let r_a2 = render_perm(&game, a2);
+        let r_a3 = render_perm(&game, a3);
+        let r_tok1 = render_perm(&game, token1);
+        let r_tok2 = render_perm(&game, token2);
+        let r_ogre1 = render_perm(&game, ogre1);
+        let r_ogre2 = render_perm(&game, ogre2);
+
+        // Before any committed decline: all four blockers are declarable and
+        // uncommitted copies stay symmetric (none forced to block).
+        let before = game.decision(Some(p1)).expect("initial blockers decision");
+        match &before.spec {
+            DecisionSpec::DeclareBlockers { declarable, .. } => {
+                assert_eq!(declarable.len(), 4);
+                assert_eq!(declarable[0].item, r_tok1);
+                assert!(declarable.iter().any(|b| b.item == r_tok2));
+                assert!(declarable.iter().all(|b| !b.must_block));
+            }
+            other => panic!("expected DeclareBlockers, got {other:?}"),
+        }
+
+        // Raw-decline Token1: Token2 is now suppressed by combat.declined_blockers.
+        let decline_idx = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| {
+                matches!(
+                    a,
+                    Action::DeclareBlocker {
+                        blocker,
+                        attacker: None,
+                        ..
+                    } if *blocker == token1
+                )
+            })
+            .expect("Token1 can decline because Ogre1 and Ogre2 cover A1 and A2");
+        game.step(decline_idx).unwrap();
+
+        // Now Ogre1 is asked: its live offers allow only blocking A1 or A2 (no decline, no A3).
+        let live_targets: Vec<Option<PermanentId>> = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .map(|a| match a {
+                Action::DeclareBlocker { attacker, .. } => *attacker,
+                other => panic!("unexpected action {other:?}"),
+            })
+            .collect();
+        assert!(!live_targets.contains(&None));
+        assert!(!live_targets.contains(&Some(a3)));
+
+        // env.decision() must agree: Token2 absent, Ogre1 and Ogre2 both have
+        // must_block=true and can_block=[A1, A2] (no A3).
+        let after = game
+            .decision(Some(p1))
+            .expect("mid-declaration blockers decision");
+        match &after.spec {
+            DecisionSpec::DeclareBlockers { declarable, .. } => {
+                let ids: Vec<_> = declarable.iter().map(|b| b.item).collect();
+                assert_eq!(ids, vec![r_ogre1, r_ogre2]);
+                assert!(!ids.contains(&r_tok2));
+                let ogre1_item = &declarable[0];
+                assert!(ogre1_item.must_block);
+                assert_eq!(ogre1_item.can_block.len(), 2);
+                assert!(ogre1_item.can_block.contains(&r_a1));
+                assert!(ogre1_item.can_block.contains(&r_a2));
+                assert!(!ogre1_item.can_block.contains(&r_a3));
+                let ogre2_item = &declarable[1];
+                assert!(ogre2_item.must_block);
+                assert!(!ogre2_item.can_block.contains(&r_a3));
+            }
+            other => panic!("expected DeclareBlockers, got {other:?}"),
+        }
+    }
+
+    // 2. Attackers repro: [Token1, Ogre1, Token2] -> raw-decline Token1 ->
+    //    Token2 omitted from declarable; and [Token1, Token2] with skip_trivial=false
+    //    -> raw-decline Token1 -> decision drops to Single (describe returns None).
+    {
+        let mut game = position(&["Mountain"], &entries, "Gray Ogre");
+        let token2 = game.create_token("token.ally", p0).unwrap();
+        game.state.permanents[token2]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
+        let ogre1 = game
+            .scenario_force_battlefield(p0, "Gray Ogre", true)
+            .unwrap();
+        let token1 = game.create_token("token.ally", p0).unwrap();
+        game.state.permanents[token1]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
+        game.scenario_refresh_priority().unwrap();
+        advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareAttackers);
+
+        let r_ogre1 = render_perm(&game, ogre1);
+        let r_tok2 = render_perm(&game, token2);
+
+        let decline_idx = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| {
+                matches!(
+                    a,
+                    Action::DeclareAttacker {
+                        permanent,
+                        attack: None,
+                        ..
+                    } if *permanent == token1
+                )
+            })
+            .expect("Token1 can decline");
+        game.step(decline_idx).unwrap();
+
+        let after = game
+            .decision(Some(p0))
+            .expect("mid-declaration attackers decision");
+        match &after.spec {
+            DecisionSpec::DeclareAttackers { declarable, .. } => {
+                let ids: Vec<_> = declarable.iter().map(|a| a.item).collect();
+                assert_eq!(ids, vec![r_ogre1]);
+                assert!(!ids.contains(&r_tok2));
+            }
+            other => panic!("expected DeclareAttackers, got {other:?}"),
+        }
+    }
+
+    {
+        let mut game = position_with_skip(&["Mountain"], &entries, "Gray Ogre", false);
+        let token2 = game.create_token("token.ally", p0).unwrap();
+        game.state.permanents[token2]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
+        let token1 = game.create_token("token.ally", p0).unwrap();
+        game.state.permanents[token1]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
+        game.scenario_refresh_priority().unwrap();
+        advance_to_step(&mut game, p0, managym::flow::turn::StepKind::DeclareAttackers);
+
+        let decline_idx = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| {
+                matches!(
+                    a,
+                    Action::DeclareAttacker {
+                        permanent,
+                        attack: None,
+                        ..
+                    } if *permanent == token1
+                )
+            })
+            .expect("Token1 can decline");
+        game.step(decline_idx).unwrap();
+
+        // Only suppressed Token2 remains -> describe returns None -> Single.
+        let after = game
+            .decision(Some(p0))
+            .expect("forced-decline remaining attacker");
+        assert!(
+            matches!(after.spec, DecisionSpec::Single),
+            "expected Single when all remaining attackers are suppressed, got {:?}",
+            after.spec
+        );
+    }
 }

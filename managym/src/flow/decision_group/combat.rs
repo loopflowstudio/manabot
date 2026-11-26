@@ -69,7 +69,26 @@ impl DecisionGroupKind for CombatGroup {
 
     fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
         let order = game.declaration_order(self.role, viewer).ok()?;
-        if order.is_empty() {
+        let combat = game.state.combat.as_deref()?;
+        let declined = match self.role {
+            CombatRole::Attackers => combat.declined_attackers.as_slice(),
+            CombatRole::Blockers => combat.declined_blockers.as_slice(),
+        };
+        let active_order: Vec<PermanentId> = if declined.is_empty() {
+            order
+        } else {
+            let suppressed = game.interchangeable_with_any_permanent(declined, &order);
+            order
+                .into_iter()
+                .zip(suppressed)
+                .filter_map(|(creature, is_suppressed)| {
+                    let keep = !is_suppressed
+                        || (self.role == CombatRole::Attackers && game.must_attack(creature));
+                    keep.then_some(creature)
+                })
+                .collect()
+        };
+        if active_order.is_empty() {
             return None;
         }
         match self.role {
@@ -84,7 +103,7 @@ impl DecisionGroupKind for CombatGroup {
                     })
                     .collect();
                 Some(DecisionSpec::DeclareAttackers {
-                    declarable: order
+                    declarable: active_order
                         .iter()
                         .map(|creature| AttackerItem {
                             item: game.permanent_render_id(*creature),
@@ -97,10 +116,10 @@ impl DecisionGroupKind for CombatGroup {
                 })
             }
             CombatRole::Blockers => Some(DecisionSpec::DeclareBlockers {
-                declarable: order
+                declarable: active_order
                     .iter()
                     .map(|creature| {
-                        let others: Vec<_> = order
+                        let others: Vec<_> = active_order
                             .iter()
                             .copied()
                             .filter(|id| *id != *creature)

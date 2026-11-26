@@ -189,16 +189,19 @@ fn interaction_offer_aliases_omit_when_empty_and_round_trip_when_present() {
 
     let mut with_aliases = offer_json;
     with_aliases["aliases"] = json!([
-        {
-            "entity_id": 42,
-            "subject": { "kind": "object", "id": { "entity": 42, "incarnation": 0 } },
-            "display_id": 42,
-            "label": "Plains"
-        }
+        { "kind": "object", "id": { "entity": 42, "incarnation": 0 } }
     ]);
     let parsed: InteractionOffer =
         from_value(with_aliases.clone()).expect("offer with aliases parses");
     assert_eq!(parsed.aliases.len(), 1);
-    assert_eq!(parsed.aliases[0].display_id, 42);
+    assert_eq!(
+        parsed.aliases[0],
+        managym::experience::SubjectRef::Object {
+            id: managym::experience::ObjectRenderId {
+                entity: 42,
+                incarnation: 0,
+            }
+        }
+    );
     assert_eq!(to_value(&parsed).unwrap(), with_aliases);
 }

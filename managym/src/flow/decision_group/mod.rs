@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::agent::action::{Action, ActionSpaceKind, AgentError};
 use crate::agent::decision_surface::DecisionVerb;
 use crate::cards::content_pack::default_content_pack;
-use crate::experience::{DecisionObjectView, ObjectRenderId, OfferSubjectView, SubjectRef};
+use crate::experience::{ObjectRenderId, OfferSubjectView, SubjectRef};
 use crate::flow::decision::Decision;
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
@@ -122,8 +122,11 @@ pub struct DecisionOffer {
     pub verb: DecisionVerb,
     pub label: String,
     pub source: Option<SubjectRef>,
+    /// Live in-zone copies folded into this offer, omitted when empty.
+    /// Outside-game sideboard copies (`LearnTakeLesson`) stay in
+    /// `Game::action_aliases` for lowering.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub aliases: Vec<DecisionObjectView>,
+    pub aliases: Vec<SubjectRef>,
 }
 
 /// The active decision a viewer faces now, carrying its bound address, raw
@@ -546,9 +549,9 @@ fn drive_preview<K: DecisionGroupKind>(
 }
 
 fn primary_subject(subjects: &[OfferSubjectView]) -> Option<SubjectRef> {
-    subjects
-        .iter()
-        .find(|view| view.role == "source")
+    ["target", "source", "choice"]
+        .into_iter()
+        .find_map(|role| subjects.iter().find(|view| view.role == role))
         .or_else(|| subjects.first())
         .map(|view| view.object.subject)
 }

@@ -1011,12 +1011,14 @@ Two objects in the same zone (or outside-game sideboard entries for
 Surviving actions keep their relative order, `ActionSpace`'s shape and policy
 input layouts are unchanged, and a space folded to one action is skipped under
 `skip_trivial` like any forced choice (and counts as no choice for loop
-detection). Experience frames list any folded copies on the surviving
-`InteractionOffer.aliases` (omitted when empty) so Academy can keep every copy
-on the board or in hand interactive while sending the one canonical Command, and
-compound offers lower folded members through those aliases. A Command naming an
-offer id removed by folding is rejected as unknown; recordings written before
-this change replay by action index only at their own engine revision.
+detection). `Offer.aliases` and experience `InteractionOffer.aliases`
+(`list[SubjectRef]`, omitted when empty) list live in-zone folded copies only so
+Academy can keep every copy on the board or in hand interactive while sending
+the one canonical Command; outside-game sideboard `LearnTakeLesson` copies stay
+in `Game::action_aliases` for lowering, and compound offers lower folded members
+through `Game::action_aliases`. A Command naming an offer id removed by folding
+is rejected as unknown; recordings written before this change replay by action
+index only at their own engine revision.
 
 ### Automatic source preference
 
@@ -1327,8 +1329,10 @@ Supported `Decision` kinds and grouped activation thresholds:
   single-step legal `offers` (`list[Offer]`), where each `Offer` carries a
   human-readable `label` (such as `"Play Mountain"`, `"Cast Gray Ogre"`,
   `"Pass priority"`), its viewer-safe `source: SubjectRef | None`, and any
-  viewer-visible folded copies in `aliases: list[DecisionObjectView]` (omitted
-  when empty) without changing `semantic_decision_frame()` fingerprints. Halfway through raw
+  viewer-visible live in-zone folded copies in `aliases: list[SubjectRef]`
+  (omitted when empty; outside-game sideboard `LearnTakeLesson` copies stay in
+  `Game::action_aliases` for lowering) without changing
+  `semantic_decision_frame()` fingerprints. Halfway through raw
   stepping a grouped decision, `env.decision()` returns the remaining undecided
   items plus immutable `committed*` state (and drops to `SingleDecision` below
   threshold).

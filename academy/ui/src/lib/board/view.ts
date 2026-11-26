@@ -396,8 +396,8 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
     // stay whole and every copy sends the canonical offer; tray/list stay one per offer.
     if (placed.anchor.kind === 'object') {
       for (const alias of placed.offer.aliases ?? []) {
-        if (alias.subject.kind === 'object' && drawn.has(alias.display_id)) {
-          place({ kind: 'object', id: alias.display_id }, placed);
+        if (alias.kind === 'object' && drawn.has(alias.id.entity)) {
+          place({ kind: 'object', id: alias.id.entity }, placed);
         }
       }
     }

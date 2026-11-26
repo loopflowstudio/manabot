@@ -303,9 +303,13 @@ describe('where decisions land', () => {
     agent.hand = knights;
     agent.graveyard = graveCards;
     frame.projection.decision_context = undefined;
+    const ref = (id: number) => ({
+      kind: 'object' as const,
+      id: { entity: id, incarnation: 0 },
+    });
     const obj = (id: number, label: string) => ({
       entity_id: id,
-      subject: { kind: 'object' as const, id: { entity: id, incarnation: 0 } },
+      subject: ref(id),
       display_id: id,
       label,
     });
@@ -320,7 +324,7 @@ describe('where decisions land', () => {
         confirm_label: 'Tap Plains for {W}',
         source: null,
         subjects: [{ role: 'choice', object: obj(501, 'Plains') }],
-        aliases: [obj(502, 'Plains'), obj(503, 'Plains')],
+        aliases: [ref(502), ref(503)],
         focus: [501],
       },
       {
@@ -330,9 +334,9 @@ describe('where decisions land', () => {
         action_type: 'PRIORITY_CAST_SPELL',
         label: 'Cast Youthful Knight',
         confirm_label: 'Cast Youthful Knight',
-        source: obj(601, 'Youthful Knight').subject,
+        source: ref(601),
         subjects: [{ role: 'source', object: obj(601, 'Youthful Knight') }],
-        aliases: [obj(602, 'Youthful Knight')],
+        aliases: [ref(602)],
         focus: [601],
       },
       {
@@ -344,7 +348,7 @@ describe('where decisions land', () => {
         confirm_label: 'Select Mountain',
         source: null,
         subjects: [{ role: 'choice', object: obj(701, 'Mountain') }],
-        aliases: [obj(702, 'Mountain')],
+        aliases: [ref(702)],
         focus: [701],
       },
     ];

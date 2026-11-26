@@ -244,12 +244,7 @@ def test_optional_fields_may_be_absent_or_round_trip_when_present():
         }
     )
     frame["offers"][0]["aliases"] = [
-        {
-            "entity_id": 99,
-            "subject": {"kind": "object", "id": {"entity": 99, "incarnation": 0}},
-            "display_id": 99,
-            "label": "Plains",
-        }
+        {"kind": "object", "id": {"entity": 99, "incarnation": 0}}
     ]
 
     RUST_VALIDATOR.validate(enriched)

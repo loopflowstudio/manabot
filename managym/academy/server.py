@@ -47,6 +47,7 @@ from managym.decision import (
     TransitionReceipt,
 )
 from managym.decision_group import (
+    Decision,
     DecisionAddress,
     DecisionGroupChoice,
     DecisionPreview,
@@ -403,6 +404,7 @@ class DecisionContext:
     actions: list[dict[str, Any]]
     offers: list[dict[str, Any]]
     frame: dict[str, Any]
+    active_decision: Decision | None = None
 
 
 @dataclass(frozen=True)
@@ -2005,7 +2007,9 @@ class GameSession:
             and self._live_decision_group_cache[0] == cache_key
         ):
             return deepcopy(self._live_decision_group_cache[1])
-        active = self.env.decision(viewer=self.human_seat)
+        active = context.active_decision
+        if active is None:
+            active = self.env.decision(viewer=self.human_seat)
         if active is None or isinstance(active, SingleDecision):
             self._live_decision_group_cache = (cache_key, None)
             return None
@@ -2807,6 +2811,7 @@ class GameSession:
         self.published_prompt = self._build_decision_context(
             self.obs,
             viewer=self.human_seat,
+            include_decision=True,
         )
         frame = ExperienceFrame.model_validate(self.published_prompt.frame)
         address = DecisionAddressV2.from_frame(
@@ -2837,6 +2842,7 @@ class GameSession:
         obs: managym.Observation,
         *,
         viewer: int,
+        include_decision: bool = False,
     ) -> DecisionContext:
         """Build one exact actor-safe frame and raw-action lowering map."""
         actions = trace_store.academy_actions(obs, self.human_seat)
@@ -2849,7 +2855,9 @@ class GameSession:
             offer_id: int(action["index"]) for offer_id, action in enumerate(actions)
         }
         subjects = json.loads(self.env.decision_offer_subjects_json(viewer))
-        active_decision = self.env.decision(viewer=viewer)
+        active_decision = (
+            self.env.decision(viewer=viewer) if include_decision else None
+        )
         decision_offers = active_decision.offers if active_decision is not None else []
         offers = [
             {
@@ -2913,6 +2921,7 @@ class GameSession:
             actions=actions,
             offers=offers,
             frame=frame,
+            active_decision=active_decision,
         )
 
     def _deck_names_for(self, viewer: int) -> dict[str, str] | None:

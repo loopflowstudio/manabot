@@ -156,9 +156,11 @@ impl Game {
             .collect()
     }
 
-    /// Viewer-safe folded copies for each one-action offer, in native offer order.
-    /// Objects hidden from `viewer` are never exposed.
-    pub fn decision_offer_aliases(&self, viewer: PlayerId) -> Vec<Vec<DecisionObjectView>> {
+    /// Viewer-safe live in-zone folded copies for each one-action offer, in
+    /// native offer order. Objects hidden from `viewer` and outside-game
+    /// sideboard entries (`LearnTakeLesson`, which stay in
+    /// `Game::action_aliases` for lowering) are not emitted.
+    pub fn decision_offer_aliases(&self, viewer: PlayerId) -> Vec<Vec<SubjectRef>> {
         let Some(space) = self.action_space() else {
             return Vec::new();
         };
@@ -181,8 +183,13 @@ impl Game {
             {
                 continue;
             }
-            if let Some(view) = self.decision_object(alias_object) {
-                slot.push(view);
+            if self.state.live(alias_object).is_none() {
+                continue;
+            }
+            if let Some(identity) = self.observed_identity(alias_object) {
+                slot.push(SubjectRef::Object {
+                    id: identity.reference.into(),
+                });
             }
         }
         by_offer

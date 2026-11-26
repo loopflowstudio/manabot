@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from managym.academy.server import GameSession
-from managym.experience import ExperienceFrame, InteractionOffer
+from managym.experience import ExperienceFrame, InteractionOffer, ObjectSubject
 
 
 def _setup(
@@ -109,7 +109,8 @@ def test_dual_land_plus_three_plains_folds_with_aliases_replays_and_rejects_stal
     assert len(hand_knights) == 2
     assert len(cast.subjects) == 1
     assert len(cast.aliases) == 1
-    assert {cast.subjects[0].object.display_id, cast.aliases[0].display_id} == set(
+    assert isinstance(cast.aliases[0], ObjectSubject)
+    assert {cast.subjects[0].object.display_id, cast.aliases[0].id.entity} == set(
         hand_knights
     )
 
@@ -134,9 +135,10 @@ def test_dual_land_plus_three_plains_folds_with_aliases_replays_and_rejects_stal
     assert len(plains_ids) == 3
     assert len(plains_offer.subjects) == 1
     assert len(plains_offer.aliases) == 2
+    assert all(isinstance(alias, ObjectSubject) for alias in plains_offer.aliases)
     assert {
         plains_offer.subjects[0].object.display_id,
-        *(alias.display_id for alias in plains_offer.aliases),
+        *(alias.id.entity for alias in plains_offer.aliases if alias.kind == "object"),
     } == set(plains_ids)
 
     # An offer id removed by folding is rejected as unknown.
@@ -205,3 +207,51 @@ def test_dual_land_plus_three_plains_folds_with_aliases_replays_and_rejects_stal
     assert replay_session.env is not None
     assert replay_session.env.state_digest() == expected_digest
     assert replay_frame.frame_hash == finished_cast.frame_hash
+
+
+def test_server_projects_decision_once_per_hero_prompt_and_skips_villain_autoplay(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    import managym.decision_group as decision_group_mod
+
+    parse_calls: list[int] = []
+    real_parse = decision_group_mod.parse_decision
+
+    def spy_parse(raw: str) -> Any:
+        parsed = real_parse(raw)
+        parse_calls.append(parsed.address.viewer)
+        return parsed
+
+    monkeypatch.setattr(decision_group_mod, "parse_decision", spy_parse)
+
+    session = GameSession(
+        trace_dir=tmp_path,
+        id_factory=lambda kind: f"proj-{kind}",
+    )
+    frame = ExperienceFrame.model_validate(
+        session.new_game(
+            {
+                "hero_deck": {"Plains": 40},
+                "villain_deck": {"Plains": 40},
+                "villain_type": "passive",
+                "seed": 11,
+                "auto_pass": False,
+            }
+        )["frame"]
+    )
+    # Initial hero prompt computed once; live_decision_group reuses it without re-projecting.
+    assert parse_calls == [session.human_seat]
+    assert session.published_prompt is not None
+    assert session.published_prompt.active_decision is not None
+    assert session.live_decision_group() is None
+    assert parse_calls == [session.human_seat]
+
+    # Step past opening keep so villain autoplays its keep/turn without projecting env.decision().
+    keep = next(offer for offer in frame.offers if offer.label == "Keep hand")
+    parse_calls.clear()
+    _choose(session, frame, keep)
+    assert all(viewer == session.human_seat for viewer in parse_calls)
+    assert len(parse_calls) == 1
+    assert session.live_decision_group() is None
+    assert len(parse_calls) == 1

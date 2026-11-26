@@ -436,7 +436,10 @@ def test_decision_offers_expose_folded_aliases() -> None:
     priority = env.decision(0)
     assert isinstance(priority, SingleDecision)
     cast_offer = next(o for o in priority.offers if o.label == "Cast Youthful Knight")
+    assert cast_offer.source is not None and cast_offer.source.kind == "object"
     assert len(cast_offer.aliases) == 1
+    assert cast_offer.aliases[0].kind == "object"
+    assert cast_offer.aliases[0] != cast_offer.source
     env.submit(cast_offer.id, at=priority.address)
 
     payment = env.decision(0)
@@ -448,8 +451,41 @@ def test_decision_offers_expose_folded_aliases() -> None:
     ]
     assert payment.offers[0].aliases == []
     assert len(payment.offers[1].aliases) == 2
+    assert all(alias.kind == "object" for alias in payment.offers[1].aliases)
+    assert payment.offers[1].source is not None
+    assert payment.offers[1].source not in payment.offers[1].aliases
     assert payment.offers[2].aliases == []
     dumped = payment.model_dump(mode="json")
     assert "aliases" not in dumped["offers"][0]
     assert len(dumped["offers"][1]["aliases"]) == 2
+    assert set(dumped["offers"][1]["aliases"][0].keys()) == {"kind", "id"}
     assert "aliases" not in dumped["offers"][2]
+
+    # DeclareBlocker offer source names the canonical attacker, matching aliases.
+    blk_env = _setup_env(
+        {"Mountain": 20, "Gray Ogre": 20},
+        {"Mountain": 20, "Gray Ogre": 20},
+        seed=19,
+    )
+    _keep_opening_hands(blk_env)
+    blk_env.scenario_force_battlefield(0, "Gray Ogre", ready=True)
+    blk_env.scenario_force_battlefield(0, "Gray Ogre", ready=True)
+    blk_env.scenario_force_battlefield(1, "Gray Ogre", ready=True)
+    blk_env.scenario_refresh()
+    atk = _advance_to_decision(blk_env, "declare_attackers")
+    assert isinstance(atk, DeclareAttackersDecision)
+    blk_env.submit(
+        DeclareAttackersChoice(attackers=[item.item for item in atk.declarable]),
+        at=atk.address,
+    )
+    blk = _advance_to_decision(blk_env, "declare_blockers")
+    block_offers = [o for o in blk.offers if o.label.startswith("Block ")]
+    assert len(block_offers) == 1
+    block_offer = block_offers[0]
+    assert block_offer.source is not None and block_offer.source.kind == "object"
+    assert len(block_offer.aliases) == 1 and block_offer.aliases[0].kind == "object"
+    attacker_items = {(item.item.entity, item.item.incarnation) for item in atk.declarable}
+    assert {
+        (block_offer.source.id.entity, block_offer.source.id.incarnation),
+        (block_offer.aliases[0].id.entity, block_offer.aliases[0].id.incarnation),
+    } == attacker_items

@@ -276,13 +276,19 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             before_ids = {
                 member
                 for o in choices
-                for member in [o.focus[0], *(a.display_id for a in o.aliases)]
+                for member in [
+                    o.focus[0],
+                    *(a.id.entity for a in o.aliases if a.kind == "object"),
+                ]
             }
             after_ids = {
                 member
                 for o in pending.offers
                 if o.action_type == "SELECT_CARD"
-                for member in [o.focus[0], *(a.display_id for a in o.aliases)]
+                for member in [
+                    o.focus[0],
+                    *(a.id.entity for a in o.aliases if a.kind == "object"),
+                ]
             }
             assert after_ids == before_ids - {chosen.focus[0]}
             game = server.SESSION_REGISTRY[initial["session_id"]].game
