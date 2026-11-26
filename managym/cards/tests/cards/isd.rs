@@ -132,3 +132,38 @@ fn foundations_5f_vampire_interloper() {
     let blocks = crate::walk_block_declaration(&mut s);
     assert_eq!(blocks, [(ogre, vec![attacker])]);
 }
+
+#[test]
+fn tribute_to_hunger_gains_the_opponents_chosen_creatures_last_toughness() {
+    use crate::support::{
+        game::until_end_of_turn,
+        inspect::{card_of, offered_cards, zone_of},
+        play::{pass_until, select_card, spend_colorless, target_opponent},
+    };
+    use managym::state::{effect::Modification, game_object::PlayerId};
+
+    let mut s = five_color_setup(&["Tribute to Hunger", "Gray Ogre", "Craw Wurm"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let (ogre_card, wurm_card) = (card_of(&s, ogre), card_of(&s, wurm));
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::ModifyPt {
+            power: 0,
+            toughness: 4,
+        },
+    );
+    cast_owned(&mut s, "Tribute to Hunger");
+    target_opponent(&mut s);
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    assert_eq!(offered_cards(&s), [ogre_card, wurm_card]);
+    select_card(&mut s, ogre_card);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, wurm_card), Some(ZoneType::Battlefield));
+    s.assert_life(0, 26);
+    s.assert_life(1, 20);
+}

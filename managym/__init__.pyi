@@ -1034,9 +1034,10 @@ class RestrictedMana:
     mana: tuple[int, int, int, int, int, int]
 
 class PooledManaClass:
-    """One pooled class with a spend effect or combat expiry."""
+    """One pooled class with a spend effect or non-step expiry."""
 
     combat: bool
+    expiry: str
     restriction: str | None
     effect: str | None
     mana: tuple[int, int, int, int, int, int]
@@ -1117,6 +1118,8 @@ class Card:
     x: Optional[int]
     # A graveyard card put there from the battlefield this turn (input v10).
     from_battlefield_this_turn: bool
+    # A graveyard card put there from any zone this turn (input v11).
+    put_into_graveyard_this_turn: bool
     # Counters on the card off the battlefield ("with a stash counter on it").
     counters: dict[str, int]
 
@@ -1207,6 +1210,7 @@ class Permanent:
     loyalty_activated_this_turn: bool
     once_each_turn_used: int
     granted_firebending: int
+    chosen: str | None
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords

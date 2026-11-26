@@ -20,6 +20,36 @@ fn foundations_5e_kindled_fury() {
 }
 
 #[test]
+fn ballyrush_banneret_reduces_kithkin_or_soldier_once() {
+    use crate::support::game::{five_color_unfunded_setup, move_to_hand};
+    use crate::support::inspect::can_cast;
+    use crate::support::play::{cast_card, settle};
+
+    let mut s = five_color_unfunded_setup(&["Ballyrush Banneret", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Ballyrush Banneret");
+    // Second Ballyrush Banneret is both Kithkin and Soldier ({1}{W}): costs {W}, not free!
+    let second = move_to_hand(&mut s, "Ballyrush Banneret");
+    let ogre = move_to_hand(&mut s, "Gray Ogre");
+
+    s.set_player_mana_pool(0, "");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, second), "Kithkin Soldier is not free");
+
+    s.set_player_mana_pool(0, "W");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, second), "Kithkin Soldier costs 1 less");
+    assert!(!can_cast(&s, ogre), "Gray Ogre gets no discount");
+
+    cast_card(&mut s, second);
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Ballyrush Banneret")
+            .len(),
+        2
+    );
+}
+
+#[test]
 fn taurean_mauler_is_revealed_as_an_ally_and_can_grow_on_an_opposing_cast() {
     use crate::support::{
         game::{clear_summoning_sickness, five_color_setup, pin_top},
@@ -116,7 +146,7 @@ fn mauler_counts_as_an_angel_elf_advisor_and_attacking_vampire() {
     choose_mode(&mut s, 0);
     let advisor = mode_labels(&s)
         .iter()
-        .position(|name| name == "Advisor")
+        .position(|name| name == "Choose Advisor")
         .unwrap();
     choose_mode(&mut s, advisor);
     settle(&mut s);

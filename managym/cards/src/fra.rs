@@ -2206,7 +2206,10 @@ fn garruk_veiled_butcher() -> CardDefinition {
                 loyalty(
                     -2,
                     vec![
-                        Effect::EachPlayerSacrificesCreatures { count: 1 },
+                        Effect::EachPlayerSacrifices {
+                            predicate: CardPredicate::creature(),
+                            count: 1,
+                        },
                         Effect::if_you_do(vec![Effect::create_tokens(
                             "token.beast_4_4_g_trample",
                             1,
@@ -2638,6 +2641,7 @@ fn break_under_pressure() -> CardDefinition {
                             exact_mana_value: Some(Box::new(max_mv)),
                         },
                         predicate: CardPredicate::default(),
+                        max_mana_value: None,
                         min: 1,
                         max: 1.into(),
                         effects: vec![Effect::Sacrifice {
@@ -3182,6 +3186,7 @@ fn loyal_tutor() -> CardDefinition {
             spell_effects: vec![Effect::SelectCards {
                 from: ObjectSelector::Zone(ZoneType::Library),
                 predicate: CardPredicate::card_type(CardType::Planeswalker),
+                max_mana_value: None,
                 min: 0,
                 max: 1.into(),
                 effects: vec![

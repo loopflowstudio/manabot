@@ -112,8 +112,8 @@ pub fn cast_targets(game: &crate::Game) -> Vec<crate::agent::action::Action> {
     let requirement = &requirements[targeting.requirement_index];
     assert_eq!(
         (
-            requirement.min_for(targeting.cast.x.into()),
-            requirement.max_for(targeting.cast.x.into())
+            requirement.min_for(i32::from(targeting.cast.x), targeting.cast.kicked),
+            requirement.max_for(i32::from(targeting.cast.x), targeting.cast.kicked),
         ),
         (1, 1)
     );

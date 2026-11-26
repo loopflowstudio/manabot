@@ -999,6 +999,8 @@ impl Aggregate {
 /// A resolution-time quantity relative to the effect controller.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum EffectValue {
+    /// The amount assigned to this target as the spell was cast.
+    TargetShare,
     Property {
         of: Box<ObjectSelector>,
         property: ObjectProperty,
@@ -1068,6 +1070,8 @@ pub enum EffectValue {
     PermanentsSacrificedThisTurn,
     /// "The number of spells you've cast this turn."
     SpellsCastThisTurn,
+    /// Matching casts by the controller strictly before the triggering spell.
+    SpellsCastBeforeTriggering(CardPredicate),
     /// The total power of the creatures tapped to pay the resolving
     /// ability's cost ("charge counters equal to its power", station, CR
     /// 702.184a), each read as the ability resolves or from its last known
@@ -1135,19 +1139,36 @@ pub enum EffectValue {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum PaymentCost {
     Mana(ManaCost),
-    Waterbend { generic: u8 },
+    Waterbend {
+        generic: u8,
+    },
     Life(u32),
     Discard,
+    /// Multiple costs that must all be paid (e.g. "Ward—{3}, Pay 3 life").
+    All(Vec<PaymentCost>),
 }
 
 impl PaymentCost {
     /// The mana this cost states, or `None` for a nonmana payment. For readers of a definition (a ward's price); a
-    /// payment being made owes a `CostComponent`.
+    /// payment being made owes `CostComponent`s.
     pub fn mana(&self) -> Option<ManaCost> {
         match self {
             Self::Mana(cost) => Some(cost.clone()),
             Self::Waterbend { generic } => Some(ManaCost::default().with_generic(*generic)),
             Self::Life(_) | Self::Discard => None,
+            Self::All(parts) => parts
+                .iter()
+                .filter_map(Self::mana)
+                .reduce(|a, b| a.plus(&b)),
+        }
+    }
+
+    /// Total life this cost requires; 0 without a life component.
+    pub fn life(&self) -> u32 {
+        match self {
+            Self::Life(life) => *life,
+            Self::All(parts) => parts.iter().map(Self::life).sum(),
+            Self::Mana(_) | Self::Waterbend { .. } | Self::Discard => 0,
         }
     }
 }
@@ -1212,6 +1233,8 @@ pub enum ObjectSelector {
     /// The clause's chosen target. The spec declares the implicit targeting
     /// clause of an effect list without an explicit `TargetClause`.
     Target(TargetSpec),
+    /// The legal targets of a specified clause, independent of the cursor.
+    ClauseTarget(usize),
     /// All eligible targets of the active clause, acted on by one instruction
     /// ("put a counter on each target"). Unlike `ForEachTarget`, this does not
     /// run a separate instruction sequence or commit a separate event per slot.
@@ -1230,8 +1253,6 @@ pub enum ObjectSelector {
     Remembered,
     /// Cards in exile linked to the exact ability source (CR 607.2a).
     ExiledWithSource,
-    /// The top `count` objects of the resolving player's library, top-first.
-    LibraryTop(usize),
     /// Every card in the resolving player's library except its bottom card.
     LibraryExceptBottom,
     /// The object the source Aura or Equipment is attached to.
@@ -1249,6 +1270,13 @@ pub enum ObjectSelector {
     CardsThisWay,
     /// Exact objects chosen by the enclosing SelectCards operation.
     Selected,
+    /// Exact objects from the enclosing `SelectCards`' `from` domain that
+    /// were not chosen (`from` minus `Selected`, still live). Available in
+    /// both `effects` and `if_declined`.
+    Unselected,
+    /// Top N cards of the resolving player's library, top first, fixed when
+    /// the instruction runs.
+    LibraryTop(Box<EffectValue>),
     /// The objects that paid the resolving spell's or ability's cost by
     /// being `How` ("the sacrificed creature", CR 602.2b). Property reads
     /// use each object's last known information once it has left; the
@@ -1305,6 +1333,8 @@ pub enum ObjectSelector {
     /// owner, unlike `Each`'s permanents by controller; a hidden zone is
     /// `Zone`, whose selection keeps sampling provenance.
     ZoneMatching {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        except: Option<Except>,
         zone: ZoneType,
         owner: Actor,
         predicate: CardPredicate,
@@ -1332,8 +1362,13 @@ pub enum Scope {
 pub enum Except {
     /// "another": the source permanent.
     This,
+    /// Exact arrivals of the preceding movement ("another permanent card").
+    Moved,
     /// "all other": the clause's chosen target (Avatar's Wrath).
     Target,
+    /// Exact objects from the preceding token creation ("all other Nightmare
+    /// tokens you control").
+    CreatedThisWay,
     /// Permanents bound in `frame.remembered` during this resolution.
     Remembered,
     /// Permanents matching `predicate` controlled by `controlled_by` relative
@@ -1416,17 +1451,19 @@ impl ObjectSelector {
             } => Some(&TARGET_PLAYER),
             Self::This
             | Self::ExactSource
+            | Self::ClauseTarget(_)
             | Self::Triggering
             | Self::Attached
             | Self::CreatedThisWay
             | Self::Remembered
-            | Self::LibraryTop(_)
             | Self::LibraryExceptBottom
             | Self::ExiledWithSource
             | Self::Grantor
             | Self::Moved
             | Self::CardsThisWay
             | Self::Selected
+            | Self::Unselected
+            | Self::LibraryTop(_)
             | Self::Paid(_)
             | Self::Zone(_)
             | Self::You
@@ -1529,6 +1566,9 @@ pub enum Effect {
         /// Move a hidden card into hand without revealing its identity.
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         unrevealed: bool,
+        /// Exile face down (CR 406.3): hidden until a play grant reveals it.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        face_down: bool,
         /// A stated end replaces the usual shuffle-into-library movement.
         #[serde(skip_serializing_if = "Option::is_none")]
         library_end: Option<LibraryEnd>,
@@ -1619,11 +1659,14 @@ pub enum Effect {
         predicate: CardPredicate,
     },
     /// Choose a subset of exact objects from `from`, then run `effects` in
-    /// a child scope where `Selected` names them. An empty selection runs
+    /// a child scope where `Selected` names them and `Unselected` names the
+    /// remaining live objects of `from`. An empty selection runs
     /// `if_declined`; the caller retains its earlier results and suffix.
     SelectCards {
         from: ObjectSelector,
         predicate: CardPredicate,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        max_mana_value: Option<Box<EffectValue>>,
         min: usize,
         max: EffectValue,
         effects: Vec<Effect>,
@@ -1738,29 +1781,17 @@ pub enum Effect {
     /// Until the controller's next turn, opponents cast spells only from
     /// their hands.
     OpponentsCastOnlyFromHand,
-    /// The controller may cast the targeted graveyard card this turn at its normal cost and timing.
-    GrantGraveyardCastThisTurn {
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        flashback: bool,
-        target: TargetSpec,
-    },
-    /// "Exile the top `count` cards of your library [face down]. [Choose
-    /// "Exile the top `count` cards of your library [face down]. You may play
-    /// them [`until`] [if `condition`]." A face-down card is hidden from
-    /// everyone, its exiler included, while the condition fails (Flameshape).
-    ExileTopCardsToPlay {
-        count: usize,
-        until: PlayWindow,
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        face_down: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        condition: Option<Condition>,
-    },
-    /// Grant the resolving player permission to play each exiled object `what`
-    /// names [`until`] [if `condition`].
+    /// Grant the resolving player permission to cast — or with `play_lands`,
+    /// play — each card `what` names for `until`. `flashback` exiles the
+    /// spell when it leaves the stack (CR 702.34); `face_down` and
+    /// `condition` match cards exiled face down (CR 406.3, Flameshape).
     GrantPlay {
         what: ObjectSelector,
         until: PlayWindow,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        play_lands: bool,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        flashback: bool,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         face_down: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -1973,7 +2004,8 @@ pub enum Effect {
     /// "Each player sacrifices `count` creatures of their choice": the active
     /// player chooses first (CR 101.4), a player with no more than `count`
     /// sacrifices them all, and the sacrifices are one event.
-    EachPlayerSacrificesCreatures {
+    EachPlayerSacrifices {
+        predicate: CardPredicate,
         count: usize,
     },
     /// Create a delayed triggered ability (CR 603.7): when `event` occurs,
@@ -1994,6 +2026,11 @@ pub enum Effect {
     GainLife {
         amount: EffectValue,
     },
+    /// Evaluate the count once, then perform the instruction that many times.
+    Repeat {
+        count: EffectValue,
+        effect: Box<Effect>,
+    },
     /// Execute the inner effect only if this is the `n`th time this
     /// ability has resolved this turn ("if this is the second time this
     /// ability has resolved this turn, ...").
@@ -2006,6 +2043,11 @@ pub enum Effect {
         count: usize,
     },
     ManifestDread,
+    /// Separate inspected cards into face-up and face-down piles. An opponent
+    /// chooses one for the controller's hand; the rest go to the graveyard.
+    SeparatePiles {
+        look: usize,
+    },
     /// Surveil `count` (CR 701.25): look at the top cards and put any
     /// number of them into the graveyard, then order the kept cards on top.
     Surveil {
@@ -2124,6 +2166,12 @@ pub enum Effect {
     /// "Add X mana of any one color", X read as the mana ability resolves.
     AddOneColorManaValue {
         amount: EffectValue,
+        /// Use the color chosen on entry; otherwise its controller picks the color now.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        chosen_color: bool,
+        /// Allowed uses of this mana, bound to its source's chosen creature type.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        creature_purposes: Vec<crate::mana::CreatureManaPurpose>,
     },
 
     /// `first` fights `second` (CR 701.14); records the excess damage dealt to
@@ -2146,6 +2194,13 @@ pub enum Effect {
     /// the primary target (Fancy Footwork: "untap one or two target
     /// creatures; they each get +2/+2"). Children may suspend.
     ForEachTarget {
+        effects: Vec<Effect>,
+    },
+    /// The inner instructions happen at once, as one event (CR 608.2c:
+    /// Drakuseth "deals 4 damage to any target and 3 damage to each of up
+    /// to two other targets"). Each inner instruction proposes its events
+    /// without a decision, and all share an event binding.
+    Simultaneously {
         effects: Vec<Effect>,
     },
 }
@@ -2211,6 +2266,9 @@ static TARGET_PLAYER: TargetSpec = TargetSpec::Player;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TargetSpec {
+    PermanentYouOwn {
+        predicate: CardPredicate,
+    },
     PermanentYouControl {
         predicate: CardPredicate,
     },
@@ -2288,6 +2346,9 @@ pub struct TargetRequirement {
     /// `min` 0, or "X targets", exactly X, with any other `min`.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub max_x: bool,
+    /// Kicker replaces the ordinary bound with “up to N”, including zero.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub up_to_if_kicked: Option<usize>,
     /// The targets in this clause have total mana value at most X.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub total_mana_value_x: bool,
@@ -2303,6 +2364,30 @@ pub struct TargetRequirement {
     /// targets during announcement (at least 1 per target).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub division: Option<EffectValue>,
+    /// How each target of this clause must stand to the targets of an
+    /// earlier clause ("other targets", "attached to that creature",
+    /// "controlled by different players").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relation: Option<TargetRelation>,
+}
+
+/// A rule joining a clause's targets to an earlier clause's (CR 115.3).
+/// Clauses otherwise admit the same object twice, once per word "target"
+/// (CR 115.3); a relation is how a card says otherwise. The clause index
+/// counts the program's targeting clauses from zero and is always earlier
+/// than the clause that carries the relation. Choosing targets, changing
+/// them (CR 115.7) and resolution (CR 608.2b) all check it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum TargetRelation {
+    /// "Other targets": no object chosen for any earlier clause.
+    DistinctFromEarlier,
+    /// "Target Equipment attached to that creature": attached to the
+    /// clause's target; illegal at resolution once that target is.
+    AttachedToEarlier(usize),
+    /// "Target creatures controlled by different players": a controller
+    /// other than that of the clause's targets. At resolution both sides
+    /// become illegal together, read from last known information.
+    DifferentControllerFrom(usize),
 }
 
 impl ObjectSelector {
@@ -2312,6 +2397,7 @@ impl ObjectSelector {
             Self::Remembered => read == ContextRead::Remembered,
             Self::Paid(_) => read == ContextRead::PaidCost,
             Self::Matching { of, .. } => of.reads(read),
+            Self::LibraryTop(count) => count.reads(read),
             Self::Each {
                 exact_mana_value,
                 max_mana_value,
@@ -2357,10 +2443,12 @@ impl TargetRequirement {
             max: 1,
             another: false,
             max_x: false,
+            up_to_if_kicked: None,
             total_mana_value_x: false,
             same_graveyard: false,
             opponent_chooses: false,
             division: None,
+            relation: None,
         }
     }
 
@@ -2378,8 +2466,10 @@ impl TargetRequirement {
     }
 
     /// The fewest targets this requirement allows with X announced as `x`.
-    pub fn min_for(&self, x: i32) -> usize {
-        if self.exact_x() {
+    pub fn min_for(&self, x: i32, kicked: bool) -> usize {
+        if kicked && self.up_to_if_kicked.is_some() {
+            0
+        } else if self.exact_x() {
             usize::try_from(x).unwrap_or(0)
         } else {
             self.min
@@ -2387,8 +2477,10 @@ impl TargetRequirement {
     }
 
     /// The most targets this requirement allows with X announced as `x`.
-    pub fn max_for(&self, x: i32) -> usize {
-        if self.max_x {
+    pub fn max_for(&self, x: i32, kicked: bool) -> usize {
+        if let Some(max) = self.up_to_if_kicked.filter(|_| kicked) {
+            max
+        } else if self.max_x {
             usize::try_from(x).unwrap_or(0)
         } else {
             self.max
@@ -2477,7 +2569,12 @@ impl Effect {
                         .any(|exception| modification_reads(&exception.modification()))
             }
             Self::If { condition, .. } if condition.reads(read) => true,
-            Self::SelectCards { max, .. } if max.reads(read) => true,
+            Self::Repeat { count, .. } if count.reads(read) => true,
+            Self::SelectCards {
+                max,
+                max_mana_value,
+                ..
+            } if max.reads(read) || max_mana_value.as_ref().is_some_and(|v| v.reads(read)) => true,
             Self::TriggerModes {
                 up_to: Some(limit), ..
             } if limit.reads(read) => true,
@@ -2500,7 +2597,7 @@ impl Effect {
             | Self::DrainLife { amount }
             | Self::AddMana { amount, .. }
             | Self::CreateToken { count: amount, .. }
-            | Self::AddOneColorManaValue { amount }
+            | Self::AddOneColorManaValue { amount, .. }
             | Self::ExileUntilNonlandCastFree { below: amount }
             | Self::LookAndSelect { look: amount, .. } => Some(amount),
             _ => None,
@@ -2540,7 +2637,9 @@ impl Effect {
     /// inspect their programs when those abilities resolve.
     fn any_child_effect(&self, mut test: impl FnMut(&Effect) -> bool) -> bool {
         match self {
-            Self::OnNthResolutionThisTurn { effect, .. } => test(effect),
+            Self::Repeat { effect, .. } | Self::OnNthResolutionThisTurn { effect, .. } => {
+                test(effect)
+            }
             Self::If {
                 then, otherwise, ..
             }
@@ -2560,6 +2659,7 @@ impl Effect {
                 ..
             }
             | Self::ForEachTarget { effects }
+            | Self::Simultaneously { effects }
             | Self::TargetClause { effects, .. }
             | Self::ForPlayer { effects, .. }
             | Self::MayOnceEachTurn { effects } => effects.iter().any(test),
@@ -2577,8 +2677,11 @@ impl Effect {
     ) -> Option<T> {
         match self {
             Effect::CreateDelayedTrigger { remember, .. } => remember.iter().find_map(f),
-            Effect::PutCountersFrom { from, on } => f(from).or_else(|| f(on)),
-            Effect::Fight { first, second } => f(first).or_else(|| f(second)),
+            Effect::PutCountersFrom { from, on }
+            | Effect::Fight {
+                first: from,
+                second: on,
+            } => f(from).or_else(|| f(on)),
             Effect::DealDamage { what, by, .. } => f(what).or_else(|| by.as_ref().and_then(f)),
             Effect::SelectCards { from: selector, .. }
             | Effect::PutCounters { on: selector, .. }
@@ -2590,6 +2693,7 @@ impl Effect {
             | Effect::Sacrifice { what: selector, .. }
             | Effect::Move { what: selector, .. }
             | Effect::MayCastExiled { what: selector, .. }
+            | Effect::GrantPlay { what: selector, .. }
             | Effect::Prepare { what: selector }
             | Effect::Unprepare { what: selector }
             | Effect::Tap { what: selector }
@@ -2605,7 +2709,6 @@ impl Effect {
             | Effect::Discard { what: selector, .. }
             | Effect::Reveal { what: selector }
             | Effect::Remember { what: selector }
-            | Effect::GrantPlay { what: selector, .. }
             | Effect::RemoveCounters { from: selector, .. }
             | Effect::RemoveAllCounters { from: selector } => f(selector),
             _ => None,
@@ -2709,12 +2812,13 @@ impl Effect {
                 ..
             }
             | Effect::MillUntil { player, .. } => player.target_spec(),
-            Effect::GrantGraveyardCastThisTurn { target, .. }
-            | Effect::ExileLinked { target, .. } => Some(target),
+            Effect::ExileLinked { target, .. } => Some(target),
             Effect::ChangeTarget { target }
             | Effect::OwnerPutsIntoLibrary { target, .. }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
-            Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
+            Effect::Repeat { effect, .. } | Effect::OnNthResolutionThisTurn { effect, .. } => {
+                effect.target_spec()
+            }
             Effect::OptionalPayment {
                 if_paid: then,
                 if_declined: otherwise,
@@ -2763,7 +2867,6 @@ impl Effect {
             | Effect::ApplyContinuous { .. }
             | Effect::ShuffleLibrary
             | Effect::OpponentsCastOnlyFromHand
-            | Effect::ExileTopCardsToPlay { .. }
             | Effect::GrantPlay { .. }
             | Effect::Remember { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
@@ -2804,12 +2907,13 @@ impl Effect {
             | Effect::CastExiledWithSource { .. }
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }
-            | Effect::EachPlayerSacrificesCreatures { .. }
+            | Effect::EachPlayerSacrifices { .. }
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::GainLife { .. }
             | Effect::Fight { .. }
             | Effect::Scry { .. }
             | Effect::ManifestDread
+            | Effect::SeparatePiles { .. }
             | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
             | Effect::RevealLibraryTop
@@ -2820,6 +2924,7 @@ impl Effect {
             | Effect::AddMana { .. }
             | Effect::AddOneColorManaValue { .. }
             | Effect::ForEachTarget { .. }
+            | Effect::Simultaneously { .. }
             | Effect::TargetCreaturesDealPowerDamageToLastTarget
             | Effect::AttachSourceTo { .. } => None,
         }
@@ -2838,6 +2943,22 @@ impl Effect {
             on,
             kind,
             amount: amount.into(),
+        }
+    }
+
+    /// "Double the number of each kind of counter on [on]."
+    pub fn double_counters(on: ObjectSelector) -> Self {
+        Effect::PutCountersFrom {
+            from: on.clone(),
+            on,
+        }
+    }
+
+    /// The creatures targeted by the first and second clauses fight.
+    pub fn fight_last_target() -> Self {
+        Self::Fight {
+            first: ObjectSelector::ClauseTarget(0),
+            second: ObjectSelector::ClauseTarget(1),
         }
     }
 
@@ -2884,12 +3005,30 @@ impl Effect {
 
     /// "Exile the top `count` cards of your library. You may play them
     /// [`until`]."
-    pub fn exile_top_to_play(count: usize, until: PlayWindow) -> Self {
-        Effect::ExileTopCardsToPlay {
-            count,
-            until,
-            face_down: false,
-            condition: None,
+    pub fn exile_top_to_play(count: usize, until: PlayWindow) -> Vec<Self> {
+        vec![
+            Self::exile(ObjectSelector::LibraryTop(Box::new(EffectValue::Fixed(
+                count as i32,
+            )))),
+            Self::GrantPlay {
+                what: ObjectSelector::Moved,
+                until,
+                play_lands: true,
+                flashback: false,
+                face_down: false,
+                condition: None,
+            },
+        ]
+    }
+
+    /// Copy the next matching spell its controller casts this turn.
+    pub fn copy_next_spell_this_turn(predicate: CardPredicate) -> Self {
+        Self::CreateDelayedTrigger {
+            remember: None,
+            event: DelayedEvent::YouCastSpell(Box::new(predicate)),
+            frequency: DelayedFrequency::Once,
+            expiry: DelayedExpiry::ThisTurn,
+            effects: vec![Self::CopyTriggeringObject],
         }
     }
 
@@ -2942,6 +3081,7 @@ impl Effect {
         Effect::SelectCards {
             from: ObjectSelector::Zone(ZoneType::Library),
             predicate,
+            max_mana_value: None,
             min,
             max,
             effects,
@@ -2957,6 +3097,7 @@ impl Effect {
         Effect::SelectCards {
             from: ObjectSelector::Zone(ZoneType::Hand),
             predicate: CardPredicate::default(),
+            max_mana_value: None,
             min: 0,
             max: EffectValue::Fixed(up_to as i32),
             effects,
@@ -3048,6 +3189,7 @@ impl Effect {
     fn zone_move(what: ObjectSelector, to: ZoneType, unrevealed: bool) -> Self {
         Effect::Move {
             unrevealed,
+            face_down: false,
             library_end: None,
             what,
             to,
@@ -3064,6 +3206,7 @@ impl Effect {
     pub fn put_in_library(what: ObjectSelector, end: LibraryEnd) -> Self {
         Effect::Move {
             unrevealed: false,
+            face_down: false,
             library_end: Some(end),
             what,
             to: ZoneType::Library,
@@ -3094,6 +3237,7 @@ impl Effect {
             Effect::exile(ObjectSelector::This),
             Effect::Move {
                 unrevealed: false,
+                face_down: false,
                 library_end: None,
                 what: ObjectSelector::Moved,
                 to: ZoneType::Battlefield,
@@ -3114,6 +3258,7 @@ impl Effect {
     ) -> Self {
         Self::Move {
             unrevealed: false,
+            face_down: false,
             what,
             to: ZoneType::Battlefield,
             tapped,
@@ -3141,6 +3286,7 @@ impl Effect {
     pub fn return_to_battlefield(what: ObjectSelector, tapped: bool) -> Self {
         Effect::Move {
             unrevealed: false,
+            face_down: false,
             library_end: None,
             what,
             to: ZoneType::Battlefield,
@@ -3170,6 +3316,7 @@ impl Effect {
     pub fn exile_linked(what: ObjectSelector, linked: LinkedExile) -> Self {
         Effect::Move {
             unrevealed: false,
+            face_down: false,
             library_end: None,
             what,
             to: ZoneType::Exile,
@@ -3222,9 +3369,9 @@ impl EffectValue {
             }
             Self::SourcePower => read == ContextRead::SourcePower,
             Self::PowerTappedToPay => read == ContextRead::PaidCost,
-            Self::TriggeringPower | Self::TriggeringManaValue => {
-                read == ContextRead::TriggeringObject
-            }
+            Self::TriggeringPower
+            | Self::TriggeringManaValue
+            | Self::SpellsCastBeforeTriggering(_) => read == ContextRead::TriggeringObject,
             Self::Half(inner) | Self::Scaled { value: inner, .. } => inner.reads(read),
             Self::Property { of, .. }
             | Self::Objects { of, .. }
@@ -3297,6 +3444,7 @@ impl EffectValue {
             | Self::X
             | Self::NegativeX
             | Self::TriggerDamage
+            | Self::TargetShare
             | Self::TriggeringAmount
             | Self::ExcessDamage
             | Self::LifeLostThisWay
@@ -3306,6 +3454,7 @@ impl EffectValue {
             | Self::TriggeringPower
             | Self::TriggeringManaValue
             | Self::TargetPower
+            | Self::SpellsCastBeforeTriggering(_)
             | Self::TargetToughness => true,
             _ => false,
         }

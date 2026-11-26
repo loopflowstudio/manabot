@@ -138,6 +138,7 @@ export function badgesOf(p: PermanentState, face: CardFace | null = null, blocks
     p.entry_controller_id !== undefined && p.entry_controller_id !== p.controller_id
       && `entered under ${enteredUnder ?? `player #${p.entry_controller_id}'s`} control`,
     p.attacking && 'attacking',
+    p.chosen && `chosen ${p.chosen}`,
     p.blocking !== undefined && `blocking ${blocks ?? 'an attacker'}`,
     p.entered_this_turn && 'entered this turn',
     p.attacked_this_turn && 'attacked this turn',

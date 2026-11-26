@@ -296,6 +296,7 @@ fn foundations_5e_bake_into_a_pie() {
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let card = card_of(&s, ogre);
     cast(&mut s, "Bake into a Pie");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
     assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
@@ -313,4 +314,192 @@ fn foundations_5f_syr_alin_the_lions_claw() {
 #[test]
 fn foundations_5g_scorching_dragonfire() {
     crate::assert_damage_exiles_creature_or_planeswalker("Scorching Dragonfire", 3);
+}
+
+#[test]
+fn entry_choice_heraldic_banner() {
+    use crate::support::play::{choose_entry_value, resolve_top, spend_colorless};
+    let mut s = five_color_setup(&["Heraldic Banner", "Gray Ogre", "Giant Koi"]);
+    let red = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let blue = s.force_permanent_on_battlefield(0, "Giant Koi");
+    cast(&mut s, "Heraldic Banner");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().actions.len(), 5);
+    choose_entry_value(&mut s, "Red");
+    assert_eq!(s.game().characteristics(red).power, 3);
+    assert_eq!(s.game().characteristics(blue).power, 5);
+    let banner = permanent_named(&s, "Heraldic Banner");
+    assert_eq!(
+        s.game().characteristics(banner).activated_abilities[0].mana_choices(),
+        Some(vec![Mana::parse("R")])
+    );
+}
+
+#[test]
+fn charming_prince_can_blink_its_owners_stolen_creature_until_the_next_end_step() {
+    use crate::support::{
+        game::enters_battlefield_with_triggers,
+        inspect::{card_of, offered_targets, permanent},
+        play::resolve_top,
+    };
+    use managym::{flow::turn::StepKind, state::game_object::Target};
+    let mut s = five_color_setup(&["Charming Prince", "Agent of Treachery", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    enters_battlefield_with_triggers(&mut s, 1, "Agent of Treachery");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(permanent(&s, ogre).controller, PlayerId(1));
+    enters_battlefield_with_triggers(&mut s, 0, "Charming Prince");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let root = s.snapshot();
+    choose_mode(&mut s, 0);
+    pass_until(&mut s, ActionSpaceKind::Scry);
+    s.restore(&root);
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    s.assert_life(0, 23);
+    s.restore(&root);
+    choose_mode(&mut s, 2);
+    assert_eq!(offered_targets(&s), [Target::Permanent(ogre)]);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    resolve_top(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    let returned = permanent_of(&s, card).unwrap();
+    assert_ne!(returned, ogre);
+    assert_eq!(permanent(&s, returned).controller, PlayerId(0));
+}
+
+/// Run Away Together needs two creatures with different controllers: with
+/// only one player's creatures it cannot be cast, and the second target
+/// is offered only among the other player's creatures. A control change in
+/// response leaves both under one controller, so both targets are illegal
+/// and neither returns. A target that leaves in response is compared by
+/// its last known controller, so the other still returns.
+#[test]
+fn run_away_together_returns_two_creatures_controlled_by_different_players() {
+    use crate::support::{
+        game::{move_card, move_from_library},
+        inspect::offered_targets,
+        play::spend_colorless,
+    };
+    use managym::state::{game_object::Target, player::ManaPayment};
+    #[derive(Clone, Copy, PartialEq)]
+    enum Response {
+        None,
+        ControlChange,
+        TheirsLeaves,
+    }
+    let mut s = five_color_setup(&["Run Away Together", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let spell = move_from_library(&mut s, 0, "Run Away Together", ZoneType::Hand);
+    let mine = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let other_mine = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    assert!(!castable(&mut s, spell));
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let root = s.snapshot();
+    for response in [
+        Response::None,
+        Response::ControlChange,
+        Response::TheirsLeaves,
+    ] {
+        s.restore(&root);
+        cast_card(&mut s, spell);
+        let mut first = offered_targets(&s);
+        first.sort();
+        let mut all = [mine, other_mine, theirs].map(Target::Permanent).to_vec();
+        all.sort();
+        assert_eq!(first, all);
+        assert!(s.choose_target(Target::Permanent(mine)));
+        assert_eq!(offered_targets(&s), [Target::Permanent(theirs)]);
+        assert!(s.choose_target(Target::Permanent(theirs)));
+        spend_colorless(&mut s);
+        match response {
+            Response::None => {}
+            // The scenario seam models a completed control change in response.
+            Response::ControlChange => {
+                s.game_mut().state.permanents[theirs]
+                    .as_mut()
+                    .unwrap()
+                    .controller = PlayerId(0);
+            }
+            Response::TheirsLeaves => {
+                let object = s.game().permanent_object(theirs).unwrap();
+                move_card(&mut s, object, ZoneType::Graveyard);
+            }
+        }
+        let hands = [0, 1].map(|player| s.zone_size(player, ZoneType::Hand));
+        settle(&mut s);
+        let mine_returns = response != Response::ControlChange;
+        let theirs_returns = response == Response::None;
+        assert_eq!(
+            s.zone_size(0, ZoneType::Hand),
+            hands[0] + usize::from(mine_returns)
+        );
+        assert_eq!(
+            s.zone_size(1, ZoneType::Hand),
+            hands[1] + usize::from(theirs_returns)
+        );
+        assert_eq!(s.game().state.permanents[mine].is_none(), mine_returns);
+        assert!(s.game().state.permanents[other_mine].is_some());
+    }
+}
+
+#[test]
+fn wishclaw_talisman_counters_and_opponent_turn_only() {
+    use crate::support::game::{five_color_setup, move_to_hand};
+    use crate::support::inspect::{counters_of, offered_cards, permanent, permanent_of, zone_of};
+    use crate::support::play::{
+        activate, cast_card, offers_ability, pass_until, select_card, settle, spend_colorless,
+    };
+    use managym::agent::action::ActionSpaceKind;
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::PlayerId;
+    use managym::state::permanent::CounterKind;
+    use managym::state::zone::ZoneType;
+
+    let mut s = five_color_setup(&["Wishclaw Talisman", "Gray Ogre"]);
+    let card = move_to_hand(&mut s, "Wishclaw Talisman");
+    cast_card(&mut s, card);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    let talisman = permanent_of(&s, card).unwrap();
+    assert_eq!(counters_of(&s, talisman, CounterKind::Wish), 3);
+
+    activate(&mut s, talisman, 0);
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let found = offered_cards(&s)[0];
+    select_card(&mut s, found);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, found), Some(ZoneType::Hand));
+    assert_eq!(counters_of(&s, talisman, CounterKind::Wish), 2);
+    assert_eq!(permanent(&s, talisman).controller, PlayerId(1));
+
+    // Even if untapped during player 0's turn, opponent cannot activate it off-turn.
+    s.game_mut().state.permanents[talisman]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    s.set_player_mana_pool(1, "2");
+    s.pass_priority();
+    assert!(!offers_ability(&mut s, talisman, 0));
+
+    // On opponent's own turn, they can activate it and pass control back.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "2");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(offers_ability(&mut s, talisman, 0));
+    activate(&mut s, talisman, 0);
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let foe_found = offered_cards(&s)[0];
+    select_card(&mut s, foe_found);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, talisman, CounterKind::Wish), 1);
+    assert_eq!(permanent(&s, talisman).controller, PlayerId(0));
 }

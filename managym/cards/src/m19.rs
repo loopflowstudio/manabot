@@ -4,8 +4,8 @@ use managym_state::ability::{
     TriggerCondition, TriggerSubject, TurnStep,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-    PrintedCharacteristics, StaticAbility, StaticScope,
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, EntryChoiceKind, Keyword,
+    Keywords, PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticScope,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
@@ -14,6 +14,7 @@ use managym_state::predicate::CardPredicate;
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         vivien_reid(),
+        diamond_mare(),
         leonin_vanguard(),
         volley_veteran(),
         mystic_archaeologist(),
@@ -461,7 +462,7 @@ fn vivien_reid() -> CardDefinition {
                                         ..Default::default()
                                     },
                                     CardPredicate {
-                                        flying: true,
+                                        keyword: Some(Keyword::Flying),
                                         ..CardPredicate::creature()
                                     },
                                 ],
@@ -477,6 +478,40 @@ fn vivien_reid() -> CardDefinition {
                     }],
                 ),
             ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn diamond_mare() -> CardDefinition {
+    let text_box = "As this creature enters, choose a color.\nWhenever you cast a spell of the chosen color, you gain 1 life.";
+    CardDefinition {
+        key: "m19.diamond_mare",
+        scryfall_id: "ca600b3f-2c70-489b-b218-6e3245b90114",
+        printed: PrintedCharacteristics {
+            name: "Diamond Mare".into(),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            subtypes: vec!["Horse".into()],
+            power: Some(1),
+            toughness: Some(3),
+            replacement_effects: vec![ReplacementEffect::AsEntersChoose {
+                kind: EntryChoiceKind::Color,
+                look_at_opponent_hand: false,
+            }],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
+                        chosen_color: true,
+                        ..Default::default()
+                    },
+                ),
+                intervening_if: None,
+                effects: vec![Effect::gain_life(1)],
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

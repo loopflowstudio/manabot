@@ -11,6 +11,7 @@ from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.observation import (
+    FACT_KIND_INDEX,
     FACT_OBJECT_INDEX,
     FACT_VALID_INDEX,
     ObservationSpace,
@@ -26,7 +27,7 @@ from manabot.policy.buckets import (
     row_needs,
     sizes_of,
 )
-from manabot.policy.prepare import MIN_LIVE_FACT_ROWS, prepare
+from manabot.policy.prepare import MIN_LIVE_FACT_ROWS, PROGRAM_KINDS, prepare
 from manabot.training.rollout.collection import collect
 from manabot.verify.representation import shared_effect_root
 import managym
@@ -55,12 +56,27 @@ def _host(obs: dict[str, torch.Tensor]) -> dict[str, np.ndarray]:
     return {key: value.numpy() for key, value in obs.items()}
 
 
-def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
+def _later_decisions(
+    case: PolicyFixture, *, require_programs: bool = False
+) -> dict[str, torch.Tensor]:
     """Decisions from played turns: permanents, facts and public history."""
-    batch = collect(case.collector, case.agent, 24)
+    batch = collect(case.collector, case.agent, 48 if require_programs else 24)
+    raw = batch.observations().observation
+    if require_programs:
+        facts = raw["facts"][:, 0]
+        has_program = (
+            (facts[..., FACT_VALID_INDEX] == 1)
+            & np.isin(facts[..., FACT_KIND_INDEX], PROGRAM_KINDS)
+        ).any(axis=-1)
+        indices = np.flatnonzero(has_program)[-8:]
+        assert len(indices) == 8, "expected rollout steps with program-backed facts"
+        return {
+            key: torch.from_numpy(value[indices, 0]).float()
+            for key, value in raw.items()
+        }
     return {
         key: torch.from_numpy(value[-8:, 0]).float()
-        for key, value in batch.observations().observation.items()
+        for key, value in raw.items()
     }
 
 
@@ -496,7 +512,7 @@ def test_mps_live_fact_routes_match_padded_outputs_and_gradients(
     """MPS preparation routes live facts only; run here on CPU against padding."""
     torch.manual_seed(303)
     case = _policy(history=False)
-    obs = _later_decisions(case)
+    obs = _later_decisions(case, require_programs=True)
     reference = _bucketed(case.agent)
     if not bucketed:
         reference.bucketed_shapes = False

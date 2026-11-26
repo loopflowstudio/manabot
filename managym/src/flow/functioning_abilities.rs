@@ -170,6 +170,7 @@ fn static_ability_zones(ability: &StaticAbility) -> FunctionZones {
         | StaticAbility::SpellsFromOutsideHandCostLess(_)
         | StaticAbility::UntapsDuringOtherUntapSteps
         | StaticAbility::SpellsHave { .. }
+        | StaticAbility::HasChosenCreatureType
         | StaticAbility::StateBasedActionDoesntApply { .. } => FunctionZones::Default,
     }
 }
@@ -229,7 +230,7 @@ fn replacement_effect_zones(effect: &ReplacementEffect) -> FunctionZones {
         } => FunctionZones::AllZones,
         ReplacementEffect::DiscardedInstead { .. } => FunctionZones::Hand,
         ReplacementEffect::EntersPrepared
-        | ReplacementEffect::AsEntersChoose(_)
+        | ReplacementEffect::AsEntersChoose { .. }
         | ReplacementEffect::EntersTapped
         | ReplacementEffect::EntersTappedUnlessControls { .. }
         | ReplacementEffect::EntersWithCounters {
@@ -845,6 +846,7 @@ mod tests {
                     requirement: 0,
                     legal: true,
                     division: 0,
+                    share: 0,
                 }];
                 game.run_frame(frame);
             };

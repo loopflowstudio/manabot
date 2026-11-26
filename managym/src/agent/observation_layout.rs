@@ -18,17 +18,18 @@ use super::{
 };
 
 impl InputLayout {
-    pub fn card_columns(self) -> &'static [Column] {
-        match self {
-            Self::Legacy => &card::COLUMNS[..card::PRINTED_LOYALTY],
-            Self::OneToken => card::COLUMNS,
-        }
-    }
     pub fn player_columns(self) -> &'static [Column] {
         match self {
             Self::OneToken => player::COLUMNS,
             Self::Legacy => &player::COLUMNS[..player::STEP_FIRST_STRIKE_COMBAT_DAMAGE],
         }
+    }
+}
+
+pub fn card_columns(layout: InputLayout) -> &'static [Column] {
+    match layout {
+        InputLayout::OneToken => card::COLUMNS,
+        InputLayout::Legacy => &card::COLUMNS[..super::legacy_input::CARD_DIM],
     }
 }
 
@@ -381,7 +382,8 @@ columns! { card {
     53: HAS_X => ("has_x", ValueLayout::FLAG),
     54: X => ("x", ValueLayout::COUNT_TENTHS),
     55: VALID => ("valid", ValueLayout::FLAG),
-    56: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
+    56: PUT_INTO_GRAVEYARD_THIS_TURN => ("put_into_graveyard_this_turn", ValueLayout::FLAG),
+    57: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
 } }
 
 columns! { permanent {
@@ -931,6 +933,9 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
     match kind {
         FactKind::Counter => ("counter", "id: CounterKind token; value: count / 10"),
         FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
+        FactKind::ChosenColor => ("chosen_color","id: chosen color token; value: 1"),
+        FactKind::ChosenSubtype => ("chosen_subtype","id: chosen creature type token; value: 1"),
+        FactKind::ChosenName => ("chosen_name","id: chosen card name; value: 1"),
         FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
         FactKind::Keyword => ("keyword", "id: keyword token; value: 1"),
         FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
@@ -1046,7 +1051,7 @@ pub fn observation_layout(
     for side in ["agent", "opponent"] {
         for (suffix, axis, capacity, columns) in [
             ("player", "player", Some(1), layout_kind.player_columns()),
-            ("cards", "card", None, layout_kind.card_columns()),
+            ("cards", "card", None, card_columns(layout_kind)),
             ("permanents", "permanent", None, &permanent_columns[..]),
         ] {
             layout.insert(
@@ -1163,7 +1168,12 @@ pub fn observation_layout(
         layout_kind == InputLayout::OneToken
             || !matches!(
                 kind,
-                FactKind::AbilityResolution | FactKind::TriggeringAmount | FactKind::Keyword
+                FactKind::AbilityResolution
+                    | FactKind::TriggeringAmount
+                    | FactKind::Keyword
+                    | FactKind::ChosenColor
+                    | FactKind::ChosenSubtype
+                    | FactKind::ChosenName
             )
     });
     facts.row_kinds = kinds
@@ -1283,7 +1293,7 @@ mod tests {
                 (
                     "agent_cards",
                     config.card_dim(),
-                    if one_token { 57 } else { 56 },
+                    if one_token { 58 } else { 56 },
                 ),
                 (
                     "agent_permanents",

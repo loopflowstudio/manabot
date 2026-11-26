@@ -23,7 +23,7 @@ use crate::{
             ActivatedTargeting, ActivationSource, CastChoices, DivisionParent, Game, PendingChoice,
             SpellTargeting,
         },
-        payment::{bargain_cost, Help, Operation, Payment},
+        payment::{bargain_cost, AnnouncedSpell, Help, Operation, Payment},
         proposed_event::{EntryFace, EventBinding, ZoneEntry},
         turn::{PhaseKind, StepKind},
     },
@@ -825,7 +825,12 @@ impl Game {
         let help = self.spell_help(player, object, cast, &cost);
         if help != Help::default() {
             let pool = self.pooled_mana(player);
-            self.payable_with_help(player, &pool, &cost, help, help.waterbend, None)
+            self.payable_with_help(
+                player,
+                &pool,
+                &cost,
+                crate::flow::payment::CostPermissionContext::from_help(help),
+            )
         } else {
             self.can_pay_with_mana_abilities(player, &cost, None)
         }
@@ -926,7 +931,11 @@ impl Game {
         let alternative = self.alternative_cost_available(player, object, cast);
         let optional = card.optional_cost().is_some() || card.bargain();
         if (alternative || optional) && self.can_pay_cast(player, object, kicked) {
-            if self.can_pay_cast(player, object, cast) {
+            if self.can_pay_cast(player, object, cast)
+                && self
+                    .cast_with_available_targets(player, object, cast)
+                    .is_some_and(|available| !available.kicked)
+            {
                 None
             } else {
                 Some(kicked)
@@ -957,6 +966,37 @@ impl Game {
             || card
                 .alternative_mana()
                 .is_some_and(|(_, condition)| self.check_static_condition(condition, player))
+    }
+
+    /// Some kicker costs replace a mandatory target with “any number”. With
+    /// no such target available, only the kicked announcement can be made.
+    pub(crate) fn cast_with_available_targets(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        mut cast: CastChoices,
+    ) -> Option<CastChoices> {
+        let spell = cast.spell(&self.state[object]);
+        let requirements = spell.target_requirements();
+        for (index, requirement) in requirements.iter().enumerate() {
+            if requirement.min == 0 || (cast.kicked && requirement.up_to_if_kicked.is_some()) {
+                continue;
+            }
+            // A clause with its own relation is checked from the clause it
+            // names, whose candidates must leave it a partner.
+            let candidates = |requirement: &TargetRequirement| {
+                self.legal_spell_targets(player, object, spell, requirement)
+                    .collect::<Vec<_>>()
+            };
+            if !candidates(requirement).into_iter().any(|target| {
+                requirement.relation.is_some()
+                    || self.relations_admit(&requirements, index, target, &[], candidates)
+            }) {
+                requirement.up_to_if_kicked?;
+                cast.kicked = true;
+            }
+        }
+        Some(cast)
     }
 
     /// Resolve the pending kicker choice, then continue the pipeline.
@@ -1067,10 +1107,11 @@ impl Game {
                         .target_requirements_for_mode(Some(*mode))
                         .iter()
                         .all(|req| {
-                            req.min == 0
+                            let min = req.min_for(i32::from(cast.x), cast.kicked);
+                            min == 0
                                 || self
                                     .legal_spell_targets(player, object, spell, req)
-                                    .nth(req.min - 1)
+                                    .nth(min - 1)
                                     .is_some()
                         })
                 })
@@ -1141,8 +1182,9 @@ impl Game {
         player: PlayerId,
         source: Option<ObjectId>,
         x: i32,
+        kicked: bool,
     ) -> usize {
-        let base = clause.max_for(x);
+        let base = clause.max_for(x, kicked);
         match &clause.division {
             Some(value) => {
                 let total = self
@@ -1297,9 +1339,10 @@ impl Game {
                 targeting.player,
                 Some(targeting.object),
                 i32::from(targeting.cast.x),
+                targeting.cast.kicked,
             );
             let legal = self
-                .remaining_legal_targets(&targeting, requirement)
+                .remaining_legal_targets(&targeting, &requirements)
                 .into_iter()
                 .filter(|target| {
                     self.target_leaves_cost_payable(
@@ -1312,7 +1355,7 @@ impl Game {
                 })
                 .collect::<Vec<_>>();
             if legal.is_empty() || max == 0 {
-                if requirement.min_for(i32::from(targeting.cast.x)) == 0 {
+                if requirement.min_for(i32::from(targeting.cast.x), targeting.cast.kicked) == 0 {
                     targeting.requirement_index += 1;
                     continue;
                 }
@@ -1347,21 +1390,35 @@ impl Game {
         self.can_pay_cast_with_targets(player, object, cast, Some(&targets))
     }
 
+    /// Candidates for clause `clause` of a spell being cast, given every
+    /// target chosen so far and the clause each went to.
+    #[allow(clippy::too_many_arguments)]
     fn remaining_legal_targets(
         &self,
         targeting: &SpellTargeting,
-        requirement: &TargetRequirement,
+        requirements: &[TargetRequirement],
     ) -> Vec<Target> {
+        let clause = targeting.requirement_index;
+        let requirement = &requirements[clause];
         let x = i32::from(targeting.cast.x);
         let spell = targeting.cast.spell(&self.state[targeting.object]);
+        let pairs: Vec<(usize, Target)> = targeting
+            .chosen_req_indices
+            .iter()
+            .copied()
+            .zip(targeting.chosen.iter().copied())
+            .collect();
         self.legal_spell_targets(targeting.player, targeting.object, spell, requirement)
             .filter(|target| {
                 self.can_add_clause_target(
                     requirement,
                     x,
-                    targeting.clause_targets(targeting.requirement_index),
+                    targeting.clause_targets(clause),
                     *target,
-                )
+                ) && self.relations_admit(requirements, clause, *target, &pairs, |later| {
+                    self.legal_spell_targets(targeting.player, targeting.object, spell, later)
+                        .collect()
+                })
             })
             .collect()
     }
@@ -1407,13 +1464,14 @@ impl Game {
             targeting.player,
             Some(targeting.object),
             i32::from(targeting.cast.x),
+            targeting.cast.kicked,
         );
 
         if targeting.clause_slots(targeting.requirement_index).count() >= effective_max {
             return self.finish_spell_clause(targeting);
         }
 
-        let legal = self.remaining_legal_targets(&targeting, requirement);
+        let legal = self.remaining_legal_targets(&targeting, &requirements);
         if legal.is_empty() {
             return self.finish_spell_clause(targeting);
         }
@@ -1448,7 +1506,7 @@ impl Game {
             .target_requirements_for_mode(targeting.mode);
         let requirement = &requirements[targeting.requirement_index];
         let chosen_in_req = targeting.clause_slots(targeting.requirement_index).count();
-        if chosen_in_req < requirement.min_for(i32::from(targeting.cast.x)) {
+        if chosen_in_req < requirement.min_for(i32::from(targeting.cast.x), targeting.cast.kicked) {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 targeting,
                 legal_targets,
@@ -1461,17 +1519,56 @@ impl Game {
     }
 
     fn finish_casting(&mut self, targeting: SpellTargeting) -> Result<(), AgentError> {
-        self.begin_payment(
-            targeting.player,
-            Operation::Spell {
-                object: targeting.object,
-                cast: targeting.cast,
-                mode: targeting.mode,
-                targets: targeting.chosen,
-                target_req_indices: targeting.chosen_req_indices,
-                target_divisions: targeting.target_divisions,
-            },
-        )
+        let division = targeting.cast.spell(&self.state[targeting.object]).division;
+        let player = targeting.player;
+        let spell = AnnouncedSpell {
+            object: targeting.object,
+            cast: targeting.cast,
+            mode: targeting.mode,
+            targets: targeting.chosen,
+            target_req_indices: targeting.chosen_req_indices,
+            target_divisions: targeting.target_divisions,
+            target_shares: Vec::new(),
+        };
+        if division > 0 && !spell.targets.is_empty() {
+            self.pending_choice = Some(PendingChoice::DivideAmongTargets {
+                player,
+                spell: Box::new(spell),
+            });
+            Ok(())
+        } else {
+            self.begin_payment(player, Operation::Spell(spell))
+        }
+    }
+
+    pub(crate) fn divide_target_action(
+        &mut self,
+        player: PlayerId,
+        amount: usize,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::DivideAmongTargets {
+            player: chooser,
+            spell,
+        }) = self.pending_choice.as_mut()
+        else {
+            return Err(AgentError("no target division pending".into()));
+        };
+        if *chooser != player
+            || !spell
+                .shares(spell.cast.spell(&self.state[spell.object]).division)
+                .contains(&amount)
+        {
+            return Err(AgentError("illegal target share".into()));
+        }
+        spell.target_shares.push(amount as u8);
+        if spell.target_shares.len() == spell.targets.len() {
+            let Some(PendingChoice::DivideAmongTargets { spell, .. }) = self.pending_choice.take()
+            else {
+                unreachable!()
+            };
+            self.begin_payment(player, Operation::Spell(*spell))?;
+        }
+        Ok(())
     }
 
     /// Whether `cast` takes `card`'s exile-from-hand alternative cost: such a
@@ -1510,14 +1607,15 @@ impl Game {
     }
 
     pub(super) fn commit_spell_payment(&mut self, player: PlayerId, payment: Payment) {
-        let Operation::Spell {
+        let Operation::Spell(AnnouncedSpell {
             object,
             cast,
             mode,
             targets,
             target_req_indices,
             target_divisions,
-        } = payment.operation
+            target_shares,
+        }) = payment.operation
         else {
             unreachable!("activation prepared before costs")
         };
@@ -1543,6 +1641,7 @@ impl Game {
             unreachable!("just pushed spell")
         };
         let paid = u32::from(payment.receipt.total());
+        spell.target_shares = target_shares;
         spell.mode = mode;
         spell.spent = payment.receipt;
         spell.target_divisions = target_divisions;
@@ -1620,7 +1719,9 @@ impl Game {
                 "ability does not function on the battlefield".into(),
             ));
         }
-        if self.activations_prohibited(permanent_id) {
+        if self.activations_prohibited(permanent_id)
+            || (!ability.is_mana_ability() && self.nonmana_activation_prohibited(permanent.object))
+        {
             return Err(AgentError(
                 "its activated abilities can't be activated".into(),
             ));
@@ -1880,6 +1981,8 @@ impl Game {
                 .state
                 .zones
                 .contains(self.state.object_of(card), ability.zone.zone(), player)
+            || (!ability.is_mana_ability()
+                && self.nonmana_activation_prohibited(self.state.object_of(card)))
         {
             return None;
         }
@@ -1889,6 +1992,7 @@ impl Game {
             source: SpendingObject::new(
                 definition.subtypes.iter().map(String::as_str),
                 definition.has_all_creature_types(),
+                definition.types.is_creature(),
             ),
         };
         self.price_activation(player, &mut ability);
@@ -1939,8 +2043,8 @@ impl Game {
             }
             let first = &ability.target_requirements()[0];
             let source_object = self.activation_ability_source(source).map(|s| s.object());
-            let first_max = self.effective_clause_max(first, player, source_object, x);
-            if first.min_for(x) == 0
+            let first_max = self.effective_clause_max(first, player, source_object, x, false);
+            if first.min_for(x, false) == 0
                 && (first_max == 0 || self.activated_ability_targets(&targeting).is_empty())
             {
                 return self.next_activation_clause(targeting);
@@ -1967,9 +2071,9 @@ impl Game {
             .iter()
             .enumerate()
             .all(|(index, requirement)| {
-                let min = requirement.min_for(x);
+                let min = requirement.min_for(x, false);
                 min == 0
-                    || (self.effective_clause_max(requirement, player, source_object, x) >= min
+                    || (self.effective_clause_max(requirement, player, source_object, x, false) >= min
                         && self
                             .activated_ability_targets(&ActivatedTargeting {
                                 player,
@@ -2046,11 +2150,25 @@ impl Game {
         let Some(ability_source) = self.activation_ability_source(source) else {
             return Vec::new();
         };
+        let Some(ability) = self.activation_ability(source, ability_index) else {
+            return Vec::new();
+        };
+        let requirements = ability.target_requirements();
+        let pairs: Vec<(usize, Target)> = targeting
+            .target_req_indices
+            .iter()
+            .copied()
+            .zip(targeting.chosen.iter().copied())
+            .collect();
         let chosen: Vec<Target> = targeting.clause_targets(requirement).collect();
         let candidates: Vec<Target> = self
             .legal_clause_targets(&clause, player, ability_source)
             .filter(|target| {
                 self.can_add_clause_target(&clause, x, chosen.iter().copied(), *target)
+                    && self.relations_admit(&requirements, requirement, *target, &pairs, |later| {
+                        self.legal_clause_targets(later, player, ability_source)
+                            .collect()
+                    })
             })
             .collect();
         if !clause.shares_creature_type {
@@ -2117,7 +2235,7 @@ impl Game {
             .activation_target_requirement(source, ability_index, requirement)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
         let count = targeting.clause_slots(requirement).count();
-        if chooser != actor || count < clause.min_for(targeting.x) {
+        if chooser != actor || count < clause.min_for(targeting.x, false) {
             return Err(AgentError("target required".into()));
         }
         self.finish_activation_clause(targeting)
@@ -2147,7 +2265,7 @@ impl Game {
         targeting.choose(target, requirement);
         let count = targeting.clause_slots(requirement).count();
         let source_object = self.activation_ability_source(source).map(|s| s.object());
-        let effective_max = self.effective_clause_max(&clause, player, source_object, x);
+        let effective_max = self.effective_clause_max(&clause, player, source_object, x, false);
         if count >= effective_max || self.activated_ability_targets(&targeting).is_empty() {
             return self.finish_activation_clause(targeting);
         }
@@ -2193,9 +2311,14 @@ impl Game {
             targeting.ability_index,
             targeting.requirement,
         ) {
-            let max =
-                self.effective_clause_max(&clause, targeting.player, source_object, targeting.x);
-            if clause.min_for(targeting.x) > 0
+            let max = self.effective_clause_max(
+                &clause,
+                targeting.player,
+                source_object,
+                targeting.x,
+                false,
+            );
+            if clause.min_for(targeting.x, false) > 0
                 || (max > 0 && !self.activated_ability_targets(&targeting).is_empty())
             {
                 self.pending_choice = Some(PendingChoice::ActivatedTarget(targeting));

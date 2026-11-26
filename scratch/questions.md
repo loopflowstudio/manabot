@@ -112,3 +112,11 @@
 - Adopted for review (R4 concept review G5): accept that granted abilities on
   the stack or pending write `acquired` into the state hash; note it in the PR
   with G3. Passed over: auditing retained TLA receipts first.
+
+- Synced main through MTG-431 (`10217a2f08`): kept `main`'s `card::PUT_INTO_GRAVEYARD_THIS_TURN`
+  at column 56 and shifted `card::PRINTED_LOYALTY` to column 57; kept `main`'s
+  decision codes 33–38 and shifted `Decision::EnterAttacking` to code 39; kept
+  `main`'s one-card `DivideAmongTargets` / `target_shares` alongside
+  `TargetRequirement.division` / `DivideAmount` so both Biogenic Upgrade's
+  copy/retarget tests and Chandra −4's activated division stay intact (unifying
+  the two division shapes is a follow-up).

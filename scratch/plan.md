@@ -255,6 +255,20 @@ Route: `clean` — no regression on `bench_steps` (+0.53%) or `bench_search`
   + 660 vitest + `play-session.spec.ts` mana-float e2e), full Rust debug
   nextest + benchmark tests, pinned pilot, and Python model/contract/Academy
   suites. Clean Ubuntu `Engine Budget` passed on PR #607 CI.
+- **Post-R4 & MTG-431 sync (`10217a2f08`) verification**: merged `main`
+  (`10217a2f08`, 56 FDN cards) cleanly, kept `main`'s `card` column 56
+  (`put_into_graveyard_this_turn`) and appended `printed_loyalty` at column 57
+  (`agent_cards` width 58 v11 / 56 legacy), shifted `Decision::EnterAttacking`
+  to code 39 after `main`'s 33–38, refreshed the 5 Academy opening fixtures and
+  all three `-planeswalkers` conformance/authority/parity receipts (all 14
+  `semantic_conformance` command counts match `evidence-forced-mana-v1.json`,
+  authored match 170 deliberate commands / 1,026 viewer checks / zero
+  divergence). Verified: workspace debug nextest (2,365 tests), release cp313
+  extension rebuild, `bench_steps` digest `4186394851247720253` matching
+  `baseline.json`, `scripts/public_api.py check`, `experience_protocol_tests`,
+  Academy UI (`svelte-check` 0 errors + 731/731 vitest), `test_pinned_pilot.py`
+  (zero drift), and Python model/contract/Academy/semantic suites (350 passed,
+  2 skipped).
 
 ## Target model (updated by concept review)
 
