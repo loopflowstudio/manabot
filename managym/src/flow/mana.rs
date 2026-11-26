@@ -2800,19 +2800,24 @@ impl Game {
     /// Every triggered mana ability on the battlefield, with its source and
     /// controller, read from one board.
     fn mana_triggers(&self) -> Vec<ManaTrigger> {
-        let mut triggers = Vec::new();
-        for controller in [PlayerId(0), PlayerId(1)] {
-            for (source, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
-                for ability in &view.triggered_mana_abilities {
-                    triggers.push(ManaTrigger {
-                        source,
-                        controller,
-                        ability: ability.clone(),
-                    });
+        self.with_layer_board(|board| {
+            if !board.has_triggered_mana_abilities {
+                return Vec::new();
+            }
+            let mut triggers = Vec::new();
+            for controller in [PlayerId(0), PlayerId(1)] {
+                for source in self.iter_battlefield_permanents(controller) {
+                    for ability in &board.view(source).triggered_mana_abilities {
+                        triggers.push(ManaTrigger {
+                            source,
+                            controller,
+                            ability: ability.clone(),
+                        });
+                    }
                 }
             }
-        }
-        triggers
+            triggers
+        })
     }
 
     /// The planner's estimate of the outputs of the triggered mana abilities

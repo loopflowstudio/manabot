@@ -264,7 +264,7 @@ impl Game {
     /// grants to a resolving spell (Lo and Li's Lesson spells).
     fn source_keywords(&self, source: ObjectId) -> Keywords {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return self.layer_view(permanent_id).keywords;
+            return self.with_layer_view(permanent_id, |v| v.keywords);
         }
         if let Some(lki) = self.object_lki(source) {
             return lki.keywords;

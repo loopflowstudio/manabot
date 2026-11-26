@@ -282,7 +282,9 @@ impl Game {
     pub fn player_has(&self, player: PlayerId, modification: &Modification) -> bool {
         self.player_effects(player)
             .any(|effect| &effect.modification == modification)
-            || self.layer_board().player_modifications[player.0].contains(modification)
+            || self.with_layer_board(|board| {
+                board.player_modifications[player.0].contains(modification)
+            })
     }
 
     /// The most life `player` can pay: none other than 0 while their life

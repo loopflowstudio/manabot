@@ -31,37 +31,42 @@ impl Game {
     /// grouped by controller in APNAP order.
     fn legend_groups(&self) -> Vec<Vec<ObjectId>> {
         let _scan = self.board_scan();
-        let mut groups = Vec::new();
-        for player in [self.active_player(), self.non_active_player()] {
-            let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
-            for (id, characteristics) in self.layer_views(self.iter_battlefield_permanents(player))
-            {
-                if characteristics
-                    .static_abilities
-                    .contains(&StaticAbility::LegendRuleDoesntApply)
-                {
-                    names.clear();
-                    break;
+        self.with_layer_board(|board| {
+            let mut groups = Vec::new();
+            for player in [self.active_player(), self.non_active_player()] {
+                let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
+                for id in self.iter_battlefield_permanents(player) {
+                    let characteristics = board.view(id);
+                    if characteristics
+                        .static_abilities
+                        .contains(&StaticAbility::LegendRuleDoesntApply)
+                    {
+                        names.clear();
+                        break;
+                    }
+                    if characteristics.is_legendary {
+                        let permanent = self.state.permanents[id].as_ref().expect("battlefield");
+                        names
+                            .entry(characteristics.name.clone())
+                            .or_default()
+                            .push(permanent.object);
+                    }
                 }
-                if characteristics.is_legendary {
-                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    names
-                        .entry(characteristics.name.clone())
-                        .or_default()
-                        .push(permanent.object);
-                }
+                groups.extend(names.into_values().filter(|objects| objects.len() > 1));
             }
-            groups.extend(names.into_values().filter(|objects| objects.len() > 1));
-        }
-        groups
+            groups
+        })
     }
 
     pub(crate) fn protected_from_loss(&self, player: PlayerId) -> bool {
-        self.layer_views(self.iter_battlefield_permanents(player))
-            .any(|(_, view)| {
-                view.static_abilities
+        self.with_layer_board(|board| {
+            self.iter_battlefield_permanents(player).any(|id| {
+                board
+                    .view(id)
+                    .static_abilities
                     .contains(&StaticAbility::CantLoseAndOpponentsCantWin)
             })
+        })
     }
 
     pub fn lose_game(&mut self, player: PlayerId) {
@@ -384,17 +389,22 @@ impl Game {
     }
 
     fn finished_sagas(&self) -> Vec<PermanentId> {
-        self.layer_views((0..self.state.permanents.len()).map(PermanentId))
-            .filter(|(id, view)| {
-                let permanent = self.state.permanents[*id].as_ref().unwrap();
-                let Some(last) = view.final_chapter() else {
-                    return false;
-                };
-                permanent.counter_count(CounterKind::Lore) >= i32::from(last)
-                    && !self.chapter_ability_pending(permanent.object)
-            })
-            .map(|(id, _)| id)
-            .collect()
+        self.with_layer_board(|board| {
+            (0..self.state.permanents.len())
+                .map(PermanentId)
+                .filter(|&id| {
+                    let Some(view) = board.objects.get(id.0).and_then(Option::as_deref) else {
+                        return false;
+                    };
+                    let permanent = self.state.permanents[id].as_ref().unwrap();
+                    let Some(last) = view.final_chapter() else {
+                        return false;
+                    };
+                    permanent.counter_count(CounterKind::Lore) >= i32::from(last)
+                        && !self.chapter_ability_pending(permanent.object)
+                })
+                .collect()
+        })
     }
 
     /// Whether a chapter ability of this Saga has triggered and not yet left

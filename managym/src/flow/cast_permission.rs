@@ -664,9 +664,11 @@ impl Game {
         player: PlayerId,
     ) -> impl Iterator<Item = ObjectId> + '_ {
         let mut seen = std::collections::BTreeSet::new();
-        let counter_plays = !self.layer_board().play_permissions[player.0]
-            .exile_counter_plays
-            .is_empty();
+        let counter_plays = self.with_layer_board(|board| {
+            !board.play_permissions[player.0]
+                .exile_counter_plays
+                .is_empty()
+        });
         let marked = self
             .state
             .object_counters
