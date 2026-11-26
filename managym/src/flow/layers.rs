@@ -29,6 +29,7 @@ use crate::{
     },
 };
 use std::{
+    borrow::Cow,
     cell::Cell,
     collections::{BTreeMap, BTreeSet},
     ops::Range,
@@ -165,17 +166,61 @@ const DIRTY_ALL: u8 = DIRTY_TYPES | DIRTY_ACTIVATIONS | DIRTY_STATICS;
 
 /// Sentinel `LayerObject::view_index` meaning the permanent still shares
 /// `seeds[slot].view` without cloning or materializing an owned `Characteristics`.
-pub(super) const SEED_VIEW: u32 = u32::MAX;
+const SEED_VIEW: u32 = u32::MAX;
 
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct LayerObject {
+struct LayerObject {
     /// `SEED_VIEW` borrows `seeds[slot].view`; otherwise indexes `owned_views`.
-    pub view_index: u32,
-    pub controller: PlayerId,
+    view_index: u32,
+    controller: PlayerId,
     /// `None` borrows `seeds[slot].statics`; `Some(v)` holds owned post-mutation
     /// statics (after ability loss, hexproof removal, or `GrantStatic`).
     statics_override: Option<Vec<StaticEntry>>,
     dirty: u8,
+}
+
+/// Borrowed result of one CR 613 pass handed to [`Game::compute_board`] before
+/// the thread-local scratch buffers are cleared.
+pub(super) struct EvaluatedBoard<'a> {
+    objects: &'a mut [Option<LayerObject>],
+    owned_views: &'a mut [Option<Characteristics>],
+    seeds: &'a [Option<Arc<SourceSeed>>],
+    pub reads_mana: bool,
+    pub reads_tapped: bool,
+    pub reads_life: bool,
+}
+
+pub(super) struct EvaluatedSlot<'a> {
+    pub controller: PlayerId,
+    pub view: Arc<Characteristics>,
+    pub seed: &'a SourceSeed,
+    pub shares_seed_details: bool,
+}
+
+impl<'a> EvaluatedBoard<'a> {
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.objects.len()
+    }
+
+    #[inline]
+    pub fn take_slot(&mut self, slot: usize) -> Option<EvaluatedSlot<'a>> {
+        let object = self.objects[slot].take()?;
+        let seed = self.seeds[slot].as_deref().unwrap();
+        let (view, shares_seed_details) = if object.view_index == SEED_VIEW {
+            (Arc::clone(&seed.view), true)
+        } else {
+            let owned = self.owned_views[object.view_index as usize].take().unwrap();
+            let shares = Arc::ptr_eq(&seed.view.details, &owned.details);
+            (Arc::new(owned), shares)
+        };
+        Some(EvaluatedSlot {
+            controller: object.controller,
+            view,
+            seed,
+            shares_seed_details,
+        })
+    }
 }
 
 /// Active evaluator state during CR 613 pass. Borrowing `live` and `seeds`
@@ -257,7 +302,7 @@ pub(super) struct SourceSeed {
     incarnation: PublicId,
     timestamp: PublicId,
     controller: PlayerId,
-    pub(super) view: Arc<Characteristics>,
+    view: Arc<Characteristics>,
     statics: Vec<StaticEntry>,
     nodes: Vec<SeedNode>,
     nodes_layers: u16,
@@ -267,13 +312,6 @@ pub(super) struct SourceSeed {
     pub(super) has_dynamic_activations: bool,
     pub(super) has_board_statics: bool,
     pub(super) has_triggered_mana_abilities: bool,
-}
-
-impl SourceSeed {
-    #[inline]
-    pub(super) fn view_details_ptr_eq(&self, view: &Characteristics) -> bool {
-        Arc::ptr_eq(&self.view.details, &view.details)
-    }
 }
 
 /// Conservative reads used for both dependency pruning and cache invalidation.
@@ -473,6 +511,11 @@ impl SourcePlan {
     }
 }
 
+#[inline]
+fn seed_node(seeds: &[Option<Arc<SourceSeed>>], slot: u32, node_index: u32) -> &SeedNode {
+    &seeds[slot as usize].as_ref().unwrap().nodes[node_index as usize]
+}
+
 impl DynamicNode {
     /// Counters and resolved records already bind one affected object; their
     /// existence and membership no longer depend on a generating static ability.
@@ -490,14 +533,6 @@ impl DynamicNode {
             key,
             timestamp,
             kind: DynamicNodeKind::Resolved { layer, operation },
-        }
-    }
-
-    #[inline]
-    fn cda(&self) -> bool {
-        match &self.kind {
-            DynamicNodeKind::Granted { plan, .. } => plan.cda,
-            DynamicNodeKind::Resolved { .. } => false,
         }
     }
 
@@ -528,12 +563,19 @@ impl DynamicNode {
 
 impl EvalNode {
     #[inline]
-    fn seed_node<'s>(&self, seeds: &'s [Option<Arc<SourceSeed>>]) -> Option<&'s SeedNode> {
+    fn plan<'a>(&'a self, seeds: &'a [Option<Arc<SourceSeed>>]) -> Option<&'a SourcePlan> {
         match self {
             Self::Seed {
                 slot, node_index, ..
-            } => Some(&seeds[*slot as usize].as_ref().unwrap().nodes[*node_index as usize]),
-            Self::Dynamic(_) => None,
+            } => Some(&seed_node(seeds, *slot, *node_index).plan),
+            Self::Dynamic(DynamicNode {
+                kind: DynamicNodeKind::Granted { plan, .. },
+                ..
+            }) => Some(plan),
+            Self::Dynamic(DynamicNode {
+                kind: DynamicNodeKind::Resolved { .. },
+                ..
+            }) => None,
         }
     }
 
@@ -547,17 +589,17 @@ impl EvalNode {
 
     #[inline]
     fn cda(&self, seeds: &[Option<Arc<SourceSeed>>]) -> bool {
-        match self {
-            Self::Seed { .. } => self.seed_node(seeds).unwrap().plan.cda,
-            Self::Dynamic(d) => d.cda(),
-        }
+        self.plan(seeds).is_some_and(|plan| plan.cda)
     }
 
     #[inline]
     fn layers(&self, seeds: &[Option<Arc<SourceSeed>>]) -> u16 {
         match self {
-            Self::Seed { .. } => self.seed_node(seeds).unwrap().plan.layers,
-            Self::Dynamic(d) => d.layers(),
+            Self::Dynamic(DynamicNode {
+                kind: DynamicNodeKind::Resolved { layer, .. },
+                ..
+            }) => layer.bit(),
+            _ => self.plan(seeds).unwrap().layers,
         }
     }
 
@@ -568,10 +610,8 @@ impl EvalNode {
 
     #[inline]
     fn reads(&self, seeds: &[Option<Arc<SourceSeed>>]) -> ReadSet {
-        match self {
-            Self::Seed { .. } => self.seed_node(seeds).unwrap().plan.reads,
-            Self::Dynamic(d) => d.reads(),
-        }
+        self.plan(seeds)
+            .map_or_else(ReadSet::default, |plan| plan.reads)
     }
 
     #[inline]
@@ -591,22 +631,51 @@ impl EvalNode {
             Self::Seed {
                 slot, node_index, ..
             } => {
-                let s = &seeds[*slot as usize].as_ref().unwrap().nodes[*node_index as usize];
+                let s = seed_node(seeds, *slot, *node_index);
                 (!s.plan.cda, s.timestamp, s.key.as_slice())
             }
-            Self::Dynamic(d) => (!d.cda(), d.timestamp, d.key.as_slice()),
+            Self::Dynamic(d) => (!self.cda(seeds), d.timestamp, d.key.as_slice()),
         }
     }
 
     fn is_unconditional_attached_or_self(&self, seeds: &[Option<Arc<SourceSeed>>]) -> bool {
-        let plan = match self {
-            Self::Seed { .. } => &self.seed_node(seeds).unwrap().plan,
-            Self::Dynamic(d) => match &d.kind {
-                DynamicNodeKind::Granted { plan, .. } => plan,
-                DynamicNodeKind::Resolved { .. } => return false,
-            },
+        self.plan(seeds).is_some_and(|plan| {
+            plan.condition.is_none()
+                && matches!(plan.scope, StaticScope::This | StaticScope::Attached)
+        })
+    }
+
+    fn bind_targets(
+        &mut self,
+        seeds: &[Option<Arc<SourceSeed>>],
+        after_mask: u16,
+        slice: &[Instruction],
+    ) {
+        if slice.is_empty() {
+            return;
+        }
+        let (plan_layers, targets) = match self {
+            Self::Seed {
+                slot,
+                node_index,
+                targets,
+            } => (seed_node(seeds, *slot, *node_index).plan.layers, targets),
+            Self::Dynamic(DynamicNode {
+                kind: DynamicNodeKind::Granted { plan, targets },
+                ..
+            }) => (plan.layers, targets),
+            Self::Dynamic(DynamicNode {
+                kind: DynamicNodeKind::Resolved { .. },
+                ..
+            }) => return,
         };
-        plan.condition.is_none() && matches!(plan.scope, StaticScope::This | StaticScope::Attached)
+        if targets.is_none() && plan_layers & after_mask != 0 {
+            // Instructions already resolved the affected set. Retain it only for
+            // effects that continue into a later layer (CR 613.6).
+            let mut bound: Vec<_> = slice.iter().map(|i| i.target).collect();
+            bound.dedup();
+            *targets = Some(bound);
+        }
     }
 
     fn layer_writes_and_grant_static(
@@ -614,21 +683,22 @@ impl EvalNode {
         seeds: &[Option<Arc<SourceSeed>>],
         layer: Layer,
     ) -> (u16, bool) {
-        let parts = match self {
-            Self::Seed { .. } => &self.seed_node(seeds).unwrap().plan.parts,
-            Self::Dynamic(d) => match &d.kind {
-                DynamicNodeKind::Granted { plan, .. } => &plan.parts,
-                DynamicNodeKind::Resolved { operation, .. } => {
-                    return (
-                        operation.writes(),
-                        matches!(operation, Operation::Modify(Modification::GrantStatic(_))),
-                    );
-                }
-            },
+        let Some(plan) = self.plan(seeds) else {
+            let Self::Dynamic(DynamicNode {
+                kind: DynamicNodeKind::Resolved { operation, .. },
+                ..
+            }) = self
+            else {
+                unreachable!();
+            };
+            return (
+                operation.writes(),
+                matches!(operation, Operation::Modify(Modification::GrantStatic(_))),
+            );
         };
         let mut writes = 0;
         let mut grants_static = false;
-        for (part_layer, op) in parts {
+        for (part_layer, op) in &plan.parts {
             if *part_layer == layer {
                 writes |= op.writes();
                 grants_static |= matches!(op, Operation::Modify(Modification::GrantStatic(_)));
@@ -698,7 +768,7 @@ impl<N> Operation<N> {
 }
 
 /// Only the state-dependent fields of a resolved instruction; fixed payloads
-/// stay borrowed from the generating `Node`.
+/// stay borrowed from the generating [`EvalNode`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ResolvedValue {
     None,
@@ -713,10 +783,18 @@ enum ResolvedValue {
     },
 }
 
+#[derive(Clone, Copy)]
+struct NodeContext<'a> {
+    origin: AbilityOrigin,
+    source: PermanentId,
+    key: &'a NodeKey,
+    timestamp: PublicId,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Instruction {
     target: PermanentId,
-    /// Index into `SourcePlan::parts` for `NodeKind::Static`; `0` for `NodeKind::Resolved`.
+    /// Index into `SourcePlan::parts` for static nodes; `0` for `DynamicNodeKind::Resolved`.
     part: usize,
     value: ResolvedValue,
 }
@@ -814,14 +892,7 @@ fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
 pub(super) fn evaluate_board(
     game: &Game,
     seeds: Option<&mut Vec<Option<Arc<SourceSeed>>>>,
-    build: impl FnOnce(
-        &mut [Option<LayerObject>],
-        &mut [Option<Characteristics>],
-        &[Option<Arc<SourceSeed>>],
-        bool,
-        bool,
-        bool,
-    ) -> LayerBoard,
+    build: impl FnOnce(EvaluatedBoard<'_>) -> LayerBoard,
 ) -> LayerBoard {
     #[cfg(feature = "benchmark")]
     let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
@@ -992,51 +1063,7 @@ pub(super) fn evaluate_board(
                     for &slot in &pass.selected {
                         let index = pass.pending[slot];
                         let slice = &pass.instructions[pass.ranges[slot].clone()];
-                        match &mut nodes[index] {
-                            EvalNode::Seed {
-                                slot: s,
-                                node_index,
-                                targets,
-                            } => {
-                                let plan_layers = seeds_slice[*s as usize].as_ref().unwrap().nodes
-                                    [*node_index as usize]
-                                    .plan
-                                    .layers;
-                                if targets.is_none()
-                                    && plan_layers & after_mask != 0
-                                    && !slice.is_empty()
-                                {
-                                    // Instructions already resolved the affected set. Retain
-                                    // it only for effects that continue into a later layer.
-                                    let mut bound: Vec<_> = slice
-                                        .iter()
-                                        .map(|instruction| instruction.target)
-                                        .collect();
-                                    bound.dedup();
-                                    *targets = Some(bound);
-                                }
-                            }
-                            EvalNode::Dynamic(DynamicNode {
-                                kind: DynamicNodeKind::Granted { plan, targets },
-                                ..
-                            }) => {
-                                if targets.is_none()
-                                    && plan.layers & after_mask != 0
-                                    && !slice.is_empty()
-                                {
-                                    let mut bound: Vec<_> = slice
-                                        .iter()
-                                        .map(|instruction| instruction.target)
-                                        .collect();
-                                    bound.dedup();
-                                    *targets = Some(bound);
-                                }
-                            }
-                            EvalNode::Dynamic(DynamicNode {
-                                kind: DynamicNodeKind::Resolved { .. },
-                                ..
-                            }) => {}
-                        }
+                        nodes[index].bind_targets(seeds_slice, after_mask, slice);
                         eval.apply(&nodes[index], slice, Some(&mut pass.granted));
                         for granted_node in pass.granted.drain(..) {
                             let added = eval.push_node(nodes, &mut active_layers, granted_node);
@@ -1098,21 +1125,18 @@ pub(super) fn evaluate_board(
                 .statics_override
                 .as_deref()
                 .unwrap_or(&seeds_slice[id.0].as_ref().unwrap().statics);
-            if view_index != SEED_VIEW {
-                let view = eval.owned_views[view_index as usize].as_mut().unwrap();
-                finish_object(&mut CowCharacteristics::Owned(view), statics, record, dirty);
+            let mut view = if view_index != SEED_VIEW {
+                Cow::Owned(eval.owned_views[view_index as usize].take().unwrap())
             } else {
-                let mut cow = CowCharacteristics::Seed {
-                    seed: &seeds_slice[id.0].as_ref().unwrap().view,
-                    owned: None,
-                };
-                finish_object(&mut cow, statics, record, dirty);
-                if let CowCharacteristics::Seed {
-                    owned: Some(view), ..
-                } = cow
-                {
+                Cow::Borrowed(&*seeds_slice[id.0].as_ref().unwrap().view)
+            };
+            finish_object(&mut view, statics, record, dirty);
+            if let Cow::Owned(v) = view {
+                if view_index != SEED_VIEW {
+                    eval.owned_views[view_index as usize] = Some(v);
+                } else {
                     let idx = eval.owned_views.len() as u32;
-                    eval.owned_views.push(Some(view));
+                    eval.owned_views.push(Some(v));
                     eval.objects[id.0].as_mut().unwrap().view_index = idx;
                 }
             }
@@ -1135,14 +1159,14 @@ pub(super) fn evaluate_board(
     } = eval;
     *objects = eval_objects;
     *owned_views = eval_owned_views;
-    build(
-        objects.as_mut_slice(),
-        owned_views.as_mut_slice(),
-        seeds_slice,
+    build(EvaluatedBoard {
+        objects: objects.as_mut_slice(),
+        owned_views: owned_views.as_mut_slice(),
+        seeds: seeds_slice,
         reads_mana,
         reads_tapped,
         reads_life,
-    )
+    })
 }
 
 /// The copiable object, bound static plans, and board summaries of one live incarnation.
@@ -1161,7 +1185,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         })
         .collect();
     let controller = permanent.entry_controller();
-    let mut view = Characteristics {
+    let mut view = Cow::Owned(Characteristics {
         is_legendary: source.is_legendary(),
         keywords: source.keywords,
         power: source.power.unwrap_or(0),
@@ -1190,13 +1214,14 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
             ..Default::default()
         }),
         ..Default::default()
-    };
+    });
     finish_object(
-        &mut CowCharacteristics::Owned(&mut view),
+        &mut view,
         &statics,
         source,
         DIRTY_ACTIVATIONS | DIRTY_STATICS,
     );
+    let view = view.into_owned();
     let nodes: Vec<SeedNode> = statics
         .iter()
         .filter_map(|entry| build_seed_node(game, id, entry))
@@ -1232,41 +1257,8 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
     }
 }
 
-enum CowCharacteristics<'a> {
-    Seed {
-        seed: &'a Characteristics,
-        owned: Option<Characteristics>,
-    },
-    Owned(&'a mut Characteristics),
-}
-
-impl std::ops::Deref for CowCharacteristics<'_> {
-    type Target = Characteristics;
-
-    #[inline]
-    fn deref(&self) -> &Characteristics {
-        match self {
-            Self::Seed {
-                owned: Some(view), ..
-            } => view,
-            Self::Seed { seed, owned: None } => seed,
-            Self::Owned(view) => view,
-        }
-    }
-}
-
-impl CowCharacteristics<'_> {
-    #[inline]
-    fn to_mut(&mut self) -> &mut Characteristics {
-        match self {
-            Self::Seed { seed, owned } => owned.get_or_insert_with(|| (*seed).clone()),
-            Self::Owned(view) => view,
-        }
-    }
-}
-
 fn finish_object(
-    view: &mut CowCharacteristics<'_>,
+    view: &mut Cow<'_, Characteristics>,
     statics: &[StaticEntry],
     record: &Object,
     dirty: u8,
@@ -1629,7 +1621,7 @@ impl Eval<'_, '_, '_> {
                 if targets.is_some() {
                     return true;
                 }
-                let Some(object) = self.objects.get(*slot as usize).and_then(Option::as_ref) else {
+                let Some(object) = self.get(PermanentId(*slot as usize)) else {
                     return false;
                 };
                 match &object.statics_override {
@@ -1642,9 +1634,7 @@ impl Eval<'_, '_, '_> {
                         true
                     }
                     Some(statics) => {
-                        let key = &self.seeds[*slot as usize].as_ref().unwrap().nodes
-                            [*node_index as usize]
-                            .key;
+                        let key = &seed_node(self.seeds, *slot, *node_index).key;
                         statics.iter().any(|s| s.key == *key)
                     }
                 }
@@ -1667,6 +1657,15 @@ impl Eval<'_, '_, '_> {
         target: PermanentId,
         out: &mut Vec<Instruction>,
     ) {
+        let resolve = |n| {
+            self.layer_value(
+                n,
+                || self.game.live_permanent(target).object,
+                controller,
+                Some(source),
+                Some(target),
+            )
+        };
         for (part, (part_layer, op)) in plan.parts.iter().enumerate() {
             if *part_layer != layer {
                 continue;
@@ -1676,42 +1675,14 @@ impl Eval<'_, '_, '_> {
                 Operation::Control(player) => ResolvedValue::Control(*player),
                 Operation::Modify(Modification::SetBasePt { power, toughness }) => {
                     ResolvedValue::SetBasePt {
-                        power: power.as_ref().map(|n| {
-                            self.layer_value(
-                                n,
-                                || self.game.live_permanent(target).object,
-                                controller,
-                                Some(source),
-                                Some(target),
-                            )
-                        }),
-                        toughness: toughness.as_ref().map(|n| {
-                            self.layer_value(
-                                n,
-                                || self.game.live_permanent(target).object,
-                                controller,
-                                Some(source),
-                                Some(target),
-                            )
-                        }),
+                        power: power.as_ref().map(resolve),
+                        toughness: toughness.as_ref().map(resolve),
                     }
                 }
                 Operation::Modify(Modification::ModifyPt { power, toughness }) => {
                     ResolvedValue::ModifyPt {
-                        power: self.layer_value(
-                            power,
-                            || self.game.live_permanent(target).object,
-                            controller,
-                            Some(source),
-                            Some(target),
-                        ),
-                        toughness: self.layer_value(
-                            toughness,
-                            || self.game.live_permanent(target).object,
-                            controller,
-                            Some(source),
-                            Some(target),
-                        ),
+                        power: resolve(power),
+                        toughness: resolve(toughness),
                     }
                 }
                 _ => ResolvedValue::None,
@@ -1734,7 +1705,7 @@ impl Eval<'_, '_, '_> {
                 node_index,
                 targets,
             } => {
-                let s = &self.seeds[*slot as usize].as_ref().unwrap().nodes[*node_index as usize];
+                let s = seed_node(self.seeds, *slot, *node_index);
                 (s.source, &s.plan, targets.as_deref())
             }
             EvalNode::Dynamic(d) => match &d.kind {
@@ -2132,98 +2103,91 @@ impl Eval<'_, '_, '_> {
         instructions: &[Instruction],
         mut granted: Option<&mut Vec<DynamicNode>>,
     ) {
-        let seeds = self.seeds;
-        let (node_origin, node_source, node_key, node_timestamp) = match node {
+        #[derive(Clone, Copy)]
+        enum NodeParts<'a> {
+            Plan(&'a [(Layer, Operation)]),
+            Resolved(&'a Operation<i32>),
+        }
+
+        let (ctx, parts) = match node {
             EvalNode::Seed {
                 slot, node_index, ..
             } => {
-                let s = &seeds[*slot as usize].as_ref().unwrap().nodes[*node_index as usize];
-                (s.origin, s.source, &s.key, s.timestamp)
+                let s = seed_node(self.seeds, *slot, *node_index);
+                (
+                    NodeContext {
+                        origin: s.origin,
+                        source: s.source,
+                        key: &s.key,
+                        timestamp: s.timestamp,
+                    },
+                    NodeParts::Plan(&s.plan.parts),
+                )
             }
-            EvalNode::Dynamic(d) => (d.origin, d.source, &d.key, d.timestamp),
+            EvalNode::Dynamic(d) => {
+                let parts = match &d.kind {
+                    DynamicNodeKind::Granted { plan, .. } => NodeParts::Plan(&plan.parts),
+                    DynamicNodeKind::Resolved { operation, .. } => NodeParts::Resolved(operation),
+                };
+                (
+                    NodeContext {
+                        origin: d.origin,
+                        source: d.source,
+                        key: &d.key,
+                        timestamp: d.timestamp,
+                    },
+                    parts,
+                )
+            }
         };
-        for (ordinal, instruction) in instructions.iter().enumerate() {
-            let id = instruction.target;
-            let origin = if id == node_source {
-                node_origin
-            } else {
-                AbilityOrigin::Permanent(node_source)
-            };
+        for (ordinal, &instruction) in instructions.iter().enumerate() {
             if let ResolvedValue::Control(controller) = instruction.value {
-                self.objects[id.0].as_mut().unwrap().controller = controller;
+                self.objects[instruction.target.0]
+                    .as_mut()
+                    .unwrap()
+                    .controller = controller;
                 continue;
             }
-            match node {
-                EvalNode::Seed {
-                    slot, node_index, ..
-                } => {
-                    let op = &seeds[*slot as usize].as_ref().unwrap().nodes[*node_index as usize]
-                        .plan
-                        .parts[instruction.part]
-                        .1;
-                    self.apply_operation(
-                        node_source,
-                        node_key,
-                        node_timestamp,
-                        id,
-                        origin,
-                        ordinal,
-                        op,
-                        instruction.value,
-                        granted.as_deref_mut(),
-                    );
-                }
-                EvalNode::Dynamic(d) => match &d.kind {
-                    DynamicNodeKind::Granted { plan, .. } => {
-                        self.apply_operation(
-                            node_source,
-                            node_key,
-                            node_timestamp,
-                            id,
-                            origin,
-                            ordinal,
-                            &plan.parts[instruction.part].1,
-                            instruction.value,
-                            granted.as_deref_mut(),
-                        );
-                    }
-                    DynamicNodeKind::Resolved { operation, .. } => {
-                        self.apply_operation(
-                            node_source,
-                            node_key,
-                            node_timestamp,
-                            id,
-                            origin,
-                            ordinal,
-                            operation,
-                            instruction.value,
-                            granted.as_deref_mut(),
-                        );
-                    }
-                },
+            match parts {
+                NodeParts::Plan(parts) => self.apply_operation(
+                    ctx,
+                    instruction,
+                    ordinal,
+                    &parts[instruction.part].1,
+                    granted.as_deref_mut(),
+                ),
+                NodeParts::Resolved(operation) => self.apply_operation(
+                    ctx,
+                    instruction,
+                    ordinal,
+                    operation,
+                    granted.as_deref_mut(),
+                ),
             }
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn apply_operation<N>(
         &mut self,
-        node_source: PermanentId,
-        node_key: &NodeKey,
-        node_timestamp: PublicId,
-        id: PermanentId,
-        origin: AbilityOrigin,
+        ctx: NodeContext<'_>,
+        instruction: Instruction,
         ordinal: usize,
         operation: &Operation<N>,
-        value: ResolvedValue,
         granted: Option<&mut Vec<DynamicNode>>,
     ) {
+        let id = instruction.target;
+        let value = instruction.value;
+        let origin = if id == ctx.source {
+            ctx.origin
+        } else {
+            AbilityOrigin::Permanent(ctx.source)
+        };
         let clock = |ability: &Ability, index| {
             let Ability::Triggered { condition, .. } = ability;
-            let static_slot = node_key.as_slice()[1];
+            let static_slot = ctx.key.as_slice()[1];
             condition.once_each_turn().then(|| GrantClock {
-                timestamp: node_timestamp,
-                grantor: node_source,
+                timestamp: ctx.timestamp,
+                grantor: ctx.source,
                 static_slot: (static_slot != usize::MAX).then_some(static_slot),
                 ability_index: index,
             })
@@ -2505,11 +2469,11 @@ impl Eval<'_, '_, '_> {
                             program: true,
                         });
                     }
-                    let key = node_key.extended(id.0, ordinal);
+                    let key = ctx.key.extended(id.0, ordinal);
                     let entry = StaticEntry {
                         origin,
                         key,
-                        timestamp: node_timestamp.max(self.game.live_permanent(id).timestamp),
+                        timestamp: ctx.timestamp.max(self.game.live_permanent(id).timestamp),
                         ability: (**ability).clone(),
                     };
                     if let Some(granted) = granted {
@@ -2559,7 +2523,6 @@ impl Eval<'_, '_, '_> {
     }
 
     fn lose_nonmana_abilities(&mut self, id: PermanentId) {
-        let seed_has_statics = !self.seeds[id.0].as_ref().unwrap().statics.is_empty();
         let view = self.view_mut(id);
         view.abilities_lost = true;
         view.keywords = Keywords::default();
@@ -2579,12 +2542,8 @@ impl Eval<'_, '_, '_> {
                 .retain(ActivatedAbilityDefinition::is_mana_ability);
             details.triggered_abilities.clear();
         }
-        let object = self.object_mut(id);
-        let had_statics = match &object.statics_override {
-            Some(v) => !v.is_empty(),
-            None => seed_has_statics,
-        };
-        if had_statics {
+        if !self.statics(id).is_empty() {
+            let object = self.object_mut(id);
             match &mut object.statics_override {
                 Some(v) => v.clear(),
                 None => object.statics_override = Some(Vec::new()),

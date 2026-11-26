@@ -1780,12 +1780,8 @@ impl Game {
         crate::benchmark_layers::record(|m| m.trigger_indexes += 1);
         let mut sources: Vec<TriggerSourceEntry> = self.with_layer_board(|board| {
             board
-                .objects
                 .iter()
-                .enumerate()
-                .filter_map(|(slot, view)| {
-                    let view = view.as_deref()?;
-                    let id = PermanentId(slot);
+                .filter_map(|(id, view)| {
                     if self.is_phased_out(id) {
                         return None;
                     }

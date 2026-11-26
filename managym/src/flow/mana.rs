@@ -1860,20 +1860,10 @@ impl Game {
         let _scan = self.board_scan();
         let triggers = self.mana_triggers();
         let board = self.layer_board();
-        let needs_finalization = board.needs_finalization_for(player);
         self.iter_battlefield_permanents(player)
             .filter_map(|permanent| {
-                let raw = board.objects.get(permanent.0).and_then(Option::as_deref)?;
-                let finalized;
-                let characteristics: &Characteristics =
-                    if needs_finalization && !raw.activated_abilities.is_empty() {
-                        finalized = self.characteristics_from(permanent, || {
-                            board.objects[permanent.0].clone().unwrap()
-                        });
-                        &finalized
-                    } else {
-                        raw
-                    };
+                let raw = board.get(permanent)?;
+                let characteristics = self.finalized_view(&board, player, permanent, raw);
                 let source = self.state.permanents[permanent].as_ref().unwrap();
                 // A source that lost its abilities offers no zero-mana tap.
                 let can_tap = !source.tapped
@@ -1881,7 +1871,7 @@ impl Game {
                         || !characteristics.restricted_by_summoning_sickness());
                 let prohibited = self.activations_prohibited(permanent);
                 let fixed = (can_tap && !prohibited && !characteristics.mana_abilities.is_empty())
-                    .then(|| self.fixed_source_mana(player, permanent, characteristics, &triggers))
+                    .then(|| self.fixed_source_mana(player, permanent, &characteristics, &triggers))
                     .flatten();
                 let abilities = characteristics
                     .activated_abilities
@@ -3832,10 +3822,7 @@ impl Game {
                 .sources
                 .iter()
                 .filter_map(|source| {
-                    let view = board
-                        .objects
-                        .get(source.permanent.0)
-                        .and_then(Option::as_deref)?;
+                    let view = board.get(source.permanent)?;
                     let basic = || {
                         self.state[source.object]
                             .supertypes
@@ -3932,13 +3919,8 @@ impl Game {
         // ability (a basic land's mana ability is not one) costs nothing more.
         let _scan = self.board_scan();
         let board = self.layer_board();
-        let needs_finalization = board.needs_finalization_for(player);
         for (index, source) in model.sources.iter().enumerate() {
-            let Some(raw) = board
-                .objects
-                .get(source.permanent.0)
-                .and_then(Option::as_deref)
-            else {
+            let Some(raw) = board.get(source.permanent) else {
                 continue;
             };
             if raw.activated_abilities.is_empty() {
@@ -3950,15 +3932,7 @@ impl Game {
             if self.activations_prohibited(source.permanent) {
                 continue;
             }
-            let finalized;
-            let view: &Characteristics = if needs_finalization {
-                finalized = self.characteristics_from(source.permanent, || {
-                    board.objects[source.permanent.0].clone().unwrap()
-                });
-                &finalized
-            } else {
-                raw
-            };
+            let view = self.finalized_view(&board, player, source.permanent, raw);
             let can_tap = !permanent.tapped
                 && (!permanent.summoning_sick || !view.restricted_by_summoning_sickness());
             for (ability_index, ability) in view.activated_abilities.iter().enumerate() {

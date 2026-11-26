@@ -184,11 +184,7 @@ impl Game {
             let board = self.layer_board();
             let mut candidates = Vec::new();
             let mut rules = Vec::new();
-            for (slot, characteristics) in board.objects.iter().enumerate() {
-                let Some(characteristics) = characteristics.as_deref() else {
-                    continue;
-                };
-                let permanent_id = PermanentId(slot);
+            for (permanent_id, characteristics) in board.iter() {
                 let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
                 // CR 704.5f — A creature with toughness 0 or less is put into
                 // its owner's graveyard (an earthbent land losing its counters
@@ -247,7 +243,7 @@ impl Game {
                 })
                 .collect();
             events.extend(
-                self.finished_sagas()
+                self.finished_sagas(&board)
                     .into_iter()
                     .filter_map(|id| self.permanent_object(id))
                     .map(|target| ProposedEvent::Sacrifice { target }),
@@ -327,7 +323,7 @@ impl Game {
             attached
                 .into_iter()
                 .filter(|&id| {
-                    let Some(view) = board.objects.get(id.0).and_then(Option::as_deref) else {
+                    let Some(view) = board.get(id) else {
                         return false;
                     };
                     !view.has_subtype("Aura")
@@ -395,23 +391,17 @@ impl Game {
         performed
     }
 
-    fn finished_sagas(&self) -> Vec<PermanentId> {
-        self.with_layer_board(|board| {
-            (0..self.state.permanents.len())
-                .map(PermanentId)
-                .filter(|&id| {
-                    let Some(view) = board.objects.get(id.0).and_then(Option::as_deref) else {
-                        return false;
-                    };
-                    let permanent = self.state.permanents[id].as_ref().unwrap();
-                    let Some(last) = view.final_chapter() else {
-                        return false;
-                    };
-                    permanent.counter_count(CounterKind::Lore) >= i32::from(last)
-                        && !self.chapter_ability_pending(permanent.object)
-                })
-                .collect()
-        })
+    fn finished_sagas(&self, board: &crate::flow::statics::LayerBoard) -> Vec<PermanentId> {
+        board
+            .iter()
+            .filter_map(|(id, view)| {
+                let permanent = self.state.permanents[id].as_ref().unwrap();
+                let last = view.final_chapter()?;
+                (permanent.counter_count(CounterKind::Lore) >= i32::from(last)
+                    && !self.chapter_ability_pending(permanent.object))
+                .then_some(id)
+            })
+            .collect()
     }
 
     /// Whether a chapter ability of this Saga has triggered and not yet left
