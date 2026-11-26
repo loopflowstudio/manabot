@@ -872,10 +872,9 @@ dialog; press **Swap sides** again at any time to swap back.
 **Swap sides** is unavailable once the game is over, in **Watch**, while a
 **Study** branch is active, while a bot retry (**Retry bot decision** / **Retry
 search**) is pending, or when you are watching a shared table rather than
-piloting it. If the bot cannot be admitted or loaded for the seat you are
-leaving (for example, a policy bound to specific decks), Academy shows the
-reason under the button and leaves the live game untouched so you can keep
-playing.
+piloting it. If loading the bot for the seat you are leaving fails, Academy
+shows the reason under the button and leaves the live game untouched so you can
+keep playing.
 
 The game remains one game through the end:
 
