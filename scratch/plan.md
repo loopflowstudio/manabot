@@ -324,6 +324,8 @@ Post-implementation (40cbc3f260), all into Pass 5 except 5a:
 - **4a** remove `TurnFaceUp` from foldable helpers and docs (docs done here).
 - **5a** keep kickoff rulings; compound candidates and `autotapper` tiebreak deferred (below). Passed over: 5b pull autotapper in; 5c compare incarnation.
 
+Post-Pass 5 (27088fb760): no conceptual defects found; every concept lines up at `2a05a0b9a5`. Its confirmation questions were taken as recommended, headless and unconfirmed: **1a** ship `InteractionOffer.aliases` (omitted when empty, `SEMANTIC_DECISION_VERSION` 8), `Env::decision_offer_aliases_json` and `MATCH_STATE_HASH_VERSION` 32 as built (passed over: 1b hold to revise a boundary); **2a** keep kickoff equivalence rulings (passed over: 2b compare incarnation, 2c relax timestamps); **3a** compound candidates and `autotapper` stay deferred below (passed over: 3b pull autotapper in). These are the irreversible boundaries `ship-review` should surface.
+
 ## Deferred findings
 
 - **Compound offer candidates.** `compound_offers()` (`agent/structured_offer.rs:708-958`) still lists every identical target, waterbend tap, attacker and blocker; lowering resolves aliases, so it is correct but redundant for compound policies. Takes: dedup `CandidateSource` lists through `fold_action_space` aliases, with count-based roles for identical creatures/taps.
