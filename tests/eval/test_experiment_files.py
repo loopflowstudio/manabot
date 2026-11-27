@@ -357,6 +357,15 @@ def test_trophy_job_uses_one_precision_for_agents_environment_and_deals(
         tla_trophies.Deal.model_validate(seating.config).precision == "bf16"
         for seating in job.tournament.seatings
     )
+    (float32,) = tla_trophies.held_out_jobs([raw])
+    assert "precision" not in float32.tournament.environment.config
+
+
+def test_trophy_final_environment_keeps_the_stored_identity() -> None:
+    # The identity the stored colab and floor final tournaments recorded.
+    assert tla_trophies_floor.final_environment().identity == (
+        "34d75d78ade089db20d32c820e7ddd29adf71a12274ab92aca4684bd44274b8f"
+    )
 
 
 def test_floor_resume_only_serializes_an_explicit_tau_scale() -> None:
@@ -817,6 +826,9 @@ def test_floor_seed_plays_128_more_deals_on_fresh_pools(tmp_path: Path) -> None:
     more_job = jobs[
         f"{tla_trophies_floor.SEED_HEURISTIC}-{tla_trophies_floor.SEED_MORE}-tau-x2"
     ]
-    assert more_job.play is tla_trophies.play
+    assert more_job.play_many is tla_trophies.play_many
     assert more_job.tournament.rollups == CARD_ROLLUPS
-    assert jobs[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x2"].play is tla_trophies.play
+    assert (
+        jobs[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x2"].play_many
+        is tla_trophies.play_many
+    )

@@ -36,7 +36,11 @@ from experiments.tla_trophies import (
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
-from manabot.eval.agent_loader import EVAL_DEVICES, load_with_precision
+from manabot.eval.agent_loader import (
+    EVAL_DEVICES,
+    device_available,
+    load_with_precision,
+)
 from manabot.eval.agents import build, local_forward
 from manabot.eval.pairing import PairingSpec, play_pairing
 from manabot.eval.vector import LocalMatches, play_pairings
@@ -157,8 +161,14 @@ def main() -> None:
     args = parser.parse_args()
     if args.slots < 1:
         parser.error("--slots must be positive")
-
+    if not device_available(args.device):
+        parser.error(f"--device {args.device} is unavailable on this host")
+    if args.checkpoint is not None and not args.checkpoint.is_file():
+        parser.error(f"--checkpoint {args.checkpoint} is not a file")
     out = args.output_dir.resolve()
+    if out.exists():
+        parser.error(f"--output-dir {out} exists; each arm needs a fresh directory")
+
     out.mkdir(parents=True)
     os.environ["MANABOT_EVAL_DEVICE"] = args.device
     os.environ["ETUDE_OUTPUT_DIR"] = str(out)

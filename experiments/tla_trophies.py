@@ -273,7 +273,9 @@ def held_out_jobs(
                     name="tla-trophies",
                     # This file and pairing.py when the stored games were played.
                     files=ENVIRONMENT_FILES,
-                    config={"pools": corpus_input().sha256, "precision": precision},
+                    # Float32 keeps the stored tournaments' environment identity.
+                    config={"pools": corpus_input().sha256}
+                    | ({} if precision == "float32" else {"precision": precision}),
                 ),
                 seatings=seatings,
             ),

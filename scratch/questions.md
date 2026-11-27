@@ -78,9 +78,20 @@ Pass 6 implementation choices (2026-11-27):
   slot count of matches.
 - Apply memory ablation to individual native row coordinates before their
   checkpoint's one batch, including when both seats use the same weights.
-- Store precision in every new trophy environment config. This gives a new
-  environment identity even for float32. The default float32 deal keeps its
-  existing seating key, and paired game seeds stay stable across precisions.
+- Store a non-float32 precision in the trophy environment config; float32
+  omits it, like the float32 deal's seating key, and paired game seeds stay
+  stable across precisions. QA (2026-11-27) found that writing
+  `"precision": "float32"` raised Etude `tournament_conflict` for a stored
+  benchmark of the same name rather than starting a new tournament.
+- `tla_trophies_floor.final_environment()` now names its files by the
+  digest the stored colab and floor final tournaments recorded
+  (`a6a2f68b…`), like `tla_trophies.ENVIRONMENT_FILES`. It hashed the live
+  `tla_trophies.py` and `pairing.py`, so this branch's edits made
+  `etude eval experiments/tla_trophies_colab.py` raise `tournament_conflict`
+  against all 126 stored colab tournaments.
+- Not this branch: `experiments/tla_trophies.py` alone already conflicts
+  with its stored `tla-trophies-held-out-32` runs on `main` (stored files
+  `54cef888…`, `ENVIRONMENT_FILES` `d7dab787…`).
 
 During compression I kept the scalar `play_pairing` keyword arguments used by
 experiments. Both runners pass the same `PairingSpec` through admission.
