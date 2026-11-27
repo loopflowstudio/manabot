@@ -76,7 +76,7 @@ def throughput_rates(
     decisions: int,
     seconds: float,
 ) -> dict[str, float]:
-    """Throughput and priority-tap rates for all two-seat closures."""
+    """Throughput and priority-tap rates for every self-play update."""
     rates = {
         "priority_tap_rate": taps / decisions,
         "rows_per_second": rows / seconds,

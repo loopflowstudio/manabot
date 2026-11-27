@@ -45,9 +45,14 @@ Pass 1, at `468b79e88a`:
 All four arms had no game failures on these updates. Counting the updates with
 one recovered failure (u2–u5 for every arm), the rates are 1,972 vs 2,417
 (1.23×) at `w160l8` and 1,121 vs 1,185 (1.06×) at `w384l8`. After a failure,
-the failed stream steps alone until it reaches its quota. That added 46,665
-idle stream-steps (`w160l8` u5) and 38,760 (`w384l8` u4). This tail is the
-cost of keeping the batch at exactly `streams × transitions` rows.
+the failed stream stepped alone until it reached its quota. That added 46,665
+idle stream-steps (`w160l8` u5) and 38,760 (`w384l8` u4).
+
+2026-11-26: after these measurements, two-seat exact quota moved to a
+pool-total row target. Every stream steps while at least `streams` rows
+remain, so a failure's tail is now under one round (fewer than `streams` idle
+stream-steps). Error-free updates are unchanged; the failure updates above were
+not rerun.
 
 At `w160l8`, an exact-quota update spends its collection time as follows:
 inference 45.7%, environment step and encoding 23.6%, observation preparation
@@ -62,8 +67,11 @@ complete-games produces ~57k. A whole update (collection plus learning) took
 
 The waiting seat's viewer-read bootstrap at each cut differed from that seat's
 next own-decision value by `mean_abs` 0.13–0.39 at `w160l8` and 0.11–0.22 at
-`w384l8`, over 241–251 cut rows per update. With fresh weights this only shows
-that the gap is logged; it says nothing about bias in a trained critic.
+`w384l8`, over 241–251 cut rows per update. With fresh weights this says
+nothing about bias in a trained critic, and the gap also includes the opponent's
+moves and the weight update between the two reads. The metric was removed
+afterwards. A same-state, same-weight comparison belongs with the learning
+comparison.
 
 ## Overlap: two cohorts (built, then removed)
 

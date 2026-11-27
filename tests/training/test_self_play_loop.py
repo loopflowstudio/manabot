@@ -72,7 +72,7 @@ def _settings(learning: Learning | DampedPolicyLearning) -> SelfPlay:
                     "recent_events": True,
                 },
             },
-            "recent_events requires complete games",
+            "recent_events with both learning seats requires complete games",
         ),
     ],
 )
@@ -82,6 +82,23 @@ def test_settings_refuse_what_the_loop_cannot_run(
     values = gray_ogre_self_play(horizon=2).model_dump()
     with pytest.raises(ValueError, match=refusal):
         SelfPlay.model_validate({**values, **fields})
+
+
+def test_one_seat_exact_quota_keeps_recent_events() -> None:
+    values = gray_ogre_self_play(horizon=2).model_dump()
+    settings = SelfPlay.model_validate(
+        {
+            **values,
+            "learning_seats": "one",
+            "batch_closure": "exact-quota",
+            "model": {
+                **values["model"],
+                "world": "elemental-world-v2",
+                "recent_events": True,
+            },
+        }
+    )
+    assert settings.model.recent_events
 
 
 @pytest.mark.parametrize(

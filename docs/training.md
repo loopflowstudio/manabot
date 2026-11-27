@@ -628,8 +628,8 @@ GAE and lambda returns stop at each seat's game boundary. Under the default
 per native stream counting both seats; the stream then finishes its current
 game, so batches have variable row counts and complete seat trajectories are
 packed into `[rows, 1]` with terminal separators and no padding. Under
-`batch_closure="exact-quota"`, `transitions` is an exact per-stream surviving
-decision count across both seats, packing `streams × transitions` rows into
+`batch_closure="exact-quota"`, `streams × transitions` is the exact surviving
+decision count across both seats, packing those rows into
 `[rows, 1]` with explicit trajectory spans ([batch closure](#batch-closure)).
 `games_per_stream` overrides the floor with complete games per stream
 per update ([batch boundaries](learning.md#can-a-batch-contain-unfinished-games)); set it on both arms for an equal-game comparison and report
@@ -656,13 +656,12 @@ settings = settings.model_copy(
   and finishes the game in progress, so every return ends at a real result;
   finished streams idle until the slowest game ends, recorded as
   `idle_stream_steps`.
-- `"exact-quota"` works with either one or both learning seats. Each stream
-  steps while its surviving learner rows (counting both seats when
-  `learning_seats="both"`) are below `transitions`, starting a new game at once
-  whenever one ends and pausing any game in progress at the boundary to
-  continue in the next update under the new weights. Error-free updates have
-  `idle_stream_steps = 0` and full-width policy calls; every batch has exactly
-  `streams × transitions` rows.
+- `"exact-quota"` works with either one or both learning seats. Every batch
+  has exactly `streams × transitions` surviving learner rows (counting both
+  seats when `learning_seats="both"`). Streams start a new game at once
+  whenever one ends and pause any game in progress at the boundary to continue
+  in the next update under the new weights. Error-free updates have
+  `idle_stream_steps = 0` and full-width policy calls.
   - With `learning_seats="one"`, the batch keeps the rectangular
     `[transitions, streams]` shape and bootstraps the paused seat's tail from
     its next decision (`V(next_obs)`).
@@ -677,16 +676,19 @@ settings = settings.model_copy(
     and resumes, so a cut game keeps its full replay prefix from its seed.
 
 Exact quota rejects `games_per_stream`, `snapshot`, adaptive collection,
-`opponent_mode="learning"` (`collect_pair`), `model.recent_events=True`
-(viewer reads at a cut carry no event history), and `game_errors` without
-`recover_capacity=True`. With `game_errors` and `recover_capacity=True`, a
-failed game discards uncommitted rows from both seats, retains rows earlier
-updates learned from (counted as `learned_samples`), and its stream steps on
-until its surviving rows reach `transitions`.
+`opponent_mode="learning"` (`collect_pair`), and `game_errors` without
+`recover_capacity=True`; with both learning seats it also rejects
+`model.recent_events=True` (viewer reads at a cut carry no event history).
+With `game_errors` and `recover_capacity=True`, a failed game discards
+uncommitted rows from both seats and retains rows earlier updates learned from
+(counted as `learned_samples`). One seat steps the failed stream on until it
+reaches `transitions`; two seats make up the rows across the pool, stepping
+every stream while at least `streams` rows remain and only the streams with
+the fewest rows in the final round.
 
-For two-seat runs, throughput metrics (`rows_per_second`, `updates_per_hour`,
-`priority_tap_rate`, and `games_per_hour` when games finish) log for both
-closures; `decisions_per_game` and `skipped_share` log only under
+Throughput metrics (`rows_per_second`, `updates_per_hour`,
+`priority_tap_rate`, and `games_per_hour` when games finish) log for every
+self-play run; `decisions_per_game` and `skipped_share` log only for two-seat
 `"complete-games"`, because exact-quota fresh rows include unfinished games.
 
 Saved regimes' stages never declared their closure: one seat with neither
@@ -1372,8 +1374,9 @@ matchup distribution, without blacklisting decks or inventing a terminal reward
 or outcome. Under `batch_closure="complete-games"`, both one-seat and two-seat
 collection finish replacement games before updating; under
 `batch_closure="exact-quota"`, `game_errors` requires `recover_capacity=True`,
-retains rows earlier updates learned from (`learned_samples`), and steps the
-stream on until its surviving rows reach `transitions`.
+retains rows earlier updates learned from (`learned_samples`), and collects
+replacement rows until the batch again holds `streams × transitions`
+([batch closure](#batch-closure)).
 
 The rolling window counts completed games, engine failures, resource limits,
 truncations and action limits once per settled native game. Run interruptions

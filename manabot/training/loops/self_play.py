@@ -77,8 +77,6 @@ from manabot.training.rollout.collection import (
     collect,
     no_operation,
     open_collector,
-    record_viewer_bootstraps,
-    viewer_bootstrap_gap_metrics,
 )
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.snapshot_vector import (
@@ -237,9 +235,10 @@ class SelfPlay(BaseModel):
                 raise ValueError("games_per_stream requires complete games")
             if self.snapshot is not None:
                 raise ValueError("snapshot collection requires complete games")
-            if self.model.recent_events:
+            if self.model.recent_events and self.learning_seats == "both":
                 raise ValueError(
-                    "recent_events requires complete games (exact quota cut reads carry no event history)"
+                    "recent_events with both learning seats requires complete games "
+                    "(exact quota cut reads carry no event history)"
                 )
             if self.game_errors is not None and not self.game_errors.recover_capacity:
                 raise ValueError("game error recovery requires complete games")
@@ -817,16 +816,6 @@ def step(
                     )
                     assert plan.receipt is not None
                     prepared = plan.bank.prepare_commit(plan.receipt, targets.signals)
-                elif collector._waiting_cuts:
-                    with learner.profiler.track("Targets"):
-                        targets = compute_batch_targets(
-                            backend,
-                            learner,
-                            backend.rollout.AdmittedRollout(learner.agent, batch),
-                            settings.learning,
-                            policy,
-                        )
-                    record_viewer_bootstraps(collector, targets.bootstrap_values)
                 metrics = learn(
                     settings,
                     learner,
@@ -889,25 +878,22 @@ def step(
             )
             backend.runtime.synchronize(device)
             probe["time/combat_probe"] = perf_counter() - started
-    rates: dict[str, float] = {}
-    if settings.learning_seats == "both":
-        completed_games = stats.games - games
-        rates = throughput_rates(
-            games=completed_games,
-            rows=batch.actions.size,
-            taps=stats.priority_taps - taps,
-            decisions=stats.micro_steps - decisions,
-            seconds=seconds,
-        )
-        if settings.batch_closure == "complete-games":
-            rates.update(
-                complete_game_rates(
-                    games=completed_games,
-                    fresh_rows=stats.fresh_learner_transitions - fresh_rows,
-                    skips=stats.skipped_decisions - skipped,
-                )
+    completed_games = stats.games - games
+    rates: dict[str, float] = throughput_rates(
+        games=completed_games,
+        rows=batch.actions.size,
+        taps=stats.priority_taps - taps,
+        decisions=stats.micro_steps - decisions,
+        seconds=seconds,
+    )
+    if settings.learning_seats == "both" and settings.batch_closure == "complete-games":
+        rates.update(
+            complete_game_rates(
+                games=completed_games,
+                fresh_rows=stats.fresh_learner_transitions - fresh_rows,
+                skips=stats.skipped_decisions - skipped,
             )
-    rates.update(viewer_bootstrap_gap_metrics(collector))
+        )
     if stats.snapshot is not None:
         rates.update(
             {

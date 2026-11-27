@@ -118,10 +118,12 @@ stream that has passed the floor stops at the end of its current game and idles
 by batch. The collector asserts that the last row is an end, and
 `bootstrapped_tail_fraction` is 0.
 
-**Exact quota: yes.** With `batch_closure="exact-quota"`, each stream collects
-exactly `transitions` surviving learner decisions (counting both seats when
-`learning_seats="both"`), so the batch always has `streams × transitions` rows
-and error-free updates have zero idle stream steps. One stream can hold the end
+**Exact quota: yes.** With `batch_closure="exact-quota"`, the batch always has
+`streams × transitions` surviving learner decisions (counting both seats when
+`learning_seats="both"`), and error-free updates have zero idle stream steps:
+every stream collects exactly `transitions`. With both seats, a failed game's
+discarded rows are made up by the whole pool, so only the final round of that
+update is narrower than the pool. One stream can hold the end
 of a game begun in the last batch, some whole games, and the start of a game
 that hasn't finished:
 
@@ -139,9 +141,10 @@ that hasn't finished:
   per update).
 
 Exact quota rejects `games_per_stream`, `snapshot`, adaptive collection,
-two-model `opponent_mode="learning"` (`collect_pair`),
-`model.recent_events=True` (viewer reads at a cut carry no event history), and
-`game_errors` without `recover_capacity=True`.
+two-model `opponent_mode="learning"` (`collect_pair`), and `game_errors`
+without `recover_capacity=True`. With both learning seats it also rejects
+`model.recent_events=True`: viewer reads at a cut carry no event history. One
+seat bootstraps from its paused decision observation, which keeps its events.
 
 At an unfinished game's boundary, no action is sampled for the cut observation.
 Three things follow:

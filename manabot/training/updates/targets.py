@@ -40,7 +40,6 @@ class BatchTargets:
     retained: np.ndarray
     source_selection: tuple[SourceSelection, ...]
     signals: BatchSignals
-    bootstrap_values: np.ndarray
 
     @property
     def empty_filter_reason(self) -> str:
@@ -273,5 +272,4 @@ def compute_batch_targets(
             retained=retained,
             source_selection=sources,
             signals=batch_signals(batch, to_host(residuals), action_values),
-            bootstrap_values=to_host(next_value).reshape(-1),
         )

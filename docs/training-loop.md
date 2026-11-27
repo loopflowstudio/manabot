@@ -143,8 +143,9 @@ capacities, and mismatched optional fields raise `ValueError`.
 The opponent is `opponent_mode`: `"self"` (one model, both seats learn by
 default), `"learning"` (two models), `"frozen"` (with `opponent_agent`, only
 the learner's seat learns) or `"random"`. `batch_closure="complete-games"` is
-the default; `"exact-quota"` stops every stream at exactly `decisions`
-surviving learner rows, carries unfinished games into the next batch, and
+the default; `"exact-quota"` stops at exactly `num_envs * decisions`
+surviving learner rows (every stream at `decisions` when no game fails),
+carries unfinished games into the next batch, and
 bootstraps open seats from `next_obs`
 ([batch boundaries](learning.md#can-a-batch-contain-unfinished-games)). With
 `learning_seats="one"` it returns a rectangular `[decisions, num_envs]` batch;
@@ -169,9 +170,10 @@ print(batch.actions.shape, len(batch.trajectories or ()))
 ```
 
 `batch_closure="exact-quota"` rejects `games_per_stream`, snapshot or adaptive
-collection, `opponent_mode="learning"` (`collect_pair`),
+collection, `opponent_mode="learning"` (`collect_pair`), and `game_errors`
+without `recover_capacity=True`; with `learning_seats="both"` it also rejects
 `observation_space.config.policy_history_version == 1` (set by `SelfPlay` for
-`model.recent_events=True`), and `game_errors` without `recover_capacity=True`.
+`model.recent_events=True`).
 Collection never changes weights. A native game failure raises unless the
 collector is given a `GameErrorPolicy`
 ([game failures](training.md#game-failures)).

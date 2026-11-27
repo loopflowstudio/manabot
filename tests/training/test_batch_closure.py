@@ -71,7 +71,6 @@ ROOT = Path(__file__).resolve().parents[2]
             0,
         ),
         ({"learning_seats": "both"}, "recent_events", 1),
-        ({"learning_seats": "one"}, "recent_events", 1),
         (
             {
                 "learning_seats": "one",
@@ -111,6 +110,22 @@ def test_collector_rejects_exact_quota_with_incompatible_settings(
             **kwargs,
             numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
         )
+
+
+def test_one_seat_exact_quota_accepts_recent_events() -> None:
+    # One seat bootstraps from its paused acting observation, which keeps its
+    # event history, so only two-seat cut reads need complete games.
+    collector = open_collector(
+        ObservationSpace(ObservationConfig(policy_history_version=1)),
+        Match(),
+        Reward(RewardConfig()),
+        num_envs=2,
+        opponent_mode="self",
+        learning_seats="one",
+        batch_closure="exact-quota",
+        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
+    )
+    close_collector(collector)
 
 
 def _one_seat(closure: BatchClosure) -> Collector:
@@ -348,6 +363,47 @@ def test_two_seat_exact_quota_cross_update_failure_receipt_replays_and_keeps_lea
         close_collector(collector)
 
 
+def test_two_seat_exact_quota_refills_a_failure_from_the_whole_pool(
+    tmp_path: Path,
+) -> None:
+    """A failure's discarded rows are made up by the pool, not by one stream alone."""
+    space = ObservationSpace(ObservationConfig(max_permanents_per_player=1))
+    match = Match(MatchConfig(hero_deck={"Forest": 12}, villain_deck={"Forest": 12}))
+    agent = _agent("scalar")
+    agent = type(agent)(space, agent.config)
+    policy = GameErrorPolicy(threshold=0.9, recover_capacity=True)
+    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
+    num_envs, transitions = 4, 6
+    collector = _two_seat_exact_collector(
+        agent,
+        num_envs=num_envs,
+        seed=11,
+        match=match,
+        space=space,
+        game_errors=policy,
+        record_attempt=lambda state, row: append_attempt(ledger, state, row, {}),
+    )
+    try:
+        most_discarded = 0
+        for _ in range(12):
+            idle = collector.stats.idle_stream_steps
+            decisions = collector.stats.micro_steps
+            batch = collect(collector, agent, transitions)
+            assert batch.actions.shape == (num_envs * transitions, 1)
+            assert all(p is None for p in collector._pending)
+            # Every decision of a self-play stream is a learner row, so the
+            # surplus over the batch is what this update's failures discarded.
+            discarded = collector.stats.micro_steps - decisions - batch.actions.size
+            # Only the final partial round is narrower than the pool.
+            assert collector.stats.idle_stream_steps - idle < num_envs
+            most_discarded = max(most_discarded, discarded)
+        # A per-stream quota would idle the other streams for at least this many
+        # steps while the failed stream made up its rows alone.
+        assert most_discarded >= 2
+    finally:
+        close_collector(collector)
+
+
 def test_two_seat_exact_quota_mid_game_save_restore_matches_in_fresh_process(
     tmp_path: Path,
 ) -> None:
@@ -444,8 +500,9 @@ def test_two_seat_exact_quota_mid_game_save_restore_matches_in_fresh_process(
     assert {int(k): v for k, v in actual["learned"].items()} == expected_learned
 
 
-def test_self_play_step_splits_rates_and_logs_viewer_bootstrap_gap(
-    tmp_path: Path,
+@pytest.mark.parametrize("seats", ["one", "both"])
+def test_self_play_step_logs_throughput_for_every_seat_mode(
+    tmp_path: Path, seats: Literal["one", "both"]
 ) -> None:
     base = gray_ogre_self_play(horizon=2).model_dump()
     settings = SelfPlay.model_validate(
@@ -454,7 +511,7 @@ def test_self_play_step_splits_rates_and_logs_viewer_bootstrap_gap(
             "streams": 4,
             "transitions": 6,
             "batch_closure": "exact-quota",
-            "learning_seats": "both",
+            "learning_seats": seats,
             "learning": DampedPolicyLearning(
                 gradient="damped_policy", advantage_quantile=0.0, min_advantage=0.0
             ),
@@ -465,23 +522,22 @@ def test_self_play_step_splits_rates_and_logs_viewer_bootstrap_gap(
     rng = np.random.default_rng(5)
     run = FreshRun(tmp_path / "out", 5)
     with self_play_loop.self_play_games(settings, run, counts) as collector:
-        row1 = self_play_loop.step(
-            settings, learner, ema, collector, counts, rng, out=run.out
-        )
-        row2 = self_play_loop.step(
-            settings, learner, ema, collector, counts, rng, out=run.out
-        )
-    for row in (row1, row2):
+        rows = [
+            self_play_loop.step(
+                settings, learner, ema, collector, counts, rng, out=run.out
+            )
+            for _ in range(2)
+        ]
+    for row in rows:
         assert row["rows_per_second"] > 0
         assert row["updates_per_hour"] > 0
         assert "priority_tap_rate" in row
         assert "decisions_per_game" not in row
         assert "skipped_share" not in row
-    assert row2["coordinates/idle_stream_steps"] == 0
-    assert row2["coordinates/learner_transitions"] == 48
-    assert row2["viewer_bootstrap_gap/count"] >= 1
-    assert np.isfinite(row2["viewer_bootstrap_gap/mean_abs"])
-    assert np.isfinite(row2["viewer_bootstrap_gap/mean_signed"])
+        assert not any(key.startswith("viewer_bootstrap") for key in row)
+    assert rows[1]["coordinates/learner_transitions"] == 48
+    if seats == "both":
+        assert rows[1]["coordinates/idle_stream_steps"] == 0
 
 
 def test_two_seat_exact_quota_handles_all_terminal_boundary_with_zero_cuts() -> None:

@@ -1040,14 +1040,6 @@ class Collector:
     _episodes: list[_EpisodeAssignment] = field(default_factory=list)
     capture_predicate: CapturePredicate | None = None
     snapshot_bank: SnapshotBank | None = None
-    # Diagnostic tracking for waiting-seat viewer-read cut bootstraps (two-seat
-    # exact quota): bootstrap_index -> (stream, seat, generation), carried into
-    # the next batch as (stream, seat) -> (generation, bootstrap_value).
-    _waiting_cuts: dict[int, tuple[int, int, int]] = field(default_factory=dict)
-    _pending_viewer_bootstraps: dict[tuple[int, int], tuple[int, float]] = field(
-        default_factory=dict
-    )
-    _viewer_bootstrap_gaps: list[float] = field(default_factory=list)
 
 
 class StreamRootState(BaseModel):
@@ -1370,9 +1362,13 @@ def open_collector(
             raise ValueError(
                 "exact quota does not support opponent_mode='learning' (collect_pair)"
             )
-        if observation_space.config.policy_history_version == 1:
+        if (
+            learning_seats == "both"
+            and observation_space.config.policy_history_version == 1
+        ):
             raise ValueError(
-                "exact quota does not support recent_events (policy_history_version=1)"
+                "two-seat exact quota does not support recent_events "
+                "(policy_history_version=1): cut reads carry no event history"
             )
         if game_errors is not None and not game_errors.recover_capacity:
             raise ValueError(
@@ -1857,8 +1853,6 @@ def _collect(
     both = collector.learning_seats == "both"
     complete_games = collector.batch_closure == "complete-games"
     two_seat_exact = both and not complete_games
-    collector._waiting_cuts.clear()
-    collector._viewer_bootstrap_gaps.clear()
     if collector.game_error_state.stop_reason:
         raise GameErrorLimit(collector.game_error_state.stop_reason)
     completed = np.zeros(num_envs, dtype=bool)
@@ -1937,18 +1931,7 @@ def _collect(
                     continue
             acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
             if two_seat_exact:
-                active = np.array(
-                    [
-                        sum(
-                            len(collector._streams[slot])
-                            + int(collector._pending[slot] is not None)
-                            for slot in _game_slots(collector, row)
-                        )
-                        < num_steps
-                        for row in range(num_envs)
-                    ],
-                    dtype=bool,
-                )
+                active = _pool_quota_active(collector, num_steps)
                 if not active.any():
                     break
                 for row in np.flatnonzero(active):
@@ -2074,12 +2057,7 @@ def _collect(
         ]
         if cuts:
             with collector.profiler.track("Cut bootstrap"):
-                frozen_cuts = _freeze_cut_bootstraps(
-                    collector,
-                    None,
-                    cuts,
-                    acting=np.asarray(env.current_agent_indices(), dtype=np.int64),
-                )
+                frozen_cuts = _freeze_cut_bootstraps(collector, None, cuts)
     if collector.game_errors and not complete_games:
         # A paused game's rows so far are learned from by this batch; a later
         # failure of that game must not discard them. Keyed by stream, summing
@@ -2471,6 +2449,37 @@ def _start_episodes(
     return plan is None and bool(snapshots.ready)
 
 
+def _pool_quota_active(collector: Collector, num_steps: int) -> np.ndarray:
+    """Streams that step next under two-seat exact quota's pool-total row target.
+
+    The batch target is `num_envs * num_steps` surviving rows (finished plus
+    pending, both seats). Every stream steps while at least `num_envs` rows
+    remain, so error-free updates are lockstep; the final partial round steps
+    only the `remaining` streams with the fewest rows (ties by stream index).
+    A failure discards rows from the pool, not from one stream, so the rest of
+    the pool keeps stepping at full width rather than one stream stepping alone.
+    """
+    num_envs = collector.num_envs
+    rows = np.array(
+        [
+            sum(
+                len(collector._streams[slot])
+                + int(collector._pending[slot] is not None)
+                for slot in _game_slots(collector, row)
+            )
+            for row in range(num_envs)
+        ],
+        dtype=np.int64,
+    )
+    remaining = num_envs * num_steps - int(rows.sum())
+    active = np.zeros(num_envs, dtype=bool)
+    if remaining >= num_envs:
+        active[:] = True
+    elif remaining > 0:
+        active[np.argsort(rows, kind="stable")[:remaining]] = True
+    return active
+
+
 def _freeze_cut_bootstraps(
     collector: Collector,
     frozen: RecordedSpans | ObservationRows | None,
@@ -2478,7 +2487,6 @@ def _freeze_cut_bootstraps(
     *,
     expected_generations: Mapping[int, int | None] | None = None,
     expected_seeds: Mapping[int, int] | None = None,
-    acting: np.ndarray | None = None,
     label: str = "cut bootstrap",
 ) -> RecordedSpans | ObservationRows | None:
     """Freeze viewer-safe observations for every pending slot at a cut without retiring games.
@@ -2560,10 +2568,6 @@ def _freeze_cut_bootstraps(
                 done=False,
                 bootstrap_index=bootstrap_index,
             )
-            if acting is not None and seat != int(acting[slot]):
-                generation = generations[slot]
-                assert generation is not None
-                collector._waiting_cuts[bootstrap_index] = (slot, seat, int(generation))
     return frozen
 
 
@@ -2736,10 +2740,6 @@ def _settle_step(
             completed[row] = _stream_at_floor(collector, int(row), games, num_steps)
 
     ended = np.flatnonzero(closed | failed)
-    if collector._pending_viewer_bootstraps and len(ended):
-        for row in ended:
-            collector._pending_viewer_bootstraps.pop((int(row), 0), None)
-            collector._pending_viewer_bootstraps.pop((int(row), 1), None)
     if snapshots is not None:
         plan = snapshots.plan
         if plan is None:
@@ -2900,15 +2900,6 @@ def _sample_learning_rows(
         )
     acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
     outcomes, needs = sampled.outcomes, sampled.needs
-    if collector._pending_viewer_bootstraps:
-        generations = collector._env.current_game_generations()
-        for j, row in enumerate(rows):
-            stream = int(row)
-            entry = collector._pending_viewer_bootstraps.pop(
-                (stream, int(acting[stream])), None
-            )
-            if entry is not None and entry[0] == generations[stream]:
-                collector._viewer_bootstrap_gaps.append(float(values[j]) - entry[1])
     with collector.profiler.track("Rollout recording"):
         if isinstance(collector._observations, RecordedSpans):
             assert isinstance(observation, ObservationSelection)
@@ -3003,33 +2994,6 @@ def _build_rectangular_batch(collector: Collector, steps: int) -> RolloutBatch:
     for stream in streams:
         stream.clear()
     return batch
-
-
-def record_viewer_bootstraps(
-    collector: Collector, bootstrap_values: np.ndarray
-) -> None:
-    """Carry waiting-seat cut bootstrap values into the next batch for gap measurement."""
-    for bootstrap_index, (row, seat, generation) in collector._waiting_cuts.items():
-        collector._pending_viewer_bootstraps[(row, seat)] = (
-            generation,
-            float(bootstrap_values[bootstrap_index]),
-        )
-    collector._waiting_cuts.clear()
-
-
-def viewer_bootstrap_gap_metrics(collector: Collector) -> dict[str, float | int]:
-    """Summary of (next_own_value - viewer_bootstrap_value) for waiting-seat cuts."""
-    gaps = collector._viewer_bootstrap_gaps
-    if not gaps:
-        return {}
-    array = np.asarray(gaps, dtype=np.float64)
-    abs_gaps = np.abs(array)
-    return {
-        "viewer_bootstrap_gap/count": len(gaps),
-        "viewer_bootstrap_gap/mean_abs": float(abs_gaps.mean()),
-        "viewer_bootstrap_gap/mean_signed": float(array.mean()),
-        "viewer_bootstrap_gap/p90_abs": float(np.percentile(abs_gaps, 90)),
-    }
 
 
 def _build_packed_batch(
