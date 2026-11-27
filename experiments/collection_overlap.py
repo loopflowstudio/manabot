@@ -1,14 +1,14 @@
 """Exploratory L4 throughput comparison: complete-games vs two-seat exact-quota.
 
 Compares `batch_closure="complete-games"` against `batch_closure="exact-quota"`
-on the TLA trophy corpus at two model sizes:
-- `w160l8`: warm-started from `tla_trophies_colab_500k_v2/w160l8@40902` u2000
-  (late-training game lengths, ~186 decisions/game).
-- `w384l8`: fresh weights (no trained checkpoint of that size exists).
+on the TLA trophy corpus at `w160l8` and `w384l8`, both from fresh weights: the
+`tla_trophies_colab_500k_v2/w160l8@40902` u2000 checkpoint (`W160L8_U2000`) was
+written at `v0.2.4+10` and its vocabulary no longer loads strictly on HEAD.
 
 Each arm runs 5 updates on one L4 with 256 streams and 4 native workers.
 Exact-quota uses `transitions=186` (47,616 rows/update) to match complete-games'
-~47.7k rows/update at `w160l8` u2000.
+~47.7k rows/update at late-training game lengths. Results:
+`experiments/reports/collection_overlap.md`.
 """
 
 from __future__ import annotations
