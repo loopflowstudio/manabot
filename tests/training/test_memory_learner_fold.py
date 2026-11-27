@@ -15,15 +15,13 @@ from manabot.env.memory_store import (
     PrefixObservation,
     gather_memory,
 )
+from manabot.env.observation import ObservationSpace
 from tests.model.test_decision_memory import policy
 from tests.training.test_memory_chunk_cache import chunk_input
 
 
-@pytest.mark.parametrize("live", [False, True])
-@pytest.mark.parametrize("summaries", [1, 4])
-def test_learner_fold_matches_stateless_policy_and_gradients(
-    live: bool, summaries: int
-) -> None:
+def memory_fold_observation() -> tuple[ObservationSpace, PrefixObservation]:
+    """Build a PrefixObservation with shared prefixes, empty rows, a branch and a fork."""
     space, raw = chunk_input()
     # Reference two first appears in the second chunk. Later records mix it
     # with reference one, exercising both local and predecessor-owned joins.
@@ -54,7 +52,16 @@ def test_learner_fold_matches_stateless_policy_and_gradients(
     prefixes = [prefixes[i] for i in (4, 0, 2, 5, 4, 1, 6, 3)]
     dense = {key: np.repeat(value, len(prefixes), axis=0) for key, value in raw.items()}
     dense.update(gather_memory(prefixes))
-    retained = PrefixObservation(dense, prefixes, capacities)
+    return space, PrefixObservation(dense, prefixes, capacities)
+
+
+@pytest.mark.parametrize("live", [False, True])
+@pytest.mark.parametrize("summaries", [1, 4])
+def test_learner_fold_matches_stateless_policy_and_gradients(
+    live: bool, summaries: int
+) -> None:
+    space, retained = memory_fold_observation()
+    batch_size = len(retained.prefixes)
     model = policy(space, "gru", summaries, live=live, bucketed=True)
     expected = model.prepare(retained.materialize())
     actual = model.prepare(retained)
@@ -72,7 +79,7 @@ def test_learner_fold_matches_stateless_policy_and_gradients(
             logits, values = model.forward_distribution(on_device(prepared, "cpu"))
             # Unequal row contributions detect accidental tail sorting, duplicate
             # suppression or averaging instead of summed shared gradients.
-            weights = torch.arange(1, len(prefixes) + 1)[:, None]
+            weights = torch.arange(1, batch_size + 1)[:, None]
             (logits.mul(weights).sum() + values.mul(weights).sum()).backward()
             outputs.append((logits.detach(), values.detach()))
             gradients.append(
@@ -99,8 +106,13 @@ def test_learner_fold_matches_stateless_policy_and_gradients(
                 if parameter.grad is not None:
                     parameter.add_(parameter.grad, alpha=-1e-5)
     # Prepared owns array routes, never native prefixes or a persistent graph.
-    nodes = [weakref.ref(node) for p in prefixes if p.tail for node in p.tail.chunks()]
-    del prefixes, retained
+    nodes = [
+        weakref.ref(node)
+        for p in retained.prefixes
+        if p.tail
+        for node in p.tail.chunks()
+    ]
+    del retained
     gc.collect()
     assert all(node() is None for node in nodes)
 

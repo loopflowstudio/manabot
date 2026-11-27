@@ -1,7 +1,16 @@
 """One-layer GRU over packed variable-length sequences.
 
 `packed_gru` is the entry point for every packed `nn.GRU` call in the policy
-encoders. CPU and CUDA run the module's own fused kernel. On MPS `nn.GRU` over a
+encoders. It owns the cross-device dtype contract: on CPU, MPS and CUDA,
+packed recurrences run with autocast disabled, cast their inputs and optional
+initial state to `gru.weight_ih_l0.dtype`, and return both step outputs and
+final states in that parameter dtype without detaching gradients. In b015d5's
+declared-bf16 CUDA run, cuDNN's fused `nn.GRU` returned `float16` states under
+BF16 autocast, failing float32 join tables (and running unscaled `float16`
+recurrences despite `learner.py` omitting a `GradScaler`).
+
+CPU and CUDA run `nn.GRU`'s own fused kernel inside
+`torch.autocast(device, enabled=False)`. On MPS `nn.GRU` over a
 `PackedSequence` runs step by step, about twenty dispatched ops per step forward
 and twenty-seven autograd nodes per step backward; there `hand_packed_gru`
 projects every packed row once and leaves only the recurrent linear and the gate
@@ -11,8 +20,7 @@ the previous-state gradient, then forms the input-projection, recurrent-weight
 and hidden-bias gradients with one concatenation, one matmul and one sum. This
 is the design of MLX's `gru_recurrence` (`manabot/backends/mlx/policy.py`).
 
-Both paths read the same `nn.GRU` parameters, so checkpoints do not change, and
-both return float32 under MPS autocast as `nn.GRU` does there.
+Both paths read the same `nn.GRU` parameters, so checkpoints do not change.
 
 Packed layout (PyTorch's): sequences sorted by descending length; step t holds
 `sizes[t]` rows, the prefix of that order, at rows `offsets[t]:offsets[t+1]`.
@@ -37,16 +45,20 @@ def packed_gru(
     """Run `gru` over packed rows `data` [N,I] with live counts `sizes`.
 
     `initial` [sizes[0],H] is the state entering step 0 (zeros when omitted).
-    Returns every step's state [N,H] in packed order and each sequence's final
-    state [sizes[0],H] in sorted order.
+    Runs with autocast disabled at `gru.weight_ih_l0.dtype` and returns every
+    step's state [N,H] in packed order and each sequence's final state
+    [sizes[0],H] in sorted order, both in that parameter dtype with gradients
+    preserved through any cast.
     """
     if data.device.type == "mps":
         return hand_packed_gru(gru, data, sizes, initial)
-    output, hidden = gru(
-        PackedSequence(data, torch.tensor(sizes)),
-        None if initial is None else initial.unsqueeze(0),
-    )
-    return output.data, hidden[0]
+    dtype = gru.weight_ih_l0.dtype
+    with torch.autocast(data.device.type, enabled=False):
+        output, hidden = gru(
+            PackedSequence(data.to(dtype), torch.tensor(sizes)),
+            None if initial is None else initial.to(dtype).unsqueeze(0),
+        )
+    return output.data.to(dtype), hidden[0].to(dtype)
 
 
 def hand_packed_gru(

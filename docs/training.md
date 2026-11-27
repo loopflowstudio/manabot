@@ -1087,7 +1087,7 @@ precision they ran with, and a checkpoint keeps what its run recorded.
 | --- | --- |
 | `float32` (default) | Nothing; the process's own TF32 switches are left as they were. |
 | `tf32` | For the loop, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
-| `bf16` | Torch uses autocast and MLX temporarily casts the policy weights for collection, bootstrap and learner forwards. Forward outputs, behavior log-probabilities, targets, losses, master weights and Adam state stay float32. |
+| `bf16` | Torch uses autocast (keeping packed GRUs at their parameters' float32 dtype on CPU, MPS and CUDA) and MLX temporarily casts the policy weights for collection, bootstrap and learner forwards. Forward outputs, behavior log-probabilities, targets, losses, master weights and Adam state stay float32. |
 
 Managed checkpoint evaluation uses CUDA when available, otherwise CPU, in
 float32; standalone evaluation and search use CPU. TF32 requires CUDA;
@@ -1119,8 +1119,23 @@ Before training a reduced precision on another GPU, run the
 dtype-join admission on that host:
 
 ```bash
-MANABOT_REQUIRE_CUDA=1 uv run --extra dev pytest tests/model/test_semantic_card_precision.py -q
+MANABOT_REQUIRE_CUDA=1 uv run --extra dev pytest tests/model/test_semantic_card_precision.py -q -s
 ```
+
+```text
+{"precision": "float32", "gru_output_dtypes": ["torch.float32"], "table_dtype": "torch.float32", ...}
+{"precision": "bf16", "gru_output_dtypes": ["torch.float32"], "table_dtype": "torch.float32", ...}
+```
+
+The admission exercises both `float32` and `bf16` across semantic-card programs
+(full, selected and empty rows, cached inference, optimizer step and reload)
+and GRU decision memory (cold and warm serving folds, learner fold with finite
+GRU gradients, and stateless encoding). Because packed GRUs disable autocast
+and run at the parameters' dtype on every device, each printed receipt reports
+`torch.float32` for both `gru_output_dtypes` and `table_dtype`. Without CUDA,
+`MANABOT_REQUIRE_CUDA=1` fails rather than skipping. This is an execution and
+dtype-join admission, not a learning-equivalence claim for `bf16` with GRU
+memory.
 
 ### Terminal incidents
 
