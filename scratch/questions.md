@@ -62,3 +62,10 @@ Ideas outside this Task:
   would raise CUDA games/hour more than batching does at w160l8.
 - **Joining memory rows with fold trees** (retained native memory) needs fold
   trees rebuilt in `concatenate`; evaluation rows carry none.
+
+Review choices made headless at `c1df3f02c2` (2026-11-27), each reversible
+and marked for review in `scratch/plan.md`: 3a (async-only `Sampler` keyed
+by checkpoint), 5a (one `MANABOT_EVAL_DEVICE` runtime-target knob), 6a
+(per-active-slot round charge), 4a (transport deferred). Open and not taken:
+Q1 (live viewer frames vs compact replay-verified annotations) changes
+stored traces; the runner keeps live frames until someone chooses.
