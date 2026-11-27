@@ -10,6 +10,8 @@ The first pass 2 attempt found the counterexample below (`34092c814`, test `tarn
 
 Pass 3 (`abfabece991`) owns the announced mana activation and its priced fee, reads dynamic output at completion, reserves paid taps from the owed cost, classifies Treasure against battlefield reads, and bumps the match-state hash to v35. Twelve focused debug checks passed, including live and snapshot-restored Ogre, Henge repricing, and conditional Treasure.
 
+Pass 4's finite-resource contract (`ab008535c`) shares one mana-ability predicate, routes board-growing and counter-swapping abilities through the stack, and reserves the pending activation's counters and source presence. The 48 focused debug checks passed. Catalog parity held across printed, token and granted definitions, with suffixes on Tarnished Citadel and The Great Henge only.
+
 Pass 4 attempt 1 stopped at a counterexample (`0d7bb6743`, `fixed_mana_suffix_reads_life_through_damage_replacement` in `managym/src/flow/mana/tests.rs`) and changed no production code. At 4 life, Henge (+2) and Citadel (3 damage plus life gained this turn, through a constructed damage replacement) owe `{G}{G}{R}` then 2 life. Root probes certify both independent; Henge-first reaches an empty decision at 6 life (Citadel now deals 5). Citadel-first pays with 1 life left. The fourth concept review (`8182d5c876`, `scratch/concept-review.html`) widened this to a missing-read-channel finding.
 
 Pass 4 attempt 2 reproduced `mana_trigger_reads_keyword_changed_by_another_activation` in debug (`a90fd7109`, `managym/src/flow/mana/tests.rs`). A constructed Heartbeat matches lands with trample. The Mountain can either tap or remove its trample counter to add `{G}`. While paying `{G}{R}{R}`, the counter-first offer reaches an empty decision because the later tap makes only `{R}`. Tap-first commits both red units and completes. Design 4's read graph would still certify both steps independent, so the stop rule sent pass 4 back to review.
@@ -58,14 +60,13 @@ The run is headless; these follow the concept review's recommendations (1a, 2a, 
    - The catalog parity test (`registered_mana_activations_consume_finite_payment_resources`, `tests.rs` ≈2439) widens to printed abilities, tokens, `GrantActivated` grants, dynamic outputs and suffixes. Any syntactic CR 605.1a mana ability the contract rejects fails CI.
    - Termination: each activation strictly lowers the payer's unreserved (permanents, untapped, use limits, counters) lexicographically. Choice and spend steps lower the owed pips or the continuation depth, and delve shrinks the graveyard. The fork search therefore needs no cap.
    - Passed over: runtime `AgentError` for non-monotone abilities (1b, two meanings of "mana ability" and fallible read paths); a capped fork search (1c, violates the no-truncation rule and still undecidable); a wider suffix whitelist (2b, no catalog card uses it); excluding bare `remove_counters` (3b, breaks `a90fd7109`).
-   - Unverified review claims for implement to check: the catalog has no suffix besides Citadel's damage and Henge's life gain, and every catalog mana card keeps `is_mana_ability()`.
+   - The catalog audit in `ab008535c` confirmed the two suffixes and found no classification changes.
 
 Preserve native action identities, source order, the chooser, individual Heartbeat bonus decisions, spend restrictions and receipts. Keep existing replay and action formats and version the canonical state hash when it changes. The `PaymentScan` debug rebuild check must keep holding: probes and coupled search run on forks and leave `&self` untouched.
 
 ## Remaining passes
 
-4. **Closed contract, whitelist classifier and coupled regime** (`state/src/card.rs`, `flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/mana/help.rs`, `flow/proposed_event.rs`). Build design 5 first, then design 4 with design 1's fork search; keep the fork search and live offer changes together. Live checks:
-   - `de9787c04` becomes the contract suite (4a): the Clue/untap ability is a stack ability at priority and owing `{U}` is rejected with no fork; bare `add_counters` mana and a remove/add counter-swap pair are stack abilities; a nested `ManaUpfront` cannot spend a reserved counter; catalog parity holds.
+4. **Whitelist classifier and coupled regime** (`flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/mana/help.rs`, `flow/proposed_event.rs`). Build design 4 with design 1's fork search and live offer changes in one pass. The existing arithmetic witness treats counter costs as one use of each ability, so keep counter-changing transitions in the fork and carry the live counter reservations into each rebuild. Live checks:
    - `0d7bb6743`: only Citadel-first offered; at 1 life the damage channel deactivates and Henge hands off to the pure model.
    - `a90fd7109`: only the Mountain tap is offered first; it commits both red units before the counter is removed for green.
    - The review's new boards: delve spell beside a non-token `{T}, Sacrifice: Add {G}`; summoning-sick creature with remove-haste-counter mana and `{T}` mana (only tap-first); a `tap_cost` predicate and an `ActivatedAbilitiesCostLess` predicate each beside a non-mana write.
@@ -106,7 +107,7 @@ The test exercises both branches of the Room’s blue/red choice and the legal o
 
 ## Concept review disposition
 
-Second review (`24f1ec2f3`): 1a, 2a, 3a, 4a are design 1–3 above, made for review. Third review (`f5992e81f`): pass 3 implements 1a, 2a and 4a for review. 3a puts the non-mana sibling in deferred findings. Fourth review (`8182d5c876`): its read graph is superseded; its non-mana ownership and `OrderReplacement` items remain deferred. Fifth review (`fc7f2f70e7`): 1a–4a are design 4 above, made for review; its convoke item stays in pass 5 and its two separate outcomes match the deferred findings. The shield board was dropped after checking that managym currently has no consumable one-shot prevention shield. Sixth review (`6f7b914a4`): 1a–4a are design 5, made for review and built in pass 4. Its convoke, non-mana ownership and `OrderReplacement` items match pass 5 and the deferred findings.
+Second review (`24f1ec2f3`): 1a, 2a, 3a, 4a are design 1–3 above, made for review. Third review (`f5992e81f`): pass 3 implements 1a, 2a and 4a for review. 3a puts the non-mana sibling in deferred findings. Fourth review (`8182d5c876`): its read graph is superseded; its non-mana ownership and `OrderReplacement` items remain deferred. Fifth review (`fc7f2f70e7`): 1a–4a are design 4 above, made for review; its convoke item stays in pass 5 and its two separate outcomes match the deferred findings. The shield board was dropped after checking that managym currently has no consumable one-shot prevention shield. Sixth review (`6f7b914a4`): 1a–4a are design 5, implemented in `ab008535c`. Its convoke, non-mana ownership and `OrderReplacement` items match pass 5 and the deferred findings.
 
 ## Deferred findings
 

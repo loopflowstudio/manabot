@@ -1,17 +1,19 @@
-at: de9787c042736909b483feae7be07c69a61a0824
+at: ab008535cbf82d69d39141aa627c3e5a332ed19f
 first:
   - path: scratch/plan.md
-    why: Payment reproductions and the fork search termination gap
-  - path: managym/src/flow/mana/tests.rs
-    why: Native transitions for the repeatable mana suffix
+    why: Payment reproductions and remaining coupled search work
   - path: managym/README.md
     why: Payment search's finite resource requirement
+  - path: managym/state/src/card.rs
+    why: The finite-resource contract for immediate mana abilities
   - path: managym/src/flow/decision.rs
     why: The owned mana activation and its continuation
   - path: managym/src/state/hash.rs
     why: Versioned identity includes the pending activation
   - path: managym/src/flow/mana.rs
     why: Activation announcement, reservation, spending, and output
+  - path: managym/src/flow/mana/tests.rs
+    why: Catalog parity, counter reservations, and live payment repros
   - path: managym/src/agent/continuation.rs
     why: The visible continuation uses the announced fee
   - path: managym/src/flow/payment.rs
