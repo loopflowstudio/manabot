@@ -107,8 +107,8 @@ ARMS: tuple[Arm, ...] = (
         seeds=W64_SEEDS,
         policy_weight=0.2,
         fade_updates=200,
-        max_usd=Decimal("2.5"),
-        max_hours=12.0,
+        max_usd=Decimal("2.65"),
+        max_hours=8.0,
     ),
     Arm(
         name="w64-ks-0.5-f200",
@@ -117,16 +117,16 @@ ARMS: tuple[Arm, ...] = (
         seeds=W64_SEEDS,
         policy_weight=0.5,
         fade_updates=200,
-        max_usd=Decimal("2.5"),
-        max_hours=12.0,
+        max_usd=Decimal("2.65"),
+        max_hours=8.0,
     ),
     Arm(
         name="w160l8-fresh",
         label="w160l8 fresh (control)",
         size="w160l8",
         seeds=LARGE_SEEDS,
-        max_usd=Decimal("5.0"),
-        max_hours=18.0,
+        max_usd=Decimal("5.20"),
+        max_hours=16.0,
     ),
     Arm(
         name="w160l8-ks-0.2-f200",
@@ -135,8 +135,8 @@ ARMS: tuple[Arm, ...] = (
         seeds=LARGE_SEEDS,
         policy_weight=0.2,
         fade_updates=200,
-        max_usd=Decimal("5.0"),
-        max_hours=18.0,
+        max_usd=Decimal("5.20"),
+        max_hours=16.0,
     ),
 )
 ARMS_BY_NAME: dict[str, Arm] = {arm.name: arm for arm in ARMS}
@@ -231,6 +231,8 @@ def training_jobs(
     streams: int = 256,
     rows: int = 512,
     checkpoint_every: int = CHECKPOINT_EVERY,
+    hours: float | None = None,
+    usd: float | None = None,
 ) -> list[TrainingJob]:
     """Kickstarted w64 arms (2 seeds each) + w160l8 fresh vs kickstarted (seed 40902)."""
     env = tuple(
@@ -284,8 +286,8 @@ def training_jobs(
                 setup=machine_setup(" --extra artifacts"),
                 inputs=inputs,
                 extras=("artifacts",),
-                max_hours=arm.max_hours,
-                max_usd=arm.max_usd,
+                max_hours=hours if hours is not None else arm.max_hours,
+                max_usd=Decimal(str(usd)) if usd is not None else arm.max_usd,
                 max_attempts=attempts,
             )
         )
