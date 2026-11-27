@@ -1,41 +1,38 @@
-at: 710163f05ad6c247d0a0000a1184aa238e57e1c6
+at: 12950aefbf5ddc65e541345ccba1f08fb63b32d2
 first:
   - path: scratch/plan.md
-    why: Fixed-tap panic and the planned scope split
+    why: Reproduction, resolved cases, and deferred coupled-payment work
+  - path: docs/engine.md
+    why: Forced decisions return explicit errors to engine callers
   - path: managym/README.md
-    why: Costs and replacement choices precede the mana output
-  - path: managym/src/flow/mana/tests.rs
-    why: Fixed-tap bonus choice, replacement orders, and snapshot restore
-  - path: managym/src/flow/decision.rs
-    why: Retained cost frames return to the owned activation
+    why: Announced mana costs, replacements, and output order
   - path: managym/src/flow/mana.rs
-    why: Activation continuations and the fixed-tap bonus assertion
+    why: Signed life, owned activations, and shared payment witness
+  - path: managym/src/flow/mana/help.rs
+    why: Convoke, improvise, delve, and waterbend permissions
+  - path: managym/src/flow/decision.rs
+    why: Retained activation costs and complete triggered mana production
+  - path: managym/src/flow/payment.rs
+    why: Announced costs reserve taps and spend produced mana
+  - path: managym/state/src/card.rs
+    why: Finite resources required for immediate mana abilities
+  - path: managym/src/flow/layers.rs
+    why: Static dependency tracking after removing provisional coupling
+  - path: managym/src/flow/statics.rs
   - path: managym/src/agent/effect_execution.rs
     why: The viewer sees the retained mana output
-  - path: managym/src/flow/interchangeable.rs
-    why: Pending mana output retains caller object references
-  - path: managym/src/flow/selection_sampling.rs
-    why: Hidden selection rebinding reaches the retained caller
-  - path: managym/state/src/card.rs
-    why: The finite-resource contract for immediate mana abilities
   - path: managym/src/state/hash.rs
-    why: Versioned identity includes the pending activation
-  - path: managym/src/agent/continuation.rs
-    why: The visible continuation uses the announced fee
-  - path: managym/src/flow/payment.rs
-    why: Announced cost components reserve source taps
-  - path: managym/src/flow/layers.rs
-    why: Static and mana effects that read battlefield counts
-  - path: managym/src/flow/statics.rs
-    why: Board-wide classification of payment writes
-  - path: managym/src/flow/play.rs
-    why: Cast and activation admission with trailing fees
-  - path: managym/cards/tests/cards/ody.rs
-    why: Four Heartbeat positions and payment order regressions
-  - path: managym/cards/tests/cards/one.rs
-    why: Ward payment can fund its life fee
+    why: Match identity includes the pending activation
   - path: managym/src/flow/tick.rs
     why: Empty decisions error at the step boundary
   - path: managym/src/agent/vector_env.rs
     why: Isolated vector slots contain step failures
+  - path: managym/cards/tests/cards/ody.rs
+    why: Citadel payment order and Heartbeat spend choice
+  - path: managym/cards/tests/cards/rav.rs
+    why: Guardian casts after Airship Engine Room produces mana
+  - path: managym/src/flow/mana/tests.rs
+    why: Payment witness, retained replacements, and snapshot regressions
+  - path: managym/cards/tests/cards/one.rs
+    why: Ward payment can fund its life fee
 hide: []

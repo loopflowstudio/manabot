@@ -4,7 +4,7 @@ A manual payment must return the payer’s next legal choice, finish the cast, o
 
 Pass 1 (`1c521e300`) propagated empty, forced and automatic decision errors and applied the zero-life cost rule. The Room at −1 offers blue and red, isolated stepping poisons only the malformed slot under both skip settings, and all 23 focused debug tests passed.
 
-Pass 2 (`a9359c03b`) carries signed life through mana, checks trailing fees and records source coupling. All 78 focused debug checks passed, including the four Heartbeat positions, the announced and Ward fees, and the read-only fork. The 512-game debug step benchmark was stopped at 4m41s before it emitted a digest. The release Engine Budget comparison remains in pass 5.
+Pass 2 (`a9359c03b`) carries signed life through mana, checks trailing fees and records source coupling. All 78 focused debug checks passed, including the four Heartbeat positions, the announced and Ward fees, and the read-only fork. The 512-game debug step benchmark was stopped at 4m41s before it emitted a digest. The release Engine Budget comparison remains in pass 6.
 
 The first pass 2 attempt found the counterexample below (`34092c814`, test `tarnished_citadel_and_the_great_henge_change_another_mana_source` in `managym/cards/tests/cards/ody.rs`) and changed no production code. The concept review (`24f1ec2f3`, `scratch/concept-review.html`) replanned around it.
 
@@ -16,6 +16,8 @@ Pass 4a (`494fb4c5e`) retains counter and sacrifice costs before computing mana 
 
 Pass 4b (coupled regime) stopped at five counterexamples and moves to a separate Task (eighth review 1a, below). Each is a committed debug test that records the defect at the point of failure: `0d7bb6743` and `a90fd7109`, `de9787c04` (closed by design 5), `da29dbbdc` (closed by pass 4a) and `710163f05` (fixed tap opens a bonus choice). Their full analysis and designs 1, 4 and 7 are in `7cb3655f1:scratch/plan.md`.
 
+Pass 5 (`12950aefb`) removes the provisional coupling flags, defers automatic commitment through the last mana bonus, and puts colored convoke in the shared witness. All 65 focused debug checks passed, including Canyon-first beside Angel, choosing which mana to spend after Heartbeat, and the Room into Guardian cast in manual and automatic modes.
+
 ## Design · made for review
 
 Headless choices following each concept review's recommendation; reversible internal engine work, approved by nobody.
@@ -23,19 +25,14 @@ Headless choices following each concept review's recommendation; reversible inte
 1. **Exact life.** Signed `LifeBudget { life: i32, cant_change: bool }`; activation `life_cost` checked against the running budget; post-mana life (announced `payment.life()`, cast `life_alternative`, resolution tail life) is a trailing `Obligation::PayLife(u32)` at completion (CR 601.2h). Built in pass 2.
 2. **Closed monotone mana-ability contract** (sixth review). One `mana_parts()` predicate; finite resource; suffixes limited to `GainLife`, `DrainLife`, untargeted `LoseLife`/`DealDamageToPlayer`; pending `remove_counters` reserved on `ManaUpfront`; catalog CR 605.1a parity in CI. Built in `ab008535c`.
 3. **Phase-accurate mana activation continuation** (seventh review 1a, 3a, 4a). `FrameCompletion::ManaOutput(Box<PendingManaOutput>)` evaluates output after counter and sacrifice costs with captured `chosen` LKI; reservation and obligation walks follow `caller` and `resume`; hash stays v35. Built in `494fb4c5e`.
-4. **Uncoupled payment only, fixed suffixes exact** (eighth review 1a). Pass 2's provisional coupling flags (`PaymentCoupling::Coupled`, `ManaSource.tap_coupled`, `LayerBoard.mana_activation_reads`, `ReadSet.battlefield`, `payment_writes_couple`, `ReadSet::mana_activations`) implement the blacklist the fifth review refuted, and nothing in production reads `tap_coupled`. `PaymentCoupling::Coupled.life_delta()` returns `LifeDelta(0)` (`flow/mana.rs:647`). With any life-reading static on the battlefield (Angel of Vitality alone), Citadel is therefore priced at 0 life. At 3 life with Citadel and Canyon casting Sokka, this offers Citadel first and Canyon's life cost then strands the payment: the Issue 628 board again. Replace `mana_activation_coupling` with `mana_suffix_life_delta(player, object, suffix) -> LifeDelta` over the existing isolated fork probe and delete the scaffolding. Passed over: leaving the flags for the split Task (1b, ships the regression and dead code); keeping 4b here (1c).
-5. **Commit produced mana only after the production's bonuses** (eighth review 3a). `Decision::ManaChoice` resume (`flow/decision.rs` ≈2927) calls `commit_produced_mana` before a pending `ManaProduction::Bonus` suspends, so a colored unit can be spent on generic before the bonus unit arrives. Commit only when `next.is_none()`; once bonuses finish, `begin_mana_spend` auto-spends a unique unit and opens `ManaSpend` otherwise. Passed over: eager commit (3b).
-6. **Colored convoke in the model** (second and eighth review 4a). `ManaSource.convoke_colors: ManaTypeSet`; the witness reduces an owed colored pip by tapping such a source; delete `while_paying`/`convoke_search` (`flow/mana/help.rs` ≈260–319). Fallback if it exceeds the pass: one wrapper routing all eight surfaces through `while_paying` (4b). Never defer it: with pass 1, an unfixed Guardian of Vitu-Ghazi play is an `AgentError`.
+4. **Fixed suffix life delta** (eighth review 1a). Probe fixed life gain and self-damage through replacements in an isolated fork, even with life-reading statics on the board. The coupled regime moves to the Task below. Built in pass 5.
+5. **Finish the production before committing mana** (eighth review 3a). Keep the original output pooled while a bonus decision is pending. At completion, spend only uncontested units automatically and retain any remaining spending choice. Built in pass 5.
+6. **Colored convoke in the witness** (second and eighth review 4a). A source can tap for an owed pip of its color on the same search path as mana and generic help. The transition reserves that tap from later obligations. Built in pass 5.
 
 Preserve native action identities, source order, the chooser, individual Heartbeat bonus decisions, spend restrictions and receipts. Keep replay and action formats. The `PaymentScan` debug rebuild check must keep holding.
 
 ## Remaining passes
 
-5. **Remove coupling scaffolding, fix bonus commit, colored convoke** (designs 4–6; `flow/mana.rs`, `flow/statics.rs`, `flow/layers.rs`, `flow/decision.rs`, `flow/mana/help.rs`). Live checks:
-   - At 3 life, Citadel + Sunbaked Canyon + Angel of Vitality casting Sokka: only Canyon-first is offered and the cast completes. This fails on HEAD.
-   - The four Issue 628 positions and pass 2–4a fixtures still pass; tests that assert `tap_coupled` or `Coupled` classification are deleted with it. Pass 3's conditional-Treasure test and the five counterexample tests are kept or rewritten against the uncoupled model; each counterexample test still records its defect for the split Task.
-   - A `1U` cast with an activated `{U}{R}` output beside Heartbeat (design 5): the payer can still float `{R}` after paying `{U}{U}`.
-   - Guardian of Vitu-Ghazi + Airship Engine Room: the empty-upfront convoke cast completes on every surface.
 6. **Collection check and acceptance.** Restore a pre-activation snapshot into one slot of a two-slot native vector with skipping on; both slots return and match scalar play. Acceptance demo, debug nextest for touched crates, release engine budget comparison, and the `managym/README.md` mana-payment section for the built design.
 
 ## Reproduced on a TLA Limited board
@@ -82,4 +79,4 @@ Reviews two through seven are designs 1–3 and the deferred findings (detail in
 ## Docs
 
 - `docs/engine.md` (`### Forced decisions`): `Game::tick` returns `Result<bool, AgentError>`; empty non-terminal spaces and failed forced/automatic actions error under both skip settings; isolated vector slots poison alone. Built in pass 1.
-- `managym/README.md` describes the signed life budget and the order of fees. Pass 5 documents the completed authority and grouped help.
+- `managym/README.md` describes the signed life budget and the order of fees. Pass 6 documents the completed payment model and grouped help.
