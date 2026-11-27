@@ -17,13 +17,11 @@ published, green, held PR; it is not landed and auto-merge is not enabled.
 
 ## Base
 
-The branch starts at `main` 6a131c4dc9, which lacks PR #636 (MTG-501, open, in
-its deliver step when this plan was written). #636 adds `PROGRAM_VOCABULARY`,
-`missing_program_tokens`, the debug emission guard, more `execution_names`
-registrations, the docs section "Program-token vocabulary", and three of the
-prefix filters this Task removes. Build on it: `lf sync main` if #636 has
-merged, otherwise `lf sync MTG-501`. Do not build before one of those succeeds.
-It is not stacked on #612; the two meet at the 0.3.0 cut.
+PR #636 (MTG-501) merged as `main` 624751ae71 on 2026-11-27. Pass 1 starts
+with `lf sync main`. It adds `PROGRAM_VOCABULARY`, `missing_program_tokens`,
+the debug emission guard, more `execution_names` registrations, the docs
+section "Program-token vocabulary", and three of the prefix filters this Task
+removes. Not stacked on #612; the two meet at the 0.3.0 cut.
 
 ## Findings that shape the design
 
@@ -44,13 +42,15 @@ It is not stacked on #612; the two meet at the 0.3.0 cut.
   every stored checkpoint has `execution/*` name keys with no running
   counterpart, and memory checkpoints have phantom token keys. Both must
   retire; the learned vector stays reachable through the surviving key.
-- Literal `RECORDS` entries with a successor (`execution/6/kept creature` →
-  `execution/6/kept permanent`) would fail with "missing successor" once the
-  successor name is gone. Every literal `execution/*` entry in `RECORDS` has
-  its token in `TOKENS` (`combat`, `kept creature`, `creatures each player
-  sacrifices`, the three `ReplacementEffect` pairs, the four retired texts), so
-  one rule covers them: the legacy name of every runtime token, current or
-  historical.
+- Two live renames sit only on synthetic `RECORDS` rows
+  (`execution/6/kept creature` → `execution/6/kept permanent`, and the
+  `creatures each player sacrifices` pair); `TOKENS` lists both old texts with
+  `None` (`token_renames.rs:183-225` at 624751ae71). Before #636 the `TOKENS`
+  test accepted only printed successors; #636 switched it to
+  `PROGRAM_VOCABULARY`, so the renames can move onto `TOKENS`.
+- `CatalogTokens` stores 32-bit hashes, not names: a retirement whose name
+  string is no longer listed anywhere cannot be recomputed. Hence a frozen
+  ledger, not a generator over live lists.
 - Decision memory reads its names as record names
   (`manabot/policy/decision_memory.py`: `tables.names(1, field_values)`,
   admission through `managym.decision_memory.decision_name_values()`), never
@@ -63,104 +63,147 @@ It is not stacked on #612; the two meet at the 0.3.0 cut.
   (`assert_execution_tokens_registered` and the effect witness, which chain
   `record_names()` tokens), `tests/model/test_record_coverage.py` (drops the
   `execution/6/effect execution` row), `tests/model/test_effect_vocabulary.py`,
-  `tests/semantic/test_pooled_mana_classes_input.py`, docs
+  `tests/semantic/test_pooled_mana_classes_input.py`,
+  `tests/model/test_record_vocabulary.py:104` (counts `record_name_keys`
+  against `len(record_vocabulary())` with decision memory on), docs
   (`docs/engine.md#program-token-vocabulary`, `manabot/README.md`,
   `managym/cards/tests/cards/README.md`, `AGENTS.md`, `.lf/qa/engine.md`).
 
 ## Design
 
-### Native: three lists, three owners
+### Native: two vocabularies, one memory list
 
-`managym/src/agent/record_vocabulary.rs` stays the one registration site, with
-two entry points:
+`managym/src/agent/record_vocabulary.rs` stays the one registration site:
 
 - `record_names() -> Vec<RecordName>`: names the fact and shared-effect
-  encoders hash. No `execution/*` rows, no decision-memory names.
+  encoders hash. No `execution/*` rows, no decision-memory names. Its `token`
+  column is only an alias into the program vocabulary, never a token source.
 - `runtime_tokens() -> Vec<RuntimeToken>` (`kind: TokenKind`, `name: String`):
-  the program tokens runtime projections emit that no printed span supplies.
-  This is today's `execution_names` body returning tokens, sorted and
-  de-duplicated, without the "skip if a record row already has it" check.
+  every program token a runtime projection can emit, sorted and de-duplicated:
+  today's `execution_names` body plus every token a record name aliases
+  (`Modification::AddTypes` beside its closing `/Modification::AddTypes`,
+  unprinted `Keyword::*`, `CounterKind::*`, `SourceQuality::*`, subtypes). It
+  may overlap printed spans; it is never filtered against the pack, so a card
+  that later prints a runtime symbol changes nothing.
+- One pack walk serves both functions (today each serializes every
+  `ObjectDefinition`).
+
+The admitted program vocabulary is `catalog_tokens()` ∪ `runtime_tokens()`.
+`PROGRAM_VOCABULARY` is that union with no filter.
 
 `managym/src/agent/decision_memory.rs` owns its names: a function beside
-`RECORD_NAMES` returns each `DecisionMemory::<name>` as a
-`RecordName { namespace: Token, token: None }`.
-
-`PROGRAM_VOCABULARY` (from #636) becomes printed catalog ∪ `record_names()`
-tokens ∪ `runtime_tokens()`, with no filter. The uniqueness test checks
-`record_names()` and the memory names together, since they share the `token`
-namespace.
+`RECORD_NAMES` returns each `DecisionMemory::<name>` with its hash and no
+token. The uniqueness test checks `record_names()` and the memory names
+together, since they share the `token` namespace.
 
 ### Python surface
 
 - `managym.record_vocabulary()`: same signature, real record names only.
 - `managym.runtime_tokens() -> list[tuple[int, str, int]]`: `(kind, name,
-  value)`. New published function; `managym/__init__.pyi` and
-  `tests/public_api.json` gain it (`scripts/public_api.py record`, an
-  addition).
-- `managym.decision_memory.decision_names() -> tuple[tuple[str, int], ...]`
-  from a native read of the memory-owned list; `decision_name_values()` derives
-  from it.
-- `manabot/policy/catalog.py::_record_tables`: record names alias or append as
-  now; then each runtime token not already present appends a row; then, only
+  value)`.
+- `managym.decision_memory_names() -> list[tuple[str, int]]`: `(name, value)`;
+  `managym.decision_memory.decision_name_values()` derives from it.
+- Both new functions go in `managym/__init__.pyi` and `tests/public_api.json`
+  (`scripts/public_api.py record`, additions).
+- `manabot/policy/catalog.py::_record_tables`: printed rows, then each runtime
+  token not already present appends a row; record names then alias an
+  existing token row (asserted, never appended) or append a name row; only
   when `decision_memory` is on, each memory name appends a name row. No fake
   rows, no prefix test.
+- `manabot/policy/decision_memory.py` reads names with
+  `RecordNamespace.TOKEN`, not the literal `1`.
 
 ### `catalog_tokens()` naming (reviewed, kept)
 
 `catalog_tokens()` keeps its name: it is the per-definition token catalog,
-rows by `CardDefId`, and `CatalogTokens`, `catalog_token_value` and
-`catalog_token_renames` share the word. It was renamed once already in 0.2.3.
-The confusion in issue 629 was the missing second surface, which
-`runtime_tokens()` now is. Its docstring and `docs/engine.md` state that the
-admitted program vocabulary is printed pairs ∪ record tokens ∪ runtime tokens,
-and a Python test holds a fresh policy's `record_token_keys` equal to exactly
-that union with decision memory on and off.
+rows by `CardDefId`, sharing the word with `CatalogTokens`,
+`catalog_token_value` and `catalog_token_renames`; it was renamed once already
+in 0.2.3. Issue 629's confusion was the missing second surface, which
+`runtime_tokens()` now is. Its docstring and `docs/engine.md` state the
+two-list union, and a Python test holds a fresh policy's `record_token_keys`
+equal to exactly that union with decision memory on and off.
 
-### Legacy keys
+### Legacy keys: a frozen ledger
 
-`managym/src/cards/token_renames.rs` gains functions that the
-`catalog_token_renames()` binding returns in place of the bare constants:
+Retirements are history, so they are not generated from lists that keep
+changing. `managym/src/cards/token_renames.rs`, returned through
+`catalog_token_renames()`:
 
-- records: literal `RECORDS` (now only `Modification::ControlChanged`) plus
-  `("token", "execution/<kind>/<name>", None)` for every runtime token and
-  every `TOKENS` entry's old name. The literal `execution/*` entries go.
-- tokens: literal `TOKENS` plus `(Variant, "DecisionMemory::<name>", None)`
-  for each memory name.
+- `TOKENS` carries the two live renames that today ride on `RECORDS`:
+  `(Text, "kept creature", Some("kept permanent"))` and
+  `(Text, "creatures each player sacrifices", Some("permanents each player
+  sacrifices"))`. Leaving them `None` while deleting the `execution/6/…` rows
+  would mean-initialize both vectors on pre-rename checkpoints.
+- `LEGACY_EXECUTION_TOKENS`: the manual pre-0.3.0 runtime symbols (about 130:
+  structs, enums, fields, `EXECUTION_TEXT`) frozen as `(kind, name)` at the
+  change.
+- `LEGACY_DECISION_MEMORY_TOKENS`: the 44 pre-0.3.0 `DecisionMemory::*`
+  names, retired as `(Variant, name, None)`, independent of later
+  `RECORD_NAMES` edits.
+- Record retirements: literal `RECORDS` (now only
+  `Modification::ControlChanged`) plus `("token", "execution/<kind>/<name>",
+  None)` for each `LEGACY_EXECUTION_TOKENS` entry, each pack card/set/play-grant
+  `execution/6/<name>`, and each `TOKENS` old name. The literal `execution/*`
+  `RECORDS` entries go. A superset is harmless: a retirement applies only to a
+  key a stored checkpoint has.
+- A unit test removes a runtime token and a memory name from the live lists and
+  shows their retirements remain.
 
-`binding.py` needs no new rule: its existing retire path handles both. The
-superset (legacy names for tokens that never had a row) is harmless, because a
-retirement only applies to a key a stored checkpoint actually has. The agent
-guide's rule shortens to: removing a runtime token retires its token in
-`TOKENS`; its legacy record name follows.
+`binding.py` needs no new rule. Skipping a missing `record_name` key whose row
+a `record_token` already bound was considered and rejected: real aliased names
+(`flying` ↔ `Keyword::flying`) share rows too, so it would swallow an
+accidental deletion of a live record name.
+
+### Historical name tracer
+
+`scripts/pinned_pilot.py::names_at` copies HEAD's `scripts/pilot_names.rs` into
+an archived writer's crate. It detects whether that crate's
+`record_vocabulary.rs` defines `pub fn runtime_tokens` (as it already inspects
+`tokens.rs`) and compiles the matching probe, so `names --at <rev>` keeps
+working for pre-0.3.0 writers such as `ab2b757d9`.
 
 ## Decisions made for review
 
-Nobody was present; these were chosen and can be reversed.
+Nobody was present; these were chosen and can be reversed before the 0.3.0
+cut. Items 2, 4 and 5 follow the concept review's recommendations.
 
 1. **Hold for 0.3.0 with no 0.2.x shim.** Passed over: landing now with
    `record_vocabulary()` kept as a deprecated composite and the clean lists
-   under new names. That is a second rename of a function renamed in 0.2.3 and
-   a dual state until the cut.
-2. **Decision-memory names leave `record_vocabulary()`** and live on decision
-   memory's own surface. The brief says "Change `DecisionMemory::*` entries to
-   `record(Token, …, None)` and remove the repeated `DecisionMemory::` prefix
-   filters"; keeping the rows in the shared table would still need a prefix
-   test in `catalog.py` and `decision_name_values`. Passed over: rows stay in
-   `record_vocabulary()` with `token=None`, two prefix selections remain.
+   under new names (a second rename of a function renamed in 0.2.3, and a dual
+   state until the cut).
+2. **Decision-memory names leave `record_vocabulary()` for a top-level
+   `managym.decision_memory_names()`.** The brief says "Change
+   `DecisionMemory::*` entries to `record(Token, …, None)` and remove the
+   repeated `DecisionMemory::` prefix filters"; keeping them in the shared
+   table would keep prefix tests in `catalog.py` and `decision_name_values`.
+   Top level keeps every engine vocabulary on the stub-checked surface.
+   Passed over: submodule `managym.decision_memory.decision_names()` over a
+   private `_managym` binding; rows kept in `record_vocabulary()` with
+   `token=None`.
 3. **`catalog_tokens()` is not renamed**; it is paired with
    `runtime_tokens()`. Passed over: `printed_tokens()` with 0.3.0 → 0.4.0
    shims across about 45 call sites.
-4. **Legacy keys are generated**, not a frozen list of several hundred
-   strings (card names included). Passed over: a literal list frozen at the
-   change.
+4. **`runtime_tokens()` is complete: admitted = `catalog_tokens()` ∪
+   `runtime_tokens()`**, with record-name tokens pure aliases. Passed over: the
+   old `execution_names` body only, which leaves a three-way union and repeats
+   issue 629 one layer down. Costly to change once 0.3.0 publishes it.
+5. **Legacy keys come from a frozen ledger** (manual runtime symbols and 44
+   memory names as constants, pack names and `TOKENS` old names derived).
+   Passed over: the whole list including card names as one static table
+   (must be regenerated if cards land before the cut); a generator over live
+   lists (loses vectors when a runtime token graduates to print or a memory
+   name is cleaned up).
+6. **Decision-memory retirement is covered by a constructed pre-0.3.0
+   checkpoint** in `tests/model/test_checkpoint_binding.py`; no retained
+   memory checkpoint is known to pin.
 
 ## Acceptance check
 
 With the rebuilt extension installed:
 
 ```sh
-uv run python -c "import managym; v=managym.record_vocabulary(); print(sum(n.startswith(('execution/','DecisionMemory::')) for _,n,*_ in v), len(managym.runtime_tokens()) > 0)"
-# 0 True
+uv run python -c "import managym; v=managym.record_vocabulary(); print(sum(n.startswith(('execution/','DecisionMemory::')) for _,n,*_ in v), len(managym.runtime_tokens()) > 0, len(managym.decision_memory_names()))"
+# 0 True 44
 git grep -nE 'starts_?with\("(DecisionMemory::|execution/)' -- managym manabot tests docs scripts
 # no output
 uv run --extra dev pytest tests/model/test_pinned_pilot.py tests/model/test_checkpoint_binding.py tests/model/test_effect_vocabulary.py tests/model/test_record_vocabulary.py tests/model/test_record_coverage.py tests/model/test_decision_memory.py -q
@@ -174,8 +217,7 @@ the binding report shows the `execution/*` names as retired keys. Needing
 ## Absent and error states
 
 - A stored key that is neither running nor classified still raises
-  "unexplained … key"; the generated retirements do not widen that to
-  arbitrary keys.
+  "unexplained … key"; the ledger does not widen that to arbitrary keys.
 - A runtime projection emitting an unregistered token still panics in debug
   (#636 guard) and fails Python admission with the `(kind, 0x…)` pairs.
 - A memory name reaching a policy built without decision memory fails
@@ -193,7 +235,7 @@ the binding report shows the `execution/*` names as retired keys. Needing
 - Nothing from PR #612; `release/v0.3.0/NOTES.md` lives there. The release
   line goes in this PR's body: "`record_vocabulary()` lists hashed record names
   only; runtime-only program tokens are `runtime_tokens()`; decision-memory
-  names are `managym.decision_memory.decision_names()`."
+  names are `decision_memory_names()`."
 
 ## What goes
 
@@ -213,22 +255,39 @@ emission guard, exact `(kind, 0x…)` diagnostics, the 44 memory names' hashes.
 
 ## Passes
 
-1. **Checkpoints survive the split (could prove the plan wrong).** Sync the
-   base. Native: `runtime_tokens()`, memory-owned names, clean
-   `record_names()`, generated legacy keys, bindings. Python: `catalog.py`,
-   `managym/decision_memory.py`, stubs. Rebuild the extension per the agent
-   guide. Shows: both pinned pilots and `test_checkpoint_binding.py` pass
-   unchanged; a fresh policy has the same embedding row count as before, with
-   decision memory on and off.
-2. **Consumers and guards.** `PROGRAM_VOCABULARY` without a filter,
-   `observability.rs` helpers, `scripts/pilot_names.rs`, Python tests
-   (union-equality test, record coverage, effect vocabulary, pooled mana),
-   debug Rust tests for `record_vocabulary`, `token_renames`, `tokens` and the
-   effect witness (`CARGO_BUILD_JOBS=2`, `--test-threads 2`).
+1. **Checkpoints survive the split (could prove the plan wrong).** `lf sync
+   main`. Native: complete `runtime_tokens()` over one pack walk, memory-owned
+   names, clean `record_names()`, the frozen ledger with the two renames moved
+   onto `TOKENS`, bindings for both new functions. Python: `catalog.py` (alias
+   assertion), `managym/decision_memory.py`, `RecordNamespace.TOKEN` in
+   `manabot/policy/decision_memory.py`, stubs. Rebuild the extension per the
+   agent guide. Shows: both pinned pilots and `test_checkpoint_binding.py`
+   pass unchanged, plus the constructed memory checkpoint; `kept permanent`
+   binds to its stored vector on a pre-rename checkpoint; a fresh policy has
+   the same embedding row count as before, with decision memory on and off.
+2. **Consumers and guards.** `PROGRAM_VOCABULARY` as the two-list union,
+   `observability.rs` helpers, `scripts/pilot_names.rs` with `names_at`
+   detecting `runtime_tokens` in the archived crate (check `names --at
+   ab2b757d9`), Python tests (union-equality, record coverage, effect
+   vocabulary, pooled mana, `test_record_vocabulary.py:104`), the ledger
+   removal test, debug Rust tests for `record_vocabulary`, `token_renames`,
+   `tokens` and the effect witness (`CARGO_BUILD_JOBS=2`, `--test-threads 2`).
 3. **Docs and contract.** `docs/engine.md`, `manabot/README.md`,
    `managym/README.md`, cards test README, `AGENTS.md` naming and retirement
    rules, `.lf/qa/engine.md`; `scripts/public_api.py record`; PR body with the
    hold notice and release line.
+
+## Concept review (a173411b48) dispositions
+
+- Live renames lost from `RECORDS` → Pass 1 (move onto `TOKENS`).
+- Retirements generated from live lists → Pass 1 (frozen ledger, decision 5,
+  removal test).
+- Three-list vocabulary → Pass 1–2 (complete `runtime_tokens()`, decision 4).
+- `pilot_names.rs` breaks pre-0.3.0 writers → Pass 2 (`names_at` detection).
+- Memory list placement, missed `test_record_vocabulary.py:104`, literal
+  namespace `1` → Pass 1–2 (decision 2).
+- Double pack serialization → Pass 1 (one walk).
+- Hold strategy and memory checkpoint → decisions 1 and 6.
 
 ## Done when
 
