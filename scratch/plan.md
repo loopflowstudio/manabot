@@ -22,6 +22,10 @@ The fifth concept review (`fc7f2f70e7`, `scratch/concept-review.html`) found fou
 
 Attempt 3 (`de9787c04`, `repeatable_mana_suffix_grows_the_board_at_a_full_pool` in `managym/src/flow/mana/tests.rs`) shows that a constructed `{T}: Add {G}, create a Clue, untap this` is admitted as a mana ability. Three activations leave the same saturated pool and a ready source, add a Clue each time and change the match-state hash each time. No fork search over such effects terminates without a cap. `is_mana_suffix_effect` (`managym/state/src/card.rs:683`) accepts any untargeted effect except mana output, `Modal` and `If`. That contradicts `managym/README.md:669` ("Every registered mana ability must consume a finite resource"). The sixth review (`6f7b914a4`, `scratch/concept-review.html`) closes that contract as design 5 below.
 
+Pass 4 attempt 4 (`da29dbbdc`, `mana_counter_cost_can_require_replacement_order` in `managym/src/flow/mana/tests.rs`) found an immediate-event panic in an activation admitted by design 5. Gray Ogre has a constructed `{T}, Put a +1/+1 counter on this: Add {G}`. Caradora adds one counter and a test-adjusted Doubling Season doubles counter costs. The native action is offered, but stepping it panics with `event requiring a choice needs a retained caller`. The committed fixture verifies the preceding `CounterChange` batch asks the payer for `OrderReplacement` and the two orders place three and four counters. That check, the two original stranded-order reproductions, and the two finite-resource checks for pending counters and board-growing suffixes passed in debug.
+
+The exact fork search assumes a coupled transition reaches a result or exposes its next native choice. `complete_mana_upfront` (`flow/mana.rs`) commits the tap and sends counter costs to `apply_immediate_event` (`flow/proposed_event.rs`) before it creates an output continuation. Branching at the next decision cannot recover a panic in that transition. Replan the native continuation in `flow/mana.rs` and `flow/decision.rs` so the counter batch retains the paid tap, the locked activation and the remaining costs, then resumes to evaluate its output. Review any resulting serialized state change before keeping the v35 hash assumption. Make the fixture execute the live action and choose both orders before reusing the same transition in the coupled search. The earlier Citadel-first and Mountain-tap-first acceptance checks remain open.
+
 ## Why a frozen source list fails
 
 Angel of Vitality is 4/4 at 25 life or more; Raucous Audience makes `{G}{G}` while its controller has a power-4 creature, else `{G}`. Casting Solemn Simulacrum (`{4}`):
@@ -66,7 +70,7 @@ Preserve native action identities, source order, the chooser, individual Heartbe
 
 ## Remaining passes
 
-4. **Whitelist classifier and coupled regime** (`flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/mana/help.rs`, `flow/proposed_event.rs`). Build design 4 with design 1's fork search and live offer changes in one pass. The existing arithmetic witness treats counter costs as one use of each ability, so keep counter-changing transitions in the fork and carry the live counter reservations into each rebuild. Live checks:
+4. **Whitelist classifier and coupled regime** (`flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/mana/help.rs`, `flow/proposed_event.rs`). Replan the counter-cost continuation from attempt 4 before building design 4 with design 1's fork search and live offer changes. The existing arithmetic witness treats counter costs as one use of each ability, so keep counter-changing transitions in the fork and carry the live counter reservations into each rebuild. Live checks:
    - `0d7bb6743`: only Citadel-first offered; at 1 life the damage channel deactivates and Henge hands off to the pure model.
    - `a90fd7109`: only the Mountain tap is offered first; it commits both red units before the counter is removed for green.
    - The review's new boards: delve spell beside a non-token `{T}, Sacrifice: Add {G}`; summoning-sick creature with remove-haste-counter mana and `{T}` mana (only tap-first); a `tap_cost` predicate and an `ActivatedAbilitiesCostLess` predicate each beside a non-mana write.
@@ -111,7 +115,7 @@ Second review (`24f1ec2f3`): 1a, 2a, 3a, 4a are design 1–3 above, made for rev
 
 ## Deferred findings
 
-- **Restrict live `OrderReplacement` offers during payment** when one order strands the cost (`proposed_event.rs`). No current catalog card builds it; pass 1 turns any constructed case into an error rather than a spin.
+- **Restrict live `OrderReplacement` offers during payment** when one order strands the cost (`proposed_event.rs`). No stranding order is known on an unmodified catalog board. Pass 4 attempt 4 separately requires the native counter-cost transition to retain the choice before the search can replay it.
 - **Own announced non-mana activations** (third review choice 3a, made for review; 3b would fold it in here). `Operation::Activation` / `ActivatedTargeting` re-read `activated_abilities.get(ability_index)` in `prepare_activated_ability` (`flow/play.rs` ≈1871/1986) after mana is spent (`flow/payment.rs` ≈1413). A grant that ends while paying gives `AgentError("invalid ability index")` or shifts to another ability. Needs owned capture in `flow/play.rs` begin/pay, `flow/payment.rs`, and the hash; a separate Task.
 
 ## Docs

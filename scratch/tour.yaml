@@ -1,7 +1,9 @@
-at: ab008535cbf82d69d39141aa627c3e5a332ed19f
+at: da29dbbdc8116e974d981a992ed4333399932e79
 first:
   - path: scratch/plan.md
     why: Payment reproductions and remaining coupled search work
+  - path: managym/src/flow/mana/tests.rs
+    why: Counter replacement orders and live payment reproductions
   - path: managym/README.md
     why: Payment search's finite resource requirement
   - path: managym/state/src/card.rs
@@ -12,8 +14,6 @@ first:
     why: Versioned identity includes the pending activation
   - path: managym/src/flow/mana.rs
     why: Activation announcement, reservation, spending, and output
-  - path: managym/src/flow/mana/tests.rs
-    why: Catalog parity, counter reservations, and live payment repros
   - path: managym/src/agent/continuation.rs
     why: The visible continuation uses the announced fee
   - path: managym/src/flow/payment.rs
