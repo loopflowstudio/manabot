@@ -47,3 +47,8 @@ questions are in that Task's branch history.
   recommended (plan, "Concept reviews"). 1a changes combat branching under
   MustBeBlocked/Menace; 1b (skip pruning when blocks are coupled) is the
   simpler alternative if 1a's solver change proves costly.
+- **Post-Pass 9 concept review 1a–5a** taken headless as recommended
+  (plan, Pass 10). 3a keeps count meaning only in labels over
+  `CandidateValue::Subject` on the deprecated compound surface; 3b (typed
+  `CandidateValue::Count`) is the wire change to revisit if structured
+  policies keep count roles past 0.3.0.
