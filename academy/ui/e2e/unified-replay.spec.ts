@@ -65,7 +65,7 @@ test('verified evaluation import reads the same timeline without producing a pol
   // The move list and the strip name the recording's moves and jump to them.
   const moves = page.getByTestId('game-log').locator('button[data-move]');
   expect(await moves.count()).toBeGreaterThan(1);
-  // One line: folded by default, the transport's ticked scrubber is the slider; opening Decisions shows the overlay strip.
+  // One line: folded by default, the transport's ticked scrubber is the slider; opening Decisions shows the strip under the board.
   await expect(page.getByTestId('decision-strip')).toHaveCount(0);
   await expect(page.getByTestId('replay-transport').getByRole('slider')).toHaveValue(String(last - 1));
   await page.getByTestId('strip-toggle').click();

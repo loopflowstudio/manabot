@@ -106,7 +106,7 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   expect(await shownIn(page.getByTestId('game-log'), '[data-testid=log-entry], [data-testid=pass-run]')).toBeGreaterThanOrEqual(8);
   expect(await shownIn(page.getByRole('list', { name: 'Legal choices' }), '[data-testid=action-option]')).toBeGreaterThanOrEqual(Math.min(3, options));
 
-  // (d) One line on a fixed 0–100 scale, a point per analysed decision (opened as an overlay).
+  // (d) One line on a fixed 0–100 scale, a point per analysed decision (docked under the board).
   await page.getByTestId('strip-toggle').click();
   const value = page.getByTestId('strip-value');
   await expect(page.getByTestId('strip-midline')).toHaveCount(1);
@@ -178,8 +178,10 @@ test('a decision made with analysis shown says so in Review and Games', async ({
       await expect(page.getByTestId('choices-heading')).toContainText('Analysis by Reader', { timeout: 30_000 });
       shown = true;
     } else if (shown) {
-      // Shown analysis draws the game's line under the board, open, on Review's 0–100 axis.
+      // Shown analysis keeps the Decisions strip folded until opened, then draws the game's line under the board on Review's 0–100 axis.
       await expect(page.getByTestId('choices-heading')).toContainText('Analysis by Reader', { timeout: 30_000 });
+      await expect(page.getByTestId('decision-strip')).toHaveCount(0);
+      await page.getByTestId('strip-toggle').click();
       // The line holds the decisions made before analysis was shown too, read after the fact.
       await expect(page.getByTestId('strip-caption')).toHaveText(/^Reader's expected score \(%\) from your seat · \d+ decisions read$/);
       await expect(page.getByTestId('strip-midline')).toHaveCount(1);
@@ -191,6 +193,7 @@ test('a decision made with analysis shown says so in Review and Games', async ({
       await plot.hover({ position: { x: 4, y: 20 } });
       await expect(page.getByTestId('strip-readout')).toHaveText(/^Turn \d+ · .+ · \d+%$/);
       await page.screenshot({ path: shot('play-live-line') });
+      await page.getByTestId('strip-toggle').click();
       await page.getByTestId('chip-analysis').click();
       await expect(page.getByTestId('chip-analysis')).toHaveCount(0);
       await expect(page.getByTestId('choices-heading')).not.toContainText('Analysis by');

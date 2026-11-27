@@ -1209,11 +1209,12 @@
   const HAND_SHORT = 132;
   const HAND_CARD_MAX = 124;
   const HAND_SHARE = 0.30;
+  const tucked = $derived(yourHand === 'tucked');
   const liveBoardCount = $derived(frame.projection.agent.battlefield.length + frame.projection.opponent.battlefield.length);
   let boardHeight = $state(0);
   const steadyHandHeight = $derived(Math.max(HAND_SHORT, Math.min(HAND_STEADY, Math.round((boardHeight || 660) * HAND_SHARE))));
   const handHeight = $derived(
-    liveBoardCount >= 16
+    !tucked && liveBoardCount >= 16
       ? handStrip(boardHeight, [
           { creatures: pileShapes(view.opponent.creatures), support: pileShapes(view.opponent.support), width: theirRows.width },
           { creatures: pileShapes(view.you.creatures), support: pileShapes(view.you.support), width: yourRows.width },
@@ -1232,26 +1233,18 @@
 
   // ———————————————— Hand ribbons
 
-  // A ribbon's cards are one steady size. Tucked, a face-up card shows its
-  // name bar (`PEEK_FACE` px) and a back a little less (`PEEK_BACK`); the rows
-  // beside a ribbon keep `PEEK_FACE` clear of it, always and in every layout,
-  // so a hand going out or in moves nothing on the battlefield.
   const RIBBON_CARD = { min: 80, max: 112 };
-  const PEEK_FACE = 46;
-  const PEEK_BACK = 40;
   let cardBackArt = $state<string | null>(null);
   onMount(() => {
     let active = true;
     void loadArt(CARD_BACK_URL).then(ok => { if (active && ok) cardBackArt = CARD_BACK_URL; });
     return () => { active = false; };
   });
-  const tucked = $derived(yourHand === 'tucked');
   /**
    * Play keeps the whole hand's depth clear under your rows, so the hand that is always out covers no land.
    * It is given back only with no card held: a last card being announced is on the stack, and still in hand.
    */
   const handWell = $derived(tucked || board.you.player.hand.length === 0 ? 0 : handHeight);
-  const bottomReserve = $derived(tucked ? PEEK_FACE : handWell);
   /** Each half's height, px: the board less your hand's well, split evenly. A plate under `PLATE_COMPACT` tightens so it does not scroll. */
   const halfHeight = $derived(boardHeight > 0 ? (boardHeight - handWell) / 2 : Infinity);
   const PLATE_COMPACT = 215;
@@ -1737,8 +1730,8 @@
   {/if}
 
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (clicking an earlier board returns to now; Esc and Space do the same from the keyboard) -->
-  <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:this={boardEl} bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handWell}px`}
-    style:--ribbon-top={`${PEEK_FACE}px`} style:--ribbon-bottom={`${bottomReserve}px`} style:--hand-well={`${handWell}px`}
+  <div class="board" class:tucked id="board" data-testid="game-board" aria-label="Board" bind:this={boardEl} bind:clientHeight={boardHeight}
+    style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handWell}px`} style:--hand-well={`${handWell}px`}
     data-board={activeCursor !== null ? (cursorHit ? 'step' : 'missing') : 'frame'}
     onclick={event => { if (activeCursor !== null && !(event.target instanceof Element && event.target.closest('.zone, .combat-table-sheet'))) clearActiveCursor(); }}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
@@ -1965,12 +1958,13 @@
     {@const out = ribbonOut(side, sideView.hand)}
     {#if count}
       <div class={`ribbon at-${edge}`} class:out class:steady class:open={side === 'opponent' && openShown} data-testid="hand-ribbon" data-ribbon={edge} data-out={out}
-        style:height={`${height + 16}px`} style:--card-height={`${height}px`} style:--peek-face={`${PEEK_FACE}px`} style:--peek-back={`${PEEK_BACK}px`}>
+        style:height={`${height + 16}px`} style:--card-height={`${height}px`}>
         <div class="ribbon-cards" style:width={`${lay.card + (count - 1) * lay.step}px`}>
           {#if sideView.hand.length}
             <!-- The cards this viewer sees are a keyboard region; backs alone are only the plate's count. -->
             <section use:region={{ across: connection !== null }} class="ribbon-faces" class:hand={side === 'you'}
               aria-label={`${label}, ${count} ${count === 1 ? 'card' : 'cards'}${sideView.hiddenHand ? `, ${sideView.hand.length} shown` : ''}`}>
+              <!-- Omit side so cards drawn into the opponent's open ribbon fade in place instead of flying from the plate. -->
               {#each sideView.hand as item, index (item.card.id)}
                 {@const away = steady && carried?.card.id === item.card.id}
                 <!-- svelte-ignore a11y_no_static_element_interactions (the press starts a pointer drag; the card's button is the control) -->
@@ -2257,7 +2251,9 @@
   .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .connection { color: var(--warning-text); }
 
+  /* Tucked ribbons peek by their name bar (`--peek-face`) or card back (`--peek-back`); the rows keep `--peek-face` clear so gliding moves nothing. */
   .board {
+    --peek-face: 46px; --peek-back: 40px;
     grid-row: 2; grid-column: 1;
     position: relative; min-height: 0; min-width: 0; display: grid;
     transition: grid-template-rows var(--motion-move) var(--motion-move-ease);
@@ -2267,11 +2263,11 @@
   .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); background: var(--bg-muted); }
   .half :global(.plate) { border-right: 1px solid var(--border); }
   .rows { isolation: isolate; display: grid; min-height: 0; min-width: 0; padding: 6px 10px; gap: 6px; }
-  /* Each half keeps a tucked ribbon's depth clear, whatever the ribbon is doing. */
-  /* Your half runs under your hand to the board's edge. */
+  /* Each half keeps its ribbon's depth clear, whatever the ribbon is doing; your half runs under your hand to the board's edge. */
   .half.you { grid-row: 2 / span 2; }
-  .opponent .rows { grid-template-rows: minmax(0, 42fr) minmax(0, 58fr); margin-top: var(--ribbon-top); }
-  .you .rows { grid-template-rows: minmax(0, 58fr) minmax(0, 42fr); margin-bottom: var(--ribbon-bottom); }
+  .opponent .rows { grid-template-rows: minmax(0, 42fr) minmax(0, 58fr); margin-top: var(--peek-face); }
+  .you .rows { grid-template-rows: minmax(0, 58fr) minmax(0, 42fr); margin-bottom: var(--hand-well); }
+  .board.tucked .you .rows { margin-bottom: var(--peek-face); }
   .row { min-height: 0; min-width: 0; }
   .row.support { border-top: 1px dashed transparent; }
   .opponent .row.creatures, .you .row.support { padding-top: 4px; }
@@ -2300,7 +2296,7 @@
   .ribbon.out .ribbon-card.face, .ribbon .ribbon-card.face:hover, .ribbon .ribbon-card.face:focus-within { transform: none; }
   /* Open hands: a card turned face-up glides out from where its back was. */
   @starting-style { .ribbon.open .ribbon-card.face { transform: translateY(calc(var(--peek-back) - var(--card-height))); } }
-  /* The card brought out orders over its neighbours, inside the ribbon's own stacking, as a card in the hand row does. */
+  /* The card brought out orders over its neighbours, inside the ribbon's own stacking. */
   .ribbon-card.face:hover, .ribbon-card.face:focus-within { z-index: 30; }
   .ribbon.out .ribbon-card.face :global(.tcard:not(.offered, .chosen, .legal, .asked)) { box-shadow: var(--lift); }
   /* Your hand in play lies in its own depth: a card raised by its offer shows whole, over the rows' edge. */
@@ -2310,7 +2306,7 @@
   .ribbon.at-top.out :global(.tcard.legal:hover) { --rise: 8px; }
   .ribbon.at-top.out :global(.tcard:is(.asked, .armed)) { --rise: 12px; }
   .ribbon.at-top :global(.tcard:focus-visible) { outline-offset: -2px; }
-  /* A playable card is dragged, never panned; while a card is carried, its neighbours stay still. */
+  /* A playable card is dragged, never panned. */
   .rows.selectable, .ribbon-card.draggable { touch-action: none; }
   .game :global([data-connect-source]) { touch-action: none; }
   .game :global(button[data-connect-target]:not([data-drop])) { outline: 2px dashed var(--accent); outline-offset: 2px; }

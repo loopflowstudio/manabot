@@ -50,9 +50,10 @@ test('play page reacts to the full game loop', async ({ page }) => {
   await expect(page.getByTestId('game')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('region', { name: 'Your battlefield' })).toBeVisible();
   await expect(page.getByTestId('turn-number')).toContainText('Turn');
-  // The opponent's hand is the board's top edge: one back per hidden card, and your own hand keeps its row.
-  await expect(page.getByTestId('hand-ribbon')).toHaveCount(1);
+  // Both hands are ribbons on the board's edges: your hand stays out along the bottom, and the opponent's is one back per hidden card along the top.
+  await expect(page.getByTestId('hand-ribbon')).toHaveCount(2);
   const topRibbon = page.locator('[data-testid="hand-ribbon"][data-ribbon="top"]');
+  await expect(page.locator('[data-testid="hand-ribbon"][data-ribbon="bottom"]')).toHaveAttribute('data-out', 'true');
   await expect(topRibbon.getByTestId('card-back')).toHaveCount(7);
 
   // Open hands turns the backs into the opponent's cards, out over the top
@@ -63,14 +64,14 @@ test('play page reacts to the full game loop', async ({ page }) => {
   await expect(topRibbon.locator('.ribbon-card.face')).toHaveCount(7);
   await expect(topRibbon.getByTestId('card-back')).toHaveCount(0);
   // Tuck hand on the opponent's plate uncovers the lands under it: the cards
-  // draw back to a card back's depth.
+  // draw back to their name bars inside the top reserve.
   await page.getByTestId('hand-toggle').click();
   await expect(topRibbon).toHaveAttribute('data-out', 'false');
   await expect.poll(async () => {
-    const edge = (await topRibbon.boundingBox())!.y;
+    const rows = (await page.locator('.half.opponent .rows').boundingBox())!;
     const card = (await topRibbon.locator('.ribbon-card.face').last().boundingBox())!;
-    return Math.round(card.y + card.height - edge);
-  }).toBeLessThanOrEqual(16);
+    return Math.round(card.y + card.height - rows.y);
+  }).toBeLessThanOrEqual(1);
   await page.getByTestId('hand-toggle').click();
   await expect(topRibbon).toHaveAttribute('data-out', 'true');
   await page.reload();

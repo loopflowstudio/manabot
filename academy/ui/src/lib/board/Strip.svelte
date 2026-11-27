@@ -23,7 +23,7 @@
     scale?: string | null;
     /** Docked under a board that keeps a hand's depth clear: a shorter chart. */
     compact?: boolean;
-    /** Close the overlay strip. */
+    /** Close the decisions strip. */
     onclose?: () => void;
   }
 

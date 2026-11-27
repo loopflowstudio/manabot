@@ -39,7 +39,7 @@
   let { drop = false, player, name, definitionNames, caption, offers, live, damage = 0, stopLifeDelta = 0, choosing = false, handToggle = null, pointed = false, compact = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
-  // The hand's cards are on the board (its row or its ribbon); the plate counts them.
+  // The hand's cards are on the board's edge ribbon; the plate counts them.
   const zones = $derived<{ key: string; count: number; cards: CardState[] | null }[]>([
     { key: 'Hand', count: hand, cards: null },
     { key: 'Library', count: player.library_count, cards: null },
