@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Concept Review · MTG-501 Program-Token Vocabulary &amp; Policy Admission</title>
+<style>
+  /* Palette, typography and surface tokens borrowed from Academy (academy/ui/src/app.css) */
+  :root {
+    color-scheme: light dark;
+    --font-serif: 'Spectral', Georgia, 'Times New Roman', serif;
+    --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+    --vivid-w: #f2ad25;
+    --vivid-u: #2f74d0;
+    --vivid-b: #9550b4;
+    --vivid-r: #e04a18;
+    --vivid-g: #46a230;
+
+    --bg: #ffffff;
+    --bg-surface: #fafaf9;
+    --bg-muted: #f2f2f0;
+    --bg-field: #ffffff;
+    --border: #dadad6;
+    --border-strong: #b4b4ae;
+    --text: #1c1c1e;
+    --text-secondary: #55555b;
+    --text-tertiary: #67676e;
+    --accent: #1c1c1e;
+    --accent-soft: #ececea;
+    --on-accent: #ffffff;
+
+    --forest: #3d7a3d;
+    --forest-ink: #2f6230;
+    --forest-wash: color-mix(in srgb, var(--forest) 10%, var(--bg-surface));
+    --plains: #9f7a1c;
+    --plains-ink: #6f5712;
+    --plains-wash: color-mix(in srgb, var(--plains) 11%, var(--bg-surface));
+    --island: #2e6da8;
+    --island-ink: #255387;
+    --island-wash: color-mix(in srgb, var(--island) 10%, var(--bg-surface));
+    --mountain: #b3261e;
+    --mountain-ink: #9a2019;
+    --mountain-wash: color-mix(in srgb, var(--mountain) 10%, var(--bg-surface));
+    --swamp: #6a5f86;
+    --swamp-ink: #554b6e;
+    --swamp-wash: color-mix(in srgb, var(--swamp) 10%, var(--bg-surface));
+
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.04);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #121213;
+      --bg-surface: #1f1f22;
+      --bg-muted: #18181a;
+      --bg-field: #26262a;
+      --border: #323236;
+      --border-strong: #4b4b52;
+      --text: #ececee;
+      --text-secondary: #a9a9b0;
+      --text-tertiary: #8f8f97;
+      --accent: #ececee;
+      --accent-soft: #2a2a2e;
+      --on-accent: #121213;
+
+      --forest: #5ca46a;
+      --forest-ink: #8cc79a;
+      --forest-wash: color-mix(in srgb, var(--forest) 22%, var(--bg-surface));
+      --plains: #c8a23c;
+      --plains-ink: #e2c874;
+      --plains-wash: color-mix(in srgb, var(--plains) 22%, var(--bg-surface));
+      --island: #5593d1;
+      --island-ink: #8ab8e8;
+      --island-wash: color-mix(in srgb, var(--island) 22%, var(--bg-surface));
+      --mountain: #f2846c;
+      --mountain-ink: #f6a18e;
+      --mountain-wash: color-mix(in srgb, var(--mountain) 22%, var(--bg-surface));
+      --swamp: #9689b8;
+      --swamp-ink: #bdb3d8;
+      --swamp-wash: color-mix(in srgb, var(--swamp) 22%, var(--bg-surface));
+      --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 28px rgb(0 0 0 / 0.25);
+    }
+  }
+
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --bg: #121213;
+    --bg-surface: #1f1f22;
+    --bg-muted: #18181a;
+    --bg-field: #26262a;
+    --border: #323236;
+    --border-strong: #4b4b52;
+    --text: #ececee;
+    --text-secondary: #a9a9b0;
+    --text-tertiary: #8f8f97;
+    --accent: #ececee;
+    --accent-soft: #2a2a2e;
+    --on-accent: #121213;
+
+    --forest: #5ca46a;
+    --forest-ink: #8cc79a;
+    --forest-wash: color-mix(in srgb, var(--forest) 22%, var(--bg-surface));
+    --plains: #c8a23c;
+    --plains-ink: #e2c874;
+    --plains-wash: color-mix(in srgb, var(--plains) 22%, var(--bg-surface));
+    --island: #5593d1;
+    --island-ink: #8ab8e8;
+    --island-wash: color-mix(in srgb, var(--island) 22%, var(--bg-surface));
+    --mountain: #f2846c;
+    --mountain-ink: #f6a18e;
+    --mountain-wash: color-mix(in srgb, var(--mountain) 22%, var(--bg-surface));
+    --swamp: #9689b8;
+    --swamp-ink: #bdb3d8;
+    --swamp-wash: color-mix(in srgb, var(--swamp) 22%, var(--bg-surface));
+    --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 28px rgb(0 0 0 / 0.25);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Academy's paper header with thin W-U-B-R-G rule */
+  .chrome-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .chrome-bar::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    height: 2px;
+    background: linear-gradient(90deg,
+      var(--vivid-w) 0 20%,
+      var(--vivid-u) 20% 40%,
+      var(--vivid-b) 40% 60%,
+      var(--vivid-r) 60% 80%,
+      var(--vivid-g) 80% 100%);
+  }
+
+  .bar-inner {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .brand-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .brand-title {
+    font-family: var(--font-serif);
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.25;
+    margin: 0;
+  }
+  .brand-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .bar-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .theme-btn {
+    background: var(--bg-field);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 4px 10px;
+    font: 500 12px/18px var(--font-sans);
+    cursor: pointer;
+  }
+  .theme-btn:hover { border-color: var(--border-strong); }
+
+  main {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 22px;
+    line-height: 1.3;
+    margin-bottom: 12px;
+  }
+  h3 {
+    font-size: 16px;
+    line-height: 1.35;
+    margin-bottom: 6px;
+  }
+  p { margin: 0 0 10px; }
+  p:last-child { margin-bottom: 0; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    background: var(--bg-muted);
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  }
+  pre {
+    margin: 10px 0 0;
+    padding: 12px 14px;
+    background: var(--bg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+  }
+
+  section { margin-bottom: 36px; }
+
+  .section-kicker {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    margin-bottom: 4px;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .badge-yes {
+    background: var(--forest-wash);
+    color: var(--forest-ink);
+    border-color: color-mix(in srgb, var(--forest) 35%, transparent);
+  }
+  .badge-no {
+    background: var(--mountain-wash);
+    color: var(--mountain-ink);
+    border-color: color-mix(in srgb, var(--mountain) 35%, transparent);
+  }
+  .badge-partial {
+    background: var(--plains-wash);
+    color: var(--plains-ink);
+    border-color: color-mix(in srgb, var(--plains) 35%, transparent);
+  }
+  .badge-existing {
+    background: var(--accent-soft);
+    color: var(--text-secondary);
+    border-color: var(--border);
+  }
+  .badge-proposed {
+    background: var(--island-wash);
+    color: var(--island-ink);
+    border-color: color-mix(in srgb, var(--island) 45%, transparent);
+    border-style: dashed;
+  }
+  .badge-this-work {
+    background: var(--forest-wash);
+    color: var(--forest-ink);
+    border-color: color-mix(in srgb, var(--forest) 40%, transparent);
+  }
+  .badge-separate {
+    background: var(--swamp-wash);
+    color: var(--swamp-ink);
+    border-color: color-mix(in srgb, var(--swamp) 40%, transparent);
+  }
+  .badge-steer {
+    background: var(--island-wash);
+    color: var(--island-ink);
+    border-color: color-mix(in srgb, var(--island) 45%, transparent);
+  }
+  .badge-irreversible {
+    background: var(--mountain-wash);
+    color: var(--mountain-ink);
+    border-color: color-mix(in srgb, var(--mountain) 55%, transparent);
+  }
+
+  /* Scope & Steer banners */
+  .scope-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-surface);
+    margin-bottom: 18px;
+  }
+  .scope-grid {
+    display: grid;
+    grid-template-columns: 1.55fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .meta-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    display: grid;
+    gap: 4px;
+  }
+  .meta-list strong { color: var(--text); font-weight: 600; }
+
+  .steer-card {
+    background: var(--island-wash);
+    border: 1px solid color-mix(in srgb, var(--island) 40%, transparent);
+    border-left: 4px solid var(--island);
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+  .steer-card h3 { color: var(--island-ink); margin-bottom: 6px; }
+
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  /* Hero Mismatch */
+  .hero-mismatch {
+    background: var(--mountain-wash);
+    border: 1px solid color-mix(in srgb, var(--mountain) 40%, transparent);
+    border-left: 4px solid var(--mountain);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+  }
+  .hero-mismatch h2 {
+    color: var(--mountain-ink);
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+
+  /* Alignment Table */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-surface);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 11px 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  thead th {
+    background: var(--bg-muted);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.col-domain { width: 23%; }
+  td.col-code { width: 27%; }
+  td.col-fit { width: 10%; white-space: nowrap; }
+  td.col-why { width: 40%; }
+  .mismatch-kind {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mountain-ink);
+    margin-bottom: 3px;
+  }
+
+  /* Side-by-side Before / After panels */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 12px;
+  }
+  .panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+  }
+  .panel.existing { border-style: solid; }
+  .panel.proposed {
+    border: 1.5px dashed var(--island);
+    background: color-mix(in srgb, var(--island-wash) 42%, var(--bg-surface));
+  }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-title {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .diagram-box {
+    background: var(--bg-field);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    margin: 10px 0;
+  }
+  .pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .tok {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    padding: 2px 7px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+  }
+  .tok.ok {
+    background: var(--forest-wash);
+    border-color: color-mix(in srgb, var(--forest) 40%, transparent);
+    color: var(--forest-ink);
+  }
+  .tok.bad {
+    background: var(--mountain-wash);
+    border-color: color-mix(in srgb, var(--mountain) 45%, transparent);
+    color: var(--mountain-ink);
+  }
+  .tok.warn {
+    background: var(--plains-wash);
+    border-color: color-mix(in srgb, var(--plains) 45%, transparent);
+    color: var(--plains-ink);
+  }
+  .tok.prop {
+    background: var(--island-wash);
+    border: 1px dashed var(--island);
+    color: var(--island-ink);
+  }
+
+  /* Findings cards */
+  .finding-list { display: grid; gap: 16px; }
+  .finding {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-surface);
+  }
+  .finding-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .finding-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .counterexample {
+    margin-top: 10px;
+    padding: 10px 13px;
+    background: var(--plains-wash);
+    border: 1px solid color-mix(in srgb, var(--plains) 38%, transparent);
+    border-left: 3px solid var(--plains);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+  }
+  .counterexample strong { color: var(--plains-ink); }
+
+  /* Walkthrough */
+  .walkthrough {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .step-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+  }
+  .step-num {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    margin-bottom: 4px;
+  }
+
+  /* Questions */
+  .questions { display: grid; gap: 14px; }
+  .q-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+  }
+  .q-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .q-options { display: grid; gap: 8px; margin-top: 8px; }
+  .opt {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--bg-field);
+    font-size: 13px;
+  }
+  .opt.rec {
+    border-color: color-mix(in srgb, var(--forest) 45%, transparent);
+    background: var(--forest-wash);
+  }
+  .opt-id {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .opt.rec .opt-id { color: var(--forest-ink); }
+
+  ul.tight { margin: 6px 0 0; padding-left: 18px; }
+  ul.tight li { margin-bottom: 4px; }
+
+  @media (max-width: 860px) {
+    .scope-grid, .compare, .walkthrough { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="chrome-bar">
+  <div class="bar-inner">
+    <div class="brand-row">
+      <h1 class="brand-title">Concept Review · MTG-501</h1>
+      <span class="brand-meta">Program-token vocabulary, runtime emission guards &amp; policy admission</span>
+    </div>
+    <div class="bar-controls">
+      <span class="badge badge-existing">Pre-implementation review</span>
+      <button class="theme-btn" id="themeToggle" type="button" aria-label="Toggle color theme">Theme: Auto</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Area & Scope -->
+  <div class="scope-card">
+    <div class="scope-grid">
+      <div>
+        <div class="section-kicker">Area reviewed &amp; why</div>
+        <h3>Program-token emission, vocabulary registration, and policy admission across <code>managym</code> and <code>manabot</code></h3>
+        <p>
+          Widened from the single <code>0.2.6</code> crash (<code>issue #629</code>) to the full pipeline linking
+          <code>TokenWriter</code> (<code>cards::tokens</code>), runtime projections (<code>agent::effect_execution</code>,
+          <code>agent::observation</code>, <code>agent::observation_encoder</code>, <code>agent::continuation</code>, <code>agent::decision_memory</code>),
+          runtime registration (<code>agent::record_vocabulary</code>), checkpoint migration (<code>cards::token_renames</code>, <code>policy::binding</code>),
+          and host admission (<code>policy::catalog</code>, <code>policy::admission</code>).
+        </p>
+      </div>
+      <ul class="meta-list">
+        <li><strong>Branch:</strong> <code>jack/mtg-501-fix-runtime-program-token-vocabulary-mismatch</code></li>
+        <li><strong>Checked against:</strong> freshly fetched <code>origin/main</code> (<code>b611abb3d7</code> — up to date)</li>
+        <li><strong>State:</strong> Kickoff plan (<code>9db1050b6e</code>) + Task steer (<code>ee8ad494</code>); no code edits yet</li>
+        <li><strong>Public API line:</strong> <code>0.2.x</code> unchanged (no new public keys)</li>
+      </ul>
+    </div>
+    <div class="legend-row">
+      <span><strong>Visual key:</strong></span>
+      <span class="badge badge-existing">Existing (on origin/main)</span>
+      <span class="badge badge-proposed">Proposed (dashed blue)</span>
+      <span class="badge badge-this-work">This work (MTG-501)</span>
+      <span class="badge badge-separate">Separate outcome (0.3.0)</span>
+      <span class="badge badge-steer">Aligned with Task steer</span>
+    </div>
+  </div>
+
+  <!-- Steer alignment note -->
+  <div class="steer-card">
+    <h3>Task steer applied (matches independent review findings)</h3>
+    <p>
+      Both this review and Jack Heart's Task steer (<code>ee8ad494</code>) independently reject <code>scratch/plan.md</code>'s two original premises:
+      (1) <strong>do not register the 11 dead <code>0.2.6</code> <code>GrantClock</code>/<code>PermanentId</code>/<code>PublicId</code> tokens</strong> (commit <code>8904bf12a5</code> already stopped emitting them, and <code>0.2.6</code> policies rejected them anyway), and
+      (2) <strong>do not add a new <code>program_vocabulary</code> public key to <code>managym.catalog_tokens()</code></strong>.
+      Instead, MTG-501 pivots to hardening the emission boundary with a <code>cfg(debug_assertions)</code> guard at <code>TokenWriter::into_rules_tokens</code>, fixing any latent unregistered runtime tokens it surfaces, adding a departed granted-trigger LKI regression test, and keeping strict Python admission tests.
+      Below we review that whole area — including <strong>concrete counterexamples and a live bug already on <code>origin/main</code></strong> that the guard design must handle cleanly.
+    </p>
+  </div>
+
+  <!-- Section 1: Alignment Matrix -->
+  <section>
+    <div class="section-kicker">Core question</div>
+    <h2>Do the concepts people work with and the code's concepts line up?</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Domain concept (what a person knows &amp; does)</th>
+            <th>Code concept (types, records &amp; APIs)</th>
+            <th>Line up?</th>
+            <th>What is wrong where it is No</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="col-domain">
+              <strong>Every emitted runtime program token is admitted</strong><br />
+              No runtime serializer can emit an unregistered symbolic pair or leak a raw storage ID.
+            </td>
+            <td class="col-code">
+              Hand-maintained <code>execution_names()</code> + <code>EXECUTION_TEXT</code> + partial witness test (6 types) + <code>Effect</code> witness test.
+            </td>
+            <td class="col-fit"><span class="badge badge-no">No</span></td>
+            <td class="col-why">
+              <div class="mismatch-kind">Unenforced invariant · Live bug on origin/main</div>
+              <code>TokenWriter::into_rules_tokens()</code> does no vocabulary check today. Nothing tests <code>Projection::lki</code> (where #629 lived) or <code>Projection::entry</code>. <strong>Live bug on <code>main</code> right now:</strong> <code>effect_execution.rs:919</code> calls <code>self.object("enters attached to", object)</code>, which is missing from <code>EXECUTION_TEXT</code> and unregistered in <code>record_vocabulary()</code>.
+            </td>
+          </tr>
+          <tr>
+            <td class="col-domain">
+              <strong>Single admitted program-token vocabulary</strong><br />
+              The exact set of non-numeric <code>(kind, value)</code> pairs accepted by every catalog policy (<code>Catalog.require_tokens</code>).
+            </td>
+            <td class="col-code">
+              <strong>No single owner.</strong><br />
+              Reconstructed in 4 places: <code>catalog.py</code>, <code>record_vocabulary.rs:438</code>, <code>observability.rs:2374</code>, <code>observability.rs:5651</code> (plus <code>token_renames.rs:277</code>).
+            </td>
+            <td class="col-fit"><span class="badge badge-no">No</span></td>
+            <td class="col-why">
+              <div class="mismatch-kind">Action with no single owner · Divergent oracles</div>
+              <code>observability.rs:5651</code> omits tokens/back faces/fixtures (walks <code>managym_cards::catalog()</code> only) and wrongly exempts <code>TokenKind::Null</code> (8, 0) as a literal, whereas <code>admission.py</code> requires exact lookup for <code>Null</code> and <code>DefinitionRef</code>. Naive <code>catalog_tokens ∪ record_names</code> also includes 44 <code>DecisionMemory::*</code> tokens that default policies (<code>decision_memory=False</code>) reject.
+            </td>
+          </tr>
+          <tr>
+            <td class="col-domain">
+              <strong>Printed card &amp; token spans</strong><br />
+              Serialized characteristics and ability programs per <code>CardDefId</code>.
+            </td>
+            <td class="col-code">
+              <code>managym.catalog_tokens()</code><br />
+              Flat CSR occurrence arrays (106,079 tokens) + <code>definition_offsets</code>, <code>program_offsets</code>.
+            </td>
+            <td class="col-fit"><span class="badge badge-partial">Partial</span></td>
+            <td class="col-why">
+              <div class="mismatch-kind">Name invites misreading as a vocabulary</div>
+              Callers (including issue #629) read <code>catalog_tokens()</code> as the full vocabulary when it only holds printed card spans. Keeping the <code>0.2.x</code> API unchanged per steer, docs and error messages should stay clear that runtime tokens come from <code>record_vocabulary()</code>.
+            </td>
+          </tr>
+          <tr>
+            <td class="col-domain">
+              <strong>Runtime-only program symbols</strong><br />
+              Serde names and projection labels emitted only at runtime (never on printed cards).
+            </td>
+            <td class="col-code">
+              Fake <code>RecordName</code> rows <code>("token", "execution/&lt;kind&gt;/&lt;name&gt;", hash, Some((kind, word)))</code> inside <code>record_vocabulary()</code>.
+            </td>
+            <td class="col-fit"><span class="badge badge-no">No</span></td>
+            <td class="col-why">
+              <div class="mismatch-kind">Concept the code has &amp; person never sees · One surface for two ideas</div>
+              No encoder ever writes <code>name_value("execution/...")</code> into a record-id column. Smuggling ~350 runtime program tokens through <code>record_vocabulary()</code> bloats <code>record_name_keys</code>, doubles every retirement in <code>token_renames.rs</code> (<code>TOKENS</code> + <code>RECORDS</code>), and misled issue #629 into confusing <code>execution/6/grantor</code> (kind 6 Text) with field <code>grantor</code> (kind 2 Field). <em>Cleanup belongs in <code>0.3.0</code> due to checkpoint compatibility.</em>
+            </td>
+          </tr>
+          <tr>
+            <td class="col-domain">
+              <strong>Record-only decision-memory names</strong><br />
+              <code>DecisionMemory::Priority</code>, <code>::PassPriority</code>, etc. — written only to <code>decision_records.kind</code> / <code>choice_kind</code>.
+            </td>
+            <td class="col-code">
+              <code>record_vocabulary.rs:91-95</code> calls <code>variant(...)</code>, giving all 44 names <code>Some((TokenKind::Variant, hash))</code>.
+            </td>
+            <td class="col-fit"><span class="badge badge-no">No</span></td>
+            <td class="col-why">
+              <div class="mismatch-kind">Phantom program tokens</div>
+              Unlike <code>CopyEffect</code>, <code>Ward</code>, and <code>PooledMana</code> (which use <code>token: None</code>), <code>DecisionMemory::*</code> gets a phantom <code>TokenKind::Variant</code> token that no program ever emits and that default policies (<code>decision_memory=False</code>) exclude. Any guard built from naive <code>record_names()</code> would falsely admit them!
+            </td>
+          </tr>
+          <tr>
+            <td class="col-domain">
+              <strong>Removed <code>0.2.6</code> bug payload (<code>GrantClock</code>)</strong><br />
+              Raw storage IDs (<code>PermanentId</code>, <code>PublicId</code>) leaked in <code>0.2.6</code>, stripped by <code>8904bf12a5</code>.
+            </td>
+            <td class="col-code">
+              <code>EffectiveTrigger</code> skips <code>origin</code>/<code>acquired</code>/<code>ability_index</code> and derives <code>clock()</code> on demand.
+            </td>
+            <td class="col-fit"><span class="badge badge-yes">Yes</span></td>
+            <td class="col-why">
+              Already clean on <code>origin/main</code>. Per Task steer, MTG-501 keeps these 11 dead tokens out of <code>record_vocabulary.rs</code> and adds a departed granted-trigger LKI regression test to lock the invariant.
+            </td>
+          </tr>
+          <tr>
+            <td class="col-domain">
+              <strong>Checkpoint vocabulary migration</strong><br />
+              Rebind an older checkpoint's learned rows onto a newer world by key.
+            </td>
+            <td class="col-code">
+              <code>token_renames.rs</code> (<code>TOKENS</code> + <code>RECORDS</code>) + <code>policy/binding.py</code> (<code>bind_catalog</code>).
+            </td>
+            <td class="col-fit"><span class="badge badge-partial">Partial</span></td>
+            <td class="col-why">
+              Works cleanly by key, but <code>token_renames.rs:277</code> only validates rename successors against printed <code>catalog_tokens()</code>, not runtime tokens — which already forced <code>"kept creature"</code> to retire as <code>None</code> in <code>TOKENS</code> while renaming to <code>Some(...)</code> in <code>RECORDS</code>.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Section 2: Biggest Mismatch + Before / After -->
+  <section>
+    <div class="hero-mismatch">
+      <div class="section-kicker" style="color: var(--mountain-ink);">Biggest mismatch (and how the steered design fixes it)</div>
+      <h2>Runtime token emission has 5 entry points and 4 divergent test oracles, but zero enforcement at the shared <code>TokenWriter</code> chokepoint</h2>
+      <p>
+        Every runtime program in <code>managym</code> — <code>effect_execution.rs:478</code>, <code>continuation.rs:236</code>,
+        <code>observation.rs:736,787,1529,2999</code>, <code>observation_encoder.rs:2193,2208</code>, and <code>decision_memory.rs:425</code> —
+        passes through <strong>one single method</strong>: <code>TokenWriter::into_rules_tokens</code> (<code>cards/tokens.rs:297</code>).
+        Meanwhile <code>catalog_tokens()</code> uses <code>writer.span()</code>, never <code>into_rules_tokens()</code>.
+        Putting a <code>OnceLock</code>-backed <code>cfg(debug_assertions)</code> guard right at <code>into_rules_tokens()</code> turns
+        <em>every Rust unit, card, and rules test in the repository</em> into an automatic vocabulary-completeness oracle —
+        provided the guard uses the <strong>exact</strong> admission rule (excluding <code>DecisionMemory::*</code>, checking <code>Null</code> and <code>DefinitionRef</code> strictly, and scoping to <code>default_content_pack()</code>).
+      </p>
+    </div>
+
+    <div class="compare">
+      <div class="panel existing">
+        <div class="panel-head">
+          <span class="panel-title">Before (origin/main)</span>
+          <span class="badge badge-existing">Existing</span>
+        </div>
+
+        <div class="diagram-box">
+          <strong>5 runtime emitters -&gt; unchecked <code>into_rules_tokens()</code></strong>
+          <div class="pill-row">
+            <span class="tok warn">effect_execution.rs:478</span>
+            <span class="tok warn">continuation.rs:236</span>
+            <span class="tok warn">observation.rs (4 sites)</span>
+            <span class="tok warn">observation_encoder.rs (2 sites)</span>
+            <span class="tok warn">decision_memory.rs:425</span>
+          </div>
+          <div class="pill-row" style="margin-top: 8px;">
+            <span class="tok bad">Unregistered on main: "enters attached to" (effect_execution.rs:919)</span>
+            <span class="tok bad">observability.rs:5651 skips tokens/back faces &amp; exempts Null</span>
+            <span class="tok bad">No LKI granted-trigger vocabulary test</span>
+          </div>
+        </div>
+
+        <pre><code>// managym/src/cards/tokens.rs:297 (today)
+pub(crate) fn into_rules_tokens(self) -&gt; Vec&lt;(u16, i32)&gt; {
+    self.tokens  // no check; unregistered tokens ship to wheels
+}
+
+// managym/cards/tests/cards/observability.rs:5651 (today)
+fn assert_execution_tokens_registered(frame: &amp;ContinuationFrame) {
+    // 1. misses token.* / back faces / fixtures
+    // 2. wrongly treats TokenKind::Null as a literal
+    let literal = [Integer, Boolean, Null].map(|k| k as u16);
+    ...
+}</code></pre>
+      </div>
+
+      <div class="panel proposed">
+        <div class="panel-head">
+          <span class="panel-title">After (Steered MTG-501 design)</span>
+          <span class="badge badge-proposed">Proposed</span>
+        </div>
+
+        <div class="diagram-box">
+          <strong>One internal cached vocabulary + chokepoint guard</strong>
+          <div class="pill-row">
+            <span class="tok prop">record_vocabulary::program_vocabulary() (OnceLock)</span>
+            <span class="tok ok">Printed catalog (incl. tokens &amp; back faces)</span>
+            <span class="tok ok">Non-DecisionMemory runtime tokens</span>
+            <span class="tok ok">Only Integer (4) &amp; Boolean (5) bypass lookup</span>
+            <span class="tok ok">"enters attached to" registered &amp; tested</span>
+          </div>
+        </div>
+
+        <pre><code>// managym/src/agent/record_vocabulary.rs (single internal owner)
+pub fn program_vocabulary() -&gt; &amp;'static HashSet&lt;(u16, i32)&gt; {
+    static VOCAB: OnceLock&lt;HashSet&lt;(u16, i32)&gt;&gt; = OnceLock::new();
+    VOCAB.get_or_init(|| {
+        // catalog_tokens(default_content_pack()) uses writer.span(),
+        // NOT into_rules_tokens() -&gt; zero recursion / deadlock!
+        // Exclude DecisionMemory::* (record-only, rejected when memory=off)
+        ...
+    })
+}
+
+// managym/src/cards/tokens.rs:297 (debug guard on every emitter)
+pub(crate) fn into_rules_tokens(self) -&gt; Vec&lt;(u16, i32)&gt; {
+    #[cfg(debug_assertions)]
+    if std::ptr::eq(self.pack, default_content_pack()) {
+        assert_program_tokens_registered(&amp;self.tokens);
+    }
+    self.tokens
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Concrete Walkthrough (Normal / Failure / Recovery) -->
+  <section>
+    <div class="section-kicker">Concrete interaction &amp; stress test</div>
+    <h2>Walking the chokepoint guard on normal, failure, and recovery paths</h2>
+
+    <div class="walkthrough">
+      <div class="step-card">
+        <div class="step-num">1 · NORMAL PATH</div>
+        <h3>Every Rust test exercises admission for free</h3>
+        <ul class="tight">
+          <li>Any test running <code>Observation::for_player</code>, <code>encode</code>, <code>rules_tokens</code>, or <code>definition_tokens</code> flows through <code>TokenWriter::into_rules_tokens()</code>.</li>
+          <li><code>program_vocabulary()</code> initializes once per test binary in a <code>OnceLock</code> (no repeated double <code>serde_json::to_value</code> walks), then checks each non-numeric token in O(1).</li>
+          <li><code>catalog_tokens()</code> uses <code>writer.span()</code>, so initializing the <code>OnceLock</code> never re-enters <code>into_rules_tokens()</code>.</li>
+        </ul>
+      </div>
+
+      <div class="step-card">
+        <div class="step-num">2 · FAILURE PATH</div>
+        <h3>Fails at the exact emitter, not hours into GPU training</h3>
+        <ul class="tight">
+          <li>If someone adds a field to a serialized runtime struct (like <code>GrantClock</code> in <code>0.2.6</code>) or omits a label from <code>EXECUTION_TEXT</code> (like <code>"enters attached to"</code> on <code>main</code>), the first Rust test that builds that observation panics immediately with all missing <code>(kind, 0xword)</code> pairs.</li>
+          <li>In Python, <code>Catalog.require_tokens</code> remains fail-closed on unknown symbolic pairs and reports <code>(kind, 0xword)</code>.</li>
+          <li>A label used only on an untested branch (like line 919) is also caught by a static test or directed Aura replacement test.</li>
+        </ul>
+      </div>
+
+      <div class="step-card">
+        <div class="step-num">3 · RECOVERY &amp; COMPATIBILITY</div>
+        <h3>Public API unchanged; checkpoints &amp; pilots intact</h3>
+        <ul class="tight">
+          <li><strong>Survives unchanged:</strong> <code>managym.catalog_tokens()</code> schema (<code>public_api.py check</code> untouched), <code>content_digest</code>, printed card spans, pinned pilot predictions (<code>v9</code>, <code>v11</code>, <code>u1952</code>).</li>
+          <li><strong>If a latent runtime token is fixed:</strong> prefer viewer-safe reference projection for storage IDs (never register <code>ObjectId</code>/<code>PermanentId</code>/<code>PublicId</code>); genuine missing labels like <code>"enters attached to"</code> add 1 row bound cleanly via mean-imputation in <code>bind_catalog</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Findings & Counterexamples -->
+  <section>
+    <div class="section-kicker">Findings &amp; counterexamples</div>
+    <h2>Concrete gaps to close in this work vs. deferred to <code>0.3.0</code></h2>
+
+    <div class="finding-list">
+
+      <!-- Finding 1 -->
+      <article class="finding">
+        <div class="finding-head">
+          <h3>1. Guard design traps: exclude <code>DecisionMemory::*</code>, check <code>Null</code> strictly, and scope to <code>default_content_pack()</code></h3>
+          <div class="finding-tags">
+            <span class="badge badge-this-work">This work</span>
+            <span class="badge badge-steer">Refines steer #3</span>
+          </div>
+        </div>
+        <p>
+          Putting the <code>cfg(debug_assertions)</code> guard in <code>TokenWriter::into_rules_tokens</code> is the right chokepoint,
+          but a naive <code>catalog_tokens ∪ record_names</code> check has three subtle holes that must be closed on every surface:
+        </p>
+        <div class="counterexample">
+          <strong>Three counterexamples against a naive guard:</strong>
+          <ul class="tight">
+            <li><strong><code>DecisionMemory::*</code> false-pass:</strong> <code>record_names()</code> gives all 44 <code>DecisionMemory::*</code> record-kind labels <code>Some((TokenKind::Variant, hash))</code>, even though default policies (<code>max_decision_records=0</code>) strip them from <code>record_token_keys</code>. The guard must filter out <code>DecisionMemory::*</code> so it enforces the <em>strictest</em> production policy (<code>decision_memory=False</code>).</li>
+            <li><strong><code>TokenKind::Null</code> mismatch:</strong> <code>observability.rs:5662</code> wrongly exempts <code>Null</code> (8) alongside <code>Integer</code> (4) and <code>Boolean</code> (5). Production <code>admission.py:510</code> only exempts <code>NUMBER_TOKEN_KINDS = (4, 5)</code>; <code>Null</code> and <code>DefinitionRef</code> require exact lookup.</li>
+            <li><strong>Test-pack / error-reporting interaction:</strong> Scope the guard to <code>std::ptr::eq(self.pack, default_content_pack())</code> so custom test packs don't false-fail on <code>DefinitionRef</code> IDs. Collect <em>all</em> missing <code>(kind, 0xword)</code> pairs of a stream before panicking (and note that <code>observability.rs:2365</code> calls <code>tokens_of</code> / <code>rules_tokens</code> inside its witness loop, so either report clearly there or keep a raw unchecked helper for the exhaustive report).</li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- Finding 2 -->
+      <article class="finding">
+        <div class="finding-head">
+          <h3>2. Live unregistered runtime token on <code>origin/main</code>: <code>"enters attached to"</code></h3>
+          <div class="finding-tags">
+            <span class="badge badge-this-work">This work</span>
+            <span class="badge badge-no">Live bug on origin/main</span>
+          </div>
+        </div>
+        <p>
+          <code>managym/src/agent/effect_execution.rs:919</code> calls <code>self.object("enters attached to", object)</code> when a pending <code>ZoneMove</code> has <code>entry.attached_to.is_some()</code>.
+          <code>"enters attached to"</code> is absent from <code>EXECUTION_TEXT</code> (lines 42–228) — so debug builds panic on <code>debug_assert!</code> (line 280) and release wheels crash <code>fact_vocabulary</code>.
+        </p>
+        <div class="counterexample">
+          <strong>Why the debug guard alone wouldn't catch untested branches:</strong>
+          <code>TokenWriter::into_rules_tokens</code> only validates code paths that tests actually execute. No existing Rust test hits line 919 (Aura entering attached under a pending replacement decision). In addition to registering <code>"enters attached to"</code> in <code>EXECUTION_TEXT</code> and exercising <code>Projection::entry</code> in tests, running the full Rust test suite with the <code>into_rules_tokens</code> guard enabled will surface any other latent runtime mismatches on executed paths.
+        </div>
+      </article>
+
+      <!-- Finding 3 -->
+      <article class="finding">
+        <div class="finding-head">
+          <h3>3. Consolidate all 4 divergent Rust vocabulary unions onto one <code>record_vocabulary::program_vocabulary()</code></h3>
+          <div class="finding-tags">
+            <span class="badge badge-this-work">This work</span>
+            <span class="badge badge-proposed">Single owner (internal Rust)</span>
+          </div>
+        </div>
+        <p>
+          Without changing any Python public API, replace the four hand-rolled Rust vocabulary sets with one internal <code>OnceLock</code>-cached function <code>managym::agent::record_vocabulary::program_vocabulary()</code>:
+        </p>
+        <ul class="tight">
+          <li><code>TokenWriter::into_rules_tokens</code> (<code>cards/tokens.rs:297</code>) — new <code>cfg(debug_assertions)</code> guard.</li>
+          <li><code>record_vocabulary.rs:438</code> (<code>runtime_only_programs_have_catalog_tokens</code>).</li>
+          <li><code>observability.rs:2374</code> (<code>every_effect_variant_reaches_the_learning_tokens</code>) and <code>observability.rs:5651</code> (<code>assert_execution_tokens_registered</code> — fixing both its missing tokens/back faces/fixtures and its bogus <code>Null</code> exemption!).</li>
+          <li><code>token_renames.rs:277</code> (<code>each_historical_token_has_one_disposition_and_renames_resolve</code> — lets runtime-only token renames resolve instead of being forced to retire as <code>None</code>).</li>
+        </ul>
+      </article>
+
+      <!-- Finding 4 -->
+      <article class="finding">
+        <div class="finding-head">
+          <h3>4. Untangle synthetic <code>execution/&lt;kind&gt;/&lt;name&gt;</code> rows and phantom <code>DecisionMemory::*</code> tokens out of <code>record_vocabulary()</code></h3>
+          <div class="finding-tags">
+            <span class="badge badge-separate">Separate outcome (0.3.0)</span>
+            <span class="badge badge-irreversible">Checkpoint/API break</span>
+          </div>
+        </div>
+        <p>
+          Today <code>record_vocabulary()</code> carries ~350 synthetic <code>("token", "execution/&lt;kind&gt;/&lt;name&gt;", ...)</code> entries solely to smuggle runtime program tokens into <code>catalog.py</code>'s <code>record_token_keys</code>, plus 44 <code>DecisionMemory::*</code> entries with phantom <code>TokenKind::Variant</code> tokens.
+        </p>
+        <p>
+          <strong>What this would take (deferred to <code>0.3.0</code>):</strong>
+          (1) expose runtime-only program tokens directly rather than disguised as fake <code>RecordNamespace::Token</code> record names;
+          (2) change <code>DecisionMemory::*</code> in <code>record_vocabulary.rs:94</code> from <code>variant(...)</code> to <code>record(Token, ..., None)</code>;
+          (3) update <code>manabot/policy/catalog.py</code> to build <code>record_token_keys</code> without fake <code>execution/*</code> record names; and
+          (4) handle legacy <code>execution/*</code> record-name keys and <code>DecisionMemory::*</code> token keys in <code>binding.py</code> / <code>token_renames.rs</code> so pre-<code>0.3.0</code> checkpoints still bind cleanly.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- Section 5: Numbered Questions -->
+  <section>
+    <div class="section-kicker">Remaining design choices for implementation</div>
+    <h2>Numbered questions — reply with option codes (e.g. <code>1a, 2a</code>)</h2>
+
+    <div class="questions">
+
+      <div class="q-card">
+        <div class="q-head">
+          <h3>1. How should <code>observability.rs::every_effect_variant_reaches_the_learning_tokens</code> interact with the <code>into_rules_tokens</code> debug guard?</h3>
+          <span class="badge badge-this-work">This work</span>
+        </div>
+        <div class="q-options">
+          <div class="opt rec">
+            <div class="opt-id">1a</div>
+            <div>
+              <strong>Recommended · Keep the guard inside <code>into_rules_tokens()</code> (reporting all missing tokens of that stream) and let <code>observability.rs</code> share the exact same <code>program_vocabulary()</code>.</strong> Every emitter — including <code>definition_tokens</code> and <code>rules_tokens</code> — gets zero-bypass enforcement, and a failure still prints the exact missing <code>(kind, 0xword)</code> list. (Add a tiny <code>#[cfg(test)]</code> / internal unchecked variant only if multi-effect aggregation in <code>observability.rs:2365</code> is specifically wanted.)
+            </div>
+          </div>
+          <div class="opt">
+            <div class="opt-id">1b</div>
+            <div>
+              <strong>Guard only runtime callers (<code>rules_tokens</code> and <code>Projection::finish</code>), skipping <code>definition_tokens()</code>.</strong> Avoids touching <code>definition_tokens</code> callers in tests, at the cost of leaving <code>decision_memory.rs:425</code> (which encodes live effective characteristics via <code>definition_tokens</code>) unguarded.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="q-card">
+        <div class="q-head">
+          <h3>2. Should MTG-501 also retire the 3 unused strings in <code>EXECUTION_TEXT</code> (<code>"creature type choice"</code>, <code>"chosen creature type"</code>, <code>"normal combat damage"</code>)?</h3>
+          <span class="badge badge-this-work">Checkpoint hygiene</span>
+        </div>
+        <div class="q-options">
+          <div class="opt rec">
+            <div class="opt-id">2a</div>
+            <div>
+              <strong>Recommended · Leave those 3 existing strings alone in MTG-501; only add the live missing <code>"enters attached to"</code> (plus whatever the new guard surfaces).</strong> Keeps MTG-501 focused and avoids 6 unrelated retirement entries in <code>token_renames.rs</code> for existing checkpoints.
+            </div>
+          </div>
+          <div class="opt">
+            <div class="opt-id">2b</div>
+            <div>
+              <strong>Audit and retire unused <code>EXECUTION_TEXT</code> entries now</strong> (adding their <code>TOKENS</code> + <code>RECORDS</code> retirement entries in <code>token_renames.rs</code> so pinned pilots still bind).
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="q-card">
+        <div class="q-head">
+          <h3>3. Should we file a separate <code>0.3.0</code> Task for untangling fake <code>execution/*</code> records and <code>DecisionMemory::*</code> phantom tokens out of <code>record_vocabulary()</code>?</h3>
+          <span class="badge badge-separate">Separate outcome (0.3.0)</span>
+        </div>
+        <div class="q-options">
+          <div class="opt rec">
+            <div class="opt-id">3a</div>
+            <div>
+              <strong>Recommended · Yes, track Finding 4 as its own <code>0.3.0</code> Task</strong> alongside the other <code>0.3.0</code> deprecation removals so <code>record_name_keys</code> drops ~350 dead hashes and <code>token_renames.rs</code> stops requiring double entries.
+            </div>
+          </div>
+          <div class="opt">
+            <div class="opt-id">3b</div>
+            <div>
+              <strong>Leave <code>record_vocabulary()</code>'s encoding as-is indefinitely</strong> and rely on the <code>into_rules_tokens</code> guard alone to prevent drift.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<script>
+  (function () {
+    const btn = document.getElementById('themeToggle');
+    const modes = ['auto', 'light', 'dark'];
+    let idx = 0;
+    function apply() {
+      const mode = modes[idx];
+      if (mode === 'auto') {
+        document.documentElement.removeAttribute('data-theme');
+      } else {
+        document.documentElement.setAttribute('data-theme', mode);
+      }
+      btn.textContent = 'Theme: ' + mode.charAt(0).toUpperCase() + mode.slice(1);
+    }
+    btn.addEventListener('click', () => {
+      idx = (idx + 1) % modes.length;
+      apply();
+    });
+    apply();
+  })();
+</script>
+</body>
+</html>
