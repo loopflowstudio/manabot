@@ -12,4 +12,8 @@ This exploratory run tests whether kickstarting fresh self-play policies (`w64` 
 
 ## Status
 
-- **2026-11-26:** Kickstarting implementation (`Kickstart`, `SelfPlay.teacher`, decaying forward-KL/value loss, Etude resume validation, diagnostics, unit tests) and exploratory experiment module [`experiments/tla_trophies_kickstart.py`](../tla_trophies_kickstart.py) prepared. Pending execution in `experiment-run`.
+- **2026-11-26:** Kickstarting implementation (`Kickstart`, `SelfPlay.teacher`, decaying forward-KL/value loss, Etude resume validation, diagnostics, unit tests) and exploratory experiment module [`experiments/tla_trophies_kickstart.py`](../tla_trophies_kickstart.py) prepared.
+- **2026-11-27 05:58 UTC (launch, commit `bb403b819627`):** Verified real-teacher (`tla_trophies_floor/tau-x2@40902` u800, SHA-256 `3456250f4fb6fe9ee8ef4fb0d2700b1196cceb97a44eac394b012a9c91a2e26f`) loading and fade-to-zero locally on CPU for both `w64` and `w160l8`. Sized A40 placement hours/caps in `bb403b819627` (`max_hours=8.0`/`max_usd=2.65` for `w64`, `16.0`/`5.20` for `w160l8`) and launched all six runs under `--max-usd 25` on three 2-slot RunPod NVIDIA A40s (`mtg446-a40-48g-s2`, $0.59/hr, planned first-wave ceiling $19.32):
+  - `tla_trophies_kickstart/w64-ks-0.2-f200@40901` & `@40902` (`mtg446-a40-48g-s2-158b2582c037`)
+  - `tla_trophies_kickstart/w64-ks-0.5-f200@40901` & `@40902` (`mtg446-a40-48g-s2-c1a6cb441892`)
+  - `tla_trophies_kickstart/w160l8-fresh@40902` & `w160l8-ks-0.2-f200@40902` (`mtg446-a40-48g-s2-ec23e9a44ef6`)
