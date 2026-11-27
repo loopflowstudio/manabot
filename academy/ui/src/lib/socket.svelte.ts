@@ -135,6 +135,7 @@ const VALID_SERVER_TYPES = new Set([
   'work_status',
   'analysis_state',
   'analysis',
+  'open_hands_state',
   'observation',
   'game_over',
   'command_outcome',
@@ -431,6 +432,11 @@ export class GameSocketController {
     this.send({ type: 'show_analysis', shown, policy });
   }
 
+  /** Show or hide the bot's hand in the game in play; the reply carries the hand. */
+  sendOpenHands(open: boolean): void {
+    this.send({ type: 'set_open_hands', open });
+  }
+
   sendPassTurn(): boolean {
     if (this.pendingResume || gameStore.stopped || this.pendingCommand) return false;
     gameStore.beginFastForward();
@@ -532,6 +538,13 @@ export class GameSocketController {
       return;
     }
 
+    if (message.type === 'open_hands_state') {
+      // The reply carries the game's setup as it now is, for Rematch and Swap play/draw.
+      gameStore.applyGame(message);
+      gameStore.openHand = message.open_hand ?? null;
+      return;
+    }
+
     if (message.type === 'observation' || message.type === 'game_over') {
       this.starting = null;
       const matchBefore = gameStore.protocolFrame?.match_id ?? null;
@@ -599,6 +612,7 @@ export class GameSocketController {
       // A first/replacement recovery resets match state. Its runner metadata
       // and live-analysis flag belong to the recovered frame and must survive that reset.
       if (message.type === 'observation') gameStore.liveAnalysis = followShown(gameStore.liveAnalysis, message.analysis?.policy ?? null);
+      if ('open_hand' in message) gameStore.openHand = message.open_hand ?? null;
       if ('work' in message) gameStore.work = message.work ?? null;
       if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
       // Live scores are read from one seat's view; after Swap sides the line
@@ -643,6 +657,8 @@ export class GameSocketController {
         gameStore.lastCommandRejection = message.rejection;
         gameStore.setError(message.rejection.message);
       }
+      // After the frame it came with: a recovery resets the match state.
+      if ('open_hand' in message) gameStore.openHand = message.open_hand ?? null;
       return;
     }
 
@@ -922,6 +938,10 @@ export function sendDecisionGroupCommand(plan: DecisionGroupPlan): boolean {
 export function sendSwapSides(): void {
   controller.sendSwapSides();
 }
+export function sendOpenHands(open: boolean): void {
+  controller.sendOpenHands(open);
+}
+
 export function sendShowAnalysis(shown: boolean, policy: string | null = null): void {
   controller.sendShowAnalysis(shown, policy);
 }

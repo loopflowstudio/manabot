@@ -3,6 +3,8 @@ export type ArtCredit = { artist: string; source: string; copyright: string };
 const requests = new Map<string, { promise: Promise<boolean>; expires: number }>();
 const shown = new Set<string>();
 
+export const CARD_BACK_URL = '/api/card-art/back.jpg';
+
 export function artUrl(name: string, kind: 'art' | 'full' = 'art'): string {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   return `/api/card-art/${kind}/${slug}.jpg`;

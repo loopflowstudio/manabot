@@ -534,16 +534,32 @@ class Recording:
         )
 
     def can_reveal(self, position: Position) -> bool:
-        """Both hands at `position`: a Watch spectator view where one was
-        captured, or any position of an authoritatively complete played game."""
+        """Both hands at `position`: every Watch position whose board has a
+        captured spectator hand, or any position of an authoritatively complete
+        played game."""
         if self.views is not None:
             return self.views.complete
-        return bool(
-            position.kind == "choice"
-            and position.decision
-            and self.watch
-            and self.payload["events"][position.event_index].get("analysis_observation")
-        )
+        return self.watch and self._watch_hands(position) is not None
+
+    def _watch_hands(self, position: Position) -> dict[int, list[Any]] | None:
+        """Each seat's hand on a Watch board, or None where none was captured.
+
+        Event `i` stores both hands of the board before it, so the board after
+        step `i` reads event `i + 1`; the board past the last event reads the
+        stored final hand, which records before it was introduced lack.
+        """
+        events = self.payload["events"]
+        index = position.event_index + (position.kind == "consequences")
+        if index < len(events):
+            analysis = events[index].get("analysis_observation")
+            if not analysis:
+                return None
+            return {
+                analysis[side]["player_index"]: analysis[side]["hand"]
+                for side in ("agent", "opponent")
+            }
+        hand = self.payload.get("final_opponent_hand")
+        return None if hand is None else {1 - self.human_seat: hand}
 
     def _board(self, position: Position, viewer: int | None = None) -> dict[str, Any]:
         """The recorded person's redacted board at `position`. Callers must not mutate it."""
@@ -813,23 +829,28 @@ class Recording:
             if position.event_index < len(self.payload["events"])
             else {}
         )
-        analysis = event.get("analysis_observation") if (row and self.watch) else None
         other = (
             self.views.board(index, viewer=1 - viewer)
             if self.views and self.views.complete
             else None
         )
-        if reveal and other is not None:
-            analysis = {
-                **observation,
-                "opponent": {
-                    **observation["opponent"],
-                    "hand": other["agent"]["hand"],
-                    "hand_hidden_count": 0,
-                },
-            }
-        if reveal and analysis is None:
-            raise ValueError("spectator_view_unavailable")
+        revealed_board: dict[str, Any] | None = None
+        if reveal:
+            if other is not None:
+                revealed_board = with_both_hands(
+                    observation, {1 - viewer: other["agent"]["hand"]}
+                )
+            elif self.watch:
+                # A Watch choice keeps its own stored spectator board; every
+                # other revealed board patches only the hands onto this
+                # position's redacted board so it keeps its orientation and
+                # never takes another step's decision context or inspected cards.
+                if row:
+                    revealed_board = event.get("analysis_observation")
+                elif (hands := self._watch_hands(position)) is not None:
+                    revealed_board = with_both_hands(observation, hands)
+            if revealed_board is None:
+                raise ValueError("spectator_view_unavailable")
         transition_start = cursor
         if position.kind == "consequences":
             revision = self.revisions.get(position.event_index)
@@ -845,7 +866,9 @@ class Recording:
         return {
             **self.metadata(position),
             "description": self._description(position),
-            "observation": deepcopy(analysis) if reveal else observation,
+            "observation": deepcopy(revealed_board)
+            if revealed_board is not None
+            else observation,
             "decision": decision,
             "outputs": deepcopy(event.get("bot_decision")) if row else None,
             "viewer": viewer,
@@ -903,6 +926,20 @@ read_cache = ReadCache()
 
 
 # ———————————————— Narrating a move
+
+
+def with_both_hands(
+    board: dict[str, Any], hands: dict[int, list[Any]]
+) -> dict[str, Any]:
+    """`board` with each seat in `hands` holding that hand face-up. Only the
+    hands change; the board is not mutated."""
+    revealed = dict(board)
+    for side in ("agent", "opponent"):
+        player = board[side]
+        hand = hands.get(player.get("player_index"))
+        if hand is not None:
+            revealed[side] = {**player, "hand": hand, "hand_hidden_count": 0}
+    return revealed
 
 
 def person_board(
