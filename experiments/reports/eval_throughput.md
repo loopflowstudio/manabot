@@ -92,6 +92,30 @@ forward row totals) against CPU scalar.
 - **CUDA L4 float32/bf16 arms** remain for pass 4 once `etude-sdk > 0.4.7`
   ships `play_many`.
 
+## MLX on Apple Silicon
+
+At `d2012147d4` (2026-11-27), MLX 0.32.4 ran both checkpoints in float32
+with 64 vector slots on the same M4 Max. The comparison reuses the CPU
+scalar and MPS vector-64 receipts above, with the same checkpoint bytes and
+32 deals per arm. Each arm ran once. The CPU and MPS timings come from an
+earlier session on the same host.
+
+| Checkpoint | CPU scalar games/hr | MPS vector-64 games/hr | MLX vector-64 games/hr | MLX vs CPU | MLX vs MPS | MLX wall (s) | MLX forward (s) | MLX other arena (s) | MLX replay (s) | MLX mean / max rows |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Trained `w160l8` | 749 | 1,989 | 2,033 | 2.71× | 1.022× | 226.7 | 32.7 | 98.6 | 95.4 | 15.78 / 39 |
+| Seeded `w384l8` | 782 | 1,882 | 1,915 | 2.45× | 1.018× | 240.6 | 39.9 | 102.8 | 97.9 | 8.72 / 51 |
+
+All 128 games per MLX arm passed replay. Every leg matched CPU scalar and
+MPS vector-64 on deal and player seeds, actions, selected offers, frame and
+state digests, winner, score, and decision count. The checkpoint forward row
+counts also matched (11,774 and 7,861).
+
+MLX spent 17.5% less time in forwards than MPS on `w160l8` and 23.4% less on
+`w384l8`, reaching 360 and 197 policy rows per second, respectively. Arena
+work outside the forward was the largest stage for both models. Together,
+that work and replay took 83–86% of wall time, leaving a measured 1.8–2.2%
+end-to-end gain over MPS across these single runs.
+
 ## Reproduce
 
 Fetch the corpus and the trained policy into local files.
@@ -111,6 +135,9 @@ uv run --extra evaluation python -m experiments.eval_throughput \
   --output-dir .runs/eval-throughput/w384-mps-64 --device mps --runner vector --slots 64
 uv run --extra evaluation python -m experiments.eval_throughput \
   --output-dir .runs/eval-throughput/w160-cpu-scalar --device cpu --runner scalar \
+  --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors
+uv run --extra evaluation --extra mlx python -m experiments.eval_throughput \
+  --output-dir .runs/eval-throughput/w160-mlx-64 --device mlx --runner vector --slots 64 \
   --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors
 ```
 

@@ -14,12 +14,16 @@ training (MTG-449, MTG-496). This replaces the earlier brief ("Build directly on
 Etude's `AGENTS` ... contract", steer `15f42691`) and the 4-leg synchronous
 driver planned from it; none of that driver was committed.
 
-Outcome: a managed evaluation on CUDA, Apple MPS or CPU keeps its accelerator
+Outcome: a managed evaluation on CUDA, Apple Silicon or CPU keeps its accelerator
 busy because one game process steps many matches' games together and sends one
 pre-collated `Prepared` per checkpoint per round; a report states games/hour and
 rows per forward for `w160l8` and a 34M model against CPU batch-1.
 
-## Upstream state (read 2026-11-27, third realign)
+Jack Heart added MLX in steer `d440244b`: prefer CUDA, then MLX, then MPS,
+then CPU. Measure MLX against the same Apple Silicon MPS and CPU arms while
+the Etude binding awaits its SDK release.
+
+## Upstream state (checked 2026-11-27)
 
 - Installed and PyPI `etude-sdk` is still `0.4.7`: `EvalRun` has only
   synchronous `play`.
@@ -53,8 +57,9 @@ rows per forward for `w160l8` and a 34M model against CPU batch-1.
 
 - **Loader & precision (`manabot/eval/agent_loader.py`, `manabot/eval/agents.py`,
   `manabot/policy/batching.py`, `manabot/sim/registration.py`,
-  `manabot/backends/torch/learner.py`):** device order `cuda -> mps -> cpu` with
-  `MANABOT_EVAL_DEVICE` override (out of identity); `load`/`load_tf32`/`load_bf16`
+  `manabot/backends/torch/learner.py`):** device order `cuda -> mlx -> mps -> cpu`
+  with `MANABOT_EVAL_DEVICE` override (out of identity), and MLX requires the
+  optional extra plus Metal; `load`/`load_tf32`/`load_bf16`
   accept any-batch `Prepared` and return `[batch, A]` float32 masked logits;
   `concatenate` rebases `MemoryRows` (rejects `fold is not None`); `AGENTS`,
   `AGENTS_TF32`, `AGENTS_BF16`, `agents_for(precision)`, and
@@ -98,6 +103,7 @@ rows per forward for `w160l8` and a 34M model against CPU batch-1.
 1. **Loader (done, `0286257840`).** `cuda -> mps -> cpu` + `MANABOT_EVAL_DEVICE`; any-batch `Prepared` -> `[batch, A]` float32 logits; `MemoryRows` in `concatenate`; `etude_compute_class`, `AGENTS`/`AGENTS_TF32`/`AGENTS_BF16`; `tf32` guard; GRU bf16 fix.
 2. **Vector runner, locally (done, `dd11bd0a3f`).** Seeded `SlotLoad.fresh(..., seed=)`; `RecordedVectorEnv.record_in_memory`/`slot_record`; shared admission/finalization (`eval/pairing.py`, `eval/match.py`); Torch-free async `play_pairings` (`eval/vector.py`). Trace parity with `play_pairing` proved field by field and by `replay_game`/`audit`/`replay_failure` (heuristic and GRU memory); raw `game_trace_sha256` differs only through wall-clock timings and `mode="vector"`.
 3. **Local measurement and runner cleanup (done, `08a854747f`, `7e79ad34ae`).** Consolidated per-leg setup (`resolve_game_match`, `game_runtime_identities`, `arena_source_sha256`, `set_execution_limits`), dropped `_` prefixes on `eval/vector.py` helpers, added `experiments/eval_throughput.py`, and measured all 12 Apple M4 Max arms in `experiments/reports/eval_throughput.md` (128/128 outcome and replay parity; MPS vector-64 2.41–2.66× CPU batch-1, host arena + replay now 79–83% of single-process wall).
+   **MLX follow-up (done, `d2012147d4`, `c4924ee4ed`).** MLX vector-64 reached 2,033 and 1,915 games/hr, with 128/128 replay passes and identical leg traces against CPU and MPS for each model. Local timings and reproduction are in `experiments/reports/eval_throughput.md`.
 4. **Etude binding, L4 arm, cleanup, docs (blocked on `etude-sdk > 0.4.7`; PyPI still `0.4.7` as of 2026-11-27, EXP-77 committed at `c5923cf` and `310ac1` at `de0c927`, both unreleased).**
    - Upgrade `etude-sdk` and bind `play_many` over `play_pairings` (pass
      `rows=prepared.batch` to awaited `Forward`; catch `ForwardError` to drop
@@ -116,17 +122,17 @@ rows per forward for `w160l8` and a 34M model against CPU batch-1.
 
 ## Docs
 
-`6e803136af` documented the superseded design (`AGENTS_BF16`, `play_pairing`
-`precision`, grouped deal stepping) as if built; it was reverted so docs
-describe only what exists. Pass 4 writes them for what ships.
+Managed loading, precision and Apple device selection are documented in
+`docs/evaluation.md#etude-agents`. Pass 4 updates the docs for managed
+`play_many`.
 
 ## Review record
 
 `scratch/concept-review.html` reviewed the superseded 4-leg design. F1
 (stepping boundary) and F6 (deal window) are superseded by the vector runner.
 F2 (declared precision) and F3 (memory rows in `concatenate`) landed in pass 1.
-F4 (opt-in MPS) stays passed over: MPS default, opt-out by
-`MANABOT_EVAL_DEVICE=cpu`, revisited after pass 4. F5 (`max_batch` 32) is
+F4 (opt-in MPS) was superseded by automatic Apple GPU selection with the
+`MANABOT_EVAL_DEVICE` override. F5 (`max_batch` 32) is
 moot once EXP-77 counts `rows=` on pre-collated inputs.
 
 ## Deferred findings
@@ -146,5 +152,5 @@ moot once EXP-77 counts `rows=` on pre-collated inputs.
 - One experiment file evaluates on NVIDIA, Apple Silicon and CPU hosts
   without edits; a declared `bf16` shows in the players' compute class.
 - The report gives games/hour and rows per forward for w160l8 and the 34M
-  model on CUDA and MPS beside CPU batch-1, naming each arm's limiting stage.
+  model on CUDA, MLX and MPS beside CPU batch-1, naming each arm's limiting stage.
 - `tests/test_package_boundaries.py` and `scripts/public_api.py check` pass.
