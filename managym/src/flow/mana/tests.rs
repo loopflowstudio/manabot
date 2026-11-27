@@ -1381,6 +1381,117 @@ fn mana_trigger_reads_keyword_changed_by_another_activation() {
 }
 
 #[test]
+fn fixed_mana_tap_can_open_a_bonus_choice() {
+    use crate::agent::action::Action;
+    use crate::flow::{
+        decision::{Decision, ManaProduction},
+        game::Game,
+        turn::StepKind,
+    };
+    use crate::state::{
+        card::ManaAbility,
+        game_object::PlayerId,
+        player::{ManaFloats, PlayerConfig},
+        zone::ZoneType,
+    };
+
+    let player = PlayerId(0);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new(
+                "payer",
+                [
+                    ("Island".into(), 37),
+                    ("Mountain".into(), 1),
+                    ("Heartbeat of Spring".into(), 1),
+                    ("Sokka, Bold Boomeranger".into(), 1),
+                ]
+                .into(),
+            ),
+            PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+        ],
+        348,
+        false,
+    );
+    game.keep_opening_hands();
+    game.mana_floats[player.0] = ManaFloats::All;
+    let mountain = game
+        .scenario_force_battlefield(player, "Mountain", true)
+        .unwrap();
+    let heartbeat = game
+        .scenario_force_battlefield(player, "Heartbeat of Spring", true)
+        .unwrap();
+    let mountain_object = game.permanent_object(mountain).unwrap();
+    let heartbeat_object = game.permanent_object(heartbeat).unwrap();
+    game.state[mountain_object].mana_abilities = vec![ManaAbility {
+        mana: Mana::parse("UR"),
+    }];
+    game.state[heartbeat_object].triggered_mana_abilities[0]
+        .predicate
+        .tapped = true;
+
+    game.scenario_clear_hand(player);
+    game.scenario_force_card_in_hand(player, "Sokka, Bold Boomeranger")
+        .unwrap();
+    let spell = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+    game.tick().unwrap();
+    for _ in 0..4 {
+        if game.state.turn.current_step_kind() == StepKind::Main {
+            break;
+        }
+        let holder = game.action_space().unwrap().player.unwrap();
+        let pass = mana_action_index(&game, Action::PassPriority { player: holder });
+        game.step(pass).unwrap();
+    }
+    let cast = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|action| matches!(action, Action::CastSpell { object, .. } if *object == spell))
+        .expect("the Mountain can pay for Sokka");
+    game.step(cast).unwrap();
+    mana_action_index(
+        &game,
+        Action::TapForMana {
+            player,
+            permanent: mountain,
+        },
+    );
+
+    let model = game.payment_model(player, None);
+    let source = model
+        .sources
+        .iter()
+        .find(|source| source.permanent == mountain)
+        .unwrap();
+    let produced = Mana::parse("UR");
+    assert_eq!(source.fixed.as_ref(), Some(&produced));
+
+    // Follow production to the bonus boundary. The tap makes Heartbeat
+    // applicable, and the resolver returns a decision to retain.
+    let mut fork = game.clone();
+    assert!(fork.tap_permanent(mountain, true));
+    let origin = fork.mana_origin(mountain_object);
+    fork.state
+        .mana_pool_mut(player)
+        .add(&produced, Some(origin));
+    let tapped = fork.tapped_for_mana(mountain);
+    let bonuses = fork.production_bonuses(player, &tapped);
+    let decision = fork.resolve_mana_bonuses(player, mountain_object, &produced, bonuses, None);
+    assert!(matches!(
+        decision.as_deref(),
+        Some(Decision::ManaChoice {
+            player: chooser,
+            choices,
+            production: ManaProduction::Bonus { source, .. },
+            ..
+        }) if *chooser == player && *source == heartbeat_object
+            && choices == &[Mana::parse("U"), Mana::parse("R")]
+    ));
+}
+
+#[test]
 fn repeatable_mana_suffix_uses_the_stack() {
     use crate::agent::action::Action;
     use crate::flow::game::Game;
