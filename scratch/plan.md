@@ -4,14 +4,43 @@ A manual payment must return the payer’s next legal choice, finish the cast, o
 
 Pass 1 (`1c521e300`) propagated empty, forced and automatic decision errors and applied the zero-life cost rule. The Room at −1 offers blue and red, isolated stepping poisons only the malformed slot under both skip settings, and all 23 focused debug tests passed.
 
-## Pass 2 · A root probe misses changes to other mana sources
+The first pass 2 attempt found the counterexample below (`34092c814`, test `tarnished_citadel_and_the_great_henge_change_another_mana_source` in `managym/cards/tests/cards/ody.rs`) and changed no production code. The concept review (`24f1ec2f3`, `scratch/concept-review.html`) replanned around it.
 
-The test `tarnished_citadel_and_the_great_henge_change_another_mana_source` uses ordinary mana activations and checks `{4}` castability for Solemn Simulacrum. Angel of Vitality goes from 2/2 to 4/4 at 25 life. Raucous Audience produces `{G}` or `{G}{G}` based on whether its controller has a creature with power at least 4.
 
-- At 28 life, either of two Tarnished Citadels activated on its own leaves the player at 25 and Audience still produces `{G}{G}`. After both colored activations, life is 22 and Audience produces only `{G}`. Two Citadel outputs plus Audience then total three mana. Audience before the second Citadel can fund the spell. A model with root source outputs and two correct −3 deltas would admit both colored Citadels before Audience. Even comparing every source after each isolated root probe would miss the second threshold crossing.
-- At 22 life, The Great Henge gains 3 life with Angel's replacement and produces `{G}{G}`. At 25, Audience adds `{G}{G}`, enabling the cast. A model that retains its root `{G}` output would reject the order as unaffordable.
+## Why a frozen source list fails
 
-Pause pass 2 here. The isolated root probe and frozen source list in design 2 cannot certify a full payment, and classifying a source from the outcome of that probe does not identify every branch needing exact evaluation. Replan how to refresh dependent source eligibility, outputs and bounds at the payment state that produced the change. Keep the signed-life and trailing-life-cost goals and the Citadel/Canyon fixtures. The README's description of the planned probe is pending that revision. No production code changed in this pass.
+Angel of Vitality is 4/4 at 25 life or more; Raucous Audience makes `{G}{G}` while its controller has a power-4 creature, else `{G}`. Casting Solemn Simulacrum (`{4}`):
+
+- **28 life, two Tarnished Citadels.** Each Citadel alone leaves 25 life; both leave 22 and Audience drops to `{G}` (3 mana). Only Citadel → Audience → Citadel pays. Probing each source once from the root sees no change.
+- **22 life, The Great Henge.** Henge gains 3 with Angel's replacement and makes `{G}{G}`; Audience then makes `{G}{G}`. The root total (2 + 1) prunes the legal cast before Henge is tried.
+- **25 life, Sunbaked Canyon + Island.** No `mana_suffix()` anywhere; Canyon's ordinary `life_cost: 1` crosses the threshold. Audience must go first.
+- **One-shot prevention shield + two Citadels.** The first hit consumes the shield; a root probe of each sees it unconsumed.
+- **Sacrifice source + White Lotus Tile / Avatar Kyoshi.** Sacrificing changes a dynamic output.
+
+Coupling is board-level: what a payment step writes (life, sacrifice, taps, counters, pool, effects) intersecting what the layer board reads (`LayerBoard.reads: StateReads`, `dynamic_activations`, `has_triggered_mana_abilities`, `has_activated_cost_reduction` in `flow/layers.rs`, `flow/statics.rs`). Today `flow/mana.rs` builds one frozen `Vec<ManaSource>` and states "Activation costs do not change these readings".
+
+Other gaps at HEAD: `PaymentModel.life: u32` clamps at 0 and `reserve_announced_payment` subtracts announced life eagerly; `payment_sources` hides life-fee sources at low life; colored convoke lives in `while_paying` (`flow/mana/help.rs`), wrapped by three outer callers and skipped by nested surfaces (`automatic_upfront_path`, `mana_choice_actions`/`mana_choice_completes_payment`, `mana_spend_choices`, `mana_tap_cost_actions`, `automatic_payment_action`); `automatic_payability`, `choice_tap_witness` and `useful_payment_taps` assume taps never change another source.
+
+## Design · made for review
+
+The run is headless; these follow the concept review's recommendations (1a, 2a, 3a, 4a) and are reversible internal engine work. Nobody has approved them. Earlier design 2 (probe each `mana_suffix()` once at the root, `LifeDelta`/`BoardChanging` on a frozen list) is refuted by the boards above and dropped.
+
+1. **One feasibility authority with two regimes.** `PaymentScan` computes a `PaymentCoupling` once from source write flags (`life_cost > 0`, `mana_suffix()`, `sacrifice_source`, tap, counters, pool) against the layer board's reads, and from a suffix probe on an isolated fork (suspends, or mutates anything but life → coupled).
+   - *Uncoupled:* the pure `PaymentModel` with a constant `LifeDelta(i32)` per suffix, full bounds, `PaymentCache`, `SearchEquivalence`, `direct()`. Covers ordinary TLA boards, including Citadel/Canyon/Room + Heartbeat.
+   - *Coupled:* exact transitions on a `Game` fork. At each state, first ask the pure model to finish without coupled mutators; otherwise branch only on coupled mutators and affected sources (one representative per equivalence class of invariant sources when an in-flight activation's upfront cost needs funding), re-apply the caller's `SourceReservation`s on the fork (sacrifice-reserved permanents stay on the battlefield until CR 601.2h), rebuild sources, and hand off to the pure model once no coupled mutator remains. Memoize by canonical payment state. Static root bounds do not prune while a coupled mutator remains.
+   - Shortcuts (`automatic_payability`'s fixed total, `choice_tap_witness`, `useful_payment_taps` dedup, `SourceClassCache`) defer to the authority on a coupled slice.
+   - Passed over: re-deriving sources whenever life changes (misses shields, sacrifice, taps, counters); forking whenever any suffix/life/sacrifice source exists (Treasures and painlands are everywhere in TLA; kills the caches); plain forked DFS without pure handoff (10 Forests + coupled sources checking `{15}` explodes).
+2. **Exact life.** Signed `LifeBudget { life: i32, cant_change: bool }`; activation `life_cost` checked against the running budget; post-mana life (announced `payment.life()`, cast `life_alternative`, resolution tail life) is a trailing `Obligation::PayLife(u32)` at completion (CR 601.2h).
+3. **Colored convoke in the model.** `ManaSource.convoke_colors: ManaTypeSet`; the witness reduces an owed colored pip by tapping such a source; delete `while_paying`/`convoke_search`. Fallback if this exceeds a pass: one wrapper routing all eight surfaces through `while_paying`. Never defer it: with pass 1, an unfixed Guardian play is an `AgentError`.
+
+Preserve native action identities, source order, the chooser, individual Heartbeat bonus decisions, spend restrictions and receipts. No changes to Rayon, GPU collection, card definitions or serialized formats. The `PaymentScan` debug rebuild check must keep holding: probes and coupled search run on forks and leave `&self` untouched.
+
+## Remaining passes
+
+2. **Pure regime, exact life, coupling detection** (`flow/mana.rs`, `flow/play.rs`, `flow/statics.rs`). Signed budget, trailing `PayLife`, `LifeDelta` suffix probe, `PaymentCoupling` in `PaymentScan`; coupled boards keep today's frozen-source answer until pass 3. Tests beside the Citadel cases in `ody.rs`: the four table rows through cast, activation and mode submissions with skipping off first; prevented Citadel hit with a payable Canyon fee; Citadel→Henge→Canyon at 2 life; Canyon+Henge paying `{G}{G}{R}` plus 2 life at 2 life (`eld.rs` if Henge-only); a fork offer read leaves the live game untouched. Teaches whether the coupling predicate stays O(N) and silent on ordinary boards (engine budget digest unchanged).
+3. **Coupled regime.** Forked search with pure-finish-first, mutator-only branching, reservation replay, memoization and shortcut deferral. Turn the Pass 2 test into the expected behavior: at 28 life only Citadel → Audience → Citadel is offered; at 22 life Henge-first is admitted; Canyon at 25 offers Audience first; the shield and sacrifice cases if a catalog card builds them (constructed positions otherwise); 10 Forests + coupled sources checking `{15}` returns quickly in debug.
+4. **Colored convoke in the model.** Regression: the Guardian of Vitu-Ghazi board from `scratch/questions.md` completes its cast.
+5. **Collection check and acceptance.** Restore a pre-activation snapshot into one slot of a two-slot native vector with skipping on; both slots return and match scalar play. Acceptance demo, debug nextest for touched crates, engine budget comparison. Rewrite the `managym/README.md` mana-payment section for the built design (the unbuilt description was removed in realign).
 
 ## Reproduced on a TLA Limited board
 
@@ -32,30 +61,6 @@ Run the bounded release probe from the repository root. It prints the four mode 
 uv run --no-project --python 3.13 --with managym==0.2.6 python scratch/repro_mana_payment.py
 ```
 
-## Where the payment witness loses progress
-
-Verified against the checkout (`b611abb3d7`); the concept review (`scratch/concept-review.html`) widened these from the reported call path.
-
-- **Life budget.** `PaymentModel` holds `life: u32`, clamping negative life to 0, and `reserve_announced_payment` (`flow/mana.rs`) subtracts announced life eagerly with `saturating_sub`.
-- **Effect-blind witness.** The payment model knows printed `life_cost` but not `mana_suffix()` effects. Only two catalog cards have one: Tarnished Citadel (3 damage, `cards/src/ody.rs`) and The Great Henge (+2 life, `cards/src/eld.rs`). Execution runs the suffix before exposing `Decision::ManaChoice`, so the model admits Citadel-first with a Canyon fee that is unaffordable once the damage lands. `payment_sources` also filters by current life, hiding Canyon even when Henge would gain life first.
-- **Colored convoke outside the model.** `while_paying` (`flow/mana/help.rs:227`) wraps three outer admission calls (`flow/mana.rs:3390, 3629, 4063`); nested surfaces (`automatic_upfront_path`, `mana_choice_actions`/`mana_choice_completes_payment`, `mana_spend_choices`, `mana_tap_cost_actions`, `automatic_payment_action`) skip it. This is the Guardian of Vitu-Ghazi empty-upfront probe in `scratch/questions.md`.
-
-## Design · made for review
-
-The concept review recommended these and the run is headless; each is reversible internal engine work. Nobody has approved them.
-
-1. **Exact life in the model (review 4a).** `PaymentModel` carries a signed `LifeBudget { life: i32, cant_change: bool }`. Post-mana life costs (announced `payment.life()`, cast `life_alternative`, resolution `Decision::Payment` tail life) become a trailing `Obligation::PayLife(u32)` checked at completion (CR 601.2h). `payment_sources` keeps non-life activation terms and the witness enforces `life_cost` against the running budget.
-2. **Probe mana suffixes once (review 1a).** While building `payment_sources`, for an ability with a non-empty `mana_suffix()`, run the shared cost/suffix transition once on an isolated fork. A finished transition that changed only life records `ManaEffect::LifeDelta(i32)` on the activation and its output; a suspended one (replacement ordering) or one that changed anything else is `ManaEffect::BoardChanging` and is evaluated exactly on a fork, skipping caches and direct shortcuts only for that source. The probe shares the transition below offer validation. Prevention, replacements and `LifeTotalCantChange` come from the real damage path. Passed over: forking `Game` inside the witness DFS, which sees stale root state, breaks `PaymentCache` keys and clones in the priority hot path.
-3. **Colored convoke in the model (review 2a).** `ManaSource` gains `convoke_colors: ManaTypeSet`; the witness reduces an owed colored pip by tapping such a source, and `while_paying`/`convoke_search` are deleted. Passed over: one wrapper routing all callers through `while_paying` (smaller now, keeps the unmemoized search beside the model). If 2a proves larger than a pass, fall back to the wrapper rather than defer: with pass 1 in place, a deferred convoke gap turns legal Guardian plays into errors.
-
-Preserve native action identities, source order, the chooser, individual Heartbeat bonus decisions, spend restrictions and receipts. No changes to Rayon, GPU collection, card definitions or serialized formats. The `PaymentScan` debug check of `shared_payment_sources` against fresh `payment_sources` must keep holding (the probe leaves `&self` untouched).
-
-## Remaining passes
-
-2. **Exact payment witness.** Update the life budget and source probing in `managym/src/flow/mana.rs` and cast admission in `managym/src/flow/play.rs`. Tests in `managym/cards/tests/cards/ody.rs` beside the Citadel cases: the four table rows through normal cast, activation and mode submissions with skipping off first; a prevented Citadel hit with a payable Canyon fee; Citadel→Henge→Canyon at 2 life and Canyon+Henge paying {G}{G}{R} plus 2 life at 2 life (`eld.rs` if Henge-only); a fork offer read leaves the live game untouched.
-3. **Colored convoke in the model.** Regression: the Guardian of Vitu-Ghazi board from `scratch/questions.md` completes its cast.
-4. **Collection check and acceptance.** Restore a pre-activation snapshot into one slot of a two-slot native vector with skipping on; both slots return and match scalar play. Run the acceptance demo, debug-profile nextest for the touched crates, and the engine budget comparison.
-
 ## Acceptance demo
 
 ```sh
@@ -66,9 +71,13 @@ The test exercises both branches of the Room’s blue/red choice and the legal o
 
 ## Concept review disposition
 
-All four review choices adopted above as made for review (1a, 2a with 2b fallback, 3a, 4a). Its `Game::play` hygiene note is in pass 1; the `PaymentScan` debug invariant is a constraint above. The review's replacement-ordering counterexample (Citadel + prevention + damage doubling) is covered by `BoardChanging`; no current card produces it, so no fixture is required.
+Second review (`24f1ec2f3`): choices 1a, 2a, 3a, 4a adopted above as made for review. Its invariants (reservation replay on forks, shortcut deferral, `PaymentScan` debug check) are in design 1. Filtering live `Decision::OrderReplacement` modes by payment completion is a separate outcome (deferred below). The first review's dispositions are superseded.
+
+## Deferred findings
+
+- **Restrict live `OrderReplacement` offers during payment** when one order strands the cost (`proposed_event.rs`). No current catalog card builds it; pass 1 turns any constructed case into an error rather than a spin.
 
 ## Docs
 
-- `docs/engine.md` (`### Forced decisions`): updated `Game::tick` contract to document `Result<bool, AgentError>`, empty non-terminal action-space rejection under both `skip_trivial` settings, error propagation for forced/automatic actions, and isolated vector slot poisoning.
-- `managym/README.md` (mana payment & `PaymentScan`/`PaymentCache` architecture): documented colored convoke inside `PaymentModel` (replacing the `while_paying` reference), CR 119.4 `can_pay_life` and signed `LifeBudget` with trailing `Obligation::PayLife`, isolated-fork `mana_suffix()` probing (`LifeDelta` / `BoardChanging`) with the Tarnished Citadel / Airship Engine Room / Sunbaked Canyon / The Great Henge examples, and direct-path/cache rules.
+- `docs/engine.md` (`### Forced decisions`): `Game::tick` returns `Result<bool, AgentError>`; empty non-terminal spaces and failed forced/automatic actions error under both skip settings; isolated vector slots poison alone. Built in pass 1.
+- `managym/README.md`: only the CR 119.4 `can_pay_life` sentence; the payment-authority description lands with passes 2–4.

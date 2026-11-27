@@ -511,14 +511,11 @@ the payment, the same in every decision (`TapPayment::mode`): 0-4 one
 {W}/{U}/{B}/{R}/{G} pip by convoke, 5 {1} by convoke, 6 {1} by improvise and 7
 {1} of the waterbend part. Only payable modes are offered, so they are sparse,
 and the choice focuses the permanent just tapped. The payment model splits
-a cost's generic mana into what those taps may pay (`help_obligations`) and
-carries each source's convoke colors (`convoke_colors`) so colored convoke pips
-are checked inside `PaymentModel` across castability, upfront costs, color
-choices, spend choices, tap costs and automatic payment.
-`AdditionalCost::{Convoke, Improvise, Delve}` give a
+a cost's generic mana into what those taps may pay (`help_obligations`), so
+castability, offers and execution agree. `AdditionalCost::{Convoke, Improvise, Delve}` give a
 spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
-Offers and affordability ask `PaymentModel` with the help included
-(`payable_with_help`), so a spell castable only with help is
+Offers and affordability ask the payment model with the help included
+(`payable_with_help`, `while_paying`), so a spell castable only with help is
 offered and a tap that would strand the cost is not; the automatic payer never
 takes help, so when mana alone cannot pay the taps and exiles are the player's
 picks.
@@ -628,26 +625,8 @@ spending caller. A nested mana ability cannot consume those resources and
 leave the announcement without a complete payment. Its own upfront life fee
 is counted once, on that ability's output obligation.
 
-Life checks follow CR 119.4 (`Game::can_pay_life`): paying 0 life is always
-legal even at 0 or negative life, while positive life fees require both enough
-life and no `LifeTotalCantChange` lock. `PaymentModel` tracks a signed
-`LifeBudget` (`life: i32`, `cant_change: bool`) as sources are activated and
-enforces post-mana life costs (announced life fees, cast life alternatives,
-resolution payment life) as a trailing `Obligation::PayLife` at completion
-(CR 601.2h). Mana abilities with non-empty `mana_suffix()` effects are probed
-once on an isolated fork while building `payment_sources`, running the shared
-cost/suffix transition so prevention, replacements and `LifeTotalCantChange`
-come from the real damage path without mutating `&self`. A probe that finishes
-having changed only life records `ManaEffect::LifeDelta(i32)` on the source;
-one that suspends (for example, replacement ordering) or changes anything else
-records `ManaEffect::BoardChanging` and is evaluated on a fork instead of the
-direct answer or cache. For example, casting `{U}{R}` at 2 life with Tarnished
-Citadel (3 damage on colored mana) and Airship Engine Room (0 life) still
-offers both blue and red after Citadel drops life to −1, and state-based
-actions check for a loss after payment; at 3 life with Tarnished Citadel and
-Sunbaked Canyon (1 life fee), only Canyon-first (3 → 2 life, then Citadel
-2 → −1) completes the cast, so Citadel-first is not offered; and with The
-Great Henge (+2 life), gaining life first makes a later life fee payable.
+Life payments follow CR 119.4 (`Game::can_pay_life`): paying 0 life is always
+legal, even at 0 or negative life; a positive fee needs that much payable life.
 
 Most payment questions never reach the search. With four untapped Islands and
 an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
@@ -655,8 +634,7 @@ plus every source's output either covers the cost or does not, and the first
 witness taps sources in source order until the pool pays, useful or not. That
 direct answer applies when the question is one mana cost and no available
 source has a mana ability beyond tapping itself for one fixed output: no color
-choice, upfront cost, life payment, side effect (`mana_suffix`), colored
-convoke, counted tap, sacrifice or limited use.
+choice, upfront cost, life payment, counted tap, sacrifice or limited use.
 Restricted fixed outputs (CR 106.6) stay in the class, counted only toward the
 purposes they may pay. A waterbend cost stays in it too: every source worth
 mana is tapped for mana, artifacts and creatures worth none cover the generic
@@ -665,12 +643,10 @@ against one model instead of a new search. Automatic production never
 activates abilities, so its single cost is direct on any board.
 
 Legal actions computed for one decision build each player's sources once
-(`PaymentScan`), keeping non-life activation terms and probing any
-`mana_suffix()` once on an isolated fork. Those sources are a function of the
-game alone, which cannot change while the computation borrows it; the pending
-payment's reservations, a sacrifice under consideration and the running
-`LifeBudget` (including each source's `life_cost`) are applied per question.
-Debug builds rebuild the sources on every reuse and assert they match.
+(`PaymentScan`). Those sources are a function of the game alone, which cannot
+change while the computation borrows it; the pending payment's reservations, a
+sacrifice under consideration and payable life are applied per question. Debug
+builds rebuild the sources on every reuse and assert they match.
 
 The direct answer is exact or it is not used. Modal lands, filters, mana
 abilities with other costs, counted taps, nested activations and the automatic
@@ -725,10 +701,8 @@ changing this search.
 
 Each Game caches at most 64 searched queries in FIFO order, retaining negative
 answers and complete first witnesses. Exact keys include ordered source
-identities and capabilities (including `ManaEffect` and convoke colors), tap
-resources, pool classes, signed `LifeBudget`, ordered caller obligations,
-source policy and the selected counted tap; queries touching a `BoardChanging`
-source bypass the cache. Forks own
+identities and capabilities, tap resources, pool classes, payable life, ordered
+caller obligations, source policy and the selected counted tap. Forks own
 independent FIFOs but share immutable entries, source lists, output alternatives
 and tap-candidate lists. Reservations detach source lists on writes. The cache
 stays outside hashes and observations; debug builds recompute every hit.
