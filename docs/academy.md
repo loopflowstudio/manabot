@@ -254,7 +254,8 @@ own loop's ([Record games](engine-python.md#record-games)), a training run's,
 an evaluation's, or a private snapshot replay exported by
 `GameSnapshot.to_replay_json()` ([Save and restore game positions](engine-python.md#save-and-restore-game-positions)).
 A record holds the seed, both setups, the actions, and any recorded boundary
-interventions (such as library reshuffles or determinizations), so
+interventions (such as library reshuffles, determinizations or counterfactual
+state edits), so
 Academy plays the game again through the engine, checks the recorded state
 digests wherever the source retained them, and saves what it verified to this traces
 directory as a finished recording. A snapshot replay carries its final digest.
@@ -267,9 +268,9 @@ to peek and inspect it, or use **Show hand / Tuck hand** on that seat's plate).
 Unchecking **Show both hands** switches to the acting view, which draws the
 non-acting seat's hidden cards as backs while keeping any rules-revealed cards
 face-up. Where the record
-re-dealt the position before a decision, the move list shows a neutral note
-in its place, such as **Branch · libraries reshuffled** or **Branch · hidden
-cards re-dealt**, which jumps to that decision. Branch seeds stay private in
+changed or re-dealt the position before a decision, the move list shows a neutral note
+in its place, such as **Branch · libraries reshuffled**, **Branch · hidden
+cards re-dealt** or **Branch · game state edited**, which jumps to that decision. Branch seeds stay private in
 either view.
 Replay runs no policy, loads no checkpoint, and never changes the file. Opening the same game again returns to the
 recording made the first time. At each choice the panel shows what the chooser

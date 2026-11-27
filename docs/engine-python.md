@@ -453,7 +453,7 @@ recording sinks. Use `snapshot.restore()` for exact continuation, or pass
 | `RestoreOptions.shuffle_libraries(seed, ...)` | Permutes only exchangeable slots in each player's library using a local seeded RNG, on open or closed decks. Preserves both hands, face-down exile, future rules RNG, and every inspected, revealed, or positioned library card until a genuine rules shuffle. Reusing `seed` across sibling branches gives Common Random Numbers. |
 | `RestoreOptions.determinize(viewer, seed, ...)` | Redraws hidden opponent cards consistently with what the chosen seat can see. The constructor requires `viewer` to be 0 or 1. Restore requires an open opponent decklist. |
 
-Each constructor also accepts two keyword arguments.
+Each constructor also accepts three keyword arguments.
 
 - `enable_decision_memory` defaults to the live capture setting. Set it to
   `False` to freeze the existing logs or `True` to append from this boundary.
@@ -461,8 +461,12 @@ Each constructor also accepts two keyword arguments.
   (`Env.clone_env()` and `fork_exact()`) always freeze their logs.
 - `forced_first_action` commits one legal index after sampling and setting
   capture. It returns the resulting game, including a terminal result.
-  Restore rejects a terminal root, an out-of-range index or a choice changed
-  by determinization. For a built-in seat it records the override for replay.
+  Restore rejects a terminal root, an out-of-range index, a choice changed
+  by determinization, or any combination with non-empty `game_state_edits`.
+  For a built-in seat it records the override for replay.
+- `game_state_edits` accepts a sequence of `GameStateEdit` values applied
+  **before** the restore mode (`reseed`, `shuffle_libraries`, or
+  `determinize`). See [counterfactual state edits](#counterfactual-state-edits).
 
 `snapshot.metadata()` returns a frozen `SnapshotMetadata` with `turn`, `phase`
 (`PhaseEnum`), `life`, `board_counts` (live battlefield permanents by
@@ -580,6 +584,125 @@ digest even if the slot stays parked. For branch evidence,
 `RecordedVectorEnv.game_inputs(slot)` joins the original commitments and
 interventions to the attempted suffix on demand. Failure capture and durable
 journaling use the same replay inputs.
+
+### Counterfactual state edits
+
+Apply typed `GameStateEdit` changes at a live decision to ask "what if this
+blocker were gone, this land were tapped, or life were lower?" without
+rebuilding the game from scratch. Turn, phase, stack, mana pools, summoning
+sickness, every untouched permanent, the 32-row policy-history window, decision
+memory and replay provenance stay intact, and the current decision's legal
+actions and observation refresh for the edited board.
+
+```python
+import managym
+
+# Starting from a live Env at a Priority, DeclareAttacker or DeclareBlocker
+# decision with `obs = game.observation_for_player(game.current_agent_index())`:
+blocker = next(
+    p for p in obs.opponent_permanents if p.characteristics.name == "Gray Ogre"
+)
+land = next(
+    p for p in obs.agent_permanents if p.characteristics.name == "Mountain"
+)
+
+# 1. Quick probe on a clone: leaves `game` untouched, freezes memory capture,
+#    and returns the refreshed Observation directly.
+what_if = game.clone_env()
+edited_obs = what_if.edit_game_state([
+    managym.GameStateEdit.move_permanent(blocker.id, to="library_bottom"),
+])
+print(len(obs.action_space.actions), "->", len(edited_obs.action_space.actions))
+assert what_if.state_digest() != game.state_digest()
+
+# 2. Replayable fork from a snapshot: preserves memory capture and composes
+#    with RestoreOptions modes and VectorEnv SlotLoad.snapshot.
+snap = game.snapshot()
+branch = snap.restore(
+    managym.RestoreOptions.exact(
+        game_state_edits=[
+            managym.GameStateEdit.set_tapped(land.id, True),
+            managym.GameStateEdit.set_life(obs.opponent.player_index, 5),
+        ]
+    )
+)
+replay_json = branch.snapshot().to_replay_json()
+reopened = managym.GameSnapshot.from_replay_json(replay_json).restore()
+assert reopened.state_digest() == branch.state_digest()
+```
+
+Both doors run the same atomic intervention path:
+
+- `env.edit_game_state(edits) -> Observation` validates the whole batch, applies
+  each edit in order, journals one `"game_state_edits"` intervention and
+  returns the refreshed decision observation. Clone first with `env.clone_env()`
+  when comparing against the unedited position.
+- `RestoreOptions.exact/shuffle_libraries/determinize(..., game_state_edits=edits)`
+  applies the edits **before** the restore mode, so `determinize` conditions on
+  the edited board and `SlotLoad.snapshot` can load edited branches into a
+  `VectorEnv`. Non-empty `game_state_edits` cannot be combined with
+  `forced_first_action`, because editing the board can change the legal action
+  list.
+
+| Constructor | Effect |
+|---|---|
+| `GameStateEdit.move_permanent(permanent, to="graveyard")` | Moves a battlefield permanent to its owner's `"graveyard"`, `"exile"` or `"library_bottom"` without firing rules events or leaves-battlefield triggers. Physical cards are conserved (a melded permanent moves both cards together); tokens cease to exist. Cards exiled by an exile-link on the moved permanent stay exiled and the dead link is dropped. `"library_bottom"` pins the card at the bottom of its owner's library so a subsequent `shuffle_libraries` leaves it pinned there. |
+| `GameStateEdit.set_tapped(permanent, tapped)` | Sets the permanent's tapped flag directly, without spending stun counters or firing tap/untap triggers. |
+| `GameStateEdit.set_damage(permanent, damage)` | Sets marked damage on the permanent (`damage >= 0`; `0` also clears the deathtouch-damage mark). Leaves `dealt_damage_this_turn` untouched. |
+| `GameStateEdit.set_counters(permanent, kind, count)` | Sets one counter kind (`count >= 0`; `0` removes it) through tracked state, updating keyword-counter timestamps and layer revisions. |
+| `GameStateEdit.set_life(player, life)` | Sets native seat `0` or `1` life directly without changing turn damage or life-change history. |
+
+Identifiers match the native observation contract:
+
+- `permanent` is the observed `Permanent.id` from `obs.agent_permanents` or
+  `obs.opponent_permanents`. Look up printed/effective names via
+  `permanent.characteristics.name` (`permanent.name` is `None` unless an effect
+  overrode it).
+- `kind` is the engine's counter name (`"plus_one_plus_one"`,
+  `"minus_one_minus_one"`, `"stun"`, `"loyalty"`, `"lore"`, `"double_strike"`,
+  `"trample"`, and other `CounterKind` names). Note that on `Permanent`, `+1/+1`
+  counters are exposed as `permanent.plus1_counters` rather than in
+  `permanent.counters`, while `set_counters` always names them
+  `"plus_one_plus_one"`.
+- `player` is the native seat index (`0` or `1`, matching
+  `obs.agent.player_index` and `obs.opponent.player_index`), not relative to
+  the current viewer.
+
+What stays unchanged and when edits apply:
+
+- **Supported decision boundaries:** `Priority`, `DeclareAttacker`, and
+  `DeclareBlocker`, outside opening/mulligan steps and with no pending choice
+  or suspended target/modal/payment decision.
+- **Declare-step eligibility:** At `DeclareAttacker` and `DeclareBlocker`,
+  newly eligible unprompted creatures (such as a blocker you just untapped)
+  join the remaining declarers for that step. If the batch leaves the focal
+  declarer ineligible or leaves no legal actions, the call rolls back and
+  raises `AgentError`.
+- **Policy history and memory:** Moving a permanent expires live object links
+  to it in `policy_history` without evicting rows or appending a synthetic
+  arrival; tap, damage, counter and life edits leave history untouched.
+  Decision memory keeps its existing prefix (`clone_env()` freezes capture;
+  `snapshot.restore()` preserves it unless `enable_decision_memory=False`).
+- **State-based actions wait:** Edits do not run state-based checks immediately.
+  Lethal marked damage, `0` life, or an unattached Aura remains on the board
+  until the game's next state-based check after the next action.
+- **Errors are atomic:** Any invalid batch raises `managym.AgentError` and
+  leaves both `Env` and its replay provenance unchanged. Rejected cases include
+  calling before `reset`, on a finished game, or at an unsupported/suspended
+  decision; unknown or phased-out `permanent`; moving a permanent twice or
+  editing it after moving it in the same batch; unknown `to` or counter `kind`;
+  negative `damage` or `count`; `player` outside `{0, 1}`; a declare-step edit
+  that invalidates the focal declarer or empties the action space; and
+  combining non-empty edits with `forced_first_action`.
+
+Every edited branch is replayable. `snapshot.to_replay_json()` journals the
+ordered `"game_state_edits"` intervention at the current action offset;
+`GameSnapshot.from_replay_json`, `read_record`, `walk`, and
+`managym academy replay` re-apply the edits and verify the state digest.
+Semantic `Command`s captured before the edit are rejected as stale against the
+refreshed decision frame. In Academy Replay, the move list labels the branch
+**Branch · game state edited**. Unlike the unrecorded test-only `scenario_*`
+helpers, `GameStateEdit` keeps cards conserved and replays verifiable.
 
 ## Ask questions of recorded games
 
