@@ -1260,6 +1260,126 @@ fn fixed_mana_suffix_reads_life_through_damage_replacement() {
 }
 
 #[test]
+fn mana_trigger_reads_keyword_changed_by_another_activation() {
+    use crate::agent::action::Action;
+    use crate::flow::{
+        game::{ActivationSource, Game, PendingChoice},
+        payment::{Operation, Payment},
+    };
+    use crate::state::{
+        ability::Effect,
+        card::{ActivatedAbilityDefinition, Keyword},
+        game_object::PlayerId,
+        permanent::CounterKind,
+        player::PlayerConfig,
+    };
+
+    let player = PlayerId(0);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new(
+                "payer",
+                [
+                    ("Forest".into(), 37),
+                    ("Mountain".into(), 1),
+                    ("Heartbeat of Spring".into(), 1),
+                    ("Gray Ogre".into(), 1),
+                ]
+                .into(),
+            ),
+            PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+        ],
+        344,
+        false,
+    );
+    game.keep_opening_hands();
+    let mountain = game
+        .scenario_force_battlefield(player, "Mountain", true)
+        .unwrap();
+    let heartbeat = game
+        .scenario_force_battlefield(player, "Heartbeat of Spring", true)
+        .unwrap();
+    let ogre = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let mountain_object = game.permanent_object(mountain).unwrap();
+    let heartbeat_object = game.permanent_object(heartbeat).unwrap();
+    let ogre_object = game.permanent_object(ogre).unwrap();
+    game.state[heartbeat_object].triggered_mana_abilities[0]
+        .predicate
+        .keyword = Some(Keyword::Trample);
+    game.state[mountain_object].activated_abilities = vec![ActivatedAbilityDefinition {
+        remove_counters: Some((CounterKind::Trample, 1)),
+        effects: vec![Effect::add_mana(Mana::parse("G"))],
+        ..Default::default()
+    }];
+    game.state[ogre_object].activated_abilities = vec![ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("GRR"),
+        effects: vec![Effect::gain_life(1)],
+        ..Default::default()
+    }];
+    game.state
+        .change_counters(mountain, CounterKind::Trample, 1);
+    let operation = Operation::Activation {
+        source: ActivationSource::Permanent(ogre),
+        ability_index: 0,
+        targets: vec![],
+        target_req_indices: vec![],
+        target_divisions: vec![],
+        x: 0,
+    };
+    let payment = Payment {
+        owed: game.cost_components(player, &operation),
+        operation,
+        receipt: Default::default(),
+    };
+    game.pending_choice = Some(PendingChoice::Pay {
+        player,
+        payment: Box::new(payment),
+    });
+
+    let tap = Action::TapForMana {
+        player,
+        permanent: mountain,
+    };
+    let remove_counter = Action::ActivateAbility {
+        player,
+        permanent: mountain,
+        ability_index: 0,
+    };
+    let step = |game: &mut Game, action: &Action| {
+        let actions = &game.action_space().unwrap().actions;
+        let index = actions
+            .iter()
+            .position(|offer| offer == action)
+            .unwrap_or_else(|| panic!("missing {action:?} in {actions:?}"));
+        game.step(index)
+    };
+
+    game.tick().unwrap();
+    let mut counter_first = game.clone();
+    // The frozen witness counts Heartbeat's second {R} even after it has
+    // spent the counter that makes the Mountain match Heartbeat's predicate.
+    let error = step(&mut counter_first, &remove_counter).unwrap_err();
+    assert!(error.0.contains("empty non-terminal action space"));
+    assert!(!counter_first
+        .characteristics(mountain)
+        .keywords
+        .has(Keyword::Trample));
+
+    // Tapping first keeps the trigger and funds the same announced activation.
+    step(&mut game, &tap).unwrap();
+    assert_eq!(
+        game.pending_payment(player).unwrap().receipt.mana().len(),
+        2
+    );
+    step(&mut game, &remove_counter).unwrap();
+    step(&mut game, &Action::ChooseMode { player, mode: 0 }).unwrap();
+    assert!(game.pending_choice.is_none());
+    assert_eq!(game.state.stack_objects.len(), 1);
+}
+
+#[test]
 fn sacrificing_treasure_couples_to_battlefield_mana_conditions() {
     use crate::flow::game::Game;
     use crate::state::{
