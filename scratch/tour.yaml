@@ -1,7 +1,9 @@
-at: a1e8d430de84778695fde64a1f2a4227a5070f73
+at: 70e45c2a5b9a769a31b4a28536b8d0a78e8bb0ac
 first:
   - path: docs/engine-python.md
     why: Public API and decision guarantees
+  - path: managym/__init__.pyi
+    why: Python constructors and entry points
   - path: managym/src/flow/state_edit.rs
     why: Edit types, quiet moves and transactional declaration refresh
   - path: managym/src/agent/env.rs
@@ -20,7 +22,24 @@ first:
     why: Battlefield departure bookkeeping shared with normal play
   - path: managym/src/agent/policy_history.rs
     why: Shared expiry of links to departed objects
+  - path: managym/src/python/bindings.rs
+    why: Typed edit constructors and live Python entry point
+  - path: managym/src/python/snapshot_bindings.rs
+    why: Python restore constructors accept the same edits
+  - path: managym/recording.py
+    why: Strict schema for the native intervention payload
+  - path: managym/academy/trace.py
+    why: Branch kinds exposed in Academy replay
+  - path: academy/ui/src/lib/board/replay.ts
+    why: Move-list label for an edited branch
   - path: managym/src/agent/env/state_edit_tests.rs
     why: Rollback, restored decisions and object-bound Commands
   - path: managym/src/flow/state_edit/tests.rs
     why: Combat, library, history and atomicity checks
+  - path: tests/env/test_game_state_edits.py
+    why: Live, cold replay and recorded vector integration
+  - path: tests/academy/test_game_records.py
+    why: Imported state edits mark the verified replay choice
+hide:
+  - path: tests/public_api.json
+    why: Generated snapshot of the additive Python API

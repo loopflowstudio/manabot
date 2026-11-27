@@ -101,6 +101,8 @@ More edit variants (hand, graveyard, exile, placement, mana, sickness, control);
 
 1. **Core edit engine** landed on this branch in `f118a1571`; five focused native edit tests and four existing policy-history tests pass in debug.
 2. **Republish + journal** landed in `a1e8d430d`. Three native regressions pass for priority refresh, blocker rollback and eligibility, and cold replay of an object-bound Command through exact, shuffled and determinized restores.
-3. **Python, recording, Academy, verify docs**: PyO3 + `managym/__init__.pyi` + `public_api.py record`; `managym/recording.py` strict union, `managym/academy/trace.py`, UI `BranchKind`/`BRANCHES` + test; `tests/env/test_game_state_edits.py`; verify `docs/engine-python.md` example and wording match the shipped implementation.
+3. **Python, recording, Academy** landed in `70e45c2a5`. Seven focused Python tests, 30 Academy move-list tests and the public API check pass.
 
-Pass 3 adds the binding in `managym/src/python/bindings.rs` and the restore argument in `managym/src/python/snapshot_bindings.rs`. The journal's `set_counters` payload uses `counter` for the counter name because `kind` tags the edit. Keep Python's `kind` constructor argument. Test exact physical placement under `shuffle_libraries` and the known bottom printing under `determinize`, which can substitute another copy of that printing.
+The focused Python checks ran against a CPython 3.13 debug wheel. The full
+scenario and consumer suites in Done when are left to CI. Ship-review still
+needs the decisions recorded under Concept review.
