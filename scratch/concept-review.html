@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept Review · MTG-500 Payment Coupling Classification &amp; Pure-Solver Handoff</title>
+<title>Concept Review · MTG-500 Positive Arithmetic Whitelist &amp; Conservative Payment Coupling</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -133,7 +133,7 @@
   }
 
   .page {
-    max-width: 1160px;
+    max-width: 1180px;
     margin: 0 auto;
     padding: 32px 24px 72px;
   }
@@ -188,7 +188,7 @@
   .lead {
     font-size: 15.5px;
     color: var(--text-secondary);
-    max-width: 90ch;
+    max-width: 92ch;
     margin-bottom: 0;
   }
 
@@ -266,7 +266,7 @@
 
   code {
     font-family: var(--font-mono);
-    font-size: 12.5px;
+    font-size: 12.4px;
     background: var(--bg-muted);
     padding: 1px 5px;
     border-radius: 4px;
@@ -281,7 +281,7 @@
     border-radius: 8px;
     overflow-x: auto;
     font-family: var(--font-mono);
-    font-size: 12.2px;
+    font-size: 12.1px;
     line-height: 1.5;
   }
   pre code { background: none; border: none; padding: 0; font-size: inherit; }
@@ -335,7 +335,7 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13.7px;
+    font-size: 13.5px;
     margin: 12px 0 20px;
     background: var(--bg-surface);
     border: 1px solid var(--border);
@@ -352,7 +352,7 @@
 
   th {
     background: var(--bg-muted);
-    font-size: 11.6px;
+    font-size: 11.4px;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -382,7 +382,7 @@
     border-radius: 8px;
     background: var(--bg);
     border: 1px solid var(--border);
-    font-size: 13.3px;
+    font-size: 13.2px;
   }
 
   .step-row.fail {
@@ -395,9 +395,9 @@
     border-color: color-mix(in srgb, var(--success) 35%, transparent);
   }
 
-  .step-row.info {
-    background: var(--info-wash);
-    border-color: color-mix(in srgb, var(--info) 35%, transparent);
+  .step-row.warn {
+    background: var(--warning-wash);
+    border-color: color-mix(in srgb, var(--warning) 40%, transparent);
   }
 
   .step-num {
@@ -415,7 +415,7 @@
 
   .step-row.fail .step-num { background: var(--error); color: #fff; border-color: transparent; }
   .step-row.ok .step-num { background: var(--success); color: #fff; border-color: transparent; }
-  .step-row.info .step-num { background: var(--info); color: #fff; border-color: transparent; }
+  .step-row.warn .step-num { background: var(--warning); color: #fff; border-color: transparent; }
 
   .diagram-wrap {
     background: var(--bg);
@@ -438,7 +438,7 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 14px 16px;
-    font-size: 13.5px;
+    font-size: 13.4px;
   }
   .role-card.role-mut { border-top: 3px solid var(--error); }
   .role-card.role-sens { border-top: 3px solid var(--warning); }
@@ -477,7 +477,7 @@
     border-radius: 8px;
     border: 1px solid var(--border);
     background: var(--bg);
-    font-size: 13.5px;
+    font-size: 13.4px;
   }
   .opt.rec {
     border-color: var(--info);
@@ -534,16 +534,14 @@
 
   <header>
     <div>
-      <div class="eyebrow">Concept Review · MTG-500 · Pass 4 Realign (Post Event-Replacement Counterexample)</div>
-      <h1>Payment Coupling Classification &amp; Pure-Solver Handoff</h1>
+      <div class="eyebrow">Concept Review · MTG-500 · Pass 4 Stop-Rule Realign (Post Triggered-Mana Counterexample)</div>
+      <h1>Positive Arithmetic Whitelist &amp; Conservative Payment Coupling</h1>
       <p class="lead">
-        <strong>Area reviewed:</strong> The soundness boundary between the Pure Regime (<code>PaymentModel</code> with frozen sources and constant <code>LifeDelta</code>)
-        and the Coupled Regime (exact <code>Game</code> fork search with pure-finish-first and pure handoff), across
-        <code>flow/layers.rs</code>, <code>flow/statics.rs</code>, <code>flow/mana.rs</code>, <code>flow/proposed_event.rs</code>,
-        <code>flow/decision.rs</code>, and <code>flow/mana/help.rs</code> — widened from Pass 4's
-        <code>fixed_mana_suffix_reads_life_through_damage_replacement</code> counterexample (<code>0d7bb6743</code>) because missing event-replacement reads,
-        incomplete <code>ReadSet</code>/<code>StateReads</code> overloading, uncoupled <code>Decision::ManaUpfront</code> continuations, and a binary
-        <code>Independent</code>/<code>Coupled</code> enum all stem from not modeling the payment slice's full Read/Write dependency graph.
+        <strong>Area reviewed:</strong> The Pure-vs-Coupled feasibility boundary and soundness certification for manual mana payment across
+        <code>managym/src/flow/mana.rs</code>, <code>flow/layers.rs</code>, <code>flow/statics.rs</code>, <code>flow/proposed_event.rs</code>,
+        <code>flow/decision.rs</code>, <code>flow/mana/help.rs</code>, and <code>flow/payment.rs</code> — widened from Pass 4 attempt 2's
+        triggered-mana reproduction (<code>a90fd7109</code>) and attempt 1's damage-replacement reproduction (<code>0d7bb6743</code>) to challenge
+        the core premise of Designs 2–4: trying to prove purity with an open-world static Read/Write blacklist instead of a closed-world positive whitelist.
       </p>
     </div>
     <button class="theme-btn" id="themeToggle" type="button">Theme: Auto</button>
@@ -551,12 +549,12 @@
 
   <div class="meta-bar">
     <div><strong>Branch:</strong> <code>jack/mtg-500-fix-infinite-spin-in-rayon-worker-during-manual</code></div>
-    <div><strong>HEAD:</strong> <code>1c300f8e63</code> (Pass 1 <code>1c521e300</code> · Pass 2 <code>a9359c03b</code> · Pass 3 <code>abfabece9</code> · Pass 4 repro <code>0d7bb6743</code>)</div>
+    <div><strong>HEAD:</strong> <code>d3bae042cc</code> (Pass 1 <code>1c521e300</code> · Pass 2 <code>a9359c03b</code> · Pass 3 <code>abfabece9</code> · Repros <code>0d7bb6743</code>, <code>a90fd7109</code>)</div>
     <div><strong>Fresh <code>origin/main</code>:</strong> <code>6a131c4dc9</code> (ancestor of HEAD; 0 sync drift)</div>
     <div><strong>Legend:</strong>
       <span class="badge badge-yes">Landed</span>
-      <span class="badge badge-no">Mismatch at HEAD</span>
-      <span class="badge badge-proposed">Proposed</span>
+      <span class="badge badge-no">Mismatch</span>
+      <span class="badge badge-proposed">Proposed (Design 5)</span>
       <span class="badge badge-scope">This Work</span>
       <span class="badge badge-existing">Separate Outcome</span>
     </div>
@@ -566,17 +564,20 @@
   <h2>1. Do the Domain Concepts and the Code's Concepts Line Up?</h2>
 
   <p>
-    Passes 1–3 landed the non-terminal step invariant (<code>1c521e300</code>), signed <code>LifeBudget</code> + trailing <code>PayLife</code> (<code>a9359c03b</code>),
-    and owned <code>ManaUpfrontActivation</code> with match-state hash v35 (<code>abfabece9</code>). Pass 4 then exposed that certifying independence from
-    <code>LayerBoard.reads</code> + <code>mana_activation_reads</code> + a single root suffix probe fails whenever an event replacement, counter-driven P/T change,
-    turn-history/graveyard condition, or saved continuation reads state mutated by another payment step.
+    Four consecutive iterations tried to certify the fast pure-arithmetic solver (<code>PaymentModel</code>) with a <em>blacklist</em>:
+    "assume a step is Pure unless a manually maintained <code>ReadSet × WriteSet</code> walker proves a dependency."
+    Pass 4 attempt 1 broke that blacklist on <code>ModifyDamage</code> (<code>0d7bb6743</code>). Pass 4 attempt 2 broke Design 4's expanded 4-channel graph
+    on <code>TriggeredManaAbility.predicate</code> (<code>a90fd7109</code>). Auditing the remaining callers of <code>payment_sources</code> and
+    <code>help.rs</code> exposed <strong>four more channels</strong> Design 4 still missed: <code>tap_cost.predicate</code>,
+    <code>ActivatedAbilitiesCostLess.predicate</code>, <code>Help::delve</code> graveyard growth on non-token sacrifice, and a summoning-sick creature
+    removing its own Haste counter. The premise — not the channel count — is what is wrong.
   </p>
 
   <table>
     <thead>
       <tr>
-        <th style="width: 21%;">Domain Concept</th>
-        <th style="width: 22%;">Code Concept (at <code>HEAD</code>)</th>
+        <th style="width: 20%;">Domain Concept</th>
+        <th style="width: 23%;">Code Concept (<code>HEAD</code> / Design 4)</th>
         <th style="width: 10%;">Aligns?</th>
         <th style="width: 35%;">What Is Wrong (or Right)</th>
         <th style="width: 12%;">Scope</th>
@@ -586,7 +587,7 @@
       <tr>
         <td>
           <strong>Step invariant, signed life &amp; owned mana activations</strong><br>
-          <span class="muted small">Non-empty choices, CR 119.4 / 601.2h fee order, CR 602.2 / 605.3b owned upfront activation.</span>
+          <span class="muted small">No empty-decision spin, CR 119.4 / 601.2h fee order, CR 602.2 / 605.3b owned <code>ManaUpfront</code>.</span>
         </td>
         <td>
           <code>Game::tick()</code>, <code>LifeBudget</code>,<br>
@@ -595,95 +596,84 @@
         </td>
         <td><span class="badge badge-yes">Yes</span><br><span class="muted small">Pass 1–3</span></td>
         <td>
-          Landed in <code>1c521e300</code>, <code>a9359c03b</code>, and <code>abfabece9</code>. Zero live index lookups left on
+          Landed in <code>1c521e300</code>, <code>a9359c03b</code>, and <code>abfabece9</code>. Zero live index lookups remain on
           <code>Decision::ManaUpfront</code>; dynamic outputs evaluate live on resolution while costs stay locked.
         </td>
         <td><span class="badge badge-yes">Landed</span></td>
       </tr>
       <tr>
         <td>
-          <strong>Complete payment read set (all 4 rules channels)</strong><br>
-          <span class="muted small">Every read that can change legality, cost, mana output, or suffix delta during payment: statics, mana abilities, event replacements, and saved continuations.</span>
+          <strong>Soundness boundary: when pure arithmetic is exact</strong><br>
+          <span class="muted small">A short, closed, positive whitelist of verified inert rule shapes; everything outside uses exact native transitions.</span>
         </td>
         <td>
-          <code>LayerBoard.reads</code> +<br>
-          <code>LayerBoard.mana_activation_reads</code><br>
-          (<code>statics.rs:366</code>, <code>layers.rs:475</code>)
+          <code>LayerBoard.reads</code> + <code>mana_activation_reads</code> +<br>
+          Design 4's 4-channel <code>ReadSet × PaymentWrites</code> blacklist
         </td>
         <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>Biggest mismatch — two entire reader channels are invisible, and <code>ReadSet</code> drops payment reads.</strong>
-          (1) <em>Event replacements</em> (<code>ModifyDamage::Add(EffectValue)</code> like <code>0d7bb6743</code> and TLA's <span class="card-name">Fated Firepower</span>,
-          <code>ModifyCounters</code>, <code>ExileIfWouldDie</code>, command emblems) never enter any read set.
-          (2) <em>Saved <code>Decision::ManaUpfront</code> continuations</em> whose grant ended vanish from <code>LayerBoard</code> yet still read live state on completion.
-          (3) <code>ReadSet::condition</code>/<code>value</code> drop <code>SacrificedThisTurnAtLeast</code>, <code>PermanentLeftThisTurn</code>, <code>CreatureDiedThisTurn</code>,
-          <code>GraveyardAtLeast</code>, <code>AnyGraveyardAtLeast</code>, <code>PermanentsSacrificedThisTurn</code>, <code>GraveyardMatching</code>, <code>AttachedCreaturePower</code>,
-          and <code>reduce_by_source_power</code>.
+          <strong>Biggest mismatch — open-world blacklist fails by construction.</strong>
+          Every missed reader channel or new <code>Condition</code>/<code>EffectValue</code>/<code>CardPredicate</code>/<code>ReplacementEffect</code>
+          field silently routes a coupled board to Pure and strands legal plays:
+          (1) <code>ModifyDamage</code> (<code>0d7bb6743</code>),
+          (2) <code>TriggeredManaAbility.predicate</code> (<code>a90fd7109</code>),
+          (3) <code>tap_cost.predicate</code> (<code>mana.rs:3381</code>),
+          (4) <code>ActivatedAbilitiesCostLess.predicate</code> (<code>statics.rs:990</code>),
+          (5) <code>Help::delve</code> graveyard growth on non-token sacrifice (<code>help.rs:51</code>),
+          (6) summoning-sick creature removing a Haste counter (<code>mana.rs:3349</code>),
+          (7) <code>from_battlefield_this_turn</code> / <code>put_into_graveyard_this_turn</code>.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
-          <strong>What a payment step writes</strong><br>
-          <span class="muted small">Mana, taps, life/turn life history, ordinary counters, <code>±1/±1</code> &amp; keyword counters (mutating P/T &amp; keywords), sacrifice/departure, and proposed event kinds.</span>
+          <strong>Pure vs. state-dependent triggered mana</strong><br>
+          <span class="muted small">Plain land-only <span class="card-name">Heartbeat of Spring</span> and creature-only <span class="card-name">Badgermole Cub</span> stay pure; keyword/power/counter predicates couple.</span>
         </td>
         <td>
-          <code>StateReads</code> passed as <code>writes</code> + separate <code>sacrifice: bool</code> (<code>mana.rs:3393, 3567</code>)
+          <code>has_triggered_mana_abilities: bool</code><br>
+          (<code>layers.rs:461</code>, <code>statics.rs:379</code> — checked only on <code>sacrifice</code>)
         </td>
         <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>One name for two ideas.</strong> <code>StateReads</code> is the cache-invalidation struct for <code>DerivedCache</code>, overloaded to represent writes.
-          Because <code>game.rs:902</code> routes <code>+1/+1</code>/<code>-1/-1</code>/keyword counters through <code>revisions.characteristics</code> (not <code>counters</code>),
-          <code>writes.counters</code> never intersects <code>reads.fields &amp; (POWER | KEYWORDS)</code> — missing e.g. removing a <code>+1/+1</code> counter beside
-          <span class="card-name">Raucous Audience</span>. Also cannot carry proposed event kinds (damage / life-gain / counter placement).
+          <strong>One boolean hides the predicate shape.</strong> Cannot tell plain <code>CardPredicate { card_type: Some(Land), ..default() }</code>
+          apart from <code>a90fd7109</code>'s <code>keyword: Some(Trample)</code>. Exact struct equality against card-type-only default whitelists
+          <span class="card-name">Heartbeat</span> and <span class="card-name">Badgermole Cub</span> while automatically rejecting every stateful
+          (and every future!) <code>CardPredicate</code> field.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
-          <strong>Three payment step roles &amp; pure handoff boundary</strong><br>
-          <span class="muted small">Distinguish <em>Mutator</em> (must fork), <em>Sensitive</em> (must branch before mutators, safe in pure-finish-first), and <em>Invariant</em> (deferred to pure handoff).</span>
+          <strong>Intrinsic source facts vs. question-level 3-role coupling</strong><br>
+          <span class="muted small">Cache pure game facts in <code>PaymentScan</code>; derive <code>Invariant</code> / <code>Sensitive</code> / <code>Mutator</code> once per payment question (incl. reservations, <code>help.delve</code>, and suspended <code>ManaUpfront</code>).</span>
         </td>
         <td>
-          <code>PaymentCoupling { Independent(LifeDelta), Coupled }</code> + <code>tap_coupled: bool</code> (<code>mana.rs:628, 738</code>)
+          <code>PaymentCoupling</code> baked into <code>shared_payment_sources</code> using <code>StateReads</code> as writes; <code>.life_delta()</code> erases <code>Coupled</code> on <code>Obligation::Output</code>
         </td>
         <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>Binary classification hides Sensitive readers.</strong>
-          <code>mana_activation_coupling</code> only tests outbound writes (plus a root suffix probe that observes writes, never reads).
-          A non-mutating <em>reader</em> whose output or delta drops after a mutator (<span class="card-name">Raucous Audience</span> before 2nd Citadel;
-          <span class="card-name">Tarnished Citadel</span> before sacrificing a <code>PreventAll</code> permanent) is labeled <code>Independent</code>, so mutator-only branching
-          misses legal orders — while lumping it into <code>Coupled</code> would break pure-finish-first!
+          <strong>Two concepts fused in the wrong lifetime.</strong>
+          (1) <code>shared_payment_sources</code> is cached across a <code>PaymentScan</code> as a function of <code>&amp;Game</code> alone, so baking
+          coupling there cannot see priority-time <code>help.delve</code> or post-<code>model.reserve(...)</code> mutator removal.
+          (2) <code>payment_obligations_owing</code> (<code>mana.rs:3562–3577</code>) calls <code>.life_delta()</code>, silently erasing
+          a coupled suspended <code>ManaUpfront</code> to <code>LifeDelta(0)</code>.
+          (3) Binary <code>Independent</code>/<code>Coupled</code> cannot keep 10 Forests <code>Invariant</code> while branching on
+          <code>Sensitive</code> readers (<span class="card-name">Raucous Audience</span>, <span class="card-name">Mountain</span> tap under stateful Heartbeat).
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
-          <strong>In-flight continuation coupling</strong><br>
-          <span class="muted small">Completing a suspended <code>Decision::ManaUpfront</code> can itself mutate coupled state or depend on remaining mutators.</span>
-        </td>
-        <td>
-          <code>Obligation::Output { life_delta }</code> calling <code>.life_delta()</code> on <code>mana_activation_coupling</code> (<code>mana.rs:3562–3583</code>)
-        </td>
-        <td><span class="badge badge-no">No</span></td>
-        <td>
-          <strong>Silent erasure of <code>Coupled</code>.</strong> <code>payment_obligations_owing</code> computes <code>mana_activation_coupling(...)</code> for a suspended
-          <code>ManaUpfront</code> and immediately calls <code>.life_delta()</code>, discarding <code>PaymentCoupling::Coupled</code> as <code>LifeDelta(0)</code>!
-          Pure-finish-first and pure handoff have no idea the pending continuation itself is coupled.
-        </td>
-        <td><span class="badge badge-scope">This Work</span></td>
-      </tr>
-      <tr>
-        <td>
-          <strong>Coupled feasibility search &amp; shortcut deferral</strong><br>
-          <span class="muted small">Forked exact search over coupled slices; pure shortcuts defer whenever any mutator remains.</span>
+          <strong>Coupled fork search, pure-finish-first &amp; shortcut deferral</strong><br>
+          <span class="muted small">Exact <code>Game</code> fork search over <code>Mutator ∪ Sensitive</code> with pure handoff once <code>Mutators == ∅</code>.</span>
         </td>
         <td>
           Frozen <code>PaymentModel</code>, <code>direct()</code>, <code>fixed_total()</code>, <code>choice_tap_witness</code>, <code>SourceClassCache</code>
         </td>
         <td><span class="badge badge-no">No</span><br><span class="muted small">Pass 4</span></td>
         <td>
-          Pending Pass 4 implementation once the coupling classification and pure-handoff contract above are realigned.
+          Pending Pass 4 implementation once the positive-whitelist boundary below is locked. Pure shortcuts must defer whenever <code>Mutators != ∅</code>.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
@@ -697,7 +687,8 @@
         </td>
         <td><span class="badge badge-no">No</span><br><span class="muted small">Pass 5</span></td>
         <td>
-          Unchanged from previous review: 5 nested surfaces skip <code>while_paying</code>. Scheduled for Pass 5.
+          Unchanged from prior reviews: 5 nested surfaces skip <code>while_paying</code>. Folding <code>convoke_colors: ManaTypeSet</code> into
+          <code>PaymentModel</code> stays in Pass 5.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
@@ -712,7 +703,7 @@
         </td>
         <td><span class="badge badge-no">No</span><br><span class="muted small">Deferred</span></td>
         <td>
-          Already triaged in prior reviews as separate Tasks (no catalog card triggers live replacement stranding; Pass 1 prevents spins).
+          Triaged in prior reviews as separate Tasks (no catalog card triggers live replacement stranding; Pass 1 prevents spins).
         </td>
         <td><span class="badge badge-existing">Separate Outcome</span></td>
       </tr>
@@ -723,120 +714,127 @@
   <h2>2. Concrete Failure &amp; Recovery Walkthroughs</h2>
 
   <p>
-    Four concrete boards — Pass 4's counterexample plus three new counterexamples uncovered by widening to the full Read/Write boundary —
-    stress-test the classification and pure-handoff contract.
+    Both Pass 4 counterexamples, four newly uncovered blind spots in Design 4, and the TLA Limited throughput controls tested against the proposed
+    <strong>Positive Arithmetic Whitelist</strong>.
   </p>
 
   <div class="grid-2">
     <div class="card">
       <div class="card-title">
-        <h3>Case 1 · Event Replacement Reads Life (Pass 4 Repro <code>0d7bb6743</code>)</h3>
-        <span class="badge badge-no">Fails at HEAD</span>
+        <h3>Case 1 · Triggered Mana Reads Keyword (Pass 4 Repro <code>a90fd7109</code>)</h3>
+        <span class="badge badge-no">Breaks HEAD &amp; Design 4</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
-          <div>At <strong>4 life</strong>: <span class="card-name">The Great Henge</span> (<code>{T}: Add <span class="pip pip-g">G</span><span class="pip pip-g">G</span>, gain 2 life</code>), <span class="card-name">Tarnished Citadel</span> (<code>{T}: Add <span class="pip pip-r">R</span>, deals 3</code>), and <span class="card-name">Gray Ogre</span> carrying <code>ModifyDamage { Add(LifeGainedThisTurn(You)) }</code>. Paying <span class="pip pip-g">G</span><span class="pip pip-g">G</span><span class="pip pip-r">R</span> + 2 life.</div>
+          <div><span class="card-name">Heartbeat of Spring</span> with <code>predicate.keyword = Some(Trample)</code>. <span class="card-name">Mountain</span> has a Trample counter, <code>{T}: Add <span class="pip pip-r">R</span></code>, and <code>Remove Trample counter: Add <span class="pip pip-g">G</span></code>. Paying <span class="pip pip-g">G</span><span class="pip pip-r">R</span><span class="pip pip-r">R</span>.</div>
         </div>
         <div class="step-row fail">
           <div class="step-num">2</div>
-          <div><strong>Failure at <code>HEAD</code>:</strong> <code>LayerBoard</code> ignores <code>replacement_effects</code>; both root probes write only <code>revisions.life</code> → certifies Henge <code>Independent(+2)</code> and Citadel <code>Independent(-3)</code>! Pure solver offers Henge first → 6 life, <code>life_gained = 2</code> → Citadel now deals 5 → <strong>empty non-terminal action space</strong>!</div>
+          <div><strong>Failure at <code>HEAD</code> &amp; Design 4:</strong> <code>tap_bonuses</code> prices <span class="card-name">Mountain</span>'s tap as <span class="pip pip-r">R</span><span class="pip pip-r">R</span> at the root, but <code>tapped_for_mana</code> re-matches the predicate live. Design 4 writes <code>fields |= KEYWORDS</code> for the counter cost, yet none of its 4 read channels walks <code>triggered_mana_abilities</code> → certifies both independent → offers counter-first → <strong>empty non-terminal action space!</strong></div>
         </div>
         <div class="step-row ok">
           <div class="step-num">3</div>
-          <div><strong>Proposed recovery:</strong> <code>LayerBoard.replacement_reads.damage</code> records <code>state.life = true</code> (active because Citadel proposes damage). Henge and Citadel both write <code>life</code> → <code>Mutator</code>. Forking Henge first → Citadel deals 5 → 1 life &lt; 2-life fee (pruned). Forking Citadel first → 1 life, no damage source left → <code>damage</code> channel deactivates → <strong>immediate Pure Handoff</strong> for Henge (+2 → 3 life, pays 2 life)!</div>
+          <div><strong>Whitelist recovery:</strong> Heartbeat's predicate fails <code>is_pure_type_mana_trigger</code> (<code>keyword != None</code>) → <code>has_stateful_mana_triggers = true</code>. Counter cost is unconditionally <code>Mutator</code>; Mountain tap is <code>Sensitive</code> (tapping under stateful mana trigger). Fork branches on <code>{tap, remove_counter}</code>: counter-first yields only <span class="pip pip-r">R</span> (pruned); <strong>only tap-first is offered</strong> → commits <span class="pip pip-r">R</span><span class="pip pip-r">R</span>, then removes counter for <span class="pip pip-g">G</span>!</div>
         </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">
-        <h3>Case 2 · Non-Mutator Reader Stranded by Mutator (3-Role Proof)</h3>
-        <span class="badge badge-proposed">New Counterexample</span>
+        <h3>Case 2 · Damage Replacement Reads Turn Life (Pass 4 Repro <code>0d7bb6743</code>)</h3>
+        <span class="badge badge-no">Breaks HEAD</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
-          <div>At <strong>3 life</strong>: Permanent <em>P</em> has <code>ModifyDamage { PreventAll }</code> + <code>{T}, Sacrifice P: Add <span class="pip pip-g">G</span></code>, alongside <span class="card-name">Tarnished Citadel</span> (<code>{T}: Add <span class="pip pip-r">R</span>, deals 3</code>). Paying <span class="pip pip-g">G</span><span class="pip pip-r">R</span> + 2 life.</div>
+          <div>At <strong>4 life</strong>: <span class="card-name">The Great Henge</span> (<code>{T}: <span class="pip pip-g">G</span><span class="pip pip-g">G</span>, +2 life</code>), <span class="card-name">Tarnished Citadel</span> (<code>{T}: <span class="pip pip-r">R</span>, deals 3</code>), and <span class="card-name">Gray Ogre</span> carrying <code>ModifyDamage { Add(LifeGainedThisTurn(You)) }</code>. Paying <span class="pip pip-g">G</span><span class="pip pip-g">G</span><span class="pip pip-r">R</span> + 2 life.</div>
         </div>
         <div class="step-row fail">
           <div class="step-num">2</div>
-          <div><strong>Failure under binary <code>Independent</code>/<code>Coupled</code>:</strong> <em>P</em> is <code>Coupled</code> (sacrificing removes <code>PreventAll</code>). Citadel writes only <code>life</code> (nobody reads <code>life</code>) and its root probe deals 0 (prevented by <em>P</em>) → labeled <code>Independent(0)</code>! If the coupled solver branches only on <code>Coupled</code> mutators, it tries <em>P</em> first → <em>P</em> leaves → Citadel deals 3 → 0 life → <strong>falsely rejects a legal cast!</strong> (Same shape as <span class="card-name">Raucous Audience</span> before 2nd Citadel at 28 life.)</div>
+          <div><strong>Failure at <code>HEAD</code>:</strong> Both root suffix probes write only <code>revisions.life</code> → certified <code>Independent(+2)</code> and <code>Independent(-3)</code>. Henge-first leaves 6 life with <code>life_gained = 2</code> → Citadel now deals 5 → <strong>empty action space!</strong></div>
         </div>
         <div class="step-row ok">
           <div class="step-num">3</div>
-          <div><strong>Proposed recovery:</strong> Citadel proposes damage while a remaining mutator (<em>P</em>) removes a damage replacement → Citadel is classified <strong><code>Sensitive(LifeDelta(0))</code></strong>. Coupled solver branches on <code>Mutator ∪ Sensitive = {P, Citadel}</code>: tries Citadel first (0 damage while <em>P</em> lives!), then sacrifices <em>P</em> → pays 2 life at 3 life!</div>
+          <div><strong>Whitelist recovery:</strong> Exhaustive <code>ReplacementEffect</code> match flags <code>has_damage_replacements = true</code>; Citadel has a damage suffix → <code>board_sensitive = true</code> → Henge and Citadel are both <code>Mutator</code> (zero walker over <code>DamageTransform</code> needed!). Fork prunes Henge-first (1 &lt; 2 life); Citadel-first leaves 1 life with <em>no damage suffix remaining</em> → <code>has_damage_replacements</code> deactivates → <strong>immediate Pure Handoff</strong> for Henge (+2 → 3 life, pays 2 life)!</div>
         </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">
-        <h3>Case 3 · <code>±1/+1</code> Counter Cost vs. Power-Reading Mana Ability</h3>
-        <span class="badge badge-proposed">New Counterexample</span>
+        <h3>Case 3 · Four More Blind Spots Design 4 Still Missed</h3>
+        <span class="badge badge-no">New Counterexamples</span>
       </div>
       <div class="trace">
-        <div class="step-row">
-          <div class="step-num">1</div>
-          <div>4/4 creature with <code>Remove a +1/+1 counter: Add <span class="pip pip-g">G</span></code> alongside <span class="card-name">Raucous Audience</span> (<code>ControlsAtLeast(power ≥ 4)</code> → <span class="pip pip-g">G</span><span class="pip pip-g">G</span> else <span class="pip pip-g">G</span>). Paying <span class="pip pip-c">3</span>.</div>
+        <div class="step-row fail">
+          <div class="step-num">A</div>
+          <div><strong>Delve + non-token sacrifice (<code>help.rs:51</code>):</strong> Zero statics, triggers, or replacements on board. Sacrificing a non-token creature with <code>{T}, Sacrifice: <span class="pip pip-g">G</span></code> puts a card into the graveyard, increasing <code>graveyard_payers</code> by +1. Frozen bounds prune the legal delve cast!</div>
         </div>
         <div class="step-row fail">
-          <div class="step-num">2</div>
-          <div><strong>Failure at <code>HEAD</code>:</strong> Audience's <code>mana_activation_reads</code> sets <code>fields |= POWER</code> and <code>battlefield = true</code>, with <code>state.counters = false</code> (<code>layers.rs:530</code>). The counter-cost ability sets only <code>writes.counters = true</code> (<code>mana.rs:3398</code>), and <code>payment_writes_couple</code> checks only <code>state.overlaps(writes)</code> — <strong>returns <code>false</code>!</strong> Removing the counter first drops the 4/4 to 3/3 → Audience drops to <span class="pip pip-g">G</span> → <strong>stranded</strong>!</div>
+          <div class="step-num">B</div>
+          <div><strong>Summoning-sick creature + Haste counter (<code>mana.rs:3349</code>):</strong> Zero statics, triggers, or replacements. Removing a Haste counter for <span class="pip pip-g">G</span> disables the creature's own <code>{T}: <span class="pip pip-r">R</span></code> via <code>restricted_by_summoning_sickness()</code>.</div>
+        </div>
+        <div class="step-row fail">
+          <div class="step-num">C</div>
+          <div><strong>Unwalked predicates &amp; two-hop statics:</strong> <code>ability.tap_cost.predicate</code> (<code>mana.rs:3381</code>), <code>ActivatedAbilitiesCostLess.predicate</code> (<code>statics.rs:990</code>), <code>from_battlefield_this_turn</code>, and 2-hop <span class="card-name">Ozai</span> (<code>UnspentManaAtLeast(6) → Flying</code>) feeding an unconditional <code>scope: Flying</code> static!</div>
         </div>
         <div class="step-row ok">
-          <div class="step-num">3</div>
-          <div><strong>Proposed recovery:</strong> <code>PaymentWrites</code> mirrors <code>game.rs:902</code>: adding/removing <code>+1/+1</code> or <code>-1/-1</code> counters sets <code>writes.fields |= POWER</code> (keyword counters set <code>KEYWORDS</code>). Intersecting <code>writes.fields &amp; reads.fields != 0</code> marks the counter source <code>Mutator</code> and Audience <code>Sensitive</code> → only Audience-first is offered.</div>
+          <div class="step-num">✓</div>
+          <div><strong>Whitelist recovery:</strong> (A) <code>help.delve.is_some()</code> activates <code>board_sensitive</code> → non-token sacrifice is <code>Mutator</code>. (B) Any <code>remove_counters</code>/<code>add_counters</code> is unconditionally <code>Mutator</code> and same-permanent / summoning-sick taps are <code>Sensitive</code>. (C) <code>tap_cost.is_some()</code> and <code>has_activated_cost_reduction</code> activate <code>board_sensitive</code>, and <code>reads.state.mana</code> makes plain taps <code>Mutator</code> without needing any 2-hop graph!</div>
         </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">
-        <h3>Case 4 · Suspended <code>ManaUpfront</code> Outlives Its Grant or Carries Coupled Suffix</h3>
-        <span class="badge badge-proposed">New Counterexample</span>
+        <h3>Case 4 · Normal TLA Limited Boards &amp; 10-Forest Guard</h3>
+        <span class="badge badge-yes">Zero Forks / Fast Reject</span>
       </div>
       <div class="trace">
-        <div class="step-row">
+        <div class="step-row ok">
           <div class="step-num">1</div>
-          <div>A granted mana ability <code><span class="pip pip-c">1</span>, {T}: Add <span class="pip pip-g">G</span><span class="pip pip-g">G</span> if power ≥ 4 else <span class="pip pip-g">G</span></code> (or a fee'd activation with a coupled suffix) enters <code>Decision::ManaUpfront</code>. Mid-fee, its grant drops off <code>LayerBoard</code>; <span class="card-name">The Great Henge</span> + <span class="card-name">Angel of Vitality</span> remain available at 22 life.</div>
+          <div><strong>MTG-500 acceptance boards (<span class="card-name">Citadel</span> + <span class="card-name">Room</span>/<span class="card-name">Canyon</span> + plain <span class="card-name">Heartbeat of Spring</span>):</strong> Heartbeat's predicate equals <code>CardPredicate { card_type: Some(Land), ..default() }</code> → whitelisted! Same for <span class="card-name">Badgermole Cub</span> (<code>Creature</code>). <code>board_sensitive == false</code> → <strong>100% Pure Arithmetic, 0 forks!</strong></div>
         </div>
-        <div class="step-row fail">
+        <div class="step-row ok">
           <div class="step-num">2</div>
-          <div><strong>Failure at <code>HEAD</code>:</strong> (a) Because the grant vanished, <code>board.mana_activation_reads</code> no longer sees <code>activation.output</code>'s reads. (b) Even for a coupled suffix on the suspended <code>ManaUpfront</code>, <code>payment_obligations_owing</code> (<code>mana.rs:3562–3583</code>) calls <code>.life_delta()</code>, <strong>silently erasing <code>Coupled</code> to <code>LifeDelta(0)</code></strong> and handing off to the pure solver!</div>
+          <div><strong>Common TLA Limited boards (<span class="card-name">Air Nomad Legacy</span>, <span class="card-name">Badgermole</span>, <span class="card-name">Fated Firepower</span> + Treasures):</strong> Neither <span class="card-name">Air Nomad Legacy</span> nor <span class="card-name">Badgermole</span> has a condition or reads life/battlefield/mana/tapped; <span class="card-name">Fated Firepower</span> has no damage mana suffix on board. <code>board_sensitive == false</code> → <strong>Treasures stay 100% Pure!</strong></div>
         </div>
         <div class="step-row ok">
           <div class="step-num">3</div>
-          <div><strong>Proposed recovery:</strong> The payment slice walks <code>suspended_decision</code> once: unions every saved <code>ManaUpfrontActivation.output</code>'s reads and event kinds into active <code>PaymentReads</code>, and retains <code>coupling</code> on <code>Obligation::Output</code> so neither Pure-Finish-First nor Pure Handoff runs while a coupled continuation is pending.</div>
+          <div><strong>Coupled stress board (10× <span class="card-name">Forest</span> + <span class="card-name">Angel of Vitality</span> + <span class="card-name">Raucous Audience</span> + 2× <span class="card-name">Citadel</span> paying <span class="pip pip-c">15</span>):</strong> Angel's conditional static writes only <code>POWER</code> (<code>stateful_static_writes_non_pt == false</code>) → all 10 Forests stay <strong><code>Invariant</code></strong>; coupled fork branches only on <code>{Citadel class rep, Audience}</code> → rejects <span class="pip pip-c">15</span> in milliseconds!</div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>3. The Biggest Mismatch: Partial One-Way Probe vs. Complete Read/Write Dependency Graph</h2>
+  <h2>3. The Biggest Mismatch: Open-World Read/Write Blacklist vs. Closed-World Positive Whitelist</h2>
 
   <div class="card card-callout">
     <div class="card-title">
-      <h3>Biggest Conceptual Mismatch at <code>HEAD</code></h3>
-      <span class="badge badge-no">Incomplete Read Channels + Overloaded <code>StateReads</code> + Binary Coupling Enum</span>
+      <h3>Biggest Conceptual Mismatch Across Designs 2–4</h3>
+      <span class="badge badge-no">Inverted Proof Burden — Blacklist Fails Open</span>
     </div>
     <p>
-      In <code>HEAD</code> (<code>1c300f8e63</code>), <code>mana_activation_coupling</code> tries to prove a step is Pure-Regime-safe by asking:
-      <em>"Does my <code>StateReads</code> write hit <code>LayerBoard.reads</code> or <code>mana_activation_reads</code>, or does one root fork probe of my suffix write outside <code>revisions.life</code>?"</em>
+      In <code>HEAD</code> and Design 4 (<code>8182d5c876</code>), purity is certified by a <strong>blacklist</strong>:
+      walk every known reader channel into a <code>ReadSet</code>, walk every known write into <code>PaymentWrites</code>, and declare the step
+      Pure unless the two bitsets intersect. That puts the proof burden backwards: <strong>every unwalked channel or future rules field defaults to
+      "Pure"</strong> — silently turning legal plays into <code>AgentError</code>s!
     </p>
     <p style="margin-bottom: 0;">
-      That single test has <strong>three structural flaws</strong>: (1) a root probe observes only <em>writes</em>, never <em>reads</em> made inside
-      <code>proposed_event.rs</code> replacements or vanished-grant continuations; (2) reusing <code>StateReads</code> for writes misses characteristic-mutating
-      counters (<code>±1/±1</code>, keyword) and turn-history/graveyard departures; and (3) a binary <code>Independent</code>/<code>Coupled</code> tag
-      cannot separate a <strong>Mutator</strong> (which must execute on a fork) from a <strong>Sensitive Reader</strong> (which must branch before Mutators,
-      yet stays exact in Pure-Finish-First when Mutators are stripped) or an <strong>Invariant Source</strong> (which defers cleanly to Pure Handoff).
+      Flipping to a <strong>closed-world positive whitelist</strong> reverses the proof burden so it <strong>fails safe</strong>:
+      a tiny, exhaustive whitelist certifies the exact rule shapes where <code>PaymentModel</code> is mathematically invariant
+      (plain card-type triggered mana, inert non-payment replacements, non-conditional statics, static mana outputs, fixed payer-life suffixes).
+      On any board outside that whitelist, <strong>every non-mana state write is a <code>Mutator</code></strong> and
+      <strong>every state-reading source is <code>Sensitive</code></strong> — deleting all fine-grained <code>ReadSet × PaymentWrites</code>
+      guessing while keeping ordinary TLA Limited boards 100% fork-free.
     </p>
   </div>
 
   <!-- Before vs After SVG Diagram -->
   <div class="diagram-wrap">
-    <svg viewBox="0 0 1080 515" width="1080" height="515" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Before and After Payment Coupling Classification and Pure Handoff">
+    <svg viewBox="0 0 1100 520" width="1100" height="520" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Before Open-World Read/Write Blacklist vs After Closed-World Positive Arithmetic Whitelist">
       <defs>
         <marker id="arr-err" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--error)"/>
@@ -853,123 +851,127 @@
       </defs>
 
       <!-- BEFORE PANEL -->
-      <rect x="8" y="8" width="486" height="499" rx="10" fill="var(--bg-surface)" stroke="var(--border)" stroke-width="1.2"/>
-      <text x="24" y="34" fill="var(--error-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">BEFORE · HEAD (1c300f8e63) — PARTIAL READS &amp; BINARY TAG</text>
+      <rect x="8" y="8" width="496" height="504" rx="10" fill="var(--bg-surface)" stroke="var(--border)" stroke-width="1.2"/>
+      <text x="24" y="34" fill="var(--error-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">BEFORE · HEAD &amp; DESIGN 4 — OPEN-WORLD BLACKLIST (FAILS OPEN)</text>
 
-      <rect x="24" y="50" width="454" height="106" rx="7" fill="var(--bg)" stroke="var(--border)"/>
-      <text x="36" y="70" fill="var(--text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">What HEAD Inspects (Only 2 of 4 Reader Channels)</text>
-      <text x="36" y="90" fill="var(--success-text)" font-family="var(--font-mono)" font-size="10.8">✓ LayerBoard.reads               (statics; misses turn-history/GY)</text>
-      <text x="36" y="106" fill="var(--success-text)" font-family="var(--font-mono)" font-size="10.8">✓ LayerBoard.mana_activation_reads (misses reduce_by_source_power)</text>
-      <text x="36" y="124" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.8">✗ replacement_effects (ModifyDamage::Add, ModifyCounters, emblems)</text>
-      <text x="36" y="140" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.8">✗ suspended Decision::ManaUpfront (vanished-grant output &amp; suffix)</text>
+      <rect x="24" y="50" width="464" height="148" rx="7" fill="var(--bg)" stroke="var(--border)"/>
+      <text x="36" y="70" fill="var(--text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">Manually Maintained Channel Walkers (Whack-a-Mole)</text>
+      <text x="36" y="90" fill="var(--success-text)" font-family="var(--font-mono)" font-size="10.7">1. LayerBoard.reads             (statics)</text>
+      <text x="36" y="106" fill="var(--success-text)" font-family="var(--font-mono)" font-size="10.7">2. mana_activation_reads        (dynamic/cond mana)</text>
+      <text x="36" y="122" fill="var(--warning-text)" font-family="var(--font-mono)" font-size="10.7">3–4. Design 4 added: replacements + continuations</text>
+      <text x="36" y="140" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ 5. triggered_mana_abilities.predicate (a90fd7109!)</text>
+      <text x="36" y="156" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ 6–7. tap_cost.predicate &amp; ActivatedAbilitiesCostLess</text>
+      <text x="36" y="172" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ 8–9. Help::delve graveyard + summoning-sick Haste</text>
+      <text x="36" y="188" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ 10+. Any future CardPredicate / Condition / EffectValue</text>
 
-      <line x1="251" y1="156" x2="251" y2="180" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
+      <line x1="256" y1="198" x2="256" y2="222" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
 
-      <rect x="24" y="180" width="454" height="102" rx="7" fill="var(--error-wash)" stroke="var(--error)"/>
-      <text x="36" y="200" fill="var(--error-text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">mana_activation_coupling(writes: StateReads, sacrifice)</text>
-      <text x="36" y="220" fill="var(--text)" font-family="var(--font-mono)" font-size="10.8">• writes.counters misses fields &amp; POWER (game.rs:902 ±1/±1 counters)</text>
-      <text x="36" y="236" fill="var(--text)" font-family="var(--font-mono)" font-size="10.8">• mana_suffix_coupling probes 1 root fork: sees writes, NEVER reads!</text>
-      <text x="36" y="252" fill="var(--text)" font-family="var(--font-mono)" font-size="10.8">• payment_obligations_owing calls .life_delta() → erases Coupled!</text>
-      <text x="36" y="268" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.8">→ Emits binary: Independent(LifeDelta) | Coupled</text>
+      <rect x="24" y="222" width="464" height="92" rx="7" fill="var(--error-wash)" stroke="var(--error)"/>
+      <text x="36" y="242" fill="var(--error-text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">Intersect Bitmasks Inside shared_payment_sources()</text>
+      <text x="36" y="262" fill="var(--text)" font-family="var(--font-mono)" font-size="10.7">• Unwalked channel or _ =&gt; {} arm silently certifies Pure!</text>
+      <text x="36" y="278" fill="var(--text)" font-family="var(--font-mono)" font-size="10.7">• Baked into PaymentScan cache: blind to delve &amp; reservations</text>
+      <text x="36" y="294" fill="var(--text)" font-family="var(--font-mono)" font-size="10.7">• Obligation::Output calls .life_delta() → erases Coupled</text>
 
-      <line x1="251" y1="282" x2="251" y2="306" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
+      <line x1="256" y1="314" x2="256" y2="338" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
 
-      <rect x="24" y="306" width="454" height="184" rx="7" fill="var(--bg)" stroke="var(--border)"/>
-      <text x="36" y="327" fill="var(--text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">Four Concrete Breakages on Coupled Boards</text>
-      <text x="36" y="349" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.5">1. Pass 4 repro (0d7bb6743): Henge (+2) &amp; Citadel (-3) both certified</text>
-      <text x="48" y="365" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="11.2">Independent → Henge-first offered → empty action space at 6 life.</text>
-      <text x="36" y="387" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.5">2. Non-mutator readers (Audience, Citadel + PreventAll) labeled Independent</text>
-      <text x="48" y="403" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="11.2">→ mutator-only branching misses legal reader-first orders.</text>
-      <text x="36" y="425" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.5">3. ±1/±1 counter cost + Audience / Treasure + SacrificedThisTurn</text>
-      <text x="48" y="441" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="11.2">→ missed write∩read intersection sends coupled board to Pure.</text>
-      <text x="36" y="463" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.5">4. Suspended ManaUpfront drops Coupled → LifeDelta(0) on handoff.</text>
+      <rect x="24" y="338" width="464" height="158" rx="7" fill="var(--bg)" stroke="var(--border)"/>
+      <text x="36" y="359" fill="var(--text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">Result: Unbounded Refinement Loop</text>
+      <text x="36" y="381" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.5">• Review 2: missed replacements, counters, continuations</text>
+      <text x="36" y="401" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.5">• Review 3: patched Treasure + owned ManaUpfront</text>
+      <text x="36" y="421" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.5">• Review 4: added 4-channel graph → broke on Heartbeat(Trample)</text>
+      <text x="36" y="441" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.5">• Still broken on delve, Haste counter, tap_cost, cost reduction</text>
+      <text x="36" y="467" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="11.2">Every new MTG mechanic risks silent stranding unless every walker matches.</text>
 
       <!-- AFTER PANEL -->
-      <rect x="514" y="8" width="558" height="499" rx="10" fill="var(--bg-surface)" stroke="var(--info)" stroke-width="1.4"/>
-      <text x="530" y="34" fill="var(--info-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">AFTER · RECOMMENDED READ/WRITE GRAPH &amp; 3-ROLE PURE HANDOFF</text>
+      <rect x="524" y="8" width="568" height="504" rx="10" fill="var(--bg-surface)" stroke="var(--info)" stroke-width="1.4"/>
+      <text x="540" y="34" fill="var(--info-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">AFTER · DESIGN 5 — CLOSED POSITIVE WHITELIST (FAILS SAFE)</text>
 
-      <rect x="530" y="50" width="526" height="114" rx="7" fill="var(--info-wash)" stroke="var(--info)"/>
-      <text x="542" y="70" fill="var(--info-text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">Complete PaymentReads (All 4 Channels, Event-Kind Gated)</text>
-      <text x="542" y="90" fill="var(--text)" font-family="var(--font-mono)" font-size="10.7">1. LayerBoard.reads                (+ turn-history, GY, AttachedPower)</text>
-      <text x="542" y="106" fill="var(--text)" font-family="var(--font-mono)" font-size="10.7">2. LayerBoard.mana_activation_reads (+ reduce_by_source_power)</text>
-      <text x="542" y="122" fill="var(--info-text)" font-family="var(--font-mono)" font-size="10.7">3. LayerBoard.replacement_reads    (damage/counters/departure, +emblems)</text>
-      <text x="542" y="138" fill="var(--info-text)" font-family="var(--font-mono)" font-size="10.7">4. continuation_reads              (suspended ManaUpfront.output &amp; events)</text>
-      <text x="542" y="155" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="10.8">Replacement channels activate ONLY if a remaining step can propose that event kind.</text>
+      <rect x="540" y="50" width="536" height="130" rx="7" fill="var(--info-wash)" stroke="var(--info)"/>
+      <text x="552" y="70" fill="var(--info-text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">1. BoardArithmeticProfile (Cached on SourceSeed + Command Zone)</text>
+      <text x="552" y="90" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">• Triggered mana: exact struct-eq CardPredicate { card_type, ..default() }</text>
+      <text x="552" y="106" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">  → Heartbeat (Land) &amp; Badgermole Cub (Creature) = PURE; any other = stateful</text>
+      <text x="552" y="122" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">• Replacements: exhaustive match (no _ =&gt;) → {Inert, Damage, LifeGain, Zone}</text>
+      <text x="552" y="138" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">• Statics: conditional/count vs counter/field-scoped + writes_non_pt bit</text>
+      <text x="552" y="154" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">• Mana abilities: has_stateful_mana (dynamic|cond|cost_red|tap_cost)</text>
+      <text x="552" y="170" fill="var(--info-text)" font-family="var(--font-sans)" font-size="10.8">Anything unrecognized fails closed (conservative coupling), never silently Pure.</text>
 
-      <line x1="793" y1="164" x2="793" y2="188" stroke="var(--info)" stroke-width="1.4" marker-end="url(#arr-ok)"/>
+      <line x1="808" y1="180" x2="808" y2="202" stroke="var(--info)" stroke-width="1.4" marker-end="url(#arr-ok)"/>
 
-      <rect x="530" y="188" width="526" height="66" rx="7" fill="var(--bg)" stroke="var(--info)"/>
-      <text x="542" y="208" fill="var(--text)" font-family="var(--font-sans)" font-size="12.1" font-weight="700">Intersect PaymentWrites × Active PaymentReads (Exact Fields + Events)</text>
-      <text x="542" y="226" fill="var(--text)" font-family="var(--font-mono)" font-size="10.7">PaymentWrites { state, fields(POWER|KW), sacrifice, removes_rules, events }</text>
-      <text x="542" y="243" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="10.8">Runs on every source tap, activation, and suspended ManaUpfront → assigns 3 roles:</text>
+      <rect x="540" y="202" width="536" height="68" rx="7" fill="var(--bg)" stroke="var(--info)"/>
+      <text x="552" y="222" fill="var(--text)" font-family="var(--font-sans)" font-size="12.1" font-weight="700">2. Question-Level Classifier (Live Sources + Reservations + Delve + ManaUpfront)</text>
+      <text x="552" y="240" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">PaymentScan caches intrinsic SourceFacts; one fn classifies sources + Output</text>
+      <text x="552" y="257" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="10.8">board_sensitive = stateful_statics | stateful_triggers | stateful_mana | active_repl | delve</text>
 
       <!-- Three arrows down to 3 roles -->
-      <line x1="615" y1="254" x2="615" y2="282" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
-      <line x1="793" y1="254" x2="793" y2="282" stroke="var(--warning)" stroke-width="1.4" marker-end="url(#arr-warn)"/>
-      <line x1="971" y1="254" x2="971" y2="282" stroke="var(--success)" stroke-width="1.4" marker-end="url(#arr-suc)"/>
+      <line x1="628" y1="270" x2="628" y2="296" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
+      <line x1="808" y1="270" x2="808" y2="296" stroke="var(--warning)" stroke-width="1.4" marker-end="url(#arr-warn)"/>
+      <line x1="988" y1="270" x2="988" y2="296" stroke="var(--success)" stroke-width="1.4" marker-end="url(#arr-suc)"/>
 
       <!-- Role 1: Mutator -->
-      <rect x="530" y="282" width="170" height="94" rx="7" fill="var(--error-wash)" stroke="var(--error)"/>
-      <text x="540" y="301" fill="var(--error-text)" font-family="var(--font-sans)" font-size="12" font-weight="700">1. Mutator</text>
-      <text x="540" y="318" fill="var(--text)" font-family="var(--font-sans)" font-size="10.8">Writes hit active reads,</text>
-      <text x="540" y="333" fill="var(--text)" font-family="var(--font-sans)" font-size="10.8">removes rules, or fails</text>
-      <text x="540" y="348" fill="var(--text)" font-family="var(--font-sans)" font-size="10.8">suffix fork probe.</text>
-      <text x="540" y="366" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.2">→ Fork transition</text>
+      <rect x="540" y="296" width="174" height="104" rx="7" fill="var(--error-wash)" stroke="var(--error)"/>
+      <text x="550" y="315" fill="var(--error-text)" font-family="var(--font-sans)" font-size="12" font-weight="700">Mutator</text>
+      <text x="550" y="332" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">• Any non-mana write if</text>
+      <text x="558" y="346" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">board_sensitive</text>
+      <text x="550" y="361" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">• Counters / rule-sacrifice /</text>
+      <text x="558" y="375" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">bad suffix / mana-tap read</text>
+      <text x="550" y="392" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.1">→ Fork transition</text>
 
       <!-- Role 2: Sensitive -->
-      <rect x="708" y="282" width="170" height="94" rx="7" fill="var(--warning-wash)" stroke="var(--warning)"/>
-      <text x="718" y="301" fill="var(--warning-text)" font-family="var(--font-sans)" font-size="12" font-weight="700">2. Sensitive(Δ)</text>
-      <text x="718" y="318" fill="var(--text)" font-family="var(--font-sans)" font-size="10.8">Reads what a Mutator</text>
-      <text x="718" y="333" fill="var(--text)" font-family="var(--font-sans)" font-size="10.8">writes (Audience, Citadel</text>
-      <text x="718" y="348" fill="var(--text)" font-family="var(--font-sans)" font-size="10.8">beside PreventAll, etc.).</text>
-      <text x="718" y="366" fill="var(--warning-text)" font-family="var(--font-mono)" font-size="10.2">→ Branch &amp; Pure-1st</text>
+      <rect x="721" y="296" width="174" height="104" rx="7" fill="var(--warning-wash)" stroke="var(--warning)"/>
+      <text x="731" y="315" fill="var(--warning-text)" font-family="var(--font-sans)" font-size="12" font-weight="700">Sensitive(Δ)</text>
+      <text x="731" y="332" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">• Dynamic / cond / tap_cost /</text>
+      <text x="739" y="346" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">stateful-trigger tap</text>
+      <text x="731" y="361" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">• Same-perm as Mutator or</text>
+      <text x="739" y="375" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">non-PT stateful static</text>
+      <text x="731" y="392" fill="var(--warning-text)" font-family="var(--font-mono)" font-size="10.1">→ Branch &amp; Pure-1st</text>
 
       <!-- Role 3: Invariant -->
-      <rect x="886" y="282" width="170" height="94" rx="7" fill="var(--success-wash)" stroke="var(--success)"/>
-      <text x="896" y="301" fill="var(--success-text)" font-family="var(--font-sans)" font-size="12" font-weight="700">3. Invariant(Δ)</text>
-      <text x="896" y="318" fill="var(--text)" font-family="var(--font-sans)" font-size="10.8">Writes nothing read;</text>
-      <text x="896" y="333" fill="var(--text)" font-family="var(--font-sans)" font-size="10.8">reads nothing mutated</text>
-      <text x="896" y="348" fill="var(--text)" font-family="var(--font-sans)" font-size="10.8">(e.g. 10 Forests).</text>
-      <text x="896" y="366" fill="var(--success-text)" font-family="var(--font-mono)" font-size="10.2">→ Defer to Pure</text>
+      <rect x="902" y="296" width="174" height="104" rx="7" fill="var(--success-wash)" stroke="var(--success)"/>
+      <text x="912" y="315" fill="var(--success-text)" font-family="var(--font-sans)" font-size="12" font-weight="700">Invariant(Δ)</text>
+      <text x="912" y="332" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">• All TLA ordinary boards</text>
+      <text x="912" y="347" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">• Heartbeat + Citadel</text>
+      <text x="912" y="362" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">• 10 Forests beside Angel</text>
+      <text x="912" y="377" fill="var(--text)" font-family="var(--font-sans)" font-size="10.7">+ Audience + 2× Citadel</text>
+      <text x="912" y="392" fill="var(--success-text)" font-family="var(--font-mono)" font-size="10.1">→ Pure Handoff</text>
 
-      <line x1="793" y1="376" x2="793" y2="400" stroke="var(--success)" stroke-width="1.5" marker-end="url(#arr-suc)"/>
+      <line x1="808" y1="400" x2="808" y2="420" stroke="var(--success)" stroke-width="1.5" marker-end="url(#arr-suc)"/>
 
-      <rect x="530" y="400" width="526" height="90" rx="7" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.3"/>
-      <text x="542" y="420" fill="var(--success-text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">Exact Pure-Handoff &amp; Pure-Finish-First Theorem</text>
-      <text x="542" y="439" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">• <strong>Pure Handoff:</strong> When <code>Mutators == ∅</code> (incl. pending <code>ManaUpfront</code>), run <code>PaymentModel</code> directly!</text>
-      <text x="542" y="456" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">• <strong>Pure-Finish-First:</strong> Strip ONLY <code>Mutators</code>; <code>Invariant ∪ Sensitive</code> remain 100% exact without Mutators.</text>
-      <text x="542" y="473" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">• <strong>Coupled Branching:</strong> Branch ONLY on <code>Mutators ∪ Sensitive</code> (+ 1 class rep per Invariant to fund fees).</text>
+      <rect x="540" y="420" width="536" height="78" rx="7" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.3"/>
+      <text x="552" y="440" fill="var(--success-text)" font-family="var(--font-sans)" font-size="12.1" font-weight="700">3. Exact Two-Regime Execution (Pure Handoff + Pure-Finish-First)</text>
+      <text x="552" y="458" fill="var(--text)" font-family="var(--font-sans)" font-size="11.1">• <strong>Mutators == ∅</strong> (incl. pending <code>ManaUpfront</code>): Pure <code>PaymentModel</code> + all caches/shortcuts.</text>
+      <text x="552" y="474" fill="var(--text)" font-family="var(--font-sans)" font-size="11.1">• <strong>Mutators != ∅</strong>: Pure-Finish-First (strip Mutators); else fork on <code>Mutators ∪ Sensitive</code> (+ 1 rep/Invariant for fees).</text>
+      <text x="552" y="490" fill="var(--text)" font-family="var(--font-sans)" font-size="11.1">• Re-apply <code>SourceReservation</code>s on fork; canonical memoization; no root static pruning.</text>
     </svg>
   </div>
 
-  <!-- Three Role Breakdown -->
+  <!-- Three Role Cards -->
   <div class="grid-3">
     <div class="role-card role-mut">
       <div style="margin-bottom: 6px;"><span class="badge badge-no">Role 1 · Mutator</span></div>
-      <strong>Must execute on a <code>Game</code> fork.</strong>
+      <strong>Executes on a <code>Game</code> fork; blocks Pure Handoff.</strong>
       <ul class="compact small">
-        <li>Writes hit active <code>PaymentReads</code> (<code>state</code>, <code>fields</code>, or <code>departure</code>), OR</li>
-        <li>Sacrifices a permanent carrying functioning statics, triggered mana abilities, or replacements, OR</li>
-        <li>Suffix probe suspends, ends the game, changes opponent life, or writes outside <code>revisions.life</code>.</li>
+        <li>Any non-mana write (<code>life_cost</code>, suffix, <code>sacrifice_source</code>, other side effect) when <code>board_sensitive</code> is true, OR</li>
+        <li>Unconditionally: <code>remove_counters</code> / <code>add_counters</code>, sacrificing a rule-bearing permanent (statics, triggered mana, payment replacements), or an unverified suffix, OR</li>
+        <li>Any tap/mana step when <code>board.reads.state.{mana,tapped}</code> or a mana reader reads mana/tapped.</li>
       </ul>
     </div>
     <div class="role-card role-sens">
       <div style="margin-bottom: 6px;"><span class="badge badge-scope">Role 2 · Sensitive(LifeDelta)</span></div>
-      <strong>Safe without Mutators; must branch before Mutators.</strong>
+      <strong>Safe in Pure-Finish-First; branches alongside Mutators.</strong>
       <ul class="compact small">
-        <li>Own writes don't trigger coupling, <em>and</em> root suffix probe yields a valid point-in-time <code>LifeDelta</code>, BUT</li>
-        <li>Legality/cost/output reads state (dynamic, conditional, cost-reduced, triggered bonus), OR</li>
-        <li>Has a suffix whose replacement/static could change under a remaining Mutator, OR</li>
-        <li>A conditional static on board writes <code>ABILITIES | TYPES | SUBTYPES | CONTROL</code>.</li>
+        <li>Not a <code>Mutator</code>, <code>Mutators != ∅</code>, AND:</li>
+        <li>The step is state-reading (dynamic output, condition, cost reduction, <code>tap_cost</code>, tapping under stateful triggered mana, or suffix under active replacement / rule-removal), OR</li>
+        <li>Shares a permanent with a <code>Mutator</code> (or is summoning-sick beside a counter-mutator), OR</li>
+        <li>A conditional/count static writes outside pure P/T (<code>!POWER</code>).</li>
       </ul>
     </div>
     <div class="role-card role-inv">
       <div style="margin-bottom: 6px;"><span class="badge badge-yes">Role 3 · Invariant(LifeDelta)</span></div>
       <strong>Deferred to Pure Handoff; zero fork blowup.</strong>
       <ul class="compact small">
-        <li>Writes nothing read by any active channel, AND</li>
-        <li>Depends on nothing any remaining Mutator can alter (e.g. 10 Forests beside Angel + Audience + 2× Citadel, or beside Henge + Citadel + <code>ModifyDamage</code>).</li>
-        <li>Only 1 representative per equivalence class branches if needed to fund a coupled step's upfront fee.</li>
+        <li>Not a <code>Mutator</code> and not affected by any remaining <code>Mutator</code>.</li>
+        <li>Covers 100% of sources on ordinary TLA Limited boards (including <span class="card-name">Citadel</span> + <span class="card-name">Heartbeat</span>, <span class="card-name">Badgermole</span> + Treasures, <span class="card-name">Fated Firepower</span> without Citadel).</li>
+        <li>On coupled boards (e.g. 10 Forests beside Angel + Audience + 2× Citadel), only 1 representative per class branches if needed to fund a coupled upfront fee.</li>
       </ul>
     </div>
   </div>
@@ -981,146 +983,157 @@
       <span class="badge badge-proposed">Proposed · Choices 1a–4a</span>
     </div>
     <p class="small">
-      Precompute event-kind-scoped replacement reads once per <code>SourceSeed</code> (plus command emblems in <code>compute_board</code>), separate
-      <code>PaymentWrites</code> from <code>StateReads</code>, and give every source/activation/continuation an explicit role:
+      Zero fine-grained <code>ReadSet × PaymentWrites</code> bitmask intersections. Every purity check is a closed-world positive predicate
+      (struct equality on <code>CardPredicate</code>, exhaustive <code>match</code> on <code>ReplacementEffect</code>, coarse static flags):
     </p>
-<pre><code>// ── flow/layers.rs (Existing ReadSet completed + Proposed ReplacementReads) ──
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct ReplacementReads {
-    pub damage: ReadSet,     // ModifyDamage: source.predicate, recipient.permanents, Add(EffectValue)
-    pub counters: ReadSet,   // ModifyCounters (!effects_only): predicate
-    pub departure: ReadSet,  // ExileIfWouldDie, GraveyardInstead(Matching): predicate
-    pub has_damage: bool,
-    pub has_life_gain: bool,
-    pub has_counters: bool,
+<pre><code>// ── flow/layers.rs (Closed positive whitelist cached on SourceSeed + LayerBoard) ──
+/// True iff `p` filters ONLY on printed/layered CardType (Heartbeat of Spring: Land;
+/// Badgermole Cub: Creature). Any other field — including any future CardPredicate field —
+/// automatically returns false via structural equality.
+#[inline]
+pub(super) fn is_pure_type_mana_trigger(p: &amp;CardPredicate) -&gt; bool {
+    *p == CardPredicate {
+        card_type: p.card_type,
+        ..CardPredicate::default()
+    }
 }
 
-// LayerBoard adds (cached on SourceSeed; command emblems via functioning_command_objects):
-//   pub(super) replacement_reads: ReplacementReads,
-//   pub(super) conditional_static_writes: u16,  // op.writes() of statics with state/departure reads
-
-// ── flow/mana.rs (Proposed PaymentWrites &amp; 3-role PaymentCoupling) ──────────
+/// Coarse, fail-safe board summary for manual payment coupling (cached per SourceSeed,
+/// merged across battlefield + functioning_command_objects in LayerBoard::compute_board).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct PaymentEventKinds {
-    damage: bool,       // DealDamage* suffix
-    life_gain: bool,    // GainLife suffix (or lifelink damage)
-    add_counters: bool, // add_counters.is_some()
-    sacrifice: bool,    // sacrifice_source
+pub(super) struct BoardArithmeticProfile {
+    /// Any functioning static with condition, LayerValue::Count, battlefield/life/mana/tapped read,
+    /// or ActivatedAbilitiesCostLess. (False for plain pumps, Air Nomad Legacy, Badgermole.)
+    pub has_conditional_or_count_statics: bool,
+    /// Whether any conditional/count static writes outside pure P/T (ABILITIES|CARD_TYPES|
+    /// SUBTYPES|CONTROL|COLORS|KEYWORDS) — keeps plain Forests Invariant beside Angel of Vitality.
+    pub stateful_static_writes_non_pt: bool,
+    /// Any functioning TriggeredManaAbility failing `is_pure_type_mana_trigger`.
+    pub has_stateful_mana_triggers: bool,
+    /// Exhaustive match over ReplacementEffect (+ StaticAbility::PlayersCantGainLife):
+    pub has_damage_replacements: bool,          // ModifyDamage
+    pub has_life_gain_replacements: bool,       // ModifyLifeGain | PlayersCantGainLife
+    pub has_counter_or_zone_replacements: bool, // ModifyCounters | ExileIfWouldDie | GraveyardInstead
+    /// Any functioning mana ability with dynamic output, condition, cost_reduction_per,
+    /// reduce_by_source_power, or tap_cost.
+    pub has_stateful_mana_abilities: bool,
+    /// Whether any static or mana ability reads mana pool or tapped state.
+    pub reads_mana_or_tapped: bool,
 }
 
+// ── flow/mana.rs (Intrinsic facts in PaymentScan; 3-role classification per question) ──
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct PaymentWrites {
-    state: StateReads,       // mana, tapped, life, ordinary counters
-    fields: u16,             // POWER (±1/±1 counters), KEYWORDS (keyword counters) — mirrors game.rs:902
-    sacrifice: bool,         // battlefield departure, graveyard arrival, turn history
-    removes_board_rules: bool, // sacrificed permanent has statics, triggered mana, or replacements
-    events: PaymentEventKinds,
-}
+enum SuffixKind { #[default] None, FixedDamage, FixedLifeGain, Other }
 
-/// Active reads for one payment slice: LayerBoard + gated replacements + saved continuations.
-#[derive(Clone, Copy, Debug, Default)]
-struct ActivePaymentReads {
-    reads: ReadSet,                 // board.reads ∪ mana_activation_reads ∪ gated replacement_reads ∪ continuation_reads
-    activated_cost_reduction: bool, // board.has_activated_cost_reduction[player]
-    triggered_mana: bool,           // board.has_triggered_mana_abilities
-    dynamic_activations: bool,      // board.needs_finalization_for(player)
-    broad_static_mutation: bool,    // conditional_static_writes &amp; (ABILITIES|CARD_TYPES|SUBTYPES|CONTROL) != 0
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ActivationFacts {
+    suffix_kind: SuffixKind,
+    verified_life_delta: Option&lt;LifeDelta&gt;, // None if unverified suffix or fork probe failed
+    writes_non_mana: bool,                  // life_cost &gt; 0 | suffix | sacrifice | other side effects
+    writes_counters: bool,                  // add_counters | remove_counters (always Mutator)
+    removes_board_rules: bool,              // sacrifice_source on permanent with statics/triggers/repls
+    reads_state: bool,                      // dynamic | condition | cost_reduction | tap_cost
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PaymentCoupling {
     Invariant(LifeDelta),  // Pure &amp; insensitive; deferred until Mutators == ∅
-    Sensitive(LifeDelta),  // Valid Δ if no Mutators run; must branch before Mutators
-    Mutator,               // Must step on a Game fork; blocks Pure Handoff
-}</code></pre>
+    Sensitive(LifeDelta),  // Exact in Pure-Finish-First; branches alongside Mutators on forks
+    Mutator,               // Must execute on a Game fork; blocks Pure Handoff
+}
+// Obligation::Output carries `coupling: PaymentCoupling` (replacing `.life_delta()` erasure)
+// and is classified by the exact same question-level function as live sources.</code></pre>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>4. Soundness Verification &amp; Counterexample Matrix</h2>
+  <h2>4. Soundness &amp; Throughput Counterexample Matrix</h2>
 
-  <div class="card">
-    <h3>Why This Contract Survives Every Boundary (Normal Path, Failure &amp; Recovery)</h3>
-    <ul class="compact">
-      <li>
-        <strong>Zero regression on ordinary TLA Limited boards:</strong>
-        On <span class="card-name">Citadel</span> + <span class="card-name">Room</span> / <span class="card-name">Canyon</span> + <span class="card-name">Heartbeat</span>,
-        no functioning replacement reads any state slice (and even with <span class="card-name">Fated Firepower</span> on board but no damage mana source,
-        <code>events.damage == false</code> leaves <code>replacement_reads.damage</code> inactive). Every source classifies as <code>Invariant(LifeDelta)</code> →
-        <strong>100% Pure Regime</strong>, zero forks, full <code>PaymentCache</code> / <code>direct()</code> / <code>SourceClassCache</code>.
-      </li>
-      <li>
-        <strong>Immediate Pure Handoff after the last Mutator executes:</strong>
-        In <code>0d7bb6743</code> (Henge + Citadel + <code>ModifyDamage(Add(LifeGainedThisTurn))</code> + 10 Forests), once Citadel taps first on the fork,
-        no remaining source proposes damage → <code>events.damage</code> becomes <code>false</code> → <code>replacement_reads.damage</code> deactivates →
-        Henge + 10 Forests are all <code>Invariant</code> → <strong>immediate Pure Handoff</strong>!
-      </li>
-      <li>
-        <strong>No hash, replay, or observation churn:</strong>
-        <code>ReplacementReads</code>, <code>PaymentWrites</code>, and the 3-role <code>PaymentCoupling</code> are strictly derived in-memory analysis
-        (cached on <code>SourceSeed</code> / <code>LayerBoard</code> / <code>PaymentScan</code>). Zero changes to <code>MATCH_STATE_HASH_VERSION</code> (stays v35),
-        replays, observations, or action identities; preserves the <code>PaymentScan</code> debug rebuild check because probes and coupled forks never mutate <code>&amp;self</code>.
-      </li>
-      <li>
-        <strong>Command-zone emblems included:</strong>
-        <code>compute_board</code> scans <code>self.functioning_command_objects(None)</code> (not only <code>static_sources.command_objects</code>, which skips
-        replacement-only emblems!) so an emblem with <code>ModifyDamage</code> or <code>ModifyLifeGain</code> is never missed.
-      </li>
-    </ul>
-  </div>
+  <p>
+    Every board from Passes 1–4, the four newly discovered blind spots, and the TLA Limited throughput controls compared across
+    <code>HEAD</code>, Design 4's read/write graph, and Design 5's Positive Arithmetic Whitelist.
+  </p>
 
   <table>
     <thead>
       <tr>
-        <th style="width: 28%;">Counterexample / Stress Case</th>
-        <th style="width: 21%;">At <code>HEAD</code> (Pass 1–3)</th>
-        <th style="width: 51%;">After Realigned Pass 4–5 <span class="badge badge-proposed">Proposed</span></th>
+        <th style="width: 27%;">Board / Stress Case</th>
+        <th style="width: 17%;">At <code>HEAD</code></th>
+        <th style="width: 19%;">Design 4 (R/W Graph)</th>
+        <th style="width: 37%;">Design 5 (Positive Whitelist) <span class="badge badge-proposed">Proposed</span></th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Henge + Citadel + <code>ModifyDamage(Add(LifeGainedThisTurn))</code> @ 4 life</strong><br><span class="muted small">Pass 4 repro (<code>0d7bb6743</code>) · + 2-life fee</span></td>
-        <td><span class="badge badge-no">Error</span> Both certified <code>Independent</code>; Henge-first strands at 6 life.</td>
-        <td><span class="badge badge-yes">Pass</span> <code>replacement_reads.damage.state.life</code> active → Henge &amp; Citadel are <code>Mutator</code>; Henge-first pruned at 1 &lt; 2 life; Citadel→Henge finishes at 1 life.</td>
+        <td><strong>Heartbeat(Trample) + Mountain(Trample counter)</strong><br><span class="muted small">Pass 4 repro 2 (<code>a90fd7109</code>) · paying <span class="pip pip-g">G</span><span class="pip pip-r">R</span><span class="pip pip-r">R</span></span></td>
+        <td><span class="badge badge-no">Error</span> Empty action space after counter-first.</td>
+        <td><span class="badge badge-no">Missed</span> Triggered mana not in 4 channels.</td>
+        <td><span class="badge badge-yes">Pass</span> Trigger fails <code>is_pure_type_mana_trigger</code> → counter is <code>Mutator</code>, tap is <code>Sensitive</code> → only tap-first offered.</td>
       </tr>
       <tr>
-        <td><strong>Permanent <em>P</em> (<code>PreventAll</code> + <code>Sacrifice: G</code>) + Citadel @ 3 life</strong><br><span class="muted small">New counterexample · reader before mutator</span></td>
-        <td><span class="badge badge-no">Missed</span> Citadel marked <code>Independent(0)</code>; mutator-only branching misses Citadel-first.</td>
-        <td><span class="badge badge-yes">Pass</span> <em>P</em> is <code>Mutator</code> (<code>removes_board_rules</code>); Citadel is <code>Sensitive(0)</code> → branches Citadel first (0 dmg), then sacrifices <em>P</em> → pays 2 life.</td>
+        <td><strong>Henge + Citadel + <code>ModifyDamage(LifeGained)</code> @ 4 life</strong><br><span class="muted small">Pass 4 repro 1 (<code>0d7bb6743</code>) · + 2-life fee</span></td>
+        <td><span class="badge badge-no">Error</span> Empty action space after Henge-first.</td>
+        <td><span class="badge badge-yes">Pass</span> via <code>ReplacementReads</code>.</td>
+        <td><span class="badge badge-yes">Pass</span> <code>has_damage_replacements</code> + damage suffix → both <code>Mutator</code>; Citadel-first hands Henge off to Pure immediately.</td>
       </tr>
       <tr>
-        <td><strong><code>Remove +1/+1 counter: G</code> + <span class="card-name">Raucous Audience</span></strong><br><span class="muted small">New counterexample · counter P/T write × <code>POWER</code> read</span></td>
-        <td><span class="badge badge-no">Missed</span> <code>writes.counters</code> misses <code>reads.fields &amp; POWER</code>.</td>
-        <td><span class="badge badge-yes">Pass</span> <code>PaymentWrites.fields |= POWER</code> for <code>±1/±1</code> counters → counter source is <code>Mutator</code>, Audience is <code>Sensitive</code> → only Audience-first offered.</td>
+        <td><strong>Plain <span class="card-name">Heartbeat of Spring</span> / <span class="card-name">Badgermole Cub</span> + Citadel + Canyon/Room</strong><br><span class="muted small">MTG-500 acceptance demo · TLA Limited</span></td>
+        <td><span class="badge badge-yes">Pure</span></td>
+        <td><span class="badge badge-yes">Pure</span></td>
+        <td><span class="badge badge-yes">Pure (0 forks)</span> Both predicates pass <code>is_pure_type_mana_trigger</code>; <code>board_sensitive == false</code> → full caches/<code>direct()</code>.</td>
       </tr>
       <tr>
-        <td><strong>Treasure + <code>SacrificedThisTurnAtLeast</code> / <code>GraveyardAtLeast</code> mana</strong><br><span class="muted small">New counterexample · missing <code>ReadSet</code> arms</span></td>
-        <td><span class="badge badge-no">Missed</span> <code>ReadSet::condition</code> / <code>value</code> hit <code>_ =&gt; {}</code>.</td>
-        <td><span class="badge badge-yes">Pass</span> Completed <code>ReadSet</code> sets <code>battlefield</code> (departure) on turn-history &amp; graveyard conditions → Treasure is <code>Mutator</code>.</td>
+        <td><strong><span class="card-name">Air Nomad Legacy</span> / <span class="card-name">Badgermole</span> / <span class="card-name">Fated Firepower</span> + Treasures</strong><br><span class="muted small">Common TLA Limited boards (no Citadel/counters)</span></td>
+        <td><span class="badge badge-yes">Pure</span></td>
+        <td><span class="badge badge-yes">Pure</span></td>
+        <td><span class="badge badge-yes">Pure (0 forks)</span> Unconditional counter/keyword scopes don't set <code>has_conditional_or_count_statics</code>; no damage suffix keeps Firepower inactive.</td>
       </tr>
       <tr>
-        <td><strong>Suspended <code>ManaUpfront</code> with vanished grant / coupled suffix</strong><br><span class="muted small">New counterexample · continuation coupling</span></td>
-        <td><span class="badge badge-no">Erased</span> <code>.life_delta()</code> drops <code>Coupled</code>; vanished grant drops reads.</td>
-        <td><span class="badge badge-yes">Pass</span> Continuation reads union into <code>ActivePaymentReads</code>; <code>Obligation::Output</code> keeps <code>PaymentCoupling</code> so Pure Handoff waits.</td>
+        <td><strong>Delve spell + non-token <code>{T}, Sacrifice: <span class="pip pip-g">G</span></code></strong><br><span class="muted small">New counterexample · zero statics/triggers/repls</span></td>
+        <td><span class="badge badge-no">Pruned</span> Static <code>graveyard_payers</code> misses +1 card.</td>
+        <td><span class="badge badge-no">Missed</span> No delve channel in <code>ReadSet</code>.</td>
+        <td><span class="badge badge-yes">Pass</span> Question-level <code>help.delve.is_some()</code> sets <code>board_sensitive</code> → non-token sacrifice is <code>Mutator</code> → fork finds legal cast.</td>
       </tr>
       <tr>
-        <td><strong><span class="card-name">Fated Firepower</span> (real TLA) + counter mana source (no Citadel)</strong><br><span class="muted small">Throughput check · inactive replacement channel</span></td>
-        <td><span class="badge badge-yes">Pure</span> (by accident — ignored replacements).</td>
-        <td><span class="badge badge-yes">Pure</span> <code>events.damage == false</code> keeps <code>replacement_reads.damage</code> inactive → zero false coupling on ordinary TLA boards!</td>
+        <td><strong>Summoning-sick creature: <code>Remove Haste counter: <span class="pip pip-g">G</span></code> + <code>{T}: <span class="pip pip-r">R</span></code></strong><br><span class="muted small">New counterexample · zero statics/triggers/repls</span></td>
+        <td><span class="badge badge-no">Error</span> Offers counter-first → loses Haste → stranded.</td>
+        <td><span class="badge badge-no">Missed</span> No summoning-sickness read in graph.</td>
+        <td><span class="badge badge-yes">Pass</span> Counter cost is unconditionally <code>Mutator</code>; same-permanent tap is <code>Sensitive</code> → only tap-first offered.</td>
       </tr>
       <tr>
-        <td><strong>10× Forest + Angel + Audience + 2× Citadel casting <code>{15}</code></strong><br><span class="muted small">Throughput guard · 3-role pruning</span></td>
-        <td><span class="badge badge-planned">Pending</span> Pass 4 solver not yet landed.</td>
-        <td><span class="badge badge-yes">Fast &amp; Exact</span> Angel writes only <code>POWER</code> (not <code>ABILITIES/TYPES/CONTROL</code>) → 10 Forests stay <code>Invariant</code>; forks only <code>{Citadel, Audience}</code>.</td>
+        <td><strong><code>tap_cost.predicate</code> / <code>ActivatedAbilitiesCostLess.predicate</code></strong><br><span class="muted small">New counterexample · unwalked predicates</span></td>
+        <td><span class="badge badge-no">Missed</span> Hardcoded <code>tapped|counters</code> / unwalked.</td>
+        <td><span class="badge badge-no">Missed</span> Not walked by <code>ReadSet</code>.</td>
+        <td><span class="badge badge-yes">Pass</span> Both set <code>has_stateful_mana_abilities</code> / <code>has_conditional_or_count_statics</code> → all non-mana writes couple safely.</td>
       </tr>
       <tr>
-        <td><strong>Angel + Audience (2× Citadel @ 28, Henge @ 22, Canyon @ 25)</strong><br><span class="muted small">Pass 2 boards · <code>board.reads.state.life</code></span></td>
-        <td><span class="badge badge-planned">Pending</span> Marked <code>Coupled</code>; frozen solver still runs.</td>
-        <td><span class="badge badge-yes">Pass</span> Mutators fork, Audience is <code>Sensitive</code>; pure shortcuts defer whenever <code>Mutators != ∅</code>.</td>
+        <td><strong>Permanent <em>P</em> (<code>PreventAll</code> + <code>Sacrifice: <span class="pip pip-g">G</span></code>) + Citadel @ 3 life</strong><br><span class="muted small">Reader before mutator · + 2-life fee</span></td>
+        <td><span class="badge badge-no">Missed</span> Binary enum drops Citadel-first.</td>
+        <td><span class="badge badge-yes">Pass</span> <em>P</em> <code>Mutator</code>, Citadel <code>Sensitive</code>.</td>
+        <td><span class="badge badge-yes">Pass</span> Both <em>P</em> (<code>removes_board_rules</code>) and Citadel (damage suffix) are <code>Mutator</code> → fork tries Citadel-first (0 dmg), then sacrifices <em>P</em>.</td>
       </tr>
       <tr>
-        <td><strong><span class="card-name">Guardian of Vitu-Ghazi</span> + Room + Cub</strong><br><span class="muted small">Colored convoke (Pass 5)</span></td>
-        <td><span class="badge badge-no">Error</span> Nested surfaces skip <code>while_paying</code>.</td>
-        <td><span class="badge badge-yes">Pass</span> <code>convoke_colors: ManaTypeSet</code> inside <code>PaymentModel</code> (Pass 5) serves both Pure and Coupled regimes.</td>
+        <td><strong>Angel + Audience (2× Citadel @ 28, Henge @ 22, Canyon @ 25) + 10 Forests</strong><br><span class="muted small">Pass 2 boards + <span class="pip pip-c">15</span> throughput guard</span></td>
+        <td><span class="badge badge-planned">Pending</span> Frozen solver still runs.</td>
+        <td><span class="badge badge-yes">Pass</span> 10 Forests <code>Invariant</code>.</td>
+        <td><span class="badge badge-yes">Pass &amp; Fast</span> Angel writes <code>POWER</code> only → 10 Forests stay <code>Invariant</code>; forks only <code>{Citadel rep, Audience}</code>; <span class="pip pip-c">15</span> rejects in ms.</td>
+      </tr>
+      <tr>
+        <td><strong>Treasure + <span class="card-name">White Lotus Tile</span> / <span class="card-name">Kyoshi</span> / <code>SacrificedThisTurnAtLeast</code></strong><br><span class="muted small">Dynamic / turn-history / graveyard mana</span></td>
+        <td><span class="badge badge-no">Partial</span> Missed turn-history &amp; graveyard arms.</td>
+        <td><span class="badge badge-yes">Pass</span> After adding missing <code>ReadSet</code> arms.</td>
+        <td><span class="badge badge-yes">Pass (No ReadSet needed)</span> Any dynamic/conditional mana sets <code>has_stateful_mana_abilities</code> → Treasure is <code>Mutator</code>, reader is <code>Sensitive</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Suspended <code>ManaUpfront</code> (vanished grant or coupled suffix)</strong><br><span class="muted small">Pass 3/4 continuation coupling</span></td>
+        <td><span class="badge badge-no">Erased</span> <code>.life_delta()</code> drops <code>Coupled</code>.</td>
+        <td><span class="badge badge-yes">Pass</span> Continuation reads + role on <code>Output</code>.</td>
+        <td><span class="badge badge-yes">Pass</span> Unified classifier inspects suspended <code>ManaUpfrontActivation</code> and keeps <code>PaymentCoupling</code> on <code>Obligation::Output</code>.</td>
+      </tr>
+      <tr>
+        <td><strong><span class="card-name">Ozai, the Phoenix King</span> (<code>UnspentManaAtLeast(6) → Flying</code>) + 8 Forests</strong><br><span class="muted small">Real TLA mythic · <code>reads_mana_or_tapped</code></span></td>
+        <td><span class="badge badge-planned">Coupled</span> <code>tap_coupled = true</code> on all 8 Forests.</td>
+        <td><span class="badge badge-no">2-hop hole</span> Missed <code>Flying → static</code> chain if exempted.</td>
+        <td><span class="badge badge-yes">Safe &amp; Fast</span> <code>reads_mana_or_tapped = true</code> forks Forest taps; equivalence-class dedup collapses 8 identical Forests to 1 branch/step!</td>
       </tr>
     </tbody>
   </table>
@@ -1130,23 +1143,23 @@ enum PaymentCoupling {
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 1 · Where event-replacement reads are summarized and activated</h3>
+      <h3>Choice 1 · Soundness architecture: Closed-world Positive Whitelist vs. patching Design 4's Read/Write Graph</h3>
       <span class="badge badge-scope">This Work · Reversible (internal engine)</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 1a</span> Event-kind-scoped <code>ReplacementReads</code> cached on <code>SourceSeed</code> / <code>LayerBoard</code> (+ command emblems), gated by active event kinds</div>
+        <div class="opt-title"><span class="badge badge-proposed">Recommended · 1a</span> Closed-world positive whitelist (<code>BoardArithmeticProfile</code>, struct-eq <code>is_pure_type_mana_trigger</code>, exhaustive <code>ReplacementEffect</code> match)</div>
         <ul class="compact">
-          <li>Precomputes <code>damage</code>, <code>counters</code>, and <code>departure</code> <code>ReadSet</code>s once per permanent incarnation in <code>build_seed</code> (O(0) on cached board hits; skips phased-out / <code>abilities_lost</code> permanents; visits <code>functioning_command_objects</code> for emblems).</li>
-          <li>Activates each channel only if at least one available source or pending <code>ManaUpfront</code> proposes that event kind — keeping <span class="card-name">Fated Firepower</span> without Citadel 100% Pure and letting <code>0d7bb6743</code> hand off to Pure immediately after Citadel taps.</li>
-          <li>Reuses <code>ReadSet::value</code> / <code>predicate</code> so any future <code>DamageTransform::Add(EffectValue)</code> works automatically without a second walker.</li>
+          <li>Eliminates the entire whack-a-mole class of missed read channels — fixes <code>0d7bb6743</code>, <code>a90fd7109</code>, <code>tap_cost.predicate</code>, <code>ActivatedAbilitiesCostLess.predicate</code>, <code>Help::delve</code>, Haste counters, and every future <code>CardPredicate</code>/<code>Condition</code>/<code>EffectValue</code> field in one stroke.</li>
+          <li><em>Smaller</em> code than Design 4: deletes <code>mana_activation_reads</code>, <code>payment_writes_couple</code>, and the proposed <code>ReplacementReads</code> / <code>PaymentWrites</code> / expanded <code>ReadSet</code> walkers; leaves <code>LayerBoard.reads</code> solely to <code>DerivedCache</code> invalidation.</li>
+          <li>Plain <span class="card-name">Heartbeat of Spring</span> (<code>Land</code>) and <span class="card-name">Badgermole Cub</span> (<code>Creature</code>) are positively verified on the Pure arithmetic path with zero forks.</li>
         </ul>
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">Passed Over · 1b</span> Mark any suffix activation <code>Coupled</code> whenever any damage/life replacement exists (or re-scan replacements in <code>mana.rs</code>)</div>
+        <div class="opt-title"><span class="badge badge-existing">Passed Over · 1b</span> Patch Design 4's Read/Write dependency graph (add channels #5–#9 for triggers, <code>tap_cost</code>, cost reduction, delve, summoning sickness)</div>
         <ul class="compact">
-          <li>Falsely couples constant replacements (e.g. <span class="card-name">Angel of Vitality</span>'s unconditional <code>+1</code>) and misses non-suffix mutators (e.g. tapping a Forest when <code>ModifyDamage</code> counts tapped lands).</li>
-          <li>Re-scanning <code>for_each_functioning_replacement</code> on every <code>payment_sources</code> call pays unnecessary work on hot paths.</li>
+          <li>Retains the open-world fail-open hazard: the next new <code>Condition</code>, <code>EffectValue</code>, or <code>CardPredicate</code> field added anywhere in <code>managym</code> silently re-breaks soundness if a side-table walker is missed.</li>
+          <li>Duplicates predicate/condition walking across 6+ subsystems for negligible real-world throughput gain over the coarse positive whitelist.</li>
         </ul>
       </div>
     </div>
@@ -1154,23 +1167,22 @@ enum PaymentCoupling {
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 2 · Dedicated <code>PaymentWrites</code> + complete <code>ReadSet</code> vs. overloading <code>StateReads</code></h3>
+      <h3>Choice 2 · How coarse should the board whitelist be on common TLA Limited statics &amp; replacements?</h3>
       <span class="badge badge-scope">This Work · Reversible (internal engine)</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 2a</span> Introduce <code>PaymentWrites</code> (state + <code>POWER</code>/<code>KEYWORDS</code> fields + sacrifice/rules + event kinds) and complete <code>ReadSet</code></div>
+        <div class="opt-title"><span class="badge badge-proposed">Recommended · 2a</span> Separate conditional/count statics from unconditional counter/keyword scopes, and gate damage/life/zone replacements by matching step kinds</div>
         <ul class="compact">
-          <li>Eliminates overloading <code>StateReads</code> for writes and keeps <code>LayerBoard</code> cache invalidation cleanly separate from replacement coupling.</li>
-          <li>Fixes three newly found blind spots in one pass: <code>±1/±1</code> &amp; keyword counter writes vs <code>POWER</code>/<code>KEYWORDS</code> reads, <code>reduce_by_source_power</code>, and turn-history/graveyard conditions (<code>SacrificedThisTurnAtLeast</code>, <code>PermanentLeftThisTurn</code>, <code>CreatureDiedThisTurn</code>, <code>GraveyardAtLeast</code>, <code>PermanentsSacrificedThisTurn</code>, <code>AttachedCreaturePower</code>).</li>
-          <li>Single write-summary helper shared by live activations and suspended <code>ManaUpfront</code> continuations.</li>
+          <li>Keeps common TLA Limited boards — <span class="card-name">Air Nomad Legacy</span> + Treasures, <span class="card-name">Badgermole</span> + Treasures, and <span class="card-name">Fated Firepower</span> without Citadel — <strong>100% Pure (zero forks)</strong>, while letting <code>0d7bb6743</code> hand Henge off to Pure immediately after Citadel taps.</li>
+          <li>Still 100% sound: unconditional counter/keyword scopes can only change via counter mutations (already unconditionally <code>Mutator</code>) or another conditional static (already sets <code>has_conditional_or_count_statics</code>).</li>
         </ul>
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">Passed Over · 2b</span> Keep passing <code>StateReads</code> + <code>sacrifice: bool</code> and merge <code>ModifyDamage</code> reads into <code>LayerBoard.reads</code></div>
+        <div class="opt-title"><span class="badge badge-existing">Passed Over · 2b</span> Single flat boolean: any non-trivial static or any payment replacement couples all non-mana writes</div>
         <ul class="compact">
-          <li>Pollutes <code>DerivedCache::invalidate</code> with replacement reads that never change <code>LayerBoard</code> characteristics (causing spurious board rebuilds on life changes!).</li>
-          <li>Leaves Case 3 (<code>±1/±1</code> counter vs Audience) and turn-history/graveyard sacrifice coupling unfixed.</li>
+          <li>Simpler by ~15 lines, but forces coupled forks on every Treasure whenever <span class="card-name">Air Nomad Legacy</span>, <span class="card-name">Badgermole</span>, or <span class="card-name">Fated Firepower</span> sits on the board in TLA Limited.</li>
+          <li>Pass 5's release Engine Budget benchmark would take avoidable fork overhead on common TLA boards.</li>
         </ul>
       </div>
     </div>
@@ -1178,23 +1190,22 @@ enum PaymentCoupling {
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 3 · Three-role coupling (<code>Invariant</code> / <code>Sensitive</code> / <code>Mutator</code>) vs. binary <code>Independent</code> / <code>Coupled</code></h3>
+      <h3>Choice 3 · Where to compute <code>PaymentCoupling</code>: intrinsic facts in <code>PaymentScan</code> vs. pre-baked on <code>ManaSource</code></h3>
       <span class="badge badge-scope">This Work · Reversible (internal engine)</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 3a</span> Explicit 3-role <code>PaymentCoupling { Invariant(LifeDelta), Sensitive(LifeDelta), Mutator }</code></div>
+        <div class="opt-title"><span class="badge badge-proposed">Recommended · 3a</span> Cache intrinsic <code>ActivationFacts</code> on <code>ManaSource</code> inside <code>PaymentScan</code>; derive 3-role <code>PaymentCoupling</code> at the question boundary</div>
         <ul class="compact">
-          <li>Makes the Pure-Finish-First and Pure-Handoff theorems directly readable in code: Pure Handoff iff <code>Mutators == ∅</code>; Pure-Finish-First strips only <code>Mutators</code>; Coupled search branches on <code>Mutators ∪ Sensitive</code>.</li>
-          <li>Fixes Case 2 (<span class="card-name">Citadel</span> before sacrificing a <code>PreventAll</code> permanent) and <span class="card-name">Raucous Audience</span> before 2nd Citadel cleanly, while keeping 10 Forests <code>Invariant</code> via <code>LayerBoard.conditional_static_writes</code>.</li>
-          <li>Lets <span class="card-name">Audience</span> + Forests pay <code>{4}</code> in O(1) via Pure-Finish-First without touching Citadel or any fork.</li>
+          <li>Preserves <code>PaymentScan</code>'s exact invariant (<code>shared_payment_sources</code> is a pure function of <code>(&amp;Game, player)</code>, keeping <code>debug_assert_eq!</code> clean).</li>
+          <li>Automatically sees priority-time <code>help.delve</code>, re-classifies cleanly after <code>model.reserve(...)</code> removes a Mutator (e.g. a reserved Citadel), and shares ONE classifier between live sources and suspended <code>Obligation::Output</code> continuations (eliminating <code>.life_delta()</code> erasure).</li>
         </ul>
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">Passed Over · 3b</span> Keep binary <code>Independent(LifeDelta)</code> / <code>Coupled</code> and classify Sensitive readers as <code>Coupled</code></div>
+        <div class="opt-title"><span class="badge badge-existing">Passed Over · 3b</span> Pre-bake <code>PaymentCoupling</code> inside <code>payment_sources()</code> and classify <code>ManaUpfront</code> separately in <code>payment_obligations_owing()</code></div>
         <ul class="compact">
-          <li>Either loses Pure-Finish-First whenever a Sensitive source is needed (because stripping <code>Coupled</code> strips Audience too), or forces branching on every source on a coupled board (exploding on 10 Forests + <code>{15}</code>).</li>
-          <li>Blurs two distinct properties (<em>"mutates state read by others"</em> vs <em>"reads state mutated by others"</em>) under one variant.</li>
+          <li>Blind to priority-time <code>help.delve</code> (where <code>self.paying()</code> is still <code>None</code>) and retains stale <code>Mutator</code> classifications after reservations remove the only damage/counter source.</li>
+          <li>Keeps two separate coupling call sites that can drift apart.</li>
         </ul>
       </div>
     </div>
@@ -1202,21 +1213,21 @@ enum PaymentCoupling {
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 4 · Representing suspended <code>Decision::ManaUpfront</code> continuations in coupling &amp; Pure Handoff</h3>
+      <h3>Choice 4 · Keeping plain sources <code>Invariant</code> on coupled boards (10 Forests beside Angel + Audience + 2× Citadel)</h3>
       <span class="badge badge-scope">This Work · Reversible (internal engine)</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 4a</span> Union suspended <code>ManaUpfrontActivation</code> reads/events into <code>ActivePaymentReads</code> and keep <code>PaymentCoupling</code> on <code>Obligation::Output</code></div>
+        <div class="opt-title"><span class="badge badge-proposed">Recommended · 4a</span> 3-role <code>Invariant</code> / <code>Sensitive</code> / <code>Mutator</code> using <code>stateful_static_writes_non_pt</code> + unconditional counter-mutator rule</div>
         <ul class="compact">
-          <li>Handles a granted dynamic mana ability whose grant disappeared while paying its upfront fee (plan Pass 4 note) using the same <code>ReadSet::mana_output</code> walker.</li>
-          <li>Stops <code>payment_obligations_owing</code> from erasing <code>Mutator</code> to <code>LifeDelta(0)</code> via <code>.life_delta()</code>, ensuring Pure Handoff waits until every coupled pending continuation has resolved on a fork.</li>
+          <li>On Angel + Audience + 2× Citadel + 10 Forests paying <code>{15}</code>, Angel writes <code>POWER</code> only → 10 Forests stay <code>Invariant</code> (deferred to Pure Handoff; branched by 1 class rep only to fund an upfront fee).</li>
+          <li>On boards where a conditional static writes outside P/T (<code>ABILITIES</code>, <code>CARD_TYPES</code>, <code>SUBTYPES</code>, <code>CONTROL</code>, <code>COLORS</code>, <code>KEYWORDS</code>), or on any permanent sharing a <code>Mutator</code>, or under stateful triggered mana, taps safely elevate to <code>Sensitive</code>.</li>
         </ul>
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">Passed Over · 4b</span> Read only <code>LayerBoard</code> and keep <code>Obligation::Output { life_delta: LifeDelta }</code></div>
+        <div class="opt-title"><span class="badge badge-existing">Passed Over · 4b</span> Mark every source on a coupled board <code>Sensitive</code> whenever any conditional static exists</div>
         <ul class="compact">
-          <li>Misses both vanished-grant dynamic outputs and coupled suffixes/sacrifices sitting inside a suspended <code>Decision::ManaUpfront</code>.</li>
+          <li>Drops <code>stateful_static_writes_non_pt</code> (1 boolean), but forces the coupled fork search to branch on 1 representative Forest at every depth on Angel + 10 Forests + <code>{15}</code> (multiplying visited fork states by ~10×).</li>
         </ul>
       </div>
     </div>
@@ -1228,36 +1239,37 @@ enum PaymentCoupling {
   <div class="card">
     <ul class="compact">
       <li>
-        <strong>Shortcut deferral on every coupled slice</strong>
-        <span class="badge badge-scope">This Work · Pass 4</span> —
-        Whenever <code>Mutators != ∅</code> (any source tap, activation, or pending <code>ManaUpfront</code> is <code>Mutator</code>),
-        <code>PaymentModel::direct()</code>, <code>PaymentCache</code>, <code>automatic_payability</code>'s <code>fixed_total</code>,
-        <code>choice_tap_witness</code>, <code>useful_payment_taps</code> profile dedup, and <code>SourceClassCache</code> must defer to the Coupled Regime authority.
-        Once a fork reaches <code>Mutators == ∅</code>, all pure shortcuts and caches re-engage at full speed.
-      </li>
-      <li>
-        <strong>Reservation replay &amp; canonical memoization on coupled forks</strong>
-        <span class="badge badge-scope">This Work · Pass 4</span> —
-        Re-apply caller <code>SourceReservation</code>s on every coupled fork (keeping sacrifice-reserved permanents on the battlefield until CR 601.2h),
-        deduplicate identical coupled/sensitive branches by equivalence class, limit Invariant branching to one class representative only when funding an upfront fee,
-        and memoize coupled states canonically so <code>{15}</code> with 10 Forests + Angel + Audience + 2× Citadel rejects in milliseconds in debug.
-      </li>
-      <li>
-        <strong>One-shot / consumable shields (future-proofing invariant)</strong>
+        <strong>No hash, replay, or observation churn</strong>
         <span class="badge badge-scope">This Work · Preserved</span> —
-        <code>managym</code> currently has no consumable one-shot player prevention shield; if one is added later, mutating <code>state.effects</code> advances
-        <code>revisions.characteristics</code>, so <code>mana_suffix_coupling</code>'s existing <code>Revisions</code> diff immediately classifies the step as <code>Mutator</code>.
+        <code>BoardArithmeticProfile</code>, <code>ActivationFacts</code>, and 3-role <code>PaymentCoupling</code> are strictly derived in-memory analysis.
+        <code>MATCH_STATE_HASH_VERSION</code> stays at v35; existing replay, action, and observation formats are untouched; the <code>PaymentScan</code>
+        debug rebuild assertion holds because suffix probes and coupled forks never mutate <code>&amp;self</code>.
+      </li>
+      <li>
+        <strong>Shortcut deferral &amp; coupled fork execution</strong>
+        <span class="badge badge-scope">This Work · Pass 4</span> —
+        Whenever <code>Mutators != ∅</code> (across live sources or pending <code>ManaUpfront</code> continuations),
+        <code>PaymentModel::direct()</code>, <code>PaymentCache</code>, <code>automatic_payability</code>'s <code>fixed_total</code>,
+        <code>choice_tap_witness</code>, <code>useful_payment_taps</code> dedup, and <code>SourceClassCache</code> defer to the Coupled Regime authority.
+        Coupled forks re-apply caller <code>SourceReservation</code>s (keeping sacrifice-reserved permanents on the battlefield until CR 601.2h),
+        deduplicate identical branches by equivalence class, memoize by canonical payment state, and hand off to Pure once <code>Mutators == ∅</code>.
+      </li>
+      <li>
+        <strong>Command-zone emblems included</strong>
+        <span class="badge badge-scope">This Work · Pass 4</span> —
+        <code>compute_board</code> scans <code>self.functioning_command_objects(None)</code> (not only <code>static_sources.command_objects</code>,
+        which skips replacement-only emblems) so emblem replacements enter <code>BoardArithmeticProfile</code>.
       </li>
       <li>
         <strong>Colored convoke inside <code>PaymentModel</code></strong>
         <span class="badge badge-scope">This Work · Pass 5</span> —
-        Move colored convoke into <code>ManaSource.convoke_colors: ManaTypeSet</code> and delete <code>while_paying</code> / <code>convoke_search</code> so all 8+
-        surfaces and both Pure and Coupled regimes handle <span class="card-name">Guardian of Vitu-Ghazi</span> identically.
+        Move colored convoke into <code>ManaSource.convoke_colors: ManaTypeSet</code> and delete <code>while_paying</code> / <code>convoke_search</code>
+        so all 8+ payment surfaces and both Pure and Coupled regimes handle <span class="card-name">Guardian of Vitu-Ghazi</span> identically.
       </li>
       <li>
         <strong>Owned capture for non-mana activations (<code>Operation::Activation</code> / <code>ActivatedTargeting</code>)</strong>
         <span class="badge badge-existing">Separate Outcome</span> —
-        Capture announced non-mana abilities in <code>flow/play.rs</code> before mana payment (carried from prior review Choice 3a).
+        Capture announced non-mana abilities in <code>flow/play.rs</code> before mana payment (carried from Review 3 Choice 3a).
       </li>
       <li>
         <strong>Filtering live <code>Decision::OrderReplacement</code> offers during payment</strong>
@@ -1269,38 +1281,38 @@ enum PaymentCoupling {
 
   <!-- ====================================================================== -->
   <h2>7. Questions for Decision</h2>
-  <p class="muted small">Reply with option codes (e.g. <code>1a, 2a, 3a, 4a</code>) to lock the Pass 4 realignment.</p>
+  <p class="muted small">Reply with option codes (e.g. <code>1a, 2a, 3a, 4a</code>) to lock the Pass 4 conservative whitelist design.</p>
 
   <ol class="q-list">
     <li class="q-item">
-      <div class="q-stem">1. Where should event-replacement reads live and how should they activate?</div>
+      <div class="q-stem">1. Should Pass 4 replace the open-world Read/Write graph with the closed-world Positive Arithmetic Whitelist?</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Cache event-kind-scoped <code>ReplacementReads</code> (<code>damage</code>, <code>counters</code>, <code>departure</code>) on <code>SourceSeed</code> / <code>LayerBoard</code> (including <code>functioning_command_objects</code> emblems), and activate each channel only when an available source or pending <code>ManaUpfront</code> can propose that event kind.</li>
-        <li>Classify every suffix activation as <code>Coupled</code> whenever any damage/life replacement is on the board (or scan <code>for_each_functioning_replacement</code> live inside <code>payment_sources</code>).</li>
+        <li><strong>(Recommended)</strong> Yes — certify pure arithmetic via a closed positive whitelist (<code>BoardArithmeticProfile</code>, struct-eq <code>is_pure_type_mana_trigger</code> keeping plain <span class="card-name">Heartbeat of Spring</span> / <span class="card-name">Badgermole Cub</span> pure, exhaustive <code>ReplacementEffect</code> match) and fail safe to exact native forks outside it.</li>
+        <li>No — keep Design 4's fine-grained Read/Write graph and patch channels #5–#9 (triggered mana, <code>tap_cost</code>, cost reduction, delve, summoning-sick Haste counters).</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">2. Should payment writes move to a dedicated <code>PaymentWrites</code> type with a completed <code>ReadSet</code>?</div>
+      <div class="q-stem">2. How coarse should the whitelist be on common TLA Limited statics and replacements?</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Yes — replace overloaded <code>StateReads</code> writes with <code>PaymentWrites</code> (mirroring <code>game.rs:902</code> for <code>±1/±1</code> &amp; keyword counters) and add the missing turn-history, graveyard, <code>AttachedCreaturePower</code>, and <code>reduce_by_source_power</code> arms to <code>ReadSet</code>.</li>
-        <li>No — keep passing <code>StateReads</code> + <code>sacrifice: bool</code> and merge <code>ModifyDamage</code> reads directly into <code>LayerBoard.reads</code>.</li>
+        <li><strong>(Recommended)</strong> Split conditional/count statics from unconditional counter/keyword scopes (keeping <span class="card-name">Air Nomad Legacy</span> + Treasures and <span class="card-name">Badgermole</span> + Treasures pure) and gate damage/life/zone replacements by matching step kinds (keeping <span class="card-name">Fated Firepower</span> without Citadel pure and enabling immediate Pure Handoff after Citadel taps in <code>0d7bb6743</code>).</li>
+        <li>Use a single flat boolean: any non-trivial static or any payment replacement couples all non-mana writes.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">3. Should <code>PaymentCoupling</code> split into three explicit roles (<code>Invariant</code> / <code>Sensitive</code> / <code>Mutator</code>) for Pure-Finish-First and Pure Handoff?</div>
+      <div class="q-stem">3. Should <code>PaymentScan</code> cache intrinsic <code>ActivationFacts</code> and compute 3-role <code>PaymentCoupling</code> at the question boundary?</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Yes — <code>Mutator</code> forks and blocks Pure Handoff; <code>Sensitive(LifeDelta)</code> stays exact in Pure-Finish-First (when Mutators are stripped) and branches alongside Mutators on forks; <code>Invariant(LifeDelta)</code> defers to Pure Handoff (using <code>LayerBoard.conditional_static_writes</code> to keep plain Forests Invariant).</li>
-        <li>No — keep binary <code>Independent(LifeDelta)</code> / <code>Coupled</code> and mark affected readers as <code>Coupled</code>.</li>
+        <li><strong>(Recommended)</strong> Yes — keeps <code>shared_payment_sources</code> a pure function of <code>(&amp;Game, player)</code>, handles priority-time <code>help.delve</code> and post-reservation mutator removal, and classifies live sources and suspended <code>Obligation::Output</code> continuations through one shared function.</li>
+        <li>No — pre-bake <code>PaymentCoupling</code> inside <code>payment_sources()</code> and classify suspended <code>ManaUpfront</code> separately.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">4. How should suspended <code>Decision::ManaUpfront</code> continuations participate in coupling and Pure Handoff?</div>
+      <div class="q-stem">4. Should <code>stateful_static_writes_non_pt</code> keep plain sources <code>Invariant</code> when conditional statics only alter P/T?</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Union every suspended <code>ManaUpfrontActivation.output</code>'s reads and proposed event kinds into <code>ActivePaymentReads</code>, and carry <code>PaymentCoupling</code> on <code>Obligation::Output</code> so Pure-Finish-First and Pure Handoff never silently drop a coupled continuation to <code>LifeDelta(0)</code>.</li>
-        <li>Keep reading only <code>LayerBoard</code> and converting continuation coupling via <code>.life_delta()</code>.</li>
+        <li><strong>(Recommended)</strong> Yes — keeps 10 Forests <code>Invariant</code> beside <span class="card-name">Angel of Vitality</span> + <span class="card-name">Raucous Audience</span> + 2× <span class="card-name">Citadel</span> (and elevates plain taps to <code>Sensitive</code> whenever a conditional static writes outside <code>POWER</code>, under stateful triggered mana, or on a permanent sharing a <code>Mutator</code>).</li>
+        <li>No — mark every source <code>Sensitive</code> whenever any conditional static is on the board.</li>
       </ol>
     </li>
   </ol>
@@ -1320,7 +1332,7 @@ enum PaymentCoupling {
       } else {
         root.setAttribute('data-theme', m);
       }
-      btn.textContent = 'Theme: ' + m.charAt(0).toUpperCase() + m.slice(1);
+      btn.textContent = 'Theme: ' + m[0].toUpperCase() + m.slice(1);
     }
     btn.addEventListener('click', function () {
       idx = (idx + 1) % modes.length;
