@@ -1,45 +1,47 @@
-at: 70e45c2a5b9a769a31b4a28536b8d0a78e8bb0ac
+at: 87655dd0e0f6d3ddaefc9a4a9120380184e1915a
 first:
   - path: docs/engine-python.md
-    why: Public API and decision guarantees
+    why: Probe a decision and replay an edited branch
   - path: managym/__init__.pyi
-    why: Python constructors and entry points
+    why: Five constructors and two Python entry points
   - path: managym/src/flow/state_edit.rs
-    why: Edit types, quiet moves and transactional declaration refresh
-  - path: managym/src/agent/env.rs
-    why: Live edit entry point and shared intervention dispatch
+    why: Validate batches and commit the refreshed decision
+  - path: managym/src/flow/combat.rs
+    why: Identify the declarer and remember completed declarations
+  - path: managym/src/flow/decision_group/combat.rs
+    why: Grouped decisions use the same declarer
+  - path: managym/src/flow/tick.rs
+    why: Ordinary and edited combat share legal offers
+  - path: managym/src/flow/zones.rs
+    why: Retire battlefield appearances and release meld components
+  - path: managym/src/agent/policy_history.rs
+    why: Expire departed objects' live history links
   - path: managym/src/agent/env/provenance.rs
-    why: Journal operation and action offsets
+    why: Ordered edits at one journal offset
+  - path: managym/src/agent/env.rs
+    why: Live edits and replay share intervention dispatch
   - path: managym/src/agent/env/snapshot.rs
     why: Restore order and forced action admission
   - path: managym/src/agent/env/snapshot/replay.rs
-    why: Cold replay and verification
-  - path: managym/src/flow/tick.rs
-    why: Action builders shared with ordinary combat
-  - path: managym/src/flow/combat.rs
-    why: Declarations that survive removal from combat
-  - path: managym/src/flow/zones.rs
-    why: Battlefield departure bookkeeping shared with normal play
-  - path: managym/src/agent/policy_history.rs
-    why: Shared expiry of links to departed objects
+    why: Rebuild and verify the saved branch
   - path: managym/src/python/bindings.rs
-    why: Typed edit constructors and live Python entry point
+    why: Python constructors and live editing
   - path: managym/src/python/snapshot_bindings.rs
-    why: Python restore constructors accept the same edits
+    why: Pass the same edits through restore
   - path: managym/recording.py
-    why: Strict schema for the native intervention payload
+    why: Validate the journal's tagged edit records
   - path: managym/academy/trace.py
-    why: Branch kinds exposed in Academy replay
+    why: Expose branch kinds to Academy
   - path: academy/ui/src/lib/board/replay.ts
-    why: Move-list label for an edited branch
-  - path: managym/src/agent/env/state_edit_tests.rs
-    why: Rollback, restored decisions and object-bound Commands
+    why: Label an edited replay choice
   - path: managym/src/flow/state_edit/tests.rs
-    why: Combat, library, history and atomicity checks
+    why: Quiet departures, melds, library knowledge and history
+  - path: managym/src/agent/env/state_edit_tests.rs
+    why: Atomic declarations and replay of object-bound commands
   - path: tests/env/test_game_state_edits.py
-    why: Live, cold replay and recorded vector integration
+    why: Scalar and recorded vector integration
   - path: tests/academy/test_game_records.py
-    why: Imported state edits mark the verified replay choice
+    why: Edited choices survive Academy import
 hide:
   - path: tests/public_api.json
     why: Generated snapshot of the additive Python API
