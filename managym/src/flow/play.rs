@@ -807,13 +807,11 @@ impl Game {
             return false;
         };
         let card = cast.spell(&self.state[object]);
-        if !cast.kicked
-            && card
-                .life_alternative()
-                .is_some_and(|life| !self.can_pay_life(player, life))
-        {
-            return false;
-        }
+        let life = if cast.kicked {
+            0
+        } else {
+            card.life_alternative().unwrap_or(0)
+        };
         if card.discard_cost() && self.discard_candidates(player, Some(object)).is_empty() {
             return false;
         }
@@ -828,23 +826,24 @@ impl Game {
             return self
                 .sacrifice_candidates(player, &bargain_cost().predicate)
                 .into_iter()
-                .any(|id| self.can_pay_with_mana_abilities(player, &cost, Some(id)));
+                .any(|id| self.can_pay_mana_and_life(player, &cost, Some(id), life));
         }
         if let Some(or_mana) = card.forage_or() {
-            return self.can_forage(player, object, &cost)
-                || self.can_pay_with_mana_abilities(player, &cost.plus(or_mana), None);
+            return self.can_forage(player, object, &cost, life)
+                || self.can_pay_mana_and_life(player, &cost.plus(or_mana), None, life);
         }
         let help = self.spell_help(player, object, cast, &cost);
         if help != Help::default() {
             let pool = self.pooled_mana(player);
-            self.payable_with_help(
+            self.payable_with_help_and_life(
                 player,
                 &pool,
                 &cost,
                 crate::flow::payment::CostPermissionContext::from_help(help),
+                life,
             )
         } else {
-            self.can_pay_with_mana_abilities(player, &cost, None)
+            self.can_pay_mana_and_life(player, &cost, None, life)
         }
     }
 
@@ -1798,7 +1797,7 @@ impl Game {
         };
         if ability.mana_cost.x > 0 {
             most = most.min(i32::from(u8::MAX));
-        } else if (ability.mana_cost.mana_value > 0 || ability.waterbend)
+        } else if (ability.mana_cost.mana_value > 0 || ability.waterbend || ability.life_cost > 0)
             && !self.activation_x_payable(player, permanent, ability_index, 0)
         {
             return 1..=0;
@@ -1938,7 +1937,7 @@ impl Game {
         self.check_activation_terms(player, ability)
     }
 
-    /// The turn, life and condition terms every activation shares, whatever
+    /// The turn and condition terms every activation shares, whatever
     /// its source, mana abilities included: the one authority for "activate
     /// only ..." restrictions (CR 602.5).
     pub(crate) fn check_activation_terms(
@@ -1948,9 +1947,6 @@ impl Game {
     ) -> Result<(), AgentError> {
         if ability.own_turn_only && self.active_player() != player {
             return Err(AgentError("activation requires your turn".into()));
-        }
-        if !self.can_pay_life(player, ability.life_cost) {
-            return Err(AgentError("cannot pay life cost".into()));
         }
         if ability.sorcery_timing && !self.can_cast_sorceries(player) {
             return Err(AgentError("activation requires sorcery timing".into()));

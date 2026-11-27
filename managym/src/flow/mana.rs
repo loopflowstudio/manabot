@@ -29,17 +29,18 @@ use crate::{
     agent::action::{Action, ActionSpace, AgentError},
     flow::{
         decision::{
-            Decision, EffectFrame, ManaProduction, PendingManaBonus, SpendCompletion,
-            SuspendedResolution, TappedForMana,
+            Decision, EffectFrame, FrameCompletion, ManaProduction, PendingManaBonus,
+            SpendCompletion, SuspendedResolution, TappedForMana,
         },
         game::{ActivationSource, Game, PendingChoice},
+        layers::StateReads,
         payment::{CostComponent, CostPermissionContext, Help, Operation, Payment},
         proposed_event::{CounterProvenance, EventCause, ProposedEvent},
         statics::Characteristics,
         turn::StepKind,
     },
     state::{
-        ability::{Effect, EffectValue},
+        ability::{Effect, EffectValue, PlayerSelector},
         card::{
             ActivatedAbilityDefinition, ActivationZone, ReplacementEffect, TriggeredManaAbility,
             TriggeredManaOutput,
@@ -435,6 +436,7 @@ impl PurposeProjection {
     ) -> bool {
         if a.waterbend != b.waterbend
             || a.keyword != b.keyword
+            || a.tap_coupled != b.tap_coupled
             || a.abilities.len() != b.abilities.len()
             || !candidates
                 .iter()
@@ -460,6 +462,7 @@ impl PurposeProjection {
                 || x.limited != y.limited
                 || x.sacrifice_source != y.sacrifice_source
                 || x.life_cost != y.life_cost
+                || x.coupling != y.coupling
                 || !((x.cost.mana_value == 0 && y.cost.mana_value == 0) || x.cost == y.cost)
                 || x.outputs.len() != y.outputs.len()
             {
@@ -588,6 +591,61 @@ fn model_has_classes(model: &PaymentModel) -> bool {
     })
 }
 
+/// The payer's actual total can go below zero while paying for a spell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(super) struct LifeBudget {
+    pub(super) life: i32,
+    pub(super) cant_change: bool,
+}
+
+impl LifeBudget {
+    pub(super) fn can_pay(self, amount: u32) -> bool {
+        amount == 0
+            || !self.cant_change && i32::try_from(amount).is_ok_and(|amount| self.life >= amount)
+    }
+
+    fn pay(self, amount: u32) -> Option<Self> {
+        self.can_pay(amount).then(|| Self {
+            life: self.life - amount as i32,
+            ..self
+        })
+    }
+
+    fn activate(self, cost: u32, delta: LifeDelta) -> Option<Self> {
+        let paid = self.pay(cost)?;
+        Some(Self {
+            life: paid.life.saturating_add(delta.0),
+            ..paid
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+struct LifeDelta(i32);
+
+/// Whether this activation changes what another payment step can do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PaymentCoupling {
+    Independent(LifeDelta),
+    Coupled,
+}
+
+impl Default for PaymentCoupling {
+    fn default() -> Self {
+        Self::Independent(LifeDelta(0))
+    }
+}
+
+impl PaymentCoupling {
+    fn life_delta(self) -> LifeDelta {
+        match self {
+            Self::Independent(delta) => delta,
+            // The frozen source model is provisional on coupled boards.
+            Self::Coupled => LifeDelta(0),
+        }
+    }
+}
+
 /// One finite resource transition model. A source is reserved before its
 /// upfront obligation, so filters cannot finance themselves or form seedless
 /// cycles. Witnesses retain identities and concrete typed pool remainders.
@@ -602,7 +660,9 @@ enum Obligation<C = ManaChoices> {
         // and memo keys share them while keeping their own progress and pool.
         choices: C,
         life_cost: u32,
+        life_delta: LifeDelta,
     },
+    PayLife(u32),
     Tap {
         candidates: Arc<Vec<PermanentId>>,
         remaining: usize,
@@ -616,6 +676,9 @@ impl Obligation {
             cost,
             taps: Taps::None,
         }
+    }
+    fn life(amount: u32) -> Option<Self> {
+        (amount > 0).then_some(Self::PayLife(amount))
     }
 }
 
@@ -633,10 +696,16 @@ impl<C> Obligation<C> {
                 cost: cost.clone(),
                 taps: *taps,
             },
-            Self::Output { choices, life_cost } => Obligation::Output {
+            Self::Output {
+                choices,
+                life_cost,
+                life_delta,
+            } => Obligation::Output {
                 choices: f(choices),
                 life_cost: *life_cost,
+                life_delta: *life_delta,
             },
+            Self::PayLife(amount) => Obligation::PayLife(*amount),
             Self::Tap {
                 candidates,
                 remaining,
@@ -666,6 +735,7 @@ struct ManaSource {
     object: ObjectId,
     untapped: bool,
     fixed: Option<Mana>,
+    tap_coupled: bool,
     abilities: Vec<ManaActivation>,
     /// An untapped artifact or creature, whose tap can pay {1} of a
     /// waterbend cost.
@@ -678,6 +748,7 @@ struct ManaSource {
 impl ManaSource {
     fn same_payment_profile(&self, other: &Self) -> bool {
         self.fixed == other.fixed
+            && self.tap_coupled == other.tap_coupled
             && self.abilities == other.abilities
             && self.waterbend == other.waterbend
             && self.keyword == other.keyword
@@ -730,6 +801,7 @@ struct ManaActivation {
     cost: ManaCost,
     outputs: ManaChoices,
     life_cost: u32,
+    coupling: PaymentCoupling,
 }
 
 impl ManaActivation {
@@ -1033,9 +1105,9 @@ impl PurposeSupply {
 struct SearchState<M = Mana, C = ManaChoices> {
     resources: PaymentResources,
     pool: M,
-    life: u32,
+    life: LifeBudget,
     obligations: Vec<Obligation<C>>,
-    /// Fixed-source budget until the first Spend; later obligations are unrestricted.
+    /// Fixed-source budget until the first Spend, or zero after a spend starts.
     prefix: Option<usize>,
 }
 
@@ -1499,7 +1571,7 @@ impl PaymentCache {
 #[derive(Debug)]
 struct CachedPayment {
     sources: Arc<Vec<ManaSource>>,
-    life: u32,
+    life: LifeBudget,
     pool: Mana,
     obligations: Vec<Obligation>,
     policy: SourcePolicy,
@@ -1510,7 +1582,7 @@ struct CachedPayment {
 struct PaymentModel<'a> {
     cache: Option<&'a RefCell<PaymentCache>>,
     sources: Arc<Vec<ManaSource>>,
-    life: u32,
+    life: LifeBudget,
 }
 
 /// A question the direct answer covers: `cost` paid with mana, then `split`,
@@ -1621,7 +1693,7 @@ impl PaymentModel<'_> {
     fn source_bounds(
         &self,
         resources: &PaymentResources,
-        life: u32,
+        life: Option<LifeBudget>,
         mut fixed_supply: impl FnMut(usize, &Mana) -> (u64, u64),
         mut ability_supply: impl FnMut(usize, usize, &ManaActivation) -> (u64, u64),
         pays_by_tap: impl Fn(&ManaSource) -> bool,
@@ -1647,7 +1719,7 @@ impl PaymentModel<'_> {
             }
             for (ability_index, ability) in source.abilities.iter().enumerate() {
                 let uses = self.uses(resources, index, ability_index) as u64;
-                if uses == 0 || ability.life_cost > life {
+                if uses == 0 || life.is_some_and(|budget| !budget.can_pay(ability.life_cost)) {
                     continue;
                 }
                 let (usable, net) = ability_supply(index, ability_index, ability);
@@ -1781,8 +1853,19 @@ impl PaymentModel<'_> {
                 next.obligations.remove(0);
                 return self.witness(next, policy, visited);
             }
-            Obligation::Output { choices, life_cost } if choices.len() == 1 => {
-                let life = state.life.checked_sub(*life_cost)?;
+            Obligation::PayLife(amount) => {
+                let life = state.life.pay(*amount)?;
+                let mut next = state;
+                next.obligations.remove(0);
+                next.life = life;
+                return self.witness(next, policy, visited);
+            }
+            Obligation::Output {
+                choices,
+                life_cost,
+                life_delta,
+            } if choices.len() == 1 => {
+                let life = state.life.activate(*life_cost, *life_delta)?;
                 let mut next = state;
                 let Obligation::Output { choices, .. } = next.obligations.remove(0) else {
                     unreachable!()
@@ -1825,7 +1908,7 @@ impl PaymentModel<'_> {
             let supply = &visited.purposes[*only];
             self.source_bounds(
                 &state.resources,
-                u32::MAX,
+                None,
                 |i, _| (supply.sources[i].fixed_usable, supply.sources[i].fixed_net),
                 |i, ai, _| {
                     let ab = &supply.abilities_of(i)[ai];
@@ -1836,7 +1919,7 @@ impl PaymentModel<'_> {
         } else {
             self.source_bounds(
                 &state.resources,
-                u32::MAX,
+                None,
                 |_, output| {
                     (
                         visited.usable_total_cached(&purpose_indices, output),
@@ -1895,6 +1978,7 @@ impl PaymentModel<'_> {
         #[cfg(feature = "benchmark")]
         crate::benchmark_payments::state();
         match &state.obligations[0] {
+            Obligation::PayLife(_) => unreachable!("advanced before branching"),
             Obligation::Tap {
                 candidates,
                 remaining,
@@ -1916,9 +2000,11 @@ impl PaymentModel<'_> {
                 }
             }
             Obligation::Output {
-                choices, life_cost, ..
+                choices,
+                life_cost,
+                life_delta,
             } => {
-                let life = state.life.checked_sub(*life_cost)?;
+                let life = state.life.activate(*life_cost, *life_delta)?;
                 for (mode, output) in choices.iter().enumerate() {
                     let mut pool = state.pool.clone();
                     pool.add(output);
@@ -2004,7 +2090,7 @@ impl PaymentModel<'_> {
                                     resources: state.resources.clone(),
                                     obligations: state.obligations.clone(),
                                     life: state.life,
-                                    prefix: state.prefix,
+                                    prefix: Some(0),
                                 };
                                 next.obligations[0] = Obligation::Pay {
                                     cost: remaining.clone(),
@@ -2048,7 +2134,10 @@ impl PaymentModel<'_> {
                         continue;
                     }
                     for (ability_index, ability) in source.abilities.iter().enumerate() {
-                        if self.uses(&state.resources, index, ability_index) == 0 {
+                        if self.uses(&state.resources, index, ability_index) == 0
+                            || ability.cost.mana_value == 0
+                                && !state.life.can_pay(ability.life_cost)
+                        {
                             continue;
                         }
                         let mut obligations = Self::activation_obligations(ability);
@@ -2296,6 +2385,7 @@ impl PaymentModel<'_> {
         obligations.push(Obligation::Output {
             choices: ability.outputs.clone(),
             life_cost: ability.life_cost,
+            life_delta: ability.coupling.life_delta(),
         });
         obligations
     }
@@ -2545,7 +2635,12 @@ impl PaymentModel<'_> {
     /// a generic split) already pay `obligations` without activating any mana
     /// ability. Conservatively returns `false` whenever activated abilities
     /// may be needed.
-    fn fixed_sufficient(&self, pool: &Mana, life: u32, mut obligations: &[Obligation]) -> bool {
+    fn fixed_sufficient(
+        &self,
+        pool: &Mana,
+        life: LifeBudget,
+        mut obligations: &[Obligation],
+    ) -> bool {
         while let Some(first) = obligations.first() {
             match first {
                 Obligation::Pay { cost, .. } if cost.mana_value == 0 => {
@@ -2560,14 +2655,28 @@ impl PaymentModel<'_> {
         if obligations.is_empty() {
             return true;
         }
-        if let Some(direct) = Self::direct_shape(obligations, true) {
+        let mana = match obligations.split_last() {
+            Some((Obligation::PayLife(amount), mana)) if life.can_pay(*amount) => mana,
+            _ => obligations,
+        };
+        if let Some(direct) = Self::direct_shape(mana, true) {
             return self.direct_payable(pool, &direct);
         }
-        if let Some((Obligation::Output { choices, life_cost }, rest)) = obligations.split_first() {
-            if *life_cost > life || choices.is_empty() {
+        if let Some((
+            Obligation::Output {
+                choices,
+                life_cost,
+                life_delta,
+            },
+            rest,
+        )) = obligations.split_first()
+        {
+            let Some(remaining_life) = life.activate(*life_cost, *life_delta) else {
+                return false;
+            };
+            if choices.is_empty() {
                 return false;
             }
-            let remaining_life = life - *life_cost;
             if rest.is_empty() {
                 return true;
             }
@@ -2583,9 +2692,11 @@ impl PaymentModel<'_> {
         if let [Obligation::Pay {
             cost: fee,
             taps: Taps::None,
-        }, Obligation::Output { choices, life_cost }, rest @ ..] = obligations
+        }, Obligation::Output {
+            choices, life_cost, ..
+        }, rest @ ..] = obligations
         {
-            if *life_cost > life || choices.is_empty() {
+            if !life.can_pay(*life_cost) || choices.is_empty() {
                 return false;
             }
             if rest.is_empty() {
@@ -2954,9 +3065,8 @@ fn owed_reservation(payment: &Payment) -> Option<SourceReservation> {
 
 impl Game {
     /// Mana abilities resolve at once (CR 605.3a), so an output that depends
-    /// on the game is fixed when the ability is offered: a branch between two
-    /// immediate outputs, or X mana of one chosen color. Activation costs do
-    /// not change these readings for current content.
+    /// on the game reads the board when offered: a branch between two
+    /// immediate outputs, or X mana of one chosen color.
     pub(crate) fn current_mana_output(
         &self,
         effect: &Effect,
@@ -3042,7 +3152,7 @@ impl Game {
         let model = self.payment_model(player, None);
         let (_, net) = model.source_bounds(
             &model.resources(),
-            model.life,
+            Some(model.life),
             |_, output| (0, u64::from(output.total())),
             |_, _, ability| (0, ability.max_net()),
             |_| false,
@@ -3061,7 +3171,7 @@ impl Game {
         let mut model = PaymentModel {
             cache: Some(&self.payment_cache),
             sources: self.shared_payment_sources(player),
-            life: self.payable_life(player).max(0) as u32,
+            life: self.life_budget(player),
         };
         if let Some(source) = sacrifice {
             model.reserve(SourceReservation::owed(source, false, true));
@@ -3134,6 +3244,80 @@ impl Game {
         sources
     }
 
+    /// Only these fixed, payer-local suffixes can be summarized as one life
+    /// delta. Resolve them through the actual event path, including damage
+    /// prevention and life gain replacements. A consumed shield, redirect,
+    /// suspended replacement or other board write needs a game transition.
+    fn mana_suffix_coupling(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        suffix: &[Effect],
+    ) -> PaymentCoupling {
+        if suffix.is_empty() {
+            return PaymentCoupling::default();
+        }
+        if !matches!(
+            suffix,
+            [Effect::GainLife {
+                amount: EffectValue::Fixed(_)
+            }] | [Effect::DealDamageToPlayer {
+                player: PlayerSelector::You,
+                amount: EffectValue::Fixed(_),
+            }]
+        ) {
+            return PaymentCoupling::Coupled;
+        }
+        let mut fork = self.clone();
+        *fork.state.suspended_decision_mut() = None;
+        let mut frame = EffectFrame::new(player, suffix.to_vec());
+        frame.bind_source(Some(object), Some(object));
+        frame.completion = FrameCompletion::Continue;
+        fork.run_frame(frame);
+        let before = self.state.revisions();
+        let after = fork.state.revisions();
+        if fork.state.suspended_decision.is_some()
+            || fork.is_game_over()
+            || self.state.players[1 - player.0].life != fork.state.players[1 - player.0].life
+            || before
+                != (crate::flow::game::Revisions {
+                    life: before.life,
+                    ..after
+                })
+        {
+            return PaymentCoupling::Coupled;
+        }
+        let life = self.state.players[player.0].life;
+        let after = fork.state.players[player.0].life;
+        // At the integer limits the observed difference need not be the
+        // instruction's delta if a later activation changes life first.
+        if matches!(after, i32::MIN | i32::MAX) {
+            return PaymentCoupling::Coupled;
+        }
+        PaymentCoupling::Independent(LifeDelta(after - life))
+    }
+
+    fn mana_activation_coupling(
+        &self,
+        board: &crate::flow::statics::LayerBoard,
+        player: PlayerId,
+        object: ObjectId,
+        ability: &ActivatedAbilityDefinition,
+    ) -> PaymentCoupling {
+        let suffix = ability.mana_suffix();
+        let writes = StateReads {
+            mana: true,
+            tapped: ability.tap_source || ability.tap_cost.is_some(),
+            life: ability.life_cost > 0 || !suffix.is_empty(),
+            counters: ability.add_counters.is_some() || ability.remove_counters.is_some(),
+        };
+        if board.payment_writes_couple(player, writes, ability.sacrifice_source) {
+            PaymentCoupling::Coupled
+        } else {
+            self.mana_suffix_coupling(player, object, suffix)
+        }
+    }
+
     /// Every permanent `player` controls as a mana source, before any
     /// reservation: a function of the game alone.
     fn payment_sources(&self, player: PlayerId) -> Vec<ManaSource> {
@@ -3183,6 +3367,12 @@ impl Game {
                             cost: ability.mana_cost.clone(),
                             outputs: outputs.into(),
                             life_cost: ability.life_cost,
+                            coupling: self.mana_activation_coupling(
+                                &board,
+                                player,
+                                source.object,
+                                ability,
+                            ),
                         })
                     })
                     .collect();
@@ -3191,6 +3381,15 @@ impl Game {
                     object: source.object,
                     untapped: !source.tapped,
                     fixed,
+                    tap_coupled: board.payment_writes_couple(
+                        player,
+                        StateReads {
+                            mana: true,
+                            tapped: true,
+                            ..StateReads::default()
+                        },
+                        false,
+                    ),
                     abilities,
                     keyword: false,
                     waterbend: !source.tapped
@@ -3201,14 +3400,12 @@ impl Game {
     }
 
     /// Reserve costs still owed by an announced payment: its source's own
-    /// tap or sacrifice, its life, and the permanents already chosen to be
-    /// sacrificed as it completes. ManaUpfront's life fee instead lives on
-    /// its Output obligation and must not be debited here.
+    /// tap or sacrifice and the permanents already chosen to be sacrificed as
+    /// it completes. Its life fee follows mana in the obligations.
     fn reserve_announced_payment(&self, payment: &Payment, model: &mut PaymentModel) {
         if let Some(reservation) = owed_reservation(payment) {
             model.reserve(reservation);
         }
-        model.life = model.life.saturating_sub(payment.life());
         let grantors = payment.owed.iter().filter_map(|component| match component {
             CostComponent::ExileGrantor(object) => Some((*object, false)),
             CostComponent::TapGrantor(object) => Some((*object, true)),
@@ -3225,40 +3422,61 @@ impl Game {
         }
     }
 
-    /// The model for paying `payment`, or `None` when its life cost alone
-    /// cannot be paid. The pending payment is reserved by every model; one
-    /// only being considered at priority is reserved here.
-    fn announced_model(&self, player: PlayerId, operation: &Operation) -> Option<PaymentModel<'_>> {
+    /// The pending payment is reserved by every model; an activation only
+    /// being considered at priority is reserved here.
+    fn announced_model(
+        &self,
+        player: PlayerId,
+        operation: &Operation,
+    ) -> Option<(PaymentModel<'_>, u32)> {
         let mut model = self.payment_model(player, None);
-        if self.paying().is_some() {
-            return Some(model);
+        if let Some((_, payment, _)) = self.paying() {
+            return Some((model, payment.life()));
         }
-        if let Operation::Activation {
+        let Operation::Activation {
             source,
             ability_index,
             ..
         } = operation
-        {
-            let ability = self.activation_ability(*source, *ability_index)?;
-            // Hold the source's own tap/leave cost while considering activation;
-            // once announced, `owed_reservation` reads its cost.
-            if let ActivationSource::Permanent(permanent) = source {
-                model.reserve(SourceReservation::owed(
-                    *permanent,
-                    ability.tap_source,
-                    ability.source_leaves(),
-                ));
-            }
-            if ability.has_grantor_cost() {
-                model.reserve(SourceReservation::owed(
-                    self.state.permanent_of(ability.granted_by?.grantor)?,
-                    ability.tap_grantor,
-                    ability.exile_grantor,
-                ));
-            }
-            model.life = model.life.checked_sub(ability.life_cost)?;
+        else {
+            return None;
+        };
+        let ability = self.activation_ability(*source, *ability_index)?;
+        // Hold the source's own tap/leave cost while considering activation;
+        // once announced, `owed_reservation` reads its cost.
+        if let ActivationSource::Permanent(permanent) = source {
+            model.reserve(SourceReservation::owed(
+                *permanent,
+                ability.tap_source,
+                ability.source_leaves(),
+            ));
         }
-        Some(model)
+        if ability.has_grantor_cost() {
+            model.reserve(SourceReservation::owed(
+                self.state.permanent_of(ability.granted_by?.grantor)?,
+                ability.tap_grantor,
+                ability.exile_grantor,
+            ));
+        }
+        Some((model, ability.life_cost))
+    }
+
+    fn payment_life_owed(&self, player: PlayerId) -> u32 {
+        if let Some(SuspendedResolution {
+            decision: Decision::Payment(progress),
+            ..
+        }) = &self.state.suspended_decision
+        {
+            if progress.player == player
+                && matches!(progress.current(), Some(CostComponent::Mana { .. }))
+            {
+                return progress.tail_life();
+            }
+        }
+        self.paying().map_or(
+            0,
+            |(payer, payment, _)| if payer == player { payment.life() } else { 0 },
+        )
     }
 
     fn payment_obligations(&self, player: PlayerId) -> Vec<Obligation> {
@@ -3278,10 +3496,19 @@ impl Game {
                     cost, completion, ..
                 } => {
                     result.push(Obligation::mana(cost.clone()));
-                    if let SpendCompletion::Upfront(next) = completion.as_ref() {
-                        let mut saved = Vec::new();
-                        append(next, game, &mut saved);
-                        result.extend(saved.into_iter().skip(1));
+                    match completion.as_ref() {
+                        SpendCompletion::Upfront(next) => {
+                            let mut saved = Vec::new();
+                            append(next, game, &mut saved);
+                            result.extend(saved.into_iter().skip(1));
+                        }
+                        SpendCompletion::Announced(payment) => {
+                            result.extend(Obligation::life(payment.life()))
+                        }
+                        SpendCompletion::Resolution(progress) => {
+                            result.extend(Obligation::life(progress.tail_life()))
+                        }
+                        SpendCompletion::Foretell(_) => {}
                     }
                 }
                 Decision::ManaUpfront {
@@ -3308,10 +3535,19 @@ impl Game {
                             remaining: *tap_remaining,
                         });
                     }
+                    let life_delta = game
+                        .mana_activation_coupling(
+                            &game.layer_board(),
+                            decision.player(),
+                            game.state.permanents[*permanent].as_ref().unwrap().object,
+                            &ability,
+                        )
+                        .life_delta();
                     result.push(Obligation::mana(ability.mana_cost));
                     result.push(Obligation::Output {
                         choices: outputs.into(),
                         life_cost: ability.life_cost,
+                        life_delta,
                     });
                     if let Some(next) = resume {
                         append(next, game, result);
@@ -3320,18 +3556,19 @@ impl Game {
                 Decision::ManaChoice {
                     resume: Some(next), ..
                 } => append(next, game, result),
-                // A life cost is paid or declined in one action: it never
-                // commits, so it never reaches the solver as an obligation.
-                Decision::Payment(progress) if !progress.can_decline() => {
+                Decision::Payment(progress) => {
                     if let Some(CostComponent::Mana { cost, .. }) = progress.owed.first() {
-                        result.push(Obligation::Pay {
-                            cost: cost.clone(),
-                            taps: if progress.waterbends() {
-                                Taps::Any
-                            } else {
-                                Taps::None
-                            },
-                        });
+                        if !progress.can_decline() || progress.tail_life() > 0 {
+                            result.push(Obligation::Pay {
+                                cost: cost.clone(),
+                                taps: if progress.waterbends() {
+                                    Taps::Any
+                                } else {
+                                    Taps::None
+                                },
+                            });
+                        }
+                        result.extend(Obligation::life(progress.tail_life()));
                     }
                 }
                 _ => {}
@@ -3349,6 +3586,7 @@ impl Game {
                     owed.unwrap_or(recorded),
                     payment.mana_permissions(),
                 ));
+                result.extend(Obligation::life(payment.life()));
             }
             _ => {}
         }
@@ -4255,9 +4493,22 @@ impl Game {
         cost: &ManaCost,
         sacrifice: Option<PermanentId>,
     ) -> bool {
+        let life = self.payment_life_owed(player);
+        self.can_pay_mana_and_life(player, cost, sacrifice, life)
+    }
+
+    pub(super) fn can_pay_mana_and_life(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+        sacrifice: Option<PermanentId>,
+        life: u32,
+    ) -> bool {
+        let mut obligations = vec![Obligation::mana(cost.clone())];
+        obligations.extend(Obligation::life(life));
         self.payment_model(player, sacrifice).payable(
             self.pooled_mana(player),
-            vec![Obligation::mana(cost.clone())],
+            obligations,
             SourcePolicy::All,
         )
     }
@@ -4277,7 +4528,7 @@ impl Game {
         }) else {
             return false;
         };
-        let Some(model) = self.announced_model(player, &payment.operation) else {
+        let Some((model, _)) = self.announced_model(player, &payment.operation) else {
             return false;
         };
         let (owed, _) = payment.mana();
@@ -4288,6 +4539,7 @@ impl Game {
             remaining: tap.count,
         }];
         obligations.extend(self.help_obligations(player, owed, payment.mana_permissions()));
+        obligations.extend(Obligation::life(payment.life()));
         let pool = self.pooled_mana(player);
         match selected {
             Some(permanent) => model.plan_after_tap(pool, obligations, permanent).is_some(),
@@ -4311,7 +4563,7 @@ impl Game {
             target_divisions: Vec::new(),
             x: i32::from(x),
         };
-        let Some(model) = self.announced_model(player, &operation) else {
+        let Some((model, _)) = self.announced_model(player, &operation) else {
             return false;
         };
         let payment = Payment {
@@ -4320,11 +4572,9 @@ impl Game {
             receipt: Default::default(),
         };
         let (cost, _) = payment.mana();
-        model.payable(
-            self.pooled_mana(player),
-            self.help_obligations(player, cost, payment.mana_permissions()),
-            SourcePolicy::All,
-        )
+        let mut obligations = self.help_obligations(player, cost, payment.mana_permissions());
+        obligations.extend(Obligation::life(payment.life()));
+        model.payable(self.pooled_mana(player), obligations, SourcePolicy::All)
     }
 
     /// Whether `operation`, considered at priority, can pay `cost` beside
@@ -4336,17 +4586,15 @@ impl Game {
         operation: &Operation,
         sacrifice: Option<PermanentId>,
     ) -> bool {
-        let Some(mut model) = self.announced_model(player, operation) else {
+        let Some((mut model, life)) = self.announced_model(player, operation) else {
             return false;
         };
         if let Some(permanent) = sacrifice {
             model.reserve(SourceReservation::owed(permanent, false, true));
         }
-        model.payable(
-            self.pooled_mana(player),
-            vec![Obligation::mana(cost.clone())],
-            SourcePolicy::All,
-        )
+        let mut obligations = vec![Obligation::mana(cost.clone())];
+        obligations.extend(Obligation::life(life));
+        model.payable(self.pooled_mana(player), obligations, SourcePolicy::All)
     }
 
     /// Whether choosing `mana` at the pending `ManaChoice` leaves a complete
@@ -4632,6 +4880,7 @@ impl Game {
                     Obligation::Output {
                         choices: after.into(),
                         life_cost: 0,
+                        life_delta: LifeDelta(0),
                     },
                 );
             }
@@ -5059,16 +5308,13 @@ impl Game {
         player: PlayerId,
         cost: &ManaCost,
     ) -> (bool, bool) {
-        let fixed_payable = model.fixed_total(pool).can_pay(cost);
-        debug_assert_eq!(
-            fixed_payable,
-            model.payable(
-                pool.clone(),
-                vec![Obligation::mana(cost.clone())],
-                SourcePolicy::FixedOnly,
-            ),
-            "direct FixedOnly payability differs from model"
-        );
+        let life = self.payment_life_owed(player);
+        let fixed_payable = model.life.can_pay(life) && model.fixed_total(pool).can_pay(cost);
+        debug_assert_eq!(fixed_payable, {
+            let mut obligations = vec![Obligation::mana(cost.clone())];
+            obligations.extend(Obligation::life(life));
+            model.payable(pool.clone(), obligations, SourcePolicy::FixedOnly)
+        });
         let can_pay = fixed_payable || self.choice_tap_witness(player, cost, model, pool).is_some();
         (fixed_payable, can_pay)
     }
@@ -5106,9 +5352,11 @@ impl Game {
         cost: &ManaCost,
     ) -> Result<Vec<AutomaticTap>, AgentError> {
         let model = self.payment_model(player, None);
+        let mut obligations = vec![Obligation::mana(cost.clone())];
+        obligations.extend(Obligation::life(self.payment_life_owed(player)));
         let Some(path) = model.plan(
             self.pooled_mana(player),
-            vec![Obligation::mana(cost.clone())],
+            obligations,
             SourcePolicy::FixedOnly,
         ) else {
             return self
@@ -5276,10 +5524,17 @@ impl Game {
         let Some(caller) = &self.state.suspended_decision else {
             // The colored, convoke and waterbend obligations can all belong
             // to this one announced cost. Paying it with mana replaces them all.
-            return Vec::new();
+            let mut obligations = Vec::new();
+            if let Some((payer, payment, _)) = self.paying() {
+                if payer == player {
+                    obligations.extend(Obligation::life(payment.life()));
+                }
+            }
+            return obligations;
         };
         let obligations = self.payment_obligations(player);
-        if matches!(&caller.decision, Decision::Payment(payment) if payment.can_decline()) {
+        if matches!(&caller.decision, Decision::Payment(payment) if payment.can_decline() && payment.tail_life() == 0)
+        {
             // An optional cost only enters the witness when it is accepted.
             return obligations;
         }
@@ -5503,7 +5758,20 @@ impl Game {
                 };
                 let mut obligations = vec![Obligation::mana(choice.remaining.clone())];
                 obligations.extend(tail.clone());
-                model.payable(remaining, obligations, SourcePolicy::All)
+                let mut search = PaymentSearch::new(&obligations);
+                model
+                    .witness(
+                        PaymentSearchState {
+                            resources: model.resources(),
+                            pool: remaining,
+                            life: model.life,
+                            obligations,
+                            prefix: Some(0),
+                        },
+                        SourcePolicy::All,
+                        &mut search,
+                    )
+                    .is_some()
             })
             .take(limit)
             .collect()

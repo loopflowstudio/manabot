@@ -466,6 +466,16 @@ impl PaymentProgress {
         }
     }
 
+    pub(super) fn tail_life(&self) -> u32 {
+        self.owed
+            .iter()
+            .skip(1)
+            .fold(0u32, |life, component| match component {
+                CostComponent::Life(amount) => life.saturating_add(*amount),
+                _ => life,
+            })
+    }
+
     pub fn current(&self) -> Option<&CostComponent> {
         self.owed.first()
     }
@@ -484,11 +494,9 @@ impl Game {
     /// Whether `payment.player` can pay every remaining component after the
     /// front one (e.g. a composite ward's life component after its mana).
     pub(crate) fn can_pay_remaining_tail(&self, payment: &PaymentProgress) -> bool {
-        let mut life = 0u32;
         let mut discards = 0usize;
         for component in payment.owed.get(1..).unwrap_or(&[]) {
             match component {
-                CostComponent::Life(amount) => life = life.saturating_add(*amount),
                 CostComponent::Discard => discards += 1,
                 CostComponent::Mana { cost, .. } => {
                     if !self.can_pay_mana_cost(payment.player, cost) {
@@ -498,7 +506,8 @@ impl Game {
                 _ => {}
             }
         }
-        (life == 0 || self.can_pay_life(payment.player, life))
+        (matches!(payment.current(), Some(CostComponent::Mana { .. }))
+            || self.can_pay_life(payment.player, payment.tail_life()))
             && (discards == 0 || self.discard_candidates(payment.player, None).len() >= discards)
     }
 
@@ -633,13 +642,19 @@ impl Game {
     }
 
     /// Whether `player` could forage for `spell` beside paying `cost` in mana.
-    pub(super) fn can_forage(&self, player: PlayerId, spell: ObjectId, cost: &ManaCost) -> bool {
+    pub(super) fn can_forage(
+        &self,
+        player: PlayerId,
+        spell: ObjectId,
+        cost: &ManaCost,
+        life: u32,
+    ) -> bool {
         self.graveyard_payers(player, spell).len() >= usize::from(FORAGE_CARDS)
-            && self.can_pay_with_mana_abilities(player, cost, None)
+            && self.can_pay_mana_and_life(player, cost, None, life)
             || self
                 .sacrifice_candidates(player, &food())
                 .into_iter()
-                .any(|id| self.can_pay_with_mana_abilities(player, cost, Some(id)))
+                .any(|id| self.can_pay_mana_and_life(player, cost, Some(id), life))
     }
 
     /// The creatures `player` controls that hold a counter, in battlefield

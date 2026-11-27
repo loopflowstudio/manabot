@@ -2762,6 +2762,12 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Ok(());
                 }
+                if !self.can_pay_life(payment.player, payment.tail_life()) {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError(
+                        "cannot pay remaining resolution life cost".into(),
+                    ));
+                }
                 if let Err(error) = self.produce_mana(payment.player, &cost) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(error);

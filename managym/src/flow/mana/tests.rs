@@ -63,7 +63,7 @@ fn production_totals_preserve_first_modes_classes_and_trigger_choices() {
 /// Synthetic announced life fee: the same obligation moves from
 /// Waterbend to spending, while a mana caller has its own Output fee.
 #[test]
-fn announced_payment_reserves_life_across_nested_callers() {
+fn announced_payment_owes_life_after_mana_across_nested_callers() {
     use crate::flow::{
         decision::{Decision, EffectFrame, SpendCompletion, SuspendedResolution},
         game::{ActivationSource, Game, PendingChoice},
@@ -124,7 +124,7 @@ fn announced_payment_reserves_life_across_nested_callers() {
             payment: Box::new(payment.clone()),
         });
         assert_eq!(game.can_activate_mana_ability(player, canyon, 0), life == 4);
-        // The life fee remains reserved after the announcement moves
+        // The life fee remains owed after the announcement moves
         // into spending, including when a nested upfront owns that caller.
         game.pending_choice = None;
         let announced = Decision::ManaSpend {
@@ -148,7 +148,7 @@ fn announced_payment_reserves_life_across_nested_callers() {
                 decision,
             });
             let model = game.payment_model(player, None);
-            assert_eq!(model.life, (life - 2) as u32);
+            assert_eq!(model.life.life, life);
             let source = model
                 .sources
                 .iter()
@@ -420,6 +420,7 @@ pub(in crate::flow::mana) fn tapping_ability(outputs: Vec<Mana>) -> ManaActivati
         cost: ManaCost::default(),
         outputs: outputs.into(),
         life_cost: 0,
+        coupling: Default::default(),
     }
 }
 
@@ -442,9 +443,17 @@ pub(in crate::flow::mana) fn source(
         object: payment_object(index),
         untapped: true,
         fixed: fixed.map(Mana::parse),
+        tap_coupled: false,
         abilities,
         keyword: false,
         waterbend: false,
+    }
+}
+
+pub(super) fn life_budget(life: i32) -> super::LifeBudget {
+    super::LifeBudget {
+        life,
+        cant_change: false,
     }
 }
 
@@ -456,7 +465,7 @@ fn forests(count: usize) -> PaymentModel<'static> {
                 .map(|index| source(index, Some("G"), Vec::new()))
                 .collect::<Vec<_>>(),
         ),
-        life: 20,
+        life: life_budget(20),
     }
 }
 
@@ -508,7 +517,7 @@ fn payment_shared_outputs_keep_cached_witness_after_source_change() {
     let mut model = PaymentModel {
         cache: Some(&cache),
         sources: Arc::new(vec![modal_source(0, &["U", "R"], "")]),
-        life: 20,
+        life: life_budget(20),
     };
     let original = model.sources.clone();
     let blue = model.plan(Mana::default(), vec![pay("U")], SourcePolicy::All);
@@ -536,7 +545,7 @@ fn payment_cache_keeps_selected_taps_and_exact_mutations() {
     let mut model = PaymentModel {
         cache: Some(&cache),
         sources: Arc::new(vec![source(0, Some("U"), vec![]), source(1, None, vec![])]),
-        life: 3,
+        life: life_budget(3),
     };
     let obligations = vec![
         Obligation::Tap {
@@ -567,9 +576,9 @@ fn payment_cache_keeps_selected_taps_and_exact_mutations() {
                 ))
             }
             2 => Arc::make_mut(&mut model.sources)[0].untapped = true,
-            3 => model.life = 0,
+            3 => model.life = life_budget(0),
             4 => Arc::make_mut(&mut model.sources).reverse(),
-            _ => model.life = 3,
+            _ => model.life = life_budget(3),
         }
         for pool in [Mana::default(), Mana::parse("U")] {
             for tail in [
@@ -578,6 +587,7 @@ fn payment_cache_keeps_selected_taps_and_exact_mutations() {
                 vec![Obligation::Output {
                     choices: vec![Mana::parse("U")].into(),
                     life_cost: 1,
+                    life_delta: super::LifeDelta(0),
                 }],
             ] {
                 let mut owed = vec![pay("U")];
@@ -601,13 +611,13 @@ fn payment_cache_keeps_selected_taps_and_exact_mutations() {
     assert_eq!(fork.entries.len(), 64);
     // FIFO retention remains bounded across many distinct life queries.
     for life in 0..100 {
-        model.life = life;
+        model.life = life_budget(life);
         model.plan(Mana::default(), vec![pay("U"), pay("G")], SourcePolicy::All);
     }
     let cache = cache.borrow();
     assert_eq!(cache.entries.len(), 64);
-    assert_eq!(cache.entries.front().unwrap().life, 36);
-    assert_eq!(cache.entries.back().unwrap().life, 99);
+    assert_eq!(cache.entries.front().unwrap().life.life, 36);
+    assert_eq!(cache.entries.back().unwrap().life.life, 99);
 }
 
 #[test]
@@ -669,6 +679,7 @@ fn direct_payment_matches_the_search_on_fixed_sources() {
                             object: payment_object(index),
                             untapped,
                             fixed: outputs.choose(&mut rng).unwrap().clone(),
+                            tap_coupled: false,
                             abilities: Vec::new(),
                             keyword: false,
                             waterbend: untapped && rng.gen_bool(0.4),
@@ -676,7 +687,7 @@ fn direct_payment_matches_the_search_on_fixed_sources() {
                     })
                     .collect::<Vec<_>>(),
             ),
-            life: 20,
+            life: life_budget(20),
         };
         let cost = ManaCost {
             purpose: purposes.choose(&mut rng).unwrap().clone(),
@@ -743,6 +754,7 @@ fn direct_payment_leaves_searched_sources_and_obligations_to_the_search() {
     let output = Obligation::Output {
         choices: vec![Mana::parse("U")].into(),
         life_cost: 0,
+        life_delta: super::LifeDelta(0),
     };
     assert!(model
         .direct(&[pay("1"), output], SourcePolicy::All)
@@ -840,6 +852,65 @@ fn a_payment_scan_keeps_sources_until_its_last_guard_ends() {
 }
 
 #[test]
+fn payment_scan_marks_life_coupling_without_coupling_basic_taps() {
+    use crate::flow::game::Game;
+    use crate::state::{game_object::PlayerId, player::PlayerConfig};
+
+    let player = PlayerId(0);
+    let deck = std::collections::BTreeMap::from([
+        ("Forest".into(), 40),
+        ("Sunbaked Canyon".into(), 1),
+        ("The Great Henge".into(), 1),
+        ("Raucous Audience".into(), 1),
+        ("Angel of Vitality".into(), 1),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("payer", deck.clone()),
+            PlayerConfig::new("opponent", deck),
+        ],
+        339,
+        false,
+    );
+    game.keep_opening_hands();
+    let forest = game
+        .scenario_force_battlefield(player, "Forest", true)
+        .unwrap();
+    let canyon = game
+        .scenario_force_battlefield(player, "Sunbaked Canyon", true)
+        .unwrap();
+    let henge = game
+        .scenario_force_battlefield(player, "The Great Henge", true)
+        .unwrap();
+    game.scenario_force_battlefield(player, "Raucous Audience", true)
+        .unwrap();
+    game.scenario_set_life(player, 25);
+
+    let uncoupled = game.payment_model(player, None).sources;
+    let find = |sources: &[ManaSource], id| sources.iter().position(|s| s.permanent == id).unwrap();
+    assert_eq!(
+        uncoupled[find(&uncoupled, canyon)].abilities[0].coupling,
+        super::PaymentCoupling::Independent(super::LifeDelta(0)),
+    );
+    assert_eq!(
+        uncoupled[find(&uncoupled, henge)].abilities[0].coupling,
+        super::PaymentCoupling::Independent(super::LifeDelta(2)),
+    );
+
+    game.scenario_force_battlefield(player, "Angel of Vitality", true)
+        .unwrap();
+    let _scan = game.payment_scan();
+    let coupled = game.payment_model(player, None).sources;
+    assert!(!coupled[find(&coupled, forest)].tap_coupled);
+    for source in [canyon, henge] {
+        assert_eq!(
+            coupled[find(&coupled, source)].abilities[0].coupling,
+            super::PaymentCoupling::Coupled,
+        );
+    }
+}
+
+#[test]
 fn direct_payment_taps_in_source_order_and_keeps_waterbend_taps_it_needs() {
     // Source order, not usefulness: the Forest ahead of the Islands is tapped.
     let model = PaymentModel {
@@ -849,7 +920,7 @@ fn direct_payment_taps_in_source_order_and_keeps_waterbend_taps_it_needs() {
             source(1, Some("U"), Vec::new()),
             source(2, Some("U"), Vec::new()),
         ]),
-        life: 20,
+        life: life_budget(20),
     };
     let path = model
         .plan(Mana::default(), vec![pay("U")], SourcePolicy::All)
@@ -871,7 +942,7 @@ fn direct_payment_taps_in_source_order_and_keeps_waterbend_taps_it_needs() {
     let model = PaymentModel {
         cache: None,
         sources: Arc::new(vec![creature, source(1, Some("U"), Vec::new())]),
-        life: 20,
+        life: life_budget(20),
     };
     let cost = ManaCost::parse("1U");
     let path = model
@@ -929,6 +1000,7 @@ fn payment_search_bounds_modal_and_restricted_bottlenecks() {
             object: payment_object(count),
             untapped: true,
             fixed: None,
+            tap_coupled: false,
             keyword: false,
             waterbend: true,
             abilities: vec![tapping_ability(vec![
@@ -1071,7 +1143,7 @@ fn payment_search_keeps_future_tap_membership_and_limited_uses() {
     }
     for mask in 0..8 {
         let mut state = search_state(&model, vec![pay("UU")]);
-        state.life = 1; // Output life costs, too, survive canonicalization.
+        state.life = life_budget(1); // Output life costs, too, survive canonicalization.
         for index in 0..3 {
             if mask & (1 << index) != 0 {
                 state.resources.use_ability(index, 0);
@@ -1079,7 +1151,7 @@ fn payment_search_keeps_future_tap_membership_and_limited_uses() {
             state.resources.present[index] = index != 2;
         }
         assert!(bounded_search(&model, state.clone(), SourcePolicy::All, 200, true).is_none());
-        state.life = 2;
+        state.life = life_budget(2);
         bounded_search(&model, state, SourcePolicy::All, 200, true);
     }
 }
@@ -1121,6 +1193,7 @@ fn payment_bound_does_not_search_subsets_of_alternative_taps() {
             object: payment_object(index),
             untapped: true,
             fixed: Some(Mana::parse("G")),
+            tap_coupled: false,
             abilities: vec![
                 tapping_ability(vec![Mana::parse("U"), Mana::parse("R")]),
                 tapping_ability(vec![Mana::restricted_to(
@@ -1135,13 +1208,13 @@ fn payment_bound_does_not_search_subsets_of_alternative_taps() {
     let model = PaymentModel {
         cache: None,
         sources: Arc::new(sources),
-        life: 20,
+        life: life_budget(20),
     };
     let mut visited = PaymentSearch::default();
     let state = PaymentSearchState {
         resources: model.resources(),
         pool: Mana::default(),
-        life: 20,
+        life: life_budget(20),
         obligations: vec![
             Obligation::mana(ManaCost::default()),
             Obligation::Pay {
@@ -1187,11 +1260,12 @@ fn payment_bound_keeps_non_tapping_production_after_a_tap() {
             object: payment_object(0),
             untapped: true,
             fixed: Some(Mana::parse("G")),
+            tap_coupled: false,
             abilities: vec![sacrifice],
             keyword: false,
             waterbend: true,
         }]),
-        life: 20,
+        life: life_budget(20),
     };
     let path = model
         .plan(
@@ -1214,7 +1288,7 @@ fn payment_bound_counts_restricted_mana_for_each_pending_purpose() {
     let model = PaymentModel {
         cache: None,
         sources: Arc::new(Vec::new()),
-        life: 20,
+        life: life_budget(20),
     };
     let obligations = ["Lesson", "Shrine"]
         .map(|subtype| {
@@ -1240,7 +1314,7 @@ fn payment_bound_counts_spend_effect_and_combat_classes() {
     let model = PaymentModel {
         cache: None,
         sources: Arc::new(Vec::new()),
-        life: 20,
+        life: life_budget(20),
     };
     assert!(model
         .plan(pool, vec![pay("U"), pay("R")], SourcePolicy::All)
@@ -1288,7 +1362,7 @@ fn payment_bound_allows_restricted_mana_to_fund_a_filter() {
     let model = PaymentModel {
         cache: None,
         sources: Arc::new(vec![source(0, None, vec![filter])]),
-        life: 20,
+        life: life_budget(20),
     };
     let pool = Mana::restricted_to(ManaRestriction::only([], ["Ally"]), [0, 0, 0, 0, 1, 0]);
     let path = model
@@ -1349,7 +1423,7 @@ fn limited_mana_uses_preserve_grouped_witnesses() {
                 .map(|index| source(index, None, abilities.to_vec()))
                 .collect(),
         ),
-        life: 20,
+        life: life_budget(20),
     };
     for mask in 0..64 {
         let mut state = search_state(&model, vec![pay("UR")]);
@@ -1454,6 +1528,7 @@ fn forced_payment_transitions_keep_complete_witnesses() {
         Obligation::Output {
             choices: vec![Mana::parse("U")].into(),
             life_cost: 2,
+            life_delta: super::LifeDelta(0),
         },
         pay("1U"),
     ];
@@ -1467,7 +1542,7 @@ fn forced_payment_transitions_keep_complete_witnesses() {
         ])
     );
     let mut poor = model;
-    poor.life = 1;
+    poor.life = life_budget(1);
     assert!(poor
         .plan(Mana::default(), obligations, SourcePolicy::All)
         .is_none());
@@ -1483,7 +1558,7 @@ fn payment_net_bound_counts_filter_fees_and_saved_outputs() {
                     modal_source(0, &[output], fee),
                     modal_source(1, &["R"], "U"),
                 ]),
-                life: 3,
+                life: life_budget(3),
             };
             for pool in [Mana::default(), Mana::parse("G"), Mana::parse("GG")] {
                 for saved in [false, true] {
@@ -1493,6 +1568,7 @@ fn payment_net_bound_counts_filter_fees_and_saved_outputs() {
                             obligations.push(Obligation::Output {
                                 choices: vec![Mana::parse("G")].into(),
                                 life_cost: 1,
+                                life_delta: super::LifeDelta(0),
                             });
                         }
                         obligations.push(pay(cost));
@@ -1507,7 +1583,7 @@ fn payment_net_bound_counts_filter_fees_and_saved_outputs() {
     let model = PaymentModel {
         cache: None,
         sources: Arc::new(vec![modal_source(0, &["UU"], "2")]),
-        life: 3,
+        life: life_budget(3),
     };
     let mut state = search_state(&model, vec![pay("UU")]);
     state.pool = Mana::parse("G");
@@ -1717,7 +1793,7 @@ fn payment_color_bound_matches_the_search_without_it() {
                     .map(|(index, kind)| palette(*kind, index))
                     .collect::<Vec<_>>(),
             ),
-            life: 20,
+            life: life_budget(20),
         };
         for cost in &costs {
             for purpose in &purposes {
@@ -1743,6 +1819,7 @@ fn payment_color_bound_matches_the_search_without_it() {
                             Obligation::Output {
                                 choices: vec![Mana::parse("U"), Mana::parse("R")].into(),
                                 life_cost: 0,
+                                life_delta: super::LifeDelta(0),
                             },
                         );
                     }
@@ -1821,7 +1898,7 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
                 .map(|(i, ty)| courtyard(i, ty))
                 .collect(),
         ),
-        life: 20,
+        life: life_budget(20),
     };
     let noncreature = Obligation::mana(ManaCost {
         purpose: SpendingContext::cast([], [CardType::Instant]),
@@ -1872,7 +1949,7 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
         let model = PaymentModel {
             cache: None,
             sources: Arc::new(sources),
-            life: 20,
+            life: life_budget(20),
         };
         // Unpayable double colored pip for a non-creature spell (only 1 Mascot
         // can filter color; Courtyards produce only restricted color + {C}).
@@ -1921,7 +1998,7 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
     let rider_model = PaymentModel {
         cache: None,
         sources: Arc::new(std::mem::take(&mut rider_sources)),
-        life: 20,
+        life: life_budget(20),
     };
     let obligations = [pay("U")];
     let mut rider_search = PaymentSearch::new(&obligations);
@@ -1974,7 +2051,7 @@ fn feasibility_projection_collapses_mixed_expiry_and_spend_effects_with_witness_
     let model = PaymentModel {
         cache: None,
         sources: Arc::new((0..4).map(|i| source(i, None, vec![prism()])).collect()),
-        life: 20,
+        life: life_budget(20),
     };
 
     // Unpayable multi-blue cost after spending through Prism filters: exact
@@ -2309,6 +2386,7 @@ fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
         cost: ManaCost::parse("1"),
         outputs: vec![Mana::parse("W"), Mana::parse("U")].into(),
         life_cost: 0,
+        coupling: Default::default(),
     };
     let model = PaymentModel {
         cache: None,
@@ -2320,7 +2398,7 @@ fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
             source(4, Some("G"), Vec::new()),
             source(5, Some("G"), Vec::new()),
         ]),
-        life: 20,
+        life: life_budget(20),
     };
     // Unpayable ({W}{U}{B}) and payable ({W}{U}) both match identity-keyed DFS.
     for cost in ["WUB", "WU"] {

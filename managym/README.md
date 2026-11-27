@@ -619,11 +619,12 @@ create stack objects. The initial fixed-source witness keeps source order;
 [automatic source preference](#automatic-source-preference) selects the taps.
 A nested automatic prefix considers concrete pool remainders and the parent's
 completion.
-The announced activation's own tap, sacrifice and unpaid life fee remain
-reserved throughout waterbend and nested mana decisions, including a saved
-spending caller. A nested mana ability cannot consume those resources and
-leave the announcement without a complete payment. Its own upfront life fee
-is counted once, on that ability's output obligation.
+The announced activation's own tap and sacrifice stay reserved through
+waterbend and nested mana decisions. Its unpaid life fee follows its mana,
+including when a spending decision holds the announcement. A mana ability
+pays its own life fee after its upfront mana and before its output. The
+payment witness carries a signed life total so damage or life gain during
+mana production can change which fees the payer can afford.
 
 Life payments follow CR 119.4 (`Game::can_pay_life`): paying 0 life is always
 legal, even at 0 or negative life; a positive fee needs that much payable life.

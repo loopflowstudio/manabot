@@ -94,14 +94,13 @@ impl Game {
         convokers: &[(PermanentId, ManaTypeSet)],
         cost: &ManaCost,
         permissions: CostPermissionContext,
+        life: u32,
     ) -> bool {
         self.convoke_search(model, cost, convokers, &mut |model, cost| {
+            let mut obligations = self.help_obligations(player, cost, permissions);
+            obligations.extend(Obligation::life(life));
             model
-                .payable(
-                    pool.clone(),
-                    self.help_obligations(player, cost, permissions),
-                    SourcePolicy::All,
-                )
+                .payable(pool.clone(), obligations, SourcePolicy::All)
                 .then_some(())
         })
         .is_some()
@@ -115,13 +114,38 @@ impl Game {
         cost: &ManaCost,
         permissions: CostPermissionContext,
     ) -> bool {
+        self.payable_with_help_and_life(
+            player,
+            pool,
+            cost,
+            permissions,
+            self.payment_life_owed(player),
+        )
+    }
+
+    pub(in crate::flow) fn payable_with_help_and_life(
+        &self,
+        player: PlayerId,
+        pool: &Mana,
+        cost: &ManaCost,
+        permissions: CostPermissionContext,
+        life: u32,
+    ) -> bool {
         let mut model = self.payment_model(player, None);
         if let Some(permanent) = permissions.reserved_tap {
             model.reserve(SourceReservation::tap(permanent));
         }
         self.mark_help_taps(&mut model, permissions.help);
         let convokers = self.convokers(&model, permissions.help);
-        self.helped_payable(player, pool, &mut model, &convokers, cost, permissions)
+        self.helped_payable(
+            player,
+            pool,
+            &mut model,
+            &convokers,
+            cost,
+            permissions,
+            life,
+        )
     }
 
     /// What tapping `tapped` may pay of `cost` under `permissions`, before
@@ -186,6 +210,7 @@ impl Game {
         };
         let (mut model, convokers) = model_for(None);
         let pool = self.pooled_mana(player);
+        let life = self.payment_life_owed(player);
         // The payments of `asked` that leave the rest payable from `model`.
         let keeping_payable = |model: &mut PaymentModel,
                                convokers: &[(PermanentId, ManaTypeSet)],
@@ -196,7 +221,15 @@ impl Game {
                 .filter(|payment| {
                     let next_permissions = permissions.after_tap(*payment);
                     let rest = cost.less_pip(payment.color);
-                    self.helped_payable(player, &pool, model, convokers, &rest, next_permissions)
+                    self.helped_payable(
+                        player,
+                        &pool,
+                        model,
+                        convokers,
+                        &rest,
+                        next_permissions,
+                        life,
+                    )
                 })
                 .collect::<Vec<_>>()
         };

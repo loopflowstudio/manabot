@@ -856,7 +856,7 @@ mod tests {
                 .map(|(index, output)| source(index, Some(output), Vec::new()))
                 .collect::<Vec<_>>()
                 .into(),
-            life: 20,
+            life: super::super::tests::life_budget(20),
             cache: None,
         }
     }

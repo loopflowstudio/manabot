@@ -281,6 +281,27 @@ pub(super) struct StateReads {
 }
 
 impl StateReads {
+    pub(super) fn mana_activations(abilities: &[ActivatedAbilityDefinition]) -> Self {
+        let mut reads = ReadSet::default();
+        for ability in abilities {
+            if ability.has_dynamic_mana_output() {
+                reads.mana_output(&ability.effects[0]);
+            }
+            if ability.condition.is_none() && ability.cost_reduction_per.is_none() {
+                continue;
+            }
+            if ability.is_mana_ability() {
+                if let Some(condition) = &ability.condition {
+                    reads.condition(condition);
+                }
+                if let Some(predicate) = &ability.cost_reduction_per {
+                    reads.predicate(predicate);
+                }
+            }
+        }
+        reads.state
+    }
+
     pub(super) fn merge(&mut self, other: Self) {
         self.mana |= other.mana;
         self.tapped |= other.tapped;
@@ -456,6 +477,7 @@ pub(super) struct SourceSeed {
     nodes_layers: u16,
     nodes_reads: StateReads,
     pub(super) has_dynamic_activations: bool,
+    pub(super) mana_activation_reads: StateReads,
     pub(super) has_board_statics: bool,
     pub(super) has_triggered_mana_abilities: bool,
 }
@@ -586,6 +608,25 @@ impl ReadSet {
                 }
                 LayerCount::SourceCounters(_) => self.state.counters = true,
             }
+        }
+    }
+
+    fn mana_output(&mut self, effect: &Effect) {
+        match effect {
+            Effect::AddMana { amount, .. } | Effect::AddOneColorManaValue { amount, .. } => {
+                self.value(amount);
+            }
+            Effect::If {
+                condition,
+                then,
+                otherwise,
+            } => {
+                self.condition(condition);
+                for effect in then.iter().chain(otherwise) {
+                    self.mana_output(effect);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -1484,6 +1525,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         nodes_reads.merge(node.plan.reads.state);
     }
     let has_dynamic_activations = view.has_dynamic_activations();
+    let mana_activation_reads = StateReads::mana_activations(&view.activated_abilities);
     let has_board_statics = has_board_statics(&view.static_abilities);
     let has_triggered_mana_abilities = !view.triggered_mana_abilities.is_empty();
     SourceSeed {
@@ -1498,6 +1540,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         nodes_layers,
         nodes_reads,
         has_dynamic_activations,
+        mana_activation_reads,
         has_board_statics,
         has_triggered_mana_abilities,
     }
