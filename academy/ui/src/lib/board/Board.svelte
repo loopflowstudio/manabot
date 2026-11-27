@@ -394,7 +394,7 @@
   const placingBlocker = $derived(draggedBlocker ?? armed);
   /** Each creature's place in the draft and what pressing it does. */
   const draftMarks = $derived.by(() => {
-    if (!combatGroup) return null;
+    if (!combatGroup || activeCursor !== null) return null;
     const places = new Map<number, 'can' | 'in' | 'armed'>();
     const notes = new Map<number, string>();
     const refusedId = activeRefusal?.item?.entity ?? null;
@@ -696,6 +696,8 @@
     connection !== null ? selection : cursorSeq !== null ? { seq: cursorSeq, scope: 'line' } : null,
   );
   const cursor = $derived(activeCursor?.seq ?? null);
+  /** Live Play is still walking past beats: hold upcoming choices in the rail until the board catches up. */
+  const catchingUp = $derived(!readOnly && walking);
   // Arrange and pile panels hide while the board walks the past; their Confirm
   // waits for them so a click never commits cards nobody has seen.
   const groupShown = $derived(combatGroup !== null || activeCursor === null);
@@ -1619,10 +1621,10 @@
         return;
       }
     }
-    if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); passTurn(); return; }
+    if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); if (!catchingUp) passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
-      // Live grouped decisions fold raw single-step offers under a collapsed disclosure, not numbered shortcuts.
-      if (!menuAt && activeGroup) return;
+      // Do not blindly commit hidden choices while the walk is still catching up, or raw steps inside a live group.
+      if (catchingUp || (!menuAt && activeGroup)) return;
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
@@ -1934,6 +1936,9 @@
       {evidence} {moveMarks} {shownMoves} {onjump} recording={readOnly} {currentMove}
       onselectline={connection !== null ? selectHistoryLine : undefined}
       cursorLineIds={active.lineIds} cursorSourceSeq={active.sourceSeq}
+      {catchingUp} walkCaption={active.caption}
+      walkProgress={activeStopIndex >= 0 ? `${activeStopIndex + 1} of ${scrubber.stops.length}` : null}
+      onnow={returnToNow}
       draft={combatGroup ? combatControls : arrangeGroup ? arrangeControls : partitionGroup ? partitionControls : undefined}
       groupKind={activeGroup?.kind ?? null} />
   </div>

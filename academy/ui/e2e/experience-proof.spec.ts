@@ -114,6 +114,10 @@ for (const [seed, width, height, motion] of [
         if (!window.academyTiming.working) resolve();
         else window.addEventListener('academy-timing-settled', () => resolve(), {once: true});
       }));
+      if (await page.locator('[data-testid=walk-bar][data-walking=true]').count()) {
+        await page.keyboard.press('Space');
+        await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+      }
       await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('game-result').isVisible()).toBe(true);
       if (await page.getByTestId('game-result').isVisible()) break;
       await showEachCreaturesChoice(page);

@@ -79,12 +79,21 @@
     draft?: Snippet;
     /** Active group kind, for the collapsed raw-offer disclosure wording. */
     groupKind?: DecisionGroupKind | null;
+    /** The board is auto-walking past beats; hold back upcoming legal choices until it catches up. */
+    catchingUp?: boolean;
+    /** Current walk beat caption shown in the dock while catching up. */
+    walkCaption?: string;
+    /** Current beat position (e.g. `2 of 4`) while catching up. */
+    walkProgress?: string | null;
+    /** Jump straight to the live board and reveal the current decision. */
+    onnow?: () => void;
   }
 
   let {
     view, stack: stackGiven, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, history, opponentName,
     stackSources, drop, onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false,
     evidence = null, moveMarks = new Map(), shownMoves = new Set(), onjump, recording = false, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, groupKind = null,
+    catchingUp = false, walkCaption = '', walkProgress = null, onnow,
   }: Props = $props();
 
   const stack = $derived(stackGiven ?? view.stack);
@@ -152,6 +161,7 @@
     void choicesOpen;
     void frame.offers.length;
     void cursorLineIds;
+    void catchingUp;
     const current = currentMove;
     // Only the list scrolls: scrolling an element into view would also move a rail that is taller than a short window.
     if (!hasCursor && current === null && !onjump) {
@@ -349,12 +359,14 @@
   {#if notices}<div class="notices">{@render notices()}</div>{/if}
 
   <div class="decision-dock">
-    <section use:region={{ across: !onjump }} class="prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
+    <section use:region={{ across: !onjump }} class="prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space} data-catching-up={catchingUp || undefined}>
       <div class="dock-head">
-        <p class="type-heading whose" class:yours={live}>
-          {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed">{` · ${elapsed} s`}</span>{/if}</span>{:else}{whose}{/if}
+        <p class="type-heading whose" class:yours={live && !catchingUp}>
+          {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed">{` · ${elapsed} s`}</span>{/if}</span>{:else if catchingUp && !over}Following recent moves{:else}{whose}{/if}
         </p>
-        {#if hasChoicesBlock && !waitingFor}
+        {#if catchingUp && !over}
+          {#if walkProgress}<span class="type-caption text-ink-3 walk-progress" data-testid="catching-up-progress">{walkProgress}</span>{/if}
+        {:else if hasChoicesBlock && !waitingFor}
           {#snippet choicesHeading()}
             <span data-testid="choices-heading">{evidence?.heading ?? (interrupted || (!live && evidence) ? 'Recorded choices' : 'Choices')}</span>
             <span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>
@@ -371,7 +383,17 @@
           <span class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</span>
         {/if}
       </div>
-      {#if !over}
+      {#if !over && catchingUp}
+        <p class="type-prompt text-ink" data-testid="catching-up">{walkCaption || 'Catching up to the current board.'}</p>
+        {#if onnow}
+          <div class="action-row">
+            <button type="button" class="btn btn-secondary skip-now" data-testid="walk-skip" onclick={onnow}>
+              <span>Skip to now</span><kbd>Space</kbd>
+            </button>
+          </div>
+        {/if}
+      {:else if !over}
+        <div class="decision-body">
         {#if interrupted}
           <p class="type-body text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>
         {:else if frame.prompt}
@@ -461,9 +483,10 @@
             <p class="type-caption text-ink-2"><ManaText text={detail} size={12} /></p>
           </details>
         {/if}
+        </div>
       {/if}
-      <!-- While you may act, once the game is over, or when status is blank, nothing needs space here. -->
-      <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null || frame.status === 'game_over' || !status} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
+      <!-- While you may act, while catching up, once the game is over, or when status is blank, nothing needs space here. -->
+      <p class="type-caption text-ink-3 status" class:sr-only={live || catchingUp || thinking !== null || frame.status === 'game_over' || !status} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
     </section>
   </div>
   {#snippet choiceList()}
@@ -519,6 +542,11 @@
   .tag { flex: none; padding: 0 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); }
   .decision-dock { flex: none; padding: 10px 14px; border-top: 1px solid var(--border-strong); background: var(--bg-field); }
   .prompt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .decision-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; animation: decision-reveal var(--motion-fast) var(--ease); }
+  .walk-progress { font-variant-numeric: tabular-nums; }
+  .skip-now { flex: 1 1 auto; min-width: 0; height: 38px; padding-block: 6px; font-size: 14px; justify-content: center; white-space: nowrap; }
+  @keyframes decision-reveal { from { opacity: 0; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .decision-body { animation: none; } }
   .dock-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .whose { color: var(--text-secondary); }
   .whose.yours { color: var(--text); }
