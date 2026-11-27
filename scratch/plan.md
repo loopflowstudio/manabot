@@ -20,6 +20,16 @@ Pass 5 (`12950aefb`) removes the provisional coupling flags, defers automatic co
 
 Pass 6 (`c94532b94`) verifies a pre-Citadel payment snapshot with skipping enabled in `managym/src/agent/vector_env.rs`. Both slots return and match scalar observations, rewards, termination and state digests through the blue/red choice and Sokka's cast. `managym/README.md` describes the resulting payment rules. All 89 focused debug nextest checks passed, including the acceptance demo.
 
+## Pass 7 · next (ninth review `10eb24410`)
+
+Two contract defects on HEAD (both checked against the code) and three convoke loose ends, one fix pass:
+
+1. **Production boundary across bonuses** (choice 1a). `flow/decision.rs` ≈2889 recomputes `start = pool.unit_count()` on every `ManaChoice` step, so when the last `ManaProduction::Bonus` finishes `commit_produced_mana` sees only that bonus's units. The original output is treated as previously floated mana, receipts name the wrong source and an uncontested `{U}{R}` stays at `PayCost`. Fix: add `commit_start: Option<usize>` to `ManaProduction::Bonus`, set it on `Output` when `resume.is_none()`, thread it through `resolve_mana_bonuses` and commit `start..` when `next.is_none()`. Stays inside hash v35. Test: a `{T}: Add {U}{R}` land beside Heartbeat casts Sokka directly with land receipts; `{1}{U}` keeps the spending choice; remove the `if has_action(.., PayCost)` workaround in `managym/cards/tests/cards/ody.rs` ≈316.
+2. **Declinable resolution life** (choice 2a). `payment_obligations` (`flow/mana.rs` ≈3596) treats `can_decline() && tail_life() > 0` as committed, so an optional Ward `{2}` + 2 life blocks floating mana before declining. Fix: `payment_obligations` holds only `!can_decline()` payments; `saved_obligations` (≈5500) appends `Obligation::life(tail_life())` for a declinable payment being paid. Update `flow/mana/tests.rs` ≈1825 to a committed payment and add a declinable-Ward-with-life test (float allowed before `Decline`, `PayCost` still gated on the life).
+3. **Convoke cleanup** (choice 3a). `prefix_lower_bound` (≈3069) handles `Taps::Convoke`; drop the unread `Color` / `WaterbendTap` sentinel on `PaymentStep::Convoke` (≈901/921); delete the dead `|| helped` (≈4270).
+
+Then run the focused debug nextest set from pass 6 plus the acceptance demo.
+
 ## Design · made for review
 
 Headless choices following each concept review's recommendation; reversible internal engine work, approved by nobody.
@@ -66,7 +76,7 @@ The test exercises both branches of the Room’s blue/red choice and the legal o
 
 ## Concept review disposition
 
-Reviews two through seven are designs 1–3 and the deferred findings (detail in `7cb3655f1:scratch/plan.md`). Eighth review (`65036139e`, `scratch/concept-review.html`): 1a is design 4 and the split below; 2a puts the fixed-tap continuation first in the split Task; 3a is design 5; 4a is design 6. All made for review. Its pass 4a verification found no defect; its handoff invariant is recorded in the split Task.
+Ninth review (`10eb24410`, `scratch/concept-review.html`): 1a, 2a, 3a are pass 7, adopted headless for review; 1b (document per-step commitment), 1c (pool tags), 2b and 3b passed over. Reviews two through seven are designs 1–3 and the deferred findings (detail in `7cb3655f1:scratch/plan.md`). Eighth review (`65036139e`, `scratch/concept-review.html`): 1a is design 4 and the split below; 2a puts the fixed-tap continuation first in the split Task; 3a is design 5; 4a is design 6. All made for review. Its pass 4a verification found no defect; its handoff invariant is recorded in the split Task.
 
 ## Deferred findings
 
