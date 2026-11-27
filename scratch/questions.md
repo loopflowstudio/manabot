@@ -40,7 +40,7 @@ Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
 - **Seeded per-slot load (resolved in pass 2, `dd11bd0a3f`).** Added
   optional keyword-only `seed: int | None = None` to `SlotLoad.fresh` in Rust
   and `managym/__init__.pyi` (non-breaking; recorded in `tests/public_api.json`).
-- **Sync `play` removal is EXP-77's reading, not confirmed.** If it lands,
+- **Sync `play` removal confirmed in EXP-77 code (`9b1993d`, unreleased).** When it ships,
   every Manabot `play` callback converts to `async def` in pass 3.
 
 Ideas outside this Task:
