@@ -28,7 +28,7 @@ impl PyGameSnapshot {
 
     #[pyo3(signature = (options=None))]
     fn restore(&self, py: Python<'_>, options: Option<&PyRestoreOptions>) -> PyResult<PyEnv> {
-        let options = options.map(|o| o.0).unwrap_or_default();
+        let options = options.map(|o| o.0.clone()).unwrap_or_default();
         py.allow_threads(|| self.0.restore(options))
             .map(PyEnv::from_live)
             .map_err(map_agent_err)
@@ -81,6 +81,7 @@ impl PyRestoreOptions {
             mode: BranchMode::Exact { reseed },
             enable_decision_memory,
             forced_first_action,
+            game_state_edits: None,
         })
     }
     #[staticmethod]
@@ -94,6 +95,7 @@ impl PyRestoreOptions {
             mode: BranchMode::ShuffleLibraries { seed },
             enable_decision_memory,
             forced_first_action,
+            game_state_edits: None,
         })
     }
     #[staticmethod]
@@ -116,6 +118,7 @@ impl PyRestoreOptions {
             },
             enable_decision_memory,
             forced_first_action,
+            game_state_edits: None,
         }))
     }
 }

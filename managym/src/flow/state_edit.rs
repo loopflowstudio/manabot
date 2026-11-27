@@ -5,7 +5,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    agent::{action::AgentError, policy_history},
+    agent::{
+        action::{Action, ActionSpaceKind, AgentError},
+        policy_history,
+    },
     flow::{game::Game, trigger::DelayedTriggerEvent},
     state::{
         card::CardDefId,
@@ -53,6 +56,111 @@ pub enum GameStateEdit {
 }
 
 impl Game {
+    /// Rebuild the same live decision without executing actions or running SBAs.
+    pub(crate) fn edit_game_state(&mut self, edits: &[GameStateEdit]) -> Result<(), AgentError> {
+        if self.is_game_over() {
+            return Err(AgentError("game state edits: game is over".into()));
+        }
+        if self.state.opening().is_some()
+            || self.pending_choice.is_some()
+            || self.state.suspended_decision.is_some()
+        {
+            return Err(AgentError(
+                "game state edits require a decision outside opening and suspended choices".into(),
+            ));
+        }
+        let space = self
+            .action_space()
+            .ok_or_else(|| AgentError("game state edits require a live decision".into()))?;
+        match (space.kind, space.actions.first()) {
+            (ActionSpaceKind::Priority, Some(action)) => {
+                let player = action.player();
+                if !edits.is_empty() {
+                    self.apply_game_state_edits(edits)?;
+                    self.refresh_control();
+                    self.refresh_priority_actions(player);
+                }
+                Ok(())
+            }
+            (
+                ActionSpaceKind::DeclareAttacker,
+                Some(&Action::DeclareAttacker {
+                    player, permanent, ..
+                }),
+            ) => self.edit_declaration(edits, player, permanent, true),
+            (
+                ActionSpaceKind::DeclareBlocker,
+                Some(&Action::DeclareBlocker {
+                    player, blocker, ..
+                }),
+            ) => self.edit_declaration(edits, player, blocker, false),
+            _ => Err(AgentError(
+                "game state edits require Priority, DeclareAttacker or DeclareBlocker".into(),
+            )),
+        }
+    }
+
+    fn edit_declaration(
+        &mut self,
+        edits: &[GameStateEdit],
+        player: PlayerId,
+        focal: PermanentId,
+        attacking: bool,
+    ) -> Result<(), AgentError> {
+        if edits.is_empty() {
+            return Ok(());
+        }
+        let rollback = self.rollback_snapshot();
+        let completed_before = self
+            .state
+            .combat
+            .as_ref()
+            .expect("published declaration has combat")
+            .completed_declarers(attacking);
+        self.apply_game_state_edits(edits)?;
+        self.refresh_control();
+        let mut eligible = if attacking {
+            self.eligible_attackers(player)
+        } else {
+            self.eligible_blockers(player)
+        };
+        if !eligible.contains(&focal) {
+            *self = rollback;
+            return Err(AgentError(
+                "game state edits made the current declarer ineligible".into(),
+            ));
+        }
+        let combat = self.state.combat.as_ref().expect("declaration has combat");
+        let completed = combat.completed_declarers(attacking);
+        let mut detached = combat.detached_declarers.clone();
+        // A blocker has still answered even if its attacker left combat.
+        detached.extend(
+            completed_before
+                .difference(&completed)
+                .copied()
+                .filter(|&id| self.permanent_object(id).is_some()),
+        );
+        eligible.retain(|id| *id != focal && !completed.contains(id) && !detached.contains(id));
+
+        let combat = self.state.combat.as_mut().expect("declaration has combat");
+        combat.detached_declarers = detached;
+        let space = if attacking {
+            combat.attackers_to_declare = eligible;
+            self.declare_attacker_action_space(player, focal)
+        } else {
+            combat.blockers_to_declare = eligible;
+            self.declare_blocker_action_space(player, focal)
+        };
+        if space.actions.is_empty() {
+            *self = rollback;
+            return Err(AgentError(
+                "game state edits left the current declaration without legal actions".into(),
+            ));
+        }
+        self.publish_action_space(space);
+        Ok(())
+    }
+
     /// Apply the state portion of an edit batch. The caller owns refreshing
     /// the decision and rolling back if a declare step loses its focal choice.
     pub(crate) fn apply_game_state_edits(

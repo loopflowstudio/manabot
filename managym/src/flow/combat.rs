@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::state::game_object::{ObjectId, PermanentId, PlayerId};
 
@@ -49,9 +49,27 @@ pub struct CombatState {
     /// once declaration finishes. Breaks block symmetry across prompts.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub declined_blockers: Vec<PermanentId>,
+    /// Already answered this step, but an edit detached the declaration.
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub detached_declarers: BTreeSet<PermanentId>,
 }
 
 impl CombatState {
+    pub(super) fn completed_declarers(&self, attacking: bool) -> BTreeSet<PermanentId> {
+        if attacking {
+            self.attackers()
+                .chain(self.declined_attackers.iter().copied())
+                .collect()
+        } else {
+            self.attacker_to_blockers
+                .values()
+                .flatten()
+                .chain(&self.declined_blockers)
+                .copied()
+                .collect()
+        }
+    }
+
     pub fn attackers(&self) -> impl ExactSizeIterator<Item = PermanentId> + '_ {
         self.attack_targets.iter().map(|&(attacker, _)| attacker)
     }

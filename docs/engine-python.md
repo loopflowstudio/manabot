@@ -636,7 +636,9 @@ Both doors run the same atomic intervention path:
 - `env.edit_game_state(edits) -> Observation` validates the whole batch, applies
   each edit in order, journals one `"game_state_edits"` intervention and
   returns the refreshed decision observation. Clone first with `env.clone_env()`
-  when comparing against the unedited position.
+  when comparing against the unedited position. An empty batch returns the
+  current observation at a supported decision and leaves its revision and
+  journal intact.
 - `RestoreOptions.exact/shuffle_libraries/determinize(..., game_state_edits=edits)`
   applies the edits **before** the restore mode, so `determinize` conditions on
   the edited board and `SlotLoad.snapshot` can load edited branches into a
