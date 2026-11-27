@@ -1,18 +1,24 @@
-//! Every name the fact and shared-effect encoders hash into an id column.
+//! Every name the fact and shared-effect encoders hash into an id column, and
+//! every program token a runtime projection can emit without a printed span.
 //!
 //! Fact rows (`observation_encoder::facts`) and shared-effect records
-//! (`shared_effects`) and retained execution programs (`effect_execution`)
-//! carry open-vocabulary names as `name_value` hashes:
-//! counter kinds, colors, subtypes, keywords, modifications, set names and
-//! combat restrictions, projection labels and runtime-only rules payloads. The hash keeps the transport exact, but a model needs
-//! the finite set of names to embed each one as its own row. This module
-//! lists that set, each name with the learning token card text uses for the
-//! same concept when there is one (a granted `flying` and a printed
-//! `Keyword::flying`), so the policy can share one embedding between them.
+//! (`shared_effects`) carry open-vocabulary names as `name_value` hashes:
+//! counter kinds, colors, subtypes, keywords, modifications, set names,
+//! combat restrictions and projection labels. The hash keeps the transport
+//! exact, but a model needs the finite set of names to embed each one as its
+//! own row. [`record_names`] lists that set, each name with the learning token
+//! card text uses for the same concept when there is one (a granted `flying`
+//! and a printed `Keyword::flying`), so the policy can share one embedding
+//! between them. That token is only an alias into the program vocabulary.
 //!
 //! Names fall in three namespaces, because the same string may mean different
 //! things in different columns: `token` (rules vocabulary), `name` (a set card
 //! name) and `restriction` (a combat restriction's predicate description).
+//!
+//! [`runtime_tokens`] lists the program tokens that retained execution frames
+//! (`effect_execution`), last-known characteristics and other runtime
+//! projections emit. The admitted program vocabulary is `catalog_tokens()`
+//! (printed spans) together with it.
 //!
 //! Entry points: [`record_names`] and [`runtime_tokens`].
 

@@ -195,6 +195,12 @@ cut. Items 2, 4 and 5 follow the concept review's recommendations.
 6. **Decision-memory retirement is covered by a constructed pre-0.3.0
    checkpoint** in `tests/model/test_checkpoint_binding.py`; no retained
    memory checkpoint is known to pin.
+7. **Pack card/set `execution/6/<name>` retirements stay derived from the
+   append-only content pack until the 0.3.0 cut** (review recommendation 1a);
+   only generated prose and `TOKENS` leave the feed. Passed over: freezing
+   ~1,255 card/set names as a static table now and deleting
+   `content_token_texts()` (must be regenerated for cards landing before the
+   cut). Worth freezing at the cut if a card rename could drop a name.
 
 ## Acceptance check
 
@@ -254,40 +260,63 @@ emission guard, exact `(kind, 0x…)` diagnostics, the 44 memory names' hashes.
 
 ## Passes
 
-1. **Checkpoints survive the split** (221af98c25). Both pinned pilots replayed unchanged, all eight checkpoint binding tests and both memory round trips passed, and the vocabulary probe printed `0 True 44`.
-2. **Consumers and guards** (0b770d16be). The effect witness and frame checks
-   already delegated to the native guard. Migrated the name probe and
-   vocabulary checks, then verified missing program pairs, the exact union
-   with memory on and off, and dispositions for keys absent from the live
-   registrations.
-3. **Docs and contract** (10b956fdd5, 0b770d16be). Rechecked the user docs,
-   updated the agent and QA guides, and recorded both API additions with
-   `scripts/public_api.py record`. The API check and both targeted contract
-   tests passed.
+1. Checkpoints survive the split (221af98c25): both pinned pilots unchanged,
+   probe `0 True 44`.
+2. Consumers and guards (0b770d16be): name probe, union check with memory on
+   and off, writer tracer at `ab2b757d9` (2,553 keys) and HEAD.
+3. Docs and contract (10b956fdd5, 0b770d16be): API recorded, contract tests
+   pass.
+4. **Finish the frozen ledger (next).** In `managym/src/cards/token_renames.rs`:
+   - Restore `pub const RECORDS: &[(&str, &str, Option<&str>)]` beside
+     `TOKENS` (today `Modification::ControlChanged`), replacing the inline
+     `std::iter::once` in `record_renames()`.
+   - Stop chaining `TOKENS` into `execution/<kind>/<name>` retirements; add the
+     pre-0.3.0 retired execution symbols that the old `RECORDS` carried (13,
+     per the review) directly to `LEGACY_EXECUTION_TOKENS`. Check against the
+     writer trace at `ab2b757d9` which `TOKENS` names really had an
+     `execution/*` key.
+   - Keep `play_grant_conditions` prose (`condition_text`, today "you control
+     a Wizard permanent") out of `content_token_texts()`'s retirement feed;
+     freeze that string in `LEGACY_EXECUTION_TOKENS`. Pack card/set names stay
+     derived (decision 7).
+   - Extend the unit test: `record_renames()` keys `(namespace,
+     name_value(old))` are unique and every `Some(successor)` resolves in
+     `record_names()` ∪ `decision_memory_names()`.
+   Proof: debug `cargo nextest` on `token_renames` and record_vocabulary
+   tests, then `tests/model/test_pinned_pilot.py
+   tests/model/test_checkpoint_binding.py` with the rebuilt extension, both
+   pilots unchanged with no `record --reason`. Teaches whether a smaller
+   retirement set still explains every key a pre-0.3.0 checkpoint holds.
 
-The 36 affected Python cases passed across the initial run and the corrected
-union check. All 12 focused debug Rust checks passed, including the exhaustive
-effect witness and cast-receipt projection. The API probe returned `0 True 44`
-and the prefix scan had no matches.
+After Pass 4: PR body with the 0.3.0 hold notice and release line; merge and
+auto-merge stay off.
 
-The writer probe traced 2,553 keys at `ab2b757d9`, including both historical
-keys for `effect execution`. At `0b770d16be` it traced 1,844 name keys and
-3,230 symbolic program keys, matching the public lists for the named kinds.
+## Concept review dispositions
 
-Delivery still needs the PR body with the 0.3.0 hold notice and release line.
-Leave merge and auto-merge off.
+Pre-implementation review (a173411b48): all findings built in Passes 1–3.
 
-## Concept review (a173411b48) dispositions
+Post-implementation review (54e1b1816b):
+- `record_renames()` chains all of `TOKENS` (61 printed-only, plus every
+  future retirement) into phantom `execution/*` retirements → Pass 4.
+- Live `condition_text` prose feeds retirements; a wording change would make
+  every pre-0.3.0 checkpoint fail with "unexplained record_name key" → Pass 4.
+- Named `RECORDS` constant gone and `record_renames()` untested → Pass 4.
+- Stale module headers in `record_vocabulary.rs` and
+  `manabot/verify/record_coverage.py` → fixed in this realign.
+- Divergent decision-memory label admission → Deferred findings.
+- Review question 1 (card/set retirements) → decision 7. Question 2 (hold,
+  constructed memory checkpoint, API names) → decisions 1, 2, 6 stand.
 
-- Live renames lost from `RECORDS` → Pass 1 (move onto `TOKENS`).
-- Retirements generated from live lists → Pass 1 (frozen ledger, decision 5,
-  removal test).
-- Three-list vocabulary → Pass 1–2 (complete `runtime_tokens()`, decision 4).
-- `pilot_names.rs` breaks pre-0.3.0 writers → Pass 2 (`names_at` detection).
-- Memory list placement, missed `test_record_vocabulary.py:104`, literal
-  namespace `1` → Pass 1–2 (decision 2).
-- Double pack serialization → Pass 1 (one walk).
-- Hold strategy and memory checkpoint → decisions 1 and 6.
+## Deferred findings
+
+- **Unify decision-memory label admission** (pre-existing, separate Task).
+  `manabot/policy/decision_memory.py:498-504` checks `kind`/`choice_kind`
+  only against the running engine's `decision_name_values()`, never the
+  checkpoint's `record_name_keys`; `manabot/policy/admission.py:394-398`
+  checks only `record_name_keys` (accepts any `TOKEN` name such as `flying`)
+  and skips models with `decision_memory="none"`. Takes one shared helper
+  (membership in both) and a regression test for an incomplete checkpoint
+  table on retained prefixes and a non-memory `TOKEN` name on v11 batches.
 
 ## Done when
 
