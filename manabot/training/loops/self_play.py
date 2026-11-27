@@ -117,6 +117,7 @@ from manabot.training.update_metrics import (
     complete_game_rates,
     metric_row,
     phase_seconds,
+    throughput_rates,
     time_since,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
@@ -227,15 +228,22 @@ class SelfPlay(BaseModel):
             raise ValueError("producer count cannot exceed streams")
         if self.snapshot is not None and self.learning_seats != "both":
             raise ValueError("snapshot collection requires both learning seats")
-        if self.learning_seats == "both" and (
-            self.behavior == "random" or self.batch_closure == "exact-quota"
-        ):
-            raise ValueError("both learning seats require complete-game self-play")
+        if self.learning_seats == "both" and self.behavior == "random":
+            raise ValueError("both learning seats require self-play")
         if self.batch_closure == "exact-quota":
             if self.games_per_stream is not None:
                 raise ValueError("games_per_stream requires complete games")
+            if self.snapshot is not None:
+                raise ValueError("snapshot collection requires complete games")
+            if self.model.recent_events and self.learning_seats == "both":
+                raise ValueError(
+                    "recent_events with both learning seats requires complete games "
+                    "(exact quota cut reads carry no event history)"
+                )
             if self.game_errors is not None and not self.game_errors.recover_capacity:
-                raise ValueError("game error recovery requires complete games")
+                raise ValueError(
+                    "exact quota with game_errors requires recover_capacity=True"
+                )
         if self.behavior == "ema-self" and self.learning.ema is None:
             raise ValueError("ema-self behavior requires an EMA rate")
         if self.matchup_curriculum == "elemental-uniform":
@@ -872,16 +880,21 @@ def step(
             )
             backend.runtime.synchronize(device)
             probe["time/combat_probe"] = perf_counter() - started
-    rates: dict[str, float] = {}
+    completed_games = stats.games - games
+    rates: dict[str, float] = throughput_rates(
+        games=completed_games,
+        rows=batch.actions.size,
+        taps=stats.priority_taps - taps,
+        decisions=stats.micro_steps - decisions,
+        seconds=seconds,
+    )
     if settings.learning_seats == "both" and settings.batch_closure == "complete-games":
-        rates = complete_game_rates(
-            games=stats.games - games,
-            fresh_rows=stats.fresh_learner_transitions - fresh_rows,
-            skips=stats.skipped_decisions - skipped,
-            rows=batch.actions.size,
-            taps=stats.priority_taps - taps,
-            decisions=stats.micro_steps - decisions,
-            seconds=seconds,
+        rates.update(
+            complete_game_rates(
+                games=completed_games,
+                fresh_rows=stats.fresh_learner_transitions - fresh_rows,
+                skips=stats.skipped_decisions - skipped,
+            )
         )
     if stats.snapshot is not None:
         rates.update(
