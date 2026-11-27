@@ -132,23 +132,35 @@ fn liliana_dreadhorde_general_loyalty_abilities() {
     while s.action_space().kind == ActionSpaceKind::Priority {
         choose(&mut s, |a| matches!(a, Action::PassPriority { .. }));
     }
-    // 1. Artifact choice: 10 Artifact Creatures + 5 Artifacts = 15 choices (linear!).
+    // 1. Artifact choice: 10 Artifact Creatures + 5 Artifacts = 15 choices, folded into 3 canonical offers (Boulder, Prism, Sol Ring).
     assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
-    assert_eq!(s.action_space().actions.len(), 15);
+    assert_eq!(
+        crate::support::inspect::offered_cards_with_aliases(&s).len(),
+        15
+    );
+    assert_eq!(s.action_space().actions.len(), 3);
     let kept_boulder = boulders[0];
     let kept_boulder_card = card_of(&s, kept_boulder);
     select_card(&mut s, kept_boulder_card);
     // 2. Battle: none (skipped automatically).
-    // 3. Creature choice: 10 Artifact Creatures + 6 Creatures = 16 choices; choose an Ogre so both boulder & ogre are kept!
-    assert_eq!(s.action_space().actions.len(), 16);
+    // 3. Creature choice: 10 Artifact Creatures + 6 Creatures = 16 choices, folded into 4 canonical offers (remembered Boulder, other Boulders, Ogres, Giants); choose an Ogre so both boulder & ogre are kept!
+    assert_eq!(
+        crate::support::inspect::offered_cards_with_aliases(&s).len(),
+        16
+    );
+    assert_eq!(s.action_space().actions.len(), 4);
     let kept_ogre = creatures[0];
     let kept_ogre_card = card_of(&s, kept_ogre);
     select_card(&mut s, kept_ogre_card);
     // 4. Enchantment: 2 choices.
     assert_eq!(s.action_space().actions.len(), 2);
     choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
-    // 5. Land: 5 choices.
-    assert_eq!(s.action_space().actions.len(), 5);
+    // 5. Land: 5 identical Plains fold into 1 canonical offer (5 with aliases).
+    assert_eq!(
+        crate::support::inspect::offered_cards_with_aliases(&s).len(),
+        5
+    );
+    assert_eq!(s.action_space().actions.len(), 1);
     choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
     // 6. Planeswalker: 2 choices.
     assert_eq!(s.action_space().actions.len(), 2);

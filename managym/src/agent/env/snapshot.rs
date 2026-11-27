@@ -26,7 +26,7 @@ pub struct GameSnapshot {
     memory_enabled: bool,
     include_own: bool,
     history: HistoryWindow,
-    action_space: Option<ActionSpace>,
+    published_decision: Option<crate::flow::game::PublishedDecision>,
     pending_choice: Option<PendingChoice>,
     epoch: u64,
     candidates: BTreeMap<ObjectCandidateAddress, ObjectId>,
@@ -100,7 +100,7 @@ impl Env {
             .ok_or_else(|| AgentError("snapshot before reset".into()))?;
         Ok(SnapshotMetadata::from_position(
             &game.state,
-            game.current_action_space.as_ref(),
+            game.action_space(),
         ))
     }
 
@@ -116,7 +116,7 @@ impl Env {
             memory_enabled: game.decision_memory_enabled,
             include_own: game.decision_memory_include_own,
             history: game.policy_history.clone(),
-            action_space: game.current_action_space.clone(),
+            published_decision: game.published_decision.clone(),
             pending_choice: game.pending_choice.clone(),
             epoch: game.decision_epoch,
             candidates: game.semantic_object_candidates.borrow().clone(),
@@ -143,8 +143,7 @@ impl GameSnapshot {
         }
         let forced = if let Some(index) = options.forced_first_action {
             let space = self
-                .action_space
-                .as_ref()
+                .action_space()
                 .filter(|_| !self.state.is_game_over())
                 .ok_or_else(|| {
                     AgentError("forced_first_action requires a non-terminal decision".into())
@@ -205,7 +204,7 @@ impl GameSnapshot {
             decision_memory_enabled: self.memory_enabled,
             decision_memory_include_own: self.include_own,
             policy_history: self.history.clone(),
-            current_action_space: self.action_space.clone(),
+            published_decision: self.published_decision.clone(),
             pending_choice: self.pending_choice.clone(),
             decision_epoch: self.epoch,
             semantic_object_candidates: self.candidates.clone().into(),
@@ -237,13 +236,17 @@ impl GameSnapshot {
         }
     }
 
+    fn action_space(&self) -> Option<&ActionSpace> {
+        self.published_decision.as_ref().map(|d| &d.space)
+    }
+
     pub fn metadata(&self) -> SnapshotMetadata {
-        SnapshotMetadata::from_position(&self.state, self.action_space.as_ref())
+        SnapshotMetadata::from_position(&self.state, self.action_space())
     }
 
     /// Read the saved decision owner without collecting the board summary.
     pub fn acting_player(&self) -> Option<usize> {
-        snapshot_chooser(self.action_space.as_ref(), self.state.is_game_over())
+        snapshot_chooser(self.action_space(), self.state.is_game_over())
     }
 
     pub fn seed(&self) -> u64 {
@@ -254,7 +257,7 @@ impl GameSnapshot {
         self.digest.get_or_init(|| {
             state_digest(
                 &self.state,
-                &self.action_space,
+                self.action_space(),
                 &self.pending_choice,
                 self.skip_trivial,
                 self.skipped,
@@ -327,7 +330,7 @@ impl SnapshotMetadata {
 
 pub(super) fn state_digest(
     state: &TrackedState,
-    actions: &Option<ActionSpace>,
+    actions: Option<&ActionSpace>,
     pending: &Option<PendingChoice>,
     skip_trivial: bool,
     skipped: usize,

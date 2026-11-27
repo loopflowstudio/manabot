@@ -126,10 +126,9 @@ def test_dual_land_plus_three_plains_labels_and_skips_redundant_modal(
     assert [offer.label for offer in payment.offers] == [
         "Tap Kyoshi Village for {G}/{W}",
         "Tap Plains for {W}",
-        "Tap Plains for {W}",
-        "Tap Plains for {W}",
         "Pay the cost",
     ]
+    assert len(payment.offers[1].aliases) == 2
 
     # Tapping Kyoshi Village leaves 3 interchangeable Plains for {1}/{W} (even
     # when the 3rd Plains was played this turn), so the color modal skips too.

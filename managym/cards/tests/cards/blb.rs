@@ -114,7 +114,8 @@ fn feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black() {
             assert!(s.choose_target(Target::Permanent(victim)));
 
             assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
-            let mut offered = offered_cards(&s);
+            assert_eq!(offered_cards(&s).len(), 2);
+            let mut offered = crate::support::inspect::offered_cards_with_aliases(&s);
             offered.sort();
             let mut expected = cards.clone();
             expected.push(food);
@@ -155,8 +156,12 @@ fn feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black() {
                 "food" => select_card(&mut s, food),
                 "cards" => {
                     select_card(&mut s, cards[0]);
-                    // Committed: two more cards, and nothing else.
-                    assert_eq!(offered_cards(&s).len(), 2);
+                    // Committed: two more identical cards (1 offer + 1 alias), and nothing else.
+                    assert_eq!(offered_cards(&s).len(), 1);
+                    assert_eq!(
+                        crate::support::inspect::offered_cards_with_aliases(&s).len(),
+                        2
+                    );
                     assert!(!has_action(&s, |a| matches!(a, Action::PayCost { .. })));
                     select_card(&mut s, cards[1]);
                     select_card(&mut s, cards[2]);

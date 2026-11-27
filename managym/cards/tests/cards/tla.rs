@@ -325,9 +325,9 @@ fn accumulate_wisdom_with_three_lessons_takes_all_three_without_decision() {
 /// its caster controls, which can then be recast for {2}.
 #[test]
 fn airbenders_reversal_destroys_an_attacker_or_airbends_your_creature() {
-    let mut s = five_color_setup(&["Airbender's Reversal", "Gray Ogre"]);
+    let mut s = five_color_setup(&["Airbender's Reversal", "Gray Ogre", "Hill Giant"]);
     let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let idle = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let idle = s.force_permanent_on_battlefield(0, "Hill Giant");
     clear_summoning_sickness(&mut s, attacker);
     clear_summoning_sickness(&mut s, idle);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
@@ -632,10 +632,14 @@ fn allies_at_last_affinity_and_two_attackers() {
     s.advance_to_active_step(0, StepKind::Main);
 
     cast_only(&mut s);
-    // Requirement 0: up to two creatures you control (+ Decline).
+    // Requirement 0: up to two creatures you control (+ Decline); two identical warriors fold to one + alias.
     let space = s.action_space().clone();
     assert_eq!(space.kind, ActionSpaceKind::ChooseTarget);
-    assert_eq!(space.actions.len(), 3, "two warriors + decline");
+    assert_eq!(space.actions.len(), 2, "folded warrior + decline");
+    assert_eq!(
+        crate::support::inspect::offered_targets_with_aliases(&s).len(),
+        2
+    );
     assert!(s.choose_target(Target::Permanent(w1)));
     assert!(s.choose_target(Target::Permanent(w2)));
     // Requirement 1: exactly one creature an opponent controls, no decline.
@@ -2598,13 +2602,21 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Graveyard));
 
     // Flashback from the graveyard for {6}{R}, then it is exiled.
+    let exiled_before = s.zone_size(0, ZoneType::Exile);
     s.set_player_mana_pool(0, "6R");
     on_top(&mut s, strike);
     cast_card(&mut s, solstice);
     resolve_top(&mut s);
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
-    assert_eq!(zone_of(&s, solstice), Some(ZoneType::Exile));
+    assert_eq!(s.zone_size(0, ZoneType::Exile), exiled_before + 1);
+    assert!(s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Exile, PlayerId(0))
+        .iter()
+        .any(|&obj| s.game().state[obj].name == "Solstice Revelations"));
 }
 
 #[test]
@@ -4645,14 +4657,17 @@ fn gran_gran_taps_to_loot_mandatorily_and_can_discard_the_drawn_card() {
         .iter()
         .all(|a| matches!(a, Action::SelectCard { .. })));
     let top = now(&s, top);
-    let index = s
-        .action_space()
-        .actions
+    let gy_before = s.zone_size(0, ZoneType::Graveyard);
+    let top_name = s.game().state[top].name.clone();
+    select_card(&mut s, top);
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), gy_before + 1);
+    assert!(s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Graveyard, PlayerId(0))
         .iter()
-        .position(|a| matches!(a, Action::SelectCard { object, .. } if *object == top))
-        .unwrap();
-    s.step_action(index);
-    assert_eq!(zone_of(&s, top), Some(ZoneType::Graveyard));
+        .any(|&obj| s.game().state[obj].name == top_name));
     assert_eq!(s.zone_size(0, ZoneType::Hand), before);
 }
 
@@ -4820,10 +4835,13 @@ fn sozins_comet_grants_firebending_as_ordinary_attack_triggers_katara_doubles() 
 
 fn foretell_offered(s: &mut Scenario, object: ObjectId) -> bool {
     s.game_mut().scenario_refresh_priority().unwrap();
-    s.action_space()
-        .actions
+    let actions = &s.action_space().actions;
+    actions
         .iter()
         .any(|a| matches!(a, Action::Foretell { object: c, .. } if *c == object))
+        || s.game().action_aliases().iter().any(|&(idx, alias)| {
+            alias == object && matches!(actions.get(idx), Some(Action::Foretell { .. }))
+        })
 }
 
 /// Foretell (CR 702.143a): during its owner's turn, pay {2} and exile Sozin's
@@ -7206,12 +7224,29 @@ fn possible_worlds_resample_an_opponents_foretold_card() {
         let b = move_card(&mut s, b, ZoneType::Hand);
         let foretold = if first { a } else { b };
         assert!(foretell_offered(&mut s, foretold));
-        choose(
-            &mut s,
-            |a| matches!(a, Action::Foretell { object: object_id, .. } if *object_id == foretold),
-        );
+        let idx = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::Foretell { object, .. } if *object == foretold))
+            .or_else(|| {
+                s.game().action_aliases().iter().find_map(|&(idx, alias)| {
+                    (alias == foretold
+                        && matches!(
+                            s.action_space().actions.get(idx),
+                            Some(Action::Foretell { .. })
+                        ))
+                    .then_some(idx)
+                })
+            })
+            .unwrap();
+        let actual = match s.action_space().actions[idx] {
+            Action::Foretell { object, .. } => object,
+            _ => foretold,
+        };
+        s.step_action(idx);
         spend_colorless(&mut s);
-        (s, foretold)
+        (s, actual)
     };
     let (s, comet) = foretell_one(true);
     let (twin, _) = foretell_one(false);
@@ -7777,7 +7812,7 @@ fn iroh_leaves_graveyard_permanents_to_muldrothas_permission() {
     ));
 
     let mut forged = s.game().clone();
-    let actions = &mut forged.current_action_space.as_mut().unwrap().actions;
+    let actions = &mut forged.action_space_mut().unwrap().actions;
     let index = actions.len();
     actions.push(Action::CastSpell {
         player: PlayerId(0),
@@ -10952,9 +10987,11 @@ fn yue_rejects_rumble_arena_filter_when_all_five_units_are_owed() {
     let arena = s.force_permanent_on_battlefield(0, "Rumble Arena");
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     let mountain = s.force_permanent_on_battlefield(0, "Mountain");
-    let seekers: Vec<_> = (0..2)
-        .map(|_| s.force_permanent_on_battlefield(0, "Knowledge Seeker"))
-        .collect();
+    let seekers = [
+        s.force_permanent_on_battlefield(0, "Knowledge Seeker"),
+        s.force_permanent_on_battlefield(0, "Knowledge Seeker"),
+    ];
+    add_counters(&mut s, seekers[1], CounterKind::PlusOnePlusOne, 1);
     s.game_mut().skip_trivial = true;
     activate(&mut s, yue, 0);
     assert!(!s.action_space().actions.iter().any(|action| matches!(
@@ -12216,11 +12253,16 @@ fn obsessive_pursuit_drains_you_for_clues_on_entry_and_upkeep() {
 #[test]
 fn obsessive_pursuit_counters_an_attacker_per_sacrifice_this_turn() {
     for (sacrifices, lifelink) in [(1, false), (3, true)] {
-        let mut s = five_color_setup(&["Obsessive Pursuit", "Gray Ogre", "Weaponize the Monsters"]);
+        let mut s = five_color_setup(&[
+            "Obsessive Pursuit",
+            "Gray Ogre",
+            "Hill Giant",
+            "Weaponize the Monsters",
+        ]);
         s.force_permanent_on_battlefield(0, "Obsessive Pursuit");
         let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
         for _ in 0..sacrifices {
-            let victim = s.force_permanent_on_battlefield(0, "Gray Ogre");
+            let victim = s.force_permanent_on_battlefield(0, "Hill Giant");
             sacrifice_to_weaponize(&mut s, victim);
         }
         assert_eq!(
@@ -12370,7 +12412,7 @@ fn appa_airbends_any_number_and_makes_an_ally_for_casts_from_exile() {
     cast(&mut s, "Appa, Steadfast Guardian");
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    let offered = offered_targets(&s);
+    let offered = crate::support::inspect::offered_targets_with_aliases(&s);
     assert!(!offered.contains(&Target::Permanent(forest)));
     assert_eq!(offered.len(), 2, "only the two Ogres: {offered:?}");
     for ogre in ogres {
@@ -15391,7 +15433,7 @@ fn fire_lord_azula_copies_spells_cast_while_she_attacks() {
 /// graveyard for their total mana value.
 #[test]
 fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
-    let mut s = five_color_setup(&["The Rise of Sozin", "Gray Ogre", "Craw Wurm"]);
+    let mut s = five_color_setup(&["The Rise of Sozin", "Gray Ogre", "Wind Drake", "Craw Wurm"]);
     let mine = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let theirs = s.force_permanent_on_battlefield(1, "Craw Wurm");
     let (mine_card, theirs_card) = (card_of(&s, mine), card_of(&s, theirs));
@@ -15838,7 +15880,7 @@ fn foggy_swamp_visions_targets_exactly_x() {
 /// Reach Sozin's untargeted combat-hit trigger's resolution, with eight
 /// untapped lands available for X. Graveyard fixtures are planted afterward.
 fn sozin_payment_setup() -> Scenario {
-    let mut s = five_color_setup(&["The Rise of Sozin", "Gray Ogre", "Craw Wurm"]);
+    let mut s = five_color_setup(&["The Rise of Sozin", "Gray Ogre", "Wind Drake", "Craw Wurm"]);
     let sozin = transformed_saga(&mut s, "The Rise of Sozin");
     clear_summoning_sickness(&mut s, sozin);
     force_lands(&mut s, 0, "Forest", 4);
@@ -15870,7 +15912,7 @@ fn fire_lord_sozin_payment_precedes_targets_and_caps_their_total() {
     for reverse in [false, true] {
         let mut s = sozin_payment_setup();
         let a = plant_in_graveyard(&mut s, 1, "Gray Ogre");
-        let b = plant_in_graveyard(&mut s, 1, "Gray Ogre");
+        let b = plant_in_graveyard(&mut s, 1, "Wind Drake");
         let expensive = plant_in_graveyard(&mut s, 1, "Craw Wurm");
         let mine = plant_in_graveyard(&mut s, 0, "Gray Ogre");
         let land = plant_in_graveyard(&mut s, 1, "Forest");
@@ -15973,7 +16015,8 @@ fn sozin_name(s: &mut Scenario, name: &str) {
 #[test]
 fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
     for count in 0..=4 {
-        let mut s = five_color_setup(&["The Rise of Sozin", "Gray Ogre", "Craw Wurm"]);
+        let mut s =
+            five_color_setup(&["The Rise of Sozin", "Gray Ogre", "Wind Drake", "Craw Wurm"]);
         enter_saga(&mut s, "The Rise of Sozin");
         next_main_phase(&mut s);
         target_opponent(&mut s);

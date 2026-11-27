@@ -73,7 +73,7 @@ pub struct SearchStateWitness {
 struct CanonicalAuthorityState<'a> {
     schema_version: u32,
     match_state: serde_json::Value,
-    current_action_space: &'a Option<ActionSpace>,
+    current_action_space: Option<&'a ActionSpace>,
     decision_epoch: u64,
     pending_choice: &'a Option<PendingChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -106,10 +106,11 @@ pub(crate) fn identity(game: &Game) -> SearchStateIdentity {
 fn identity_with_rng(game: &Game, rng_probe: [u64; 8]) -> SearchStateIdentity {
     #[cfg(feature = "benchmark")]
     let _authority = crate::benchmark_search::Timer::new("witness/authority");
+    let action_space = game.action_space();
     let authority_state = CanonicalAuthorityState {
         schema_version: SEARCH_WITNESS_SCHEMA_VERSION,
         match_state: game.state.deterministic_hash_value(),
-        current_action_space: &game.current_action_space,
+        current_action_space: action_space,
         decision_epoch: game.decision_epoch,
         pending_choice: &game.pending_choice,
         mana_payment: (game.mana_payment != [ManaPayment::Manual; 2]).then_some(game.mana_payment),
@@ -119,8 +120,8 @@ fn identity_with_rng(game: &Game, rng_probe: [u64; 8]) -> SearchStateIdentity {
         rng_probe,
     };
     let authority_bytes = serde_json::to_vec(&authority_state).expect("authority state serializes");
-    let action_bytes = serde_json::to_vec(&game.current_action_space)
-        .expect("action space serializes deterministically");
+    let action_bytes =
+        serde_json::to_vec(&action_space).expect("action space serializes deterministically");
     SearchStateIdentity {
         authority: AuthorityFingerprint {
             hash: blake3::hash(&authority_bytes).to_hex().to_string(),
@@ -128,10 +129,7 @@ fn identity_with_rng(game: &Game, rng_probe: [u64; 8]) -> SearchStateIdentity {
         },
         legal_surface: LegalSurfaceFingerprint {
             hash: blake3::hash(&action_bytes).to_hex().to_string(),
-            action_count: game
-                .current_action_space
-                .as_ref()
-                .map_or(0, |space| space.actions.len()),
+            action_count: action_space.map_or(0, |space| space.actions.len()),
             bytes: action_bytes,
         },
     }
@@ -155,11 +153,7 @@ pub fn witness(game: &Game) -> SearchStateWitness {
     // With no events and a published chooser, its inputs equal that fixed
     // viewer's projection. Reuse bytes and hash only in that exact case.
     let acting_projection = if game.state.observation_events.is_empty()
-        && game
-            .current_action_space
-            .as_ref()
-            .and_then(|space| space.player)
-            == Some(game.agent_player())
+        && game.action_space().and_then(|space| space.player) == Some(game.agent_player())
     {
         viewers[game.agent_player().0].clone()
     } else {

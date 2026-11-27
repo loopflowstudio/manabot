@@ -162,18 +162,31 @@ def test_merchant_payment_reconnect_vector_and_fork(
                         f"{remaining} tap selections still required"
                         in capture_text_decision(game.env).text
                     )
-                    assert len(frame.offers) == remaining + 1
+                    assert (
+                        sum(1 + len(o.aliases) for o in frame.offers) == remaining + 1
+                    )
                     assert all("Tap Food to pay" in o.label for o in frame.offers)
-                    foods.append(frame.offers[0].focus[0])
+                    # Tap from a folded pair first so the second tap still leaves two
+                    # distinct Foods and does not auto-skip.
+                    chosen_index = next(
+                        (i for i, o in enumerate(frame.offers) if o.aliases),
+                        0,
+                    )
+                    foods.append(frame.offers[chosen_index].focus[0])
                 else:
                     assert frame.action_space == "MODAL"
                     assert len(frame.offers) == 5
                     assert len(set(foods)) == 2
+                    chosen_index = 0
                 before = len(game.trace.events)
-                command = _command(frame, frame.offers[0], f"pay.{remaining}")
+                command = _command(
+                    frame, frame.offers[chosen_index], f"pay.{remaining}"
+                )
                 contract = SemanticDecisionContract.from_env(fork)
                 contract.apply(
-                    fork, contract.frame.offers[0]["id"], command_id=f"fork.{remaining}"
+                    fork,
+                    contract.frame.offers[chosen_index]["id"],
+                    command_id=f"fork.{remaining}",
                 )
                 assert game.env.state_digest() == digest
                 socket.send_json({"type": "command", "command": command})

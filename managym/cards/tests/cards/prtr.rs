@@ -121,9 +121,9 @@ fn both_milled_instants_wait_for_ordering_before_the_batch_commits() {
 fn ward_discard_or_decline_resumes_after_its_own_replacement_choice() {
     use crate::support::{inspect::permanent, play::choose};
     use managym::agent::action::Action;
-    let mut s = militants(&["Scavenger Regent", "Lightning Bolt"]);
+    let mut s = militants(&["Scavenger Regent", "Lightning Bolt", "Burst Lightning"]);
     let dragon = s.force_permanent_on_battlefield(1, "Scavenger Regent");
-    let discard = move_to_hand(&mut s, "Lightning Bolt");
+    let discard = move_to_hand(&mut s, "Burst Lightning");
     let bolt = cast(&mut s, "Lightning Bolt");
     assert!(s.choose_target(Target::Permanent(dragon)));
     s.pass_priority();

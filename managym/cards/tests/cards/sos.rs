@@ -131,6 +131,8 @@ fn harmonized_trio_pays_three_distinct_taps_and_orders_brainstorm() {
         .zones
         .zone_objects(ZoneType::Exile, PlayerId(0))[0];
     assert_eq!(s.game().state[copy].name, "Brainstorm");
+    // Ensure the three drawn cards are distinct so both Brainstorm top orders stay separate.
+    crate::support::game::pin_top(&mut s, &["Plains", "Island", "Mountain"]);
     cast_card(&mut s, copy);
     resolve_top(&mut s);
     let cards = hand(&s, 0);

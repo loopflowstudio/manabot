@@ -2,7 +2,7 @@
 //! shared grouped-input driver.
 use std::collections::HashSet;
 
-use crate::agent::action::{Action, ActionSpace, AgentError};
+use crate::agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError};
 use crate::experience::ObjectRenderId;
 use crate::flow::combat::AttackTarget;
 use crate::flow::decision_group::{
@@ -38,9 +38,24 @@ impl CombatGroup {
     }
 }
 
-pub(crate) struct CombatProgress {
-    remaining: Vec<PermanentId>,
-    offset: usize,
+pub(crate) enum CombatProgress {
+    Attackers {
+        rules_player: PlayerId,
+        normalizer: AttackPlanNormalizer,
+    },
+    Blockers {
+        rules_player: PlayerId,
+        normalizer: BlockPlanNormalizer,
+    },
+}
+
+impl CombatProgress {
+    fn remaining(&self) -> &[PermanentId] {
+        match self {
+            Self::Attackers { normalizer, .. } => normalizer.remaining(),
+            Self::Blockers { normalizer, .. } => normalizer.remaining(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -54,7 +69,26 @@ impl DecisionGroupKind for CombatGroup {
 
     fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
         let order = game.declaration_order(self.role, viewer).ok()?;
-        if order.is_empty() {
+        let combat = game.state.combat.as_deref()?;
+        let declined = match self.role {
+            CombatRole::Attackers => combat.declined_attackers.as_slice(),
+            CombatRole::Blockers => combat.declined_blockers.as_slice(),
+        };
+        let active_order: Vec<PermanentId> = if declined.is_empty() {
+            order
+        } else {
+            let suppressed = game.interchangeable_with_any_permanent(declined, &order);
+            order
+                .into_iter()
+                .zip(suppressed)
+                .filter_map(|(creature, is_suppressed)| {
+                    let keep = !is_suppressed
+                        || (self.role == CombatRole::Attackers && game.must_attack(creature));
+                    keep.then_some(creature)
+                })
+                .collect()
+        };
+        if active_order.is_empty() {
             return None;
         }
         match self.role {
@@ -69,7 +103,7 @@ impl DecisionGroupKind for CombatGroup {
                     })
                     .collect();
                 Some(DecisionSpec::DeclareAttackers {
-                    declarable: order
+                    declarable: active_order
                         .iter()
                         .map(|creature| AttackerItem {
                             item: game.permanent_render_id(*creature),
@@ -82,10 +116,10 @@ impl DecisionGroupKind for CombatGroup {
                 })
             }
             CombatRole::Blockers => Some(DecisionSpec::DeclareBlockers {
-                declarable: order
+                declarable: active_order
                     .iter()
                     .map(|creature| {
-                        let others: Vec<_> = order
+                        let others: Vec<_> = active_order
                             .iter()
                             .copied()
                             .filter(|id| *id != *creature)
@@ -189,13 +223,82 @@ impl DecisionGroupKind for CombatGroup {
         &self,
         game: &Game,
         viewer: PlayerId,
-        _choice: &DecisionChoice,
+        choice: &DecisionChoice,
     ) -> Result<Self::Progress, AgentError> {
-        let remaining = game.declaration_order(self.role, viewer)?;
-        Ok(CombatProgress {
-            remaining,
-            offset: 0,
-        })
+        let order = game.declaration_order(self.role, viewer)?;
+        let rules_player = game
+            .action_space()
+            .and_then(|space| space.actions.first().map(Action::player))
+            .ok_or_else(|| AgentError("declaration has no legal actions".into()))?;
+        match (self.role, choice) {
+            (CombatRole::Attackers, DecisionChoice::DeclareAttackers { attackers }) => {
+                let to_entry = |attack: PlannedAttack, force_committed: bool| {
+                    let perm = game
+                        .permanent_by_render_id(attack.creature)
+                        .expect("verified attacker");
+                    let defender = match attack.defender {
+                        Some(object) => AttackTarget::Permanent(
+                            game.permanent_object(
+                                game.permanent_by_render_id(object)
+                                    .expect("verified defender"),
+                            )
+                            .expect("battlefield defender"),
+                        ),
+                        None => AttackTarget::Player(game.non_active_player()),
+                    };
+                    PlannedAttackEntry {
+                        attacker: perm,
+                        defender,
+                        raw_defender: attack.defender,
+                        committed: force_committed || !order.contains(&perm),
+                    }
+                };
+                let working_attackers = attackers
+                    .iter()
+                    .copied()
+                    .map(|attack| to_entry(attack, false))
+                    .chain(
+                        game.declared_attackers()
+                            .into_iter()
+                            .filter(|attack| !attackers.contains(attack))
+                            .map(|attack| to_entry(attack, true)),
+                    )
+                    .collect();
+                Ok(CombatProgress::Attackers {
+                    rules_player,
+                    normalizer: AttackPlanNormalizer::new(order, working_attackers),
+                })
+            }
+            (CombatRole::Blockers, DecisionChoice::DeclareBlockers { blocks }) => {
+                let to_entry = |block: PlannedBlock, force_committed: bool| {
+                    let blocker = game
+                        .permanent_by_render_id(block.blocker)
+                        .expect("verified blocker");
+                    PlannedBlockEntry {
+                        blocker,
+                        attacker: game.permanent_by_render_id(block.attacker),
+                        raw_attacker: Some(block.attacker),
+                        committed: force_committed || !order.contains(&blocker),
+                    }
+                };
+                let working_blocks = blocks
+                    .iter()
+                    .copied()
+                    .map(|block| to_entry(block, false))
+                    .chain(
+                        game.declared_blocks()
+                            .into_iter()
+                            .filter(|block| !blocks.contains(block))
+                            .map(|block| to_entry(block, true)),
+                    )
+                    .collect();
+                Ok(CombatProgress::Blockers {
+                    rules_player,
+                    normalizer: BlockPlanNormalizer::new(order, working_blocks),
+                })
+            }
+            _ => unreachable!("matches_choice already verified variant"),
+        }
     }
 
     fn continues(
@@ -207,7 +310,7 @@ impl DecisionGroupKind for CombatGroup {
     ) -> bool {
         position
             .asked_creature(self.role, viewer)
-            .is_some_and(|asked| progress.remaining[progress.offset..].contains(&asked))
+            .is_some_and(|asked| progress.remaining().contains(&asked))
     }
 
     fn next_step(
@@ -215,35 +318,56 @@ impl DecisionGroupKind for CombatGroup {
         live: &Game,
         position: &Game,
         viewer: PlayerId,
-        choice: &DecisionChoice,
+        _choice: &DecisionChoice,
         progress: &mut Self::Progress,
     ) -> NextStep {
-        let Some(asked) = position.asked_creature(self.role, viewer) else {
+        if position
+            .action_space()
+            .is_none_or(|space| space.player != Some(viewer))
+        {
             return NextStep::Done;
-        };
-        let Some(at) = progress.remaining[progress.offset..]
-            .iter()
-            .position(|creature| *creature == asked)
-        else {
-            return NextStep::Done;
-        };
-        progress.offset += at + 1;
-        let wanted = live.planned_combat_answer(self.role, asked, choice);
-        let space = position.action_space().expect("asked decision");
-        let index = space
-            .actions
-            .iter()
-            .position(|action| match (action, wanted) {
-                (Action::DeclareAttacker { attack, .. }, Answer::Attack(want)) => *attack == want,
-                (Action::DeclareBlocker { attacker, .. }, Answer::Block(want)) => *attacker == want,
-                _ => false,
-            });
-        match index {
-            Some(action_index) => NextStep::Step {
-                action_index,
-                item: Some(live.permanent_render_id(asked)),
-            },
-            None => NextStep::Refuse(live.combat_refusal(asked, wanted, space)),
+        }
+        match progress {
+            CombatProgress::Attackers {
+                rules_player,
+                normalizer,
+            } => {
+                let Some(step) = normalizer.next_step(position, *rules_player) else {
+                    return NextStep::Done;
+                };
+                let space = position.action_space().expect("asked decision");
+                match step.action_index {
+                    Some(action_index) => NextStep::Step {
+                        action_index,
+                        item: Some(live.permanent_render_id(step.permanent)),
+                    },
+                    None => NextStep::Refuse(live.combat_refusal(
+                        step.permanent,
+                        Answer::Attack(step.attack),
+                        space,
+                    )),
+                }
+            }
+            CombatProgress::Blockers {
+                rules_player,
+                normalizer,
+            } => {
+                let Some(step) = normalizer.next_step(position, *rules_player) else {
+                    return NextStep::Done;
+                };
+                let space = position.action_space().expect("asked decision");
+                match step.action_index {
+                    Some(action_index) => NextStep::Step {
+                        action_index,
+                        item: Some(live.permanent_render_id(step.blocker)),
+                    },
+                    None => NextStep::Refuse(live.combat_refusal(
+                        step.blocker,
+                        Answer::Block(step.wanted_attacker),
+                        space,
+                    )),
+                }
+            }
         }
     }
 
@@ -253,11 +377,25 @@ impl DecisionGroupKind for CombatGroup {
         position: &Game,
         obs_events_from: usize,
         _spec: &DecisionSpec,
-        choice: &DecisionChoice,
-        _progress: &Self::Progress,
+        _choice: &DecisionChoice,
+        progress: &Self::Progress,
     ) -> (DecisionOutcome, Option<DecisionRefusal>) {
         let outcome = live.read_combat_outcome(self.role, position, obs_events_from);
-        let refused = live.combat_undeclared(self.role, choice, &outcome);
+        let refused = match (progress, &outcome) {
+            (
+                CombatProgress::Attackers { normalizer, .. },
+                DecisionOutcome::DeclareAttackers {
+                    attackers: declared_attackers,
+                },
+            ) => live.undeclared_attackers(normalizer.planned(), declared_attackers),
+            (
+                CombatProgress::Blockers { normalizer, .. },
+                DecisionOutcome::DeclareBlockers {
+                    blocks: declared_blocks,
+                },
+            ) => live.undeclared_blocks(normalizer.planned(), declared_blocks),
+            _ => unreachable!("matching combat progress and outcome"),
+        };
         (outcome, refused)
     }
 }
@@ -291,14 +429,39 @@ impl Game {
         if space.player != Some(viewer) {
             return None;
         }
+        let rules_player = space.actions.first().map(Action::player)?;
+        self.asked_creature_for_rules_player(role, rules_player)
+    }
+
+    fn asked_creature_for_rules_player(
+        &self,
+        role: CombatRole,
+        rules_player: PlayerId,
+    ) -> Option<PermanentId> {
+        let space = self.action_space()?;
+        let expected_kind = match role {
+            CombatRole::Attackers => ActionSpaceKind::DeclareAttacker,
+            CombatRole::Blockers => ActionSpaceKind::DeclareBlocker,
+        };
+        if space.kind != expected_kind {
+            return None;
+        }
         space
             .actions
             .iter()
             .find_map(|action| match (action, role) {
-                (Action::DeclareAttacker { permanent, .. }, CombatRole::Attackers) => {
-                    Some(*permanent)
-                }
-                (Action::DeclareBlocker { blocker, .. }, CombatRole::Blockers) => Some(*blocker),
+                (
+                    Action::DeclareAttacker {
+                        player, permanent, ..
+                    },
+                    CombatRole::Attackers,
+                ) if *player == rules_player => Some(*permanent),
+                (
+                    Action::DeclareBlocker {
+                        player, blocker, ..
+                    },
+                    CombatRole::Blockers,
+                ) if *player == rules_player => Some(*blocker),
                 _ => None,
             })
     }
@@ -369,35 +532,6 @@ impl Game {
             })
     }
 
-    fn planned_combat_answer(
-        &self,
-        role: CombatRole,
-        creature: PermanentId,
-        choice: &DecisionChoice,
-    ) -> Answer {
-        let id = self.permanent_render_id(creature);
-        match (role, choice) {
-            (CombatRole::Attackers, DecisionChoice::DeclareAttackers { attackers }) => {
-                Answer::Attack(attackers.iter().find(|a| a.creature == id).map(|a| {
-                    match a.defender {
-                        Some(object) => AttackTarget::Permanent(
-                            self.permanent_object(self.permanent_by_render_id(object).unwrap())
-                                .unwrap(),
-                        ),
-                        None => AttackTarget::Player(self.non_active_player()),
-                    }
-                }))
-            }
-            (CombatRole::Blockers, DecisionChoice::DeclareBlockers { blocks }) => Answer::Block(
-                blocks
-                    .iter()
-                    .find(|block| block.blocker == id)
-                    .and_then(|block| self.permanent_by_render_id(block.attacker)),
-            ),
-            _ => unreachable!("matches_choice already verified variant"),
-        }
-    }
-
     fn combat_refusal(
         &self,
         creature: PermanentId,
@@ -417,10 +551,19 @@ impl Game {
             })
             .collect();
         let reason = match wanted {
-            Answer::Block(None) => match offered.as_slice() {
-                [attacker] => format!("{label} must block {}.", self.permanent_label(*attacker)),
-                _ => format!("{label} must block an attacker that requires it."),
-            },
+            Answer::Block(None) => {
+                let coupled: Vec<_> = offered
+                    .iter()
+                    .copied()
+                    .filter(|&attacker| self.blocks_are_coupled(attacker))
+                    .collect();
+                match (offered.as_slice(), coupled.as_slice()) {
+                    ([attacker], _) | (_, [attacker]) => {
+                        format!("{label} must block {}.", self.permanent_label(*attacker))
+                    }
+                    _ => format!("{label} must block an attacker that requires it."),
+                }
+            }
             Answer::Block(Some(attacker)) => {
                 format!("{label} can't block {}.", self.permanent_label(attacker))
             }
@@ -510,93 +653,355 @@ impl Game {
         }
     }
 
-    /// The engine finished the declaration but did not declare the plan:
-    /// the engine answered a forced declaration for a skipped creature.
-    fn combat_undeclared(
+    /// The engine finished the attacker declaration but did not declare the
+    /// normalized plan (e.g., a forced attack on a skipped creature).
+    fn undeclared_attackers(
         &self,
-        role: CombatRole,
-        choice: &DecisionChoice,
-        outcome: &DecisionOutcome,
+        working_attackers: &[PlannedAttackEntry],
+        declared_attackers: &[PlannedAttack],
     ) -> Option<DecisionRefusal> {
-        let named = |id: ObjectRenderId| self.permanent_render_label(id);
-        match (role, choice, outcome) {
-            (
-                CombatRole::Attackers,
-                DecisionChoice::DeclareAttackers { attackers },
-                DecisionOutcome::DeclareAttackers {
-                    attackers: declared_attackers,
-                },
-            ) => {
-                let mut planned = attackers.clone();
-                planned.extend(
-                    self.declared_attackers()
-                        .into_iter()
-                        .filter(|id| !attackers.contains(id)),
-                );
-                let mut declared = declared_attackers.clone();
-                planned.sort_by_key(|a| (a.creature.entity, a.creature.incarnation));
-                declared.sort_by_key(|a| (a.creature.entity, a.creature.incarnation));
-                (planned != declared).then(|| {
-                    let creature = planned
-                        .iter()
-                        .find(|id| !declared_attackers.contains(id))
-                        .or_else(|| declared_attackers.iter().find(|id| !planned.contains(id)))
-                        .copied()
-                        .expect("differing attacker sets");
-                    let label = named(creature.creature);
-                    let must_attack = self
-                        .permanent_by_render_id(creature.creature)
-                        .is_some_and(|attacker| self.must_attack(attacker));
-                    let reason = if must_attack && !planned.contains(&creature) {
-                        format!("{label} must attack.")
-                    } else {
-                        format!("The engine would not declare {label} as planned.")
-                    };
-                    DecisionRefusal {
-                        item: Some(creature.creature),
-                        reason,
-                        label,
-                    }
-                })
+        let mut planned: Vec<PlannedAttack> = working_attackers
+            .iter()
+            .map(|entry| PlannedAttack {
+                creature: self.permanent_render_id(entry.attacker),
+                defender: entry.raw_defender,
+            })
+            .collect();
+        let mut declared = declared_attackers.to_vec();
+        planned.sort_by_key(|a| (a.creature.entity, a.creature.incarnation));
+        declared.sort_by_key(|a| (a.creature.entity, a.creature.incarnation));
+        (planned != declared).then(|| {
+            let creature = planned
+                .iter()
+                .find(|id| !declared_attackers.contains(id))
+                .or_else(|| declared_attackers.iter().find(|id| !planned.contains(id)))
+                .copied()
+                .expect("differing attacker sets");
+            let label = self.permanent_render_label(creature.creature);
+            let must_attack = self
+                .permanent_by_render_id(creature.creature)
+                .is_some_and(|attacker| self.must_attack(attacker));
+            let reason = if must_attack && !planned.contains(&creature) {
+                format!("{label} must attack.")
+            } else {
+                format!("The engine would not declare {label} as planned.")
+            };
+            DecisionRefusal {
+                item: Some(creature.creature),
+                reason,
+                label,
             }
-            (
-                CombatRole::Blockers,
-                DecisionChoice::DeclareBlockers { blocks },
-                DecisionOutcome::DeclareBlockers {
-                    blocks: declared_blocks,
-                },
-            ) => {
-                let mut planned = blocks.clone();
-                planned.extend(
-                    self.declared_blocks()
-                        .into_iter()
-                        .filter(|block| !blocks.contains(block)),
-                );
-                let missing = planned
-                    .iter()
-                    .find(|block| !declared_blocks.contains(block));
-                if let Some(block) = missing {
-                    let label = named(block.blocker);
-                    let attacker = named(block.attacker);
-                    return Some(DecisionRefusal {
-                        item: Some(block.blocker),
-                        reason: format!("{label} can't block {attacker} in this declaration."),
-                        label,
-                    });
-                }
-                declared_blocks
-                    .iter()
-                    .find(|block| !planned.contains(block))
-                    .map(|block| {
-                        let label = named(block.blocker);
-                        DecisionRefusal {
-                            item: Some(block.blocker),
-                            reason: format!("{label} must block {}.", named(block.attacker)),
-                            label,
-                        }
-                    })
-            }
-            _ => unreachable!("matching combat role, choice, and outcome"),
+        })
+    }
+
+    /// The engine finished the blocker declaration but did not declare the
+    /// normalized plan (a forced block on a skipped creature or unresolvable target).
+    fn undeclared_blocks(
+        &self,
+        working_blocks: &[PlannedBlockEntry],
+        declared_blocks: &[PlannedBlock],
+    ) -> Option<DecisionRefusal> {
+        let planned: Vec<PlannedBlock> = working_blocks
+            .iter()
+            .map(|block| PlannedBlock {
+                blocker: self.permanent_render_id(block.blocker),
+                attacker: block
+                    .raw_attacker
+                    .expect("combat preview blocks carry render ids"),
+            })
+            .collect();
+        if let Some(block) = planned
+            .iter()
+            .find(|block| !declared_blocks.contains(block))
+        {
+            let label = self.permanent_render_label(block.blocker);
+            let attacker = self.permanent_render_label(block.attacker);
+            return Some(DecisionRefusal {
+                item: Some(block.blocker),
+                reason: format!("{label} can't block {attacker} in this declaration."),
+                label,
+            });
         }
+        declared_blocks
+            .iter()
+            .find(|block| !planned.contains(block))
+            .map(|block| {
+                let label = self.permanent_render_label(block.blocker);
+                DecisionRefusal {
+                    item: Some(block.blocker),
+                    reason: format!(
+                        "{label} must block {}.",
+                        self.permanent_render_label(block.attacker)
+                    ),
+                    label,
+                }
+            })
+    }
+}
+
+/// Cursor tracking the engine's sequential declaration order past creatures
+/// auto-resolved by `skip_trivial`.
+struct DeclarationCursor {
+    order: Vec<PermanentId>,
+    cursor: usize,
+    skipped: usize,
+}
+
+impl DeclarationCursor {
+    fn new(order: Vec<PermanentId>) -> Self {
+        Self {
+            order,
+            cursor: 0,
+            skipped: 0,
+        }
+    }
+
+    fn remaining(&self) -> &[PermanentId] {
+        &self.order[self.cursor..]
+    }
+
+    fn advance(
+        &mut self,
+        game: &Game,
+        role: CombatRole,
+        player: PlayerId,
+    ) -> Option<(PermanentId, &[PermanentId])> {
+        let asked = game.asked_creature_for_rules_player(role, player)?;
+        let rel = self.order[self.cursor..]
+            .iter()
+            .position(|creature| *creature == asked)?;
+        self.skipped += rel;
+        self.cursor += rel + 1;
+        Some((asked, &self.order[self.cursor..]))
+    }
+
+    fn all_asked(&self) -> bool {
+        self.skipped == 0 && self.cursor == self.order.len()
+    }
+}
+
+/// One planned attack entry tracked through sequential attacker declaration.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PlannedAttackEntry {
+    pub(crate) attacker: PermanentId,
+    pub(crate) defender: AttackTarget,
+    pub(crate) raw_defender: Option<ObjectRenderId>,
+    pub(crate) committed: bool,
+}
+
+/// One planned block entry tracked through sequential blocker declaration.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PlannedBlockEntry {
+    pub(crate) blocker: PermanentId,
+    pub(crate) attacker: Option<PermanentId>,
+    pub(crate) raw_attacker: Option<ObjectRenderId>,
+    pub(crate) committed: bool,
+}
+
+/// Normalized answer for the currently asked creature in an attacker declaration.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct NormalizedAttackStep {
+    pub(crate) permanent: PermanentId,
+    pub(crate) attack: Option<AttackTarget>,
+    pub(crate) action_index: Option<usize>,
+}
+
+/// Normalized answer for the currently asked creature in a blocker declaration.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct NormalizedBlockStep {
+    pub(crate) blocker: PermanentId,
+    pub(crate) wanted_attacker: Option<PermanentId>,
+    pub(crate) action_index: Option<usize>,
+}
+
+/// Shared attack-plan normalizer for grouped combat previews and compound lowering.
+///
+/// Advances past creatures auto-resolved by `skip_trivial` and re-homes
+/// planned marks from later interchangeable donors onto the creature being
+/// asked so non-canonical subsets (like `[A:no, B:yes]`) normalize cleanly
+/// under the declined-earlier symmetry rule.
+pub(crate) struct AttackPlanNormalizer {
+    cursor: DeclarationCursor,
+    planned: Vec<PlannedAttackEntry>,
+}
+
+impl AttackPlanNormalizer {
+    pub(crate) fn new(order: Vec<PermanentId>, planned: Vec<PlannedAttackEntry>) -> Self {
+        Self {
+            cursor: DeclarationCursor::new(order),
+            planned,
+        }
+    }
+
+    pub(crate) fn remaining(&self) -> &[PermanentId] {
+        self.cursor.remaining()
+    }
+
+    pub(crate) fn next_step(
+        &mut self,
+        game: &Game,
+        player: PlayerId,
+    ) -> Option<NormalizedAttackStep> {
+        let (asked, remaining) = self.cursor.advance(game, CombatRole::Attackers, player)?;
+        let attack = if let Some(entry) = self
+            .planned
+            .iter_mut()
+            .find(|entry| !entry.committed && entry.attacker == asked)
+        {
+            entry.committed = true;
+            Some(entry.defender)
+        } else if let Some(pos) = remaining.iter().find_map(|&other| {
+            let pos = self
+                .planned
+                .iter()
+                .position(|entry| !entry.committed && entry.attacker == other)?;
+            game.interchangeable_permanents(asked, other).then_some(pos)
+        }) {
+            self.planned[pos].attacker = asked;
+            self.planned[pos].committed = true;
+            Some(self.planned[pos].defender)
+        } else {
+            None
+        };
+        let space = game.action_space().expect("asked decision");
+        let wanted = Action::DeclareAttacker {
+            player,
+            permanent: asked,
+            attack,
+        };
+        let action_index = space.actions.iter().position(|action| *action == wanted);
+        Some(NormalizedAttackStep {
+            permanent: asked,
+            attack,
+            action_index,
+        })
+    }
+
+    pub(crate) fn all_committed(&self) -> bool {
+        self.planned.iter().all(|entry| entry.committed)
+    }
+
+    pub(crate) fn all_asked(&self) -> bool {
+        self.cursor.all_asked()
+    }
+
+    pub(crate) fn planned(&self) -> &[PlannedAttackEntry] {
+        &self.planned
+    }
+}
+
+/// Shared block-plan normalizer for grouped combat previews and compound lowering.
+///
+/// Advances past blockers auto-resolved by `skip_trivial`, re-homes planned
+/// blocks from later interchangeable donors onto the blocker being asked,
+/// resolves folded attacker aliases through `Game::resolve_action_index`, and
+/// transposes `want <-> canon` across remaining uncommitted blocks so
+/// split-blocks stay split and double-blocks stay paired.
+pub(crate) struct BlockPlanNormalizer {
+    cursor: DeclarationCursor,
+    planned: Vec<PlannedBlockEntry>,
+}
+
+impl BlockPlanNormalizer {
+    pub(crate) fn new(order: Vec<PermanentId>, planned: Vec<PlannedBlockEntry>) -> Self {
+        Self {
+            cursor: DeclarationCursor::new(order),
+            planned,
+        }
+    }
+
+    pub(crate) fn remaining(&self) -> &[PermanentId] {
+        self.cursor.remaining()
+    }
+
+    pub(crate) fn next_step(
+        &mut self,
+        game: &Game,
+        player: PlayerId,
+    ) -> Option<NormalizedBlockStep> {
+        let (asked, remaining) = self.cursor.advance(game, CombatRole::Blockers, player)?;
+
+        let entry_pos = if let Some(pos) = self
+            .planned
+            .iter()
+            .position(|entry| !entry.committed && entry.blocker == asked)
+        {
+            Some(pos)
+        } else if let Some(pos) = remaining.iter().find_map(|&other| {
+            let pos = self.planned.iter().position(|entry| {
+                !entry.committed && entry.blocker == other && entry.attacker.is_some()
+            })?;
+            game.interchangeable_permanents(asked, other).then_some(pos)
+        }) {
+            self.planned[pos].blocker = asked;
+            Some(pos)
+        } else {
+            None
+        };
+
+        let wanted_attacker = entry_pos.and_then(|pos| self.planned[pos].attacker);
+        let space = game.action_space().expect("asked decision");
+        let wanted_action = Action::DeclareBlocker {
+            player,
+            blocker: asked,
+            attacker: wanted_attacker,
+        };
+        let action_index = game.resolve_action_index(space, &wanted_action);
+        let resolved_attacker = action_index.and_then(|idx| match space.actions[idx] {
+            Action::DeclareBlocker { attacker, .. } => attacker,
+            _ => None,
+        });
+
+        if let Some(pos) = entry_pos {
+            if self.planned[pos].attacker.is_some() {
+                self.planned[pos].committed = true;
+            }
+            if let (Some(want), Some(canon)) = (wanted_attacker, resolved_attacker) {
+                if canon != want {
+                    let has_render = self.planned[pos].raw_attacker.is_some();
+                    let canon_render = has_render.then(|| game.permanent_render_id(canon));
+                    let want_render = has_render.then(|| game.permanent_render_id(want));
+                    let assign = |entry: &mut PlannedBlockEntry,
+                                  perm: PermanentId,
+                                  render: Option<ObjectRenderId>| {
+                        entry.attacker = Some(perm);
+                        if render.is_some() {
+                            entry.raw_attacker = render;
+                        }
+                    };
+                    assign(&mut self.planned[pos], canon, canon_render);
+                    // Transpose want <-> canon across uncommitted blocks so
+                    // split-blocks stay split and double-blocks stay paired on
+                    // the canonical attacker.
+                    for (i, other) in self.planned.iter_mut().enumerate() {
+                        if i != pos && !other.committed {
+                            if other.attacker == Some(want) {
+                                assign(other, canon, canon_render);
+                            } else if other.attacker == Some(canon) {
+                                assign(other, want, want_render);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Some(NormalizedBlockStep {
+            blocker: asked,
+            wanted_attacker,
+            action_index,
+        })
+    }
+
+    pub(crate) fn all_committed(&self) -> bool {
+        self.planned.iter().all(|entry| entry.committed)
+    }
+
+    pub(crate) fn all_asked(&self) -> bool {
+        self.cursor.all_asked()
+    }
+
+    pub(crate) fn planned(&self) -> &[PlannedBlockEntry] {
+        &self.planned
     }
 }

@@ -212,6 +212,10 @@ pub enum ChoiceStep {
 pub struct InteractionOffer {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subjects: Vec<OfferSubjectView>,
+    /// Live in-zone copies folded into this offer, omitted when empty.
+    /// Outside-game sideboard copies stay engine-internal for lowering.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<SubjectRef>,
     pub id: OfferId,
     pub actor: PlayerId,
     pub verb: OfferVerb,

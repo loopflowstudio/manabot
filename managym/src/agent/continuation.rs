@@ -474,9 +474,7 @@ impl Game {
         for object in self.state.stack_objects.iter().rev() {
             frames.push(self.stack_frame(object, viewer));
         }
-        if self.current_action_space.as_ref().and_then(|s| s.player) == Some(viewer)
-            && !self.is_game_over()
-        {
+        if self.action_space().and_then(|s| s.player) == Some(viewer) && !self.is_game_over() {
             self.append_private_frames(viewer, &mut frames);
         }
         frames.extend(
@@ -847,8 +845,7 @@ impl Game {
         let mut frame = ContinuationFrame {
             kind: 4,
             controller: self
-                .current_action_space
-                .as_ref()
+                .action_space()
                 .and_then(|space| space.actions.first().map(|action| action.player()))
                 .expect("announcement has a player")
                 .0,
@@ -1028,9 +1025,7 @@ impl Game {
             debug_assert!(matches!(frame.kind, 1..=3));
             super::effect_execution::project_stack_object(self, object, viewer, frame, true);
         }
-        if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
-            || self.is_game_over()
-        {
+        if self.action_space().and_then(|s| s.player) != Some(viewer) || self.is_game_over() {
             return;
         }
         if let Some(PendingChoice::DivideAmongTargets { spell, .. }) = &self.pending_choice {

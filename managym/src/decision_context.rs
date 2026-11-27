@@ -156,6 +156,45 @@ impl Game {
             .collect()
     }
 
+    /// Viewer-safe live in-zone folded copies for each one-action offer, in
+    /// native offer order. Objects hidden from `viewer` and outside-game
+    /// sideboard entries (`LearnTakeLesson`, which stay in
+    /// `Game::action_aliases` for lowering) are not emitted.
+    pub fn decision_offer_aliases(&self, viewer: PlayerId) -> Vec<Vec<SubjectRef>> {
+        let Some(space) = self.action_space() else {
+            return Vec::new();
+        };
+        if space.player != Some(viewer) {
+            return Vec::new();
+        }
+        let mut by_offer = vec![Vec::new(); space.actions.len()];
+        let aliases = self.action_aliases();
+        if aliases.is_empty() {
+            return by_offer;
+        }
+        for &(offer_index, alias_object) in aliases {
+            let Some(slot) = by_offer.get_mut(offer_index) else {
+                continue;
+            };
+            if self
+                .visible_reference(alias_object, viewer)
+                .object
+                .is_none()
+            {
+                continue;
+            }
+            if self.state.live(alias_object).is_none() {
+                continue;
+            }
+            if let Some(identity) = self.observed_identity(alias_object) {
+                slot.push(SubjectRef::Object {
+                    id: identity.reference.into(),
+                });
+            }
+        }
+        by_offer
+    }
+
     /// Public event identities captured before a transition so a permanent's
     /// later departure cannot turn a committed damage target into a guess.
     /// `object:<slot>` names each battlefield and graveyard appearance by the

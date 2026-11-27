@@ -7,7 +7,7 @@
 use crate::state::card::SpellProfile;
 #[cfg(test)]
 use crate::state::player::ManaFloats;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 use rand::seq::SliceRandom;
 
@@ -772,8 +772,8 @@ pub enum Decision {
         end: DistinctSearchEnd,
     },
     /// `player` chooses a card matching `predicate` from `owner`'s revealed
-    /// hand; `owner` discards it. Candidates are read from the current hand,
-    /// one per definition, so resampled physical copies stay consistent.
+    /// hand; `owner` discards it. Candidates are read from the current hand;
+    /// indistinguishable copies fold through the shared action-space folder.
     DiscardFromRevealedHand {
         player: PlayerId,
         owner: PlayerId,
@@ -1063,64 +1063,6 @@ pub(crate) enum ResolutionRef<'a> {
 }
 
 impl SuspendedResolution {
-    /// A simple output choice resumes an empty root frame. Other continuations
-    /// can still use their selected objects, batches and callers after payment.
-    pub(super) fn may_name_mana_source(&self, id: PermanentId, object: ObjectId) -> bool {
-        let payment_names = |progress: &PaymentProgress| {
-            let f = &self.frame;
-            let target = Target::Permanent(id);
-            let completion_names = match f.completion {
-                FrameCompletion::Priority | FrameCompletion::Continue => false,
-                FrameCompletion::TurnFaceUp(o) => o == object,
-                FrameCompletion::Spell {
-                    object: o,
-                    attach_to,
-                } => o == object || attach_to == Some(object),
-                _ => true,
-            };
-            f.batch.is_some()
-                || f.iteration.is_some()
-                || completion_names
-                || [f.source(), f.source_ref(), f.chosen, f.attached, f.grantor]
-                    .contains(&Some(object))
-                || f.context == Some(target)
-                || f.targets.iter().any(|t| t.target == target)
-                || f.remembered.iter().any(|b| b.object == object)
-                || [
-                    &f.selected,
-                    &f.unselected,
-                    &f.moved,
-                    &f.moved_from,
-                    &f.created,
-                    &f.this_way,
-                ]
-                .iter()
-                .any(|v| v.contains(&object))
-                || f.spent.names_object(object)
-                || progress.receipt.names_object(object)
-                || progress.spends.is_some_and(|key| key.0 == object)
-                || progress.counters_on_decline == Some(target)
-        };
-        match &self.decision {
-            Decision::ManaChoice {
-                player,
-                production: ManaProduction::Output { source, .. },
-                resume: None,
-                ..
-            } => *source == Some(object) || self.frame != EffectFrame::new(*player, Vec::new()),
-            Decision::ManaChoice {
-                production: ManaProduction::Output { source, .. },
-                resume: Some(resume),
-                ..
-            } => match resume.as_ref() {
-                Decision::Payment(progress) => *source == Some(object) || payment_names(progress),
-                _ => true,
-            },
-            Decision::Payment(progress) => payment_names(progress),
-            _ => true,
-        }
-    }
-
     /// Walk the complete caller chain, outermost first. Projection and private
     /// inspection use this same order across both child scopes and mana costs.
     pub(crate) fn continuation(&self) -> Vec<ResolutionRef<'_>> {
@@ -3886,8 +3828,8 @@ impl Game {
         }
     }
 
-    /// Playable card and profile pairs. Graveyard choices bind each public
-    /// object. Existing free-hand offers group interchangeable copies by definition.
+    /// Playable card and profile pairs. Indistinguishable copies fold when
+    /// the action space is published so aliases cover every copy.
     pub(crate) fn resolution_cast_candidates(
         &self,
         decision: &Decision,
@@ -3991,24 +3933,12 @@ impl Game {
                 }
             }
         }
-        if !matches!(
-            offer,
-            ResolutionCastOffer::Graveyard { .. }
-                | ResolutionCastOffer::AmongExiled { .. }
-                | ResolutionCastOffer::ChooseExiled { .. }
-        ) {
-            let mut offered = HashSet::new();
-            candidates.retain(|(card, profile)| {
-                offered.insert((
-                    self.state[self.state.object_of(*card)].definition_id,
-                    *profile,
-                ))
-            });
-        }
         candidates
     }
 
-    /// One hand card per matching definition for `DiscardFromRevealedHand`.
+    /// Matching hand objects for `DiscardFromRevealedHand`. Indistinguishable
+    /// copies fold when the action space is published so aliases cover every
+    /// copy and pinned/referenced copies stay distinct.
     pub(crate) fn revealed_hand_objects(&self, decision: &Decision) -> Vec<ObjectId> {
         let Decision::DiscardFromRevealedHand {
             owner, predicate, ..
@@ -4025,7 +3955,6 @@ impl Game {
             .filter(|object| self.object_matches_predicate(*object, predicate))
             .collect();
         candidates.sort_unstable_by_key(|object| (self.state[*object].definition_id, *object));
-        candidates.dedup_by_key(|object| self.state[*object].definition_id);
         candidates
     }
 
@@ -4388,11 +4317,10 @@ mod learn_tests {
             .collect()
     }
 
-    fn game(sideboard: &[(&str, usize)]) -> Game {
+    fn game_with_deck(deck: &[(&str, usize)], sideboard: &[(&str, usize)]) -> Game {
         let mut game = Game::new(
             vec![
-                PlayerConfig::new("learner", counts(&[("Island", 40)]))
-                    .with_sideboard(counts(sideboard)),
+                PlayerConfig::new("learner", counts(deck)).with_sideboard(counts(sideboard)),
                 PlayerConfig::new("opponent", counts(&[("Plains", 40)]))
                     .with_sideboard(counts(&[("Fancy Footwork", 1)])),
             ],
@@ -4401,6 +4329,22 @@ mod learn_tests {
         );
         game.keep_opening_hands();
         game
+    }
+
+    fn game(sideboard: &[(&str, usize)]) -> Game {
+        game_with_deck(&[("Island", 40)], sideboard)
+    }
+
+    fn distinct_card_names(count: usize) -> Vec<String> {
+        let pack = crate::cards::content_pack::default_content_pack();
+        pack.definitions()
+            .filter(|def| {
+                def.kind == crate::state::game_object::ObjectKind::Card
+                    && pack.definition_id(&def.printed.name).is_some()
+            })
+            .map(|def| def.printed.name.clone())
+            .take(count)
+            .collect()
     }
 
     #[test]
@@ -4646,7 +4590,13 @@ mod learn_tests {
     fn learn_sideboard_projection_is_private_complete_and_consumed_once() {
         use crate::agent::observation::Observation;
 
-        let mut game = game(&[("Firebending Lesson", 40), ("Island", 1)]);
+        let distinct_hand = distinct_card_names(35);
+        let deck_entries: Vec<(&str, usize)> = distinct_hand
+            .iter()
+            .map(|name| (name.as_str(), 1))
+            .chain(std::iter::once(("Island", 10)))
+            .collect();
+        let mut game = game_with_deck(&deck_entries, &[("Firebending Lesson", 40), ("Island", 1)]);
         let initial = Observation::for_player(&game, PlayerId(0));
         assert_eq!(initial.agent_sideboard.len(), 41);
         assert_eq!(
@@ -4678,6 +4628,19 @@ mod learn_tests {
         );
         assert!(other.action_space.actions.is_empty());
 
+        // Move the 35 distinct cards into hand so LearnTakeLesson lands past
+        // index 32 even after the 40 identical sideboard Lessons fold to one offer.
+        for name in &distinct_hand {
+            if !game
+                .state
+                .zones
+                .zone_objects(ZoneType::Hand, PlayerId(0))
+                .iter()
+                .any(|&obj| game.state[obj].name == *name)
+            {
+                game.scenario_force_card_in_hand(PlayerId(0), name).unwrap();
+            }
+        }
         learn(&mut game);
         let deciding = Observation::for_player(&game, PlayerId(0));
         let retrievals: Vec<_> = deciding
@@ -4688,7 +4651,7 @@ mod learn_tests {
                 action.action_type == crate::agent::action::ActionType::LearnTakeLesson
             })
             .collect();
-        assert_eq!(retrievals.len(), 40);
+        assert_eq!(retrievals.len(), 1);
         for action in &retrievals {
             assert_eq!(action.focus.len(), 1);
             let outside = deciding
@@ -4698,7 +4661,7 @@ mod learn_tests {
                 .unwrap();
             assert_eq!(outside.name, "Firebending Lesson");
         }
-        let last = retrievals.last().unwrap().focus[0];
+        let chosen = retrievals[0].focus[0];
         let index = deciding
             .action_space
             .actions
@@ -4725,11 +4688,11 @@ mod learn_tests {
         assert!(after
             .agent_sideboard
             .iter()
-            .all(|object| object.candidate_id != last));
+            .all(|object| object.candidate_id != chosen));
         assert!(after
             .agent_cards
             .iter()
-            .any(|object| object.id == last && object.zone == ZoneType::Hand));
+            .any(|object| object.id == chosen && object.zone == ZoneType::Hand));
         assert_eq!(after.agent.sideboard_counts, initial.agent.sideboard_counts);
         assert_eq!(
             after
@@ -4753,7 +4716,23 @@ mod learn_tests {
 
     #[test]
     fn learn_complete_offers_execute_beyond_thirty_two_and_reject_stale_reuse() {
-        let mut game = game(&[("Firebending Lesson", 40)]);
+        let distinct_hand = distinct_card_names(40);
+        let deck_entries: Vec<(&str, usize)> = distinct_hand
+            .iter()
+            .map(|name| (name.as_str(), 1))
+            .collect();
+        let mut game = game_with_deck(&deck_entries, &[("Firebending Lesson", 1)]);
+        for name in &distinct_hand {
+            if !game
+                .state
+                .zones
+                .zone_objects(ZoneType::Hand, PlayerId(0))
+                .iter()
+                .any(|&obj| game.state[obj].name == *name)
+            {
+                game.scenario_force_card_in_hand(PlayerId(0), name).unwrap();
+            }
+        }
         learn(&mut game);
         let source = game.clone();
         let before = witness(&source);
@@ -5003,17 +4982,21 @@ mod learn_tests {
             assert!(lesson_count >= 1);
             seen.insert(lesson_count);
             let actions = &branch.action_space().unwrap().actions;
-            assert_eq!(
-                actions
-                    .iter()
-                    .filter(|action| matches!(action, Action::LearnDiscard { .. }))
-                    .count(),
-                hand.len()
-            );
-            for action in actions {
-                if let Action::LearnDiscard { object, .. } = action {
-                    assert!(hand.contains(*object));
+            let mut discard_objects: Vec<ObjectId> = actions
+                .iter()
+                .filter_map(|action| match action {
+                    Action::LearnDiscard { object, .. } => Some(*object),
+                    _ => None,
+                })
+                .collect();
+            for &(idx, alias) in branch.action_aliases() {
+                if matches!(actions.get(idx), Some(Action::LearnDiscard { .. })) {
+                    discard_objects.push(alias);
                 }
+            }
+            assert_eq!(discard_objects.len(), hand.len());
+            for object in discard_objects {
+                assert!(hand.contains(object));
             }
             assert_eq!(
                 branch.state.players[0].known_hand,
