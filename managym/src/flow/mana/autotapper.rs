@@ -134,13 +134,13 @@ fn colored(output: &Mana) -> bool {
 }
 
 /// Deterministic total order on fixed mana outputs among sources of equal
-/// reluctance and coloredness: smaller total output first (avoid wasting
-/// doubled mana), restricted/classed outputs before ordinary ones (keep
-/// flexible mana), then WUBRGC order (`W < U < B < R < G < C`), then class
-/// details.
+/// reluctance and coloredness: shared `OutputTiebreak` order (smaller total
+/// output first, restricted/classed outputs before ordinary ones, then combined
+/// WUBRGC totals `W < U < B < R < G < C`), breaking remaining ties by ordinary
+/// vs classed breakdown and `ManaClass` details.
 pub(super) fn cmp_mana_output(a: &Mana, b: &Mana) -> std::cmp::Ordering {
-    a.total()
-        .cmp(&b.total())
+    OutputTiebreak::of(a)
+        .cmp(&OutputTiebreak::of(b))
         .then_with(|| b.classes().len().cmp(&a.classes().len()))
         .then_with(|| b.mana.cmp(&a.mana))
         .then_with(|| {
@@ -166,6 +166,12 @@ struct OutputTiebreak {
 }
 
 impl OutputTiebreak {
+    fn of(output: &Mana) -> Self {
+        let mut tiebreak = Self::default();
+        tiebreak.tap(output, 1);
+        tiebreak
+    }
+
     fn tap(&mut self, output: &Mana, count: usize) {
         let count = count as u16;
         self.total += output.total() * count;
@@ -298,6 +304,20 @@ impl Chooser<'_> {
         (kinds, tiebreak)
     }
 
+    fn cmp_tap_outputs(&self, a: &[usize], b: &[usize]) -> std::cmp::Ordering {
+        let mut oa: Vec<&Mana> = a.iter().map(|&index| self.output(index)).collect();
+        let mut ob: Vec<&Mana> = b.iter().map(|&index| self.output(index)).collect();
+        oa.sort_unstable_by(|x, y| cmp_mana_output(x, y));
+        ob.sort_unstable_by(|x, y| cmp_mana_output(x, y));
+        for (x, y) in oa.iter().zip(&ob) {
+            let ord = cmp_mana_output(x, y);
+            if ord != std::cmp::Ordering::Equal {
+                return ord;
+            }
+        }
+        oa.len().cmp(&ob.len())
+    }
+
     /// The payment the kind and color/output preference picks when no follow-up
     /// matters, or `None` when it is no better than `taps`, the pruned witness.
     /// Every usable source starts tapped and each surplus one is dropped,
@@ -337,7 +357,12 @@ impl Chooser<'_> {
             }
         }
         chosen.sort_unstable();
-        (self.rank(&chosen) < self.rank(taps)).then_some(chosen)
+        let better = match self.rank(&chosen).cmp(&self.rank(taps)) {
+            std::cmp::Ordering::Less => true,
+            std::cmp::Ordering::Greater => false,
+            std::cmp::Ordering::Equal => self.cmp_tap_outputs(&chosen, taps).is_lt(),
+        };
+        better.then_some(chosen)
     }
 
     fn pooled(&self, taps: &[usize]) -> Mana {
@@ -631,12 +656,15 @@ impl ClassSearch<'_, '_> {
             return;
         };
         let kept = chooser.kept(set);
-        if (kept, std::cmp::Reverse((kinds, tiebreak)))
-            > (
-                self.best,
-                std::cmp::Reverse((self.best_kinds, self.best_tiebreak)),
-            )
-        {
+        let better = match (kept, std::cmp::Reverse((kinds, tiebreak))).cmp(&(
+            self.best,
+            std::cmp::Reverse((self.best_kinds, self.best_tiebreak)),
+        )) {
+            std::cmp::Ordering::Greater => true,
+            std::cmp::Ordering::Less => false,
+            std::cmp::Ordering::Equal => chooser.cmp_tap_outputs(&taps, &self.taps).is_lt(),
+        };
+        if better {
             self.best = kept;
             self.best_kinds = kinds;
             self.best_tiebreak = tiebreak;
@@ -1064,6 +1092,73 @@ mod tests {
             after_last.sources[last_choice.taps[0]].fixed.as_ref(),
             Some(&Mana::parse("W"))
         );
+    }
+
+    #[test]
+    fn restricted_mana_classes_share_one_order_across_preferred_and_class_search() {
+        use crate::state::mana::ManaRestriction;
+
+        let ally_g = Mana::restricted_to(ManaRestriction::only([], ["Ally"]), [0, 0, 0, 0, 1, 0]);
+        let lesson_w =
+            Mana::restricted_to(ManaRestriction::only([], ["Lesson"]), [1, 0, 0, 0, 0, 0]);
+        let lesson_g =
+            Mana::restricted_to(ManaRestriction::only([], ["Lesson"]), [0, 0, 0, 0, 1, 0]);
+
+        // Combined WUBRGC order places Lesson:{W} ahead of Ally:{G} in both
+        // cmp_mana_output and OutputTiebreak; same-color classes break ties by ManaClass.
+        assert_eq!(
+            super::cmp_mana_output(&lesson_w, &ally_g),
+            std::cmp::Ordering::Less
+        );
+        assert!(super::OutputTiebreak::of(&lesson_w) < super::OutputTiebreak::of(&ally_g));
+        assert_eq!(
+            super::cmp_mana_output(&ally_g, &lesson_g),
+            std::cmp::Ordering::Less
+        );
+
+        let mut cost = ManaCost::parse("1");
+        cost.purpose = SpendingContext::ability(["Ally", "Lesson"]);
+        let mut tied_a = ManaCost::parse("1");
+        tied_a.purpose = SpendingContext::ability(["Ally"]);
+        let mut tied_b = ManaCost::parse("1");
+        tied_b.purpose = SpendingContext::ability(["Lesson"]);
+        let tied_probe = PaymentProbe {
+            followups: vec![tied_a, tied_b],
+            hand: 0,
+            instant: 0,
+            tapping: vec![None; 2],
+        };
+
+        for (first, second, want) in [
+            (&ally_g, &lesson_w, &lesson_w),
+            (&lesson_w, &ally_g, &lesson_w),
+            (&ally_g, &lesson_g, &ally_g),
+            (&lesson_g, &ally_g, &ally_g),
+        ] {
+            let mut model = lands(&["G", "G"]);
+            let sources = std::sync::Arc::make_mut(&mut model.sources);
+            sources[0].fixed = Some(first.clone());
+            sources[1].fixed = Some(second.clone());
+            let witness = model
+                .plan(
+                    Mana::default(),
+                    vec![pay_cost(&cost)],
+                    SourcePolicy::FixedOnly,
+                )
+                .unwrap();
+            for probe in [PaymentProbe::default(), tied_probe.clone()] {
+                let choice = model.choose_taps(
+                    &Mana::default(),
+                    &cost,
+                    &[],
+                    &witness,
+                    || vec![Reluctance::Land; 2],
+                    || probe.clone(),
+                );
+                assert_eq!(choice.taps.len(), 1);
+                assert_eq!(model.sources[choice.taps[0]].fixed.as_ref(), Some(want));
+            }
+        }
     }
 
     #[test]

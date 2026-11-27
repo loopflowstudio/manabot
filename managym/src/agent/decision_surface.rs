@@ -1045,9 +1045,7 @@ impl Game {
                 for count in 1..=bclass.len() {
                     let id = next_candidate_id(candidates.len())?;
                     let mut candidate = self.compound_permanent_candidate(attacker, id)?;
-                    if count > 1 {
-                        candidate.label = format!("{count} × {attacker_name}");
-                    }
+                    candidate.label = format!("{count} × {blocker_name} → {attacker_name}");
                     candidates.push(candidate);
                     let seq = bclass
                         .iter()
@@ -1188,7 +1186,10 @@ impl Game {
             .paying()
             .filter(|(_, payment, _)| payment.paying_mana() && payment.waterbends())
         else {
-            return Err(DecisionSurfaceError::WrongDecision);
+            // Resolving waterbend costs (e.g. OptionalPayment / Ward) live in
+            // Decision::Payment rather than PendingChoice::Pay; fall back to
+            // the folded sequential space.
+            return Ok(None);
         };
         if !self.state.delayed_triggers.is_empty()
             || self.state.permanents.iter().flatten().any(|permanent| {
@@ -1214,6 +1215,7 @@ impl Game {
                 DecisionSurfaceError::Invariant("waterbend has no payable completion".into())
             })?;
         let classes = self.partition_interchangeable_permanents(&legal_taps);
+        let total_legal = legal_taps.len();
         let mut choices = Vec::new();
         let mut roles = Vec::new();
         if classes.iter().all(|class| class.len() == 1) || max <= 1 {
@@ -1245,8 +1247,7 @@ impl Game {
                 min,
                 max,
             });
-        } else {
-            let total_legal = legal_taps.len();
+        } else if classes.len() == 1 || min == total_legal || (min == 0 && total_legal <= max) {
             for class in &classes {
                 let role = RoleId(
                     u16::try_from(choices.len())
@@ -1322,6 +1323,12 @@ impl Game {
                     });
                 }
             }
+        } else {
+            // Multi-class count roles with a coupled total bound (min..=max)
+            // admit schema-valid role products outside that range. Fall back to
+            // the sequential ActionSpace, which fold_action_space already folds
+            // to one tap offer per equivalence class.
+            return Ok(None);
         }
         let offer = DecisionOption {
             id: DecisionOptionId(0),
@@ -2351,7 +2358,28 @@ impl Game {
             .first()
             .map(Action::player)
             .ok_or(DecisionSurfaceError::WrongDecision)?;
-        let mut order = Vec::with_capacity(actions.len());
+        let first = self
+            .action_space()
+            .filter(|space| space.kind == ActionSpaceKind::DeclareBlocker)
+            .and_then(|space| {
+                space.actions.iter().find_map(|action| match action {
+                    Action::DeclareBlocker {
+                        player: action_player,
+                        blocker,
+                        ..
+                    } if *action_player == player => Some(*blocker),
+                    _ => None,
+                })
+            })
+            .ok_or(DecisionSurfaceError::WrongDecision)?;
+        let combat = self
+            .state
+            .combat
+            .as_ref()
+            .ok_or(DecisionSurfaceError::WrongDecision)?;
+        let order: Vec<PermanentId> = std::iter::once(first)
+            .chain(combat.blockers_to_declare.iter().rev().copied())
+            .collect();
         let mut planned = Vec::new();
         for action in actions {
             match *action {
@@ -2360,7 +2388,6 @@ impl Game {
                     blocker,
                     attacker,
                 } if action_player == player => {
-                    order.push(blocker);
                     if attacker.is_some() {
                         planned.push(crate::flow::decision_group::PlannedBlockEntry {
                             blocker,

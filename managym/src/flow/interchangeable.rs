@@ -2888,7 +2888,7 @@ impl Game {
             return permanents.iter().map(|&id| vec![id]).collect();
         }
 
-        let census = ReferenceCensus::run(self, &watch);
+        let census = ReferenceCensus::run_with_perm_flag(self, &watch, true);
         if census.all_named() {
             return permanents.iter().map(|&id| vec![id]).collect();
         }
@@ -2984,7 +2984,7 @@ impl Game {
             return targets;
         }
 
-        let census = ReferenceCensus::run(self, &watch);
+        let census = ReferenceCensus::run_with_perm_flag(self, &watch, has_perm_dup);
         if census.all_named() {
             return targets;
         }

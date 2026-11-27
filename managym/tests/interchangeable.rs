@@ -1244,16 +1244,56 @@ fn compound_waterbend_lowers_folded_aliases_under_both_skip_trivial_modes() {
             ("Water Tribe Rallier", 16),
             ("Gray Ogre", 8),
         ];
+
+        // 1. Coupled multi-class Waterbend (1 Rallier + 3 Gray Ogre with {2} floating ->
+        // min=3, max=4, total_legal=4): independent roles would admit schema-valid answers
+        // with < 3 taps, so compound_offers() falls back to the folded sequential space.
+        let mut coupled = position(
+            &["Water Tribe Rallier", "Gray Ogre", "Gray Ogre", "Gray Ogre"],
+            &entries,
+            "Forest",
+        );
+        coupled.skip_trivial = skip_trivial;
+        coupled.state.players[0]
+            .mana_pool
+            .add(&Mana::parse("GG"), None);
+        coupled.scenario_refresh_priority().unwrap();
+        let activate = coupled
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::ActivateAbility { .. }))
+            .unwrap();
+        coupled.step(activate).unwrap();
+        assert_eq!(
+            coupled.action_space().unwrap().kind,
+            ActionSpaceKind::Waterbend
+        );
+        let coupled_offers = coupled.compound_offers().unwrap();
+        assert_eq!(
+            coupled_offers.projection().offers.len(),
+            coupled.action_space().unwrap().actions.len()
+        );
+        assert_eq!(coupled_offers.projection().offers.len(), 2);
+        assert!(coupled_offers
+            .projection()
+            .offers
+            .iter()
+            .all(|o| o.verb == DecisionVerb::WaterbendTap && o.choices.is_empty()));
+
+        // 2. Unconstrained multi-class Waterbend (1 Rallier + 3 Gray Ogre with {5} floating ->
+        // min=0, max=4, total_legal=4): every schema-valid combination (2 × 4 = 8) is legal,
+        // so compound_offers() emits 2 independent roles and lowers folded aliases cleanly.
         let mut game = position(
             &["Water Tribe Rallier", "Gray Ogre", "Gray Ogre", "Gray Ogre"],
             &entries,
             "Forest",
         );
         game.skip_trivial = skip_trivial;
-        // Give player {2} mana in pool so waterbend {5} needs min=3, max=4 taps.
         game.state.players[0]
             .mana_pool
-            .add(&Mana::parse("GG"), None);
+            .add(&Mana::parse("GGGGG"), None);
         game.scenario_refresh_priority().unwrap();
         let activate = game
             .action_space()
@@ -1271,8 +1311,6 @@ fn compound_waterbend_lowers_folded_aliases_under_both_skip_trivial_modes() {
         let offers = game.compound_offers().unwrap();
         let offer = &offers.projection().offers[0];
         assert_eq!(offer.verb, DecisionVerb::PayWaterbend);
-        // 1 Water Tribe Rallier + 3 identical Gray Ogres with min=3, max=4
-        // fold into 2 roles: Rallier (0..=1) and Gray Ogre (2 or 3 copies).
         assert_eq!(offer.choices.len(), 2);
         let ChoiceStep::Select {
             role: rallier_role,
@@ -1289,29 +1327,41 @@ fn compound_waterbend_lowers_folded_aliases_under_both_skip_trivial_modes() {
             ..
         } = &offer.choices[1];
         assert_eq!((*r_min, *r_max), (0, 1));
-        assert_eq!((*o_min, *o_max), (1, 1));
+        assert_eq!((*o_min, *o_max), (0, 1));
         let r_list = r_cands.initial.as_ref().unwrap();
         let o_list = o_cands.initial.as_ref().unwrap();
         assert_eq!(r_list.len(), 1);
-        assert_eq!(o_list.len(), 2);
-        assert_eq!(o_list[0].label, "2 × Gray Ogre");
-        assert_eq!(o_list[1].label, "3 × Gray Ogre");
+        assert_eq!(o_list.len(), 3);
+        assert_eq!(o_list[0].label, "Gray Ogre");
+        assert_eq!(o_list[1].label, "2 × Gray Ogre");
+        assert_eq!(o_list[2].label, "3 × Gray Ogre");
 
-        // Under-paying (0 Rallier + 2 Gray Ogres = 2 < min 3) is rejected by decode.
-        let under = DecisionSubmission {
-            offer_id: offer.id,
-            answers: vec![
-                ChoiceAnswer::Candidates {
-                    role: *rallier_role,
-                    candidates: vec![],
-                },
-                ChoiceAnswer::Candidates {
-                    role: *ogre_role,
-                    candidates: vec![o_list[0].id],
-                },
-            ],
-        };
-        assert!(offers.decode(&under).is_err());
+        // Every schema-valid combination in the Cartesian product decodes cleanly.
+        for r_pick in [vec![], vec![r_list[0].id]] {
+            for o_pick in [
+                vec![],
+                vec![o_list[0].id],
+                vec![o_list[1].id],
+                vec![o_list[2].id],
+            ] {
+                let sub = DecisionSubmission {
+                    offer_id: offer.id,
+                    answers: vec![
+                        ChoiceAnswer::Candidates {
+                            role: *rallier_role,
+                            candidates: r_pick.clone(),
+                        },
+                        ChoiceAnswer::Candidates {
+                            role: *ogre_role,
+                            candidates: o_pick,
+                        },
+                    ],
+                };
+                offers
+                    .decode(&sub)
+                    .expect("every schema-valid unconstrained waterbend combination must decode");
+            }
+        }
 
         // Select Rallier + 2 Gray Ogres (3 taps total), paying remaining {2} mana via PayCost.
         let submission = DecisionSubmission {
@@ -1323,7 +1373,7 @@ fn compound_waterbend_lowers_folded_aliases_under_both_skip_trivial_modes() {
                 },
                 ChoiceAnswer::Candidates {
                     role: *ogre_role,
-                    candidates: vec![o_list[0].id],
+                    candidates: vec![o_list[1].id],
                 },
             ],
         };
