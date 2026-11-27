@@ -3,25 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept Review · MTG-500 Manual Mana Payment &amp; Step Invariant</title>
+<title>Concept Review · MTG-500 State-Coupled Mana Payment &amp; Unified Authority</title>
 <style>
   :root {
     color-scheme: light dark;
     --bg: #ffffff;
-    --bg-surface: #fafaf9;
-    --bg-muted: #f2f2f0;
+    --bg-surface: #fafaf8;
+    --bg-muted: #f2f1ed;
     --bg-field: #ffffff;
-    --border: #dadad6;
-    --border-strong: #b4b4ae;
-    --text: #1c1c1e;
-    --text-secondary: #55555b;
-    --text-tertiary: #67676e;
-    --accent: #1c1c1e;
-    --accent-soft: #ececea;
+    --border: #dad8d0;
+    --border-strong: #b4b1a6;
+    --text: #1c1b19;
+    --text-secondary: #54524c;
+    --text-tertiary: #6a6760;
+    --accent: #1c1b19;
+    --accent-soft: #eceae4;
     --on-accent: #ffffff;
 
     --success: #3d7a3d;
-    --success-text: #2f6230;
+    --success-text: #2c5e2d;
     --success-wash: #eef5ee;
     --warning: #9f7a1c;
     --warning-text: #6f5712;
@@ -30,7 +30,7 @@
     --error-text: #9a2019;
     --error-wash: #faecea;
     --info: #2e6da8;
-    --info-text: #275382;
+    --info-text: #244f7c;
     --info-wash: #ecf2f9;
     --planned: #a36f0c;
     --planned-text: #6f4b07;
@@ -54,22 +54,22 @@
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #121213;
-      --bg-surface: #1f1f22;
-      --bg-muted: #18181a;
-      --bg-field: #26262a;
-      --border: #323236;
-      --border-strong: #4b4b52;
-      --text: #ececee;
-      --text-secondary: #a9a9b0;
-      --text-tertiary: #8f8f97;
-      --accent: #ececee;
-      --accent-soft: #2a2a2e;
-      --on-accent: #121213;
+      --bg: #131312;
+      --bg-surface: #1e1e1c;
+      --bg-muted: #181816;
+      --bg-field: #252522;
+      --border: #33322e;
+      --border-strong: #4d4b45;
+      --text: #eceae4;
+      --text-secondary: #aaa79e;
+      --text-tertiary: #8f8c84;
+      --accent: #eceae4;
+      --accent-soft: #2a2926;
+      --on-accent: #131312;
 
       --success: #5ea36c;
       --success-text: #8cc79a;
-      --success-wash: #1d2920;
+      --success-wash: #1c291f;
       --warning: #c8a23c;
       --warning-text: #d9bc66;
       --warning-wash: #292418;
@@ -88,22 +88,22 @@
   }
 
   :root[data-theme="dark"] {
-    --bg: #121213;
-    --bg-surface: #1f1f22;
-    --bg-muted: #18181a;
-    --bg-field: #26262a;
-    --border: #323236;
-    --border-strong: #4b4b52;
-    --text: #ececee;
-    --text-secondary: #a9a9b0;
-    --text-tertiary: #8f8f97;
-    --accent: #ececee;
-    --accent-soft: #2a2a2e;
-    --on-accent: #121213;
+    --bg: #131312;
+    --bg-surface: #1e1e1c;
+    --bg-muted: #181816;
+    --bg-field: #252522;
+    --border: #33322e;
+    --border-strong: #4d4b45;
+    --text: #eceae4;
+    --text-secondary: #aaa79e;
+    --text-tertiary: #8f8c84;
+    --accent: #eceae4;
+    --accent-soft: #2a2926;
+    --on-accent: #131312;
 
     --success: #5ea36c;
     --success-text: #8cc79a;
-    --success-wash: #1d2920;
+    --success-wash: #1c291f;
     --warning: #c8a23c;
     --warning-text: #d9bc66;
     --warning-wash: #292418;
@@ -133,7 +133,7 @@
   }
 
   .page {
-    max-width: 1120px;
+    max-width: 1140px;
     margin: 0 auto;
     padding: 32px 24px 72px;
   }
@@ -188,7 +188,7 @@
   .lead {
     font-size: 15.5px;
     color: var(--text-secondary);
-    max-width: 82ch;
+    max-width: 86ch;
     margin-bottom: 0;
   }
 
@@ -209,7 +209,7 @@
   .meta-bar {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 14px;
+    gap: 8px 16px;
     font-size: 13px;
     color: var(--text-secondary);
     background: var(--bg-surface);
@@ -218,7 +218,6 @@
     padding: 10px 14px;
     margin-bottom: 24px;
   }
-
   .meta-bar strong { color: var(--text); font-weight: 600; }
 
   .badge {
@@ -236,10 +235,10 @@
     white-space: nowrap;
   }
 
-  .badge-yes { background: var(--success-wash); color: var(--success-text); border-color: color-mix(in srgb, var(--success) 30%, transparent); }
+  .badge-yes { background: var(--success-wash); color: var(--success-text); border-color: color-mix(in srgb, var(--success) 35%, transparent); }
   .badge-no { background: var(--error-wash); color: var(--error-text); border-color: color-mix(in srgb, var(--error) 35%, transparent); }
   .badge-existing { background: var(--accent-soft); color: var(--text-secondary); border-color: var(--border); }
-  .badge-plan { background: var(--planned-wash); color: var(--planned-text); border-color: color-mix(in srgb, var(--planned) 35%, transparent); }
+  .badge-refuted { background: var(--planned-wash); color: var(--planned-text); border-color: color-mix(in srgb, var(--planned) 40%, transparent); }
   .badge-proposed { background: var(--info-wash); color: var(--info-text); border-color: color-mix(in srgb, var(--info) 35%, transparent); }
   .badge-scope { background: var(--warning-wash); color: var(--warning-text); border-color: color-mix(in srgb, var(--warning) 35%, transparent); }
 
@@ -315,7 +314,7 @@
     flex-wrap: wrap;
   }
 
-  .card-title h3 { margin: 0; font-size: 16px; }
+  .card-title h3 { margin: 0; font-size: 15.5px; }
 
   .grid-2 {
     display: grid;
@@ -323,14 +322,14 @@
     gap: 16px;
   }
 
-  @media (max-width: 820px) {
+  @media (max-width: 840px) {
     .grid-2 { grid-template-columns: 1fr; }
   }
 
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px;
+    font-size: 13.8px;
     margin: 12px 0 20px;
     background: var(--bg-surface);
     border: 1px solid var(--border);
@@ -347,7 +346,7 @@
 
   th {
     background: var(--bg-muted);
-    font-size: 12px;
+    font-size: 11.8px;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -370,14 +369,14 @@
 
   .step-row {
     display: grid;
-    grid-template-columns: 28px 1fr;
+    grid-template-columns: 26px 1fr;
     gap: 10px;
     align-items: start;
     padding: 8px 10px;
     border-radius: 8px;
     background: var(--bg);
     border: 1px solid var(--border);
-    font-size: 13.5px;
+    font-size: 13.3px;
   }
 
   .step-row.fail {
@@ -388,6 +387,11 @@
   .step-row.ok {
     background: var(--success-wash);
     border-color: color-mix(in srgb, var(--success) 35%, transparent);
+  }
+
+  .step-row.info {
+    background: var(--info-wash);
+    border-color: color-mix(in srgb, var(--info) 35%, transparent);
   }
 
   .step-num {
@@ -405,6 +409,7 @@
 
   .step-row.fail .step-num { background: var(--error); color: #fff; border-color: transparent; }
   .step-row.ok .step-num { background: var(--success); color: #fff; border-color: transparent; }
+  .step-row.info .step-num { background: var(--info); color: #fff; border-color: transparent; }
 
   .diagram-wrap {
     background: var(--bg);
@@ -446,8 +451,15 @@
     margin-top: 10px;
   }
 
-  @media (max-width: 780px) {
-    .choice-grid { grid-template-columns: 1fr; }
+  .choice-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-top: 10px;
+  }
+
+  @media (max-width: 900px) {
+    .choice-grid, .choice-grid-3 { grid-template-columns: 1fr; }
   }
 
   .opt {
@@ -512,14 +524,15 @@
 
   <header>
     <div>
-      <div class="eyebrow">Concept Review · MTG-500 · Pre-Implementation Plan Review</div>
-      <h1>Manual Mana Payment, Payment Feasibility &amp; Step Invariant</h1>
+      <div class="eyebrow">Concept Review · MTG-500 · Pass 2 Replan (Post-Counterexample)</div>
+      <h1>State-Coupled Mana Payment &amp; Unified Feasibility Authority</h1>
       <p class="lead">
-        <strong>Area reviewed:</strong> Native mana-payment legality, witness search, and non-terminal decision stepping across
-        <code>flow/mana.rs</code>, <code>flow/mana/help.rs</code>, <code>flow/payment.rs</code>, <code>flow/play.rs</code>,
-        <code>flow/decision.rs</code>, <code>flow/tick.rs</code>, and <code>flow/effects.rs</code> — widened from the
-        <code>mana_triggers</code> spin because the same split feasibility authority and empty-decision loop break
-        effect-bearing mana abilities, colored convoke, and negative-life activation together.
+        <strong>Area reviewed:</strong> Mana-payment feasibility, state-dependent mana sources, search bounds/caching, and
+        all payment callers across <code>flow/mana.rs</code>, <code>flow/mana/help.rs</code>, <code>flow/statics.rs</code>,
+        <code>flow/layers.rs</code>, <code>flow/play.rs</code>, <code>flow/payment.rs</code>, <code>flow/decision.rs</code>,
+        and <code>flow/tick.rs</code> — widened from the Pass 2 <span class="card-name">Angel of Vitality</span> +
+        <span class="card-name">Raucous Audience</span> counterexample because the same frozen-source assumption breaks
+        life costs, sacrifices, prevention shields, and static pruning bounds together.
       </p>
     </div>
     <button class="theme-btn" id="themeToggle" type="button">Theme: Auto</button>
@@ -527,11 +540,12 @@
 
   <div class="meta-bar">
     <div><strong>Branch:</strong> <code>jack/mtg-500-fix-infinite-spin-in-rayon-worker-during-manual</code></div>
-    <div><strong>Base:</strong> <code>b611abb3d7</code></div>
-    <div><strong>Fresh <code>origin/main</code>:</strong> <code>6a131c4dc9</code> (0 files changed in <code>managym/</code>; no sync drift)</div>
+    <div><strong>HEAD:</strong> <code>ac23fc82e2</code> (Pass 1 landed at <code>1c521e3001</code>; Pass 2 counterexample at <code>34092c814f</code>)</div>
+    <div><strong>Fresh <code>origin/main</code>:</strong> <code>6a131c4dc9</code> (merged at base <code>3feefa8ee5</code>; 0 sync drift)</div>
     <div><strong>Legend:</strong>
+      <span class="badge badge-yes">Landed (Pass 1)</span>
       <span class="badge badge-existing">Existing</span>
-      <span class="badge badge-plan">Plan Proposal</span>
+      <span class="badge badge-refuted">Refuted Plan (Design 2)</span>
       <span class="badge badge-proposed">Recommended</span>
     </div>
   </div>
@@ -540,239 +554,261 @@
   <h2>1. Do the Domain Concepts and the Code's Concepts Line Up?</h2>
 
   <p>
-    In Magic (CR 601.2g–h, 602.2b, 605.3, 119.4, 119.8, 704.3) and in <code>managym</code>'s agent contract, a player paying a cost works with
-    <strong>one</strong> question — <em>"From this board, is there a legal sequence that finishes every pending cost?"</em> — and one step invariant —
-    <em>"Every non-terminal decision has at least one legal action."</em> In the current code, that single question is split across four partial dialects.
+    Pass 1 (<code>1c521e3001</code>) closed the <code>Game::tick()</code> infinite-spin invariant and aligned <code>play.rs</code> on
+    <code>can_pay_life</code>. Pass 2 (<code>34092c814f</code>) then proved that Design 2's isolated root probe
+    (<code>ManaEffect::LifeDelta(i32)</code> on a frozen <code>Vec&lt;ManaSource&gt;</code>) cannot certify a full payment when
+    mana activations mutate state that another source reads. Below is the alignment of the full area as it stands at <code>HEAD</code>.
   </p>
 
   <table>
     <thead>
       <tr>
-        <th style="width: 24%;">Domain Concept</th>
-        <th style="width: 24%;">Code Concept</th>
-        <th style="width: 8%;">Aligns?</th>
-        <th style="width: 32%;">What Is Wrong (or Right)</th>
+        <th style="width: 23%;">Domain Concept</th>
+        <th style="width: 23%;">Code Concept</th>
+        <th style="width: 9%;">Aligns?</th>
+        <th style="width: 33%;">What Is Wrong (or Right)</th>
         <th style="width: 12%;">Scope</th>
       </tr>
     </thead>
     <tbody>
       <tr>
         <td>
-          <strong>Paying a life fee</strong><br>
-          <span class="muted small">CR 119.4 / 119.8: 0 life is always payable (even at ≤ 0 life); positive life requires <code>life ≥ fee</code> and life can change.</span>
+          <strong>Non-terminal step invariant &amp; parallel isolation</strong><br>
+          <span class="muted small">Every non-terminal decision has ≥ 1 legal action; broken slots fail cleanly without stalling sibling workers.</span>
         </td>
         <td>
-          <code>Game::can_pay_life</code> (<code>effects.rs:303</code>)<br>
-          <code>play.rs:1952</code> (<code>check_activation_terms</code>)<br>
-          <code>play.rs:813</code> (<code>can_pay_cast_with_targets</code>)<br>
-          <code>PaymentModel.life: u32</code> (<code>mana.rs:3064</code>)
+          <code>Game::tick() -&gt; Result&lt;bool, AgentError&gt;</code><br>
+          <code>Game::play() -&gt; Result&lt;(), AgentError&gt;</code><br>
+          <code>VectorEnv::step_isolated_with_writer</code>
+        </td>
+        <td><span class="badge badge-yes">Yes</span><br><span class="muted small">Pass 1</span></td>
+        <td>
+          Landed in <code>1c521e3001</code>. Rejects any empty non-terminal <code>ActionSpace</code> under both <code>skip_trivial</code> settings,
+          propagates forced/auto-payment errors with <code>?</code>, and isolates slot poisoning.
+        </td>
+        <td><span class="badge badge-yes">Landed</span></td>
+      </tr>
+      <tr>
+        <td>
+          <strong>State-dependent mana sources</strong><br>
+          <span class="muted small">CR 605.3: activating a mana ability mutates real game state (life, battlefield, taps, counters, shields); later sources read the <em>resulting</em> state.</span>
+        </td>
+        <td>
+          Frozen <code>Vec&lt;ManaSource&gt;</code> (<code>mana.rs:3139</code>)<br>
+          Refuted root probe <code>ManaEffect</code> (<span class="badge badge-refuted">Design 2</span>)<br>
+          vs <code>LayerBoard.reads: StateReads</code> &amp; <code>dynamic_activations</code> (<code>layers.rs:276</code>, <code>statics.rs:327</code>)
         </td>
         <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>One idea under three implementations.</strong> Both <code>play.rs:1952</code> and <code>play.rs:813</code> compare
-          <code>payable_life &lt; fee as i32</code> directly, rejecting <code>0</code> life at negative life. Meanwhile <code>PaymentModel.life</code>
-          clamps negative life to <code>0u32</code>, losing negative debt (breaks <span class="card-name">Tarnished Citadel</span> <code>2 → −1</code>
-          followed by <span class="card-name">The Great Henge</span> <code>−1 → +1</code>) and erasing <code>LifeTotalCantChange</code> inside search.
+          <strong>Biggest mismatch — wrong concept of coupling.</strong> Both existing code (<code>mana.rs:2958</code>: <em>"Activation costs do not change these readings"</em>)
+          and Design 2 treat coupling as a <em>single-source</em> property of <code>mana_suffix()</code> tested in isolation from the root.
+          In reality, coupling is a <strong>board-level write ∩ read relation</strong>: two <span class="card-name">Tarnished Citadel</span>s cross
+          <span class="card-name">Angel of Vitality</span>'s 25-life threshold only on the <em>second</em> hit; <span class="card-name">Sunbaked Canyon</span>'s
+          ordinary <code>life_cost: 1</code> (no <code>mana_suffix()</code>!) crosses it at 25 life; one-shot prevention shields are consumed on hit #1;
+          and <code>sacrifice_source</code> changes <span class="card-name">White Lotus Tile</span> / <span class="card-name">Avatar Kyoshi</span> / <span class="card-name">Raucous Audience</span>.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
-          <strong>Mana ability resolution</strong><br>
-          <span class="muted small">CR 605.3: tap/costs, non-mana suffix effects (damage, life gain, sacrifice), output mana, and triggered bonuses happen in one ordered transition.</span>
+          <strong>Pruning bounds &amp; caching under state change</strong><br>
+          <span class="muted small">A pruning bound may reject a branch only when no legal future step can increase supply or unlock a source.</span>
         </td>
         <td>
-          <code>ManaActivation</code> &amp; <code>Obligation::Output</code> (<code>mana.rs:600, 721</code>) vs<br>
-          <code>complete_mana_upfront</code> (<code>mana.rs:4792</code>)<br>
-          <code>payment_sources</code> (<code>mana.rs:3163</code>)
+          <code>source_bounds</code>, <code>cost_coverable</code>, <code>colors_coverable</code>,<br>
+          <code>direct()</code>, <code>fixed_sufficient()</code>,<br>
+          <code>PaymentCache</code>, <code>SourceClassCache</code>, <code>SearchEquivalence</code>
         </td>
         <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>One transition split into two incompatible models.</strong> Execution runs <code>ability.mana_suffix()</code> before exposing
-          <code>Decision::ManaChoice</code>; the solver models only <code>life_cost: u32</code> and is blind to suffix damage/life gain/replacements.
-          Worse, <code>payment_sources</code> filters abilities by current <code>life_cost</code> up front, hiding <span class="card-name">Sunbaked Canyon</span>
-          even when <span class="card-name">The Great Henge</span> would gain life first.
+          <strong>Static snapshot bounds assume monotone depletion.</strong> At 22 life, <span class="card-name">The Great Henge</span>
+          (<code>{G}{G}</code>) + <span class="card-name">Raucous Audience</span> (currently <code>{G}</code>) sum to <code>3 &lt; 4</code>.
+          <code>total &lt; owed</code> and <code>net_total &lt; owed</code> prune the root <em>before</em> Henge is ever tried, rejecting a legal cast.
+          Meanwhile <code>PaymentCache</code> keys omit board-coupled state (prevention shields, layer reads) and would alias distinct worlds.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
-          <strong>Payment feasibility ("can all pending costs finish?")</strong><br>
-          <span class="muted small">Every offer — cast admission, mana activation, upfront tap/mana, color choice, spend unit — answers the same feasibility question.</span>
+          <strong>Signed life budget &amp; CR 601.2h life-cost order</strong><br>
+          <span class="muted small">Life may go negative mid-payment and recover via life gain; post-mana life fees are checked at completion (CR 601.2h), not eagerly.</span>
+        </td>
+        <td>
+          <code>Game::can_pay_life</code> (<code>play.rs:813, 1952</code> — Pass 1)<br>
+          vs <code>PaymentModel.life: u32</code> (<code>mana.rs:3064</code>)<br>
+          <code>reserve_announced_payment</code> (<code>mana.rs:3211</code>)<br>
+          <code>payment_sources</code> filtering (<code>mana.rs:3163</code>)
+        </td>
+        <td><span class="badge badge-no">No</span></td>
+        <td>
+          <strong>Half-migrated concept.</strong> <code>play.rs</code> now follows CR 119.4, but <code>PaymentModel</code> still clamps life to <code>0u32</code>
+          (losing negative debt on Citadel <code>2→−1</code> then Henge <code>−1→+1</code>), drops <code>LifeTotalCantChange</code> inside search,
+          eagerly subtracts <code>payment.life()</code> with <code>saturating_sub</code>, omits cast <code>life_alternative</code> and resolution tail life,
+          and hides <span class="card-name">Sunbaked Canyon</span> in <code>payment_sources</code> whenever current life is 0 even if Henge can gain life first.
+        </td>
+        <td><span class="badge badge-scope">This Work</span></td>
+      </tr>
+      <tr>
+        <td>
+          <strong>Unified payment feasibility (incl. colored convoke)</strong><br>
+          <span class="muted small">Every payment surface — outer admission and nested mana decisions — asks the same "can all pending costs finish?" question.</span>
         </td>
         <td>
           <code>PaymentModel::payable</code> / <code>plan</code> vs<br>
-          <code>Game::while_paying</code> / <code>convoke_search</code> (<code>help.rs:227</code>)<br>
-          <code>reserve_announced_payment</code> (<code>mana.rs:3211</code>)
+          <code>Game::while_paying</code> / <code>convoke_search</code> (<code>help.rs:227</code>)
         </td>
         <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>No single owner; two partial query dialects.</strong> Colored convoke lives outside <code>PaymentModel</code> in <code>while_paying</code>:
-          3 outer callers wrap with it, while <strong>5 nested surfaces skip it</strong>
-          (<code>automatic_upfront_path</code>, <code>mana_choice_actions</code>/<code>mana_choice_completes_payment</code>,
-          <code>mana_spend_choices</code>, <code>mana_tap_cost_actions</code>, <code>automatic_payment_action</code>) — causing the exact
-          <span class="card-name">Guardian of Vitu-Ghazi</span> empty-upfront bug in <code>scratch/questions.md</code>. Also missing life reservations for
-          <code>life_alternative</code> (<code>play.rs:810</code>) and resolution <code>Decision::Payment</code> trailing life (<code>mana.rs:3108</code>),
-          and eager <code>saturating_sub</code> gets life-gain ordering wrong.
+          <strong>Two partial query dialects.</strong> Colored convoke lives outside <code>PaymentModel</code> in <code>while_paying</code>:
+          3 outer callers wrap with it while 5 nested surfaces skip it (<code>automatic_upfront_path</code>, <code>mana_choice_actions</code>,
+          <code>mana_choice_completes_payment</code>, <code>mana_spend_choices</code>, <code>mana_tap_cost_actions</code>, <code>automatic_payment_action</code>).
+          With Pass 1 landed, the legal <span class="card-name">Guardian of Vitu-Ghazi</span> + <span class="card-name">Airship Engine Room</span>
+          play now raises <code>AgentError</code> instead of spinning — still broken until unified.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
-          <strong>Non-terminal step invariant</strong><br>
-          <span class="muted small">Every non-terminal decision has ≥ 1 legal action; trivial skipping collapses only a singleton that executes cleanly; corruption surfaces as an error.</span>
+          <strong>Automatic-pay &amp; tap-offer shortcuts</strong><br>
+          <span class="muted small"><code>PayCost</code> and tap deduplication must agree with exact order-dependent feasibility on every board.</span>
         </td>
         <td>
-          <code>Game::tick</code> (<code>tick.rs:113–147</code>)<br>
-          <code>automatic_payment_action</code> (<code>mana.rs:3743</code>)
+          <code>automatic_payability</code> (<code>mana.rs:5055</code>)<br>
+          <code>choice_tap_witness</code> (<code>mana.rs:5239</code>)<br>
+          <code>useful_payment_taps</code> (<code>mana.rs:3936</code>)
         </td>
         <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>Code conflates <code>len == 0</code> with <code>len == 1</code>.</strong>
-          With <code>skip_trivial=true</code>, 0 actions spins forever incrementing <code>skip_trivial_count</code>; with <code>skip_trivial=false</code>,
-          0 actions publishes a playerless zombie space; a failed trivial action returns <code>true</code> (fabricating a fake draw while <code>!is_game_over()</code>);
-          and automatic-payment witness failure panics via <code>.expect()</code> instead of returning <code>AgentError</code>.
-          The plan restricts the 0-offer guard to <em>suspended mana decisions</em>, leaving <code>PendingChoice::Pay</code> and all other decisions exposed.
+          <strong>Order-independence shortcuts bypass coupling.</strong> <code>fixed_total(pool).can_pay(cost)</code> and <code>dedup_profiles</code>
+          assume tapping fixed/simple sources never alters another source. On a board where <code>board.reads.tapped</code> or
+          <code>board.reads.mana</code> holds (or a dynamic source is affected by taps), those shortcuts must route through the coupled witness.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
-      </tr>
-      <tr>
-        <td>
-          <strong>Search caching &amp; source deduplication</strong><br>
-          <span class="muted small">Fast O(N) direct paths, FIFO witness cache, and equivalence classes never disagree with exact execution.</span>
-        </td>
-        <td>
-          <code>PaymentCache</code>, <code>SourceClassCache</code>,<br>
-          <code>SearchEquivalence</code>, <code>direct()</code>, <code>fixed_sufficient()</code>
-        </td>
-        <td><span class="badge badge-no">No</span><br><span class="muted small">(under plan's fork-in-DFS)</span></td>
-        <td>
-          <strong>Hot-path / cache boundary mismatch in plan.</strong>
-          <code>PaymentModel</code> is a self-contained value without <code>&amp;Game</code>, keyed in <code>PaymentCache</code> by <code>(sources, life, pool, obligations)</code>.
-          Evaluating native forks dynamically inside <code>witness</code> faces stale root <code>&amp;Game</code> state (earlier DFS taps/life haven't run), breaks cache keys across
-          prevention/replacement states, and runs full <code>Game::clone()</code> inside hot priority-check DFS.
-        </td>
-        <td><span class="badge badge-scope">This Work</span></td>
-      </tr>
-      <tr>
-        <td>
-          <strong>Parallel rollout fault isolation</strong><br>
-          <span class="muted small">One broken game poisons only its own slot and returns its decision frame; sibling workers never stall at the step barrier.</span>
-        </td>
-        <td>
-          <code>VectorEnv::step_with_writer</code><br>
-          <code>VectorEnv::step_isolated_with_writer</code> (<code>vector_env.rs:827</code>)<br>
-          <code>DecisionSurfaceError::Invariant</code>
-        </td>
-        <td><span class="badge badge-yes">Yes</span></td>
-        <td>
-          Already properly structured: strict stepping propagates <code>AgentError</code>, isolated stepping records <code>"AgentError"</code> + semantic frame and poisons
-          only that slot, and <code>DecisionSurfaceError::Invariant</code> carries step-boundary invariant failures.
-        </td>
-        <td><span class="badge badge-existing">Aligned</span></td>
-      </tr>
-      <tr>
-        <td>
-          <strong>Arbitrary board-mutating mana suffixes</strong><br>
-          <span class="muted small">Future cards whose mana suffix draws, creates/destroys permanents, or consumes one-shot shields (none in current catalog).</span>
-        </td>
-        <td>
-          <code>is_mana_suffix_effect</code> (<code>state/src/card.rs:683</code>)
-        </td>
-        <td><span class="badge badge-yes">Yes</span><br><span class="muted small">(if classified as <code>BoardChanging</code>)</span></td>
-        <td>
-          Catalog audit confirms only two cards currently have a non-empty <code>mana_suffix()</code>:
-          <span class="card-name">Tarnished Citadel</span> (3 damage) and <span class="card-name">The Great Henge</span> (+2 life).
-          A <code>BoardChanging</code> fallback variant preserves soundness for future cards or <code>OrderReplacement</code> choices without penalizing normal boards.
-        </td>
-        <td><span class="badge badge-existing">Guarded</span></td>
       </tr>
     </tbody>
   </table>
 
   <!-- ====================================================================== -->
-  <h2>2. Concrete Failure Walkthroughs (Existing Behavior)</h2>
+  <h2>2. Concrete Failure &amp; Recovery Walkthroughs</h2>
 
   <p>
-    Tracing three concrete boards shows how all three failures stem from the same split authority — and why fixing only <span class="card-name">Tarnished Citadel</span>
-    leaves the identical infinite spin open on <span class="card-name">Guardian of Vitu-Ghazi</span> and breaks <span class="card-name">The Great Henge</span>.
+    Four concrete boards expose the exact failure modes of frozen sources, isolated root probing, and naive forked DFS —
+    and show how the proposed two-regime authority handles all four cleanly.
   </p>
 
   <div class="grid-2">
     <div class="card">
       <div class="card-title">
-        <h3>Case A · <span class="card-name">Sokka</span> <span class="pip pip-u">U</span><span class="pip pip-r">R</span> + <span class="card-name">Tarnished Citadel</span> + <span class="card-name">Sunbaked Canyon</span> (3 life)</h3>
-        <span class="badge badge-existing">Existing Bug</span>
+        <h3>Case A · 2× <span class="card-name">Tarnished Citadel</span> + <span class="card-name">Angel</span> + <span class="card-name">Audience</span> (28 life)</h3>
+        <span class="badge badge-refuted">Refutes Root Probe</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
-          <div>Cast <span class="card-name">Sokka</span> at 3 life with <span class="card-name">Heartbeat of Spring</span>. <code>activation_payable_from</code> asks <code>PaymentModel</code> if Citadel first works.</div>
+          <div>Cast <span class="card-name">Solemn Simulacrum</span> <span class="pip pip-c">4</span> at 28 life. Angel is 4/4 (life ≥ 25) → Audience produces <span class="pip pip-g">G</span><span class="pip pip-g">G</span>.</div>
         </div>
         <div class="step-row fail">
           <div class="step-num">2</div>
-          <div><code>PaymentModel</code> sees Citadel <code>life_cost = 0</code> and <strong>ignores</strong> Citadel's 3-damage suffix. It proves Citadel → Canyon (still thinks life = 3) and <strong>admits Citadel first</strong>.</div>
+          <div><strong>Design 2 failure:</strong> Probing Citadel #1 alone (<code>28→25</code>) keeps Angel 4/4 and Audience <span class="pip pip-g">G</span><span class="pip pip-g">G</span>. Probing Citadel #2 alone also stays at 25. Both get <code>LifeDelta(-3)</code> on a frozen source list → admits <code>Citadel #1 → Citadel #2 → Audience</code>, which drops to 22 life (Audience shrinks to <span class="pip pip-g">G</span>, total 3 &lt; 4 → <strong>stranded</strong>!).</div>
         </div>
-        <div class="step-row">
+        <div class="step-row ok">
           <div class="step-num">3</div>
-          <div>Player activates Citadel. <code>complete_mana_upfront</code> runs <code>mana_suffix()</code>: 3 damage drops life <code>3 → 0</code>, then suspends <code>Decision::ManaChoice</code>.</div>
-        </div>
-        <div class="step-row fail">
-          <div class="step-num">4</div>
-          <div><code>mana_choice_actions</code> checks all 5 colors at 0 life. Canyon needs 1 life → 0 feasible modes → <code>actions = []</code>. In <code>tick()</code> with <code>skip_trivial=true</code>, <code>len &gt; 1</code> is false, <code>first()</code> is <code>None</code> → <strong>infinite spin at 99.9% CPU</strong>.</div>
+          <div><strong>Recommended recovery:</strong> <code>board.reads.life == true</code> + life-changing Citadel → Coupled Regime. Testing <code>Citadel #1</code> forks (<code>28→25</code>); from 25 life, testing <code>Citadel #2</code> forks (<code>25→22</code>), refreshes Audience to <span class="pip pip-g">G</span>, hands off to Pure <code>PaymentModel</code> (<code>2+1 &lt; 4</code> → fails). Testing <code>Audience</code> at 25 life produces <span class="pip pip-g">G</span><span class="pip pip-g">G</span>, then <code>Citadel #2</code> finishes <span class="pip pip-c">4</span> → <strong>only legal orders offered</strong>.</div>
         </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">
-        <h3>Case B · <span class="card-name">Guardian of Vitu-Ghazi</span> <span class="pip pip-c">6</span><span class="pip pip-g">G</span><span class="pip pip-w">W</span> (Convoke) + <span class="card-name">Airship Engine Room</span></h3>
-        <span class="badge badge-existing">Existing Bug · questions.md</span>
+        <h3>Case B · <span class="card-name">The Great Henge</span> + <span class="card-name">Angel</span> + <span class="card-name">Audience</span> (22 life)</h3>
+        <span class="badge badge-refuted">Refutes Root Bounds</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
-          <div>Board: 5 Plains, <span class="card-name">Badgermole Cub</span> (green), <span class="card-name">Compassionate Healer</span> (white), <span class="card-name">Airship Engine Room</span>. No green mana source; Cub convokes <span class="pip pip-g">G</span>.</div>
+          <div>Cast <span class="card-name">Solemn Simulacrum</span> <span class="pip pip-c">4</span> at 22 life. Angel is 2/2 → Audience currently outputs only <span class="pip pip-g">G</span>. Henge outputs <span class="pip pip-g">G</span><span class="pip pip-g">G</span> and gains <code>2 + 1 = 3</code> life.</div>
+        </div>
+        <div class="step-row fail">
+          <div class="step-num">2</div>
+          <div><strong>Double failure:</strong> (1) Frozen sources keep Audience at <span class="pip pip-g">G</span> (<code>2 + 1 = 3 &lt; 4</code>). (2) Even with refresh-on-activate, <code>PaymentModel</code>'s root bound (<code>total = 3 &lt; 4</code>) prunes the search <em>before expanding Henge</em> → falsely rejects a legal cast!</div>
         </div>
         <div class="step-row ok">
-          <div class="step-num">2</div>
-          <div><code>activation_payable_from</code> wraps its check in <code>while_paying</code> → <code>convoke_search</code> taps Cub for <span class="pip pip-g">G</span> → <strong>admits Room activation</strong>.</div>
-        </div>
-        <div class="step-row fail">
           <div class="step-num">3</div>
-          <div>Player activates Room. <code>activate_mana_ability</code> installs <code>Decision::ManaUpfront</code> and calls <code>automatic_upfront_path</code>, which calls <code>payment_obligations()</code> <strong>WITHOUT <code>while_paying</code></strong> → sees unpayable <span class="pip pip-g">G</span> → returns <code>None</code>!</div>
+          <div><strong>Recommended recovery:</strong> Coupled Regime disables static root pruning while a coupled source (Henge) remains. Forking Henge runs Angel's replacement (<code>22→25</code>, pool <span class="pip pip-g">G</span><span class="pip pip-g">G</span>), refreshes Audience to <span class="pip pip-g">G</span><span class="pip pip-g">G</span>, and hands off to Pure <code>PaymentModel</code> (no coupled source left) → <code>2 + 2 = 4</code> → <strong>cast admitted; only Henge-first offered</strong>.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <h3>Case C · <span class="card-name">Sunbaked Canyon</span> + <span class="card-name">Angel</span> + <span class="card-name">Audience</span> + <span class="card-name">Island</span> (25 life)</h3>
+        <span class="badge badge-no">Zero mana_suffix()!</span>
+      </div>
+      <div class="trace">
+        <div class="step-row">
+          <div class="step-num">1</div>
+          <div>Cast <span class="card-name">Solemn Simulacrum</span> <span class="pip pip-c">4</span> at 25 life. <strong>No card on the board has a <code>mana_suffix()</code>!</strong> Canyon pays <code>life_cost: 1</code> as an ordinary cost.</div>
         </div>
         <div class="step-row fail">
-          <div class="step-num">4</div>
-          <div><code>Decision::ManaUpfront</code> stays suspended with <code>actions = []</code> (and even if bypassed, <code>mana_choice_actions</code> also omits <code>while_paying</code> → <code>actions = []</code>) → <strong>exact same infinite spin in <code>tick()</code></strong>.</div>
+          <div class="step-num">2</div>
+          <div><strong>Suffix-only trap:</strong> Any design that inspects only <code>!mana_suffix().is_empty()</code> treats this board as pure, admitting Canyon first (<code>25→24</code>), shrinking Angel 4/4→2/2 and Audience <span class="pip pip-g">G</span><span class="pip pip-g">G</span>→<span class="pip pip-g">G</span> → total 3 mana → <strong>stranded</strong>!</div>
+        </div>
+        <div class="step-row ok">
+          <div class="step-num">3</div>
+          <div><strong>Recommended recovery:</strong> Coupling checks <code>(life_cost &gt; 0 || !mana_suffix().is_empty()) &amp;&amp; board.reads.life</code> → enters Coupled Regime. Rejects Canyon first; admits Audience first (<code>25 life</code>, <span class="pip pip-g">G</span><span class="pip pip-g">G</span>), then Canyon + Island = 4 mana.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <h3>Case D · 10× <span class="card-name">Forest</span> + <span class="card-name">Angel</span> + <span class="card-name">Audience</span> + 2× <span class="card-name">Citadel</span> casting <span class="pip pip-c">15</span></h3>
+        <span class="badge badge-scope">Perf Guard</span>
+      </div>
+      <div class="trace">
+        <div class="step-row">
+          <div class="step-num">1</div>
+          <div>Unpayable spell <span class="pip pip-c">15</span> checked at every priority pass on a coupled board with 10 ordinary Forests.</div>
+        </div>
+        <div class="step-row fail">
+          <div class="step-num">2</div>
+          <div><strong>Naive forked DFS failure:</strong> Disabling static bounds + cloning <code>Game</code> across all 13 sources tries <code>10!</code> Forest orderings before proving <span class="pip pip-c">15</span> unpayable → <strong>hangs priority</strong>!</div>
+        </div>
+        <div class="step-row ok">
+          <div class="step-num">3</div>
+          <div><strong>Recommended recovery:</strong> Try pure finish first (10 Forests + Audience = 12 &lt; 15 in O(1)); then fork <em>only</em> over coupled/affected sources (2 Citadels + Audience = ≤ 6 states; equivalent Citadels deduplicated). The 10 invariant Forests never enter the fork tree unless needed to pay a coupled source's upfront mana cost (where 1 representative suffices).</div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>3. The Biggest Mismatch: Split Payment Authority</h2>
+  <h2>3. The Biggest Mismatch: Per-Source Root Probing vs Board-Level Coupling</h2>
 
   <div class="card card-callout">
     <div class="card-title">
       <h3>Biggest Conceptual Mismatch</h3>
-      <span class="badge badge-no">No Single Truth for "Can This Payment Finish?"</span>
+      <span class="badge badge-no">Coupling Is a Board-Level Write ∩ Read Property, Not a Per-Source Suffix Flag</span>
     </div>
     <p>
-      The payment engine enforces a strong invariant — <em>never offer an action that commits the player into an unpayable payment</em> — but computes
-      payment feasibility through <strong>four different lenses</strong>:
+      <code>managym</code> <em>already</em> tracks the exact state slices every layer board reads in
+      <code>LayerBoard.reads: StateReads { mana, tapped, life, counters }</code>, <code>dynamic_activations</code>,
+      <code>has_triggered_mana_abilities</code>, and <code>has_activated_cost_reduction</code> (<code>flow/layers.rs:276</code>,
+      <code>flow/statics.rs:327</code>). Yet <code>flow/mana.rs</code> ignores that dependency graph and assumes one frozen
+      <code>Vec&lt;ManaSource&gt;</code> stays valid across an entire payment.
     </p>
-    <ul class="compact">
-      <li><strong>Outer admission</strong> (<code>activation_payable_from</code>, <code>useful_payment_taps</code>, <code>append_mana_floats</code>): includes colored convoke (<code>while_paying</code>), ignores <code>mana_suffix()</code>, clamps life to <code>u32</code>.</li>
-      <li><strong>Nested mana decisions</strong> (<code>automatic_upfront_path</code>, <code>mana_choice_actions</code>, <code>mana_spend_choices</code>, <code>mana_tap_cost_actions</code>, <code>automatic_payment_action</code>): <strong>drops colored convoke</strong>, ignores <code>mana_suffix()</code>, filters sources with raw <code>payable_life &lt; life_cost</code>.</li>
-      <li><strong>Cast &amp; resolution life admission</strong> (<code>can_pay_cast_with_targets</code>, <code>Decision::Payment</code>): checks life separately without reserving it in <code>PaymentModel</code>, and <code>play.rs:813</code> uses raw <code>payable_life &lt; life</code>.</li>
-      <li><strong>Live execution &amp; <code>tick()</code></strong> (<code>complete_mana_upfront</code>, <code>tick.rs</code>): executes <code>mana_suffix()</code> before <code>ManaChoice</code>, allows negative life, and when any of the three lenses above disagree and yield <code>actions = []</code>, spins forever instead of failing fast.</li>
-    </ul>
+    <p style="margin-bottom: 0;">
+      <strong>The fix makes the model more honest, not more approximate:</strong> keep <code>PaymentModel</code> pure,
+      bounded, and cached for the 99.9%+ of boards where <code>payment_writes ∩ board_reads == ∅</code> (including ordinary
+      TLA Limited boards with Treasures, <span class="card-name">Sunbaked Canyon</span>, and <span class="card-name">Tarnished Citadel</span>
+      + <span class="card-name">Heartbeat of Spring</span>), and switch to exact <code>Game</code>-forked transitions with
+      pure-subproblem handoff only when <code>payment_writes ∩ board_reads ≠ ∅</code> (or a suffix suspends / mutates non-life state).
+    </p>
   </div>
 
   <!-- Before vs After SVG Diagram -->
   <div class="diagram-wrap">
-    <svg viewBox="0 0 1040 420" width="1040" height="420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Before and After Payment Authority Architecture">
+    <svg viewBox="0 0 1060 465" width="1060" height="465" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Before and After Payment Coupling Architecture">
       <defs>
         <marker id="arr-err" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--error)"/>
@@ -780,145 +816,174 @@
         <marker id="arr-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--info)"/>
         </marker>
-        <marker id="arr-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--text-tertiary)"/>
+        <marker id="arr-suc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--success)"/>
         </marker>
       </defs>
 
       <!-- BEFORE PANEL -->
-      <rect x="8" y="8" width="500" height="404" rx="10" fill="var(--bg-surface)" stroke="var(--border)" stroke-width="1.2"/>
-      <text x="24" y="34" fill="var(--error-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">BEFORE · EXISTING SPLIT AUTHORITY</text>
+      <rect x="8" y="8" width="496" height="449" rx="10" fill="var(--bg-surface)" stroke="var(--border)" stroke-width="1.2"/>
+      <text x="24" y="34" fill="var(--error-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">BEFORE · REFUTED DESIGN 2 (FROZEN SOURCES + ROOT PROBE)</text>
 
-      <rect x="24" y="50" width="220" height="62" rx="7" fill="var(--bg)" stroke="var(--border)"/>
-      <text x="34" y="70" fill="var(--text)" font-family="var(--font-sans)" font-size="12.5" font-weight="600">Outer Offer Admission</text>
-      <text x="34" y="87" fill="var(--text-secondary)" font-family="var(--font-mono)" font-size="10.5">activation_payable_from</text>
-      <text x="34" y="102" fill="var(--success-text)" font-family="var(--font-sans)" font-size="11">+ while_paying (convoke)</text>
+      <rect x="24" y="50" width="464" height="62" rx="7" fill="var(--bg)" stroke="var(--border)"/>
+      <text x="36" y="70" fill="var(--text)" font-family="var(--font-sans)" font-size="12.5" font-weight="600">payment_sources() Builds One Frozen Vec&lt;ManaSource&gt;</text>
+      <text x="36" y="88" fill="var(--text-secondary)" font-family="var(--font-mono)" font-size="10.8">Probe each !mana_suffix().is_empty() ONCE from root Game</text>
+      <text x="36" y="103" fill="var(--planned-text)" font-family="var(--font-sans)" font-size="11">Ignores LayerBoard.reads, life_cost, sacrifice_source, shields</text>
 
-      <rect x="268" y="50" width="224" height="62" rx="7" fill="var(--error-wash)" stroke="var(--error)"/>
-      <text x="278" y="70" fill="var(--text)" font-family="var(--font-sans)" font-size="12.5" font-weight="600">5 Nested Mana Surfaces</text>
-      <text x="278" y="87" fill="var(--text-secondary)" font-family="var(--font-mono)" font-size="10.5">ManaUpfront · ManaChoice · Spend</text>
-      <text x="278" y="102" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11">✗ NO while_paying (drops convoke!)</text>
+      <line x1="256" y1="112" x2="256" y2="136" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
 
-      <rect x="24" y="138" width="468" height="72" rx="7" fill="var(--error-wash)" stroke="var(--error)"/>
-      <text x="36" y="158" fill="var(--text)" font-family="var(--font-sans)" font-size="12.5" font-weight="600">PaymentModel (Partial World)</text>
-      <text x="36" y="176" fill="var(--text-secondary)" font-family="var(--font-mono)" font-size="11">life: u32 (clamped ≥ 0) · life_cost only · NO mana_suffix</text>
-      <text x="36" y="194" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.5">payment_sources() rejects 0-life at &lt;0 life (play.rs:1952) &amp; hides Canyon before Henge</text>
+      <rect x="24" y="136" width="464" height="96" rx="7" fill="var(--error-wash)" stroke="var(--error)"/>
+      <text x="36" y="156" fill="var(--error-text)" font-family="var(--font-sans)" font-size="12.5" font-weight="700">Four Ways Frozen Root Probing Breaks</text>
+      <text x="36" y="175" fill="var(--text)" font-family="var(--font-sans)" font-size="11.5">1. Multi-step threshold: 2× Citadel (28→25→22) passes single probe, shrinks Audience</text>
+      <text x="36" y="192" fill="var(--text)" font-family="var(--font-sans)" font-size="11.5">2. Supply increase: Henge (22→25) pruned by root bound (2+1 &lt; 4) before trying</text>
+      <text x="36" y="209" fill="var(--text)" font-family="var(--font-sans)" font-size="11.5">3. Non-suffix mutations: Canyon life_cost (25→24) &amp; sacrifice_source shrink others</text>
+      <text x="36" y="225" fill="var(--text)" font-family="var(--font-sans)" font-size="11.5">4. Consumed shields: 2× Citadel root probes both see same 1-shot prevention</text>
 
-      <line x1="134" y1="112" x2="134" y2="138" stroke="var(--text-tertiary)" stroke-width="1.4" marker-end="url(#arr-muted)"/>
-      <line x1="380" y1="112" x2="380" y2="138" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
+      <line x1="256" y1="232" x2="256" y2="258" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
 
-      <rect x="24" y="236" width="468" height="58" rx="7" fill="var(--bg)" stroke="var(--border)"/>
-      <text x="36" y="256" fill="var(--text)" font-family="var(--font-sans)" font-size="12.5" font-weight="600">Live Execution · complete_mana_upfront</text>
-      <text x="36" y="274" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="11.5">Runs mana_suffix() (Citadel −3 dmg → life ≤ 0) BEFORE exposing ManaChoice</text>
+      <rect x="24" y="258" width="464" height="78" rx="7" fill="var(--bg)" stroke="var(--border)"/>
+      <text x="36" y="278" fill="var(--text)" font-family="var(--font-sans)" font-size="12.5" font-weight="600">Current HEAD (Pass 1 Landed, Pass 2–3 Pending)</text>
+      <text x="36" y="296" fill="var(--success-text)" font-family="var(--font-sans)" font-size="11.3">✓ Game::tick() fails fast with AgentError (no more infinite spin!)</text>
+      <text x="36" y="313" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.3">✗ Citadel+Canyon @3, Guardian convoke, Angel+Audience still turn legal play into err</text>
+      <text x="36" y="328" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.3">✗ PaymentModel still u32 life + eager saturating_sub + 5 callers drop convoke</text>
 
-      <line x1="258" y1="210" x2="258" y2="236" stroke="var(--error)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr-err)"/>
-      <text x="268" y="227" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11" font-weight="600">drift → actions = []</text>
-
-      <rect x="24" y="320" width="468" height="76" rx="7" fill="var(--error-wash)" stroke="var(--error)" stroke-width="1.5"/>
-      <text x="36" y="341" fill="var(--error-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">Game::tick() → bool (Silent Spin / Fake Draw / Panic)</text>
-      <text x="36" y="360" fill="var(--text)" font-family="var(--font-mono)" font-size="11">len == 0 &amp; skip_trivial=true  ⇒ continue forever (99.9% CPU)</text>
-      <text x="36" y="376" fill="var(--text)" font-family="var(--font-mono)" font-size="11">len == 0 &amp; skip_trivial=false ⇒ publish player:None zombie space</text>
-      <text x="36" y="390" fill="var(--text)" font-family="var(--font-mono)" font-size="11">execute_action().is_err()     ⇒ return true (phantom draw!)</text>
-
-      <line x1="258" y1="294" x2="258" y2="320" stroke="var(--error)" stroke-width="1.5" marker-end="url(#arr-err)"/>
+      <rect x="24" y="354" width="464" height="86" rx="7" fill="var(--planned-wash)" stroke="var(--planned)"/>
+      <text x="36" y="375" fill="var(--planned-text)" font-family="var(--font-sans)" font-size="12.5" font-weight="700">Why Naive "Fork Everything in DFS" Also Fails</text>
+      <text x="36" y="394" fill="var(--text)" font-family="var(--font-sans)" font-size="11.5">• 10× Forest + Angel + Audience + Citadel checking {15} explodes to 10! forks</text>
+      <text x="36" y="411" fill="var(--text)" font-family="var(--font-sans)" font-size="11.5">• Forking on every Treasure / Canyon kills PaymentCache &amp; SearchEquivalence</text>
+      <text x="36" y="428" fill="var(--text)" font-family="var(--font-sans)" font-size="11.5">• Forgetting SourceReservation on fork mis-models pending costs (CR 601.2g–h)</text>
 
       <!-- AFTER PANEL -->
-      <rect x="532" y="8" width="500" height="404" rx="10" fill="var(--bg-surface)" stroke="var(--info)" stroke-width="1.4"/>
-      <text x="548" y="34" fill="var(--info-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">AFTER · RECOMMENDED UNIFIED AUTHORITY</text>
+      <rect x="524" y="8" width="528" height="449" rx="10" fill="var(--bg-surface)" stroke="var(--info)" stroke-width="1.4"/>
+      <text x="540" y="34" fill="var(--info-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">AFTER · RECOMMENDED TWO-REGIME UNIFIED AUTHORITY</text>
 
-      <rect x="548" y="50" width="468" height="58" rx="7" fill="var(--bg)" stroke="var(--info)"/>
-      <text x="560" y="70" fill="var(--text)" font-family="var(--font-sans)" font-size="12.5" font-weight="600">All 8 Payment Callers Share One Feasibility Entry Point</text>
-      <text x="560" y="88" fill="var(--text-secondary)" font-family="var(--font-mono)" font-size="10.5">Admission · Upfront · TapCost · ManaChoice · ManaSpend · Floats · AutoPay · Cast/Ward</text>
+      <rect x="540" y="50" width="496" height="54" rx="7" fill="var(--bg)" stroke="var(--info)"/>
+      <text x="552" y="70" fill="var(--text)" font-family="var(--font-sans)" font-size="12.5" font-weight="600">One Feasibility Entry Point for All 8+ Payment Surfaces</text>
+      <text x="552" y="88" fill="var(--text-secondary)" font-family="var(--font-mono)" font-size="10.5">Signed LifeBudget · Trailing Obligation::PayLife · Colored convoke_colors inside model</text>
 
-      <rect x="548" y="132" width="468" height="104" rx="7" fill="var(--info-wash)" stroke="var(--info)"/>
-      <text x="560" y="152" fill="var(--info-text)" font-family="var(--font-sans)" font-size="12.5" font-weight="700">Unified PaymentModel (Pure, Cacheable, Exact)</text>
-      <text x="560" y="170" fill="var(--text)" font-family="var(--font-mono)" font-size="11">1. LifeBudget { life: i32, cant_change: bool } (CR 119.4/119.8)</text>
-      <text x="560" y="187" fill="var(--text)" font-family="var(--font-mono)" font-size="11">2. ManaEffect: None | LifeDelta(i32) | BoardChanging (probed once)</text>
-      <text x="560" y="204" fill="var(--text)" font-family="var(--font-mono)" font-size="11">3. Colored convoke inside PaymentModel (or universal wrapper)</text>
-      <text x="560" y="221" fill="var(--text)" font-family="var(--font-mono)" font-size="11">4. Trailing Obligation::PayLife(u32) (exact chronological timing)</text>
+      <line x1="788" y1="104" x2="788" y2="126" stroke="var(--info)" stroke-width="1.4" marker-end="url(#arr-ok)"/>
 
-      <line x1="782" y1="108" x2="782" y2="132" stroke="var(--info)" stroke-width="1.5" marker-end="url(#arr-ok)"/>
+      <rect x="540" y="126" width="496" height="62" rx="7" fill="var(--info-wash)" stroke="var(--info)"/>
+      <text x="552" y="146" fill="var(--info-text)" font-family="var(--font-sans)" font-size="12.5" font-weight="700">O(N) Sound Coupling Check (Cached in PaymentScan)</text>
+      <text x="552" y="164" fill="var(--text)" font-family="var(--font-mono)" font-size="10.5">writes (life_cost, suffix, sacrifice, tap, counters) ∩ LayerBoard (reads, dynamic, triggers)</text>
+      <text x="552" y="180" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="11">Also Coupled if suffix probe suspends (OrderReplacement) or mutates effects/non-life state</text>
 
-      <rect x="548" y="260" width="468" height="44" rx="7" fill="var(--bg)" stroke="var(--border)"/>
-      <text x="560" y="279" fill="var(--text)" font-family="var(--font-sans)" font-size="12.5" font-weight="600">Shared Transition · can_pay_life everywhere (play.rs:813 &amp; 1952)</text>
-      <text x="560" y="295" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="11">Probe shares effect execution below validation; life_cost checked at witness step</text>
+      <!-- Split arrows -->
+      <line x1="664" y1="188" x2="664" y2="216" stroke="var(--success)" stroke-width="1.5" marker-end="url(#arr-suc)"/>
+      <line x1="912" y1="188" x2="912" y2="216" stroke="var(--info)" stroke-width="1.5" marker-end="url(#arr-ok)"/>
+      <text x="556" y="207" fill="var(--success-text)" font-family="var(--font-sans)" font-size="11" font-weight="700">Uncoupled (99.9%+)</text>
+      <text x="845" y="207" fill="var(--info-text)" font-family="var(--font-sans)" font-size="11" font-weight="700">Coupled (rare)</text>
 
-      <line x1="782" y1="236" x2="782" y2="260" stroke="var(--info)" stroke-width="1.5" marker-end="url(#arr-ok)"/>
+      <!-- Left branch: Pure -->
+      <rect x="540" y="216" width="240" height="148" rx="7" fill="var(--success-wash)" stroke="var(--success)"/>
+      <text x="552" y="236" fill="var(--success-text)" font-family="var(--font-sans)" font-size="12.5" font-weight="700">Pure PaymentModel</text>
+      <text x="552" y="255" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">• Constant LifeDelta(i32) suffix</text>
+      <text x="552" y="272" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">• Zero Game::clone() in DFS</text>
+      <text x="552" y="289" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">• Full PaymentCache &amp; bounds</text>
+      <text x="552" y="306" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">• SearchEquivalence &amp; direct()</text>
+      <text x="552" y="325" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="10.8">Covers: basics, duals, Treasures,</text>
+      <text x="552" y="340" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="10.8">Citadel + Heartbeat + Canyon/Room,</text>
+      <text x="552" y="354" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="10.8">Guardian convoke (exact!)</text>
 
-      <rect x="548" y="324" width="468" height="72" rx="7" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.4"/>
-      <text x="560" y="344" fill="var(--success-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">Game::tick() → Result&lt;bool, AgentError&gt;</text>
-      <text x="560" y="363" fill="var(--text)" font-family="var(--font-mono)" font-size="11">ANY non-terminal space.actions.is_empty() ⇒ Err(AgentError)</text>
-      <text x="560" y="379" fill="var(--text)" font-family="var(--font-mono)" font-size="11">skip_trivial &amp; auto-pay execute via `?`   ⇒ strict err / isolated poison</text>
+      <!-- Right branch: Coupled -->
+      <rect x="794" y="216" width="242" height="148" rx="7" fill="var(--bg)" stroke="var(--info)"/>
+      <text x="806" y="236" fill="var(--info-text)" font-family="var(--font-sans)" font-size="12.5" font-weight="700">Coupled Forked Search</text>
+      <text x="806" y="255" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">1. Try Pure finish first (excl. mutators)</text>
+      <text x="806" y="272" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">2. Branch ONLY on coupled / affected</text>
+      <text x="806" y="287" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">   sources (defer invariant Forests!)</text>
+      <text x="806" y="304" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">3. Run real transition on Game fork</text>
+      <text x="806" y="321" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">4. Re-apply SourceReservations &amp; refresh</text>
+      <text x="806" y="338" fill="var(--text)" font-family="var(--font-sans)" font-size="11.2">5. Hand off to Pure when uncoupled</text>
+      <text x="806" y="354" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="10.8">Memoized by canonical payment state</text>
 
-      <line x1="782" y1="304" x2="782" y2="324" stroke="var(--info)" stroke-width="1.5" marker-end="url(#arr-ok)"/>
+      <!-- Handoff arrow from Coupled to Pure -->
+      <path d="M 794 334 L 780 334" stroke="var(--success)" stroke-width="1.5" stroke-dasharray="3 2" marker-end="url(#arr-suc)"/>
+
+      <rect x="540" y="380" width="496" height="60" rx="7" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.3"/>
+      <text x="552" y="400" fill="var(--success-text)" font-family="var(--font-sans)" font-size="12.5" font-weight="700">One Guarantee Across Every Surface (Manual, Auto, Priority, VectorEnv)</text>
+      <text x="552" y="418" fill="var(--text)" font-family="var(--font-sans)" font-size="11.3">Every admitted action has a real executable witness on Game; shortcuts (direct, fixed_total,</text>
+      <text x="552" y="432" fill="var(--text)" font-family="var(--font-sans)" font-size="11.3">dedup_profiles) skip coupled slices; Pass 1 Game::tick() stays the universal safety net.</text>
     </svg>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>4. Before &amp; After on the Key Counterexamples</h2>
+  <h2>4. Counterexample Verification Matrix</h2>
 
   <p>
-    Every proposed model must survive not just the four <span class="card-name">Sokka</span> positions in <code>scratch/plan.md</code>,
-    but also life gain, negative life, prevention, replacement ordering, convoke, and composite spell/ward life costs.
+    Every counterexample from MTG-500 — the four TLA Limited <span class="card-name">Sokka</span> rows, Pass 2's
+    <span class="card-name">Angel of Vitality</span> + <span class="card-name">Raucous Audience</span> positions,
+    and five additional stress cases found in this review — checked against <code>HEAD</code>, refuted Design 2, and the proposed architecture.
   </p>
 
   <table>
     <thead>
       <tr>
-        <th style="width: 27%;">Board / Counterexample</th>
-        <th style="width: 22%;">Existing Engine</th>
-        <th style="width: 23%;">Plan As Written <span class="badge badge-plan">Plan</span></th>
-        <th style="width: 28%;">Recommended Design <span class="badge badge-proposed">Recommended</span></th>
+        <th style="width: 26%;">Counterexample</th>
+        <th style="width: 22%;">Current <code>HEAD</code> (Pass 1)</th>
+        <th style="width: 22%;">Refuted Design 2 <span class="badge badge-refuted">Refuted</span></th>
+        <th style="width: 30%;">Recommended Design <span class="badge badge-proposed">Recommended</span></th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Citadel + Room at 2 life</strong><br><span class="muted small">Cast Sokka {U}{R}, Citadel first → −1 life</span></td>
-        <td><span class="badge badge-no">Spin</span> <code>play.rs:1952</code> drops Room at −1 life → empty <code>ManaChoice</code>.</td>
-        <td><span class="badge badge-yes">Pass</span> <code>can_pay_life</code> keeps Room; both U/R offered.</td>
-        <td><span class="badge badge-yes">Pass</span> <code>can_pay_life</code> + signed <code>LifeBudget(-1)</code> keeps Room; both U/R offered.</td>
+        <td><strong>Citadel + Room at 2 life</strong><br><span class="muted small">Sokka {U}{R}, Citadel first → −1 life</span></td>
+        <td><span class="badge badge-yes">Pass</span> Pass 1 <code>can_pay_life</code> offers U and R.</td>
+        <td><span class="badge badge-yes">Pass</span></td>
+        <td><span class="badge badge-yes">Pass</span> <em>Pure Regime</em> (uncoupled): signed <code>LifeBudget(-1)</code> + <code>LifeDelta(-3)</code>.</td>
       </tr>
       <tr>
-        <td><strong>Citadel + Canyon at 3 life</strong><br><span class="muted small">Cast Sokka {U}{R}, Canyon pays 1 life</span></td>
-        <td><span class="badge badge-no">Spin</span> Admits Citadel first → 0 life → empty <code>ManaChoice</code>.</td>
-        <td><span class="badge badge-yes">Pass</span> Rejects Citadel first; offers Canyon first.</td>
-        <td><span class="badge badge-yes">Pass</span> <code>LifeDelta(-3)</code> leaves <code>0 &lt; 1</code> → backtracks; Canyon first (<code>3→2→−1</code>) offered.</td>
+        <td><strong>Citadel + Canyon at 3 life</strong><br><span class="muted small">Sokka {U}{R}, Canyon pays 1 life</span></td>
+        <td><span class="badge badge-no">Err</span> Admits Citadel first → <code>AgentError</code> at 0 life.</td>
+        <td><span class="badge badge-yes">Pass</span></td>
+        <td><span class="badge badge-yes">Pass</span> <em>Pure Regime</em> (uncoupled): <code>LifeDelta(-3)</code> blocks Citadel first; Canyon first completes.</td>
       </tr>
       <tr>
-        <td><strong>Citadel + Protection + Canyon at 3 life</strong><br><span class="muted small">Damage prevented, life can still change</span></td>
-        <td><span class="badge badge-yes">Pass</span> (Accidentally, because Citadel damage ignored.)</td>
-        <td><span class="badge badge-yes">Pass</span> Isolated fork sees damage prevented.</td>
-        <td><span class="badge badge-yes">Pass</span> One-time probe runs damage pipeline → <code>LifeDelta(0)</code> → Citadel first legal; cache key stays valid.</td>
+        <td><strong>2× Citadel + Angel + Audience (28 life)</strong><br><span class="muted small">Pass 2 · cast {4}; threshold at 25 life</span></td>
+        <td><span class="badge badge-no">Fail</span> Admits both Citadels before Audience → 3 mana.</td>
+        <td><span class="badge badge-no">Fail</span> Isolated root probes both stay ≥ 25 → admits both Citadels first.</td>
+        <td><span class="badge badge-yes">Pass</span> <em>Coupled Regime</em> (<code>reads.life</code>): Citadel #1→#2 refreshes Audience to <code>{G}</code> → fails; Citadel→Audience→Citadel succeeds.</td>
       </tr>
       <tr>
-        <td><strong>Citadel (−3) + <span class="card-name">The Great Henge</span> (+2) + Canyon (1 fee) at 2 life</strong><br><span class="muted small">Citadel 2→−1, Henge −1→+1, Canyon 1→0</span></td>
-        <td><span class="badge badge-no">Fail</span> Clamped <code>life: u32</code> loses −1; <code>payment_sources</code> hides Canyon at −1.</td>
-        <td><span class="badge badge-no">Breaks unless fork threads full DFS</span> Clamped <code>u32</code> turns <code>−1 + 2</code> into <code>0 + 2 = 2</code>; <code>payment_sources</code> hides Canyon once at −1.</td>
-        <td><span class="badge badge-yes">Pass</span> Signed <code>LifeBudget</code> tracks <code>2 → −1 → +1 → 0</code>; <code>payment_sources</code> defers <code>life_cost</code> check to <code>witness</code>.</td>
+        <td><strong>Great Henge + Angel + Audience (22 life)</strong><br><span class="muted small">Pass 2 · cast {4}; Henge +3 → 25 life</span></td>
+        <td><span class="badge badge-no">Fail</span> Frozen Audience = <code>{G}</code> → rejects legal cast.</td>
+        <td><span class="badge badge-no">Fail</span> Frozen sources &amp; root bound (<code>2+1 &lt; 4</code>) reject cast.</td>
+        <td><span class="badge badge-yes">Pass</span> <em>Coupled Regime</em>: no root pruning while Henge remains; fork runs Henge (<code>22→25</code>), refreshes Audience to <code>{G}{G}</code> → succeeds.</td>
       </tr>
       <tr>
-        <td><strong>Canyon (1 fee) + <span class="card-name">Great Henge</span> (+2) paying <code>{G}{G}{R}, Pay 2 life</code> at 2 life</strong><br><span class="muted small">Canyon 2→1, Henge 1→3, final cost 3→1</span></td>
-        <td><span class="badge badge-no">Fail</span> Eager <code>model.life.saturating_sub(2)</code> starts at <code>0</code>, falsely forbidding Canyon first.</td>
-        <td><span class="badge badge-no">Fail</span> Still eagerly debits <code>payment.life()</code> in <code>reserve_announced_payment</code>.</td>
-        <td><span class="badge badge-yes">Pass</span> Trailing <code>Obligation::PayLife(2)</code> checks life at completion, matching CR 601.2h order.</td>
+        <td><strong>Sunbaked Canyon + Angel + Audience + Island (25 life)</strong><br><span class="muted small">No <code>mana_suffix()</code>; <code>life_cost: 1</code> crosses 25→24</span></td>
+        <td><span class="badge badge-no">Fail</span> Admits Canyon first → shrinks Audience → 3 mana.</td>
+        <td><span class="badge badge-no">Fail</span> Suffix-only check ignores <code>life_cost</code> → admits Canyon first.</td>
+        <td><span class="badge badge-yes">Pass</span> <em>Coupled Regime</em> (<code>life_cost &gt; 0 &amp;&amp; reads.life</code>): rejects Canyon first; admits Audience first.</td>
       </tr>
       <tr>
-        <td><strong><span class="card-name">Guardian of Vitu-Ghazi</span> (Convoke) + Room + Cub</strong><br><span class="muted small"><code>scratch/questions.md</code> second probe</span></td>
-        <td><span class="badge badge-no">Spin</span> Admitted via <code>while_paying</code>, then empty <code>ManaUpfront</code> / <code>ManaChoice</code>.</td>
-        <td><span class="badge badge-no">Errors instead of playing!</span> Deferred as separate finding → legal play becomes an <code>AgentError</code>.</td>
-        <td><span class="badge badge-yes">Pass</span> Unified convoke feasibility handles <code>ManaUpfront</code>, <code>ManaChoice</code>, <code>ManaSpend</code>, <code>TapCost</code>, and <code>AutoPay</code>.</td>
+        <td><strong>2× Citadel + 1-shot Prevent(3) + Canyon (3 life)</strong><br><span class="muted small">Shield absorbs hit #1; hit #2 deals 3 dmg</span></td>
+        <td><span class="badge badge-no">Fail</span> Ignores Citadel damage completely.</td>
+        <td><span class="badge badge-no">Fail</span> Both root probes see unconsumed shield → both get <code>LifeDelta(0)</code>!</td>
+        <td><span class="badge badge-yes">Pass</span> Probe detects <code>state.effects</code> mutation (shield consumed) → <em>Coupled Regime</em> tracks shield across hits.</td>
       </tr>
       <tr>
-        <td><strong>Citadel + <code>Prevent(1)</code> + <code>Double</code> (<code>OrderReplacement</code>)</strong><br><span class="muted small">Two replacement orders: 4 dmg vs 5 dmg at 5 life</span></td>
-        <td><span class="badge badge-no">Wrong</span> Ignores suffix completely.</td>
-        <td><span class="badge badge-no">Trap</span> Naive fork suspends on <code>OrderReplacement</code> before applying damage (reads 0 dmg!).</td>
-        <td><span class="badge badge-yes">Pass</span> Probe detects suspension → classifies as <code>BoardChanging</code> → explores replacement modes on fork.</td>
+        <td><strong>Creature w/ <code>sacrifice_source</code> + <span class="card-name">White Lotus Tile</span> / <span class="card-name">Avatar Kyoshi</span></strong><br><span class="muted small">Sacrificing shrinks dynamic mana output</span></td>
+        <td><span class="badge badge-no">Fail</span> Frozen dynamic output ignores sacrificed creature.</td>
+        <td><span class="badge badge-no">Fail</span> Suffix-only check ignores <code>sacrifice_source</code>.</td>
+        <td><span class="badge badge-yes">Pass</span> <em>Coupled Regime</em> (<code>sacrifice_source &amp;&amp; dynamic_activations</code>): orders Tile/Kyoshi before sacrifice.</td>
       </tr>
       <tr>
-        <td><strong>Synthetic empty <code>PendingChoice::Pay</code> or other decision</strong><br><span class="muted small">Invariant violation outside <code>suspended_decision</code></span></td>
-        <td><span class="badge badge-no">Spin / Zombie</span> Loops forever if <code>skip_trivial=true</code>; publishes <code>player: None</code> if <code>false</code>.</td>
-        <td><span class="badge badge-no">Missed</span> Plan checks only <em>suspended mana decisions</em>.</td>
-        <td><span class="badge badge-yes">Pass</span> <code>Game::tick()</code> rejects ANY non-terminal <code>space.actions.is_empty()</code> with <code>AgentError</code> before skipping or publishing.</td>
+        <td><strong>Citadel (−3) + Henge (+2) + Canyon (1 fee) at 2 life</strong> &amp; <strong>Canyon + Henge paying <code>{G}{G}{R}, Pay 2 life</code> at 2 life</strong></td>
+        <td><span class="badge badge-no">Fail</span> Clamped <code>u32</code> life, eager <code>saturating_sub</code>, upfront life filter.</td>
+        <td><span class="badge badge-yes">Pass</span> (via Design 1)</td>
+        <td><span class="badge badge-yes">Pass</span> Signed <code>LifeBudget</code> + trailing <code>Obligation::PayLife(u32)</code> + witness-time <code>life_cost</code> check.</td>
+      </tr>
+      <tr>
+        <td><strong><span class="card-name">Guardian of Vitu-Ghazi</span> (Convoke) + Room + Cub</strong><br><span class="muted small"><code>questions.md</code> colored convoke probe</span></td>
+        <td><span class="badge badge-no">Err</span> Pass 1 turned spin into <code>AgentError</code> on legal play.</td>
+        <td><span class="badge badge-yes">Pass</span> (via Design 3)</td>
+        <td><span class="badge badge-yes">Pass</span> <code>convoke_colors: ManaTypeSet</code> in <code>PaymentModel</code> serves both Pure &amp; Coupled regimes.</td>
+      </tr>
+      <tr>
+        <td><strong>10× Forest + Angel + Audience + 2× Citadel casting <code>{15}</code></strong><br><span class="muted small">Throughput / blowup guard on coupled board</span></td>
+        <td><span class="badge badge-yes">Fast</span> (wrong on payable cases)</td>
+        <td><span class="badge badge-yes">Fast</span> (wrong on 28/22 life)</td>
+        <td><span class="badge badge-yes">Fast &amp; Exact</span> Pure-finish check O(1); 10 invariant Forests stay out of fork tree (≤ 6 forks total).</td>
       </tr>
     </tbody>
   </table>
@@ -928,36 +993,45 @@
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 1 · How <code>PaymentModel</code> accounts for state-changing mana suffixes (<code>mana_suffix()</code>)</h3>
+      <h3>Choice 1 · Replacing Design 2: How to certify payments when activations mutate board state</h3>
       <span class="badge badge-scope">This Work · Reversible (internal engine)</span>
     </div>
     <p class="small muted">
-      Hot-path constraint: <code>PaymentModel::witness</code> runs inside <code>priority_action_space</code> for every castable card and activated ability.
-      <code>PaymentCache</code>, <code>SourceClassCache</code>, and <code>SearchEquivalence</code> depend on <code>PaymentModel</code> being a pure, hashable value.
+      Hot-path constraint: <code>PaymentModel</code> runs in <code>priority_action_space</code> on every decision across Rayon collection workers.
+      Ordinary boards (including Treasures, duals, modal lands, and uncoupled <span class="card-name">Tarnished Citadel</span> /
+      <span class="card-name">Sunbaked Canyon</span>) must keep O(N) direct paths, <code>PaymentCache</code>, and zero DFS clones.
     </p>
-    <div class="choice-grid">
+    <div class="choice-grid-3">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 1a</span> Probe-once <code>ManaEffect</code> + signed <code>LifeBudget</code></div>
+        <div class="opt-title"><span class="badge badge-proposed">Recommended · 1a</span> Two-regime authority gated by <code>LayerBoard</code> coupling</div>
         <p>
-          Replace <code>life: u32</code> with <code>LifeBudget { life: i32, cant_change: bool }</code>.
-          When building <code>payment_sources</code> (once per <code>PaymentScan</code>), ONLY for abilities with <code>!ability.mana_suffix().is_empty()</code>,
-          run the shared cost/suffix transition on one isolated fork:
+          Detect coupling once per <code>PaymentScan</code> using <code>LayerBoard</code> (<code>reads</code>, <code>dynamic_activations</code>,
+          <code>has_triggered_mana_abilities</code>, <code>has_activated_cost_reduction</code>) + source write flags + suffix probe diff.
         </p>
         <ul class="compact">
-          <li>If it finishes immediately and only changed player life → record <code>ManaEffect::LifeDelta(i32)</code> directly on <code>ManaActivation</code> and <code>Obligation::Output</code>.</li>
-          <li>If it suspended (e.g. <code>OrderReplacement</code>) or mutated non-life board state/shields → mark <code>ManaEffect::BoardChanging</code> and fall back to exact fork evaluation (skipping cache/direct shortcuts only when present).</li>
+          <li><strong>Uncoupled (99.9%+):</strong> pure <code>PaymentModel</code> with constant <code>LifeDelta(i32)</code>, signed <code>LifeBudget</code>, full caches &amp; bounds.</li>
+          <li><strong>Coupled (rare):</strong> exact <code>Game</code>-forked transitions refreshing <code>payment_sources</code> after each mutating step, with immediate handoff to Pure once no coupled source remains.</li>
         </ul>
-        <p style="margin-top:6px;margin-bottom:0;"><strong>Why:</strong> Zero <code>Game::clone()</code> in DFS for all current cards (Citadel, Henge); keeps <code>PaymentCache</code>, <code>SourceClassCache</code>, and <code>SearchEquivalence</code> exact; zero cost on 99.9% of boards.</p>
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-plan">Passed Over · 1b</span> Fork <code>Game</code> inside <code>witness</code> DFS (Plan as written)</div>
+        <div class="opt-title"><span class="badge badge-existing">Passed Over · 1b</span> Life-indexed source cache inside <code>PaymentModel</code></div>
         <p>
-          Forking <code>&amp;Game</code> at every state-changing activation node inside <code>witness</code> has three hazards:
+          Keep a single pure solver and recompute <code>payment_sources</code> whenever <code>state.life</code> changes.
         </p>
         <ul class="compact">
-          <li>Root <code>&amp;Game</code> does not reflect earlier taps/life fees in <code>PaymentSearchState</code> unless a cloned <code>Game</code> is threaded through every DFS state.</li>
-          <li>Breaks <code>PaymentCache</code> keys (<code>sources</code> alone wouldn't capture prevention shields / replacements).</li>
-          <li>Clones full <code>GameState</code> inside hot priority-check DFS whenever Citadel or Henge sits on board.</li>
+          <li>Fails on 1-shot damage prevention shields (not a function of life).</li>
+          <li>Fails on <code>sacrifice_source</code> + <span class="card-name">White Lotus Tile</span> / <span class="card-name">Avatar Kyoshi</span> / <span class="card-name">Raucous Audience</span>.</li>
+          <li>Fails on <code>OrderReplacement</code>, <code>reads.tapped</code>, and <code>reads.counters</code>, while duplicating damage/life-gain replacement logic.</li>
+        </ul>
+      </div>
+      <div class="opt">
+        <div class="opt-title"><span class="badge badge-existing">Passed Over · 1c</span> Fork <code>Game</code> whenever any suffix / life / sacrifice source exists</div>
+        <p>
+          Skip <code>LifeDelta</code> and run the forked solver whenever any permanent has <code>mana_suffix()</code>, <code>life_cost &gt; 0</code>, or <code>sacrifice_source</code>.
+        </p>
+        <ul class="compact">
+          <li>Treasure tokens (<code>sacrifice_source</code>) and painlands (<code>life_cost</code>) are ubiquitous in TLA Limited.</li>
+          <li>Disables <code>PaymentCache</code>, <code>SourceClassCache</code>, and <code>SearchEquivalence</code> on ordinary boards that have zero coupling.</li>
         </ul>
       </div>
     </div>
@@ -965,77 +1039,29 @@
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 2 · Finishing colored convoke feasibility across nested mana decisions</h3>
+      <h3>Choice 2 · Bounding search cost inside the Coupled Regime (preventing the 10-Forest blowup)</h3>
       <span class="badge badge-scope">This Work · Reversible (internal engine)</span>
     </div>
-    <p class="small muted">
-      Per repo rule <em>"Finish the rule on every surface it touches"</em>: deferring the <code>questions.md</code> convoke probe leaves the exact same
-      empty-decision deadlock/error reachable on legal TLA Limited boards (<span class="card-name">Guardian of Vitu-Ghazi</span> + modal lands).
-    </p>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 2a</span> Fold colored convoke into <code>PaymentModel</code></div>
+        <div class="opt-title"><span class="badge badge-proposed">Recommended · 2a</span> Pure-finish-first + invariant-source deferral + pure handoff</div>
         <p>
-          Add <code>convoke_colors: ManaTypeSet</code> (1 byte, <code>EMPTY</code> outside convoke) to <code>ManaSource</code>.
-          Inside <code>witness</code>, tapping an untapped source with <code>convoke_colors</code> intersecting an owed colored pip reduces that pip directly.
+          At each coupled fork state:
         </p>
         <ul class="compact">
-          <li>Every caller of <code>PaymentModel</code> automatically gets exact colored convoke — impossible for a nested surface to forget.</li>
-          <li>Gains <code>PaymentSearch::visited</code> memoization &amp; source-equivalence pruning, replacing the unmemoized exponential <code>convoke_search</code> in <code>help.rs</code>.</li>
+          <li>First ask pure <code>PaymentModel</code> (excluding coupled mutators) if the current snapshot already finishes all obligations — O(1) fast accept on payable boards, O(1) pure check on unpayable boards.</li>
+          <li>Otherwise branch the <code>Game</code> fork <em>only</em> on <strong>coupled mutators</strong>, <strong>affected sources</strong> (dynamic/conditional/bonus-dependent), and — only when an upfront <code>Pay</code>/<code>Tap</code> obligation of an in-flight coupled activation needs funding — one canonical representative per equivalence class of invariant sources.</li>
+          <li>Hand off immediately to pure <code>PaymentModel</code> once no coupled mutator remains, and memoize visited coupled states by canonical payment state.</li>
         </ul>
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">Alternative · 2b</span> Keep <code>while_paying</code>, route all 8 callers through one helper</div>
+        <div class="opt-title"><span class="badge badge-existing">Passed Over · 2b</span> Plain forked DFS with static bounds disabled</div>
         <p>
-          Introduce one <code>Game::obligations_payable</code> / <code>Game::plan_obligations</code> wrapper that always invokes <code>while_paying</code>,
-          and replace the 5 direct <code>model.payable/plan</code> calls in <code>automatic_upfront_path</code>, <code>mana_choice_actions</code>,
-          <code>mana_choice_completes_payment</code>, <code>mana_spend_choices</code>, <code>mana_tap_cost_actions</code>, and <code>automatic_payment_action</code>.
-        </p>
-        <p style="margin-top:6px;margin-bottom:0;"><strong>Trade-off:</strong> Smaller diff now, but leaves unmemoized exponential <code>convoke_search</code> outside <code>PaymentModel</code>.</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="choice-box">
-    <div class="choice-header">
-      <h3>Choice 3 · Scope of the empty-decision &amp; step-error boundary in <code>Game::tick()</code></h3>
-      <span class="badge badge-scope">This Work · Caller-visible behavior (bug fix)</span>
-    </div>
-    <p class="small muted">
-      Affects <code>Game::tick</code>, <code>Game::finish_action_step</code>, <code>Game::step</code>, and <code>DecisionSurface::apply_search_action</code>.
-      Python/public signatures stay unchanged (<code>Env::step</code> and <code>VectorEnv::step*</code> already return <code>Result&lt;_, AgentError&gt;</code>).
-    </p>
-    <div class="choice-grid">
-      <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 3a</span> Universal non-terminal invariant in <code>Game::tick()</code></div>
-        <pre><code>pub(crate) fn tick(&amp;mut self) -&gt; Result&lt;bool, AgentError&gt; {
-  ...
-  if space.actions.is_empty() {
-    return Err(AgentError(format!(
-      "non-terminal {:?} decision has no legal actions", space.kind
-    )));
-  }
-  if let Some(action) = self.automatic_payment_action(&amp;space)? {
-    self.execute_action(&amp;action)?;
-    self.skip_trivial_count += 1;
-    continue;
-  }
-  ...
-  let action = &amp;space.actions[0];
-  self.execute_action(action)?; // no fake `return true` draw!
-  self.skip_trivial_count += 1;
-}</code></pre>
-      </div>
-      <div class="opt">
-        <div class="opt-title"><span class="badge badge-plan">Passed Over · 3b</span> Guard only suspended mana decisions (Plan as written)</div>
-        <p>
-          Checking only <code>Decision::ManaChoice / ManaUpfront / ManaSpend</code> leaves:
+          Explore every untapped source on the <code>Game</code> fork without separating invariant sources or pure handoff.
         </p>
         <ul class="compact">
-          <li><code>PendingChoice::Pay</code> (not a suspended decision!) still spinning forever on 0 offers;</li>
-          <li>Every other non-terminal decision still able to spin or publish <code>player: None</code>;</li>
-          <li><code>tick.rs:140</code> still converting failed trivial-skip actions into phantom <code>game_over = true</code> draws;</li>
-          <li><code>automatic_payment_action</code> still panicking via <code>.expect()</code> instead of returning <code>AgentError</code>.</li>
+          <li>10 Forests + Angel + Audience + Citadel checking an unpayable spell at priority explodes combinatorially (<code>10!</code>).</li>
+          <li>Can re-introduce a priority-check stall on late-game coupled boards.</li>
         </ul>
       </div>
     </div>
@@ -1043,83 +1069,131 @@
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 4 · Life reservation timing &amp; remaining raw life comparisons</h3>
+      <h3>Choice 3 · Which payment mutations trigger the Coupled Regime?</h3>
       <span class="badge badge-scope">This Work · Reversible (internal engine)</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 4a</span> Trailing <code>Obligation::PayLife(u32)</code> + <code>can_pay_life</code> everywhere</div>
+        <div class="opt-title"><span class="badge badge-proposed">Recommended · 3a</span> Full <code>write ∩ read</code> coupling via <code>LayerBoard</code></div>
+        <p>
+          Check every mutation a mana payment can perform against <code>LayerBoard</code>'s existing metadata:
+        </p>
         <ul class="compact">
-          <li>Replace BOTH <code>play.rs:1952</code> AND <code>play.rs:813</code> with <code>self.can_pay_life(player, life)</code>.</li>
-          <li>Represent owed post-mana life costs (announced <code>payment.life()</code>, cast <code>life_alternative</code>, activation <code>life_cost</code>, resolution <code>Decision::Payment</code> tail life) as trailing <code>Obligation::PayLife(u32)</code> instead of eager <code>saturating_sub</code>.</li>
-          <li>In <code>payment_sources</code>, check non-life activation terms and let <code>witness</code> enforce <code>life_cost</code> against <code>state.life</code> (while <code>can_activate_mana_ability</code> checks immediate <code>can_pay_life</code> for the first activation).</li>
+          <li><strong>Life</strong> (<code>life_cost &gt; 0</code> or non-empty <code>mana_suffix()</code>) × (<code>board.reads.life</code> ∨ dynamic/conditional mana ability ∨ probe mutated non-life / <code>state.effects</code> / suspended).</li>
+          <li><strong>Sacrifice</strong> (<code>sacrifice_source</code>) × (<code>dynamic_activations</code> ∨ <code>has_triggered_mana_abilities</code> ∨ <code>has_activated_cost_reduction</code> ∨ sacrificed source has statics/replacements ∨ conditional/tap-cost mana ability).</li>
+          <li><strong>Tap / Counters / Mana pool</strong> × (<code>board.reads.{tapped, counters, mana}</code> or matching dynamic/conditional mana ability).</li>
+        </ul>
+        <p style="margin-top:6px;margin-bottom:0;"><strong>Why:</strong> One tiny O(N) predicate closes Citadel, Henge, Sunbaked Canyon @ 25 life, one-shot shields, and sacrifice + White Lotus Tile / Kyoshi together with zero extra runtime cost on uncoupled boards.</p>
+      </div>
+      <div class="opt">
+        <div class="opt-title"><span class="badge badge-existing">Passed Over · 3b</span> Life-slice coupling only (<code>life_cost</code> / <code>mana_suffix</code> × <code>reads.life</code>)</div>
+        <p>
+          Narrow coupling detection to life mutations and <code>mana_suffix()</code> probes, deferring sacrifice/tap/counter coupling.
+        </p>
+        <ul class="compact">
+          <li>Leaves <span class="card-name">White Lotus Tile</span> / <span class="card-name">Avatar Kyoshi</span> / <span class="card-name">Raucous Audience</span> + creature sacrifice mana abilities broken on the exact same frozen-source bug.</li>
+          <li>Saves only ~15 lines in the predicate while violating <em>"Finish the rule on every surface it touches."</em></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="choice-box">
+    <div class="choice-header">
+      <h3>Choice 4 · Carry-forward decisions (LifeBudget, trailing PayLife, colored convoke)</h3>
+      <span class="badge badge-scope">This Work · Reversible (internal engine)</span>
+    </div>
+    <div class="choice-grid">
+      <div class="opt rec">
+        <div class="opt-title"><span class="badge badge-proposed">Recommended · 4a</span> Keep Design 1 + Design 3 unified inside <code>PaymentModel</code></div>
+        <ul class="compact">
+          <li>Signed <code>LifeBudget { life: i32, cant_change: bool }</code> + trailing <code>Obligation::PayLife(u32)</code> (covering announced <code>payment.life()</code>, cast <code>life_alternative</code>, activation <code>life_cost</code>, resolution tail life).</li>
+          <li><code>convoke_colors: ManaTypeSet</code> folded directly into <code>ManaSource</code> &amp; <code>PaymentModel::witness</code>, deleting <code>while_paying</code> / <code>convoke_search</code> so BOTH Pure and Coupled regimes inherit exact convoke across all 8 callers.</li>
         </ul>
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-plan">Passed Over · 4b</span> Patch only <code>play.rs:1952</code> + keep eager subtraction</div>
-        <ul class="compact">
-          <li>Leaves <code>play.rs:813</code> inconsistent at negative life.</li>
-          <li>Leaves cast <code>life_alternative</code> and resolution <code>Decision::Payment</code> tail life unreserved during mana payment.</li>
-          <li>Breaks life-gaining mana abilities (<span class="card-name">The Great Henge</span>) enabling a subsequent <span class="card-name">Sunbaked Canyon</span> or post-mana life fee.</li>
-        </ul>
+        <div class="opt-title"><span class="badge badge-existing">Fallback · 4b</span> Keep <code>while_paying</code> wrapper over all 8 callers</div>
+        <p>
+          Retain <code>convoke_search</code> in <code>help.rs</code> behind one shared helper called by all 8 payment surfaces (including <code>ManaUpfront</code>, <code>ManaChoice</code>, <code>ManaSpend</code>, <code>ManaTapCost</code>, <code>AutoPay</code>).
+        </p>
+        <p style="margin-top:6px;margin-bottom:0;"><strong>Use only if</strong> Pass 3 proves larger than one clean pass — never defer convoke past MTG-500, because Pass 1 turns unfixed Guardian plays into <code>AgentError</code>.</p>
       </div>
     </div>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>6. Small Cleanup Worth Checking (Separate or Opportunistic)</h2>
+  <h2>6. Critical Invariants &amp; Separate Outcomes</h2>
+
   <div class="card">
     <ul class="compact">
       <li>
-        <strong><code>Game::play()</code> test helper (<code>tick.rs:103</code>)</strong>
-        <span class="badge badge-existing">Separate / 2-line hygiene</span> —
-        Currently does <code>while !self.is_game_over() { let _ = self.step(0); }</code>. Once <code>step()</code> returns <code>Err(AgentError)</code> on an empty decision,
-        ignoring the error would still loop in any test calling <code>Game::play()</code>; changing it to break/panic on error prevents test hangs.
+        <strong>Re-applying <code>SourceReservation</code> across coupled forks</strong>
+        <span class="badge badge-scope">This Work</span> —
+        When the Coupled Regime forks <code>Game</code> and rebuilds <code>fork.payment_sources(player)</code>, it must re-apply the caller's
+        pending reservations (<code>PendingChoice::Pay</code>, <code>Decision::ManaUpfront</code>, <code>sacrifice</code> argument,
+        <code>announced_model</code> source/grantor) while keeping reserved-to-sacrifice permanents on <code>fork</code>'s battlefield during
+        CR 601.2g mana payment (so dynamic counts still see them until CR 601.2h completes).
       </li>
       <li>
-        <strong><code>payment_sources()</code> + <code>PaymentScan</code> debug assert</strong>
+        <strong>Skipping order-independence shortcuts on coupled boards</strong>
         <span class="badge badge-scope">This Work</span> —
-        Remember <code>PaymentScan</code> asserts in debug builds that <code>shared_payment_sources(player)</code> matches a fresh <code>payment_sources(player)</code>;
-        probing <code>mana_suffix()</code> on a forked clone leaves <code>&amp;self</code> untouched and deterministic, so the debug invariant holds automatically.
+        <code>automatic_payability</code> (<code>fixed_total</code>), <code>choice_tap_witness</code>, <code>useful_payment_taps</code>
+        (<code>dedup_profiles</code> / <code>fixed_only</code>), and <code>mana_ability_actions_with</code> (<code>SourceClassCache</code>)
+        must defer to the coupled solver whenever the board is coupled on the relevant slice so <code>PayCost</code> and manual taps
+        never disagree with admission.
+      </li>
+      <li>
+        <strong><code>PaymentScan</code> debug invariant</strong>
+        <span class="badge badge-scope">This Work</span> —
+        <code>SharedSources</code> can cache <code>(Arc&lt;Vec&lt;ManaSource&gt;&gt;, PaymentCoupling)</code> as a pure function of <code>&amp;self</code>.
+        Any suffix probe runs on an isolated fork, leaving <code>&amp;self</code> untouched so debug rebuild assertions hold identically.
+      </li>
+      <li>
+        <strong>Filtering live <code>Decision::OrderReplacement</code> modes by payment completion</strong>
+        <span class="badge badge-existing">Separate Outcome</span> —
+        In the Coupled Regime, branching over <code>OrderReplacement</code> modes on a fork accurately decides whether activating a mana ability
+        <em>has</em> a completable path. If a future card creates simultaneous competing damage replacements on a mana ability during live payment
+        where one order strands the cost and the other completes it, restricting live <code>OrderReplacement</code> offers during payment would take
+        a small dedicated change in <code>proposed_event.rs</code> (no current catalog card creates this; Pass 1 prevents any spin if constructed).
       </li>
     </ul>
   </div>
 
   <!-- ====================================================================== -->
   <h2>7. Questions for Decision</h2>
-  <p class="muted small">Reply with option codes (e.g. <code>1a, 2a, 3a, 4a</code>) to lock the implementation plan.</p>
+  <p class="muted small">Reply with option codes (e.g. <code>1a, 2a, 3a, 4a</code>) to lock the Pass 2–3 replan.</p>
 
   <ol class="q-list">
     <li class="q-item">
-      <div class="q-stem">1. How should <code>PaymentModel</code> evaluate state-changing mana suffixes (<code>Tarnished Citadel</code>, <code>The Great Henge</code>, future cards)?</div>
+      <div class="q-stem">1. How should Pass 2 replace refuted Design 2 (frozen root probe) to handle state-dependent mana sources?</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Signed <code>LifeBudget { life: i32, cant_change: bool }</code> + probe <code>mana_suffix()</code> once when building <code>payment_sources</code> into <code>ManaEffect::LifeDelta(i32)</code>, falling back to fork evaluation only for <code>ManaEffect::BoardChanging</code> (e.g. <code>OrderReplacement</code> or non-life mutations).</li>
-        <li><strong>(Plan as written)</strong> Fork <code>Game</code> dynamically inside <code>witness</code> at every state-changing activation/output boundary (bypassing <code>PaymentCache</code> / <code>SearchEquivalence</code> when present).</li>
+        <li><strong>(Recommended)</strong> Two-regime unified authority gated by <code>LayerBoard</code> coupling: fast pure <code>PaymentModel</code> with constant <code>LifeDelta(i32)</code> on uncoupled boards (99.9%+), and exact <code>Game</code>-forked transitions refreshing <code>payment_sources</code> on coupled boards.</li>
+        <li>Life-indexed source refresh inside pure <code>PaymentModel</code> (only re-evaluates on life changes; misses one-shot shields, <code>sacrifice_source</code>, <code>OrderReplacement</code>, and tap/counter reads).</li>
+        <li>Always fork <code>Game</code> whenever any <code>mana_suffix()</code>, <code>life_cost</code>, or <code>sacrifice_source</code> exists (no <code>LifeDelta</code> pure path; slower on Treasure/painland boards).</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">2. Should MTG-500 also close the colored-convoke empty-decision bug (<code>Guardian of Vitu-Ghazi</code> + <code>Airship Engine Room</code>) across the 5 nested mana surfaces?</div>
+      <div class="q-stem">2. How should the Coupled Regime bound search cost when many ordinary lands sit alongside coupled sources?</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Yes — fold colored convoke (<code>convoke_colors: ManaTypeSet</code>) directly into <code>PaymentModel::witness</code> so every surface shares one memoized authority.</li>
-        <li>Yes — keep <code>while_paying</code> in <code>help.rs</code> for now, but route all 8 payment callers (including <code>ManaUpfront</code>, <code>ManaChoice</code>, <code>ManaSpend</code>, <code>TapCost</code>, <code>AutoPay</code>) through one wrapper.</li>
-        <li>No — leave colored convoke out of MTG-500 (note: those legal boards will then raise <code>AgentError</code> under Choice 3 instead of completing).</li>
+        <li><strong>(Recommended)</strong> Pure-finish-first + pure-subproblem handoff + invariant-source deferral (keep invariant Forests out of the fork tree except one canonical representative per class when an upfront cost needs them, plus canonical state memoization).</li>
+        <li>Plain forked DFS over all sources with static pruning disabled.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">3. How broad should the zero-action invariant in <code>Game::tick()</code> be?</div>
+      <div class="q-stem">3. Should coupling detection cover all <code>LayerBoard</code> state slices (life, sacrifice, tap, counters, mana pool) or life mutations only?</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Reject ANY non-terminal <code>space.actions.is_empty()</code> with <code>AgentError</code>, propagate trivial-skip <code>execute_action</code> errors with <code>?</code> (no fake draw), and convert <code>automatic_payment_action</code> panics to <code>AgentError</code>.</li>
-        <li><strong>(Plan as written)</strong> Guard only non-terminal suspended mana decisions (<code>ManaChoice</code> / <code>ManaUpfront</code> / <code>ManaSpend</code>).</li>
+        <li><strong>(Recommended)</strong> Full <code>write ∩ read</code> coupling using <code>LayerBoard</code>'s existing <code>StateReads</code>, <code>dynamic_activations</code>, and <code>has_triggered_mana_abilities</code> (closes <span class="card-name">Sunbaked Canyon</span> @ 25 life, one-shot shields, and sacrifice + <span class="card-name">White Lotus Tile</span> / <span class="card-name">Avatar Kyoshi</span> in one predicate).</li>
+        <li>Life-slice coupling only (<code>life_cost</code> / <code>mana_suffix</code> × <code>reads.life</code>), leaving sacrifice/tap/counter coupling for a separate Task.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">4. Should post-mana life costs become a trailing <code>Obligation::PayLife(u32)</code> (fixing <code>play.rs:813</code>, cast <code>life_alternative</code>, resolution tail life, and Henge-before-life-fee ordering)?</div>
+      <div class="q-stem">4. Confirm carry-forward for signed <code>LifeBudget</code>, trailing <code>Obligation::PayLife(u32)</code>, and colored convoke in <code>PaymentModel</code>?</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Yes — unify all life-fee checks via <code>can_pay_life</code> + <code>Obligation::PayLife(u32)</code>, and defer <code>life_cost</code> filtering from <code>payment_sources</code> to <code>witness</code>.</li>
-        <li>No — fix <code>play.rs:1952</code> and <code>play.rs:813</code> with <code>can_pay_life</code>, keep eager life subtraction, and leave Henge-enables-Canyon for later.</li>
+        <li><strong>(Recommended)</strong> Keep all three inside <code>PaymentModel</code> (deleting <code>while_paying</code> / <code>convoke_search</code>) so both Pure and Coupled regimes share one exact representation.</li>
+        <li>Keep signed <code>LifeBudget</code> + trailing <code>Obligation::PayLife</code>, and use the smaller <code>while_paying</code> wrapper across all 8 callers for Pass 3.</li>
       </ol>
     </li>
   </ol>
