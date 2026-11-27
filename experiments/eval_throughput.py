@@ -29,7 +29,7 @@ from experiments.tla_trophies import POOLS, ROOT, Deal, corpus_input, deck, play
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
-from manabot.eval.agent_loader import EVAL_DEVICES, load
+from manabot.eval.agent_loader import EVAL_DEVICES, load_with_precision
 from manabot.eval.agents import build
 from manabot.eval.pairing import play_pairing
 from manabot.eval.vector import LocalMatches, PairingSpec, play_pairings
@@ -39,6 +39,7 @@ from manabot.policy.checkpoint import read_container
 from manabot.policy.prepare import Prepared
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import DeckMatchup
+from manabot.sim.registration import EvalPrecision
 
 ARENA = "eval-throughput"
 DEALS = 32
@@ -82,7 +83,7 @@ def random_checkpoint(path: Path, width: int) -> None:
 
 
 def trophy_deals(
-    ref: CheckpointRef, count: int, corpus_path: Path
+    ref: CheckpointRef, count: int, corpus_path: Path, precision: EvalPrecision
 ) -> tuple[Code, dict[str, PairingSpec], list[Match]]:
     source = corpus_input()
     if file_sha256(corpus_path) != source.sha256:
@@ -114,6 +115,7 @@ def trophy_deals(
             matchup_mode="cross",
             game_seconds=GAME_SECONDS,
             arena=ARENA,
+            precision=precision,
         )
     return heuristic, specs, matches
 
@@ -146,6 +148,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--device", choices=EVAL_DEVICES, required=True)
     parser.add_argument("--runner", choices=("scalar", "vector"), required=True)
+    parser.add_argument("--precision", choices=("float32", "bf16"), default="float32")
     parser.add_argument("--slots", type=int, default=64, help="vector slots")
     parser.add_argument("--deals", type=int, default=DEALS, choices=range(1, DEALS + 1))
     policy = parser.add_mutually_exclusive_group()
@@ -184,9 +187,11 @@ def main() -> None:
 
     inputs = os.environ.get("ETUDE_INPUTS_DIR")
     corpus_path = Path(inputs) / "pools.json" if inputs else ROOT / POOLS
-    heuristic, specs, matches = trophy_deals(ref, args.deals, corpus_path)
+    heuristic, specs, matches = trophy_deals(
+        ref, args.deals, corpus_path, args.precision
+    )
     timing = ForwardTiming()
-    forward = timed_forward(load(ref), timing)
+    forward = timed_forward(load_with_precision(ref, args.precision), timing)
     agents = (forward, build(heuristic, {}))
     source = LocalMatches([(match, agents) for match in matches])
     started = time.perf_counter()
@@ -202,6 +207,7 @@ def main() -> None:
                 matchup_mode=spec.matchup_mode,
                 game_seconds=spec.game_seconds,
                 arena=spec.arena,
+                precision=spec.precision,
             )
             games += completed_games(match, result)
     else:
@@ -224,6 +230,7 @@ def main() -> None:
         "torch": torch.__version__,
         "torch_threads": torch.get_num_threads(),
         "device": args.device,
+        "precision": args.precision,
         "runner": args.runner,
         "slots": 1 if args.runner == "scalar" else args.slots,
         "model": model_name,
@@ -243,6 +250,9 @@ def main() -> None:
     }
     if args.device == "mlx":
         summary["mlx"] = version("mlx")
+    if args.device == "cuda":
+        summary["gpu"] = torch.cuda.get_device_name()
+        summary["cuda"] = torch.version.cuda
     atomic_json(out / "summary.json", summary)
     print(json.dumps(summary, indent=2))
 
