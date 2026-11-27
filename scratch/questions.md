@@ -46,3 +46,11 @@ Headless realign took the review's recommendations; each binds replay digests, s
 
 - An edit can leave the current declaration with one legal action (moving the only attacker leaves a lone "no block" offer). `edit_game_state` returns it rather than skipping it, so a caller can be handed a forced decision. Left as is: auto-advancing would move the game past the decision the caller asked about.
 - A snapshot replay that ends at the edited decision shows the edited board in Academy without a branch note, since the note attaches to the next recorded choice. Same for determinize and reshuffle branches already.
+
+## Ship-review (Jack Heart, 2026-11-27)
+
+Verbatim from ship-review (`scratch/ship-review.html`):
+
+- Jack Heart: *"ok lets land this and add the followup task to add those two"* (referring to `create_token` and `add_to_battlefield` on `GameStateEdit`).
+
+Outcome: proceed to delivery (`reflect` → `land`) on PR #637 as built; file a standalone follow-up Task for `GameStateEdit.create_token` and `GameStateEdit.add_to_battlefield`. Unresolved findings from `scratch/ship-review.html` (F1 `declined_*` symmetry suppression on mid-declaration edits, F2 eager negative validation / doc clarifications, F3 `manabot.belief` carry-over & library-entry bug) remain noted here without separate Tasks unless requested.
