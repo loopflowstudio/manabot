@@ -47,6 +47,23 @@ from manabot.sim.registration import (
     PlayerRegistration,
 )
 
+PARTICIPANTS = ("candidate", "opponent")
+
+
+@dataclass(frozen=True)
+class PairingSpec:
+    """Arena parameters for one paired-deal match."""
+
+    matchup: AuthoredMatchup | DeckMatchup
+    deal: int
+    matchup_mode: Literal["cross", "all"]
+    game_seconds: float
+    arena: str
+    precision: EvalPrecision = "float32"
+    max_commands: int = 10_000
+    bootstrap_seed: int = 6510
+    keep_game_logs: bool = False
+
 
 @dataclass(frozen=True)
 class AdmittedPairing[Seat]:
@@ -54,36 +71,26 @@ class AdmittedPairing[Seat]:
 
     request: EvaluationRequest
     agents: dict[str, Seat]
-    legs: int
-    participants: tuple[str, str]
     retained: Path
 
 
 def admit_pairing[Seat](
     match: Match,
     agents: Sequence[Seat],
+    spec: PairingSpec,
     *,
-    matchup: AuthoredMatchup | DeckMatchup,
-    deal: int,
-    matchup_mode: Literal["cross", "all"],
-    game_seconds: float,
-    arena: str,
-    precision: EvalPrecision = "float32",
-    max_commands: int = 10_000,
-    bootstrap_seed: int = 6510,
     output_dir: Path | None = None,
     read: CheckpointReader | None = None,
 ) -> AdmittedPairing[Seat]:
     """Validate match players and build registrations, request and game players."""
-    legs = 4 if matchup_mode == "cross" else 8
+    legs = 4 if spec.matchup_mode == "cross" else 8
     # An indexed Etude match is one deal. A legacy multi-game match declares legs.
     expected_games = legs if match.index is None else 1
     if match.games != expected_games or len(match.players) != 2:
         raise ValueError("a pairing requires two players and every declared leg")
     players: list[PlayerRegistration] = []
     paths: dict[str, str] = {}
-    participants = ("candidate", "opponent")
-    for name, player in zip(participants, match.players, strict=True):
+    for name, player in zip(PARTICIPANTS, match.players, strict=True):
         if name == "opponent" and isinstance(player, Code):
             if player.name != "heuristic":
                 raise ValueError("a pairing's code opponent must be the heuristic")
@@ -102,10 +109,10 @@ def admit_pairing[Seat](
             registration(
                 player,
                 name=name,
-                match=matchup.match(),
-                content_suite=matchup.content_suite,
+                match=spec.matchup.match(),
+                content_suite=spec.matchup.content_suite,
                 role="challenger" if name == "candidate" else "anchor",
-                precision=precision,
+                precision=spec.precision,
                 read=read,
             )
         )
@@ -116,21 +123,21 @@ def admit_pairing[Seat](
         # The cohort identifies the opponent; the envelope identifies precision.
         anchor["compute_class_id"] = ETUDE_COMPUTE_CLASS
     key = EvaluationKey(
-        content_suite=matchup.content_suite,
+        content_suite=spec.matchup.content_suite,
         viewer_boundary="acting-viewer",
-        arena_version=arena,
+        arena_version=spec.arena,
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
         anchor_cohort_sha256=canonical_sha256(anchor),
         evaluation_compute_envelope_id=candidate.compute_class_id,
         seed_compute_envelope_id=(
-            ETUDE_COMPUTE_CLASS if precision != "float32" else None
+            ETUDE_COMPUTE_CLASS if spec.precision != "float32" else None
         ),
     )
     root = (
         output_dir
         if output_dir is not None
-        else Path(os.environ.get("ETUDE_OUTPUT_DIR") or Path(".runs") / arena)
+        else Path(os.environ.get("ETUDE_OUTPUT_DIR") or Path(".runs") / spec.arena)
     )
     retained = root / "arena" / match.key
     request = EvaluationRequest(
@@ -138,20 +145,18 @@ def admit_pairing[Seat](
         candidate=candidate,
         opponent=opponent,
         checkpoint_paths=paths,
-        deal_seeds=(deal,),
-        matchup_mode=matchup_mode,
-        authored_matchup=matchup,
-        game_seconds=game_seconds,
-        max_commands=max_commands,
-        bootstrap_seed=bootstrap_seed,
-        purpose=arena,
+        deal_seeds=(spec.deal,),
+        matchup_mode=spec.matchup_mode,
+        authored_matchup=spec.matchup,
+        game_seconds=spec.game_seconds,
+        max_commands=spec.max_commands,
+        bootstrap_seed=spec.bootstrap_seed,
+        purpose=spec.arena,
     )
-    seated = dict(zip(participants, agents, strict=True))
+    seated = dict(zip(PARTICIPANTS, agents, strict=True))
     return AdmittedPairing(
         request=request,
         agents=seated,
-        legs=legs,
-        participants=participants,
         retained=retained,
     )
 
@@ -161,9 +166,6 @@ def pairing_result(
     *,
     out: Path,
     cards: Path,
-    matchup: AuthoredMatchup | DeckMatchup,
-    legs: int,
-    participants: tuple[str, str],
 ) -> Result:
     """Assemble Etude tables and card blobs from a settled pairing attempt."""
     if result.error:
@@ -174,11 +176,15 @@ def pairing_result(
         and result.status == "completed"
         else None
     )
+    legs = len(result.request.legs)
     tables = evaluation_tables(
-        result.rows, matchup=matchup, legs=legs, play_counts=counts
+        result.rows,
+        matchup=result.request.authored_matchup,
+        legs=legs,
+        play_counts=counts,
     )
     trace = json.loads((out / "trace.json").read_bytes())
-    evidence = trace_card_tables(cards, trace, participants)
+    evidence = trace_card_tables(cards, trace, PARTICIPANTS)
     if len(evidence.blobs) != legs:
         raise ValueError("pairing requires card evidence for every leg")
     return Result(tables={**tables, **evidence.tables}, blobs=evidence.blobs)
@@ -210,12 +216,14 @@ def play_pairing(
     admitted = admit_pairing(
         match,
         seated,
-        matchup=matchup,
-        deal=deal,
-        matchup_mode=matchup_mode,
-        game_seconds=game_seconds,
-        arena=arena,
-        precision=precision,
+        PairingSpec(
+            matchup=matchup,
+            deal=deal,
+            matchup_mode=matchup_mode,
+            game_seconds=game_seconds,
+            arena=arena,
+            precision=precision,
+        ),
         read=read,
     )
     with pairing_attempt(admitted.retained) as (out, cards):
@@ -225,14 +233,7 @@ def play_pairing(
             card_evidence_dir=cards,
             agents=admitted.agents,
         )
-        return pairing_result(
-            result,
-            out=out,
-            cards=cards,
-            matchup=matchup,
-            legs=admitted.legs,
-            participants=admitted.participants,
-        )
+        return pairing_result(result, out=out, cards=cards)
 
 
 @contextmanager

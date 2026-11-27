@@ -151,12 +151,14 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
     reduced = pairing.admit_pairing(
         match,
         agents,
-        matchup=matchup,
-        deal=1,
-        matchup_mode="cross",
-        game_seconds=60,
-        arena="fixture-pairing",
-        precision="bf16",
+        pairing.PairingSpec(
+            matchup=matchup,
+            deal=1,
+            matchup_mode="cross",
+            game_seconds=60,
+            arena="fixture-pairing",
+            precision="bf16",
+        ),
     ).request
     assert reduced.key.evaluation_compute_envelope_id == "etude-policy-bf16-auto-v1"
     assert reduced.opponent.compute_class_id == "etude-policy-bf16-auto-v1"

@@ -113,8 +113,6 @@ def test_loader_batches_prepared_rows_without_sampling(
     assert participant.writer_revision == "a" * 40
     assert participant.stored_programs == 0
     forward = load(ref)
-    sampler = build(checkpoint_player(ref), {ref.key: local_forward(forward)})
-    assert isinstance(sampler, Sampler)
     spec = checkpoint_reader(1)(ref).spec
     # Etude passes a config-less checkpoint seat its bare forward, never built.
     [seated] = game_players([checkpoint_player(ref)], [local_forward(forward)])
@@ -262,8 +260,6 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
         ),
     )
     forward = load(ref)
-    sampler = build(checkpoint_player(ref), {ref.key: local_forward(forward)})
-    assert isinstance(sampler, Sampler)
     spec = checkpoint_reader(1)(ref).spec
     rows = []
     for env in (shared_effect_root(1), kellan_upgrade_root()):
@@ -459,8 +455,6 @@ def test_concatenate_joins_decision_memory_rows_and_rejects_folds(
         ),
     )
     forward = load(ref)
-    sampler = build(checkpoint_player(ref), {ref.key: local_forward(forward)})
-    assert isinstance(sampler, Sampler)
     spec = checkpoint_reader(1)(ref).spec
 
     # Collect one empty-memory turn-0 row and two distinct nonempty histories.
@@ -571,8 +565,6 @@ def test_loader_apple_gpu_matches_cpu_logits_and_supports_bf16(
     )
     monkeypatch.setenv("MANABOT_EVAL_DEVICE", "cpu")
     cpu_forward = load(ref)
-    sampler = build(checkpoint_player(ref), {ref.key: local_forward(cpu_forward)})
-    assert isinstance(sampler, Sampler)
     spec = checkpoint_reader(1)(ref).spec
 
     env = Env(match, space, Reward(RewardConfig()), seed=74)

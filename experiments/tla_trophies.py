@@ -32,7 +32,8 @@ from experiments.mana_taps import OBSERVATION
 from experiments.tla_frontier import HEURISTIC, learning, model
 from manabot.data import load_manifest
 from manabot.eval.agents import agents_for
-from manabot.eval.vector import PairingSpec, play_pairings
+from manabot.eval.pairing import PairingSpec
+from manabot.eval.vector import play_pairings
 from manabot.experiment.setup import machine_setup
 from manabot.infra.identity import StrictModel
 from manabot.pools import Pool, PoolCorpus, PoolSplit
@@ -199,17 +200,28 @@ class Deal(StrictModel):
     )
 
 
+def held_out_deal(index: int, precision: EvalPrecision = "float32") -> Deal:
+    return Deal(
+        first=index * 2, second=index * 2 + 1, seed=40900 + index, precision=precision
+    )
+
+
+def held_out_matchup(
+    deal: Deal, pools: tuple[Pool, ...], corpus_sha256: str
+) -> DeckMatchup:
+    first, second = pools[deal.first], pools[deal.second]
+    return DeckMatchup(
+        population_sha256=corpus_sha256,
+        entries=(first.id, second.id),
+        lists=(deck(first), deck(second)),
+        decklists="closed",
+    )
+
+
 def pairing_spec(match: Match) -> PairingSpec:
     deal = Deal.model_validate(match.config)
-    pools = playable("held_out")
-    a, b = pools[deal.first], pools[deal.second]
     return PairingSpec(
-        matchup=DeckMatchup(
-            population_sha256=corpus_input().sha256,
-            entries=(a.id, b.id),
-            lists=(deck(a), deck(b)),
-            decklists="closed",
-        ),
+        matchup=held_out_matchup(deal, playable("held_out"), corpus_input().sha256),
         deal=deal.seed,
         matchup_mode="cross",
         game_seconds=120,
@@ -245,9 +257,7 @@ def held_out_jobs(
         Seating(
             name=f"Held-out pair {i + 1}",
             players=(CheckpointSlot(), heuristic),
-            config=Deal(
-                first=i * 2, second=i * 2 + 1, seed=40900 + i, precision=precision
-            ),
+            config=held_out_deal(i, precision),
             games=seeds,
         )
         for i in range(32)

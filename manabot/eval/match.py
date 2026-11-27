@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
@@ -74,9 +75,9 @@ class CellWorkItem:
 
 @dataclass(frozen=True)
 class CellPlan:
-    pair: tuple[str, str]
+    key: EvaluationKey
+    players: tuple[PlayerRegistration, PlayerRegistration]
     cell_id: str
-    authored: bool
     played_legs: tuple[int, ...]
     trace_relative_path: str
     deal_seed_set_sha256: str
@@ -228,9 +229,9 @@ def build_cell_plan(
                 )
             )
     return CellPlan(
-        pair=pair,
+        key=key,
+        players=(player_a, player_b),
         cell_id=cell_id,
-        authored=authored,
         played_legs=played_legs,
         trace_relative_path=trace_relative_path,
         deal_seed_set_sha256=deal_seed_set_sha256,
@@ -238,24 +239,17 @@ def build_cell_plan(
     )
 
 
-def _evaluation_row(
-    game: dict[str, Any],
-    *,
-    key: EvaluationKey,
-    player_a: PlayerRegistration,
-    player_b: PlayerRegistration,
-    plan: CellPlan,
-) -> dict[str, Any]:
+def _evaluation_row(game: dict[str, Any], plan: CellPlan) -> dict[str, Any]:
+    player_a, player_b = plan.players
     block, deal_seed, leg = game["deal_block"], game["deal_seed"], game["leg"]
     seeds = game["player_seeds"]
-    seat_decks = game.get("seat_decks")
     seconds = game["execution_seconds"]
     if game["failure"] is not None:
         score_a = None
     else:
         score_a = 0.5 if game["winner"] is None else float(game["winner"] == leg % 2)
     row: dict[str, Any] = {
-        "arena_key": key.model_dump(),
+        "arena_key": plan.key.model_dump(),
         "cell_id": game["cell_id"],
         "deal_block": block,
         "deal_seed": deal_seed,
@@ -291,15 +285,15 @@ def _evaluation_row(
         "latency": {},
         "game_seconds": seconds,
     }
-    if plan.authored:
-        row["seat_decks"] = list(seat_decks)
+    if "seat_decks" in game:
+        row["seat_decks"] = list(game["seat_decks"])
     if (cutoff := game.get("policy_action_cutoff")) is not None:
         counts = cutoff["counts_by_kind"].values()
         row["policy_actions"] = {
             "decisions": sum(c["decisions"] for c in counts),
             "dropped_actions": sum(c["dropped_actions"] for c in counts),
         }
-    for player_id in plan.pair:
+    for player_id in (player_a.player_id, player_b.player_id):
         values = [
             d["latency_seconds"]
             for d in game["decisions"]
@@ -318,10 +312,6 @@ def finalize_settled_cell(
     settled_games: Iterable[dict[str, Any]],
     *,
     plan: CellPlan,
-    key: EvaluationKey,
-    player_a: PlayerRegistration,
-    player_b: PlayerRegistration,
-    deal_seeds: tuple[int, ...],
     out_dir: Path,
     game_seconds: float = 120.0,
     card_evidence_dir: Path | None = None,
@@ -337,7 +327,9 @@ def finalize_settled_cell(
     replay_receipts: list[dict[str, Any]] = []
     replay_errors: list[str] = []
     card_evidence: list[dict[str, Any]] = []
-    replayed_blocks: set[int] = set()
+    pending_blocks: dict[int, list[tuple[dict[str, Any], dict[str, Any]]]] = (
+        defaultdict(list)
+    )
     replay_seconds = 0.0
     perf = EvalPerformance("cell")
     trace_path = out_dir / plan.trace_relative_path
@@ -345,12 +337,9 @@ def finalize_settled_cell(
     def replay_block(block: int) -> None:
         """Publish replayed rows only after their immutable shard is retained."""
         nonlocal replay_seconds
-        block_games = sorted(
-            (g for g in games if g["deal_block"] == block), key=lambda g: g["leg"]
-        )
-        block_rows = sorted(
-            (r for r in rows if r["deal_block"] == block), key=lambda r: r["leg"]
-        )
+        entries = sorted(pending_blocks.pop(block), key=lambda entry: entry[0]["leg"])
+        block_games = [game for game, _ in entries]
+        block_rows = [row for _, row in entries]
         # Shards sit below games/ so reading that directory yields each game once.
         relative = (
             Path("games")
@@ -401,7 +390,6 @@ def finalize_settled_cell(
             )
         replay_seconds += time.perf_counter() - started
         perf.record("replay", started)
-        replayed_blocks.add(block)
         commits = out_dir / "blocks"
         commits.mkdir(exist_ok=True)
         atomic_json(
@@ -414,20 +402,18 @@ def finalize_settled_cell(
         # coordinator cannot erase a previously validated complete block.
         atomic_json(
             out_dir / "rows.json",
-            [r for r in rows if r["deal_block"] in replayed_blocks],
+            [r for r in rows if r["deal_block"] not in pending_blocks],
         )
 
     try:
         for game in settled_games:
             finalize_game(game)
             games.append(game)
-            rows.append(
-                _evaluation_row(
-                    game, key=key, player_a=player_a, player_b=player_b, plan=plan
-                )
-            )
+            row = _evaluation_row(game, plan)
+            rows.append(row)
             block = game["deal_block"]
-            if sum(g["deal_block"] == block for g in games) == len(plan.played_legs):
+            pending_blocks[block].append((game, row))
+            if len(pending_blocks[block]) == len(plan.played_legs):
                 replay_block(block)
     finally:
         # Build the diagnostic aggregate once, even if the game source fails.
@@ -449,7 +435,7 @@ def finalize_settled_cell(
         perf.write(out_dir / "performance.json")
         raise RuntimeError("no game started")
     # Incomplete blocks also retain replay diagnostics.
-    for block in sorted({g["deal_block"] for g in games} - replayed_blocks):
+    for block in sorted(pending_blocks):
         replay_block(block)
     if card_evidence_dir is not None:
         trace_receipt["card_evidence"] = card_evidence
@@ -463,7 +449,7 @@ def finalize_settled_cell(
     if replay_errors:
         replay_payload["error"] = "; ".join(replay_errors)
     perf.count("expected_games", len(plan.work))
-    perf.count("legs_per_block", len(plan.work) // len(deal_seeds))
+    perf.count("legs_per_block", len(plan.played_legs))
     perf.count("attempted_games", len(rows))
     perf.count(
         "valid_games",
@@ -597,10 +583,6 @@ def play_cell(
     return finalize_settled_cell(
         (run(item) for item in plan.work),
         plan=plan,
-        key=key,
-        player_a=player_a,
-        player_b=player_b,
-        deal_seeds=deal_seeds,
         out_dir=out_dir,
         game_seconds=game_seconds,
         card_evidence_dir=card_evidence_dir,

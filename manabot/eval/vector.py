@@ -15,14 +15,15 @@ This module is Torch-free (`tests/test_package_boundaries.py`).
 from __future__ import annotations
 
 import asyncio
-from collections import deque
+from collections import defaultdict, deque
 from collections.abc import AsyncGenerator, Callable, Sequence
 from dataclasses import dataclass, field
+from itertools import islice
 import math
 from pathlib import Path
 import time
 from time import monotonic
-from typing import Any, Literal, Protocol
+from typing import Any, Protocol
 from uuid import uuid4
 
 from etude.eval.agents import ForwardError
@@ -30,10 +31,7 @@ from etude.eval.records import CheckpointPlayer, Match
 from etude.eval.result import Result
 import numpy as np
 
-from manabot.env.failures import (
-    ActionCutoffCounts,
-    ActionCutoffSample,
-)
+from manabot.env.failures import PolicyActionCutoffs
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
 from manabot.eval.agents import (
@@ -53,51 +51,34 @@ from manabot.eval.match import (
     finalize_settled_cell,
 )
 from manabot.eval.pairing import (
+    PARTICIPANTS,
     AdmittedPairing,
+    PairingSpec,
     admit_pairing,
     pairing_attempt,
     pairing_result,
 )
 from manabot.infra.config import MatchConfig
-from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
+from manabot.policy.prepare import Prepared
 from manabot.policy.spans import BatchRow, ObservationSelection
 from manabot.sim.evaluation_records import (
     bind_record,
     decision_annotation,
     set_execution_limits,
 )
-from manabot.sim.frames import build_command, build_viewer_frame
-from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 from manabot.sim.native_game import (
+    ArenaDecision,
+    arena_decision,
     arena_source_sha256,
+    chosen_offer,
     game_runtime_identities,
     resolve_game_match,
 )
 from manabot.sim.performance import EvalPerformance
-from manabot.sim.registration import (
-    EvalPrecision,
-    require_open_decklists,
-)
+from manabot.sim.registration import require_open_decklists
 from manabot.sim.supervision import failure_record, settle_record
 import managym
-from managym.experience import UNVERSIONED_CONTENT_HASH
 from managym.recording import GameEnd, RecordedVectorEnv
-
-
-@dataclass(frozen=True)
-class PairingSpec:
-    """Arena parameters for one paired-deal match."""
-
-    matchup: AuthoredMatchup | DeckMatchup
-    deal: int
-    matchup_mode: Literal["cross", "all"]
-    game_seconds: float
-    arena: str
-    precision: EvalPrecision = "float32"
-    max_commands: int = 10_000
-    bootstrap_seed: int = 6510
-    keep_game_logs: bool = False
 
 
 class MatchSource(Protocol):
@@ -110,15 +91,12 @@ class LocalMatches:
     """In-memory `MatchSource` over a fixed sequence of `(match, agents)` pairs."""
 
     def __init__(self, items: Sequence[tuple[Match, Sequence[object]]]) -> None:
-        self._queue: deque[tuple[Match, Sequence[object]]] = deque(items)
+        self._matches = iter(items)
 
     async def take(self, limit: int) -> list[tuple[Match, Sequence[object]]]:
         if limit < 1:
             raise ValueError("take limit must be positive")
-        taken: list[tuple[Match, Sequence[object]]] = []
-        while self._queue and len(taken) < limit:
-            taken.append(self._queue.popleft())
-        return taken
+        return list(islice(self._matches, limit))
 
 
 @dataclass(frozen=True)
@@ -133,13 +111,12 @@ class PendingLeg:
     active_match: ActiveMatch
     game: dict[str, Any]
     setup: managym.GameSetup
-    seed: int
 
 
 @dataclass(eq=False)
 class ActiveMatch:
     match: Match
-    spec: PairingSpec
+    keep_game_logs: bool
     admitted: AdmittedPairing[Seat]
     plan: CellPlan
     space: ObservationSpace
@@ -147,16 +124,24 @@ class ActiveMatch:
     started: float
     finished_games: int = 0
 
+    def forward_error(self, errors: dict[str, ForwardError]) -> ForwardError | None:
+        for player in self.match.players:
+            if isinstance(player, CheckpointPlayer) and player.checkpoint.key in errors:
+                return errors[player.checkpoint.key]
+        return None
+
 
 @dataclass
 class SlotState:
     slot: int
     leg: PendingLeg
     gameplay_started: float
-    revision: int = 0
-    decision_counts: dict[str, int] = field(default_factory=dict)
-    policy_counts: dict[str, ActionCutoffCounts] = field(default_factory=dict)
-    policy_samples: list[ActionCutoffSample] = field(default_factory=list)
+    decision_counts: dict[str, int]
+    cutoffs: PolicyActionCutoffs = field(default_factory=PolicyActionCutoffs)
+
+    @property
+    def revision(self) -> int:
+        return sum(self.decision_counts.values())
 
 
 def admit_active_match(
@@ -172,29 +157,22 @@ def admit_active_match(
     admitted = admit_pairing(
         match,
         game_players(match.players, agents),
-        matchup=spec.matchup,
-        deal=spec.deal,
-        matchup_mode=spec.matchup_mode,
-        game_seconds=spec.game_seconds,
-        arena=spec.arena,
-        precision=spec.precision,
-        max_commands=spec.max_commands,
-        bootstrap_seed=spec.bootstrap_seed,
+        spec,
         output_dir=output_dir,
         read=read,
     )
     inputs = {
         name: read(player.checkpoint)
-        for name, player in zip(admitted.participants, match.players, strict=True)
+        for name, player in zip(PARTICIPANTS, match.players, strict=True)
         if isinstance(player, CheckpointPlayer)
     }
     player_spaces = {
         name: inputs[name].space if name in inputs else None for name in admitted.agents
     }
-    spaces = [space for space in player_spaces.values() if space is not None]
-    if spaces and any(space.shapes != spaces[0].shapes for space in spaces):
+    # Pairing admission requires a checkpoint in the candidate seat.
+    space = inputs["candidate"].space
+    if any(checkpoint.space.shapes != space.shapes for checkpoint in inputs.values()):
         raise ValueError("players have different observation ABIs")
-    space = spaces[0] if spaces else ObservationSpace()
     if not space.one_token:
         raise ValueError("vector evaluation requires policy input v11")
 
@@ -210,7 +188,7 @@ def admit_active_match(
     )
     active_match = ActiveMatch(
         match=match,
-        spec=spec,
+        keep_game_logs=spec.keep_game_logs,
         admitted=admitted,
         plan=plan,
         space=space,
@@ -243,7 +221,6 @@ def admit_active_match(
                 active_match=active_match,
                 game=game,
                 setup=EnvMatch(resolved_match).to_rust(),
-                seed=int(game["deal_seed"]),
             )
         )
     return active_match, legs
@@ -265,53 +242,6 @@ def choose_code_action(
     return action, time.perf_counter() - started
 
 
-def record_slot_policy_cutoff(
-    slot_state: SlotState,
-    count: int,
-    kind: str,
-    capacity: int,
-    vector: RecordedVectorEnv,
-) -> None:
-    if kind not in slot_state.policy_counts:
-        slot_state.policy_counts[kind] = ActionCutoffCounts()
-    counts = slot_state.policy_counts[kind]
-    counts.decisions += 1
-    retained = managym.policy_action_count(count, capacity, "first-legal")
-    if retained == count:
-        return
-    counts.overflows += 1
-    counts.dropped_actions += count - retained
-    if len(slot_state.policy_samples) < 4:
-        slot_state.policy_samples.append(
-            ActionCutoffSample(
-                original_count=count,
-                retained_count=retained,
-                dropped_count=count - retained,
-                decision_kind=kind,
-                game=vector.game_inputs(slot_state.slot).model_copy(deep=True),
-            )
-        )
-
-
-def policy_cutoff_report(
-    slot_state: SlotState, vector: RecordedVectorEnv, seconds: float
-) -> dict[str, object]:
-    return {
-        "schema": "policy-action-cutoff-v1",
-        "policy": "first-legal",
-        "counts_by_kind": {
-            kind: counts.model_dump()
-            for kind, counts in slot_state.policy_counts.items()
-        },
-        "samples": [
-            sample.model_dump(mode="json") for sample in slot_state.policy_samples
-        ],
-        "identities": vector.identities,
-        "context": {},
-        "seconds": seconds,
-    }
-
-
 def settle_leg(
     slot_state: SlotState,
     record: managym.recording.GameRecord,
@@ -323,7 +253,12 @@ def settle_leg(
     game = leg.game
     game["execution_seconds"] = seconds
     if leg.active_match.space.config.action_overflow == "first-legal":
-        game["policy_action_cutoff"] = policy_cutoff_report(slot_state, vector, seconds)
+        game["policy_action_cutoff"] = {
+            **slot_state.cutoffs.report(),
+            "identities": vector.identities,
+            "context": {},
+            "seconds": seconds,
+        }
     game["worker_performance"] = EvalPerformance(
         str(game.get("match_id", "game")),
         bool(game.get("instrumentation", True)),
@@ -343,15 +278,11 @@ def finalize_match(active_match: ActiveMatch) -> Result:
                 settle_record(
                     item.game,
                     out / item.evidence_path,
-                    keep_completed=active_match.spec.keep_game_logs,
+                    keep_completed=active_match.keep_game_logs,
                 )
             return finalize_settled_cell(
                 (item.game for item in active_match.plan.work),
                 plan=active_match.plan,
-                key=request.key,
-                player_a=request.candidate,
-                player_b=request.opponent,
-                deal_seeds=request.deal_seeds,
                 out_dir=out,
                 game_seconds=request.game_seconds,
                 card_evidence_dir=cards,
@@ -367,14 +298,7 @@ def finalize_match(active_match: ActiveMatch) -> Result:
             started=active_match.started,
             card_evidence_dir=cards,
         )
-        return pairing_result(
-            result,
-            out=out,
-            cards=cards,
-            matchup=active_match.spec.matchup,
-            legs=admitted.legs,
-            participants=admitted.participants,
-        )
+        return pairing_result(result, out=out, cards=cards)
 
 
 def open_vector(
@@ -405,6 +329,132 @@ def open_vector(
     return vector, state_buffers
 
 
+@dataclass(frozen=True)
+class PlayedRound:
+    players: dict[int, str]
+    seconds_per_slot: float
+    errors: dict[str, ForwardError]
+
+
+async def step_round(
+    vector: RecordedVectorEnv, states: list[SlotState | None], space: ObservationSpace
+) -> PlayedRound:
+    """Choose once per live slot, omitting matches whose checkpoint failed."""
+    started = monotonic()
+    active = [state is not None for state in states]
+    actors = vector.current_agent_indices()
+    observations = vector.decision_observations(active)
+    turns: dict[int, ArenaDecision] = {}
+    groups: dict[str, list[tuple[SlotState, Sampler]]] = defaultdict(list)
+    code: list[tuple[SlotState, Heuristic, managym.Observation]] = []
+    for state in states:
+        if state is None:
+            continue
+        slot = state.slot
+        raw = observations[slot]
+        assert raw is not None
+        if actors[slot] != int(raw.agent.player_index):
+            raise RuntimeError(
+                f"vector actor {actors[slot]} differs from observation actor {raw.agent.player_index}"
+            )
+        turn = arena_decision(
+            state.leg.game, raw, state.revision, state.decision_counts
+        )
+        turns[slot] = turn
+        seat = state.leg.active_match.admitted.agents[turn.player_id]
+        if isinstance(seat, Sampler):
+            groups[seat.checkpoint_key].append((state, seat))
+        else:
+            code.append((state, seat, raw))
+
+    chosen: dict[int, tuple[int, float]] = {}
+    errors: dict[str, ForwardError] = {}
+    if groups:
+        rows = vector.observation_rows()
+        blank: dict[managym.ObservationBatch, managym.ObservationBatch] = {}
+
+        def prepare_group(
+            members: list[tuple[SlotState, Sampler]],
+        ) -> Prepared[np.ndarray]:
+            first, sampler = members[0]
+            spec = first.leg.active_match.inputs[turns[first.slot].player_id].spec
+            coords: list[BatchRow] = []
+            for state, seat in members:
+                batch, index = rows[state.slot]
+                if seat.blank_decision_memory:
+                    if batch not in blank:
+                        blank[batch] = batch.blank_decision_memory()
+                    batch = blank[batch]
+                coords.append((batch, index))
+            return sampler.prepare(
+                ObservationSelection(spec.space, tuple(coords)), spec
+            )
+
+        async def sample_group(
+            members: list[tuple[SlotState, Sampler]], prepared: Prepared[np.ndarray]
+        ) -> None:
+            _, sampler = members[0]
+            try:
+                logits, elapsed = await sampler.logits(prepared)
+            except ForwardError as error:
+                errors[error.checkpoint] = error
+                return
+            for row, (state, seat) in enumerate(members):
+                action = seat.sample(
+                    logits[row], prepared.legal[row], turns[state.slot].policy_seed
+                )
+                chosen[state.slot] = (action, elapsed / len(members))
+
+        # Prepare all checkpoints before dispatch so their forwards can run together.
+        batches = [(group, prepare_group(group)) for group in groups.values()]
+        outputs = await asyncio.gather(
+            *(sample_group(group, batch) for group, batch in batches),
+            return_exceptions=True,
+        )
+        for output in outputs:
+            if isinstance(output, BaseException):
+                raise output
+
+    if errors:
+        for state in states:
+            if state is not None and state.leg.active_match.forward_error(errors):
+                active[state.slot] = False
+    for state, seat, raw in code:
+        if active[state.slot]:
+            chosen[state.slot] = choose_code_action(
+                seat, raw, seed=turns[state.slot].policy_seed, space=space
+            )
+    players = {slot: turn.player_id for slot, turn in turns.items() if active[slot]}
+    if not players:
+        return PlayedRound(players, 0.0, errors)
+
+    summaries = (
+        vector.current_action_summaries()
+        if space.config.action_overflow == "first-legal"
+        else None
+    )
+    actions = [0] * len(states)
+    annotations: list[dict[str, object] | None] = [None] * len(states)
+    for slot in players:
+        state = states[slot]
+        assert state is not None
+        actions[slot], elapsed = chosen[slot]
+        turn = turns[slot]
+        offer = chosen_offer(state.leg.game, turn, actions[slot])
+        # Replay derives the bound Command from the recorded offer and revision.
+        annotations[slot] = decision_annotation(turn.evidence(offer, elapsed))
+        if summaries is not None:
+            count, kind = summaries[slot]
+            state.cutoffs.record(
+                count, kind, space.config.max_actions, lambda: vector.game_inputs(slot)
+            )
+
+    vector.step_isolated_into_buffers(
+        actions, active, recover_capacity=True, annotations=annotations
+    )
+    return PlayedRound(players, (monotonic() - started) / len(players), errors)
+
+
 async def play_pairings(
     matches: MatchSource,
     spec_for: Callable[[Match], PairingSpec],
@@ -429,6 +479,7 @@ async def play_pairings(
     deferred_matches: deque[tuple[ActiveMatch, list[PendingLeg]]] = deque()
     ready_errors: deque[tuple[Match, Exception]] = deque()
     active_matches: set[ActiveMatch] = set()
+    completed_matches: deque[ActiveMatch] = deque()
     current_space: ObservationSpace | None = None
     source_exhausted = False
     legs_per_match_hint = 4
@@ -440,7 +491,7 @@ async def play_pairings(
     state_buffers: dict[str, np.ndarray] | None = None
     slot_states: list[SlotState | None] = []
 
-    async def fetch_legs(needed_legs: int, *, drain_if_empty: bool) -> None:
+    async def fetch_legs(needed_legs: int, *, fill_layout: bool) -> None:
         nonlocal current_space, source_exhausted, legs_per_match_hint
         while not source_exhausted and len(pending_legs) < needed_legs:
             capacity = slots - max(len(deferred_matches), len(ready_errors))
@@ -466,29 +517,27 @@ async def play_pairings(
                 except Exception as exc:
                     ready_errors.append((match, exc))
                     continue
-                legs_per_match_hint = max(1, len(legs))
+                legs_per_match_hint = len(legs)
                 active_matches.add(active_match)
                 if current_space is None:
                     current_space = active_match.space
-                    pending_legs.extend(legs)
-                elif active_match.space.config == current_space.config:
+                if active_match.space.config == current_space.config:
                     pending_legs.extend(legs)
                 else:
                     deferred_matches.append((active_match, legs))
-            if not drain_if_empty:
+            if not fill_layout:
                 break
             if len(batch) < request_count and (pending_legs or deferred_matches):
                 break
 
     def complete_leg(
-        slot: int,
         slot_state: SlotState,
-        completed_matches: list[ActiveMatch],
         *,
         end: GameEnd | None = None,
         info: dict[str, Any] | None = None,
     ) -> None:
         assert vector is not None
+        slot = slot_state.slot
         record = vector.take_slot_record(slot, end=end, info=info)
         settle_leg(
             slot_state, record, vector, gameplay_seconds - slot_state.gameplay_started
@@ -496,80 +545,83 @@ async def play_pairings(
         active_match = slot_state.leg.active_match
         active_match.finished_games += 1
         slot_states[slot] = None
-        if active_match.finished_games == active_match.admitted.legs:
+        if active_match.finished_games == len(active_match.plan.work):
+            active_matches.remove(active_match)
             completed_matches.append(active_match)
 
-    def settle_immediate_terminals(
-        slots_to_check: Sequence[int],
-        completed_matches: list[ActiveMatch],
-    ) -> None:
+    def seat_legs(free: Sequence[int]) -> list[SlotState]:
+        seated = []
+        for slot in free:
+            if not pending_legs:
+                break
+            leg = pending_legs.popleft()
+            state = SlotState(
+                slot,
+                leg,
+                gameplay_seconds,
+                decision_counts=dict.fromkeys(leg.game["seat_players"], 0),
+            )
+            slot_states[slot] = state
+            seated.append(state)
+        return seated
+
+    def settle_openings(seated: Sequence[SlotState]) -> bool:
         assert vector is not None and state_buffers is not None
         actors = vector.current_agent_indices()
-        infos: list[dict[str, Any]] | None = None
-        digests: list[str | None] | None = None
-        for slot in slots_to_check:
-            slot_state = slot_states[slot]
-            if slot_state is None:
-                continue
-            if actors[slot] >= 0 and not state_buffers["terminated"][slot]:
-                continue
-            if infos is None:
-                infos = vector.get_last_info()
-                digests = vector.state_digests(
-                    [i in slots_to_check for i in range(len(slot_states))]
-                )
-            info = infos[slot] if slot < len(infos) else {}
-            winner = info.get("winner_index")
+        ended = [
+            state
+            for state in seated
+            if actors[state.slot] < 0 or state_buffers["terminated"][state.slot]
+        ]
+        if not ended:
+            return False
+        mask = [False] * len(slot_states)
+        for state in ended:
+            mask[state.slot] = True
+        digests = vector.state_digests(mask)
+        infos = vector.get_last_info()
+        for slot_state in ended:
+            slot = slot_state.slot
+            winner = infos[slot].get("winner_index")
             slot_state.leg.game.update(
                 winner=winner,
                 terminated=True,
                 termination_reason="draw" if winner is None else "terminal",
             )
             complete_leg(
-                slot,
                 slot_state,
-                completed_matches,
-                end=GameEnd(
-                    status="complete",
-                    winner=winner,
-                    digest=digests[slot] if digests is not None else None,
-                ),
+                end=GameEnd(status="complete", winner=winner, digest=digests[slot]),
             )
+        return True
 
-    async def backfill_free_slots(completed_matches: list[ActiveMatch]) -> None:
+    async def backfill_free_slots() -> None:
         assert vector is not None
-        while True:
-            free = [i for i, st in enumerate(slot_states) if st is None]
-            if not free:
-                return
-            if len(pending_legs) < len(free) and not source_exhausted:
-                await fetch_legs(len(free), drain_if_empty=False)
-            loads: list[managym.SlotLoad] = []
-            loaded_slots: list[int] = []
-            for slot in free:
-                if not pending_legs:
-                    break
-                leg = pending_legs.popleft()
-                loads.append(managym.SlotLoad.fresh(slot, leg.setup, seed=leg.seed))
-                slot_states[slot] = SlotState(
-                    slot=slot,
-                    leg=leg,
-                    gameplay_started=gameplay_seconds,
-                    decision_counts=dict.fromkeys(leg.game["seat_players"], 0),
-                )
-                loaded_slots.append(slot)
-            if not loads:
-                return
-            vector.load_slots_into_buffers(loads)
-            before = len(completed_matches)
-            settle_immediate_terminals(loaded_slots, completed_matches)
-            if len(completed_matches) == before and all(
-                slot_states[slot] is not None for slot in loaded_slots
-            ):
-                return
+        while free := [i for i, state in enumerate(slot_states) if state is None]:
+            await fetch_legs(len(free), fill_layout=False)
+            seated = seat_legs(free)
+            if not seated:
+                break
+            vector.load_slots_into_buffers(
+                [
+                    managym.SlotLoad.fresh(
+                        state.slot, state.leg.setup, seed=state.leg.game["deal_seed"]
+                    )
+                    for state in seated
+                ]
+            )
+            if not settle_openings(seated):
+                break
 
     try:
         while True:
+            while completed_matches:
+                done = completed_matches.popleft()
+                try:
+                    result = finalize_match(done)
+                except Exception as exc:
+                    yield done.match, exc
+                else:
+                    yield done.match, result
             while ready_errors:
                 yield ready_errors.popleft()
 
@@ -577,27 +629,17 @@ async def play_pairings(
                 if pending_legs:
                     current_space = pending_legs[0].active_match.space
                 elif deferred_matches:
-                    first_match, first_legs = deferred_matches.popleft()
-                    current_space = first_match.space
-                    pending_legs.extend(first_legs)
-                    remaining: deque[tuple[ActiveMatch, list[PendingLeg]]] = deque()
-                    while deferred_matches:
-                        other_match, other_legs = deferred_matches.popleft()
-                        if other_match.space.config == current_space.config:
-                            pending_legs.extend(other_legs)
+                    current_space = deferred_matches[0][0].space
+                    for _ in range(len(deferred_matches)):
+                        match, legs = deferred_matches.popleft()
+                        if match.space.config == current_space.config:
+                            pending_legs.extend(legs)
                         else:
-                            remaining.append((other_match, other_legs))
-                    deferred_matches = remaining
+                            deferred_matches.append((match, legs))
 
-                if len(pending_legs) < slots and not source_exhausted:
-                    await fetch_legs(slots, drain_if_empty=True)
-                    while ready_errors:
-                        yield ready_errors.popleft()
-
+                await fetch_legs(slots, fill_layout=True)
                 if not pending_legs:
-                    if deferred_matches:
-                        continue
-                    if source_exhausted:
+                    if source_exhausted and not (deferred_matches or ready_errors):
                         break
                     continue
 
@@ -605,92 +647,53 @@ async def play_pairings(
                 num_envs = min(slots, len(pending_legs)) if source_exhausted else slots
                 vector, state_buffers = open_vector(num_envs, current_space)
                 slot_states = [None] * num_envs
-                initial_setups: list[managym.GameSetup] = []
-                initial_seeds: list[int] = []
-                fallback_setup: managym.GameSetup | None = None
-                for slot in range(num_envs):
-                    if pending_legs:
-                        leg = pending_legs.popleft()
-                        fallback_setup = leg.setup
-                        initial_setups.append(leg.setup)
-                        initial_seeds.append(leg.seed)
-                        slot_states[slot] = SlotState(
-                            slot=slot,
-                            leg=leg,
-                            gameplay_started=gameplay_seconds,
-                            decision_counts=dict.fromkeys(leg.game["seat_players"], 0),
-                        )
-                    else:
-                        assert fallback_setup is not None
-                        initial_setups.append(fallback_setup)
-                        initial_seeds.append(0)
-                vector.reset_each_into_buffers(initial_setups, seeds=initial_seeds)
-                completed_matches: list[ActiveMatch] = []
-                settle_immediate_terminals(
-                    [i for i, st in enumerate(slot_states) if st is not None],
-                    completed_matches,
+                seated = seat_legs(range(num_envs))
+                # Native reset needs a setup for each slot, including idle ones.
+                idle = num_envs - len(seated)
+                vector.reset_each_into_buffers(
+                    [state.leg.setup for state in seated]
+                    + [seated[-1].leg.setup] * idle,
+                    seeds=[state.leg.game["deal_seed"] for state in seated]
+                    + [0] * idle,
                 )
-                if any(st is None for st in slot_states):
-                    await backfill_free_slots(completed_matches)
-                for done_match in completed_matches:
-                    active_matches.discard(done_match)
-                    try:
-                        yield done_match.match, finalize_match(done_match)
-                    except Exception as exc:
-                        yield done_match.match, exc
-                while ready_errors:
-                    yield ready_errors.popleft()
+                settle_openings(seated)
+                await backfill_free_slots()
                 continue
 
             assert state_buffers is not None and current_space is not None
 
             # Check per-game command caps and active gameplay time before stepping.
-            limit_expired: list[tuple[int, str, str]] = []
+            expired: dict[int, tuple[str, str]] = {}
             for slot, slot_state in enumerate(slot_states):
                 if slot_state is None:
                     continue
-                spec = slot_state.leg.active_match.spec
-                if slot_state.revision >= spec.max_commands:
-                    limit_expired.append(
-                        (slot, "command_cap", "game exceeded its Command cap")
-                    )
+                request = slot_state.leg.active_match.admitted.request
+                if slot_state.revision >= request.max_commands:
+                    expired[slot] = ("command_cap", "game exceeded its Command cap")
                 elif (
-                    gameplay_seconds - slot_state.gameplay_started >= spec.game_seconds
+                    gameplay_seconds - slot_state.gameplay_started
+                    >= request.game_seconds
                 ):
-                    limit_expired.append(
-                        (slot, "timeout", "game wall-clock budget exhausted")
-                    )
+                    expired[slot] = ("timeout", "game wall-clock budget exhausted")
 
-            if limit_expired:
-                expired_set = {slot for slot, _, _ in limit_expired}
+            if expired:
                 digests = vector.state_digests(
-                    [i in expired_set for i in range(len(slot_states))]
+                    [i in expired for i in range(len(slot_states))]
                 )
-                completed_matches = []
-                for slot, reason, message in limit_expired:
+                for slot, (reason, message) in expired.items():
                     slot_state = slot_states[slot]
                     assert slot_state is not None
                     failure_record(slot_state.leg.game, reason, message, None)
                     complete_leg(
-                        slot,
                         slot_state,
-                        completed_matches,
                         end=GameEnd(
                             status="interrupted", reason=reason, digest=digests[slot]
                         ),
                     )
-                await backfill_free_slots(completed_matches)
-                for done_match in completed_matches:
-                    active_matches.discard(done_match)
-                    try:
-                        yield done_match.match, finalize_match(done_match)
-                    except Exception as exc:
-                        yield done_match.match, exc
-                while ready_errors:
-                    yield ready_errors.popleft()
+                await backfill_free_slots()
+                continue
 
-            active_slots = [i for i, st in enumerate(slot_states) if st is not None]
-            if not active_slots:
+            if not any(slot_states):
                 vector.close()
                 vector = None
                 state_buffers = None
@@ -698,211 +701,39 @@ async def play_pairings(
                 current_space = None
                 continue
 
-            num_envs = len(slot_states)
-            round_started = monotonic()
-            active_mask = [st is not None for st in slot_states]
-            actors = vector.current_agent_indices()
-            raw_observations = vector.decision_observations(active_mask)
-
-            frames: dict[int, dict[str, Any]] = {}
-            checkpoint_groups: dict[str, list[tuple[int, Sampler, int]]] = {}
-            code_slots: list[tuple[int, Heuristic, int]] = []
-            slot_meta: dict[int, tuple[int, str, int, int]] = {}
-
-            for slot in active_slots:
-                slot_state = slot_states[slot]
-                assert slot_state is not None
-                raw = raw_observations[slot]
-                assert raw is not None
-                actor = actors[slot]
-                if actor != int(raw.agent.player_index):
-                    raise RuntimeError(
-                        f"vector actor {actor} differs from observation actor {raw.agent.player_index}"
-                    )
-                leg = slot_state.leg
-                player_id = leg.game["seat_players"][actor]
-                ordinal = slot_state.decision_counts[player_id]
-                policy_seed = (leg.game["player_seeds"][player_id] + ordinal) % (2**63)
-                slot_meta[slot] = (actor, player_id, ordinal, policy_seed)
-
-                frame = build_viewer_frame(
-                    raw,
-                    match_id=str(leg.game["match_id"]),
-                    revision=slot_state.revision,
-                    content_hash=UNVERSIONED_CONTENT_HASH,
-                    asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
-                )
-                if frame["projection"]["opponent"].get("hand"):
-                    leg.game["integrity"]["private_exposures"] += 1
-                    raise RuntimeError("viewer frame exposes a private hand")
-                frames[slot] = frame
-
-                agent = leg.active_match.admitted.agents[player_id]
-                if isinstance(agent, Sampler):
-                    checkpoint_groups.setdefault(agent.checkpoint_key, []).append(
-                        (slot, agent, policy_seed)
-                    )
-                else:
-                    code_slots.append((slot, agent, policy_seed))
-
-            chosen_actions: dict[int, tuple[int, float]] = {}
-            if checkpoint_groups:
-                obs_rows = vector.observation_rows()
-                prepared_batches = []
-                blank_batches: dict[
-                    managym.ObservationBatch, managym.ObservationBatch
-                ] = {}
-                for members in checkpoint_groups.values():
-                    first_slot, sampler, _ = members[0]
-                    state = slot_states[first_slot]
-                    assert state is not None
-                    player_id = slot_meta[first_slot][1]
-                    spec = state.leg.active_match.inputs[player_id].spec
-                    coords: list[BatchRow] = []
-                    for slot, seat, _ in members:
-                        batch, row = obs_rows[slot]
-                        if seat.blank_decision_memory:
-                            if batch not in blank_batches:
-                                blank_batches[batch] = batch.blank_decision_memory()
-                            batch = blank_batches[batch]
-                        coords.append((batch, row))
-                    selection = ObservationSelection(spec.space, tuple(coords))
-                    prepared_batches.append(sampler.prepare(selection, spec))
-                forward_outputs = await asyncio.gather(
-                    *(
-                        members[0][1].logits(prepared)
-                        for members, prepared in zip(
-                            checkpoint_groups.values(), prepared_batches, strict=True
-                        )
-                    ),
-                    return_exceptions=True,
-                )
-                checkpoint_errors: dict[str, ForwardError] = {}
-                for output in forward_outputs:
-                    if isinstance(output, ForwardError):
-                        checkpoint_errors[output.checkpoint] = output
-                    elif isinstance(output, BaseException):
-                        raise output
-                if checkpoint_errors:
-                    failed_matches = {
-                        active: checkpoint_errors[player.checkpoint.key]
-                        for active in active_matches
-                        for player in active.match.players
-                        if isinstance(player, CheckpointPlayer)
-                        and player.checkpoint.key in checkpoint_errors
-                    }
-                    pending_legs = deque(
-                        leg
-                        for leg in pending_legs
-                        if leg.active_match not in failed_matches
-                    )
-                    deferred_matches = deque(
-                        (active, legs)
-                        for active, legs in deferred_matches
-                        if active not in failed_matches
-                    )
-                    for slot, state in enumerate(slot_states):
-                        if (
-                            state is not None
-                            and state.leg.active_match in failed_matches
-                        ):
-                            slot_states[slot] = None
-                            active_mask[slot] = False
-                    active_slots = [slot for slot in active_slots if active_mask[slot]]
-                    for active, error in failed_matches.items():
-                        active_matches.remove(active)
-                        ready_errors.append((active.match, error))
-                    if not active_slots:
-                        continue
-
-                for members, prepared, output in zip(
-                    checkpoint_groups.values(),
-                    prepared_batches,
-                    forward_outputs,
-                    strict=True,
-                ):
-                    if isinstance(output, BaseException):
-                        continue
-                    logits, elapsed = output
-                    per_row_latency = elapsed / len(members)
-                    for row_idx, (slot, sampler, policy_seed) in enumerate(members):
-                        if not active_mask[slot]:
-                            continue
-                        action = sampler.sample(
-                            logits[row_idx], prepared.legal[row_idx], policy_seed
-                        )
-                        chosen_actions[slot] = (action, per_row_latency)
-
-            for slot, agent, policy_seed in code_slots:
-                if not active_mask[slot]:
-                    continue
-                raw = raw_observations[slot]
-                assert raw is not None
-                chosen_actions[slot] = choose_code_action(
-                    agent, raw, seed=policy_seed, space=current_space
-                )
-
-            step_actions = [0] * num_envs
-            annotations: list[dict[str, object] | None] = [None] * num_envs
-            summaries = (
-                vector.current_action_summaries()
-                if current_space.config.action_overflow == "first-legal"
-                else None
-            )
-            cutoff_capacity = current_space.config.max_actions
-
-            for slot in active_slots:
-                slot_state = slot_states[slot]
-                assert slot_state is not None
-                leg = slot_state.leg
-                frame = frames[slot]
-                action, elapsed = chosen_actions[slot]
-                offers = {int(offer["id"]): offer for offer in frame["offers"]}
-                if action not in offers:
-                    leg.game["integrity"]["illegal_actions"] += 1
-                    raise RuntimeError(f"illegal offer {action}")
-                actor, player_id, ordinal, policy_seed = slot_meta[slot]
-                command = build_command(frame, action)
-                decision: dict[str, Any] = {
-                    "actor": actor,
-                    "action_space_kind": frame["action_space"],
-                    "frame_sha256": canonical_sha256(frame),
-                    "command": command,
-                    "command_sha256": canonical_sha256(command),
-                    "chosen_offer": offers[action],
-                    "revision": slot_state.revision,
-                    "player_id": player_id,
-                    "player_seed": leg.game["player_seeds"][player_id],
-                    "player_decision_ordinal": ordinal,
-                    "policy_rng_seed": policy_seed,
-                    "latency_seconds": elapsed,
+            round_result = await step_round(vector, slot_states, current_space)
+            gameplay_seconds += round_result.seconds_per_slot
+            if round_result.errors:
+                failed = {
+                    match: error
+                    for match in active_matches
+                    if (error := match.forward_error(round_result.errors)) is not None
                 }
-                step_actions[slot] = action
-                annotations[slot] = decision_annotation(decision)
-                if summaries is not None:
-                    count, kind = summaries[slot]
-                    record_slot_policy_cutoff(
-                        slot_state, count, kind, cutoff_capacity, vector
-                    )
-
-            vector.step_isolated_into_buffers(
-                step_actions,
-                active_mask,
-                recover_capacity=True,
-                annotations=annotations,
-            )
-            gameplay_seconds += (monotonic() - round_started) / len(active_slots)
+                pending_legs = deque(
+                    leg for leg in pending_legs if leg.active_match not in failed
+                )
+                deferred_matches = deque(
+                    (match, legs)
+                    for match, legs in deferred_matches
+                    if match not in failed
+                )
+                for slot, state in enumerate(slot_states):
+                    if state is not None and state.leg.active_match in failed:
+                        slot_states[slot] = None
+                for match, error in failed.items():
+                    active_matches.remove(match)
+                    ready_errors.append((match.match, error))
+                if not round_result.players:
+                    continue
 
             infos = vector.get_last_info()
             terminated = state_buffers["terminated"]
             truncated = state_buffers["truncated"]
-            completed_matches = []
 
-            for slot in active_slots:
+            for slot, player_id in round_result.players.items():
                 slot_state = slot_states[slot]
                 assert slot_state is not None
                 leg = slot_state.leg
-                _, player_id, _, _ = slot_meta[slot]
                 info = infos[slot] if slot < len(infos) else {}
 
                 if info.get("game_error"):
@@ -926,10 +757,9 @@ async def play_pairings(
                             f"{error_class}: {error_msg}",
                             player_id,
                         )
-                    complete_leg(slot, slot_state, completed_matches, info=info)
+                    complete_leg(slot_state, info=info)
                     continue
 
-                slot_state.revision += 1
                 slot_state.decision_counts[player_id] += 1
 
                 if truncated[slot]:
@@ -941,9 +771,7 @@ async def play_pairings(
                         None,
                     )
                     complete_leg(
-                        slot,
                         slot_state,
-                        completed_matches,
                         end=GameEnd(
                             status="interrupted",
                             reason="truncated",
@@ -959,20 +787,9 @@ async def play_pairings(
                         terminated=True,
                         termination_reason="draw" if winner is None else "terminal",
                     )
-                    complete_leg(slot, slot_state, completed_matches)
+                    complete_leg(slot_state)
 
-            if any(st is None for st in slot_states):
-                await backfill_free_slots(completed_matches)
-
-            for done_match in completed_matches:
-                active_matches.discard(done_match)
-                try:
-                    yield done_match.match, finalize_match(done_match)
-                except Exception as exc:
-                    yield done_match.match, exc
-
-            while ready_errors:
-                yield ready_errors.popleft()
+            await backfill_free_slots()
     finally:
         if vector is not None:
             vector.close()

@@ -25,20 +25,26 @@ import torch
 
 from experiments.mana_taps import OBSERVATION
 from experiments.tla_frontier import HEURISTIC, model
-from experiments.tla_trophies import POOLS, ROOT, Deal, corpus_input, deck, playable
+from experiments.tla_trophies import (
+    POOLS,
+    ROOT,
+    corpus_input,
+    held_out_deal,
+    held_out_matchup,
+    playable,
+)
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.eval.agent_loader import EVAL_DEVICES, load_with_precision
 from manabot.eval.agents import build, local_forward
-from manabot.eval.pairing import play_pairing
-from manabot.eval.vector import LocalMatches, PairingSpec, play_pairings
+from manabot.eval.pairing import PairingSpec, play_pairing
+from manabot.eval.vector import LocalMatches, play_pairings
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.policy.checkpoint import read_container
 from manabot.policy.prepare import Prepared
 from manabot.sim.heuristic import heuristic_source_paths
-from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import EvalPrecision
 
 ARENA = "eval-throughput"
@@ -100,17 +106,11 @@ def trophy_deals(
     specs: dict[str, PairingSpec] = {}
     matches: list[Match] = []
     for i in range(count):
-        deal = Deal(first=i * 2, second=i * 2 + 1, seed=40900 + i)
-        a, b = pools[deal.first], pools[deal.second]
+        deal = held_out_deal(i)
         match = Match(players=(candidate, heuristic), config=deal.model_dump())
         matches.append(match)
         specs[match.key] = PairingSpec(
-            matchup=DeckMatchup(
-                population_sha256=source.sha256,
-                entries=(a.id, b.id),
-                lists=(deck(a), deck(b)),
-                decklists="closed",
-            ),
+            matchup=held_out_matchup(deal, pools, source.sha256),
             deal=deal.seed,
             matchup_mode="cross",
             game_seconds=GAME_SECONDS,

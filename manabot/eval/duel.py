@@ -36,6 +36,7 @@ from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.schema import ArtifactReference
+from manabot.sim.agent import GamePlayer
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
 from manabot.training.coordinates import TrainingCoordinates
 
@@ -117,7 +118,7 @@ async def play(match: Match, agents: Sequence[object]) -> Tables:
     return await play_scalar(play_match, match, agents)
 
 
-def play_match(match: Match, agents: Sequence[object]) -> Tables:
+def play_match(match: Match, agents: Sequence[GamePlayer]) -> Tables:
     """Etude game callback: one eight-leg deal between the two checkpoints."""
     duel = Duel.model_validate_json(Path(os.environ["MANABOT_DUEL"]).read_bytes())
     candidate, opponent = registrations(duel)

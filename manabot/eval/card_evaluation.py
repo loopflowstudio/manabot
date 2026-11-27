@@ -17,7 +17,7 @@ from itertools import combinations
 import os
 from pathlib import Path
 import tempfile
-from typing import Literal, cast
+from typing import Literal
 
 from etude.eval.records import (
     Benchmark,
@@ -226,7 +226,7 @@ async def play_card_match(match: Match, agents: Sequence[object]) -> Result:
     return await play_scalar(play_cards, match, agents)
 
 
-def play_cards(match: Match, agents: Sequence[object]) -> Result:
+def play_cards(match: Match, agents: Sequence[GamePlayer]) -> Result:
     players = card_match_players(match)
     conditions = CardConditions.model_validate(match.config)
     paths: dict[str, str] = {}
@@ -255,9 +255,7 @@ def play_cards(match: Match, agents: Sequence[object]) -> Result:
         matchup_mode="all",
         authored_matchup=conditions.authored_matchup,
         card_evidence_dir=root,
-        agents={
-            p.player_id: cast(GamePlayer, agents[i]) for i, p in enumerate(players)
-        },
+        agents={p.player_id: agent for p, agent in zip(players, agents, strict=True)},
     )
     games = _handed_over(root, trace)
     return Result(

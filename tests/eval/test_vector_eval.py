@@ -21,6 +21,7 @@ from etude.eval.records import (
 from etude.eval.result import Result
 from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
+import numpy as np
 import pytest
 import torch
 
@@ -32,8 +33,8 @@ from manabot.eval import agents as agent_module, vector as vector_runner
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import build, local_forward
 from manabot.eval.card_query import CardSelection, audit, card_data, card_db
-from manabot.eval.pairing import play_pairing
-from manabot.eval.vector import LocalMatches, PairingSpec, play_pairings
+from manabot.eval.pairing import PairingSpec, play_pairing
+from manabot.eval.vector import LocalMatches, play_pairings
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import Prepared
@@ -92,17 +93,11 @@ def _fixture_checkpoint(
     )
 
 
-def _row_pure_async_forward(
+def observed_forward(
     sync_forward: Callable[[list[object]], list[object]],
     batch_sizes: list[int],
 ) -> Forward:
-    """Async forward recording batch sizes while evaluating rows independently.
-
-    Batched BLAS GEMMs can reorder float32 additions across batch sizes; running
-    each slice through the same loader independently keeps logits bit-exact to
-    batch-1 `play_pairing` while still exercising full pre-collated `Prepared`
-    transport and verifying `batch > 1` inputs arrive from the runner.
-    """
+    """Record the row count declared for each pre-collated input to the loader."""
 
     async def forward(inputs: list[object], *, rows: int | None = None) -> list[object]:
         assert len(inputs) == 1 and isinstance(inputs[0], Prepared)
@@ -113,6 +108,24 @@ def _row_pure_async_forward(
         return sync_forward(inputs)
 
     return forward
+
+
+def play_local(
+    source: LocalMatches,
+    spec_for: Callable[[Match], PairingSpec],
+    *,
+    slots: int,
+    output_dir: Path,
+) -> list[tuple[Match, Result | Exception]]:
+    async def run() -> list[tuple[Match, Result | Exception]]:
+        return [
+            result
+            async for result in play_pairings(
+                source, spec_for, slots=slots, output_dir=output_dir
+            )
+        ]
+
+    return asyncio.run(run())
 
 
 def _canonical_decisions(game: dict[str, Any]) -> list[dict[str, Any]]:
@@ -196,9 +209,9 @@ def test_slot_load_fresh_explicit_seed_matches_scalar_reset() -> None:
     )
     try:
         state = {
-            "rewards": torch.zeros(2, dtype=torch.float64).numpy(),
-            "terminated": torch.zeros(2, dtype=torch.uint8).numpy(),
-            "truncated": torch.zeros(2, dtype=torch.uint8).numpy(),
+            "rewards": np.zeros(2, dtype=np.float64),
+            "terminated": np.zeros(2, dtype=np.uint8),
+            "truncated": np.zeros(2, dtype=np.uint8),
         }
         vector.set_observation_layout(state, "error", layout=space.layout)
         vector.reset_each_into_buffers([setup_a, setup_a], seeds=[11, 22])
@@ -338,7 +351,7 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
                 (
                     match,
                     [
-                        _row_pure_async_forward(sync_forward, batch_sizes),
+                        observed_forward(sync_forward, batch_sizes),
                         build(heuristic, {}),
                     ],
                 )
@@ -346,24 +359,18 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
             ]
         )
 
-        async def collect() -> list[tuple[Match, Result | Exception]]:
-            out: list[tuple[Match, Result | Exception]] = []
-            async for item in play_pairings(
-                source,
-                lambda match: PairingSpec(
-                    matchup=matchup,
-                    deal=int(match.config["deal"]),
-                    matchup_mode="cross",
-                    game_seconds=60,
-                    arena="fixture-vector",
-                ),
-                slots=6,
-                output_dir=vector_root,
-            ):
-                out.append(item)
-            return out
-
-        yielded = asyncio.run(collect())
+        yielded = play_local(
+            source,
+            lambda match: PairingSpec(
+                matchup=matchup,
+                deal=int(match.config["deal"]),
+                matchup_mode="cross",
+                game_seconds=60,
+                arena="fixture-vector",
+            ),
+            slots=6,
+            output_dir=vector_root,
+        )
         assert len(yielded) == 2
         assert steps_at_settlement[0] < len(observed_active_counts)
 
@@ -377,24 +384,9 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
     assert max(forwards_per_step) == 1
     # Pre-collated batches carried more than one row.
     assert max(batch_sizes) > 1
-    # All 6 slots stayed busy while legs were pending (backfill happened immediately).
+    # With eight legs, all six slots start full and only drain after the queue empties.
     assert observed_active_counts[0] == 6
-    assert max(observed_active_counts) == 6
-    # Because 8 legs run in 6 slots, at least the first two completions refill to 6
-    # before active count can ever drop below 6 (no dip to 5 then back up to 6).
-    first_below_six = next(
-        (i for i, count in enumerate(observed_active_counts) if count < 6),
-        len(observed_active_counts),
-    )
-    assert all(count <= 6 for count in observed_active_counts[first_below_six:])
-    assert all(
-        later <= earlier
-        for earlier, later in zip(
-            observed_active_counts[first_below_six:],
-            observed_active_counts[first_below_six + 1 :],
-            strict=False,
-        )
-    )
+    assert observed_active_counts == sorted(observed_active_counts, reverse=True)
 
     charged_seconds = 0.0
     # Exact trace, Command, digest, score, behaviour and card parity per deal.
@@ -488,29 +480,23 @@ def test_vector_runner_matches_play_pairing_with_gru_memory_and_blanking(
     )
 
     batch_sizes: list[int] = []
-    async_forward = _row_pure_async_forward(sync_forward, batch_sizes)
+    async_forward = observed_forward(sync_forward, batch_sizes)
     source = LocalMatches(
         [(match, [async_forward, build(opponent, {ref.key: async_forward})])]
     )
 
-    async def run() -> list[tuple[Match, Result | Exception]]:
-        return [
-            item
-            async for item in play_pairings(
-                source,
-                lambda _: PairingSpec(
-                    matchup=matchup,
-                    deal=1,
-                    matchup_mode="cross",
-                    game_seconds=60,
-                    arena="fixture-memory",
-                ),
-                slots=4,
-                output_dir=vector_root,
-            )
-        ]
-
-    [(got_match, got_result)] = asyncio.run(run())
+    [(got_match, got_result)] = play_local(
+        source,
+        lambda _: PairingSpec(
+            matchup=matchup,
+            deal=1,
+            matchup_mode="cross",
+            game_seconds=60,
+            arena="fixture-memory",
+        ),
+        slots=4,
+        output_dir=vector_root,
+    )
     assert got_match == match
     assert isinstance(got_result, Result), got_result
     assert batch_sizes[0] == 4
@@ -581,24 +567,19 @@ def test_vector_runner_isolates_native_crash_and_keeps_other_legs_valid(
     )
     vector_root = tmp_path / "crash-isolation"
 
-    async def run() -> list[tuple[Match, Result | Exception]]:
-        return [
-            item
-            async for item in play_pairings(
-                source,
-                lambda match: PairingSpec(
-                    matchup=matchup,
-                    deal=int(match.config["deal"]),
-                    matchup_mode="cross",
-                    game_seconds=60,
-                    arena="fixture-crash",
-                ),
-                slots=4,
-                output_dir=vector_root,
-            )
-        ]
-
-    results = {match.key: outcome for match, outcome in asyncio.run(run())}
+    settled = play_local(
+        source,
+        lambda match: PairingSpec(
+            matchup=matchup,
+            deal=int(match.config["deal"]),
+            matchup_mode="cross",
+            game_seconds=60,
+            arena="fixture-crash",
+        ),
+        slots=4,
+        output_dir=vector_root,
+    )
+    results = {match.key: outcome for match, outcome in settled}
     assert len(results) == 2
 
     crashed_res = results[matches[0].key]
@@ -655,29 +636,27 @@ def test_vector_runner_isolates_admission_and_checkpoint_failures(
     good_match = Match(players=(candidate, heuristic), games=4, config={"deal": 301})
     forward = local_forward(load(ref))
 
-    async def run_mixed() -> list[tuple[Match, Result | Exception]]:
-        return [
-            item
-            async for item in play_pairings(
-                LocalMatches(
-                    [
-                        (bad_match, [forward, build(heuristic, {})]),
-                        (good_match, [forward, build(heuristic, {})]),
-                    ]
-                ),
-                lambda match: PairingSpec(
-                    matchup=matchup,
-                    deal=int(match.config["deal"]),
-                    matchup_mode="cross",
-                    game_seconds=60,
-                    arena="fixture-mixed",
-                ),
-                slots=4,
-                output_dir=tmp_path / "mixed",
-            )
-        ]
+    def spec_for(match: Match) -> PairingSpec:
+        return PairingSpec(
+            matchup=matchup,
+            deal=int(match.config["deal"]),
+            matchup_mode="cross",
+            game_seconds=60,
+            arena="fixture-mixed",
+        )
 
-    mixed = {match.key: outcome for match, outcome in asyncio.run(run_mixed())}
+    opponent = build(heuristic, {})
+    mixed = {
+        match.key: outcome
+        for match, outcome in play_local(
+            LocalMatches(
+                [(match, [forward, opponent]) for match in (bad_match, good_match)]
+            ),
+            spec_for,
+            slots=4,
+            output_dir=tmp_path / "mixed",
+        )
+    }
     assert isinstance(mixed[bad_match.key], ValueError)
     assert isinstance(mixed[good_match.key], Result)
 
@@ -695,38 +674,21 @@ def test_vector_runner_isolates_admission_and_checkpoint_failures(
         assert rows is not None and rows >= 1
         raise error
 
-    async def run_checkpoint_failure() -> list[tuple[Match, Result | Exception]]:
-        opponent = build(heuristic, {})
-        return [
-            item
-            async for item in play_pairings(
-                LocalMatches(
-                    [
-                        (failed_match, [broken_checkpoint, opponent]),
-                        (good_match, [forward, opponent]),
-                    ]
-                ),
-                lambda match: PairingSpec(
-                    matchup=matchup,
-                    deal=int(match.config["deal"]),
-                    matchup_mode="cross",
-                    game_seconds=60,
-                    arena="fixture-mixed",
-                ),
-                slots=5,
-                output_dir=tmp_path / "checkpoint-failure",
-            )
-        ]
-
-    settled = asyncio.run(run_checkpoint_failure())
+    settled = play_local(
+        LocalMatches(
+            [
+                (failed_match, [broken_checkpoint, opponent]),
+                (good_match, [forward, opponent]),
+            ]
+        ),
+        spec_for,
+        slots=5,
+        output_dir=tmp_path / "checkpoint-failure",
+    )
+    outcomes = {match.key: outcome for match, outcome in settled}
     assert len(settled) == 2
-    assert (
-        dict((match.key, outcome) for match, outcome in settled)[failed_match.key]
-        is error
-    )
-    assert isinstance(
-        dict((match.key, outcome) for match, outcome in settled)[good_match.key], Result
-    )
+    assert outcomes[failed_match.key] is error
+    assert isinstance(outcomes[good_match.key], Result)
 
     # An unexpected forward exception still escapes the generator.
     async def exploding_forward(
@@ -734,23 +696,13 @@ def test_vector_runner_isolates_admission_and_checkpoint_failures(
     ) -> list[object]:
         raise RuntimeError("inference server unavailable")
 
-    async def run_exploding() -> None:
-        async for _ in play_pairings(
-            LocalMatches([(good_match, [exploding_forward, build(heuristic, {})])]),
-            lambda match: PairingSpec(
-                matchup=matchup,
-                deal=int(match.config["deal"]),
-                matchup_mode="cross",
-                game_seconds=60,
-                arena="fixture-explode",
-            ),
+    with pytest.raises(RuntimeError, match="inference server unavailable"):
+        play_local(
+            LocalMatches([(good_match, [exploding_forward, opponent])]),
+            spec_for,
             slots=4,
             output_dir=tmp_path / "explode",
-        ):
-            pass
-
-    with pytest.raises(RuntimeError, match="inference server unavailable"):
-        asyncio.run(run_exploding())
+        )
 
 
 def test_vector_runner_bounds_deferred_layouts_before_play(
@@ -774,7 +726,7 @@ def test_vector_runner_bounds_deferred_layouts_before_play(
     async def forward(inputs: list[object], *, rows: int | None = None) -> list[object]:
         [batch] = inputs
         assert isinstance(batch, Prepared) and rows == batch.batch
-        return [torch.zeros(batch.legal.shape).numpy()]
+        return [np.zeros(batch.legal.shape, dtype=np.float32)]
 
     class CountingMatches(LocalMatches):
         granted = 0

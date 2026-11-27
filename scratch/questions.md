@@ -81,3 +81,6 @@ Pass 6 implementation choices (2026-11-27):
 - Store precision in every new trophy environment config. This gives a new
   environment identity even for float32. The default float32 deal keeps its
   existing seating key, and paired game seeds stay stable across precisions.
+
+During compression I kept the scalar `play_pairing` keyword arguments used by
+experiments. Both runners pass the same `PairingSpec` through admission.
