@@ -1136,6 +1136,11 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   choice, both fixed and simple choice taps are offered alongside pay (and
   non-simple mana abilities such as Treasure remain explicit).
 
+An activated mana ability keeps the cost priced when the player announces it.
+Paying that fee can remove a granted ability from its source. The announced
+ability still resolves, and an output that depends on the battlefield uses
+the state after the mana fee is paid.
+
 These choices are on by default for every consumer. They do not expose undo,
 or production at priority unless a seat
 [asks for it](#mana-taps-at-priority-and-during-payment).

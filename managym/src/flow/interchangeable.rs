@@ -1510,11 +1510,7 @@ impl<'a> ReferenceCensus<'a> {
                 }
             }
             Decision::ManaUpfront {
-                player: _,
-                permanent,
-                ability_index: _,
-                tap_remaining: _,
-                resume,
+                permanent, resume, ..
             } => {
                 self.mark_permanent(*permanent);
                 if let Some(resume) = resume.as_deref() {

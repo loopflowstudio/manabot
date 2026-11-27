@@ -281,27 +281,6 @@ pub(super) struct StateReads {
 }
 
 impl StateReads {
-    pub(super) fn mana_activations(abilities: &[ActivatedAbilityDefinition]) -> Self {
-        let mut reads = ReadSet::default();
-        for ability in abilities {
-            if ability.has_dynamic_mana_output() {
-                reads.mana_output(&ability.effects[0]);
-            }
-            if ability.condition.is_none() && ability.cost_reduction_per.is_none() {
-                continue;
-            }
-            if ability.is_mana_ability() {
-                if let Some(condition) = &ability.condition {
-                    reads.condition(condition);
-                }
-                if let Some(predicate) = &ability.cost_reduction_per {
-                    reads.predicate(predicate);
-                }
-            }
-        }
-        reads.state
-    }
-
     pub(super) fn merge(&mut self, other: Self) {
         self.mana |= other.mana;
         self.tapped |= other.tapped;
@@ -357,7 +336,7 @@ pub(super) struct EvaluatedBoard<'a> {
     /// has no matching land yet. Entry consults them before a land exists.
     pub land_type_overwrites: Vec<CardPredicate>,
     pub static_sources: StaticSources,
-    pub reads: StateReads,
+    pub reads: ReadSet,
 }
 
 pub(super) struct EvaluatedSlot<'a> {
@@ -403,7 +382,7 @@ struct Eval<'a, 'b, 's> {
     objects: Vec<Option<LayerObject>>,
     owned_views: Vec<Option<Characteristics>>,
     live: &'b [PermanentId],
-    reads: StateReads,
+    reads: ReadSet,
 }
 
 /// Definition-derived static node owned inline by a [`SourceSeed`].
@@ -475,22 +454,56 @@ pub(super) struct SourceSeed {
     statics: Vec<StaticEntry>,
     nodes: Vec<SeedNode>,
     nodes_layers: u16,
-    nodes_reads: StateReads,
+    nodes_reads: ReadSet,
     pub(super) has_dynamic_activations: bool,
-    pub(super) mana_activation_reads: StateReads,
+    pub(super) mana_activation_reads: ReadSet,
     pub(super) has_board_statics: bool,
     pub(super) has_triggered_mana_abilities: bool,
 }
 
 /// Conservative reads used for both dependency pruning and cache invalidation.
 /// Walk each predicate/condition once, including nested alternatives.
-#[derive(Clone, Copy, Default)]
-struct ReadSet {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct ReadSet {
     fields: u16,
-    state: StateReads,
+    pub(super) state: StateReads,
+    /// Counts and selectors that can change when a permanent leaves play.
+    pub(super) battlefield: bool,
 }
 
 impl ReadSet {
+    pub(super) fn mana_activations(abilities: &[ActivatedAbilityDefinition]) -> Self {
+        let mut reads = Self::default();
+        for ability in abilities {
+            if ability.has_dynamic_mana_output() {
+                reads.mana_output(&ability.effects[0]);
+            }
+            if ability.condition.is_none() && ability.cost_reduction_per.is_none() {
+                continue;
+            }
+            if ability.is_mana_ability() {
+                if let Some(condition) = &ability.condition {
+                    reads.condition(condition);
+                }
+                if let Some(predicate) = &ability.cost_reduction_per {
+                    reads.battlefield_predicate(predicate);
+                }
+            }
+        }
+        reads
+    }
+
+    pub(super) fn merge(&mut self, other: Self) {
+        self.fields |= other.fields;
+        self.state.merge(other.state);
+        self.battlefield |= other.battlefield;
+    }
+
+    fn battlefield_predicate(&mut self, predicate: &CardPredicate) {
+        self.battlefield = true;
+        self.predicate(predicate);
+    }
+
     fn predicate(&mut self, p: &CardPredicate) {
         if p.chosen_name || p.namesake || p.named.is_some() {
             self.fields |= NAME;
@@ -533,7 +546,7 @@ impl ReadSet {
             ..
         } = of
         {
-            self.predicate(predicate);
+            self.battlefield_predicate(predicate);
             if let Some(Except::Matching {
                 predicate: excluded,
                 ..
@@ -556,17 +569,21 @@ impl ReadSet {
                 self.fields |= CARD_TYPES
             }
             EffectValue::SourcePower => self.fields |= POWER,
-            EffectValue::GreatestSharedCreatureType => self.fields |= CARD_TYPES | SUBTYPES,
+            EffectValue::GreatestSharedCreatureType => {
+                self.battlefield = true;
+                self.fields |= CARD_TYPES | SUBTYPES;
+            }
             EffectValue::CreaturesWithCounters => {
+                self.battlefield = true;
                 self.fields |= CARD_TYPES;
                 self.state.counters = true;
             }
             EffectValue::GreatestPowerYouControl { predicate } => {
                 self.fields |= CARD_TYPES | POWER;
-                self.predicate(predicate);
+                self.battlefield_predicate(predicate);
             }
             EffectValue::BattlefieldMatching { predicate }
-            | EffectValue::AttackingMatching { predicate } => self.predicate(predicate),
+            | EffectValue::AttackingMatching { predicate } => self.battlefield_predicate(predicate),
             EffectValue::Property { of, property, .. } => {
                 match property {
                     ObjectProperty::Power | ObjectProperty::Toughness => self.fields |= POWER,
@@ -594,16 +611,18 @@ impl ReadSet {
     fn layer_value(&mut self, value: &LayerValue) {
         if let LayerValue::Count(count) = value {
             match count.as_ref() {
-                LayerCount::CreatureTypes { .. } => self.fields |= SUBTYPES,
+                LayerCount::CreatureTypes { .. } => {
+                    self.battlefield = true;
+                    self.fields |= SUBTYPES;
+                }
                 LayerCount::ColorsAmong(p) => {
                     self.fields |= COLORS;
-                    self.predicate(p);
+                    self.battlefield_predicate(p);
                 }
-                LayerCount::Graveyard { predicate, .. } | LayerCount::YouControl(predicate) => {
-                    self.predicate(predicate)
-                }
+                LayerCount::Graveyard { predicate, .. } => self.predicate(predicate),
+                LayerCount::YouControl(predicate) => self.battlefield_predicate(predicate),
                 LayerCount::CountersOn { predicate, .. } => {
-                    self.predicate(predicate);
+                    self.battlefield_predicate(predicate);
                     self.state.counters = true;
                 }
                 LayerCount::SourceCounters(_) => self.state.counters = true,
@@ -641,16 +660,20 @@ impl ReadSet {
                 distinct_names,
                 ..
             } => {
-                self.predicate(predicate);
+                self.battlefield_predicate(predicate);
                 if *distinct_names {
                     self.fields |= NAME;
                 }
             }
-            Condition::OpponentControlsMoreCreatures => self.fields |= CARD_TYPES,
-            Condition::BattlefieldAtLeast { predicate, .. }
-            | Condition::SourceMatches(predicate) => {
-                self.predicate(predicate);
+            Condition::OpponentControlsMoreCreatures => {
+                self.battlefield = true;
+                self.fields |= CARD_TYPES;
             }
+            Condition::BattlefieldAtLeast { predicate, .. } => {
+                self.battlefield_predicate(predicate)
+            }
+            Condition::ControlsUnownedAtLeast { .. } => self.battlefield = true,
+            Condition::SourceMatches(predicate) => self.predicate(predicate),
             Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
                 for condition in conditions {
                     self.condition(condition);
@@ -1141,7 +1164,7 @@ pub(super) fn evaluate_board(
     live.clear();
     nodes.clear();
     let mut land_type_overwrites = Vec::new();
-    let mut reads = StateReads::default();
+    let mut reads = ReadSet::default();
     let mut static_sources = StaticSources::default();
     let mut active_layers = 0u16;
     let mut has_pt_counters = false;
@@ -1273,7 +1296,7 @@ pub(super) fn evaluate_board(
                     ability: ability.clone(),
                 };
                 if let Some(node) = build_dynamic_node(game, NodeSource::command(source), &entry) {
-                    reads.merge(node.reads().state);
+                    reads.merge(node.reads());
                     active_layers |= node.layers();
                     nodes.push(EvalNode::Dynamic(node));
                 }
@@ -1519,13 +1542,13 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         .filter_map(|entry| build_seed_node(game, node_source, entry))
         .collect();
     let mut nodes_layers = 0u16;
-    let mut nodes_reads = StateReads::default();
+    let mut nodes_reads = ReadSet::default();
     for node in &nodes {
         nodes_layers |= node.plan.layers;
-        nodes_reads.merge(node.plan.reads.state);
+        nodes_reads.merge(node.plan.reads);
     }
     let has_dynamic_activations = view.has_dynamic_activations();
-    let mana_activation_reads = StateReads::mana_activations(&view.activated_abilities);
+    let mana_activation_reads = ReadSet::mana_activations(&view.activated_abilities);
     let has_board_statics = has_board_statics(&view.static_abilities);
     let has_triggered_mana_abilities = !view.triggered_mana_abilities.is_empty();
     SourceSeed {
@@ -1757,7 +1780,7 @@ impl Eval<'_, '_, '_> {
         active_layers: &mut u16,
         node: DynamicNode,
     ) -> u16 {
-        self.reads.merge(node.reads().state);
+        self.reads.merge(node.reads());
         let layers = node.layers();
         *active_layers |= layers;
         nodes.push(EvalNode::Dynamic(node));

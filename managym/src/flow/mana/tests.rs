@@ -1,6 +1,6 @@
 use super::{
-    tap_obligations, ManaActivation, ManaSource, Obligation, PaymentModel, PaymentSearch,
-    PaymentSearchState, PaymentStep, SourcePolicy, Taps,
+    tap_obligations, ManaActivation, ManaSource, ManaUpfrontActivation, Obligation, PaymentModel,
+    PaymentSearch, PaymentSearchState, PaymentStep, SourcePolicy, Taps,
 };
 use crate::cards::content_pack::ContentPack;
 use crate::state::{
@@ -117,6 +117,9 @@ fn announced_payment_owes_life_after_mana_across_nested_callers() {
         payment.owed[1..],
         [CostComponent::Life(2), CostComponent::Source(How::Tapped)]
     );
+    let abilities = std::mem::take(&mut game.state[object].activated_abilities);
+    assert!(!game.help_tap_candidates(player, &payment).contains(&source));
+    game.state[object].activated_abilities = abilities;
     for life in [2, 4] {
         game.scenario_set_life(player, life);
         game.pending_choice = Some(PendingChoice::Pay {
@@ -139,6 +142,10 @@ fn announced_payment_owes_life_after_mana_across_nested_callers() {
                 player,
                 permanent: canyon,
                 ability_index: 0,
+                activation: Box::new(ManaUpfrontActivation::new(
+                    ManaCost::default(),
+                    &game.layer_view(canyon).activated_abilities[0],
+                )),
                 tap_remaining: 0,
                 resume: Some(Box::new(announced)),
             },
@@ -912,7 +919,8 @@ fn payment_scan_marks_life_coupling_without_coupling_basic_taps() {
 
 #[test]
 fn mana_upfront_fee_can_remove_the_activated_ability() {
-    use crate::flow::{decision::Decision, game::Game};
+    use crate::agent::action::Action;
+    use crate::flow::decision::Decision;
     use crate::state::{
         ability::{Condition, Effect},
         card::{ActivatedAbilityDefinition, StaticAbility, StaticScope},
@@ -923,21 +931,19 @@ fn mana_upfront_fee_can_remove_the_activated_ability() {
 
     let player = PlayerId(0);
     let deck = [("Mountain".into(), 39), ("Gray Ogre".into(), 1)].into();
-    let mut game = Game::new(
-        vec![
-            PlayerConfig::new("payer", deck),
-            PlayerConfig::new("opponent", [("Mountain".into(), 40)].into()),
-        ],
-        340,
-        false,
-    );
+    let mut env = crate::Env::new(340, false, false, false);
+    env.reset(vec![
+        PlayerConfig::new("payer", deck),
+        PlayerConfig::new("opponent", [("Mountain".into(), 40)].into()),
+    ])
+    .unwrap();
+    let game = env.fixture_game_mut();
     game.keep_opening_hands();
     game.mana_floats[player.0] = ManaFloats::All;
     let source = game
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();
-    let mountain = game
-        .scenario_force_battlefield(player, "Mountain", true)
+    game.scenario_force_battlefield(player, "Mountain", true)
         .unwrap();
     let cost = ManaCost::parse("{1}{R}");
     let grant = StaticAbility::continuous(
@@ -945,7 +951,7 @@ fn mana_upfront_fee_can_remove_the_activated_ability() {
         Some(Condition::UnspentManaAtLeast { count: 1 }),
         vec![Modification::GrantActivated(Box::new(
             ActivatedAbilityDefinition {
-                mana_cost: cost.clone(),
+                mana_cost: cost,
                 tap_source: true,
                 effects: vec![Effect::add_mana(Mana::parse("BB"))],
                 ..Default::default()
@@ -965,27 +971,214 @@ fn mana_upfront_fee_can_remove_the_activated_ability() {
         game.state.suspended_decision.as_ref().unwrap().decision,
         Decision::ManaUpfront { permanent, ability_index: 0, .. } if permanent == source
     ));
-    assert!(game.can_pay_mana_upfront(player));
-    let before = game.state.deterministic_hash();
+    game.tick().unwrap();
+    let pay = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|action| *action == Action::PayCost { player })
+        .unwrap();
+    let announced = game.state.deterministic_hash();
     let mut fork = game.clone();
-    fork.tap_fixed_mana_source(player, mountain);
-    let mut remaining = fork.characteristics(source).activated_abilities[0]
-        .mana_cost
-        .clone();
-    while remaining.mana_value > 0 {
-        let choices = fork.pooled_mana(player).spending_choices(&remaining);
-        let [choice] = choices.as_slice() else {
-            panic!("the red pool pays the fee in one order");
-        };
-        fork.spend_mana_unit(player, &choice.unit, &remaining);
-        remaining = choice.remaining.clone();
+    let Decision::ManaUpfront { activation, .. } = &mut fork
+        .state
+        .suspended_decision_mut()
+        .as_mut()
+        .unwrap()
+        .decision
+    else {
+        unreachable!();
+    };
+    activation.output = Effect::add_mana(Mana::parse("B"));
+    assert_ne!(fork.state.deterministic_hash(), announced);
+
+    let mut restored = env.snapshot().unwrap().restore(Default::default()).unwrap();
+    assert_eq!(
+        restored.fixture_game_mut().state.deterministic_hash(),
+        announced
+    );
+    for branch in [&mut env, &mut restored] {
+        branch.step(pay as i64).unwrap();
+        let game = branch.fixture_game_mut();
+        assert_eq!(game.pooled_mana(player).total(), 0);
+        assert!(game.characteristics(source).activated_abilities.is_empty());
+        assert!(game.state.permanents[source].as_ref().unwrap().tapped);
+        assert!(matches!(
+            &game.state.suspended_decision.as_ref().unwrap().decision,
+            Decision::ManaChoice { choices, .. } if choices == &[Mana::parse("BB")]
+        ));
+        assert_eq!(
+            game.action_space().unwrap().actions,
+            [Action::ChooseMode { player, mode: 0 }]
+        );
+        branch.step(0).unwrap();
+        assert_eq!(
+            branch.fixture_game_mut().pooled_mana(player),
+            Mana::parse("BB")
+        );
     }
-    // The pending activation is still the same one. Its live index has
-    // disappeared before complete_mana_upfront can read it.
-    assert_eq!(fork.pooled_mana(player).total(), 0);
-    assert!(fork.characteristics(source).activated_abilities.is_empty());
-    assert_eq!(fork.state.suspended_decision, game.state.suspended_decision);
-    assert_eq!(game.state.deterministic_hash(), before);
+    assert_eq!(
+        env.selected_witness().unwrap(),
+        restored.selected_witness().unwrap()
+    );
+}
+
+#[test]
+fn mana_upfront_dynamic_output_reads_the_board_after_the_fee() {
+    use crate::agent::action::Action;
+    use crate::flow::{decision::Decision, game::Game};
+    use crate::state::{
+        ability::{Condition, Effect},
+        card::ActivatedAbilityDefinition,
+        game_object::PlayerId,
+        player::{ManaFloats, PlayerConfig},
+        predicate::CardPredicate,
+    };
+
+    let player = PlayerId(0);
+    let deck = [
+        ("Forest".into(), 37),
+        ("The Great Henge".into(), 1),
+        ("Angel of Vitality".into(), 1),
+        ("Gray Ogre".into(), 1),
+    ]
+    .into();
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("payer", deck),
+            PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+        ],
+        341,
+        false,
+    );
+    game.keep_opening_hands();
+    game.mana_floats[player.0] = ManaFloats::All;
+    game.scenario_set_life(player, 22);
+    // Keep an extra float available so the restored caller still offers
+    // PayCost after the Henge has supplied the full fee.
+    game.scenario_force_battlefield(player, "Forest", true)
+        .unwrap();
+    let henge = game
+        .scenario_force_battlefield(player, "The Great Henge", true)
+        .unwrap();
+    game.scenario_force_battlefield(player, "Angel of Vitality", true)
+        .unwrap();
+    let source = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let object = game.permanent_object(source).unwrap();
+    let powerful = CardPredicate {
+        min_power: Some(4),
+        ..CardPredicate::creature()
+    };
+    game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("1G"),
+        cost_reduction_per: Some(powerful.clone()),
+        tap_source: true,
+        effects: vec![Effect::If {
+            condition: Condition::ControlsAtLeast {
+                count: 1,
+                distinct_names: false,
+                predicate: powerful,
+            },
+            then: vec![Effect::add_mana(Mana::parse("GG"))],
+            otherwise: vec![Effect::add_mana(Mana::parse("G"))],
+        }],
+        ..Default::default()
+    }];
+    assert_eq!(
+        game.characteristics(source).activated_abilities[0].mana_choices(),
+        Some(vec![Mana::parse("G")])
+    );
+    game.activate_mana_ability(player, source, 0).unwrap();
+    game.tick().unwrap();
+
+    let step = |game: &mut Game, offer: Action| {
+        let actions = &game.action_space().unwrap().actions;
+        let action = actions
+            .iter()
+            .position(|a| *a == offer)
+            .unwrap_or_else(|| panic!("missing {offer:?} in {actions:?}"));
+        game.step(action).unwrap();
+    };
+    step(
+        &mut game,
+        Action::ActivateAbility {
+            player,
+            permanent: henge,
+            ability_index: 0,
+        },
+    );
+    step(&mut game, Action::ChooseMode { player, mode: 0 });
+    assert_eq!(game.state.players[0].life, 25);
+    assert_eq!(
+        game.characteristics(source).activated_abilities[0]
+            .mana_cost
+            .cost,
+        ManaCost::parse("G").cost
+    );
+    step(&mut game, Action::PayCost { player });
+    assert_eq!(game.pooled_mana(player).total(), 0);
+    assert!(matches!(
+        &game.state.suspended_decision.as_ref().unwrap().decision,
+        Decision::ManaChoice { choices, .. } if choices == &[Mana::parse("GG")]
+    ));
+    step(&mut game, Action::ChooseMode { player, mode: 0 });
+    assert_eq!(game.pooled_mana(player), Mana::parse("GG"));
+}
+
+#[test]
+fn sacrificing_treasure_couples_to_battlefield_mana_conditions() {
+    use crate::flow::game::Game;
+    use crate::state::{
+        ability::{Condition, Effect},
+        card::{ActivatedAbilityDefinition, CardType},
+        game_object::PlayerId,
+        player::PlayerConfig,
+        predicate::CardPredicate,
+    };
+
+    let player = PlayerId(0);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new(
+                "payer",
+                [("Gray Ogre".into(), 1), ("Forest".into(), 39)].into(),
+            ),
+            PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+        ],
+        342,
+        false,
+    );
+    game.keep_opening_hands();
+    let treasure = game.create_token("token.treasure", player).unwrap();
+    let source = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let object = game.permanent_object(source).unwrap();
+    let coupling = |game: &Game| {
+        let _scan = game.payment_scan();
+        game.payment_model(player, None)
+            .sources
+            .iter()
+            .find(|s| s.permanent == treasure)
+            .unwrap()
+            .abilities[0]
+            .coupling
+    };
+    assert_eq!(coupling(&game), super::PaymentCoupling::default());
+    game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        condition: Some(Condition::ControlsAtLeast {
+            count: 1,
+            distinct_names: false,
+            predicate: CardPredicate::card_type(CardType::Artifact),
+        }),
+        tap_source: true,
+        effects: vec![Effect::add_mana(Mana::parse("G"))],
+        ..Default::default()
+    }];
+    assert_eq!(coupling(&game), super::PaymentCoupling::Coupled);
 }
 
 #[test]

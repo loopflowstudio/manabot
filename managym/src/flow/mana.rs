@@ -29,8 +29,8 @@ use crate::{
     agent::action::{Action, ActionSpace, AgentError},
     flow::{
         decision::{
-            Decision, EffectFrame, FrameCompletion, ManaProduction, PendingManaBonus,
-            SpendCompletion, SuspendedResolution, TappedForMana,
+            Decision, EffectFrame, FrameCompletion, ManaProduction, ManaUpfrontActivation,
+            PendingManaBonus, SpendCompletion, SuspendedResolution, TappedForMana,
         },
         game::{ActivationSource, Game, PendingChoice},
         layers::StateReads,
@@ -42,8 +42,8 @@ use crate::{
     state::{
         ability::{Effect, EffectValue, PlayerSelector},
         card::{
-            ActivatedAbilityDefinition, ActivationZone, ReplacementEffect, TriggeredManaAbility,
-            TriggeredManaOutput,
+            mana_output_choices, ActivatedAbilityDefinition, ActivationZone, ReplacementEffect,
+            TriggeredManaAbility, TriggeredManaOutput,
         },
         game_object::{ObjectId, PermanentId, PlayerId},
         mana::{
@@ -3123,6 +3123,21 @@ impl Game {
         }
     }
 
+    /// Resolve the announced text against the board at this point in payment.
+    fn upfront_mana_outputs(
+        &self,
+        player: PlayerId,
+        permanent: PermanentId,
+        activation: &ManaUpfrontActivation,
+    ) -> Vec<Mana> {
+        let chosen = self.state.permanents[permanent]
+            .as_ref()
+            .and_then(|source| source.chosen.as_deref());
+        let output = self.current_mana_output(&activation.output, player, chosen);
+        mana_output_choices(output.as_ref().unwrap_or(&activation.output))
+            .expect("an announced mana ability has a mana output")
+    }
+
     /// The activation's mana cost as paid now: per-permanent reductions apply
     /// to its generic part (CR 601.2f, 602.2b). Its purpose already names the
     /// source (CR 106.6).
@@ -3193,16 +3208,14 @@ impl Game {
                 },
                 Decision::ManaUpfront {
                     permanent,
-                    ability_index,
+                    activation,
                     resume,
                     ..
                 } => {
-                    let ability =
-                        &game.characteristics(*permanent).activated_abilities[*ability_index];
                     model.reserve(SourceReservation::owed(
                         *permanent,
-                        ability.tap_source,
-                        ability.source_leaves(),
+                        activation.tap_source,
+                        activation.sacrifice_source,
                     ));
                     if let Some(next) = resume {
                         reserve(next, game, model);
@@ -3302,16 +3315,17 @@ impl Game {
         board: &crate::flow::statics::LayerBoard,
         player: PlayerId,
         object: ObjectId,
-        ability: &ActivatedAbilityDefinition,
+        writes: StateReads,
+        sacrifice: bool,
+        suffix: &[Effect],
     ) -> PaymentCoupling {
-        let suffix = ability.mana_suffix();
-        let writes = StateReads {
-            mana: true,
-            tapped: ability.tap_source || ability.tap_cost.is_some(),
-            life: ability.life_cost > 0 || !suffix.is_empty(),
-            counters: ability.add_counters.is_some() || ability.remove_counters.is_some(),
-        };
-        if board.payment_writes_couple(player, writes, ability.sacrifice_source) {
+        let sacrifice_changes_sources = sacrifice
+            && self.state.permanent_of(object).is_some_and(|source| {
+                let view = board.view(source);
+                !view.static_abilities.is_empty()
+                    || !view.abilities_lost && !self.state[object].replacement_effects.is_empty()
+            });
+        if sacrifice_changes_sources || board.payment_writes_couple(player, writes, sacrifice) {
             PaymentCoupling::Coupled
         } else {
             self.mana_suffix_coupling(player, object, suffix)
@@ -3360,7 +3374,12 @@ impl Game {
                             automatic,
                             tap_source: ability.tap_source,
                             tap_count: ability.tap_cost.as_ref().map_or(0, |cost| cost.count),
-                            tap_candidates: self.tap_cost_candidates(player, ability).into(),
+                            tap_candidates: ability
+                                .tap_cost
+                                .as_ref()
+                                .map_or_else(Default::default, |cost| {
+                                    self.tap_candidates(player, &cost.predicate).into()
+                                }),
                             limited: ability.is_use_limited() || ability.remove_counters.is_some(),
                             sacrifice_source: ability.sacrifice_source,
                             ability_index: index,
@@ -3371,7 +3390,16 @@ impl Game {
                                 &board,
                                 player,
                                 source.object,
-                                ability,
+                                StateReads {
+                                    mana: true,
+                                    tapped: ability.tap_source || ability.tap_cost.is_some(),
+                                    life: ability.life_cost > 0
+                                        || !ability.mana_suffix().is_empty(),
+                                    counters: ability.add_counters.is_some()
+                                        || ability.remove_counters.is_some(),
+                                },
+                                ability.sacrifice_source,
+                                ability.mana_suffix(),
                             ),
                         })
                     })
@@ -3512,41 +3540,45 @@ impl Game {
                     }
                 }
                 Decision::ManaUpfront {
+                    player,
                     permanent,
-                    ability_index,
+                    activation,
                     tap_remaining,
                     resume,
                     ..
                 } => {
-                    let ability = game.characteristics(*permanent).activated_abilities
-                        [*ability_index]
-                        .clone();
-                    let mut outputs = ability.mana_choices().unwrap();
-                    if ability.tap_source {
-                        let bonuses =
-                            game.tap_bonuses(&game.mana_triggers(), decision.player(), *permanent);
+                    let mut outputs = game.upfront_mana_outputs(*player, *permanent, activation);
+                    if activation.tap_source {
+                        let bonuses = game.tap_bonuses(&game.mana_triggers(), *player, *permanent);
                         outputs = production_alternatives(outputs, &bonuses);
                     }
                     if *tap_remaining > 0 {
+                        let tap = activation.tap_cost.as_ref().expect("outstanding tap cost");
                         result.push(Obligation::Tap {
-                            candidates: game
-                                .tap_cost_candidates(decision.player(), &ability)
-                                .into(),
+                            candidates: game.tap_candidates(*player, &tap.predicate).into(),
                             remaining: *tap_remaining,
                         });
                     }
                     let life_delta = game
                         .mana_activation_coupling(
                             &game.layer_board(),
-                            decision.player(),
+                            *player,
                             game.state.permanents[*permanent].as_ref().unwrap().object,
-                            &ability,
+                            StateReads {
+                                mana: true,
+                                tapped: activation.tap_source || *tap_remaining > 0,
+                                life: activation.life_cost > 0 || !activation.suffix.is_empty(),
+                                counters: activation.add_counters.is_some()
+                                    || activation.remove_counters.is_some(),
+                            },
+                            activation.sacrifice_source,
+                            &activation.suffix,
                         )
                         .life_delta();
-                    result.push(Obligation::mana(ability.mana_cost));
+                    result.push(Obligation::mana(activation.mana_cost.clone()));
                     result.push(Obligation::Output {
                         choices: outputs.into(),
-                        life_cost: ability.life_cost,
+                        life_cost: activation.life_cost,
                         life_delta,
                     });
                     if let Some(next) = resume {
@@ -4897,9 +4929,15 @@ impl Game {
         if !self.can_activate_mana_ability(player, permanent, ability_index) {
             return Err(AgentError("illegal mana activation".into()));
         }
-        let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
+        let characteristics = self.characteristics(permanent);
+        let ability = &characteristics.activated_abilities[ability_index];
+        let raw = self.layer_view(permanent);
+        let activation = Box::new(ManaUpfrontActivation::new(
+            ability.mana_cost.clone(),
+            &raw.activated_abilities[ability_index],
+        ));
         self.state
-            .record_activation(permanent, ability_index, &ability);
+            .record_activation(permanent, ability_index, ability);
         let (frame, resume) = match self.state.suspended_decision_mut().take() {
             Some(caller) => (caller.frame, Some(Box::new(caller.decision))),
             None => (EffectFrame::new(player, Vec::new()), None),
@@ -4910,7 +4948,8 @@ impl Game {
                 player,
                 permanent,
                 ability_index,
-                tap_remaining: ability.tap_cost.as_ref().map_or(0, |cost| cost.count),
+                tap_remaining: activation.tap_cost.as_ref().map_or(0, |cost| cost.count),
+                activation,
                 resume,
             },
         });
@@ -4971,8 +5010,7 @@ impl Game {
         };
         let Decision::ManaUpfront {
             player,
-            permanent,
-            ability_index,
+            ref activation,
             tap_remaining,
             ..
         } = suspended.decision
@@ -4984,12 +5022,7 @@ impl Game {
         }
         // With taps on, a mana-costed activation waits for the payer's taps
         // or PayCost instead of committing the automatic prefix.
-        if self.characteristics(permanent).activated_abilities[ability_index]
-            .mana_cost
-            .mana_value
-            > 0
-            && self.has_mana_floats(player)
-        {
+        if activation.mana_cost.mana_value > 0 && self.has_mana_floats(player) {
             return Ok(());
         }
         self.pay_mana_upfront(player)
@@ -5015,14 +5048,12 @@ impl Game {
         let Some(path) = self.automatic_upfront_path(player) else {
             return Ok(());
         };
-        let Decision::ManaUpfront {
-            permanent,
-            ability_index,
-            ..
-        } = self.state.suspended_decision.as_ref().unwrap().decision
+        let Decision::ManaUpfront { activation, .. } =
+            &self.state.suspended_decision.as_ref().unwrap().decision
         else {
             unreachable!()
         };
+        let cost = activation.mana_cost.clone();
         for step in path {
             match step {
                 PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, source),
@@ -5030,9 +5061,6 @@ impl Game {
                 _ => unreachable!("validated automatic prefix"),
             }
         }
-        let cost = self.characteristics(permanent).activated_abilities[ability_index]
-            .mana_cost
-            .clone();
         let caller = self.state.suspended_decision_mut().take().unwrap();
         self.begin_mana_spend(
             player,
@@ -5048,28 +5076,27 @@ impl Game {
         let Decision::ManaUpfront {
             player,
             permanent,
-            ability_index,
+            activation,
             resume,
             ..
         } = caller.decision
         else {
             unreachable!()
         };
-        let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
         // Tapping the source for mana (CR 106.12) records what the source
         // was, so a sacrifice cost leaves its last known information; the
         // triggered mana abilities it triggers are read from the board once
         // the output is produced (CR 106.12a).
         let mut tapped = None;
-        if ability.tap_source {
+        if activation.tap_source {
             self.tap_permanent(permanent, true);
             tapped = Some(self.tapped_for_mana(permanent));
         }
         let counter_costs = [
-            ability
+            activation
                 .remove_counters
                 .map(|(kind, count)| (kind, -i32::from(count))),
-            ability
+            activation
                 .add_counters
                 .map(|(kind, count)| (kind, i32::from(count))),
         ];
@@ -5085,8 +5112,8 @@ impl Game {
                 by: Some(player),
             });
         }
-        if ability.life_cost > 0 {
-            self.change_life(player, -(ability.life_cost as i32));
+        if activation.life_cost > 0 {
+            self.change_life(player, -(activation.life_cost as i32));
         }
         // Retain the output and original payment frame before any cost
         // effect can suspend. Resumption must not spend mana, tap or pay life
@@ -5094,7 +5121,7 @@ impl Game {
         let source_ref = self.permanent_object(permanent);
         caller.decision = Decision::ManaChoice {
             player,
-            choices: ability.mana_choices().unwrap(),
+            choices: self.upfront_mana_outputs(player, permanent, &activation),
             production: ManaProduction::Output {
                 source: source_ref,
                 tapped,
@@ -5105,11 +5132,10 @@ impl Game {
         // once as the source's own child frame (CR 605.3b): damage it deals
         // names the source and can be prevented. Resuming the choice never
         // reaches this frame again.
-        let mut effects = Vec::new();
-        if ability.sacrifice_source {
-            effects.push(Effect::sacrifice_this());
+        let mut effects = activation.suffix;
+        if activation.sacrifice_source {
+            effects.insert(0, Effect::sacrifice_this());
         }
-        effects.extend_from_slice(ability.mana_suffix());
         if !effects.is_empty() {
             let mut child = EffectFrame::new(player, effects);
             child.bind_source(

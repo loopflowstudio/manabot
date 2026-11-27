@@ -6,7 +6,8 @@ use crate::{
         decision::EffectFrame,
         game::{Game, Revisions},
         layers::{
-            evaluate_board, matches_view, PredicateSource, SourceSeed, StateReads, StaticSources,
+            evaluate_board, matches_view, PredicateSource, ReadSet, SourceSeed, StateReads,
+            StaticSources,
         },
         proposed_event::{EntryFace, ZoneEntry},
         triggers::TriggerIndex,
@@ -324,8 +325,8 @@ pub(super) struct LayerBoard {
     /// gathers across the battlefield and command zone).
     pub(super) static_sources: StaticSources,
     pub(super) land_type_overwrites: Vec<CardPredicate>,
-    reads: StateReads,
-    mana_activation_reads: StateReads,
+    reads: ReadSet,
+    mana_activation_reads: ReadSet,
     /// Finalization can inspect state beyond the raw layer view. Ordinary
     /// fixed activations retain their finalized entry across state writes
     /// that leave the board unchanged.
@@ -368,11 +369,14 @@ impl LayerBoard {
         writes: StateReads,
         sacrifice: bool,
     ) -> bool {
-        self.reads.overlaps(writes)
-            || self.mana_activation_reads.overlaps(writes)
+        self.reads.state.overlaps(writes)
+            || self.mana_activation_reads.state.overlaps(writes)
             || self.has_activated_cost_reduction[player.0] && (writes.tapped || writes.counters)
             || sacrifice
-                && (self.needs_finalization_for(player) || self.has_triggered_mana_abilities)
+                && (self.reads.battlefield
+                    || self.mana_activation_reads.battlefield
+                    || self.needs_finalization_for(player)
+                    || self.has_triggered_mana_abilities)
     }
 
     #[inline]
@@ -435,7 +439,7 @@ impl DerivedCache {
             || self
                 .board
                 .as_ref()
-                .is_some_and(|board| board.reads.overlaps(state_changed));
+                .is_some_and(|board| board.reads.state.overlaps(state_changed));
         if board_changed
             || (state_changed.any()
                 && self
@@ -467,7 +471,7 @@ impl Game {
             let mut land_plays_each_player = 0;
             let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
             let mut dynamic_activations = false;
-            let mut mana_activation_reads = StateReads::default();
+            let mut mana_activation_reads = ReadSet::default();
             let mut has_activated_cost_reduction = [false; 2];
             let mut has_triggered_mana_abilities = false;
             let apply_play_static =
@@ -526,9 +530,8 @@ impl Game {
                 } else {
                     dynamic_activations =
                         dynamic_activations || entry.view.has_dynamic_activations();
-                    mana_activation_reads.merge(StateReads::mana_activations(
-                        &entry.view.activated_abilities,
-                    ));
+                    mana_activation_reads
+                        .merge(ReadSet::mana_activations(&entry.view.activated_abilities));
                     has_triggered_mana_abilities = has_triggered_mana_abilities
                         || !entry.view.triggered_mana_abilities.is_empty();
                     !entry.view.static_abilities.is_empty()
@@ -2042,7 +2045,7 @@ mod cache_tests {
     #[cfg(debug_assertions)]
     fn with_stale_board(game: &Game) {
         let mut board = game.compute_board(None);
-        board.reads.mana = !board.reads.mana;
+        board.reads.state.mana = !board.reads.state.mana;
         game.derived.borrow_mut().at(game.state.revisions()).board = Some(Arc::new(board));
     }
 

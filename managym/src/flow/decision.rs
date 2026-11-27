@@ -30,6 +30,7 @@ use crate::{
     },
     state::{
         ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant},
+        card::{ActivatedAbilityDefinition, TapCost},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
         knowledge::LibraryKnowledge,
         mana::ManaCost,
@@ -39,6 +40,38 @@ use crate::{
         zone::ZoneType,
     },
 };
+
+/// The priced cost and rules text of an announced mana activation. Paying
+/// its fee can change the source's live abilities, so the decision owns both.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ManaUpfrontActivation {
+    pub(crate) mana_cost: ManaCost,
+    pub(crate) tap_cost: Option<TapCost>,
+    pub(crate) tap_source: bool,
+    pub(crate) remove_counters: Option<(CounterKind, u16)>,
+    pub(crate) add_counters: Option<(CounterKind, u16)>,
+    pub(crate) life_cost: u32,
+    pub(crate) sacrifice_source: bool,
+    pub(crate) output: Effect,
+    pub(crate) suffix: Vec<Effect>,
+}
+
+impl ManaUpfrontActivation {
+    pub(crate) fn new(mana_cost: ManaCost, raw: &ActivatedAbilityDefinition) -> Self {
+        debug_assert!(raw.is_mana_ability());
+        Self {
+            mana_cost,
+            tap_cost: raw.tap_cost.clone(),
+            tap_source: raw.tap_source,
+            remove_counters: raw.remove_counters,
+            add_counters: raw.add_counters,
+            life_cost: raw.life_cost,
+            sacrifice_source: raw.sacrifice_source,
+            output: raw.effects[0].clone(),
+            suffix: raw.mana_suffix().to_vec(),
+        }
+    }
+}
 
 /// The caller awaiting a frame's completion. A child owns exactly one return
 /// destination; unfinished effects never grant priority or expose a saved
@@ -648,11 +681,12 @@ pub enum Decision {
         spent: PaymentReceipt,
         completion: Box<SpendCompletion>,
     },
-    /// A mana ability's printed upfront cost, before its output exists.
+    /// A mana ability's announced cost, before its output exists.
     ManaUpfront {
         player: PlayerId,
         permanent: PermanentId,
         ability_index: usize,
+        activation: Box<ManaUpfrontActivation>,
         #[serde(skip_serializing_if = "crate::state::is_zero")]
         tap_remaining: usize,
         resume: Option<Box<Decision>>,

@@ -1096,6 +1096,7 @@ impl Game {
             Decision::ManaUpfront {
                 permanent,
                 ability_index,
+                activation,
                 tap_remaining,
                 ..
             } => {
@@ -1104,9 +1105,7 @@ impl Game {
                 if *tap_remaining > 0 {
                     frame.mode = Some(*tap_remaining);
                 }
-                frame.cost(
-                    &self.characteristics(*permanent).activated_abilities[*ability_index].mana_cost,
-                );
+                frame.cost(&activation.mana_cost);
             }
             Decision::ManaSpend { cost, .. } => frame.cost(cost),
             Decision::ManaChoice {
@@ -1611,6 +1610,15 @@ mod tests {
                 player,
                 permanent: PermanentId(0),
                 ability_index: 0,
+                activation: Box::new(crate::flow::decision::ManaUpfrontActivation::new(
+                    ManaCost::default(),
+                    &crate::state::card::ActivatedAbilityDefinition {
+                        effects: vec![crate::state::ability::Effect::add_mana(
+                            crate::state::mana::Mana::parse("G"),
+                        )],
+                        ..Default::default()
+                    },
+                )),
                 tap_remaining: 0,
                 resume: None,
             },

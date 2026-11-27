@@ -19,7 +19,7 @@ use crate::{
     },
     state::{
         ability::{Effect, PaymentCost},
-        card::{ActivatedAbilityDefinition, CardType, SacrificeCost, TapCost},
+        card::{CardType, SacrificeCost, TapCost},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost},
         payment::{How, PaymentReceipt, Toward},
@@ -359,6 +359,18 @@ impl Payment {
     /// component).
     pub fn owes(&self, source_cost: &CostComponent) -> bool {
         self.owed.contains(source_cost)
+    }
+
+    /// The source whose own {T} is owed by this payment. It can't also tap
+    /// for waterbend, convoke or improvise.
+    fn tapped_source(&self) -> Option<PermanentId> {
+        match self.operation {
+            Operation::Activation {
+                source: ActivationSource::Permanent(source),
+                ..
+            } if self.owes(&CostComponent::Source(How::Tapped)) => Some(source),
+            _ => None,
+        }
     }
 
     /// The mana still owed and the generic part of it that waterbend taps
@@ -1049,20 +1061,6 @@ impl Game {
         candidates
     }
 
-    /// The untapped permanents `player` controls that can pay `ability`'s
-    /// tap cost.
-    pub(crate) fn tap_cost_candidates(
-        &self,
-        player: PlayerId,
-        ability: &ActivatedAbilityDefinition,
-    ) -> Vec<PermanentId> {
-        ability
-            .tap_cost
-            .as_ref()
-            .map(|cost| self.tap_candidates(player, &cost.predicate))
-            .unwrap_or_default()
-    }
-
     pub(crate) fn pay_discard_cost(
         &mut self,
         player: PlayerId,
@@ -1587,33 +1585,15 @@ impl Game {
         }
     }
 
-    /// The permanent whose ability `payment` activates when that ability
-    /// also costs {T}: it can't tap for both.
-    pub(crate) fn payment_tapped_source(&self, operation: &Operation) -> Option<PermanentId> {
-        let Operation::Activation {
-            source: ActivationSource::Permanent(source),
-            ability_index,
-            ..
-        } = operation
-        else {
-            return None;
-        };
-        self.characteristics(*source)
-            .activated_abilities
-            .get(*ability_index)
-            .is_some_and(|ability| ability.tap_source)
-            .then_some(*source)
-    }
-
-    /// The untapped artifacts and creatures a tap may pay `operation` with
+    /// The untapped artifacts and creatures a player may pay `payment` with
     /// (waterbend, convoke or improvise), less a source it taps anyway.
     pub(crate) fn help_tap_candidates(
         &self,
         player: PlayerId,
-        operation: &Operation,
+        payment: &Payment,
     ) -> Vec<PermanentId> {
         let mut candidates = self.waterbend_candidates(player);
-        if let Some(source) = self.payment_tapped_source(operation) {
+        if let Some(source) = payment.tapped_source() {
             candidates.retain(|candidate| *candidate != source);
         }
         candidates
@@ -1639,16 +1619,13 @@ impl Game {
         payment: &Payment,
         tapped: PermanentId,
     ) -> Vec<TapPayment> {
-        if !self
-            .help_tap_candidates(player, &payment.operation)
-            .contains(&tapped)
-        {
+        if !self.help_tap_candidates(player, payment).contains(&tapped) {
             return Vec::new();
         }
         let (cost, _) = payment.mana();
         let permissions = payment
             .mana_permissions()
-            .with_reserved_tap(self.payment_tapped_source(&payment.operation));
+            .with_reserved_tap(payment.tapped_source());
         self.help_taps(player, cost, permissions, &[tapped])
             .pop()
             .map_or_else(Vec::new, |(_, options)| options)
@@ -1666,13 +1643,13 @@ impl Game {
         let _scan = self.board_scan();
         let permissions = payment
             .mana_permissions()
-            .with_reserved_tap(self.payment_tapped_source(&payment.operation));
+            .with_reserved_tap(payment.tapped_source());
         let mut actions: Vec<Action> = self
             .help_taps(
                 player,
                 cost,
                 permissions,
-                &self.help_tap_candidates(player, &payment.operation),
+                &self.help_tap_candidates(player, payment),
             )
             .into_iter()
             .map(|(permanent, _)| Action::WaterbendTap { player, permanent })

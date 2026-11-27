@@ -755,6 +755,23 @@ fn fixed_mana_output(effect: &Effect) -> Option<&Mana> {
     }
 }
 
+/// The concrete choices of one finalized leading mana effect.
+pub fn mana_output_choices(effect: &Effect) -> Option<Vec<Mana>> {
+    if let Some(mana) = fixed_mana_output(effect) {
+        return Some(vec![mana.clone()]);
+    }
+    match effect {
+        Effect::Modal { modes } => modes
+            .iter()
+            .map(|effects| match effects.as_slice() {
+                [effect] => fixed_mana_output(effect).cloned(),
+                _ => None,
+            })
+            .collect(),
+        _ => None,
+    }
+}
+
 /// Whether `effect` has concrete fixed mana outputs (`mana_choices` is `Some`).
 fn is_static_mana_output(effect: &Effect) -> bool {
     fixed_mana_output(effect).is_some()
@@ -885,19 +902,7 @@ impl ActivatedAbilityDefinition {
         if !suffix.iter().all(is_mana_suffix_effect) {
             return None;
         }
-        if let Some(mana) = fixed_mana_output(effect) {
-            return Some(vec![mana.clone()]);
-        }
-        match effect {
-            Effect::Modal { modes } => modes
-                .iter()
-                .map(|effects| match effects.as_slice() {
-                    [effect] => fixed_mana_output(effect).cloned(),
-                    _ => None,
-                })
-                .collect(),
-            _ => None,
-        }
+        mana_output_choices(effect)
     }
 
     /// Tapping this permanent is the entire cost and producing mana its only effect.
