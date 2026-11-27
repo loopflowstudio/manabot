@@ -1,0 +1,177 @@
+<header>
+  <h1>MTG-501 · Guard runtime program tokens against the policy vocabulary</h1>
+  <p>
+    PR <a href="https://github.com/loopflowstudio/manabot/pull/636">#636</a> ·
+    tracks <a href="https://github.com/loopflowstudio/manabot/issues/629">manabot#629</a> ·
+    branch <code>jack/mtg-501-fix-runtime-program-token-vocabulary-mismatch</code> at <code>68c414a1b6</code>
+  </p>
+</header>
+
+<section id="what-was-built">
+  <h2>1. What was built</h2>
+  <p>
+    Every runtime program token stream leaving <code>TokenWriter::into_rules_tokens</code> now panics in
+    debug builds if it emits a non-numeric token outside the vocabulary a default catalog policy
+    (<code>decision_memory=False</code>) admits. Previously, unregistered runtime structs or labels
+    passed unit tests silently and crashed live self-play admission (as <code>GrantClock</code> did in
+    <code>0.2.6</code> before commit <code>8904bf12a5</code> stopped emitting it).
+  </p>
+  <p>
+    Turning that guard on immediately surfaced and fixed <strong>six</strong> latent vocabulary leaks on
+    <code>main</code> without touching the <code>0.2.x</code> public API or adding a <code>0.2.6</code>
+    <code>GrantClock</code> shim:
+  </p>
+  <ul>
+    <li><code>"enters attached to"</code> projection label missing from <code>EXECUTION_TEXT</code> (<code>f35670541f</code>)</li>
+    <li><code>LoyaltyCost::MinusX</code>, <code>/Modification::AddTypes</code>, <code>/Modification::AddColors</code>, <code>/Modification::ModeChosen</code>, <code>DamageKind::Combat</code>, <code>DamageRecipientFilter::Any</code>, and <code>TriggerCondition::TappedForMana</code> (<code>f35670541f</code>, <code>5424678db4</code>)</li>
+    <li>Out-of-catalog chosen card names leaking from expanded naming fixtures across <code>SearchNamed</code>, <code>ZoneEntry.chosen</code>, <code>Effect::ExileNamed</code>, and <code>FactKind::ChosenName</code> (<code>5424678db4</code>)</li>
+    <li>Text <code>"all"</code> (<code>CreatureTypes::All</code>) emitted when a stacked object retains a departed changeling's last-known characteristics — caught by QA during a 200-game sweep (<code>b5083bb212</code>)</li>
+    <li><code>SpendingObject</code> / <code>SpendingContext::Activate</code> (and attached-grant <code>AbilityGrant</code>) leaking into decision-memory snapshots because <code>decision_memory::snapshot</code> copied <code>layers.rs</code>'s live <code>view.activated_abilities</code> verbatim — caught by CI (<code>68c414a1b6</code>)</li>
+  </ul>
+
+  <p><strong>Real guard output when an unregistered token leaks (from QA game 38 before <code>b5083bb212</code>):</strong></p>
+  <pre>runtime program tokens outside the policy vocabulary: (6, 0x43dc8b2f)
+  into_rules_tokens &larr; Projection::finish &larr; project_stack_object &larr; Game::stack_frame
+  &larr; continuation_frames &larr; Observation::for_player_with_events &larr; Env::step</pre>
+
+  <p><strong>Real Python admission output when an unknown token is injected into a live observation:</strong></p>
+  <pre>ValueError: policy received a program token outside the vocabulary; missing keys: (6, 0x7abc1234)</pre>
+
+  <p>
+    <strong>How to try it:</strong>
+    <code>cd managym &amp;&amp; cargo nextest run --profile ci -p managym -E 'test(runtime_token_guard) or test(runtime_only_programs_have_catalog_tokens) or test(activated_ability_snapshot)'</code>
+  </p>
+</section>
+
+<section id="how-it-works">
+  <h2>2. How it works</h2>
+
+  <h3>Single vocabulary rule and debug emission guard</h3>
+  <p>
+    <code>PROGRAM_VOCABULARY</code> computes the exact set a default catalog policy
+    (<code>decision_memory=False</code>) admits once per process, and <code>missing_program_tokens</code>
+    replaces four divergent Rust vocabulary checks. <code>TokenWriter::into_rules_tokens</code> calls it
+    in debug builds for every stream built against <code>default_content_pack()</code>.
+  </p>
+  <lf-diff path="managym/src/agent/record_vocabulary.rs" lines="160-189">
+    <lf-note line="172">Excludes the 44 <code>DecisionMemory::*</code> rows because default policies strip them from <code>record_token_keys</code>.</lf-note>
+    <lf-note line="185">Only <code>Integer</code> (4) and <code>Boolean</code> (5) bypass lookup; <code>Null</code> (8) and <code>DefinitionRef</code> (7) are checked strictly, matching <code>admission.py</code>.</lf-note>
+  </lf-diff>
+
+  <lf-diff path="managym/src/cards/tokens.rs" lines="343-360">
+    <lf-note line="346">Scoped to <code>default_content_pack()</code> by pointer identity so synthetic test packs do not false-fail, while <code>catalog_tokens()</code> exits through <code>span()</code> and never recurses.</lf-note>
+  </lf-diff>
+
+  <h3>Stripping derived runtime fields from decision-memory snapshots</h3>
+  <p>
+    <code>layers.rs</code> stamps activation pricing context (<code>SpendingContext::Activate</code> /
+    <code>SpendingObject</code>) and attached-grant provenance (<code>AbilityGrant { grantor: ObjectId, .. }</code>)
+    onto live battlefield views. Clearing both when building a <code>PrintedCharacteristics</code>
+    snapshot prevents unregistered tokens and storage IDs from entering <code>definition_tokens()</code>
+    and restores <code>definition_only()</code> deduplication for unmodified permanents with activated abilities.
+  </p>
+  <lf-diff path="managym/src/agent/decision_memory.rs" lines="400-417">
+    <lf-note line="411">Resets <code>mana_cost.purpose</code> to the printed default and drops <code>granted_by</code> provenance.</lf-note>
+  </lf-diff>
+
+  <h3>Uniform out-of-catalog chosen-name rule</h3>
+  <p>
+    When an expanded naming fixture lets a player name a card absent from the installed catalog, rules
+    state and human-readable text keep the exact spelling while policy programs encode <code>Null</code>
+    and the permanent encoder omits <code>FactKind::ChosenName</code>.
+  </p>
+  <lf-diff path="managym/src/cards/tokens.rs" lines="484-500">
+    <lf-note line="487"><code>EntryChoice::CardName</code> and <code>Effect::ExileNamed.name</code> route through <code>StringField::ChosenCardName</code>.</lf-note>
+  </lf-diff>
+  <lf-diff path="managym/src/agent/observation_encoder.rs" lines="1875-1892"></lf-diff>
+</section>
+
+<section id="apis-and-types">
+  <h2>3. Key data structures and APIs</h2>
+  <ul>
+    <li><strong>Public API (unchanged):</strong> <code>managym.catalog_tokens()</code> (printed card spans only) and <code>managym.record_vocabulary()</code> (runtime names and token pairs) keep their exact signatures and return schemas. Docstrings in <code>managym/__init__.pyi</code> and <code>docs/engine.md</code> now document how their union forms the admitted vocabulary.</li>
+    <li><strong><code>record_vocabulary::PROGRAM_VOCABULARY</code> &amp; <code>missing_program_tokens(&amp;[(u16, i32)]) -&gt; BTreeSet&lt;(u16, i32)&gt;</code>:</strong> single native source of truth shared by the <code>into_rules_tokens</code> debug guard, <code>runtime_only_programs_have_catalog_tokens</code>, <code>observability.rs</code> witnesses, and <code>token_renames.rs</code>.</li>
+    <li><strong><code>ContentPack::catalog_name(&amp;str) -&gt; Option&lt;&amp;str&gt;</code> &amp; <code>StringField::ChosenCardName</code>:</strong> gates chosen card names uniformly across <code>Decision::SearchNamed</code>, <code>ZoneEntry.chosen</code>, <code>Effect::ExileNamed</code>, and <code>FactKind::ChosenName</code>.</li>
+    <li><strong><code>fixtures</code>-gated unchecked serializer:</strong> <code>rules_tokens_unchecked</code> / <code>TokenWriter::into_rules_tokens_unchecked</code> exists only under the <code>fixtures</code> feature so <code>every_effect_variant_reaches_the_learning_tokens</code> can report every missing pair in one pass without disabling the guard on the other 46 <code>observability.rs</code> witness tests.</li>
+  </ul>
+</section>
+
+<section id="tradeoffs-and-invariants">
+  <h2>4. Trade-offs and invariants going forward</h2>
+  <ul>
+    <li><strong>No <code>0.2.6</code> <code>GrantClock</code> shim and no new <code>catalog_tokens()</code> key:</strong> followed your steer (<code data-no-check>ee8ad494</code>). Existing checkpoints stay unaffected (new registrations in <code>execution_names</code> append by name and bind cleanly; both pinned pilots stay bit-identical).</li>
+    <li><strong>Debug-only guard:</strong> runs under <code>#[cfg(debug_assertions)]</code> with zero release overhead and no effect on engine perf baselines or state digests. Release self-play still fails closed in Python <code>admission.py</code>.</li>
+    <li><strong><code>decision_memory=False</code> baseline in the guard:</strong> the guard intentionally excludes <code>DecisionMemory::*</code> tokens (refining the steer's literal <code>catalog_tokens &cup; record_names</code>) so no runtime emitter can rely on rows that default policies strip.</li>
+    <li><strong>Storage-ID projection invariant:</strong> runtime writers must never serialize storage IDs or derived solver caches (<code>GrantClock</code>, <code>PermanentId</code>, <code>ObjectId</code>, <code>SpendingObject</code>, <code>AbilityGrant</code>). Fix future guard failures by projecting or stripping at the writer rather than registering raw storage structs.</li>
+    <li><strong>Intentional behavior change:</strong> <code>decision_memory::snapshot</code> no longer serializes <code>SpendingContext::Activate</code> / <code>SpendingObject</code> (or <code>granted_by</code>) on battlefield permanents with activated abilities. That restores <code>definition_only()</code> deduplication and shifts recorded decision-memory snapshot digests in authored-match parity receipts (see Finding 2).</li>
+    <li><strong>Security note:</strong> this diff touches no auth, credentials, network, or untrusted-input boundaries.</li>
+  </ul>
+</section>
+
+<section id="findings">
+  <h2>5. Findings left outside this PR</h2>
+
+  <lf-component name="decision" id="f1" title="Untangle synthetic execution/* rows and phantom DecisionMemory::* tokens from record_vocabulary() (0.3.0)" recommendation="File Task">
+    <p>
+      <code>record_vocabulary()</code> carries ~360 synthetic <code>("token", "execution/&lt;kind&gt;/&lt;name&gt;", &hellip;)</code>
+      rows solely to shuttle runtime program tokens into <code>catalog.py</code>'s <code>record_token_keys</code>,
+      plus 44 <code>DecisionMemory::*</code> rows with phantom <code>Variant</code> tokens (now filtered by
+      <code>!name.starts_with("DecisionMemory::")</code> in four places). Splitting runtime program tokens out
+      directly — and deciding whether <code>catalog_tokens()</code> should be renamed alongside it — breaks
+      checkpoint/API compatibility, so it belongs together as one <code>0.3.0</code> Task.
+    </p>
+    <button data-lf='{"kind":"task.create","title":"Untangle synthetic execution/* rows and DecisionMemory::* tokens from record_vocabulary() for 0.3.0"}'>File 0.3.0 Task</button>
+  </lf-component>
+
+  <lf-component name="decision" id="f2" title="Refresh the stale checked authored-match parity receipt" recommendation="Fix here">
+    <p>
+      Stripping <code>SpendingObject</code> / <code>SpendingContext::Activate</code> from
+      <code>decision_memory::snapshot</code> in <code>68c414a1b6</code> intentionally changed the recorded
+      decision-memory snapshot digest, so <code>test_checked_authored_match_parity_receipt</code> in
+      <code>CI/Academy Integration (contracts)</code> now reports a stale checked receipt (all other 25 CI
+      checks are green). Regenerate and commit the receipt before landing (or let <code>deliver</code>'s
+      <code>land --wait-and-fix</code> refresh it).
+    </p>
+  </lf-component>
+
+  <lf-component name="decision" id="f3" title="Leave three unused EXECUTION_TEXT labels untouched" recommendation="Drop">
+    <p>
+      <code>"creature type choice"</code>, <code>"chosen creature type"</code>, and
+      <code>"normal combat damage"</code> remain in <code>EXECUTION_TEXT</code> with no live emitter.
+      Removing them on <code>0.2.x</code> would require six retirement entries in
+      <code>token_renames.rs</code> for no runtime benefit.
+    </p>
+  </lf-component>
+
+  <lf-component name="decision" id="f4" title="Update and close GitHub issue #629" recommendation="Fix here">
+    <p>
+      <a href="https://github.com/loopflowstudio/manabot/issues/629">manabot#629</a> is still open with
+      zero comments. Once PR #636 merges, comment that the <code>0.2.6</code> <code>GrantClock</code> crash
+      was fixed on <code>main</code> in <code>8904bf12a5</code> and hardened with PR #636 (shipping in
+      <code>0.2.7</code>), and close it.
+    </p>
+  </lf-component>
+</section>
+
+<section id="questions">
+  <h2>6. Questions</h2>
+
+  <div data-choice="q1" data-label="1. Authored-match parity receipt &amp; delivery">
+    <p><strong>1.</strong> How should we handle the stale authored-match parity receipt and delivery?</p>
+    <button data-value="1a">1a · Refresh the parity receipt here, push, and advance MTG-501 to deliver</button>
+    <button data-value="1b">1b · Advance directly to deliver and let land --wait-and-fix refresh it</button>
+    <button data-value="1c">1c · Hold at ship-review — I want to inspect or change something first</button>
+  </div>
+
+  <div data-choice="q2" data-label="2. 0.3.0 record_vocabulary() cleanup Task">
+    <p><strong>2.</strong> Should we file one follow-up Task for the <code>0.3.0</code> <code>record_vocabulary()</code> / <code>catalog_tokens()</code> cleanup?</p>
+    <button data-value="2a">2a · File one 0.3.0 Task covering both the synthetic execution/* rows and DecisionMemory::* phantom tokens</button>
+    <button data-value="2b">2b · Drop it — keep the 0.2.x layout as-is</button>
+  </div>
+
+  <div data-choice="q3" data-label="3. GitHub issue #629">
+    <p><strong>3.</strong> Should I post a reply on <a href="https://github.com/loopflowstudio/manabot/issues/629">manabot#629</a> once PR #636 merges?</p>
+    <button data-value="3a">3a · Yes — note 8904bf12a5 + PR #636 for 0.2.7 and close #629 after merge</button>
+    <button data-value="3b">3b · Leave #629 for me / the release agent</button>
+  </div>
+</section>
