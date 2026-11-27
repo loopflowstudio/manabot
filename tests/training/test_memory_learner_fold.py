@@ -3,7 +3,6 @@
 import gc
 import weakref
 
-import numpy as np
 import pytest
 import torch
 
@@ -13,8 +12,8 @@ from manabot.env.memory_store import (
     MemoryStore,
     PrefixIdentity,
     PrefixObservation,
-    gather_memory,
 )
+from tests.model.memory_fold_fixture import memory_fold_observation
 from tests.model.test_decision_memory import policy
 from tests.training.test_memory_chunk_cache import chunk_input
 
@@ -24,37 +23,8 @@ from tests.training.test_memory_chunk_cache import chunk_input
 def test_learner_fold_matches_stateless_policy_and_gradients(
     live: bool, summaries: int
 ) -> None:
-    space, raw = chunk_input()
-    # Reference two first appears in the second chunk. Later records mix it
-    # with reference one, exercising both local and predecessor-owned joins.
-    raw["decision_members"][0, : 32 * 4, 0] = 1
-    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
-    store = MemoryStore(capacities)
-    identity = PrefixIdentity("game", 0, "root")
-    prefixes = []
-    for length in (0, 31, 32, 33, 65):
-        selected = {key: value.copy() for key, value in raw.items()}
-        selected["decision_records"][:, length:] = 0
-        selected["decision_members"][:, length * 4 :] = 0
-        if length <= 32:
-            selected["decision_references"][:, 1:] = 0
-            selected["decision_reference_details"][:, 8:] = 0
-        if not length:
-            for key in MEMORY_FIELDS:
-                selected[key][:] = 0
-        prefixes.append(store.capture(selected, 0, identity))
-    # A coalesced tail and another root exercise branches, backwards reference
-    # joins and nodes whose exact predecessor differs despite matching row bytes.
-    changed = {key: value.copy() for key, value in raw.items()}
-    changed["decision_records"][0, 64, 3] = 2
-    changed["decision_records"][0, 64, 9] = 65
-    prefixes.append(store.capture(changed, 0, identity))
-    changed["decision_reference_details"][0, 0, 3] += 1
-    prefixes.append(store.capture(changed, 0, PrefixIdentity("fork", 1, "fork")))
-    prefixes = [prefixes[i] for i in (4, 0, 2, 5, 4, 1, 6, 3)]
-    dense = {key: np.repeat(value, len(prefixes), axis=0) for key, value in raw.items()}
-    dense.update(gather_memory(prefixes))
-    retained = PrefixObservation(dense, prefixes, capacities)
+    space, retained = memory_fold_observation()
+    batch_size = len(retained.prefixes)
     model = policy(space, "gru", summaries, live=live, bucketed=True)
     expected = model.prepare(retained.materialize())
     actual = model.prepare(retained)
@@ -72,7 +42,7 @@ def test_learner_fold_matches_stateless_policy_and_gradients(
             logits, values = model.forward_distribution(on_device(prepared, "cpu"))
             # Unequal row contributions detect accidental tail sorting, duplicate
             # suppression or averaging instead of summed shared gradients.
-            weights = torch.arange(1, len(prefixes) + 1)[:, None]
+            weights = torch.arange(1, batch_size + 1)[:, None]
             (logits.mul(weights).sum() + values.mul(weights).sum()).backward()
             outputs.append((logits.detach(), values.detach()))
             gradients.append(
@@ -99,8 +69,13 @@ def test_learner_fold_matches_stateless_policy_and_gradients(
                 if parameter.grad is not None:
                     parameter.add_(parameter.grad, alpha=-1e-5)
     # Prepared owns array routes, never native prefixes or a persistent graph.
-    nodes = [weakref.ref(node) for p in prefixes if p.tail for node in p.tail.chunks()]
-    del prefixes, retained
+    nodes = [
+        weakref.ref(node)
+        for p in retained.prefixes
+        if p.tail
+        for node in p.tail.chunks()
+    ]
+    del retained
     gc.collect()
     assert all(node() is None for node in nodes)
 
