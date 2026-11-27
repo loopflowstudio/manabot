@@ -1346,9 +1346,39 @@ impl Observation {
 
     /// Copies of each definition id among `objects`.
     fn definition_counts(definitions: impl IntoIterator<Item = u32>) -> BTreeMap<u32, u32> {
+        let mut stack = [0u32; 64];
+        let mut len = 0usize;
+        let mut spill: Vec<u32> = Vec::new();
+        for def in definitions {
+            if spill.is_empty() {
+                if len < stack.len() {
+                    stack[len] = def;
+                    len += 1;
+                } else {
+                    spill.reserve(128);
+                    spill.extend_from_slice(&stack);
+                    spill.push(def);
+                }
+            } else {
+                spill.push(def);
+            }
+        }
+        let slice: &mut [u32] = if spill.is_empty() {
+            &mut stack[..len]
+        } else {
+            &mut spill
+        };
+        slice.sort_unstable();
         let mut counts = BTreeMap::new();
-        for definition in definitions {
-            *counts.entry(definition).or_default() += 1;
+        let mut i = 0;
+        while i < slice.len() {
+            let def = slice[i];
+            let start = i;
+            i += 1;
+            while i < slice.len() && slice[i] == def {
+                i += 1;
+            }
+            counts.insert(def, (i - start) as u32);
         }
         counts
     }
@@ -1581,6 +1611,78 @@ impl Observation {
                     text_box: record.text_box.clone(),
                 });
             }
+        }
+
+        let other = PlayerId(1 - agent_player.0);
+        let fast_disjoint = game.pending_public_entries().is_empty()
+            && game.state.suspended_decision.is_none()
+            && !game.looks_at_library_top(agent_player)
+            && !(game.shares_information(agent_player, other) && game.looks_at_library_top(other));
+
+        if fast_disjoint {
+            // Fast path: Hand, Command (emblems), Graveyard, and Exile are
+            // mutually disjoint zones, so no `HashSet` deduplication is needed.
+            let mut agent_cap = game.state.zones.size(ZoneType::Hand, agent_player)
+                + game.state.zones.size(ZoneType::Graveyard, agent_player)
+                + game.state.zones.size(ZoneType::Exile, agent_player);
+            let mut opp_cap = game.state.zones.size(ZoneType::Graveyard, other)
+                + game.state.zones.size(ZoneType::Exile, other);
+            if game.shares_information(agent_player, other) {
+                opp_cap += game.state.zones.size(ZoneType::Hand, other);
+            }
+            agent_cap += game.emblems().count();
+            self.agent_cards.reserve(agent_cap);
+            self.opponent_cards.reserve(opp_cap);
+
+            for perspective in [agent_player, other] {
+                if !game.shares_information(agent_player, perspective) {
+                    continue;
+                }
+                for object_id in game
+                    .state
+                    .zones
+                    .zone_objects(ZoneType::Hand, perspective)
+                    .iter()
+                {
+                    self.push_card(
+                        Self::card_data(game, *object_id, ZoneType::Hand),
+                        game.state[*object_id].owner,
+                    );
+                }
+            }
+            for (_, object_id) in game.emblems() {
+                self.push_card(
+                    Self::card_data(game, object_id, ZoneType::Command),
+                    game.state[object_id].owner,
+                );
+            }
+            for player in [agent_player, other] {
+                for object_id in game
+                    .state
+                    .zones
+                    .zone_objects(ZoneType::Graveyard, player)
+                    .iter()
+                {
+                    self.push_card(
+                        Self::card_data(game, *object_id, ZoneType::Graveyard),
+                        game.state[*object_id].owner,
+                    );
+                }
+                for object_id in game
+                    .state
+                    .zones
+                    .zone_objects(ZoneType::Exile, player)
+                    .iter()
+                {
+                    if !game.hides_face_down_exile(*object_id, agent_player) {
+                        self.push_card(
+                            Self::card_data(game, *object_id, ZoneType::Exile),
+                            game.state[*object_id].owner,
+                        );
+                    }
+                }
+            }
+            return;
         }
 
         // Inspection paths can overlap (hand, library top and a pending
@@ -1834,12 +1936,15 @@ impl Observation {
             loyalty_activated_this_turn: permanent.loyalty_activated_this_turn,
             once_each_turn_used: (permanent.activated_this_turn.len()
                 + game.state.turn.used_trigger_grants.count(permanent.object)
-                + game
-                    .state
-                    .turn
-                    .ability_triggers_this_turn
-                    .range(printed_abilities.clone())
-                    .count()) as i32,
+                + if game.state.turn.ability_triggers_this_turn.is_empty() {
+                    0
+                } else {
+                    game.state
+                        .turn
+                        .ability_triggers_this_turn
+                        .range(printed_abilities.clone())
+                        .count()
+                }) as i32,
             granted_firebending: i32::from(characteristics.firebending),
             temp_subtypes: characteristics
                 .added_subtypes
@@ -1881,14 +1986,18 @@ impl Observation {
                     _ => None,
                 }
             }),
-            blocking: game.state.combat.as_ref().and_then(|combat| {
-                combat
-                    .attacker_to_blockers
-                    .iter()
-                    .find(|(_, blockers)| blockers.contains(&perm_id))
-                    .and_then(|(attacker, _)| game.state.permanents[*attacker].as_ref())
-                    .map(|attacker| attacker.id.0 as i32)
-            }),
+            blocking: (!permanent.attacking)
+                .then(|| game.state.combat.as_ref())
+                .flatten()
+                .filter(|combat| !combat.attacker_to_blockers.is_empty())
+                .and_then(|combat| {
+                    combat
+                        .attacker_to_blockers
+                        .iter()
+                        .find(|(_, blockers)| blockers.contains(&perm_id))
+                        .and_then(|(attacker, _)| game.state.permanents[*attacker].as_ref())
+                        .map(|attacker| attacker.id.0 as i32)
+                }),
             hexproof_from: characteristics
                 .static_abilities
                 .iter()
@@ -1914,14 +2023,19 @@ impl Observation {
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             attacked_this_turn: game.state.turn.attack_count(permanent.object) > 0,
             entered_this_turn: permanent.entered_this_turn(game.state.turn.turn_number),
-            combat_damage_to_players: game
-                .state
-                .turn
-                .damage_pairs
-                .combat_players(permanent.object)
-                .map(|p| p.0)
-                .collect(),
-            damaged_permanents: {
+            combat_damage_to_players: if game.state.turn.damage_pairs.is_empty() {
+                Vec::new()
+            } else {
+                game.state
+                    .turn
+                    .damage_pairs
+                    .combat_players(permanent.object)
+                    .map(|p| p.0)
+                    .collect()
+            },
+            damaged_permanents: if game.state.turn.damage_pairs.is_empty() {
+                Vec::new()
+            } else {
                 let mut targets: Vec<_> = game
                     .state
                     .turn
@@ -1934,13 +2048,16 @@ impl Observation {
                 targets.sort_unstable();
                 targets
             },
-            ability_resolutions: game
-                .state
-                .turn
-                .ability_resolutions_this_turn
-                .range(printed_abilities)
-                .map(|((_, _, index), count)| (*index, *count))
-                .collect(),
+            ability_resolutions: if game.state.turn.ability_resolutions_this_turn.is_empty() {
+                Vec::new()
+            } else {
+                game.state
+                    .turn
+                    .ability_resolutions_this_turn
+                    .range(printed_abilities)
+                    .map(|((_, _, index), count)| (*index, *count))
+                    .collect()
+            },
             used_abilities: characteristics
                 .activated_abilities
                 .iter()
@@ -1979,7 +2096,7 @@ impl Observation {
                         .unwrap_or(0),
                     card_types: CardTypeData::from_types(&characteristics.types),
                     keywords: KeywordData::from_keywords(&characteristics.keywords),
-                    ..Self::printed_characteristics_data(game, permanent.object)
+                    mana_cost: object.mana_cost.clone().unwrap_or_default(),
                 }
             },
         };

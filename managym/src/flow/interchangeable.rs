@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use crate::{
-    agent::action::{Action, ActionSpace},
+    agent::action::{Action, ActionSpace, ActionSpaceKind},
     flow::{
         cast_permission::{CastPermissions, PlayGrant, PlayRoute},
         combat::{AttackTarget, CombatState},
@@ -68,15 +68,24 @@ pub(crate) type ActionAliases = Option<Box<[(usize, ObjectId)]>>;
 struct ReferenceCensus<'a> {
     state: &'a GameState,
     watch: &'a [ObjectId],
+    has_perm_watch: bool,
     named_mask: u64,
     overflow: Vec<bool>,
 }
 
 impl<'a> ReferenceCensus<'a> {
     fn run(game: &'a Game, watch: &'a [ObjectId]) -> Self {
+        let has_perm_watch = watch
+            .iter()
+            .any(|&obj| game.state.zones.zone_of(obj) == Some(ZoneType::Battlefield));
+        Self::run_with_perm_flag(game, watch, has_perm_watch)
+    }
+
+    fn run_with_perm_flag(game: &'a Game, watch: &'a [ObjectId], has_perm_watch: bool) -> Self {
         let mut census = Self {
             state: &game.state,
             watch,
+            has_perm_watch,
             named_mask: 0,
             overflow: if watch.len() > 64 {
                 vec![false; watch.len() - 64]
@@ -136,6 +145,9 @@ impl<'a> ReferenceCensus<'a> {
 
     #[inline]
     fn mark_permanent(&mut self, id: PermanentId) {
+        if !self.has_perm_watch {
+            return;
+        }
         if let Some(permanent) = self.state.permanents.get(id.0).and_then(Option::as_ref) {
             self.mark_object(permanent.object);
         }
@@ -266,34 +278,40 @@ impl<'a> ReferenceCensus<'a> {
             resolution_owed: _,
         } = priority;
 
-        // Battlefield permanents: only `attached_to` names another object.
-        // A settled permanent's `spell_entry.payment` is vouched as history.
-        for permanent in permanents.iter().flatten() {
-            let Permanent {
-                chosen: _,
-                transforms: _,
-                manifested: _,
-                id: _,
-                object: _, // own slot record
-                controller: _,
-                control_differs_from_entry: _,
-                tapped: _,
-                summoning_sick: _,
-                damage: _,
-                deathtouch_damage: _,
-                dealt_damage_this_turn: _,
-                entry_turn: _,
-                counters: _,
-                keyword_counter_timestamps: _,
-                timestamp: _,
-                attacking: _,
-                spell_entry: _, // vouched as history for settled permanents
-                attached_to,
-                spent_abilities: _,
-                activated_this_turn: _,
-                loyalty_activated_this_turn: _,
-            } = permanent;
-            self.mark_opt_object(*attached_to);
+        // Battlefield permanents: only `attached_to` names another battlefield
+        // permanent. A settled permanent's `spell_entry.payment` is vouched as
+        // history.
+        if self.has_perm_watch {
+            for permanent in permanents.iter().flatten() {
+                let Permanent {
+                    chosen: _,
+                    transforms: _,
+                    manifested: _,
+                    id: _,
+                    object: _, // own slot record
+                    controller: _,
+                    control_differs_from_entry: _,
+                    tapped: _,
+                    summoning_sick: _,
+                    damage: _,
+                    deathtouch_damage: _,
+                    dealt_damage_this_turn: _,
+                    entry_turn: _,
+                    counters: _,
+                    keyword_counter_timestamps: _,
+                    timestamp: _,
+                    attacking: _,
+                    spell_entry: _, // vouched as history for settled permanents
+                    attached_to,
+                    spent_abilities: _,
+                    activated_this_turn: _,
+                    loyalty_activated_this_turn: _,
+                } = permanent;
+                self.mark_opt_object(*attached_to);
+            }
+            if self.all_named() {
+                return;
+            }
         }
 
         for player in players {
@@ -315,6 +333,9 @@ impl<'a> ReferenceCensus<'a> {
         }
 
         self.walk_turn_state(turn);
+        if self.all_named() {
+            return;
+        }
 
         for stack_object in stack_objects {
             self.walk_stack_object(stack_object);
@@ -326,8 +347,13 @@ impl<'a> ReferenceCensus<'a> {
             }
         }
 
-        if let Some(combat) = combat.as_deref() {
-            self.walk_combat_state(combat);
+        if self.has_perm_watch {
+            if let Some(combat) = combat.as_deref() {
+                self.walk_combat_state(combat);
+            }
+        }
+        if self.all_named() {
+            return;
         }
 
         for event in pending_events {
@@ -2627,45 +2653,56 @@ impl Game {
     /// Fast path: zero heap allocations when no two foldable actions share a
     /// cheap bucket key.
     pub(crate) fn fold_action_space(&self, mut space: ActionSpace) -> (ActionSpace, ActionAliases) {
-        if space.actions.len() < 2 {
+        if space.actions.len() < 2
+            || matches!(
+                space.kind,
+                ActionSpaceKind::DeclareAttacker
+                    | ActionSpaceKind::Scry
+                    | ActionSpaceKind::Modal
+                    | ActionSpaceKind::OrderTriggers
+                    | ActionSpaceKind::GameOver
+            )
+        {
             return (space, None);
         }
 
         let allow_select_card = self.select_card_decision_allows_fold();
 
-        // Stack-buffered candidate scan: avoids any heap allocation in the
-        // common case where no two foldable actions share a bucket key.
-        let mut inline: [Option<FoldCandidate>; 24] = [None; 24];
-        let mut inline_len = 0usize;
-        let mut spill: Vec<FoldCandidate> = Vec::new();
+        // Register-only fast path for 0, 1, or 2 foldable actions (the vast
+        // majority of priority prompts have `PassPriority` + 1–2 actions).
+        // Avoids zero-initializing an inline array or touching the heap.
+        let mut first: Option<FoldCandidate> = None;
+        let mut second: Option<FoldCandidate> = None;
+        let mut candidates: Vec<FoldCandidate> = Vec::new();
         let mut has_dup = false;
 
         for (index, action) in space.actions.iter().enumerate() {
             let Some((key, object)) = self.fold_candidate(action, allow_select_card) else {
                 continue;
             };
-            if spill.is_empty() {
-                if !has_dup
-                    && inline[..inline_len]
-                        .iter()
-                        .flatten()
-                        .any(|(k, _, _)| *k == key)
-                {
+            let cand = (key, index, object);
+            if !candidates.is_empty() {
+                if !has_dup && candidates.iter().any(|(k, _, _)| *k == key) {
                     has_dup = true;
                 }
-                if inline_len < inline.len() {
-                    inline[inline_len] = Some((key, index, object));
-                    inline_len += 1;
+                candidates.push(cand);
+            } else if let Some(c0) = first {
+                if let Some(c1) = second {
+                    candidates.reserve(space.actions.len());
+                    candidates.push(c0);
+                    candidates.push(c1);
+                    if !has_dup && (c0.0 == key || c1.0 == key) {
+                        has_dup = true;
+                    }
+                    candidates.push(cand);
                 } else {
-                    spill.reserve(space.actions.len());
-                    spill.extend(inline[..inline_len].iter().flatten().copied());
-                    spill.push((key, index, object));
+                    if c0.0 == key {
+                        has_dup = true;
+                    }
+                    second = Some(cand);
                 }
             } else {
-                if !has_dup && spill.iter().any(|(k, _, _)| *k == key) {
-                    has_dup = true;
-                }
-                spill.push((key, index, object));
+                first = Some(cand);
             }
         }
 
@@ -2673,11 +2710,14 @@ impl Game {
             return (space, None);
         }
 
-        let candidates: Vec<FoldCandidate> = if spill.is_empty() {
-            inline[..inline_len].iter().flatten().copied().collect()
-        } else {
-            spill
-        };
+        if candidates.is_empty() {
+            if let Some(c0) = first {
+                candidates.push(c0);
+            }
+            if let Some(c1) = second {
+                candidates.push(c1);
+            }
+        }
 
         // Group duplicate-key candidates that also pass cheap object/permanent
         // equivalence before running `ReferenceCensus::run` or acquiring
@@ -2718,7 +2758,7 @@ impl Game {
             return (space, None);
         }
 
-        let census = ReferenceCensus::run(self, &watch);
+        let census = ReferenceCensus::run_with_perm_flag(self, &watch, has_perm_dup);
         if census.all_named() {
             return (space, None);
         }
@@ -2773,21 +2813,24 @@ impl Game {
             return (space, None);
         }
 
-        // Compact surviving actions in emission order and remap alias indices
-        // to surviving action indices.
+        // Compact surviving actions in place in emission order and remap alias
+        // indices to surviving action indices.
         let orig_len = space.actions.len();
         let mut new_index = vec![0usize; orig_len];
-        let mut kept = Vec::with_capacity(orig_len);
         let mut aliases: Vec<(usize, ObjectId)> = Vec::new();
-        for (orig_idx, action) in space.actions.into_iter().enumerate() {
+        let mut write = 0usize;
+        for orig_idx in 0..orig_len {
             if let Some((rep_orig_idx, object)) = folded_into[orig_idx] {
                 aliases.push((new_index[rep_orig_idx], object));
             } else {
-                new_index[orig_idx] = kept.len();
-                kept.push(action);
+                new_index[orig_idx] = write;
+                if write != orig_idx {
+                    space.actions.swap(write, orig_idx);
+                }
+                write += 1;
             }
         }
-        space.actions = kept;
+        space.actions.truncate(write);
         (space, Some(aliases.into_boxed_slice()))
     }
 
