@@ -95,8 +95,10 @@ class LearnerDecisionSchedule(Strict):
 class DampedPolicyLearning(Strict):
     """Unnormalized clipped policy update with reverse-KL regularization.
 
-    Iteration schedules, one epoch and no advantage normalization belong to
+    Iteration schedules, default one epoch and no advantage normalization belong to
     this method, rather than inheriting the PPO control's elapsed-time recipe.
+    Setting `epochs > 1` repeats passes over the admitted rollout under the same
+    collection-policy KL and clipping guards.
     """
 
     gradient: Literal["damped_policy"]
@@ -122,6 +124,7 @@ class DampedPolicyLearning(Strict):
     tau_scale: float = Field(default=0.05, ge=0)
     tau_power: float = Field(default=0.3, ge=0)
     max_grad_norm: float = Field(default=0.267, gt=0)
+    epochs: int = Field(default=1, ge=1, exclude_if=lambda value: value == 1)
     ema: float | None = Field(default=0.999, ge=0, lt=1)
     iteration_schedule: IterationSchedule | None = Field(
         default=None, exclude_if=lambda value: value is None

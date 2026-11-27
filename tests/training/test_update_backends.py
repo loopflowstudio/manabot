@@ -447,3 +447,51 @@ def test_actor_filtered_floor_is_the_reported_penalty(
     assert floor["policy_loss"] - control["policy_loss"] == pytest.approx(
         0.002 * floor["reference_forward_kl"], rel=1e-5
     )
+
+
+@pytest.mark.parametrize("name", sorted(BACKENDS))
+def test_damped_update_multi_epoch_scales_steps_and_agrees_across_backends(
+    name: str,
+    captured: tuple[PolicyCheckpoint, RolloutBatch],
+) -> None:
+    weights, batch = captured
+    reference, backend = resolve("torch"), installed_backend(name)
+    single_rule = LEARNING
+    assert "epochs" not in single_rule.model_dump()
+    multi_rule = LEARNING.model_copy(update={"epochs": 2})
+    assert multi_rule.model_dump()["epochs"] == 2
+    with pytest.raises(ValueError):
+        DampedPolicyLearning(gradient="damped_policy", epochs=0)
+
+    size = batch.actions.size
+    _, ref_one_learner = reference.load(weights, minibatch_rows=size)
+    one = update_damped_iteration(reference, ref_one_learner, batch, single_rule, 1)
+
+    _, ref_two_learner = reference.load(weights, minibatch_rows=size)
+    expected = update_damped_iteration(reference, ref_two_learner, batch, multi_rule, 1)
+
+    _, actual_learner = backend.load(weights, minibatch_rows=size)
+    actual = update_damped_iteration(backend, actual_learner, batch, multi_rule, 1)
+
+    assert expected["retained"] == one["retained"] > 0
+    assert (
+        expected["numerical"]["optimizer_steps"]
+        == 2 * one["numerical"]["optimizer_steps"]
+    )
+    assert expected["optimizer_exposures"] == 2 * one["optimizer_exposures"]
+    assert expected["actor_exposures"] == 2 * one["actor_exposures"]
+    assert expected["critic_exposures"] == 2 * one["critic_exposures"]
+    for key in _COUNTS:
+        assert actual[key] == expected[key], key
+    assert (
+        actual["numerical"]["optimizer_steps"]
+        == expected["numerical"]["optimizer_steps"]
+    )
+    assert actual["loss"] == pytest.approx(expected["loss"], rel=1e-2)
+
+    empty_rule = multi_rule.model_copy(update={"min_advantage": 1e6})
+    _, empty_learner = backend.load(weights, minibatch_rows=2)
+    empty = update_damped_iteration(backend, empty_learner, batch, empty_rule, 1)
+    assert empty["skipped"] == "empty advantage filter"
+    assert empty["optimizer_exposures"] == 0
+    assert empty["numerical"]["skipped_steps"] == 2 * ((size + 1) // 2)

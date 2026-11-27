@@ -93,7 +93,7 @@ def update_damped_iteration(
     learner_transitions: int | None = None,
     targets: BatchTargets | None = None,
 ) -> UpdateDiagnostics:
-    """One fresh epoch grouped by native stream count, with frozen targets.
+    """`learning.epochs` passes (default 1) grouped by native stream count, with frozen targets.
 
     `backend` is the module whose arrays `learner` holds. EMA belongs to the calling stage and advances
     once even on an empty filter. No batch shuffling, advantage normalization,
@@ -203,7 +203,9 @@ def update_damped_iteration(
         diagnostics["skipped"] = targets.empty_filter_reason
         if diagnostics["skipped"] == "empty advantage filter":
             learner.set_learning_rate(rate)
-        health["skipped_steps"] = (len(actor_rows) + width - 1) // width
+        health["skipped_steps"] = learning.epochs * (
+            (len(actor_rows) + width - 1) // width
+        )
         return diagnostics
     # Rows each minibatch trains: the actor's under actor_critic scope, else all.
     learner.set_learning_rate(rate)
@@ -213,165 +215,173 @@ def update_damped_iteration(
     )
     with track("Minibatches"):
         admitted.admit_rows(training_rows, min(width, learner.execution_rows or width))
-        for start in range(0, len(actor_rows), width):
-            window = trained[start : start + width]
-            if not window.any():
-                health["skipped_steps"] += 1
-                continue
-            logical_rows = np.arange(start, start + len(window))[window]
-            execution_rows = learner.execution_rows or len(logical_rows)
-            split = len(logical_rows) > execution_rows
-            actor_count = int(actor_rows[logical_rows].sum())
-            weights = logical_weights(
-                normalized, logical_rows, actor_count, backend.arrays, device
-            )
-            totals = dict(
-                loss=0.0,
-                policy_loss=0.0,
-                value_loss=0.0,
-                entropy=0.0,
-                collection_kl=0.0,
-                reference_kl=0.0,
-                reference_forward_kl=0.0,
-                clip_fraction=0.0,
-            )
-            for offset in range(0, len(logical_rows), execution_rows):
-                rows_host = logical_rows[offset : offset + execution_rows]
-                with track("Forward and loss"):
-                    coefficients = (
-                        None
-                        if weights is None
-                        else weights[offset : offset + execution_rows]
-                    )
-                    indexes = to_device(rows_host, device)
-                    minibatch_actions = actions[indexes]
-                    obs, rows = admitted.rows(rows_host, device)
-                    valid = rl.legal_mask(admitted.legal(obs))
-                    behavior_logs = to_device(rows.log_probabilities, device)
-                    reference = to_device(
-                        reference_distribution(rows.observation, learning.reference),
-                        device,
-                    )
-                    actor_selected = actor_rows[rows_host]
-                    actor_mask = targets.selected.reshape(-1)[indexes]
-                    # Actor and critic have different denominators under actor-only filtering.
-                    policy_weight = int(actor_selected.sum()) / max(1, actor_count)
-                    value_weight = len(rows_host) / len(logical_rows)
+        for _ in range(learning.epochs):
+            for start in range(0, len(actor_rows), width):
+                window = trained[start : start + width]
+                if not window.any():
+                    health["skipped_steps"] += 1
+                    continue
+                logical_rows = np.arange(start, start + len(window))[window]
+                execution_rows = learner.execution_rows or len(logical_rows)
+                split = len(logical_rows) > execution_rows
+                actor_count = int(actor_rows[logical_rows].sum())
+                weights = logical_weights(
+                    normalized, logical_rows, actor_count, backend.arrays, device
+                )
+                totals = dict(
+                    loss=0.0,
+                    policy_loss=0.0,
+                    value_loss=0.0,
+                    entropy=0.0,
+                    collection_kl=0.0,
+                    reference_kl=0.0,
+                    reference_forward_kl=0.0,
+                    clip_fraction=0.0,
+                )
+                for offset in range(0, len(logical_rows), execution_rows):
+                    rows_host = logical_rows[offset : offset + execution_rows]
+                    with track("Forward and loss"):
+                        coefficients = (
+                            None
+                            if weights is None
+                            else weights[offset : offset + execution_rows]
+                        )
+                        indexes = to_device(rows_host, device)
+                        minibatch_actions = actions[indexes]
+                        obs, rows = admitted.rows(rows_host, device)
+                        valid = rl.legal_mask(admitted.legal(obs))
+                        behavior_logs = to_device(rows.log_probabilities, device)
+                        reference = to_device(
+                            reference_distribution(
+                                rows.observation, learning.reference
+                            ),
+                            device,
+                        )
+                        actor_selected = actor_rows[rows_host]
+                        actor_mask = targets.selected.reshape(-1)[indexes]
+                        # Actor and critic have different denominators under actor-only filtering.
+                        policy_weight = int(actor_selected.sum()) / max(1, actor_count)
+                        value_weight = len(rows_host) / len(logical_rows)
 
-                    def _objective(obs: Observations = obs) -> tuple[Array, ...]:
-                        with learner.forward_precision():
-                            logits, value_logits = learner.agent.forward_distribution(
-                                obs
+                        def _objective(obs: Observations = obs) -> tuple[Array, ...]:
+                            with learner.forward_precision():
+                                logits, value_logits = (
+                                    learner.agent.forward_distribution(obs)
+                                )
+                            logits, value_logits = (
+                                float32(logits),
+                                float32(value_logits),
                             )
-                        logits, value_logits = float32(logits), float32(value_logits)
-                        return (
-                            *minibatch_objective(
-                                rl,
+                            return (
+                                *minibatch_objective(
+                                    rl,
+                                    logits,
+                                    value_logits,
+                                    valid,
+                                    actions=minibatch_actions,
+                                    advantages=advantages[indexes],
+                                    value_targets=value_targets[indexes],
+                                    behavior_logs=behavior_logs,
+                                    reference=reference,
+                                    actor_mask=actor_mask,
+                                    categorical=categorical,
+                                    clip=learning.clip,
+                                    collection_kl=learning.collection_kl,
+                                    tau=tau,
+                                    reference_forward_kl=learning.reference_forward_kl,
+                                    policy_weight=policy_weight,
+                                    value_weight=value_weight,
+                                    weights=coefficients,
+                                ),
                                 logits,
                                 value_logits,
-                                valid,
+                            )
+
+                        loss, policy_loss, value_loss, logits, value_logits = (
+                            learner.loss(_objective)
+                        )
+
+                        def _failure(
+                            logits: Array = logits,
+                            value_logits: Array = value_logits,
+                            obs: Observations = obs,
+                        ) -> dict[str, Any]:
+                            return minibatch_tensors(
+                                logits=rl.constant(logits),
+                                value_logits=rl.constant(value_logits),
+                                valid=valid,
                                 actions=minibatch_actions,
-                                advantages=advantages[indexes],
-                                value_targets=value_targets[indexes],
                                 behavior_logs=behavior_logs,
                                 reference=reference,
-                                actor_mask=actor_mask,
-                                categorical=categorical,
-                                clip=learning.clip,
-                                collection_kl=learning.collection_kl,
-                                tau=tau,
-                                reference_forward_kl=learning.reference_forward_kl,
-                                policy_weight=policy_weight,
-                                value_weight=value_weight,
-                                weights=coefficients,
-                            ),
-                            logits,
-                            value_logits,
-                        )
+                                advantages=advantages[indexes],
+                                value_targets=value_targets[indexes],
+                                actor_selected=actor_mask,
+                                indexes=indexes,
+                                obs=admitted.evidence(obs),
+                            )
 
-                    loss, policy_loss, value_loss, logits, value_logits = learner.loss(
-                        _objective
-                    )
-
-                    def _failure(
-                        logits: Array = logits,
-                        value_logits: Array = value_logits,
-                        obs: Observations = obs,
-                    ) -> dict[str, Any]:
-                        return minibatch_tensors(
-                            logits=rl.constant(logits),
-                            value_logits=rl.constant(value_logits),
-                            valid=valid,
-                            actions=minibatch_actions,
-                            behavior_logs=behavior_logs,
-                            reference=reference,
-                            advantages=advantages[indexes],
-                            value_targets=value_targets[indexes],
-                            actor_selected=actor_mask,
-                            indexes=indexes,
-                            obs=admitted.evidence(obs),
+                    with failure_tensors(_failure, rl.NumericalError):
+                        observer.check(loss)
+                        if split:
+                            learner.accumulate(loss, first=offset == 0)
+                        # Clip and Adam stay at the logical boundary, after all contributions.
+                        if offset + execution_rows >= len(logical_rows):
+                            norm = learner.step(
+                                loss,
+                                learning.max_grad_norm,
+                                recorder=observer,
+                                accumulated=split,
+                            )
+                    with track("Minibatch diagnostics"), backend.learner.no_grad():
+                        logs = rl.policy_logs(logits, valid)
+                        totals["entropy"] += (
+                            float(rl.entropy(logs, valid).mean()) * value_weight
                         )
-
-                with failure_tensors(_failure, rl.NumericalError):
-                    observer.check(loss)
-                    if split:
-                        learner.accumulate(loss, first=offset == 0)
-                    # Clip and Adam stay at the logical boundary, after all contributions.
-                    if offset + execution_rows >= len(logical_rows):
-                        norm = learner.step(
-                            loss,
-                            learning.max_grad_norm,
-                            recorder=observer,
-                            accumulated=split,
-                        )
-                with track("Minibatch diagnostics"), backend.learner.no_grad():
-                    logs = rl.policy_logs(logits, valid)
-                    totals["entropy"] += (
-                        float(rl.entropy(logs, valid).mean()) * value_weight
-                    )
-                    magnet_logs = rl.reference_logs(reference, valid)
-                    for name, target_logs in (
-                        ("collection_kl", behavior_logs),
-                        ("reference_kl", magnet_logs),
-                    ):
-                        divergence = rl.reverse_kl(logs, target_logs, valid)
-                        totals[name] += float(divergence.mean()) * value_weight
-                    totals["reference_forward_kl"] += float(
-                        actor_term(
-                            rl,
-                            rl.forward_kl(logs, magnet_logs, valid),
-                            actor_mask,
-                            policy_weight,
-                            coefficients,
-                        )
-                    )
-                    totals["clip_fraction"] += (
-                        float(
-                            rl.clip_fraction(
-                                rl.action_logs(logs - behavior_logs, minibatch_actions),
-                                learning.clip,
+                        magnet_logs = rl.reference_logs(reference, valid)
+                        for name, target_logs in (
+                            ("collection_kl", behavior_logs),
+                            ("reference_kl", magnet_logs),
+                        ):
+                            divergence = rl.reverse_kl(logs, target_logs, valid)
+                            totals[name] += float(divergence.mean()) * value_weight
+                        totals["reference_forward_kl"] += float(
+                            actor_term(
+                                rl,
+                                rl.forward_kl(logs, magnet_logs, valid),
+                                actor_mask,
+                                policy_weight,
+                                coefficients,
                             )
                         )
-                        * value_weight
+                        totals["clip_fraction"] += (
+                            float(
+                                rl.clip_fraction(
+                                    rl.action_logs(
+                                        logs - behavior_logs, minibatch_actions
+                                    ),
+                                    learning.clip,
+                                )
+                            )
+                            * value_weight
+                        )
+                        totals["loss"] += float(rl.constant(loss))
+                        totals["value_loss"] += float(rl.constant(value_loss))
+                        totals["policy_loss"] += float(rl.constant(policy_loss))
+                    del (
+                        obs,
+                        rows,
+                        logits,
+                        value_logits,
+                        loss,
+                        policy_loss,
+                        value_loss,
+                        logs,
+                        _objective,
+                        _failure,
                     )
-                    totals["loss"] += float(rl.constant(loss))
-                    totals["value_loss"] += float(rl.constant(value_loss))
-                    totals["policy_loss"] += float(rl.constant(policy_loss))
-                del (
-                    obs,
-                    rows,
-                    logits,
-                    value_logits,
-                    loss,
-                    policy_loss,
-                    value_loss,
-                    logs,
-                    _objective,
-                    _failure,
-                )
-            health["clip_fraction"] = totals.pop("clip_fraction")
-            diagnostics.update(totals, gradient_norm=float(norm))
-            diagnostics["optimizer_exposures"] += len(logical_rows)
-            diagnostics["actor_exposures"] += actor_count
-            diagnostics["critic_exposures"] += len(logical_rows)
+                health["clip_fraction"] = totals.pop("clip_fraction")
+                diagnostics.update(totals, gradient_norm=float(norm))
+                diagnostics["optimizer_exposures"] += len(logical_rows)
+                diagnostics["actor_exposures"] += actor_count
+                diagnostics["critic_exposures"] += len(logical_rows)
     return diagnostics
