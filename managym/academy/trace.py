@@ -230,14 +230,16 @@ class TraceEvent:
     # The person committed this decision while seeing the bot's hand
     # (`GameConfig.open_hands`). Stored only when true; absent reads as false.
     open_hands: bool = False
-    # How an imported record re-dealt the position before this step
-    # (`BRANCHING_INTERVENTIONS` kinds, in order); never its seeds or viewers.
+    # Branch operations before this step, in order. Only their kinds are public.
     branched: list[str] | None = None
 
 
-# Record interventions that branch the recorded position from the game it came
-# from: hidden cards re-dealt, libraries reshuffled, randomness reseeded.
-BRANCHING_INTERVENTIONS = ("determinize", "shuffle_libraries", "reseed")
+BRANCHING_INTERVENTIONS = (
+    "determinize",
+    "shuffle_libraries",
+    "reseed",
+    "game_state_edits",
+)
 
 
 def academy_actions(obs: managym.Observation, human_seat: int) -> list[dict[str, Any]]:

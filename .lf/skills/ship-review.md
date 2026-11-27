@@ -10,9 +10,8 @@ regresses, inspect the CI artifact's per-seed/per-sim breakdown and the diff's
 hot paths before asking what to do—separate trajectory shifts from per-step
 overhead instead of punting investigation to `deliver`/`gate`.
 
-**Ask in concrete behavior, not code symbols.** Write each numbered question (in
-chat and on the page) as what the player or user sees under each option, and
-give each distinct choice its own number so a bare reply like `4b` needs no
-follow-up. Say what an engine term ("incarnation", "alias") is where it first
-appears, and state what answering decides. Offer a deferred finding as "fix here" against "leave", and
-file no follow-up Task until that is answered.
+**Ask what the player sees under each option.** When a rules choice affects
+linked cards, use a named card example and say where each card ends up. Explain
+engine terms on first use. Number each choice the same way in chat and on the
+page so a reply like `4b` settles it. Offer “fix here” or “leave” for deferred
+findings and wait for the answer before filing a follow-up Task.
