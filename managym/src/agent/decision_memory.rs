@@ -8,6 +8,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind},
+    cards::tokens::name_value,
     flow::game::Game,
     state::{
         game_object::{ObjectId, PlayerId},
@@ -513,8 +514,8 @@ pub const RECORD_DIM: usize = super::observation_layout::decision_record::WIDTH;
 pub const DETAIL_DIM: usize = super::observation_layout::decision_reference_detail::WIDTH;
 pub const REFERENCE_DIM: usize = super::observation_layout::decision_reference::WIDTH;
 pub const MEMBER_DIM: usize = super::observation_layout::decision_member::WIDTH;
-/// Names introduced by this projection, registered in the shared catalog.
-pub const RECORD_NAMES: &[&str] = &[
+/// Names introduced by this projection, in the shared token namespace.
+const RECORD_NAMES: &[&str] = &[
     "Priority",
     "DeclareAttacker",
     "DeclareBlocker",
@@ -560,6 +561,24 @@ pub const RECORD_NAMES: &[&str] = &[
     "Foretell",
     "TurnFaceUp",
 ];
+
+fn record_name(name: &str) -> String {
+    format!("DecisionMemory::{name}")
+}
+
+/// Hashed decision-memory names in name order.
+pub fn decision_memory_names() -> Vec<(String, i32)> {
+    let mut names: Vec<_> = RECORD_NAMES
+        .iter()
+        .map(|name| {
+            let name = record_name(name);
+            let value = name_value(&name);
+            (name, value)
+        })
+        .collect();
+    names.sort_unstable();
+    names
+}
 
 use super::{
     observation_encoder::ObservationEncodeError,
@@ -716,7 +735,6 @@ fn write_from(
     indexes: &mut std::collections::HashMap<usize, usize>,
     out: &mut impl RowWriter,
 ) -> Result<(), ObservationEncodeError> {
-    use crate::cards::tokens::name_value;
     let [record_start, mut detail_slot, reference_start, mut member_slot] = starts;
     for (offset, reference) in log.snapshots_since(reference_start).enumerate() {
         let index = reference_start + offset;
@@ -789,7 +807,7 @@ fn write_from(
         }
         header[10] = Integer(record.context.phase as i64);
         header[11] = Integer(record.context.step as i64);
-        header[12] = Word(name_value(&format!("DecisionMemory::{}", record.kind)));
+        header[12] = Word(name_value(&record_name(&record.kind)));
         header[14] = Integer(member_slot as i64);
         for (group, references) in [
             &record.context.mana_sources,
@@ -836,7 +854,7 @@ fn write_from(
                 .choice
                 .kind
                 .as_ref()
-                .map(|kind| name_value(&format!("DecisionMemory::{kind}")) as u32),
+                .map(|kind| name_value(&record_name(kind)) as u32),
             record.choice.mode,
             record.choice.ability,
             record.choice.name_row.map(|n| n + 1),
@@ -1753,7 +1771,9 @@ mod tests {
             .all(|ability| matches!(ability.mana_cost.purpose, SpendingContext::Activate { .. })));
 
         let unmodified = snapshot(&game, land, PlayerId(0), true);
-        assert!(crate::agent::record_vocabulary::missing_program_tokens(&unmodified.program).is_empty());
+        assert!(
+            crate::agent::record_vocabulary::missing_program_tokens(&unmodified.program).is_empty()
+        );
         assert!(!unmodified.description.contains("SpendingObject"));
 
         let affected_land = game.affected_permanent(land_perm).unwrap();
@@ -1773,7 +1793,9 @@ mod tests {
             .any(|ability| ability.granted_by.is_some()));
 
         let reference = snapshot(&game, land, PlayerId(0), true);
-        assert!(crate::agent::record_vocabulary::missing_program_tokens(&reference.program).is_empty());
+        assert!(
+            crate::agent::record_vocabulary::missing_program_tokens(&reference.program).is_empty()
+        );
         assert!(!reference.description.contains("SpendingObject"));
         assert!(!reference.description.contains("AbilityGrant"));
     }

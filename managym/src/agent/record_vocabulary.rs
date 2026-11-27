@@ -14,7 +14,7 @@
 //! things in different columns: `token` (rules vocabulary), `name` (a set card
 //! name) and `restriction` (a combat restriction's predicate description).
 //!
-//! Entry point: [`record_names`].
+//! Entry points: [`record_names`] and [`runtime_tokens`].
 
 use std::{
     collections::{BTreeSet, HashSet},
@@ -71,44 +71,75 @@ pub struct RecordName {
     pub token: Option<(u16, i32)>,
 }
 
-fn record(namespace: RecordNamespace, name: &str, token: Option<(TokenKind, &str)>) -> RecordName {
-    RecordName {
-        namespace,
-        name: name.to_string(),
-        value: name_value(name),
-        token: token.map(|(kind, token)| (kind as u16, name_value(token))),
+/// A named program token emitted by a runtime projection.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeToken {
+    pub kind: TokenKind,
+    pub name: String,
+    pub value: i32,
+}
+
+#[derive(Default)]
+struct Vocabulary {
+    records: Vec<RecordName>,
+    runtime: Vec<RuntimeToken>,
+    content_texts: BTreeSet<String>,
+}
+
+impl Vocabulary {
+    fn record(&mut self, namespace: RecordNamespace, name: &str, token: Option<(TokenKind, &str)>) {
+        self.records.push(RecordName {
+            namespace,
+            name: name.to_owned(),
+            value: name_value(name),
+            token: token.map(|(kind, name)| (kind as u16, name_value(name))),
+        });
+        if let Some((kind, name)) = token {
+            self.runtime.push(runtime_token(kind, name));
+        }
+    }
+
+    fn variant(&mut self, name: &str) {
+        self.record(
+            RecordNamespace::Token,
+            name,
+            Some((TokenKind::Variant, name)),
+        );
     }
 }
 
-/// A name card text serializes as the same enum variant.
-fn variant(name: &str) -> RecordName {
-    record(
-        RecordNamespace::Token,
-        name,
-        Some((TokenKind::Variant, name)),
-    )
+fn runtime_token(kind: TokenKind, name: &str) -> RuntimeToken {
+    RuntimeToken {
+        kind,
+        name: name.to_owned(),
+        value: name_value(name),
+    }
 }
 
-/// Every name the encoders can hash, sorted and without duplicates.
+/// Hashed names in fact and shared-effect rows, sorted by namespace and name.
 pub fn record_names() -> Vec<RecordName> {
+    VOCABULARY.records.clone()
+}
+
+/// Runtime program symbols, including record aliases, sorted by kind and name.
+pub fn runtime_tokens() -> Vec<RuntimeToken> {
+    VOCABULARY.runtime.clone()
+}
+
+pub(crate) fn content_token_texts() -> &'static BTreeSet<String> {
+    &VOCABULARY.content_texts
+}
+
+static VOCABULARY: LazyLock<Vocabulary> = LazyLock::new(|| {
     use RecordNamespace::{Name, Restriction, Token};
-    let mut out = Vec::new();
-    out.extend(
-        crate::agent::decision_memory::RECORD_NAMES
-            .iter()
-            .map(|name| variant(&format!("DecisionMemory::{name}"))),
-    );
+    let mut out = Vocabulary::default();
     for keyword in Keyword::ALL {
         // Effects name a keyword bare; card text serializes the enum variant.
         let printed = format!("Keyword::{}", keyword.name());
-        out.push(record(
-            Token,
-            keyword.name(),
-            Some((TokenKind::Variant, &printed)),
-        ));
+        out.record(Token, keyword.name(), Some((TokenKind::Variant, &printed)));
     }
     for kind in CounterKind::ALL {
-        out.push(variant(&format!("CounterKind::{}", kind.name())));
+        out.variant(&format!("CounterKind::{}", kind.name()));
     }
     for color in [
         Color::White,
@@ -119,47 +150,63 @@ pub fn record_names() -> Vec<RecordName> {
         Color::Colorless,
         Color::Generic,
     ] {
-        out.push(variant(&format!("Color::{color:?}")));
+        out.variant(&format!("Color::{color:?}"));
     }
     for name in MODIFICATION_NAMES {
-        out.push(variant(&format!("Modification::{name}")));
+        out.variant(&format!("Modification::{name}"));
     }
     for subtype in subtypes() {
-        out.push(record(Token, subtype, Some((TokenKind::Text, subtype))));
+        out.record(Token, subtype, Some((TokenKind::Text, subtype)));
     }
-    out.push(record(Token, "CopyEffect", None));
-    out.push(record(Token, POOLED_MANA, None));
-    out.push(variant("StaticAbility::HexproofFrom"));
-    out.push(variant("StaticAbility::Protection"));
+    out.record(Token, "CopyEffect", None);
+    out.record(Token, POOLED_MANA, None);
+    out.variant("StaticAbility::HexproofFrom");
+    out.variant("StaticAbility::Protection");
     for quality in SourceQuality::ALL {
-        out.push(variant(&quality.token_name()));
+        out.variant(&quality.token_name());
     }
-    out.push(record(Token, WARD, None));
-    out.push(record(Token, PLAY_GRANT, None));
-    out.push(record(Token, PLAY_GRANT_SOURCE, None));
-    out.push(record(Token, SPENT_TYPE, None));
+    out.record(Token, WARD, None);
+    out.record(Token, PLAY_GRANT, None);
+    out.record(Token, PLAY_GRANT_SOURCE, None);
+    out.record(Token, SPENT_TYPE, None);
     let pack = default_content_pack();
     for candidate in pack.name_candidates().iter() {
-        out.push(record(Name, &candidate.name, None));
+        out.record(Name, &candidate.name, None);
+        out.content_texts.insert(candidate.name.clone());
     }
     for (_, definition) in pack.definition_entries() {
-        out.push(record(Name, &definition.name, None));
+        out.record(Name, &definition.name, None);
+        out.content_texts.insert(definition.name.clone());
         let json = serde_json::to_value(definition).expect("serializable definition");
         for name in set_names(&json) {
-            out.push(record(Name, &name, None));
+            out.record(Name, &name, None);
+            out.content_texts.insert(name);
+        }
+        for condition in play_grant_conditions(&json) {
+            out.content_texts
+                .insert(condition_text("permanent", &condition));
         }
         for predicate in combat_restrictions(&json) {
             let description = predicate_description(&predicate, "creatures");
-            out.push(record(Restriction, &description, None));
+            out.record(Restriction, &description, None);
         }
     }
-    execution_names(&mut out);
-    out.sort_by(|a, b| (a.namespace, &a.name).cmp(&(b.namespace, &b.name)));
-    out.dedup();
+    out.runtime.extend(
+        out.content_texts
+            .iter()
+            .map(|name| runtime_token(TokenKind::Text, name)),
+    );
+    register_runtime_tokens(&mut out.runtime);
+    out.records
+        .sort_by(|a, b| (a.namespace, &a.name).cmp(&(b.namespace, &b.name)));
+    out.records.dedup();
+    out.runtime
+        .sort_by(|a, b| (a.kind as u16, &a.name).cmp(&(b.kind as u16, &b.name)));
+    out.runtime.dedup();
     out
-}
+});
 
-/// Exact rows in a catalog policy with decision memory disabled.
+/// Printed and runtime program pairs admitted by a catalog policy.
 pub(crate) static PROGRAM_VOCABULARY: LazyLock<HashSet<(u16, i32)>> = LazyLock::new(|| {
     let catalog = catalog_tokens(default_content_pack()).expect("default token catalog");
     catalog
@@ -167,10 +214,10 @@ pub(crate) static PROGRAM_VOCABULARY: LazyLock<HashSet<(u16, i32)>> = LazyLock::
         .into_iter()
         .zip(catalog.token_value)
         .chain(
-            record_names()
-                .into_iter()
-                .filter(|entry| !entry.name.starts_with("DecisionMemory::"))
-                .filter_map(|entry| entry.token),
+            VOCABULARY
+                .runtime
+                .iter()
+                .map(|token| (token.kind as u16, token.value)),
         )
         .collect()
 });
@@ -188,20 +235,8 @@ pub fn missing_program_tokens(tokens: &[(u16, i32)]) -> BTreeSet<(u16, i32)> {
 
 /// Runtime-only programs have no printed card span from which to discover
 /// their vocabulary. Register their serde names and projection labels explicitly.
-fn execution_names(out: &mut Vec<RecordName>) {
-    let mut add = |kind: TokenKind, name: &str| {
-        let token = (kind as u16, name_value(name));
-        if !out.iter().any(|entry| entry.token == Some(token)) {
-            out.push(record(
-                RecordNamespace::Token,
-                &format!("execution/{}/{name}", kind as u16),
-                Some((kind, name)),
-            ));
-        }
-    };
-    for candidate in default_content_pack().name_candidates().iter() {
-        add(TokenKind::Text, &candidate.name);
-    }
+fn register_runtime_tokens(out: &mut Vec<RuntimeToken>) {
+    let mut add = |kind, name: &str| out.push(runtime_token(kind, name));
     for name in EXECUTION_TEXT {
         add(TokenKind::Text, name);
     }
@@ -217,18 +252,6 @@ fn execution_names(out: &mut Vec<RecordName>) {
     // creature type, which no printed definition serializes.
     add(TokenKind::Text, "all");
     add(TokenKind::Variant, "DamageRecipientFilter::Any");
-    // A departed permanent's last known name (a token's, or one an effect
-    // set) and a play grant's condition reach fact programs as rules text.
-    for (_, definition) in default_content_pack().definition_entries() {
-        add(TokenKind::Text, &definition.name);
-        let json = serde_json::to_value(definition).expect("serializable definition");
-        for name in set_names(&json) {
-            add(TokenKind::Text, &name);
-        }
-        for condition in play_grant_conditions(&json) {
-            add(TokenKind::Text, &condition_text("permanent", &condition));
-        }
-    }
     add(TokenKind::Structure, "PlayGrantExtension");
     add(TokenKind::Structure, "/PlayGrantExtension");
     for name in [
@@ -555,10 +578,16 @@ mod tests {
     #[test]
     fn record_names_are_unambiguous_within_a_namespace() {
         let names = record_names();
+        let memory_names = crate::agent::decision_memory::decision_memory_names();
         let mut values = std::collections::BTreeMap::new();
         for name in &names {
             if let Some(previous) = values.insert((name.namespace, name.value), &name.name) {
                 panic!("{previous:?} and {:?} share a hash", name.name);
+            }
+        }
+        for (name, value) in &memory_names {
+            if let Some(previous) = values.insert((RecordNamespace::Token, *value), name) {
+                panic!("{previous:?} and {name:?} share a hash");
             }
         }
         assert!(names

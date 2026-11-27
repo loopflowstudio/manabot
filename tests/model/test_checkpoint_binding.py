@@ -16,7 +16,9 @@ from manabot.infra.identity import canonical_sha256
 from manabot.model.catalog import inspect_checkpoint
 from manabot.policy import buckets
 from manabot.policy.binding import packed
+from manabot.policy.catalog import catalog_tables
 from manabot.policy.checkpoint import read_container, write_container
+from manabot.policy.prepare import RecordNamespace
 from manabot.policy.readings import (
     fresh_readings,
     input_width,
@@ -27,6 +29,88 @@ from manabot.policy.readings import (
 from manabot.recipes.builders import elemental_self_play, gray_ogre_self_play
 import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+
+
+def test_checkpoint_keeps_vectors_after_vocabulary_keys_retire(tmp_path: Path) -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=8,
+            max_decision_reference_details=64,
+            max_decision_references=64,
+            max_decision_members=256,
+            decision_memory_include_own=True,
+        )
+    )
+    writer = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8,
+            world=managym.WORLD_SETUP,
+            attention_on=True,
+            policy_film=True,
+            decision_memory="gru",
+        ),
+    ).eval()
+    path = tmp_path / "before-vocabulary-split.safetensors"
+    save_checkpoint(writer, space, path, player_configs=None)
+    record = read_checkpoint(path)
+    state = record["model_state_dict"]
+    names = "semantic_cards.record_name"
+    tokens = "semantic_cards.record_token"
+    weights = "semantic_cards.token_embedding.weight"
+    no_memory = catalog_tables(managym.WORLD_SETUP, records=True, decision_memory=False)
+    assert len(state[weights]) == no_memory.embedding_rows + 44
+
+    def key(kind: int, name: str) -> int:
+        return packed(kind, managym.catalog_token_value(name))
+
+    # Before the split the memory name and its phantom Variant shared a row.
+    memory_value = key(RecordNamespace.TOKEN, "DecisionMemory::Priority")
+    memory_row = state[f"{names}_rows"][state[f"{names}_keys"] == memory_value].item()
+    token_keys, token_rows = state[f"{tokens}_keys"], state[f"{tokens}_rows"]
+    token_keys = torch.cat(
+        (token_keys, token_keys.new_tensor([key(3, "DecisionMemory::Priority")]))
+    )
+    token_rows = torch.cat((token_rows, token_rows.new_tensor([memory_row])))
+
+    # An earlier execution label's two keys also addressed one shared row.
+    current = token_keys == key(6, "kept permanent")
+    old = "kept creature"
+    execution_row = token_rows[current].item()
+    token_keys[current] = key(6, old)
+    order = token_keys.argsort()
+    state[f"{tokens}_keys"], state[f"{tokens}_rows"] = (
+        token_keys[order],
+        token_rows[order],
+    )
+    name_keys, name_rows = state[f"{names}_keys"], state[f"{names}_rows"]
+    synthetic = key(RecordNamespace.TOKEN, f"execution/6/{old}")
+    name_keys = torch.cat((name_keys, name_keys.new_tensor([synthetic])))
+    name_rows = torch.cat((name_rows, name_rows.new_tensor([execution_row])))
+    order = name_keys.argsort()
+    state[f"{names}_keys"], state[f"{names}_rows"] = name_keys[order], name_rows[order]
+    write_checkpoint(record, path)
+
+    restored, _ = load_checkpoint(str(path))
+    torch.testing.assert_close(
+        restored.state_dict()[weights], state[weights], atol=0, rtol=0
+    )
+    env = managym.Env(seed=17, decision_memory_include_own=True)
+    env.reset(
+        [
+            managym.PlayerConfig("A", {"Forest": 20, "Gray Ogre": 20}),
+            managym.PlayerConfig("B", {"Mountain": 20, "Gray Ogre": 20}),
+        ]
+    )
+    for _ in range(4):
+        env.step(0)
+    batch = managym.encode_observation_batch([env], space.layout)
+    prepared = writer.prepare(batch)
+    assert prepared.memory is not None
+    expected = writer.evaluate(prepared)
+    actual = restored.evaluate(restored.prepare(batch))
+    for before, after in zip(expected, actual, strict=True):
+        np.testing.assert_array_equal(before, after)
 
 
 @pytest.mark.parametrize("legacy_file", [False, True])

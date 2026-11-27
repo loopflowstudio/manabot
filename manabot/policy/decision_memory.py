@@ -1043,7 +1043,7 @@ def _prepare_memory_rows(
     *,
     native: "ObservationSpans | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
-    from manabot.policy.prepare import pack, record_word
+    from manabot.policy.prepare import RecordNamespace, pack, record_word
     from manabot.policy.spans import full_word
 
     if native is None:
@@ -1088,10 +1088,12 @@ def _prepare_memory_rows(
         ),
         -1,
     ).astype(np.float32)
-    kinds = tables.names(1, word(selected, _RECORD_KIND))
+    kinds = tables.names(RecordNamespace.TOKEN, word(selected, _RECORD_KIND))
     choices = np.zeros(len(selected), np.int64)
     present = selected[:, _RECORD_CHOICE_PRESENT] == 1
-    choices[present] = tables.names(1, word(selected[present, _RECORD_CHOICE_KIND], 0))
+    choices[present] = tables.names(
+        RecordNamespace.TOKEN, word(selected[present, _RECORD_CHOICE_KIND], 0)
+    )
     choice_names = word(selected, _RECORD_NAME)
     references_list: list[np.ndarray] = []
     details_list: list[np.ndarray] = []
@@ -1166,7 +1168,9 @@ def _prepare_memory_rows(
     # Native stable hashes of DecisionMemory::Program and ::Mana. The lookup
     # is against the supplied checkpoint vocabulary, not a current-world join.
     field_values = np.array([30649973, 1006277364], np.int64)
-    fields = tables.names(1, field_values)[details[:, _DETAIL_FIELD].astype(np.int64)]
+    fields = tables.names(RecordNamespace.TOKEN, field_values)[
+        details[:, _DETAIL_FIELD].astype(np.int64)
+    ]
 
     def cat(arrays: list[np.ndarray], width: int | None = None) -> np.ndarray:
         return (

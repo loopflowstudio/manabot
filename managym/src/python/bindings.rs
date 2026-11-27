@@ -5547,21 +5547,23 @@ fn catalog_token_value(name: &str) -> i32 {
 }
 
 #[cfg(feature = "python")]
-type Renamed<K> = (K, &'static str, Option<&'static str>);
+type Renamed<K, N> = (K, N, Option<&'static str>);
 
 /// Historical (token kind, old name, successor) and (record namespace,
 /// old name, successor) entries. Definition references instead follow the
 /// referenced definition identity.
 #[cfg(feature = "python")]
 #[pyfunction]
-fn catalog_token_renames() -> (Vec<Renamed<u16>>, Vec<Renamed<&'static str>>) {
-    use crate::cards::token_renames::{RECORDS, TOKENS};
+fn catalog_token_renames() -> (
+    Vec<Renamed<u16, &'static str>>,
+    Vec<Renamed<&'static str, String>>,
+) {
+    use crate::cards::token_renames::{record_renames, token_renames};
     (
-        TOKENS
-            .iter()
-            .map(|&(kind, old, new)| (kind as u16, old, new))
+        token_renames()
+            .map(|(kind, old, new)| (kind as u16, old, new))
             .collect(),
-        RECORDS.to_vec(),
+        record_renames(),
     )
 }
 
@@ -5586,6 +5588,23 @@ fn record_vocabulary() -> Vec<RecordNameRow> {
             )
         })
         .collect()
+}
+
+/// Runtime program tokens, as (kind, name, value).
+#[cfg(feature = "python")]
+#[pyfunction]
+fn runtime_tokens() -> Vec<(u16, String, i32)> {
+    crate::agent::record_vocabulary::runtime_tokens()
+        .into_iter()
+        .map(|token| (token.kind as u16, token.name, token.value))
+        .collect()
+}
+
+/// Decision-memory names and their stable hashes in the token namespace.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn decision_memory_names() -> Vec<(String, i32)> {
+    crate::agent::decision_memory::decision_memory_names()
 }
 
 /// The world pool by its public name (`"world"`, the only pool).
@@ -5812,6 +5831,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(catalog_token_value, m)?)?;
     m.add_function(wrap_pyfunction!(catalog_token_renames, m)?)?;
     m.add_function(wrap_pyfunction!(record_vocabulary, m)?)?;
+    m.add_function(wrap_pyfunction!(runtime_tokens, m)?)?;
+    m.add_function(wrap_pyfunction!(decision_memory_names, m)?)?;
     crate::python::layout_bindings::register(m)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;

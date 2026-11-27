@@ -177,8 +177,14 @@ LearningCatalog = CatalogTokens  # Deprecated spelling, removed in 0.3.0.
 def catalog_tokens() -> CatalogTokens:
     """Printed rules spans for cards, tokens and back faces, indexed by CardDefId.
 
-    Runtime-only program symbols come from ``record_vocabulary()``.
+    Together with ``runtime_tokens()`` these form the program-token vocabulary.
     """
+
+def runtime_tokens() -> list[tuple[int, str, int]]:
+    """Runtime program symbols as (kind, name, value), including record aliases."""
+
+def decision_memory_names() -> list[tuple[str, int]]:
+    """Decision-memory names and their stable hashes in the token namespace."""
 
 def card_definitions_json() -> str:
     """Every catalog definition as the JSON its catalog tokens serialize."""
@@ -192,11 +198,11 @@ def catalog_token_renames() -> tuple[
     """Historical catalog tokens and record names with their optional successors."""
 
 def record_vocabulary() -> list[tuple[str, str, int, int | None, int | None]]:
-    """Every name fact/shared-effect encoders hash and runtime-only program
-    tokens, as `(namespace, name, value, token_kind, token_value)`.
+    """Names hashed by fact and shared-effect encoders, as
+    `(namespace, name, value, token_kind, token_value)`.
 
-    When present, `(token_kind, token_value)` is the learning token shared with
-    printed card text or appended for runtime-only program symbols. Namespaces:
+    When present, `(token_kind, token_value)` aliases an existing program token.
+    Namespaces:
     `token`, `name`, `restriction`."""
 
 @deprecated("use catalog_tokens; removed in 0.3.0")
