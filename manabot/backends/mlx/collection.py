@@ -31,8 +31,6 @@ from manabot.training.rollout.selection_data import SelectionDraw
 
 
 class CollectionSession:
-    supports_pipeline = False
-
     packing_mask = staticmethod(packing_mask)
     check_packed = staticmethod(check_packed)
 

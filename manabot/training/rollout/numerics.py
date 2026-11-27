@@ -7,13 +7,14 @@ is opaque recovery data, serialized by the framework.
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Protocol
 
 import numpy as np
 
 from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
+from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
 from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.actions import ActionValidator
@@ -29,19 +30,12 @@ class SampledRows:
     needs: np.ndarray | None
 
 
-@dataclass(frozen=True)
-class InferredChunk:
-    seconds: float
-    # The last chunk draws once for the entire row group.
-    sampled: SampledRows | None
-
-
 def prepared_chunks[A](
     observation: ObservationBuffers,
     execution_rows: int | None,
-    prepare: Callable[[ObservationBuffers], A],
+    prepare: Callable[[ObservationBuffers], Prepared[A]],
     profiler: Profiler,
-) -> Iterator[A]:
+) -> Iterator[Prepared[A]]:
     """Prepare borrowed rows in order. The caller samples once across all chunks."""
     count = (
         len(observation.coordinates)
@@ -77,23 +71,9 @@ class CollectionScope(Protocol):
     ) -> np.ndarray: ...
 
 
-@runtime_checkable
-class PipelinedScope(CollectionScope, Protocol):
-    def prepare_step(
-        self,
-        observation: ObservationSelection,
-        profiler: Profiler,
-        *,
-        cohort: int,
-        execution_rows: int | None,
-    ) -> Iterator[Callable[[], InferredChunk]]: ...
-
-
 class CollectionSession(ActionValidator, Protocol):
     @property
     def device_name(self) -> str: ...
-    @property
-    def supports_pipeline(self) -> bool: ...
     def scope(
         self, agent: BackendPolicy
     ) -> AbstractContextManager[CollectionScope]: ...

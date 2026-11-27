@@ -166,9 +166,6 @@ class SelfPlay(BaseModel):
     games_per_stream: int | None = Field(default=None, ge=1)
     learning_seats: Literal["one", "both"] = "both"
     batch_closure: BatchClosure = "complete-games"
-    collection_pipeline: bool = Field(
-        default=False, exclude_if=lambda enabled: not enabled
-    )
     matchup_curriculum: Literal[
         "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
     ] = "fixed"
@@ -246,16 +243,6 @@ class SelfPlay(BaseModel):
                 )
             if self.game_errors is not None and not self.game_errors.recover_capacity:
                 raise ValueError("game error recovery requires complete games")
-        if self.collection_pipeline and (
-            self.streams % 2
-            or self.batch_closure != "exact-quota"
-            or self.learning_seats != "both"
-            or self.observation.policy_input_version != 11
-            or self.device not in ("cpu", "cuda")
-        ):
-            raise ValueError(
-                "collection pipeline requires even v11 streams, both-seat exact quota, and CPU or CUDA"
-            )
         if self.behavior == "ema-self" and self.learning.ema is None:
             raise ValueError("ema-self behavior requires an EMA rate")
         if self.matchup_curriculum == "elemental-uniform":
@@ -419,7 +406,6 @@ def self_play_collector(
         opponent_mode="random" if settings.behavior == "random" else "self",
         learning_seats=settings.learning_seats,
         batch_closure=settings.batch_closure,
-        collection_pipeline=settings.collection_pipeline,
         games_per_stream=settings.games_per_stream,
         game_errors=settings.game_errors,
         record_attempt=record_attempt,

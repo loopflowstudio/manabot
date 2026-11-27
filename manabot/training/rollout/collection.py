@@ -28,12 +28,9 @@ Collection never updates model weights; the calling loop owns learning.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
-from functools import partial
-from itertools import chain
 from pathlib import Path
 import time
 from typing import Any, Literal, Protocol, TypedDict
@@ -87,19 +84,8 @@ from manabot.training.rollout.matchups import (
     elemental_roster,
     stream_matches,
 )
-from manabot.training.rollout.numerics import (
-    CollectionScope,
-    CollectionSession,
-    InferredChunk,
-    PipelinedScope,
-    SampledRows,
-)
-from manabot.training.rollout.producers import (
-    BufferedStreams,
-    ShardedVectorEnv,
-    StreamCohort,
-    open_native_streams,
-)
+from manabot.training.rollout.numerics import CollectionScope, CollectionSession
+from manabot.training.rollout.producers import BufferedStreams, open_native_streams
 from manabot.training.rollout.self_play import GameSetting, SelfPlayCounter
 from manabot.training.rollout.snapshot_vector import (
     SlotInstall,
@@ -1062,7 +1048,6 @@ class Collector:
         default_factory=dict
     )
     _viewer_bootstrap_gaps: list[float] = field(default_factory=list)
-    _cohorts: tuple[StreamCohort, ...] = ()
 
 
 class StreamRootState(BaseModel):
@@ -1093,19 +1078,9 @@ class CollectorSnapshot(BaseModel):
     parked_fresh: list[StreamRootState] | None
     learned_game_rows: dict[int, int]
     opponent_rng: dict[str, Any] | None
-    cohorts: Literal[1, 2] = Field(default=1, exclude_if=lambda count: count == 1)
 
     @model_validator(mode="after")
     def validate_slots(self) -> "CollectorSnapshot":
-        if self.cohorts == 2 and (
-            self.num_envs < 2
-            or self.num_envs % 2
-            or self.learning_seats != "both"
-            or self.batch_closure != "exact-quota"
-            or self.opponent_mode != "self"
-            or self.parked_fresh is not None
-        ):
-            raise ValueError("invalid pipelined collector geometry")
         if len(self.streams) != self.num_envs or any(
             root.slot != i for i, root in enumerate(self.streams)
         ):
@@ -1168,7 +1143,6 @@ def capture_collector(collector: Collector) -> CollectorSnapshot:
         learning_seats=collector.learning_seats,
         batch_closure=collector.batch_closure,
         opponent_mode=collector.opponent_mode,
-        cohorts=2 if collector._cohorts else 1,
         streams=stream_roots(env),
         parked_fresh=[] if collector.stats.snapshot is not None else None,
         learned_game_rows=collector.stats.learned_game_rows,
@@ -1224,7 +1198,6 @@ def reconstruct_collector(
             or collector.learning_seats != snapshot.learning_seats
             or collector.batch_closure != snapshot.batch_closure
             or collector.opponent_mode != snapshot.opponent_mode
-            or (2 if collector._cohorts else 1) != snapshot.cohorts
             or (collector.stats.snapshot is not None)
             != (snapshot.parked_fresh is not None)
         ):
@@ -1278,7 +1251,6 @@ def open_collector(
     opponent_agent: BackendPolicy | None = None,
     learning_seats: Literal["one", "both"] | None = None,
     batch_closure: BatchClosure = "complete-games",
-    collection_pipeline: bool = False,
     games_per_stream: int | None = None,
     root: str | None = None,
     matchup_curriculum: Curriculum = "fixed",
@@ -1408,22 +1380,6 @@ def open_collector(
             )
     if game_errors is not None and (record_attempt is None or root is not None):
         raise ValueError("game error recovery needs durable receipts and native games")
-    if collection_pipeline:
-        if (
-            num_envs < 2
-            or num_envs % 2
-            or learning_seats != "both"
-            or batch_closure != "exact-quota"
-            or opponent_mode != "self"
-            or root is not None
-            or not observation_space.one_token
-        ):
-            raise ValueError(
-                "collection pipeline requires an even number of native v11 streams "
-                "with both-seat exact-quota self-play"
-            )
-        if not numerics.supports_pipeline:
-            raise ValueError("collection pipeline requires Torch on CPU or CUDA")
 
     if execution_rows is not None and execution_rows < 1:
         raise ValueError("execution_rows must be positive")
@@ -1447,7 +1403,6 @@ def open_collector(
             decision_memory_include_own=memory.decision_memory_include_own,
             games_path=games_path,
             record_fraction=record_fraction,
-            collection_pipeline=collection_pipeline,
         )
     else:
         from manabot.env.target_practice import TargetPracticeVector
@@ -1500,7 +1455,6 @@ def open_collector(
             game_error_state=GameErrorState(),
             profiler=Profiler(enabled=False),
             _env=env,
-            _cohorts=env.cohorts if isinstance(env, ShardedVectorEnv) else (),
             _buffers=buffers,
             _observation_keys=observation_keys,
             _observations=observations,
@@ -1748,19 +1702,10 @@ def retain_spans(
 
 
 def _retain_obs_rows(
-    collector: Collector,
-    rows: np.ndarray,
-    *,
-    bootstrap: bool = False,
-    cohort: StreamCohort | None = None,
+    collector: Collector, rows: np.ndarray, *, bootstrap: bool = False
 ) -> ObservationBuffers:
     """Borrow live buffers for this decision, or own them across later bootstrap reads."""
     with collector.profiler.track("Observation retention"):
-        if cohort is not None:
-            live = ObservationSelection(
-                collector.observation_space, tuple(cohort.streams.observation_rows())
-            )
-            return retain_spans(collector, live.select(rows - cohort.start), rows)
         live = live_observations(collector)
         if isinstance(live, ObservationSelection):
             return retain_spans(collector, live.select(rows), rows)
@@ -1782,18 +1727,13 @@ def _retain_obs_rows(
 
 
 def _count_action_types(
-    collector: Collector,
-    counter: dict[str, int],
-    rows: np.ndarray,
-    actions: np.ndarray,
-    *,
-    live: ObservationSelection | None = None,
+    collector: Collector, counter: dict[str, int], rows: np.ndarray, actions: np.ndarray
 ) -> None:
-    observations = live if live is not None else live_observations(collector)
-    if isinstance(observations, ObservationSelection):
-        chosen = observations.action_columns(rows, actions, range(ACTION_TYPE_DIM))
+    live = live_observations(collector)
+    if isinstance(live, ObservationSelection):
+        chosen = live.action_columns(rows, actions, range(ACTION_TYPE_DIM))
     else:
-        chosen = observations["actions"][rows, actions, :ACTION_TYPE_DIM]
+        chosen = live["actions"][rows, actions, :ACTION_TYPE_DIM]
     type_indices = chosen.argmax(axis=1)
     # At priority all additional mana abilities, fixed and choice-output,
     # follow PassPriority. The first-legal policy projection preserves order.
@@ -1801,16 +1741,14 @@ def _count_action_types(
         chosen[:, ActionEnum.PRIORITY_ACTIVATE_ABILITY] > 0
     )
     if floats.any():
-        if isinstance(observations, ObservationSelection):
-            spans = observations.select(rows[floats]).spans.tables["actions"]
+        if isinstance(live, ObservationSelection):
+            spans = live.select(rows[floats]).spans.tables["actions"]
             passes = spans.scatter(
                 spans.integers[:, ActionEnum.PRIORITY_PASS_PRIORITY],
                 int(spans.counts.max()),
             )
         else:
-            passes = observations["actions"][
-                rows[floats], :, ActionEnum.PRIORITY_PASS_PRIORITY
-            ]
+            passes = live["actions"][rows[floats], :, ActionEnum.PRIORITY_PASS_PRIORITY]
         collector.stats.priority_taps += int(
             (passes.any(axis=1) & (actions[floats] > passes.argmax(axis=1))).sum()
         )
@@ -1958,25 +1896,67 @@ def _collect(
         )
     elif snapshot_starts is not None:
         raise ValueError("snapshot starts require a snapshot vector")
-    check_stop = partial(_check_collection_stop, collector, deadline_monotonic, check)
-    if collector._cohorts:
-        if not isinstance(inference, PipelinedScope):
-            raise ValueError("collection pipeline requires a split inference scope")
-        _collect_cohorts(collector, num_steps, inference, check_stop, games, completed)
-
-    while not collector._cohorts:
-        check_stop()
+    while True:
+        try:
+            if check is not None:
+                check()
+            if (
+                deadline_monotonic is not None
+                and time.perf_counter() >= deadline_monotonic
+            ):
+                raise TimeoutError("collector exceeded training deadline")
+        except Exception as error:
+            # The run stopped, not the games: deadlines, cancellation and
+            # supervision limits settle in-progress games as abandoned
+            # attempts outside the game error window.
+            deadline = isinstance(error, TimeoutError)
+            if (
+                deadline
+                and not collector.game_errors
+                and hasattr(env, "capture_failure")
+            ):
+                env.capture_failure(error)
+            if collector.game_errors:
+                seeds = env.current_game_seeds()
+                seats = env.current_agent_indices()
+                for row, prefix in enumerate(collector._game_actions):
+                    if prefix:
+                        _settle_attempt(
+                            collector,
+                            row,
+                            seeds[row],
+                            seats[row],
+                            "deadline" if deadline else "abandoned",
+                            error_class=type(error).__name__,
+                            error=str(error),
+                        )
+            raise
         with collector.profiler.track("Stream bookkeeping"):
             if snapshots is not None and snapshots.ready:
                 if _start_episodes(collector, snapshots, games, completed, num_steps):
                     continue
             acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
             if two_seat_exact:
-                active = _exact_quota_active(
-                    collector, num_steps, acting, range(num_envs)
+                active = np.array(
+                    [
+                        sum(
+                            len(collector._streams[slot])
+                            + int(collector._pending[slot] is not None)
+                            for slot in _game_slots(collector, row)
+                        )
+                        < num_steps
+                        for row in range(num_envs)
+                    ],
+                    dtype=bool,
                 )
                 if not active.any():
                     break
+                for row in np.flatnonzero(active):
+                    if acting[row] < 0:
+                        continue
+                    slot = 2 * int(row) + int(acting[row])
+                    if collector._pending[slot] is not None:
+                        _finalize(collector, slot, reward=0.0, done=False)
             else:
                 for row in range(num_envs):
                     if completed[row] or acting[row] < 0:
@@ -1995,7 +1975,11 @@ def _collect(
                 )
                 if not active.any():
                     break
-            acting = _refill_active(collector, active, acting)
+            if collector._needs_refill:
+                refill = sorted(row for row in collector._needs_refill if active[row])
+                if refill:
+                    _refill(collector, refill)
+                    acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
         collector.stats.idle_stream_steps += num_envs - int(active.sum())
         collector._record_annotations = [None] * num_envs
         actions = np.zeros(num_envs, dtype=np.int64)
@@ -2042,9 +2026,41 @@ def _collect(
                 collector.capture_predicate,
             )
 
-        _advance_step(
-            collector, actions, active, acting, games, completed, num_steps, snapshots
+        for row in np.flatnonzero(active):
+            _expose(collector, int(row), "environment_decisions")
+        seeds = env.current_game_seeds() if collector.game_errors else []
+        annotations = (
+            {"annotations": collector._record_annotations}
+            if any(collector._record_annotations)
+            else {}
         )
+        with (
+            collector.profiler.track("Environment step and encoding"),
+            _native_step_split(collector),
+        ):
+            if collector.game_errors:
+                env.step_isolated_into_buffers(
+                    actions.tolist(),
+                    active.tolist(),
+                    collector.game_errors.recover_capacity,
+                    **annotations,
+                )
+            else:
+                env.step_into_buffers(actions.tolist(), active.tolist(), **annotations)
+        collector.stats.micro_steps += int(active.sum())
+
+        with collector.profiler.track("Stream bookkeeping"):
+            _settle_step(
+                collector,
+                actions,
+                active,
+                acting,
+                seeds,
+                games,
+                completed,
+                num_steps,
+                snapshots,
+            )
 
     frozen_cuts: RecordedSpans | ObservationRows | None = None
     if two_seat_exact:
@@ -2116,256 +2132,6 @@ def _collect(
         assert isinstance(batch, RolloutBatch)
         collector._uncommitted_batch = batch
     return batch
-
-
-def _check_collection_stop(
-    collector: Collector,
-    deadline_monotonic: float | None,
-    check: Callable[[], None] | None,
-) -> None:
-    env = collector._env
-    try:
-        if check is not None:
-            check()
-        if deadline_monotonic is not None and time.perf_counter() >= deadline_monotonic:
-            raise TimeoutError("collector exceeded training deadline")
-    except Exception as error:
-        # The run stopped, not the games: deadlines, cancellation and
-        # supervision limits settle in-progress games as abandoned
-        # attempts outside the game error window.
-        deadline = isinstance(error, TimeoutError)
-        if deadline and not collector.game_errors and hasattr(env, "capture_failure"):
-            env.capture_failure(error)
-        if collector.game_errors:
-            seeds = env.current_game_seeds()
-            seats = env.current_agent_indices()
-            for row, prefix in enumerate(collector._game_actions):
-                if prefix:
-                    _settle_attempt(
-                        collector,
-                        row,
-                        seeds[row],
-                        seats[row],
-                        "deadline" if deadline else "abandoned",
-                        error_class=type(error).__name__,
-                        error=str(error),
-                    )
-        raise
-
-
-def _exact_quota_active(
-    collector: Collector, num_steps: int, acting: np.ndarray, streams: range
-) -> np.ndarray:
-    active = np.zeros(collector.num_envs, dtype=bool)
-    for row in streams:
-        if (
-            sum(
-                len(collector._streams[slot])
-                + int(collector._pending[slot] is not None)
-                for slot in _game_slots(collector, row)
-            )
-            >= num_steps
-        ):
-            continue
-        active[row] = True
-        if acting[row] >= 0:
-            slot = 2 * row + int(acting[row])
-            if collector._pending[slot] is not None:
-                _finalize(collector, slot, reward=0.0, done=False)
-    return active
-
-
-def _refill_active(
-    collector: Collector, active: np.ndarray, acting: np.ndarray
-) -> np.ndarray:
-    if collector._needs_refill:
-        refill = sorted(row for row in collector._needs_refill if active[row])
-        if refill:
-            _refill(collector, refill)
-            return np.asarray(collector._env.current_agent_indices(), dtype=np.int64)
-    return acting
-
-
-def _advance_step(
-    collector: Collector,
-    actions: np.ndarray,
-    active: np.ndarray,
-    acting: np.ndarray,
-    games: np.ndarray,
-    completed: np.ndarray,
-    num_steps: int,
-    snapshots: _SnapshotRollout | None,
-    *,
-    cohort: StreamCohort | None = None,
-) -> None:
-    env = collector._env
-    step_env = env if cohort is None else cohort.streams
-    rows = slice(None) if cohort is None else cohort.rows
-    for row in np.flatnonzero(active):
-        _expose(collector, int(row), "environment_decisions")
-    seeds = env.current_game_seeds() if collector.game_errors else []
-    selected = collector._record_annotations[rows]
-    annotations = {"annotations": selected} if any(selected) else {}
-    with (
-        collector.profiler.track("Environment step and encoding"),
-        _native_step_split(collector, step_env),
-    ):
-        if collector.game_errors:
-            step_env.step_isolated_into_buffers(
-                actions[rows].tolist(),
-                active[rows].tolist(),
-                collector.game_errors.recover_capacity,
-                **annotations,
-            )
-        else:
-            step_env.step_into_buffers(
-                actions[rows].tolist(), active[rows].tolist(), **annotations
-            )
-    collector.stats.micro_steps += int(active.sum())
-
-    with collector.profiler.track("Stream bookkeeping"):
-        _settle_step(
-            collector,
-            actions,
-            active,
-            acting,
-            seeds,
-            games,
-            completed,
-            num_steps,
-            snapshots,
-        )
-
-
-@dataclass(frozen=True)
-class CohortDecision:
-    active: np.ndarray
-    acting: np.ndarray
-    rows: np.ndarray
-    observation: ObservationSelection
-    work: Iterator[Callable[[], InferredChunk]]
-
-
-def _prepare_cohort(
-    collector: Collector, num_steps: int, inference: PipelinedScope, index: int
-) -> CohortDecision | None:
-    cohort = collector._cohorts[index]
-    with collector.profiler.track("Stream bookkeeping"):
-        acting = np.asarray(collector._env.current_agent_indices(), dtype=np.int64)
-        active = _exact_quota_active(
-            collector, num_steps, acting, range(cohort.start, cohort.stop)
-        )
-        rows = np.flatnonzero(active)
-        if not len(rows):
-            return None
-        acting = _refill_active(collector, active, acting)
-    observation = _retain_obs_rows(collector, rows, cohort=cohort)
-    assert isinstance(observation, ObservationSelection)
-    work = inference.prepare_step(
-        observation,
-        collector.profiler,
-        cohort=index,
-        execution_rows=collector.execution_rows,
-    )
-    return CohortDecision(active, acting, rows, observation, chain((next(work),), work))
-
-
-def _inference_result(
-    future: Future[InferredChunk], profiler: Profiler
-) -> InferredChunk:
-    with profiler.track("Inference wait"):
-        result = future.result()
-    profiler.record("Policy inference and action selection", result.seconds)
-    return result
-
-
-def _finish_inference(
-    result: InferredChunk,
-    work: Iterator[Callable[[], InferredChunk]],
-    worker: ThreadPoolExecutor,
-    profiler: Profiler,
-) -> SampledRows:
-    while result.sampled is None:
-        result = _inference_result(worker.submit(next(work)), profiler)
-    # Resume the generator to release its final Prepared reference.
-    assert next(work, None) is None
-    return result.sampled
-
-
-def _collect_cohorts(
-    collector: Collector,
-    num_steps: int,
-    inference: PipelinedScope,
-    check_stop: Callable[[], None],
-    games: np.ndarray,
-    completed: np.ndarray,
-) -> None:
-    """While one cohort infers, commit and prepare decisions for the other."""
-    check_stop()
-    index = 0
-    decision = _prepare_cohort(collector, num_steps, inference, index)
-    previous: CohortDecision | None = None
-    sampled: SampledRows | None = None
-    rounds = [0, 0]
-
-    # The executor joins even if native stepping, profiling or preparation raises.
-    # Inference owns admitted rows and RNG only. All game mutations are on this side.
-    with ThreadPoolExecutor(
-        max_workers=1, thread_name_prefix="manabot-inference"
-    ) as worker:
-        while decision is not None or previous is not None:
-            check_stop()
-            other = 1 - index
-            cohort = collector._cohorts[other]
-            with collector.operation("learner_inference", per_step=True):
-                future = (
-                    worker.submit(next(decision.work)) if decision is not None else None
-                )
-                if previous is not None:
-                    assert sampled is not None
-                    rounds[other] += 1
-                    collector.stats.idle_stream_steps += (
-                        cohort.stop - cohort.start - len(previous.rows)
-                    )
-                    collector._record_annotations = [None] * collector.num_envs
-                    actions = np.zeros(collector.num_envs, dtype=np.int64)
-                    actions[previous.rows] = _record_learning_rows(
-                        collector,
-                        previous.rows,
-                        previous.acting,
-                        previous.observation,
-                        sampled,
-                    )
-                    _count_action_types(
-                        collector,
-                        collector.stats.learner_action_types,
-                        np.arange(len(previous.rows)),
-                        sampled.actions,
-                        live=previous.observation,
-                    )
-                    _advance_step(
-                        collector,
-                        actions,
-                        previous.active,
-                        previous.acting,
-                        games,
-                        completed,
-                        num_steps,
-                        None,
-                        cohort=cohort,
-                    )
-                next_decision = _prepare_cohort(collector, num_steps, inference, other)
-                sampled = None
-                if future is not None and decision is not None:
-                    result = _inference_result(future, collector.profiler)
-                    del future
-                    sampled = _finish_inference(
-                        result, decision.work, worker, collector.profiler
-                    )
-            previous, decision, index = decision, next_decision, other
-    collector.stats.idle_stream_steps += abs(rounds[0] - rounds[1]) * (
-        collector.num_envs // 2
-    )
 
 
 def _record_assignment(collector: Collector, row: int) -> None:
@@ -3012,14 +2778,14 @@ def _stream_at_floor(
 
 
 @contextmanager
-def _native_step_split(collector: Collector, env: object) -> Iterator[None]:
+def _native_step_split(collector: Collector) -> Iterator[None]:
     """Split the running step phase by the engine's clock; Python envs have none."""
-    if not isinstance(env, (BufferedStreams, RecordedVectorEnv)):
+    if not isinstance(collector._env, (BufferedStreams, RecordedVectorEnv)):
         yield
         return
-    stepped, encoded = env.buffered_call_timings()
+    stepped, encoded = collector._env.buffered_call_timings()
     yield
-    stepped_after, encoded_after = env.buffered_call_timings()
+    stepped_after, encoded_after = collector._env.buffered_call_timings()
     collector.profiler.record("Native stepping", stepped_after - stepped)
     collector.profiler.record("Observation encoding", encoded_after - encoded)
 
@@ -3132,16 +2898,6 @@ def _sample_learning_rows(
         sampled = inference.sample(
             observation, collector.profiler, execution_rows=collector.execution_rows
         )
-    return _record_learning_rows(collector, rows, acting, observation, sampled)
-
-
-def _record_learning_rows(
-    collector: Collector,
-    rows: np.ndarray,
-    acting: np.ndarray,
-    observation: ObservationBuffers,
-    sampled: SampledRows,
-) -> np.ndarray:
     acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
     outcomes, needs = sampled.outcomes, sampled.needs
     if collector._pending_viewer_bootstraps:

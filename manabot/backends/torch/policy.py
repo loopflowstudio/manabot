@@ -1253,12 +1253,6 @@ class ActorCritic(nn.Module):
             return value
 
 
-def collection_memory() -> CollectionMemory[torch.Tensor]:
-    return CollectionMemory(
-        torch.cat, torch.stack, lambda states, i: states[i].detach().clone()
-    )
-
-
 class PolicyInference:
     """One unchanged behavior policy; batches expire with the scope.
 
@@ -1275,7 +1269,9 @@ class PolicyInference:
         self._versions = agent._parameter_versions()
         self._modes = tuple(module.training for module in agent.modules())
         self._binding = agent._binding()
-        self.memory = collection_memory()
+        self.memory = CollectionMemory[torch.Tensor](
+            torch.cat, torch.stack, lambda states, i: states[i].detach().clone()
+        )
         self.transfers = 0
         self.transfer_bytes = 0
         agent.clear_cache()
@@ -1343,43 +1339,23 @@ class PolicyInference:
 
     @torch.no_grad()
     def prepare(self, obs: PolicyObservation) -> Prepared[torch.Tensor]:
-        batch, roots = prepare_inference_host(self, obs, self.memory)
-        return move_inference_prepared(self, obs, batch, roots, self.memory)
-
-
-@torch.no_grad()
-def prepare_inference_host(
-    inference: PolicyInference,
-    obs: PolicyObservation,
-    memory: CollectionMemory[torch.Tensor],
-) -> tuple[Prepared[np.ndarray], Mapping[str, int] | None]:
-    inference.check(inference.agent)
-    if type(obs) not in (managym.ObservationBatch, ObservationSelection) and any(
-        not isinstance(value, np.ndarray) for value in obs.values()
-    ):
-        raise TypeError("inference preparation requires NumPy observation buffers")
-    roots = (
-        memory.roots(obs) if inference.agent.config.decision_memory == "gru" else None
-    )
-    batch = inference.agent.prepare(obs, inference=True, memory_roots=roots)
-    if inference.cache_catalog:
-        batch = replace(batch, programs=None)
-    return batch, roots
-
-
-def move_inference_prepared(
-    inference: PolicyInference,
-    obs: PolicyObservation,
-    batch: Prepared[np.ndarray],
-    roots: Mapping[str, int] | None,
-    memory: CollectionMemory[torch.Tensor],
-) -> Prepared[torch.Tensor]:
-    moved, inference.transfer_bytes, inference.transfers = transfer(
-        batch, inference.device
-    )
-    if roots is not None:
-        moved = memory.bind(moved, obs, roots)
-    return replace(moved, guard=inference._forward_check)
+        self.check(self.agent)
+        if type(obs) not in (managym.ObservationBatch, ObservationSelection) and any(
+            not isinstance(value, np.ndarray) for value in obs.values()
+        ):
+            raise TypeError("inference preparation requires NumPy observation buffers")
+        roots = (
+            self.memory.roots(obs)
+            if self.agent.config.decision_memory == "gru"
+            else None
+        )
+        batch = self.agent.prepare(obs, inference=True, memory_roots=roots)
+        if self.cache_catalog:
+            batch = replace(batch, programs=None)
+        moved, self.transfer_bytes, self.transfers = transfer(batch, self.device)
+        if roots is not None:
+            moved = self.memory.bind(moved, obs, roots)
+        return replace(moved, guard=self._forward_check)
 
 
 # -----------------------------------------------------------------------------
