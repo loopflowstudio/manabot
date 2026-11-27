@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept Review · MTG-500 Closed Monotone Mana-Ability Contract &amp; Fork Termination</title>
+<title>Concept Review · MTG-500 Phase-Accurate Mana Activation Continuation &amp; Replacement Ordering</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -188,7 +188,7 @@
   .lead {
     font-size: 15.5px;
     color: var(--text-secondary);
-    max-width: 94ch;
+    max-width: 96ch;
     margin-bottom: 0;
   }
 
@@ -544,14 +544,21 @@
 
   <header>
     <div>
-      <div class="eyebrow">Concept Review · MTG-500 · Pass 4 Stop-Rule Realign (Post Repeatable Mana Suffix)</div>
-      <h1>Closed Monotone Mana-Ability Contract &amp; Well-Founded Fork Termination</h1>
+      <div class="eyebrow">Concept Review · MTG-500 · Pass 4 Stop-Rule Realign (Post Counter-Cost Replacement Suspension)</div>
+      <h1>Phase-Accurate Mana Activation Continuation &amp; Replacement Ordering</h1>
       <p class="lead">
-        <strong>Area reviewed:</strong> The mana-ability admission contract and finite-resource termination invariant across
-        <code>managym/state/src/card.rs</code>, <code>managym/src/flow/mana.rs</code>, <code>flow/decision.rs</code>,
-        <code>flow/layers.rs</code>, <code>flow/statics.rs</code>, <code>flow/mana/help.rs</code>, and <code>managym/README.md</code>
-        — widened from Pass 4 attempt 3's repeatable-suffix reproduction (<code>de9787c042</code>) to examine every way a mana
-        activation can violate finite-resource monotonicity and break exact coupled fork termination.
+        <strong>Area reviewed:</strong> The mana-ability cost-commitment and output-production continuation lifecycle across
+        <code>managym/src/flow/mana.rs</code> (<code>complete_mana_upfront</code>, <code>upfront_mana_outputs</code>,
+        <code>payment_model</code>, <code>payment_obligations_owing</code>),
+        <code>managym/src/flow/decision.rs</code> (<code>FrameCompletion</code>, <code>EffectFrame</code>,
+        <code>Decision::ManaUpfront</code>, <code>Decision::ManaChoice</code>, <code>Decision::OrderReplacement</code>,
+        <code>SuspendedResolution::continuation</code>, <code>run_payment_frame</code>),
+        <code>managym/src/flow/proposed_event.rs</code> (<code>apply_immediate_event</code>, <code>advance_event_batch</code>),
+        <code>managym/src/flow/payment.rs</code> (<code>complete_announced_payment</code>),
+        <code>managym/src/state/hash.rs</code>, and continuation consumers
+        (<code>agent/continuation.rs</code>, <code>agent/effect_execution.rs</code>, <code>flow/interchangeable.rs</code>,
+        <code>flow/selection_sampling.rs</code>) — widened from Pass 4 attempt 4's immediate-event panic
+        (<code>da29dbbdc8</code>) to examine the full cost → output → suffix lifecycle and its parity with the coupled fork search.
       </p>
     </div>
     <button class="theme-btn" id="themeToggle" type="button">Theme: Auto</button>
@@ -559,8 +566,8 @@
 
   <div class="meta-bar">
     <div><strong>Branch:</strong> <code>jack/mtg-500-fix-infinite-spin-in-rayon-worker-during-manual</code></div>
-    <div><strong>HEAD:</strong> <code>94bde14b58</code> (Pass 1–3 landed · Pass 4 repros <code>0d7bb67437</code>, <code>a90fd71090</code>, <code>de9787c042</code>)</div>
-    <div><strong>Fresh <code>origin/main</code>:</strong> <code>6a131c4dc9</code> (ancestor of HEAD; 0 sync drift)</div>
+    <div><strong>HEAD:</strong> <code>cc268d738e</code> (Pass 1–3 + Design 5 contract <code>ab008535cb</code> · Repro <code>da29dbbdc8</code>)</div>
+    <div><strong>Fresh <code>origin/main</code>:</strong> <code>6a131c4dc9</code> (ancestor of HEAD; 0 sync drift · hash v34 → v35 on branch)</div>
     <div><strong>Legend:</strong>
       <span class="badge badge-yes">Landed</span>
       <span class="badge badge-no">Mismatch</span>
@@ -574,15 +581,17 @@
   <h2>1. Do the Domain Concepts and the Code's Concepts Line Up?</h2>
 
   <p>
-    Pass 4 attempt 3 (<code>de9787c042</code>) surfaced the exact mirror of Review 5's finding: just as <code>ReadSet × PaymentWrites</code>
-    was an open-world blacklist for coupling, <strong><code>is_mana_suffix_effect</code> (<code>state/src/card.rs:683</code>) is an open-world
-    blacklist for mana-ability suffixes</strong>. It silently admits ~90 arbitrary <code>Effect</code> variants — including <code>Untap</code>,
-    <code>CreateToken</code>, <code>PutCounters</code>, <code>Move</code>, <code>DrawCards</code>, and <code>OptionalPayment</code> — as
-    off-the-stack mana suffixes, directly contradicting <code>managym/README.md:669–673</code>
-    (<em>"Every registered mana ability must consume a finite resource… production and spending cannot restore a consumed resource"</em>).
-    Auditing the full termination surface uncovered <strong>three additional holes</strong> that would also spin or double-spend even with an
-    empty suffix: bare <code>add_counters</code>, a 2-ability <code>remove_counters</code>/<code>add_counters</code> swap cycle, and unreserved
-    <code>remove_counters</code> across nested <code>Decision::ManaUpfront</code> frames (<code>mana.rs:3209</code>).
+    Pass 4 attempt 4 (<code>da29dbbdc8</code>) exposed a structural split in how activated abilities pay their costs.
+    Non-mana activated abilities (<code>complete_announced_payment</code>, <code>payment.rs:1429–1520</code>) already run
+    <code>CounterChange</code> and <code>Sacrifice</code> costs through a retained <code>EffectFrame.batch</code> backed by a
+    typed <code>FrameCompletion::Activated</code>. Activated mana abilities (<code>complete_mana_upfront</code>,
+    <code>mana.rs:5133–5207</code>) do the opposite: they send <code>CounterChange</code> to
+    <code>apply_immediate_event</code> (panicking whenever two counter replacements apply), evaluate
+    <code>upfront_mana_outputs</code> <em>before</em> <code>Effect::sacrifice_this()</code> runs, and park the sacrifice
+    alongside <code>activation.suffix</code> behind <code>FrameCompletion::Decision(ManaChoice)</code> — which both
+    <code>payment_model::reserve</code> and <code>payment_obligations_owing</code> ignore. Widening to live play also
+    reveals that once Pass 4's coupled fork search branches through <code>Decision::OrderReplacement</code>, leaving live
+    <code>OrderReplacement</code> unfiltered during payment directly produces <code>AgentError</code> on a stranding order.
   </p>
 
   <table>
@@ -598,122 +607,142 @@
     <tbody>
       <tr>
         <td>
-          <strong>Step invariant, signed life &amp; owned mana activations</strong><br>
-          <span class="muted small">No empty-decision spin, CR 119.4 / 601.2h fee order, CR 602.2 / 605.3b owned <code>ManaUpfront</code>.</span>
+          <strong>Step invariant, signed life, owned <code>ManaUpfront</code> &amp; monotone contract</strong><br>
+          <span class="muted small">Pass 1–3 + Design 5 finite-resource contract (CR 605.1a parity, pending counter reservation).</span>
         </td>
         <td>
           <code>Game::tick()</code>, <code>LifeBudget</code>,<br>
-          <code>Obligation::PayLife</code>,<br>
-          <code>ManaUpfrontActivation</code> (hash v35)
+          <code>ManaUpfrontActivation</code> (v35),<br>
+          <code>mana_parts()</code> (<code>card.rs:846</code>)
         </td>
-        <td><span class="badge badge-yes">Yes</span><br><span class="muted small">Pass 1–3</span></td>
+        <td><span class="badge badge-yes">Yes</span><br><span class="muted small">Landed</span></td>
         <td>
-          Landed in <code>1c521e300</code>, <code>a9359c03b</code>, and <code>abfabece99</code>. Zero live index lookups remain on
-          <code>Decision::ManaUpfront</code>; dynamic outputs evaluate live on resolution while costs stay locked.
+          Landed in <code>1c521e300</code>, <code>a9359c03b</code>, <code>abfabece99</code>, and <code>ab008535cb</code>.
+          Zero live index lookups on <code>ManaUpfront</code>; every admitted mana ability strictly lowers unreserved finite resources.
         </td>
         <td><span class="badge badge-yes">Landed</span></td>
       </tr>
       <tr>
         <td>
-          <strong>Monotone mana-ability contract (single owner)</strong><br>
-          <span class="muted small">A mana ability consumes a finite payment resource and its suffix can never restore one or launch nested programs.</span>
+          <strong>Mana cost commitment through the event pipeline</strong><br>
+          <span class="muted small">All event-pipeline activation costs (counters, sacrifice) retain their caller across replacement choices, just like non-mana costs.</span>
         </td>
         <td>
-          <code>is_mana_suffix_effect</code> (<code>card.rs:683</code>) +<br>
-          catalog-only test (<code>tests.rs:2439</code>) +<br>
-          runtime panic in <code>PaymentModel::uses</code> (<code>mana.rs:1795</code>)
+          <code>complete_mana_upfront</code> (<code>mana.rs:5165</code>) calls <code>apply_immediate_event</code>;<br>
+          <code>complete_announced_payment</code> (<code>payment.rs:1506</code>) uses <code>EffectFrame.batch</code>
         </td>
         <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>Biggest mismatch — no single owner; open-world suffix blacklist contradicts documented invariant.</strong>
-          (1) <code>is_mana_suffix_effect</code> admits <code>Untap</code>, <code>CreateToken</code>, <code>PutCounters</code>, <code>Move</code>,
-          <code>DrawCards</code>, <code>OptionalPayment</code>, etc. (<code>de9787c042</code>).
-          (2) Zero catalog card uses any suffix besides <code>DealDamageToPlayer</code> (<span class="card-name">Tarnished Citadel</span>) and
-          <code>GainLife</code> (<span class="card-name">The Great Henge</span>).
-          (3) Empty-suffix <code>add_counters</code>-only and <code>remove_counters</code>+<code>add_counters</code> swap abilities bypass
-          <code>PaymentModel::uses</code> on a coupled fork and spin forever.
-          (4) Unrepresented costs (<code>exile_source</code>, <code>return_source</code>, <code>sacrifice</code>, <code>discard</code>,
-          <code>waterbend</code>) pass <code>is_mana_ability()</code> and are silently skipped by <code>complete_mana_upfront</code>.
+          <strong>Biggest mismatch — two incompatible cost-execution models.</strong>
+          <code>complete_mana_upfront</code> sends <code>CounterChange</code> to <code>apply_immediate_event</code>
+          (<code>proposed_event.rs:1531</code>), which panics (<code>"event requiring a choice needs a retained caller"</code>)
+          the moment two <code>ModifyCounters</code> replacements apply (<code>da29dbbdc8</code>). Non-mana activations already
+          own a retained cost <code>EffectFrame</code> with <code>FrameCompletion::Activated</code>; mana activations have no
+          equivalent <code>FrameCompletion</code>.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
-          <strong>Pending counter-cost reservation across <code>ManaUpfront</code></strong><br>
-          <span class="muted small">Counters committed to an announced mana ability cannot be double-spent by a nested activation.</span>
+          <strong>CR 601.2h / 605.3b output timing &amp; CR 608.2h LKI</strong><br>
+          <span class="muted small">Dynamic mana output evaluates <em>after</em> all costs (counters, sacrifice) commit and <em>before</em> the suffix runs, preserving LKI of a sacrificed source's chosen color/type.</span>
         </td>
         <td>
-          <code>payment_model::reserve()</code> (<code>mana.rs:3209</code>)<br>
-          reserves only <code>tap_source</code> &amp; <code>sacrifice_source</code>
+          <code>upfront_mana_outputs</code> called at <code>mana.rs:5182</code> <em>before</em> <code>Effect::sacrifice_this()</code>;<br>
+          reads live <code>permanents[permanent].chosen</code> (<code>mana.rs:3182</code>)
         </td>
         <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>Missing reservation causes infinite <code>ManaUpfront</code> nesting.</strong>
-          <code>remove_counters</code> commits in <code>complete_mana_upfront</code> (<code>mana.rs:5107</code>), not on announcement,
-          and is never reserved while <code>Decision::ManaUpfront</code> waits for <code>mana_cost</code>. A <code>{1}, Remove a counter: Add {G}{G}</code>
-          ability on a permanent with 1 counter can activate itself infinitely before paying <code>{1}</code>.
+          <strong>Premature output baking + missing LKI.</strong>
+          (1) On <code>HEAD</code>, a dynamic sacrifice mana ability (e.g. counting creatures, graveyard, or
+          <code>permanents_sacrificed</code>) evaluates <em>before</em> the sacrifice commits.
+          (2) With suspended counter replacements, baking <code>Decision::ManaChoice</code> before the counter batch commits
+          freezes stale pre-counter power/counter counts (3 vs 4 counters can change the output!).
+          (3) Once sacrifice runs before output evaluation, reading live <code>permanents[permanent].chosen</code> returns
+          <code>None</code> unless captured as LKI beforehand.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
-          <strong>Catalog CR 605.1a parity</strong><br>
-          <span class="muted small">No real card or granted mana ability can silently fall onto the stack when authored.</span>
+          <strong>Payment reservations &amp; obligations across suspended child frames</strong><br>
+          <span class="muted small">Enclosing mana payments and reservations remain visible while a replacement choice is suspended inside a mana activation.</span>
         </td>
         <td>
-          <code>registered_mana_activations_consume_finite_payment_resources</code> (<code>tests.rs:2439</code>)
+          <code>payment_model::reserve</code> (<code>mana.rs:3280</code>) &amp;<br>
+          <code>payment_obligations_owing</code> (<code>mana.rs:3667</code>)<br>
+          inspect only <code>suspended.decision</code>
         </td>
         <td><span class="badge badge-no">No</span></td>
         <td>
-          Only inspects <code>ability.mana_choices().is_some()</code> on printed <code>activated_abilities</code>; skips
-          <code>has_dynamic_mana_output()</code>, skips <code>GrantActivated</code> statics/effects, omits <code>remove_counters</code>, and
-          never checks suffixes.
+          <strong>Silent caller erasure during <code>OrderReplacement</code>.</strong>
+          Unlike <code>SuspendedResolution::continuation()</code> (<code>decision.rs:1102</code>), neither <code>reserve</code>
+          nor <code>payment_obligations_owing</code> walks <code>suspended.frame.completion</code>. Whenever
+          <code>Decision::OrderReplacement</code> is parked on a cost or suffix frame, every saved <code>ManaOutput</code>,
+          <code>ManaChoice</code>, <code>ManaUpfront</code>, and resolution <code>Payment</code> disappears from both.
+        </td>
+        <td><span class="badge badge-scope">This Work</span></td>
+      </tr>
+      <tr>
+        <td>
+          <strong>Fork-search &amp; live-offer parity on <code>OrderReplacement</code> during payment</strong><br>
+          <span class="muted small">Every offer the payer sees during a manual payment leaves a legal completion; opponent choices remain universal and unrestricted.</span>
+        </td>
+        <td>
+          <code>Decision::OrderReplacement</code> action space (<code>decision.rs:1918</code>) &amp; execution (<code>decision.rs:2661</code>) unconditionally offer all <code>0..candidates.len()</code>
+        </td>
+        <td><span class="badge badge-no">No</span></td>
+        <td>
+          <strong>Promoted from Deferred → This Work (Finish the rule on every surface it touches).</strong>
+          Once Pass 4's coupled fork search branches through <code>OrderReplacement</code> (OR for <code>chooser == payer</code>,
+          AND for <code>chooser != payer</code>), an activation can be certified legal via one order while another order strands
+          the cost. Leaving live <code>OrderReplacement</code> unfiltered lets the payer choose the stranding order and crash into
+          an empty <code>ManaChoice</code> (<code>AgentError</code>) — breaking MTG-500's own core invariant.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
           <strong>Positive arithmetic whitelist &amp; coupled fork search</strong><br>
-          <span class="muted small">Review 5 Design 5: closed <code>BoardArithmeticProfile</code>, intrinsic <code>ActivationFacts</code>, question-level 3-role coupling, Pure Handoff.</span>
+          <span class="muted small">Review 5 Design 4 (<code>BoardArithmeticProfile</code>, <code>ActivationFacts</code>, 3 roles) + Design 1 pure-handoff fork search.</span>
         </td>
         <td>
           Frozen <code>PaymentModel</code>, <code>LayerBoard.reads</code>,<br>
-          <code>payment_writes_couple</code>, <code>.life_delta()</code> erasure
+          <code>payment_writes_couple</code>, <code>.life_delta()</code>
         </td>
         <td><span class="badge badge-no">No</span><br><span class="muted small">Pass 4</span></td>
         <td>
-          Unchanged from Review 5 (<code>fc7f2f70e7</code>). Now acquires a complete, zero-cap termination proof once paired with the closed
-          monotone mana-ability contract above.
+          Design 4 from Review 5 stands intact. With <code>FrameCompletion::ManaOutput</code>, coupled transitions that suspend
+          on <code>OrderReplacement</code> now complete cleanly on forks without panicking and without any search cap.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
           <strong>Unified feasibility incl. colored convoke</strong><br>
-          <span class="muted small">All 8+ payment surfaces share one feasibility model including colored convoke taps.</span>
+          <span class="muted small">Fold <code>convoke_colors: ManaTypeSet</code> into <code>PaymentModel</code> across all 8+ payment surfaces.</span>
         </td>
         <td>
           <code>PaymentModel</code> vs <code>while_paying</code> / <code>convoke_search</code> (<code>help.rs:260</code>)
         </td>
         <td><span class="badge badge-no">No</span><br><span class="muted small">Pass 5</span></td>
         <td>
-          5 nested surfaces still skip <code>while_paying</code>. Folding <code>convoke_colors: ManaTypeSet</code> into
-          <code>PaymentModel</code> stays in Pass 5.
+          Unchanged from prior reviews; remains Pass 5.
         </td>
         <td><span class="badge badge-scope">This Work</span></td>
       </tr>
       <tr>
         <td>
-          <strong>Non-mana activation ownership &amp; live <code>OrderReplacement</code> filtering</strong><br>
-          <span class="muted small">Announced non-mana abilities surviving grant loss; pruning stranding replacement orders.</span>
+          <strong>Owned non-mana activations</strong><br>
+          <span class="muted small">Announced non-mana abilities surviving grant loss while paying their costs.</span>
         </td>
         <td>
-          <code>Operation::Activation</code> (<code>play.rs:2376</code>)<br>
-          <code>proposed_event.rs</code>
+          <code>Operation::Activation</code> re-reads <code>ability_index</code> in <code>prepare_activated_ability</code> (<code>play.rs:1871/1986</code>)
         </td>
         <td><span class="badge badge-no">No</span><br><span class="muted small">Deferred</span></td>
         <td>
-          Triaged in prior reviews as separate Tasks (no catalog card triggers live replacement stranding; Pass 1 prevents spins).
+          Independent of mana-ability payment continuation; requires owned capture on <code>Operation::Activation</code> /
+          <code>ActivatedTargeting</code> in <code>flow/play.rs</code> and <code>flow/payment.rs</code>. Separate Task (Review 3 choice 3a).
         </td>
         <td><span class="badge badge-existing">Separate Outcome</span></td>
       </tr>
@@ -721,562 +750,476 @@
   </table>
 
   <!-- ====================================================================== -->
-  <h2>2. Concrete Failure &amp; Recovery Walkthroughs</h2>
+  <h2>2. Concrete Failure, Counterexample &amp; Recovery Walkthroughs</h2>
 
   <div class="grid-2">
     <div class="card">
       <div class="card-title">
-        <h3>Case 1 · Repeatable Suffix Grows Board (Repro <code>de9787c042</code>)</h3>
-        <span class="badge badge-no">Unbounded in Coupled Fork</span>
+        <h3>Case 1 · Attempt 4 Panic &amp; Priority Recovery (<code>da29dbbdc8</code>)</h3>
+        <span class="badge badge-no">Panics on HEAD</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
-          <div>Constructed ability on <span class="card-name">Gray Ogre</span>: <code>{T}: Add <span class="pip pip-g">G</span>, Create 1 Clue, Untap This</code>. Pool saturated at 255 <span class="pip pip-g">G</span>; payer checks a spell costing <span class="pip pip-u">U</span>.</div>
+          <div>
+            Board at priority (<code>ManaFloats::All</code>, no enclosing payment): <span class="card-name">Gray Ogre</span>
+            with <code>{T}, Put a +1/+1 counter on this: Add <span class="pip pip-g">G</span></code>,
+            <span class="card-name">Caradora, Heart of Alacria</span> (<code>+1</code>), and cost-enabled
+            <span class="card-name">Doubling Season</span> (<code>×2</code>).
+          </div>
         </div>
         <div class="step-row fail">
           <div class="step-num">2</div>
-          <div><strong>Failure under open-world <code>is_mana_suffix_effect</code>:</strong> <code>CreateToken</code> and <code>Untap</code> pass the blacklist → classified as a mana ability → Design 5 marks it <code>Mutator</code>. Every fork activation leaves Ogre untapped, pool unchanged, and <code>clues = 1, 2, 3, …</code> with a fresh canonical hash every step → <strong>non-terminating fork search!</strong></div>
+          <div>
+            <strong>Failure on <code>HEAD</code>:</strong> Stepping <code>ActivateAbility(ogre, 0)</code> calls
+            <code>complete_mana_upfront</code> → taps Ogre → sends <code>CounterChange(+1)</code> to
+            <code>apply_immediate_event</code> → <strong>panics</strong> (<code>event requiring a choice needs a retained caller</code>).
+          </div>
         </div>
         <div class="step-row ok">
           <div class="step-num">3</div>
-          <div><strong>Closed-contract recovery:</strong> <code>CreateToken</code> and <code>Untap</code> are not in the life/damage suffix whitelist → <code>is_mana_ability() == false</code>. At priority it activates onto the stack (<code>Operation::Activation</code>); during payment it never enters <code>payment_sources()</code>, so <span class="pip pip-u">U</span> rejects immediately in 0 forks.</div>
+          <div>
+            <strong>Recovery:</strong> <code>complete_mana_upfront</code> builds a cost <code>EffectFrame</code> with
+            <code>batch = [CounterChange(+1)]</code> and <code>completion = FrameCompletion::ManaOutput(Box&lt;PendingManaOutput&gt;)</code>.
+            <code>run_frame</code> suspends cleanly on <code>Decision::OrderReplacement</code>. Because no enclosing payment
+            exists, <strong>both</strong> orders are offered; stepping either commits 3 or 4 counters, fires
+            <code>FrameCompletion::ManaOutput</code>, and produces <span class="pip pip-g">G</span>.
+          </div>
         </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">
-        <h3>Case 2 · Three More Termination Holes (Empty Suffix!)</h3>
-        <span class="badge badge-no">Newly Uncovered</span>
-      </div>
-      <div class="trace">
-        <div class="step-row fail">
-          <div class="step-num">A</div>
-          <div><strong>Bare <code>add_counters</code> mana ability:</strong> <code>add_counters: (+1/+1, 1): Add <span class="pip pip-g">G</span></code> (no tap/sacrifice/limit). Suffix is empty! Design 5 marks it <code>Mutator</code> → coupled fork puts 1, 2, 3… counters forever without ever hitting <code>PaymentModel::uses</code>'s panic.</div>
-        </div>
-        <div class="step-row fail">
-          <div class="step-num">B</div>
-          <div><strong>2-ability counter-swap cycle:</strong> Ability 0 swaps <code>+1/+1 → Charge</code>; Ability 1 swaps <code>Charge → +1/+1</code>. Both have <code>remove_counters.is_some()</code>, yet together form an unbounded cycle when paired with a board-mutating/counter-reading trigger or pool cap.</div>
-        </div>
-        <div class="step-row fail">
-          <div class="step-num">C</div>
-          <div><strong>Unreserved <code>remove_counters</code> in <code>ManaUpfront</code> (<code>mana.rs:3209</code>):</strong> <code><span class="pip pip-c">1</span>, Remove a counter: Add <span class="pip pip-g">G</span><span class="pip pip-g">G</span></code> on a permanent with 1 counter pushes <code>Decision::ManaUpfront</code> without reserving the counter → can activate itself recursively forever before paying <span class="pip pip-c">1</span>, then double-spend 1 counter!</div>
-        </div>
-        <div class="step-row ok">
-          <div class="step-num">✓</div>
-          <div><strong>Recovery:</strong> <code>consumes_finite_payment_resource()</code> rejects (A) and (B) (any <code>add_counters</code> must also consume tap/sacrifice/limit/tap_cost); reserving pending <code>remove_counters</code> in <code>ManaUpfront</code> closes (C).</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">
-        <h3>Case 3 · Why Search Caps / Cycle Pruning Cannot Solve It</h3>
-        <span class="badge badge-no">Undecidable in General</span>
+        <h3>Case 2 · Dynamic Output + Stranding Replacement Order</h3>
+        <span class="badge badge-no">Counterexample to Baking &amp; Deferral</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
-          <div>Pair <code>{T}: Add <span class="pip pip-g">G</span>, Create Clue, Untap This</code> with <code>Condition::ControlsAtLeast(K, Artifact), {T}: Add <span class="pip pip-u">U</span></code> (paying <span class="pip pip-u">U</span>).</div>
+          <div>
+            Same board, casting a <span class="pip pip-g">G</span><span class="pip pip-g">G</span> spell;
+            <span class="card-name">Gray Ogre</span> (2/2) has <code>{T}, Put a +1/+1 counter on this: If you control a creature with power ≥ 6, add <span class="pip pip-g">G</span><span class="pip pip-g">G</span>, else <span class="pip pip-g">G</span></code>.
+          </div>
         </div>
         <div class="step-row fail">
           <div class="step-num">2</div>
-          <div><strong>No exact bound exists:</strong> If <code>K = 100</code>, the only legal witness activates 100 times; if the condition asks for Enchantments instead, no finite count ever pays <span class="pip pip-u">U</span>. Worse, <code>PutCounters</code> + <code>RemoveCounters</code> + <code>Condition</code> encodes a 2-counter machine — <strong>feasibility is undecidable</strong>.</div>
+          <div>
+            <strong>Why pre-baking <code>ManaChoice</code> breaks:</strong> Evaluating <code>upfront_mana_outputs</code> before
+            the counter batch sees Ogre at 2/2 and bakes <span class="pip pip-g">G</span> forever — even after 4 counters make it 6/6!
+          </div>
+        </div>
+        <div class="step-row fail">
+          <div class="step-num">3</div>
+          <div>
+            <strong>Why unfiltered live <code>OrderReplacement</code> breaks:</strong> Coupled fork search certifies Ogre via
+            <code>Caradora → Season</code> (<code>(1+1)×2 = 4</code> counters → 6/6 → <span class="pip pip-g">G</span><span class="pip pip-g">G</span>).
+            If live play still offers <code>Season → Caradora</code> (<code>(1×2)+1 = 3</code> counters → 5/5 → <span class="pip pip-g">G</span>),
+            picking it hits <code>ManaChoice([<span class="pip pip-g">G</span>])</code> with 0 feasible modes → <strong><code>AgentError</code></strong>!
+          </div>
+        </div>
+        <div class="step-row ok">
+          <div class="step-num">4</div>
+          <div>
+            <strong>Recovery:</strong> <code>FrameCompletion::ManaOutput</code> evaluates dynamic output <em>after</em> counters
+            commit, and live <code>OrderReplacement</code> filters modes via the same coupled authority while
+            <code>has_enclosing_payment(payer)</code> holds — offering only <code>Caradora → Season</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <h3>Case 3 · Sacrifice Dynamic Output &amp; Chosen-Color LKI</h3>
+        <span class="badge badge-no">Already Wrong on HEAD</span>
+      </div>
+      <div class="trace">
+        <div class="step-row">
+          <div class="step-num">1</div>
+          <div>
+            Ability A: <code>{T}, Sacrifice this: Add <span class="pip pip-g">G</span> for each creature you control</code>
+            (or <code>If you sacrificed a permanent this turn, add <span class="pip pip-g">G</span><span class="pip pip-g">G</span>, else <span class="pip pip-g">G</span></code>).<br>
+            Ability B: <code>{T}, Sacrifice this: Add one mana of the chosen color</code> (<code>AddOneColorManaValue { chosen_color: true }</code>).
+          </div>
+        </div>
+        <div class="step-row fail">
+          <div class="step-num">2</div>
+          <div>
+            <strong>Failure on <code>HEAD</code>:</strong> <code>complete_mana_upfront</code> (<code>mana.rs:5182</code>) evaluates
+            <code>upfront_mana_outputs</code> <em>before</em> <code>Effect::sacrifice_this()</code> runs (<code>mana.rs:5195</code>),
+            counting the sacrificed creature as still on the battlefield and missing <code>permanents_sacrificed</code>.
+            Simply moving evaluation after sacrifice without LKI breaks Ability B because <code>permanents[permanent]</code> is
+            now <code>None</code> (<code>mana.rs:3182</code>).
+          </div>
+        </div>
+        <div class="step-row ok">
+          <div class="step-num">3</div>
+          <div>
+            <strong>Recovery:</strong> Capture <code>chosen: Option&lt;Arc&lt;EntryChoice&gt;&gt;</code> alongside
+            <code>source</code> and <code>tapped</code> before the cost frame runs. Run <code>Effect::sacrifice_this()</code> in
+            <code>cost_frame.queue</code>, then evaluate <code>output</code> in <code>FrameCompletion::ManaOutput</code> using
+            the post-sacrifice board and captured <code>chosen</code> LKI (CR 601.2h / 605.3b / 608.2h).
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <h3>Case 4 · Fast Path, Chained Replacements &amp; Opponent Chooser</h3>
+        <span class="badge badge-yes">Stress-Tested Edge Cases</span>
+      </div>
+      <div class="trace">
+        <div class="step-row ok">
+          <div class="step-num">A</div>
+          <div>
+            <strong>Fast path (no counter/sacrifice cost):</strong> Lands, <span class="card-name">Tarnished Citadel</span>,
+            <span class="card-name">The Great Henge</span>, mana dorks skip <code>cost_frame</code> entirely — identical
+            allocation profile to <code>HEAD</code>.
+          </div>
+        </div>
+        <div class="step-row ok">
+          <div class="step-num">B</div>
+          <div>
+            <strong>Combined counter + sacrifice + suffix:</strong> <code>cost_frame.batch</code> commits counters first (so
+            departure LKI sees added counters), <code>cost_frame.queue</code> runs <code>sacrifice_this</code> (suspending on
+            competing graveyard/exile replacements if any), <code>FrameCompletion::ManaOutput</code> computes output post-cost /
+            pre-suffix, and <code>suffix</code> runs in its child frame before exposing <code>ManaChoice</code>.
+          </div>
         </div>
         <div class="step-row warn">
-          <div class="step-num">3</div>
-          <div><strong>Any arbitrary node/depth cap violates core repository contracts:</strong> <code>managym/README.md:697</code> forbids work-limit truncation of legal payments, and <code>plan.md:100</code> requires exactness independent of search budgets. Zero printed Magic cards in history have a resource-restoring mana suffix.</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">
-        <h3>Case 4 · All Real &amp; Constructed Pass 4 Boards Still Work</h3>
-        <span class="badge badge-yes">100% Preserved</span>
-      </div>
-      <div class="trace">
-        <div class="step-row ok">
-          <div class="step-num">1</div>
-          <div><strong>Catalog suffixes:</strong> <span class="card-name">Tarnished Citadel</span> (<code>DealDamageToPlayer(You, 3)</code>) and <span class="card-name">The Great Henge</span> (<code>GainLife(2)</code>) are both in the life/damage suffix whitelist — zero change on <code>0d7bb67437</code> or TLA Limited acceptance.</div>
-        </div>
-        <div class="step-row ok">
-          <div class="step-num">2</div>
-          <div><strong>Counter-removing &amp; counter-adding mana:</strong> Pass 4 repro <code>a90fd7109</code> (Mountain <code>remove_counters: (Trample, 1)</code>, <code>add_counters: None</code>), <span class="card-name">Ramos</span>, and a future <span class="card-name">Wall of Roots</span> (<code>once_each_turn: true, add_counters: (-0/-1, 1)</code>) all satisfy <code>consumes_finite_payment_resource()</code>!</div>
-        </div>
-        <div class="step-row ok">
-          <div class="step-num">3</div>
-          <div><strong>Future real cards (e.g. <span class="card-name">Chromatic Sphere</span>):</strong> If a card is later authored with <code>DrawCards</code> as a mana suffix, the catalog CR 605.1a parity test fails CI immediately instead of silently putting it on the stack.</div>
+          <div class="step-num">C</div>
+          <div>
+            <strong>Opponent-controlled <code>OrderReplacement</code>:</strong> If a suffix affects the opponent
+            (e.g. <code>DealDamageToPlayer(EachPlayer)</code> with two opponent damage replacements), <code>chooser != payer</code>.
+            The fork search requires <strong>every</strong> opponent order to complete (universal AND); live play never filters
+            an opponent's replacement choice.
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>3. The Biggest Mismatch &amp; The Exact Termination Theorem</h2>
+  <h2>3. Biggest Mismatch — Before &amp; After Architecture</h2>
 
   <div class="card card-callout">
     <div class="card-title">
-      <h3>Biggest Conceptual Mismatch</h3>
-      <span class="badge badge-no">Two Open-World Blacklists, Split Ownership</span>
-    </div>
-    <p>
-      <code>managym</code> already documents the exact domain invariant that makes payment feasibility decidable without search caps
-      (<code>managym/README.md:669–673</code>): <em>every mana activation consumes a finite payment resource, and neither production nor
-      spending can restore one</em>. Yet the code split that invariant across three leaky places: an open-world blacklist in
-      <code>is_mana_suffix_effect</code> (<code>card.rs:683</code>), a partial cost-only test on printed definitions
-      (<code>tests.rs:2439</code>), and a late panic inside <code>PaymentModel::uses</code> (<code>mana.rs:1795</code>) that a coupled
-      fork never even reaches.
-    </p>
-    <p style="margin-bottom: 0;">
-      <strong>Fix:</strong> Consolidate the invariant into <strong>one closed-world predicate</strong> on
-      <code>ActivatedAbilityDefinition</code> (<code>state/src/card.rs</code>), back it with a <strong>catalog CR 605.1a parity test</strong>
-      over printed and granted abilities, and close the missing <strong><code>remove_counters</code> reservation on <code>Decision::ManaUpfront</code></strong>.
-      Together with Design 5's Positive Arithmetic Whitelist, every step in BOTH Pure and Coupled regimes strictly descends a well-founded
-      lexicographic measure.
-    </p>
-  </div>
-
-  <!-- Lexicographic Well-Founded Termination Proof -->
-  <div class="card card-proof">
-    <div class="card-title">
-      <h3>Exact Zero-Cap Termination Proof: Lexicographic Resource Measure <code>M = (P, U, L, C)</code></h3>
-      <span class="badge badge-yes">Well-Founded on ℕ⁴ (Order Type ω⁴)</span>
+      <h3>Why the Current Boundary Breaks</h3>
+      <span class="badge badge-no">Before · HEAD (<code>cc268d738e</code>)</span>
     </div>
     <p class="small">
-      Let <code>M(state) = (P_unres, U_unres, L_unres, C_unres) ∈ ℕ⁴</code> count the payer's <em>unreserved</em> finite battlefield resources.
-      Every activation strictly decreases <code>M</code> in lexicographic order; no whitelisted suffix, replacement effect, or queued trigger
-      can increase any component at or above the consumed one:
-    </p>
-    <div class="grid-4" style="margin-top: 10px;">
-      <div class="measure-card">
-        <strong>1. <code>P_unres</code> (Presence)</strong><br>
-        <span class="muted small">Unreserved battlefield permanents. Decreased by <code>sacrifice_source</code> (reserved immediately on <code>ManaUpfront</code>). Never increased by life/damage suffixes.</span>
-      </div>
-      <div class="measure-card">
-        <strong>2. <code>U_unres</code> (Untapped)</strong><br>
-        <span class="muted small">Unreserved untapped permanents. Decreased by <code>tap_source</code>, <code>tap_cost</code> (blocks nested activations until <code>tap_remaining == 0</code>), fixed taps, and help taps.</span>
-      </div>
-      <div class="measure-card">
-        <strong>3. <code>L_unres</code> (Use Limits)</strong><br>
-        <span class="muted small">Unused <code>once_only</code> / <code>exhaust</code> / <code>power_up</code> / <code>once_each_turn</code> slots. Decreased immediately by <code>record_activation</code>.</span>
-      </div>
-      <div class="measure-card">
-        <strong>4. <code>C_unres</code> (Counters)</strong><br>
-        <span class="muted small">Unreserved permanent counters. Decreased by <code>remove_counters</code> (when <code>add_counters.is_none()</code>; reserved on <code>ManaUpfront</code>). <code>add_counters</code> allowed only when <code>(P, U, L)</code> strictly drops!</span>
-      </div>
-    </div>
-    <p class="small" style="margin: 10px 0 0;">
-      <strong>Non-activation steps:</strong> <code>ManaChoice</code> and <code>ManaSpend</code> / <code>PayCost</code> strictly shrink
-      continuation depth or owed mana pips without changing <code>M</code>; delve shrinks graveyard size <code>G</code>;
-      all 16 <code>ReplacementEffect</code> variants (<code>card.rs:596–678</code>) leave <code>(P, U, L, C)</code> non-increasing on
-      life/damage/sacrifice/removal events; non-mana triggers queue in <code>waiting_triggers</code> and never resolve during payment (CR 603.3).
-      <strong>Therefore every branch of the coupled fork search terminates in finitely many steps with zero arbitrary cap.</strong>
+      <code>complete_mana_upfront</code> mixes synchronous immediate-event calls with a post-output child frame: it assumes
+      counter costs never suspend, assumes output never depends on sacrifice or counter replacements, and relies on
+      <code>FrameCompletion::Decision(ManaChoice)</code> while <code>payment_model::reserve</code> and
+      <code>payment_obligations_owing</code> never inspect <code>frame.completion</code>.
     </p>
   </div>
 
-  <!-- Before vs After SVG Diagram -->
   <div class="diagram-wrap">
-    <svg viewBox="0 0 1100 470" width="1100" height="470" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Before fragmented open-world mana ability checks vs After single closed monotone mana-ability contract">
-      <defs>
-        <marker id="arr-err" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--error)"/>
-        </marker>
-        <marker id="arr-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--info)"/>
-        </marker>
-        <marker id="arr-suc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--success)"/>
-        </marker>
-      </defs>
+    <svg viewBox="0 0 1100 355" xmlns="http://www.w3.org/2000/svg" font-family="DM Sans, -apple-system, sans-serif">
+      <!-- BEFORE LANE -->
+      <text x="14" y="24" font-size="12" font-weight="700" letter-spacing="0.06em" fill="var(--error-text)">BEFORE · HEAD (TWO INCOMPATIBLE WORLDS)</text>
 
-      <!-- BEFORE PANEL -->
-      <rect x="8" y="8" width="510" height="454" rx="10" fill="var(--bg-surface)" stroke="var(--border)" stroke-width="1.2"/>
-      <text x="24" y="34" fill="var(--error-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">BEFORE · HEAD — FRAGMENTED OPEN-WORLD CONTRACT</text>
+      <rect x="14" y="38" width="150" height="72" rx="8" fill="var(--bg-surface)" stroke="var(--border-strong)"/>
+      <text x="89" y="64" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">1. tap_source</text>
+      <text x="89" y="82" text-anchor="middle" font-size="11" fill="var(--text-secondary)">tap_permanent()</text>
+      <text x="89" y="97" text-anchor="middle" font-size="11" fill="var(--text-secondary)">capture tapped LKI</text>
 
-      <rect x="24" y="50" width="478" height="122" rx="7" fill="var(--error-wash)" stroke="var(--error)"/>
-      <text x="36" y="70" fill="var(--error-text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">1. is_mana_suffix_effect() — Open-World Blacklist (card.rs:683)</text>
-      <text x="36" y="89" fill="var(--text)" font-family="var(--font-mono)" font-size="10.7">!matches!(AddMana | AddOneColorManaValue | Modal | If)</text>
-      <text x="36" y="106" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ Admits Untap, CreateToken, PutCounters, Move, DrawCards…</text>
-      <text x="36" y="123" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ Ignores finite-resource cost &amp; unrepresented upfront costs</text>
-      <text x="36" y="140" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ 4 separate methods repeat suffix check (can drift)</text>
-      <text x="36" y="158" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="10.8">Catalog test (tests.rs:2439) checks printed costs only — never suffixes or grants.</text>
+      <line x1="164" y1="74" x2="192" y2="74" stroke="var(--error)" stroke-width="1.8"/>
+      <polygon points="192,74 185,70 185,78" fill="var(--error)"/>
 
-      <line x1="263" y1="172" x2="263" y2="196" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
+      <rect x="194" y="38" width="186" height="72" rx="8" fill="var(--error-wash)" stroke="var(--error)" stroke-width="1.6"/>
+      <text x="287" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--error-text)">2. apply_immediate_event</text>
+      <text x="287" y="80" text-anchor="middle" font-size="11" fill="var(--error-text)">CounterChange (remove/add)</text>
+      <text x="287" y="97" text-anchor="middle" font-size="11" font-weight="600" fill="var(--error-text)">PANIC on OrderReplacement!</text>
 
-      <rect x="24" y="196" width="478" height="104" rx="7" fill="var(--bg)" stroke="var(--border)"/>
-      <text x="36" y="216" fill="var(--text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">2. Runtime Enforcement Leaks on Four Paths</text>
-      <text x="36" y="236" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ de9787c042: CreateToken + Untap → infinite Clue growth</text>
-      <text x="36" y="253" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ Empty suffix + add_counters only → infinite counter growth</text>
-      <text x="36" y="270" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ remove_counters + add_counters pair → counter-swap cycle</text>
-      <text x="36" y="287" fill="var(--error-text)" font-family="var(--font-mono)" font-size="10.7">✗ ManaUpfront (mana.rs:3209) → remove_counters unreserved!</text>
+      <line x1="380" y1="74" x2="408" y2="74" stroke="var(--error)" stroke-width="1.8"/>
+      <polygon points="408,74 401,70 401,78" fill="var(--error)"/>
 
-      <line x1="263" y1="300" x2="263" y2="324" stroke="var(--error)" stroke-width="1.4" marker-end="url(#arr-err)"/>
+      <rect x="410" y="38" width="210" height="72" rx="8" fill="var(--error-wash)" stroke="var(--error)" stroke-width="1.6"/>
+      <text x="515" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--error-text)">3. upfront_mana_outputs()</text>
+      <text x="515" y="80" text-anchor="middle" font-size="11" fill="var(--error-text)">life_cost + bake ManaChoice</text>
+      <text x="515" y="97" text-anchor="middle" font-size="11" font-weight="600" fill="var(--error-text)">TOO EARLY (pre-sacrifice!)</text>
 
-      <rect x="24" y="324" width="478" height="122" rx="7" fill="var(--error-wash)" stroke="var(--error)"/>
-      <text x="36" y="344" fill="var(--error-text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">3. Coupled Fork Search Has No Termination Proof</text>
-      <text x="36" y="365" fill="var(--text)" font-family="var(--font-sans)" font-size="11.4">• Pure PaymentModel::uses() panics late on usize::MAX (costs only)</text>
-      <text x="36" y="384" fill="var(--text)" font-family="var(--font-sans)" font-size="11.4">• Coupled fork executes Mutators before Pure → never hits panic</text>
-      <text x="36" y="403" fill="var(--text)" font-family="var(--font-sans)" font-size="11.4">• Canonical hash memoization never loops back when Clues/counters grow</text>
-      <text x="36" y="426" fill="var(--error-text)" font-family="var(--font-sans)" font-size="11.4" font-weight="600">→ Either infinite spin (recreating MTG-500!) or arbitrary search cap.</text>
+      <line x1="620" y1="74" x2="648" y2="74" stroke="var(--border-strong)" stroke-width="1.6"/>
+      <polygon points="648,74 641,70 641,78" fill="var(--border-strong)"/>
 
-      <!-- AFTER PANEL -->
-      <rect x="536" y="8" width="556" height="454" rx="10" fill="var(--bg-surface)" stroke="var(--info)" stroke-width="1.4"/>
-      <text x="552" y="34" fill="var(--info-text)" font-family="var(--font-sans)" font-size="13" font-weight="700">AFTER · PROPOSED — CLOSED MONOTONE CONTRACT + DESIGN 5</text>
+      <rect x="650" y="38" width="224" height="72" rx="8" fill="var(--warning-wash)" stroke="var(--warning)" stroke-width="1.5"/>
+      <text x="762" y="62" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--warning-text)">4. child([sacrifice, suffix])</text>
+      <text x="762" y="80" text-anchor="middle" font-size="11" fill="var(--warning-text)">completion: Decision(ManaChoice)</text>
+      <text x="762" y="97" text-anchor="middle" font-size="11" fill="var(--warning-text)">blind to reserve() / obligations()</text>
 
-      <rect x="552" y="50" width="524" height="134" rx="7" fill="var(--info-wash)" stroke="var(--info)"/>
-      <text x="564" y="70" fill="var(--info-text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">1. Single Authoritative Predicate: mana_parts() (state/src/card.rs)</text>
-      <text x="564" y="89" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">• Closed suffix whitelist: GainLife | LoseLife* | DealDamageToPlayer* | DrainLife</text>
-      <text x="564" y="106" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">• Supported costs: exactly the fields ManaUpfrontActivation pays</text>
-      <text x="564" y="123" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">• Finite resource: sacrifice | tap | limit | tap_cost&gt;0</text>
-      <text x="564" y="139" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">                   OR (remove_counters&gt;0 &amp;&amp; add_counters.is_none())</text>
-      <text x="564" y="157" fill="var(--info-text)" font-family="var(--font-sans)" font-size="10.8">Shared by is_mana_ability(), mana_choices(), has_dynamic_mana_output(), mana_suffix().</text>
-      <text x="564" y="173" fill="var(--success-text)" font-family="var(--font-sans)" font-size="10.8">+ Catalog CR 605.1a parity test scans printed definitions, tokens &amp; GrantActivated.</text>
+      <line x1="874" y1="74" x2="902" y2="74" stroke="var(--border-strong)" stroke-width="1.6"/>
+      <polygon points="902,74 895,70 895,78" fill="var(--border-strong)"/>
 
-      <line x1="814" y1="184" x2="814" y2="208" stroke="var(--info)" stroke-width="1.4" marker-end="url(#arr-ok)"/>
+      <rect x="904" y="38" width="182" height="72" rx="8" fill="var(--bg-surface)" stroke="var(--border-strong)"/>
+      <text x="995" y="64" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">5. ManaChoice</text>
+      <text x="995" y="82" text-anchor="middle" font-size="11" fill="var(--text-secondary)">stale choices if sacrifice</text>
+      <text x="995" y="97" text-anchor="middle" font-size="11" fill="var(--text-secondary)">changed board state</text>
 
-      <rect x="552" y="208" width="524" height="90" rx="7" fill="var(--bg)" stroke="var(--info)"/>
-      <text x="564" y="228" fill="var(--text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">2. Complete Upfront Reservations + Design 5 Whitelist</text>
-      <text x="564" y="248" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">• ManaUpfront reserves tap_source, sacrifice_source AND remove_counters!</text>
-      <text x="564" y="265" fill="var(--text)" font-family="var(--font-mono)" font-size="10.6">• BoardArithmeticProfile + ActivationFacts → {Invariant, Sensitive, Mutator}</text>
-      <text x="564" y="282" fill="var(--text-secondary)" font-family="var(--font-sans)" font-size="10.8">Life/damage-only suffixes fit Design 5's damage/life replacement channels cleanly.</text>
+      <!-- DIVIDER -->
+      <line x1="14" y1="142" x2="1086" y2="142" stroke="var(--border)" stroke-dasharray="5,5"/>
 
-      <line x1="814" y1="298" x2="814" y2="322" stroke="var(--success)" stroke-width="1.5" marker-end="url(#arr-suc)"/>
+      <!-- AFTER LANE -->
+      <text x="14" y="168" font-size="12" font-weight="700" letter-spacing="0.06em" fill="var(--info-text)">AFTER · PROPOSED (ONE PHASE-ACCURATE CONTINUATION — MIRRORS FrameCompletion::Activated)</text>
 
-      <rect x="552" y="322" width="524" height="124" rx="7" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.3"/>
-      <text x="564" y="342" fill="var(--success-text)" font-family="var(--font-sans)" font-size="12.2" font-weight="700">3. Proven Termination on Both Pure &amp; Coupled Regimes</text>
-      <text x="564" y="363" fill="var(--text)" font-family="var(--font-sans)" font-size="11.3">• Every activation strictly decreases M = (P_unres, U_unres, L_unres, C_unres) ∈ ℕ⁴</text>
-      <text x="564" y="382" fill="var(--text)" font-family="var(--font-sans)" font-size="11.3">• Non-activation steps shrink continuation depth / owed pips / delve graveyard</text>
-      <text x="564" y="401" fill="var(--text)" font-family="var(--font-sans)" font-size="11.3">• Zero arbitrary node/depth caps; zero truncation; zero hash/token/replay churn</text>
-      <text x="564" y="424" fill="var(--success-text)" font-family="var(--font-sans)" font-size="11.3" font-weight="600">→ Exactness &amp; guaranteed termination hold by construction on every game state.</text>
+      <rect x="14" y="182" width="156" height="92" rx="8" fill="var(--bg-surface)" stroke="var(--info)" stroke-width="1.5"/>
+      <text x="92" y="206" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">1. Immediate Costs</text>
+      <text x="92" y="224" text-anchor="middle" font-size="11" fill="var(--text-secondary)">tap_source + life_cost</text>
+      <text x="92" y="240" text-anchor="middle" font-size="11" fill="var(--info-text)">capture LKI: source,</text>
+      <text x="92" y="255" text-anchor="middle" font-size="11" fill="var(--info-text)">tapped, chosen</text>
+
+      <line x1="170" y1="228" x2="198" y2="228" stroke="var(--info)" stroke-width="1.8"/>
+      <polygon points="198,228 191,224 191,232" fill="var(--info)"/>
+
+      <rect x="200" y="182" width="232" height="92" rx="8" fill="var(--info-wash)" stroke="var(--info)" stroke-width="1.8"/>
+      <text x="316" y="205" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--info-text)">2. Cost Frame (if counters/sac)</text>
+      <text x="316" y="223" text-anchor="middle" font-size="11" fill="var(--text)">batch: [CounterChange (rem, add)]</text>
+      <text x="316" y="239" text-anchor="middle" font-size="11" fill="var(--text)">queue: [Effect::sacrifice_this?]</text>
+      <text x="316" y="257" text-anchor="middle" font-size="11" font-weight="600" fill="var(--info-text)">completion: ManaOutput(Box&lt;…&gt;)</text>
+
+      <!-- OrderReplacement loop on Cost Frame -->
+      <path d="M 275 274 C 275 306, 357 306, 357 274" fill="none" stroke="var(--info)" stroke-width="1.5" stroke-dasharray="3,2"/>
+      <polygon points="357,274 352,281 361,281" fill="var(--info)"/>
+      <text x="316" y="322" text-anchor="middle" font-size="11" font-weight="600" fill="var(--info-text)">OrderReplacement (filtered if paying)</text>
+
+      <line x1="432" y1="228" x2="460" y2="228" stroke="var(--info)" stroke-width="1.8"/>
+      <polygon points="460,228 453,224 453,232" fill="var(--info)"/>
+
+      <rect x="462" y="182" width="206" height="92" rx="8" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.8"/>
+      <text x="565" y="205" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--success-text)">3. complete_mana_output()</text>
+      <text x="565" y="223" text-anchor="middle" font-size="11" fill="var(--text)">eval output AFTER all costs,</text>
+      <text x="565" y="239" text-anchor="middle" font-size="11" fill="var(--text)">BEFORE suffix, w/ LKI chosen</text>
+      <text x="565" y="257" text-anchor="middle" font-size="11" font-weight="600" fill="var(--success-text)">builds Decision::ManaChoice</text>
+
+      <!-- Fast path arrow from 1 to 3 -->
+      <path d="M 92 182 C 92 152, 565 152, 565 180" fill="none" stroke="var(--success)" stroke-width="1.4" stroke-dasharray="4,3"/>
+      <polygon points="565,181 561,174 569,174" fill="var(--success)"/>
+      <text x="330" y="156" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--success-text)">fast path (99.9%): no counters &amp; no sacrifice → zero cost_frame allocation</text>
+
+      <line x1="668" y1="228" x2="696" y2="228" stroke="var(--info)" stroke-width="1.8"/>
+      <polygon points="696,228 689,224 689,232" fill="var(--info)"/>
+
+      <rect x="698" y="182" width="184" height="92" rx="8" fill="var(--bg-surface)" stroke="var(--info)" stroke-width="1.5"/>
+      <text x="790" y="206" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">4. Suffix Frame (if any)</text>
+      <text x="790" y="224" text-anchor="middle" font-size="11" fill="var(--text-secondary)">queue: life/damage suffix</text>
+      <text x="790" y="240" text-anchor="middle" font-size="11" fill="var(--text-secondary)">completion: Decision(Choice)</text>
+      <text x="790" y="257" text-anchor="middle" font-size="11" fill="var(--info-text)">OrderReplacement filtered too</text>
+
+      <line x1="882" y1="228" x2="910" y2="228" stroke="var(--success)" stroke-width="1.8"/>
+      <polygon points="910,228 903,224 903,232" fill="var(--success)"/>
+
+      <rect x="912" y="182" width="174" height="92" rx="8" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.6"/>
+      <text x="999" y="206" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--success-text)">5. Decision::ManaChoice</text>
+      <text x="999" y="224" text-anchor="middle" font-size="11" fill="var(--text)">exact post-cost choices</text>
+      <text x="999" y="240" text-anchor="middle" font-size="11" fill="var(--text)">exact post-suffix life</text>
+      <text x="999" y="257" text-anchor="middle" font-size="11" fill="var(--success-text)">reserve/obligations intact</text>
     </svg>
   </div>
 
-  <!-- Proposed Code Shape -->
-  <div class="card card-proposed">
-    <div class="card-title">
-      <h3>Proposed Code Shapes (<code>managym/state/src/card.rs</code> &amp; <code>managym/src/flow/mana.rs</code>)</h3>
-      <span class="badge badge-proposed">Proposed · Choices 1a–4a</span>
+  <div class="grid-2">
+    <div class="card card-proposed">
+      <div class="card-title">
+        <h3>Proposed Continuation Type (<code>flow/decision.rs</code>)</h3>
+        <span class="badge badge-proposed">Proposed · Pass 4</span>
+      </div>
+      <pre><code>/// Retained mana activation awaiting its counter/sacrifice cost frame
+/// before evaluating dynamic output and running any suffix (CR 601.2h, 605.3b).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PendingManaOutput {
+    pub player: PlayerId,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub source: Option&lt;ObjectId&gt;,
+    pub tapped: Option&lt;TappedForMana&gt;,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chosen: Option&lt;std::sync::Arc&lt;crate::state::permanent::EntryChoice&gt;&gt;,
+    pub output: Effect,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub suffix: Vec&lt;Effect&gt;,
+    pub caller: Box&lt;EffectFrame&gt;,
+    pub resume: Option&lt;Box&lt;Decision&gt;&gt;,
+}
+
+// Appended to `pub enum FrameCompletion`:
+/// Mana-ability counter/sacrifice costs finished; evaluate output now.
+ManaOutput(Box&lt;PendingManaOutput&gt;),</code></pre>
     </div>
-    <p class="small">
-      Composes directly with Design 5 (<code>fc7f2f70e7</code>). Zero serialized schema, token, or hash v35 changes — pure Rust invariants:
-    </p>
-<pre><code>// ── managym/state/src/card.rs (Closed positive mana-ability contract) ────────
-/// A mana ability's later instruction (CR 605.1a, 605.3b): untargeted life or
-/// damage only — never restores finite payment resources (permanents, taps,
-/// use limits, counters) or launches nested decision programs.
-fn is_mana_suffix_effect(effect: &amp;Effect) -&gt; bool {
-    match effect {
-        Effect::GainLife { .. } | Effect::DrainLife { .. } =&gt; true,
-        Effect::LoseLife { player, .. } | Effect::DealDamageToPlayer { player, .. } =&gt; {
-            player.target_spec().is_none()
-        }
-        _ =&gt; false,
-    }
-}
 
-impl ActivatedAbilityDefinition {
-    /// Whether activating this ability strictly decreases the well-founded
-    /// payment resource tuple (P, U, L, C). Adding counters is allowed only
-    /// when a higher-priority resource (P, U, or L) strictly decreases.
-    pub fn consumes_finite_payment_resource(&amp;self) -&gt; bool {
-        self.sacrifice_source
-            || self.tap_source
-            || self.is_use_limited()
-            || self.tap_cost.as_ref().is_some_and(|cost| cost.count &gt; 0)
-            || (self.remove_counters.is_some_and(|(_, count)| count &gt; 0)
-                &amp;&amp; self.add_counters.is_none())
-    }
-
-    /// Cost fields paid by `ManaUpfrontActivation` / `complete_mana_upfront`.
-    pub fn has_supported_mana_costs(&amp;self) -&gt; bool {
-        self.zone == ActivationZone::Battlefield
-            &amp;&amp; self.loyalty.is_none()
-            &amp;&amp; self.sacrifice.is_none()
-            &amp;&amp; !self.waterbend
-            &amp;&amp; !self.exile_source
-            &amp;&amp; !self.return_source
-            &amp;&amp; !self.discard_source
-            &amp;&amp; !self.discard_card
-            &amp;&amp; !self.has_grantor_cost()
-            &amp;&amp; self.tap_power().is_none()
-            &amp;&amp; !self.station
-    }
-
-    /// Single owner used by `is_mana_ability`, `has_dynamic_mana_output`,
-    /// `mana_choices`, `resolve_fixed_entry_mana`, and `mana_suffix`.
-    fn mana_parts(&amp;self) -&gt; Option&lt;(&amp;Effect, &amp;[Effect])&gt; {
-        if !self.has_supported_mana_costs() || !self.consumes_finite_payment_resource() {
-            return None;
-        }
-        let (effect, suffix) = self.effects.split_first()?;
-        (is_mana_output(effect) &amp;&amp; suffix.iter().all(is_mana_suffix_effect))
-            .then_some((effect, suffix))
-    }
-
-    /// Syntactic CR 605.1a check used by the catalog parity test so no real
-    /// printed or granted mana card can silently fall onto the stack.
-    pub fn looks_like_cr_mana_ability(&amp;self) -&gt; bool {
-        self.loyalty.is_none()
-            &amp;&amp; self.effects.first().is_some_and(is_mana_output)
-            &amp;&amp; self.effects.iter().all(|e| e.target_spec().is_none())
-    }
-}
-
-// ── managym/src/flow/mana.rs (Reserve pending remove_counters on ManaUpfront) ─
-// Collect pending `(PermanentId, CounterKind, u16)` from suspended `Decision::ManaUpfront`
-// frames (just like `tap_source` / `sacrifice_source` reservations), and subtract them
-// when checking `can_pay_counters` in `payment_sources()` / `can_activate_mana_ability()`.
-// Coupled forks re-apply the same reservations; `PaymentModel::uses()` keeps its
-// `debug_assert_ne!(uses, usize::MAX)` backed by `consumes_finite_payment_resource()`.</code></pre>
+    <div class="card card-proposed">
+      <div class="card-title">
+        <h3>Every Consumer &amp; Authority Surface Touched</h3>
+        <span class="badge badge-proposed">Proposed · Pass 4</span>
+      </div>
+      <ul class="compact small">
+        <li><code>flow/mana.rs</code> (<code>complete_mana_upfront</code> &amp; <code>complete_mana_output</code>): fast-path when no counter/sacrifice costs; otherwise run <code>CounterChange</code> in <code>cost_frame.batch</code> + <code>sacrifice_this</code> in <code>cost_frame.queue</code> with <code>FrameCompletion::ManaOutput</code>. <code>upfront_mana_outputs</code> takes <code>chosen: Option&lt;&amp;EntryChoice&gt;</code> instead of reading live <code>permanents[permanent]</code>.</li>
+        <li><code>flow/mana.rs</code> (<code>payment_model::reserve</code> &amp; <code>payment_obligations_owing</code>): walk <code>suspended.frame.completion</code> through <code>Decision</code>, <code>ManaOutput</code>, <code>Frame</code>, <code>Event</code>, and <code>DiscardDuringResolution</code> so mid-batch queries retain every reservation and obligation.</li>
+        <li><code>flow/decision.rs</code> (<code>run_payment_frame</code>, <code>FrameCompletion::then</code>, <code>SuspendedResolution::continuation</code>): dispatch <code>ManaOutput</code> into <code>complete_mana_output</code> (looping into <code>suffix_frame</code> when non-empty); walk <code>pending.caller</code> and <code>pending.resume</code>.</li>
+        <li><code>flow/decision.rs</code> (<code>Decision::OrderReplacement</code> at <code>:1918</code> &amp; <code>:2661</code>): when <code>has_enclosing_payment(*player)</code> holds, filter offered modes (and validate execution) via the coupled feasibility authority.</li>
+        <li><code>flow/interchangeable.rs</code>, <code>flow/selection_sampling.rs</code>, <code>agent/effect_execution.rs</code>: exhaustive <code>ManaOutput</code> arms marking <code>source</code>, walking/rebinding <code>caller</code> + <code>resume</code>, and projecting execution tokens.</li>
+      </ul>
+    </div>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>4. Termination &amp; Soundness Matrix</h2>
+  <h2>4. Engine Invariants · Throughput, Memory, Hash &amp; Termination</h2>
 
-  <table>
-    <thead>
-      <tr>
-        <th style="width: 28%;">Case / Ability Shape</th>
-        <th style="width: 18%;">At <code>HEAD</code></th>
-        <th style="width: 20%;">Design 5 Alone</th>
-        <th style="width: 34%;">Design 5 + Closed Monotone Contract <span class="badge badge-proposed">Proposed</span></th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><strong><code>{T}: Add <span class="pip pip-g">G</span>, Create Clue, Untap This</code></strong><br><span class="muted small">Pass 4 repro 3 (<code>de9787c042</code>) paying <span class="pip pip-u">U</span></span></td>
-        <td><span class="badge badge-no">Leak</span> Admitted as mana ability; Pure ignores suffix.</td>
-        <td><span class="badge badge-no">Infinite Spin</span> Mutator grows Clues forever.</td>
-        <td><span class="badge badge-yes">Safe</span> Rejected by suffix whitelist → ordinary stack ability at priority; 0 forks during payment.</td>
-      </tr>
-      <tr>
-        <td><strong><code>add_counters: (+1/+1, 1): Add <span class="pip pip-g">G</span></code></strong><br><span class="muted small">Empty suffix; no tap/sacrifice/limit</span></td>
-        <td><span class="badge badge-no">Panic</span> <code>PaymentModel::uses</code> hits <code>usize::MAX</code>.</td>
-        <td><span class="badge badge-no">Infinite Spin</span> Mutator skips <code>uses()</code>, grows counters forever.</td>
-        <td><span class="badge badge-yes">Safe</span> Rejected by <code>consumes_finite_payment_resource()</code> → stack ability; zero panic, zero spin.</td>
-      </tr>
-      <tr>
-        <td><strong>Counter-swap pair: <code>-A,+B</code> ↔ <code>-B,+A</code></strong><br><span class="muted small">Two mana abilities cycling counters</span></td>
-        <td><span class="badge badge-no">Incorrect</span> Pure marks <code>limited: true</code>; misses cycle.</td>
-        <td><span class="badge badge-no">Cycle</span> Coupled fork loops A ↔ B.</td>
-        <td><span class="badge badge-yes">Safe</span> <code>add_counters.is_some()</code> requires <code>(P,U,L)</code> drop → neither admitted without tap/limit.</td>
-      </tr>
-      <tr>
-        <td><strong><code><span class="pip pip-c">1</span>, Remove counter: Add <span class="pip pip-g">G</span><span class="pip pip-g">G</span></code> (1 counter)</strong><br><span class="muted small">Unreserved <code>remove_counters</code> in <code>ManaUpfront</code></span></td>
-        <td><span class="badge badge-no">Bug</span> Double-spends 1 counter or nests forever.</td>
-        <td><span class="badge badge-no">Infinite Nest</span> Fork nests <code>ManaUpfront</code> infinitely.</td>
-        <td><span class="badge badge-yes">Pass</span> Pending <code>remove_counters</code> reserved on <code>ManaUpfront</code> → <code>C_unres</code> drops to 0 immediately.</td>
-      </tr>
-      <tr>
-        <td><strong><span class="card-name">Mountain</span> <code>remove_counters: (Trample, 1)</code> + Heartbeat</strong><br><span class="muted small">Pass 4 repro 2 (<code>a90fd71090</code>)</span></td>
-        <td><span class="badge badge-no">Error</span> Empty action space on counter-first.</td>
-        <td><span class="badge badge-yes">Pass</span></td>
-        <td><span class="badge badge-yes">Pass</span> <code>remove_counters &gt; 0 &amp;&amp; add_counters.is_none()</code> strictly lowers <code>C_unres</code>; only tap-first offered.</td>
-      </tr>
-      <tr>
-        <td><strong><span class="card-name">Henge</span> + <span class="card-name">Citadel</span> + <code>ModifyDamage</code> @ 4 life</strong><br><span class="muted small">Pass 4 repro 1 (<code>0d7bb67437</code>)</span></td>
-        <td><span class="badge badge-no">Error</span> Empty action space on Henge-first.</td>
-        <td><span class="badge badge-yes">Pass</span></td>
-        <td><span class="badge badge-yes">Pass</span> <code>GainLife</code> and <code>DealDamageToPlayer</code> both whitelisted; Citadel-first hands Henge off to Pure.</td>
-      </tr>
-      <tr>
-        <td><strong><span class="card-name">Wall of Roots</span> shape: <code>once_each_turn + add_counters</code></strong><br><span class="muted small">Real MTG card pattern</span></td>
-        <td><span class="badge badge-yes">Admitted</span></td>
-        <td><span class="badge badge-yes">Mutator</span></td>
-        <td><span class="badge badge-yes">Pass</span> <code>L_unres</code> strictly drops (higher than <code>C_unres</code> in <code>M</code>) → admitted &amp; strictly terminating!</td>
-      </tr>
-      <tr>
-        <td><strong>Future <span class="card-name">Chromatic Sphere</span> (<code>DrawCards</code> suffix)</strong><br><span class="muted small">Unwhitelisted real MTG card</span></td>
-        <td><span class="badge badge-no">Broken</span> Leaks hidden-info draw into payment forks.</td>
-        <td><span class="badge badge-no">Broken</span> Forks read private library order!</td>
-        <td><span class="badge badge-yes">Caught in CI</span> Catalog CR 605.1a parity test fails loudly until draw-mana semantics are deliberately added.</td>
-      </tr>
-      <tr>
-        <td><strong>All TLA Limited &amp; Catalog Mana Cards</strong><br><span class="muted small">Citadel, Henge, Ramos, Canyon, Treasure, Cabbage Merchant, Audience, Heartbeat, Badgermole</span></td>
-        <td><span class="badge badge-yes">Pure / Pending</span></td>
-        <td><span class="badge badge-yes">Pure / Coupled</span></td>
-        <td><span class="badge badge-yes">100% Preserved</span> Every catalog card passes both <code>is_mana_ability()</code> and parity test; TLA boards stay 0-fork Pure.</td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="grid-4">
+    <div class="measure-card">
+      <h3>Hot-Path Throughput</h3>
+      <p class="small muted">
+        99.9% of mana activations have neither counter nor sacrifice costs and skip <code>cost_frame</code> allocation
+        completely. Live <code>OrderReplacement</code> checks <code>has_enclosing_payment(player)</code> in O(1) — zero cost
+        on combat, spell resolution, death triggers, or priority floating.
+      </p>
+    </div>
+    <div class="measure-card">
+      <h3>Memory &amp; Size Budget</h3>
+      <p class="small muted">
+        Boxing <code>PendingManaOutput</code> inside <code>FrameCompletion::ManaOutput(Box&lt;…&gt;)</code> keeps
+        <code>size_of::&lt;FrameCompletion&gt;()</code> and <code>EffectFrame</code> identical to <code>HEAD</code>
+        (matching <code>DiscardPayment</code>, <code>Frame</code>, and <code>Decision</code>).
+      </p>
+    </div>
+    <div class="measure-card">
+      <h3>Hash &amp; Snapshot Fidelity</h3>
+      <p class="small muted">
+        <code>origin/main</code> is hash v34; this branch already carries the unreleased bump to v35. Appending
+        <code>FrameCompletion::ManaOutput</code> leaves all existing JSON encodings byte-identical, serializes
+        <code>source</code> with <code>exact</code>, and preserves snapshot/determinization parity.
+      </p>
+    </div>
+    <div class="measure-card">
+      <h3>Zero-Cap Termination</h3>
+      <p class="small muted">
+        Each <code>OrderReplacement</code> step permanently pushes one <code>ReplacementId</code> onto
+        <code>pending.applied</code> (<code>proposed_event.rs:2245</code>). Combined with Design 5's monotone finite-resource
+        measure, every coupled fork terminates with no node or depth cap.
+      </p>
+    </div>
+  </div>
 
   <!-- ====================================================================== -->
-  <h2>5. Key Design Choices &amp; Trade-Offs</h2>
+  <h2>5. Design Choices &amp; Trade-Offs</h2>
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 1 · Where should finite-resource monotonicity be enforced?</h3>
-      <span class="badge badge-scope">This Work · Reversible (internal engine; zero hash/replay/token break)</span>
+      <strong>1. How should a mana activation retain its continuation across counter/sacrifice replacement choices?</strong>
+      <span class="badge badge-existing">Reversible internal engine design</span>
     </div>
     <div class="choice-grid-3">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 1a</span> Closed contract in <code>ActivatedAbilityDefinition::is_mana_ability()</code> + catalog CR 605.1a parity test</div>
-        <ul class="compact">
-          <li>One authoritative predicate (<code>mana_parts()</code>) owns finite-resource consumption, supported costs, and whitelisted suffixes across all 5 callers.</li>
-          <li>Mathematically guarantees termination of both Pure and Coupled regimes with zero search cap and zero runtime <code>Result</code> plumbing.</li>
-          <li>Catalog parity test over printed definitions, tokens, and <code>GrantActivated</code> guarantees no real card silently falls onto the stack.</li>
-        </ul>
+        <div class="opt-title"><span class="badge badge-proposed">1a · Recommended</span> Dedicated <code>FrameCompletion::ManaOutput(Box&lt;PendingManaOutput&gt;)</code></div>
+        Mirrors <code>FrameCompletion::Paid</code> and <code>FrameCompletion::Activated</code>. Evaluates dynamic output
+        after all costs commit and before <code>suffix</code> runs, using captured LKI <code>chosen</code>. Zero extra
+        allocation when no counter/sacrifice cost is present.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">Passed Over · 1b</span> Keep open-world CR 605.1a in <code>is_mana_ability()</code>; reject non-monotone abilities with <code>AgentError</code> at runtime</div>
-        <ul class="compact">
-          <li>Splits "mana ability" into two concepts across <code>layers.rs</code>, <code>observation.rs</code>, <code>play.rs</code>, and <code>mana.rs</code>.</li>
-          <li>Forces fallible <code>Result&lt;_, AgentError&gt;</code> through 30+ read-only payment query helpers (or panics on constructed boards), while offering no extra safety for real cards over 1a's CI test.</li>
-        </ul>
+        <div class="opt-title"><span class="badge badge-existing">1b · Passed over</span> Pre-bake <code>Decision::ManaChoice</code> into <code>FrameCompletion::Decision</code></div>
+        Fails both dynamic-output counterexamples: freezes stale output before counter replacements (3 vs 4 counters) and before
+        <code>sacrifice_source</code> changes battlefield/graveyard counts.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">Passed Over · 1c</span> Allow resource-restoring suffixes in coupled fork search with a depth / node cap</div>
-        <ul class="compact">
-          <li>Violates <code>managym/README.md:697</code> and <code>plan.md:100</code> (no search-budget truncation of legal payments).</li>
-          <li>Exact feasibility is undecidable with unbounded token/counter growth; any cap either strands legal plays into <code>AgentError</code> or burns the full cap on infeasible casts.</li>
-        </ul>
+        <div class="opt-title"><span class="badge badge-existing">1c · Passed over</span> Add a post-cost stage to <code>Decision::ManaUpfront</code></div>
+        Misuses a player-facing <code>Decision</code> variant as an internal non-interactive transition, complicating
+        <code>action_space</code>, continuation codes, and <code>FrameCompletion::Decision</code>.
       </div>
     </div>
   </div>
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 2 · Which <code>Effect</code> variants belong in the closed <code>is_mana_suffix_effect</code> whitelist?</h3>
-      <span class="badge badge-scope">This Work · Reversible (internal engine)</span>
+      <strong>2. Should live <code>Decision::OrderReplacement</code> filter stranding orders during payment in Pass 4?</strong>
+      <span class="badge badge-scope">This Work · Parity with Coupled Search</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 2a</span> Life &amp; damage only: <code>GainLife</code>, untargeted <code>LoseLife</code>, untargeted <code>DealDamageToPlayer</code>, <code>DrainLife</code></div>
-        <ul class="compact">
-          <li>Covers 100% of catalog mana suffixes (<span class="card-name">Tarnished Citadel</span>, <span class="card-name">The Great Henge</span>) and every classic painland / life-gain mana source.</li>
-          <li>Strictly life-only: never touches <code>(P, U, L, C)</code>, delve graveyards, hidden library order, or interactive sub-decisions.</li>
-          <li>Any future card needing e.g. <code>DrawCards</code> (<span class="card-name">Chromatic Sphere</span>) triggers the catalog parity test so its hidden-info semantics are designed explicitly.</li>
-        </ul>
+        <div class="opt-title"><span class="badge badge-proposed">2a · Recommended</span> Filter <code>OrderReplacement</code> when <code>chooser == payer</code> &amp; <code>has_enclosing_payment</code></div>
+        Uses the exact coupled feasibility authority Pass 4 already builds. Eliminates <code>AgentError</code> on stranding
+        replacement orders (Case 2) while leaving priority floating (<code>da29dbbdc8</code>), opponent choices (universal AND
+        in search), and non-payment gameplay completely unrestricted.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">Passed Over · 2b</span> Wider monotone whitelist adding <code>MillCards</code>, <code>Sacrifice</code>, <code>Discard</code>, <code>Tap</code>, <code>RemoveCounters</code></div>
-        <ul class="compact">
-          <li>Zero catalog cards use any of these as a mana suffix.</li>
-          <li><code>Sacrifice</code>/<code>Discard</code> can suspend for interactive choices and mutate delve graveyards, widening the coupled surface for unused shapes.</li>
-        </ul>
+        <div class="opt-title"><span class="badge badge-existing">2b · Passed over</span> Keep <code>OrderReplacement</code> filtering deferred to a separate Task</div>
+        Leaves a direct gap between Pass 4's coupled fork search (which certifies an activation via one order) and live play
+        (which offers the stranding order and crashes into an empty <code>ManaChoice</code>).
       </div>
     </div>
   </div>
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 3 · How should <code>remove_counters</code> participate in finite-resource monotonicity?</h3>
-      <span class="badge badge-scope">This Work · Reversible (internal engine)</span>
+      <strong>3. How should <code>CounterChange</code> and <code>Sacrifice</code> costs be ordered inside the cost frame?</strong>
+      <span class="badge badge-existing">Reversible internal engine design</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 3a</span> Admit <code>remove_counters &gt; 0 &amp;&amp; add_counters.is_none()</code> AND reserve pending <code>remove_counters</code> on <code>Decision::ManaUpfront</code></div>
-        <ul class="compact">
-          <li>Keeps Pass 4 repro 2 (<code>a90fd71090</code>) and real counter-mana cards (<span class="card-name">Crystalline Crawler</span>, <span class="card-name">Gemstone Array</span>, <span class="card-name">Ramos</span>) valid while blocking both empty-suffix <code>add_counters</code> and counter-swap cycles.</li>
-          <li>Reserving pending counter removals on <code>ManaUpfront</code> closes the nested-upfront recursion &amp; double-spend bug at <code>mana.rs:3209</code>.</li>
-        </ul>
+        <div class="opt-title"><span class="badge badge-proposed">3a · Recommended</span> <code>CounterChange</code> in <code>cost_frame.batch</code>, <code>Effect::sacrifice_this()</code> in <code>cost_frame.queue</code></div>
+        Still a single <code>EffectFrame</code> with <code>FrameCompletion::ManaOutput</code>, and commits added/removed
+        counters onto the live permanent <em>before</em> <code>sacrifice_this</code> snapshots departure LKI.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">Passed Over · 3b</span> Exclude bare <code>remove_counters</code> from <code>consumes_finite_payment_resource()</code> (require tap/sacrifice/limit/tap_cost only)</div>
-        <ul class="compact">
-          <li>Breaks Pass 4 repro 2 (<code>a90fd71090</code>, which has <code>remove_counters: (Trample, 1)</code> without <code>once_each_turn</code>) and rejects genuine finite MTG counter-mana cards.</li>
-        </ul>
+        <div class="opt-title"><span class="badge badge-existing">3b · Passed over</span> Combine <code>CounterChange</code> and <code>Sacrifice</code> in one simultaneous <code>EventBatch</code></div>
+        <code>advance_event_batch</code> snapshots <code>departing</code> LKI before any member commits
+        (<code>proposed_event.rs:989</code>), so newly added cost counters would be invisible to death/departure LKI.
       </div>
     </div>
   </div>
 
   <div class="choice-box">
     <div class="choice-header">
-      <h3>Choice 4 · Disposition of Pass 4 attempt 3's fixture <code>repeatable_mana_suffix_grows_the_board_at_a_full_pool</code> (<code>de9787c042</code>)</h3>
-      <span class="badge badge-scope">This Work · Reversible</span>
+      <strong>4. Canonical state hash version for <code>FrameCompletion::ManaOutput</code>?</strong>
+      <span class="badge badge-existing">Reversible before merge to main</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">Recommended · 4a</span> Convert into the closed-contract regression suite (non-monotone suffix, bare <code>add_counters</code>, counter-swap, nested <code>ManaUpfront</code> counter reservation, and catalog parity)</div>
-        <ul class="compact">
-          <li>Retains the exact <code>CreateToken + Untap</code> board from <code>de9787c042</code> to prove it stays off the mana-ability path and rejects an impossible <span class="pip pip-u">U</span> cast in 0 forks.</li>
-          <li>Locks all three newly uncovered counter/cost termination holes with directed debug tests.</li>
-        </ul>
+        <div class="opt-title"><span class="badge badge-proposed">4a · Recommended</span> Keep <code>MATCH_STATE_HASH_VERSION = 35</code></div>
+        <code>origin/main</code> is v34; v35 is already this branch's unreleased bump from Pass 3. Appending a new
+        <code>FrameCompletion</code> variant leaves every existing serialized state unchanged, and both new payment
+        continuations land together under v35.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">Passed Over · 4b</span> Remove <code>de9787c042</code> once the whitelist lands</div>
-        <ul class="compact">
-          <li>Drops the regression that caught the open-world <code>is_mana_suffix_effect</code> blacklist in the first place.</li>
-        </ul>
+        <div class="opt-title"><span class="badge badge-existing">4b · Passed over</span> Bump to <code>MATCH_STATE_HASH_VERSION = 36</code></div>
+        Burns two hash versions inside one unmerged PR with no released v35 consumer to distinguish from.
       </div>
     </div>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>6. Critical Invariants &amp; Separate Outcomes</h2>
-
-  <div class="card">
-    <ul class="compact">
-      <li>
-        <strong>No hash, replay, token, or published-API churn</strong>
-        <span class="badge badge-scope">This Work · Preserved</span> —
-        <code>is_mana_suffix_effect</code>, <code>consumes_finite_payment_resource</code>, <code>has_supported_mana_costs</code>,
-        <code>BoardArithmeticProfile</code>, and <code>ManaUpfront</code> counter reservations are purely derived runtime/type invariants.
-        <code>MATCH_STATE_HASH_VERSION</code> stays at v35; every registered card keeps identical behavior, learning tokens, and replay hashes.
-      </li>
-      <li>
-        <strong>Pass 4 implementation scope (Design 5 + Closed Monotone Contract)</strong>
-        <span class="badge badge-scope">This Work · Pass 4</span> —
-        Implement Review 5's Positive Arithmetic Whitelist (<code>BoardArithmeticProfile</code>, intrinsic <code>ActivationFacts</code>,
-        question-level 3-role <code>PaymentCoupling</code>, Pure Handoff, shortcut deferral, command-zone emblems) together with this
-        review's closed monotone mana-ability contract, <code>ManaUpfront</code> counter reservation, and expanded catalog CR 605.1a parity test.
-      </li>
-      <li>
-        <strong>Colored convoke inside <code>PaymentModel</code> &amp; release Engine Budget</strong>
-        <span class="badge badge-scope">This Work · Pass 5</span> —
-        Fold <code>convoke_colors: ManaTypeSet</code> into <code>PaymentModel</code>, delete <code>while_paying</code> / <code>convoke_search</code>,
-        verify <span class="card-name">Guardian of Vitu-Ghazi</span> and two-slot snapshot restore, and update <code>managym/README.md</code>.
-      </li>
-      <li>
-        <strong>Owned capture for non-mana activations (<code>Operation::Activation</code> / <code>ActivatedTargeting</code>)</strong>
-        <span class="badge badge-existing">Separate Outcome</span> —
-        Capture announced non-mana abilities in <code>flow/play.rs</code> before mana payment (carried from Review 3 Choice 3a).
-      </li>
-      <li>
-        <strong>Filtering live <code>Decision::OrderReplacement</code> offers during payment</strong>
-        <span class="badge badge-existing">Separate Outcome</span> —
-        Restricting replacement ordering choices in <code>proposed_event.rs</code> when one order strands payment (no current catalog card constructs it; Pass 1 prevents spins).
-      </li>
-    </ul>
-  </div>
-
-  <!-- ====================================================================== -->
-  <h2>7. Questions for Decision</h2>
-  <p class="muted small">Reply with option codes (e.g. <code>1a, 2a, 3a, 4a</code>) to lock the Pass 4 termination contract alongside Design 5.</p>
+  <h2>6. Questions</h2>
 
   <ol class="q-list">
     <li class="q-item">
-      <div class="q-stem">1. Where should finite-resource monotonicity for mana abilities be enforced?</div>
+      <div class="q-stem">1. Cost-to-output continuation shape for activated mana abilities:</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Close <code>ActivatedAbilityDefinition::is_mana_ability()</code> around one authoritative predicate (<code>mana_parts()</code>: finite resource cost, supported upfront costs, whitelisted non-restoring suffix) and enforce CR 605.1a parity across printed cards, tokens, and <code>GrantActivated</code> in the catalog test.</li>
-        <li>Keep <code>is_mana_ability()</code> as open-world CR 605.1a syntax and reject non-monotone mana abilities with <code>AgentError</code> at runtime in <code>payment_sources()</code> / <code>activate_mana_ability()</code>.</li>
-        <li>Allow resource-restoring mana suffixes inside coupled fork search and enforce termination with a search depth / state cap.</li>
+        <li><strong>1a (Recommended):</strong> Add <code>FrameCompletion::ManaOutput(Box&lt;PendingManaOutput&gt;)</code> (evaluating dynamic output post-cost / pre-suffix with captured <code>chosen</code> LKI, fast-pathing when no counter/sacrifice cost exists) and walk <code>frame.completion</code> in <code>payment_model::reserve</code> and <code>payment_obligations_owing</code>.</li>
+        <li><strong>1b:</strong> Pre-bake <code>Decision::ManaChoice</code> into <code>FrameCompletion::Decision</code> (accepting stale dynamic outputs when counter replacements or sacrifice change board state).</li>
+        <li><strong>1c:</strong> Add a post-cost stage to <code>Decision::ManaUpfront</code> inside <code>FrameCompletion::Decision</code>.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">2. Which <code>Effect</code> variants should the closed <code>is_mana_suffix_effect</code> whitelist admit?</div>
+      <div class="q-stem">2. Live <code>Decision::OrderReplacement</code> filtering during manual mana payment:</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Life and damage only (<code>GainLife</code>, untargeted <code>LoseLife</code>, untargeted <code>DealDamageToPlayer</code>, <code>DrainLife</code>), matching 100% of current catalog suffixes and keeping <code>(P, U, L, C)</code>, delve, and hidden info untouched.</li>
-        <li>A wider non-restoring whitelist also including <code>MillCards</code>, <code>Sacrifice</code>, <code>Discard</code>, <code>Tap</code>, and <code>RemoveCounters</code>.</li>
+        <li><strong>2a (Recommended):</strong> Pull into Pass 4 — filter <code>Decision::OrderReplacement</code> when <code>chooser == payer</code> and <code>has_enclosing_payment</code> is true (and treat <code>chooser != payer</code> as universal AND in fork search), guaranteeing fork-search / live-play parity with zero overhead outside payment.</li>
+        <li><strong>2b:</strong> Leave live <code>OrderReplacement</code> filtering deferred to a separate Task and accept <code>AgentError</code> if a payer chooses a stranding replacement order on a constructed board.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">3. How should <code>remove_counters</code> enter the finite-resource invariant and <code>Decision::ManaUpfront</code>?</div>
+      <div class="q-stem">3. Ordering counter costs and source sacrifice inside the cost frame:</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Admit <code>remove_counters &gt; 0 &amp;&amp; add_counters.is_none()</code> in <code>consumes_finite_payment_resource()</code> (keeping <code>a90fd71090</code> and counter-mana cards valid while blocking bare <code>add_counters</code> and counter-swap cycles), and reserve pending <code>remove_counters</code> across suspended <code>Decision::ManaUpfront</code> frames.</li>
-        <li>Require <code>tap_source</code>, <code>sacrifice_source</code>, <code>is_use_limited()</code>, or <code>tap_cost &gt; 0</code> on every mana ability, excluding bare <code>remove_counters</code>.</li>
+        <li><strong>3a (Recommended):</strong> Put <code>CounterChange</code> (remove, then add) in <code>cost_frame.batch</code> and <code>Effect::sacrifice_this()</code> in <code>cost_frame.queue</code> so departure LKI reflects committed cost counters.</li>
+        <li><strong>3b:</strong> Combine both into one simultaneous <code>EventBatch</code> (matching <code>complete_announced_payment</code>'s single-batch layout).</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">4. What should happen to Pass 4 attempt 3's fixture <code>repeatable_mana_suffix_grows_the_board_at_a_full_pool</code> (<code>de9787c042</code>)?</div>
+      <div class="q-stem">4. Canonical match-state hash version:</div>
       <ol class="q-opts" type="a">
-        <li><strong>(Recommended)</strong> Convert it into the closed-contract regression suite covering <code>CreateToken + Untap</code> exclusion (0-fork rejection of <span class="pip pip-u">U</span>), bare <code>add_counters</code>, counter-swap cycles, nested <code>ManaUpfront</code> counter reservation, and catalog CR 605.1a parity.</li>
-        <li>Delete <code>de9787c042</code> after tightening <code>is_mana_suffix_effect</code>.</li>
+        <li><strong>4a (Recommended):</strong> Keep this branch's unreleased <code>MATCH_STATE_HASH_VERSION = 35</code> (vs v34 on <code>origin/main</code>).</li>
+        <li><strong>4b:</strong> Bump to <code>MATCH_STATE_HASH_VERSION = 36</code>.</li>
       </ol>
     </li>
   </ol>
@@ -1285,22 +1228,22 @@ impl ActivatedAbilityDefinition {
 
 <script>
   (function () {
-    const btn = document.getElementById('themeToggle');
+    const btn = document.getElementById("themeToggle");
     const root = document.documentElement;
-    const modes = ['auto', 'light', 'dark'];
+    const states = ["auto", "light", "dark"];
     let idx = 0;
     function apply() {
-      const mode = modes[idx];
-      if (mode === 'auto') {
-        root.removeAttribute('data-theme');
-        btn.textContent = 'Theme: Auto';
+      const mode = states[idx];
+      if (mode === "auto") {
+        root.removeAttribute("data-theme");
+        btn.textContent = "Theme: Auto";
       } else {
-        root.setAttribute('data-theme', mode);
-        btn.textContent = 'Theme: ' + (mode === 'light' ? 'Light' : 'Dark');
+        root.setAttribute("data-theme", mode);
+        btn.textContent = "Theme: " + mode[0].toUpperCase() + mode.slice(1);
       }
     }
-    btn.addEventListener('click', function () {
-      idx = (idx + 1) % modes.length;
+    btn.addEventListener("click", function () {
+      idx = (idx + 1) % states.length;
       apply();
     });
     apply();
