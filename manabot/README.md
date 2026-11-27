@@ -52,10 +52,8 @@ CUDA. All five shipped recipes (`local`, `baseline`, `elemental`,
 (with `device="mps"` or `"cpu"` for self-play).
 [MLX training and recovery](backends/mlx.md#tracked-training-and-recovery)
 
-Torch MPS self-play requires Torch 2.15 or newer. Standalone local evaluation
-and search run on CPU; managed Etude evaluation uses CUDA, MPS or CPU
-([Etude agents](../docs/evaluation.md#etude-agents)). The device guide covers
-precision, belief inputs and frozen opponents.
+Torch MPS self-play requires Torch 2.15 or newer. Evaluation and search run
+on CPU. The device guide covers precision, belief inputs and frozen opponents.
 [Training devices](../docs/training.md#run-training)
 
 The loop logs completed updates and cumulative transitions, publishes raw
@@ -1031,16 +1029,12 @@ execution remain outside it.
 
 ### Managed evaluation inference
 
-Etude owns process allocation, model residency and batching. Float32 evaluation
-jobs use `manabot.eval.agents.AGENTS` (or `AGENTS_TF32` / `AGENTS_BF16` for
-declared reduced precision): the loader selects CUDA, MPS or CPU (overridable
-with `MANABOT_EVAL_DEVICE`) and returns float32 masked logits from merged
-`Prepared` rows, including decision-memory rows. Torch-free game agents step a
-deal's legs together to group forward calls, preparing on the host and sampling
-with the decision seed. Native play and replay run in the Etude game process.
-Standalone local checks remain scalar on CPU. See
-[evaluation](../docs/evaluation.md#etude-agents) for precision declarations,
-failure limits and retained compute identities.
+Etude owns process allocation, model residency and batching. Every evaluation
+job uses `manabot.eval.agents.AGENTS`: the loader returns deterministic masked
+logits from Prepared rows, and Torch-free game agents prepare and sample with
+the decision seed. Native play and replay run in the Etude game process.
+Standalone local checks remain scalar. See [evaluation](../docs/evaluation.md#etude-agents)
+for failure limits and retained compute identities.
 
 ### Native decision text
 

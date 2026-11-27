@@ -407,172 +407,46 @@ print(corpus.sql("""
 
 ## Etude agents
 
-Managed evaluations declare `manabot.eval.agents.AGENTS` on `EvalJob` and pass
-those agents to `active.play`. Etude owns game processes, checkpoint grouping,
-batching, model residency, retries and performance records. The callback is
-`play(match, agents)`, with objects in seat order; it runs the native games and
-Command replay in that Etude process.
+Managed evaluations declare the same `manabot.eval.agents.AGENTS` on every
+`EvalJob`, and pass those agents to `active.play`. Etude owns game processes,
+checkpoint grouping, batching, model residency, retries and performance records.
+The callback is `play(match, agents)`, with objects in seat order; it runs the
+native game and Command replay in that Etude process.
 
-```python
-from collections.abc import Sequence
+`manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path`, chooses
+Torch and CPU or CUDA, and returns a deterministic forward:
+`list[Prepared] -> list[masked logits]`, preserving length and order. Host
+preparation and admission happen once in the game-side sampler. The loader
+merges admitted rows, rebasing their object, frame, fact and effect routes;
+it never selects an action. `build(player, leaves)` creates the heuristic or
+checkpoint sampler without importing Torch. Each decision's recorded seed
+controls NumPy PCG64 sampling in the game process.
 
-from etude.eval.records import Benchmark, Environment, Match
-from etude.eval.result import Result
-from etude.jobs import EvalJob
-from manabot.eval.agents import AGENTS, AGENTS_BF16
-from manabot.eval.pairing import play_pairing
-
-# Ordinary float32 evaluation: runs unchanged on CUDA, Apple Silicon MPS or CPU.
-def play_float32(match: Match, agents: Sequence[object]) -> Result:
-    return play_pairing(
-        match,
-        agents,
-        matchup=matchup,
-        deal=deal,
-        matchup_mode="cross",
-        game_seconds=600.0,
-        arena="my-eval-agents-v1",
-    )
-
-float32_job = EvalJob(
-    tournament=Benchmark(
-        name="my-eval-agents-v1",
-        environment=Environment(name="my-eval", files=source_digest, config={}),
-        seatings=seatings,
-    ),
-    play=play_float32,
-    agents=AGENTS,
-)
-
-# Declared BF16 evaluation: distinct Match.key (via Environment.config) and
-# compute class (`etude-policy-bf16-auto-v1`), sharing float32 deal seeds.
-def play_bf16(match: Match, agents: Sequence[object]) -> Result:
-    return play_pairing(
-        match,
-        agents,
-        matchup=matchup,
-        deal=deal,
-        matchup_mode="cross",
-        game_seconds=600.0,
-        arena="my-eval-agents-v1",
-        precision="bf16",
-    )
-
-bf16_job = EvalJob(
-    tournament=Benchmark(
-        name="my-eval-bf16-agents-v1",
-        environment=Environment(
-            name="my-eval", files=source_digest, config={"precision": "bf16"}
-        ),
-        seatings=seatings,
-    ),
-    play=play_bf16,
-    agents=AGENTS_BF16,
-)
-```
-
-Run the same experiment file on an NVIDIA host, an Apple Silicon host or a CPU
-host without editing the code, or force a device with `MANABOT_EVAL_DEVICE`:
-
-```sh
-uv run --extra evaluation etude eval experiments/my_eval.py
-MANABOT_EVAL_DEVICE=cpu uv run --extra evaluation etude eval experiments/my_eval.py
-```
-
-**Device selection.** `manabot.eval.agent_loader.load(checkpoint)` reads
-`checkpoint.path`, selects Torch and chooses the first available device in
-order: `cuda`, then `mps`, then `cpu` (using `OMP_NUM_THREADS`, default 1, on
-CPU). Set `MANABOT_EVAL_DEVICE` to `cuda`, `mps` or `cpu` to override that
-choice — for example, `MANABOT_EVAL_DEVICE=cpu` for a CPU baseline or to avoid
-one GPU weight copy per game process on a 16 GB Apple Silicon Mac while Etude
-runs in direct mode. An unknown `MANABOT_EVAL_DEVICE` fails checkpoint load and
-names the accepted values. Device stays out of player registrations and
-`EvaluationKey`.
-
-**Precision and compute identity.** Precision is declared explicitly rather
-than through an environment variable, because it changes logits and compute
-identity. `manabot.sim.registration` defines
-`EvalPrecision = Literal["float32", "tf32", "bf16"]` and
-`etude_compute_class(precision)`. `manabot.eval.agent_loader` exposes `load`
-(float32), `load_tf32` and `load_bf16`, and `manabot.eval.agents.agents_for`
-builds the matching `Agents` values:
-
-| Agents | Precision | `compute_class_id` | Supported devices |
-| --- | --- | --- | --- |
-| `AGENTS` (default) | `float32` | `etude-policy-f32-auto-v1` | `cuda`, `mps`, `cpu` |
-| `AGENTS_TF32` | `tf32` | `etude-policy-tf32-auto-v1` | `cuda` only |
-| `AGENTS_BF16` | `bf16` | `etude-policy-bf16-auto-v1` | `cuda`, `mps` |
-
-Every loader returns a deterministic forward
-`list[Prepared] -> list[masked logits]` in float32, preserving input length and
-order; it never selects an action. Loading `tf32` off CUDA or `bf16` on CPU
-fails checkpoint load, which Etude records as a checkpoint loading failure.
-Pass the same `precision` to `play_pairing(..., precision=...)` or
-`registration(..., precision=...)`: `EvaluationKey.evaluation_compute_envelope_id`
-reads `candidate.compute_class_id`, and `Sampler` checks the supplied agents'
-precision against the registration at match start so a mismatch fails
-immediately. Because Etude's `Match.key` hashes `Environment` rather than
-`EvalJob.environment`, reduced-precision evaluations put `"precision"` in
-`Environment.config` so cached float32 matches never collide. For non-float32
-pairings, `play_pairing` pins `EvaluationKey.seed_compute_envelope_id` to
-`etude-policy-f32-auto-v1` so precision arms play the same deals against a
-fixed anchor.
-
-**Grouped stepping and batching.** Host preparation and admission happen once
-in the game-side `Sampler` created by `build(player, leaves)` without importing
-Torch. Inside each game process, `play_cell` steps all legs of a deal block
-together (or a window of up to four deals for single-leg cells) through
-`manabot.sim.native_game.execute_games`. Local players such as `Heuristic` act
-inline; checkpoint seats prepare their row, wait for every live game in the
-group to reach its next forward, and submit one `Forward(inputs)` call per
-checkpoint callable — up to four rows per four-leg deal against the heuristic
-or in same-checkpoint self-play — then validate and sample per game with each
-decision's recorded seed and NumPy PCG64 (`numpy-pcg64-v1`). Under a row-pure
-forward, stepping legs together produces the same Commands and
-`game_trace_sha256` as stepping serially; a real batched forward can differ in
-the last bits with batch composition, and replay verifies Commands rather than
-cross-device float identity. Finished games release their native `Env`
-immediately.
-
-On CUDA, Etude's shared agent process batches requests across game processes up
-to `AGENTS.max_batch` (32 on Etude 0.4.7, which also caps game processes per
-host, putting up to 32 × 4 = 128 rows in flight) or `AGENTS.max_delay_seconds`.
-Batching parameters stay outside match keys and player registrations.
-
-**Decision memory.** Evaluation prepares dense observations without retained
-native fold trees (`MemoryRows.fold is None`), so
-`manabot.policy.batching.concatenate` merges decision-memory rows alongside
-memory-free rows — rebasing object, frame, fact, effect and memory routes —
-allowing decision-memory checkpoints to batch across legs and processes.
-Passing a `Prepared` row with a non-`None` memory fold to `concatenate` raises
-`ValueError`. A seat whose player config holds `blank_decision_memory: True`
-plays the same bytes with the log zeroed at every decision, registered as a
-distinct player
+A checkpoint with a decision-memory encoder has its log prepared by the same
+sampler, and the loader forwards each such row as its own batch. A seat whose
+player config holds `blank_decision_memory: True` plays the same bytes with
+the log zeroed at every decision, registered as a distinct player
 ([reliance comparison](observation-and-model.md#whole-game-decision-memory));
 `manabot.eval.pairing.play_pairing` plays a paired deal with either and
 returns an Etude `Result` carrying outcome rows, heuristic behaviour counts
 and [card data](#card-data).
 
-New tournaments have fresh `agents-v1` names and one native game group per
-Etude match. Frozen tournament keys, compute contracts and receipts are
-unchanged. `manabot.sim.execution` reads retained `shared-eval-v1` and
-`shared-eval-v2` records; it no longer allocates execution. Standalone local
-evaluation and training monitoring retain scalar CPU checkpoint play through
-bounded local children.
+Managed checkpoint registrations name `etude-policy-f32-auto-v1` and
+`numpy-pcg64-v1`. New tournaments have fresh `agents-v1` names and one native
+game group per Etude match. Frozen tournament keys, compute contracts and
+receipts are unchanged. `manabot.sim.execution` reads retained
+`shared-eval-v1` and `shared-eval-v2` records; it no longer allocates execution.
+Standalone local evaluation and training monitoring retain scalar checkpoint
+play through bounded local children.
 
-**Failure.** Each game tracks its own `game_seconds` (its own stepping plus the
-forward rounds it waited in) between decisions and enforces `max_commands`;
-each decision records its prepare, forward-round and sample time in
-`latency_seconds`. Before native execution it fsyncs the pending Command.
-Native `AgentError`, PyO3 `PanicException`, timeouts, truncation, or a
-`Sampler` prepare/sample error fail only that game, producing an invalid,
-score-null row and retaining its journal while sibling legs in the deal keep
-batching. Replay verifies Commands, not cross-device policy equivalence.
-Invalid rows never become forfeits. A `Forward` failure (`RetryRequested`,
-agent crash, or logits with the wrong count, wrong shape or non-finite legal
-values) closes every live game in the group and fails the match. Elemental also
-fails a match with no valid replayed games, preserving its evidence, so an
-all-invalid smoke cannot report success.
+**Failure.** The game loop checks `game_seconds` between decisions and enforces
+`max_commands`. Before native execution it fsyncs the pending Command. Native
+`AgentError` and PyO3 `PanicException` produce invalid, score-null rows and retain
+the journal; later games in the group still run. Replay verifies Commands,
+not cross-device policy equivalence. Invalid rows never become forfeits.
+Other Python exceptions fail the match. Elemental also fails a match with no
+valid replayed games, preserving its evidence, so an all-invalid smoke cannot
+report success.
 
 Cooperative clock checks cannot interrupt a stuck native call. At the pinned
 Etude revision, a true hang or process exit retries the grouped evaluation job;

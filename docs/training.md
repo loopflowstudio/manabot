@@ -1089,11 +1089,9 @@ precision they ran with, and a checkpoint keeps what its run recorded.
 | `tf32` | For the loop, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
 | `bf16` | Torch uses autocast and MLX temporarily casts the policy weights for collection, bootstrap and learner forwards. Forward outputs, behavior log-probabilities, targets, losses, master weights and Adam state stay float32. |
 
-Managed checkpoint evaluation picks CUDA, then MPS, then CPU
-(`MANABOT_EVAL_DEVICE` overrides it) and defaults to float32, with explicit
-`tf32` and `bf16` evaluation agents ([Etude agents](evaluation.md#etude-agents));
-standalone evaluation and search use CPU. TF32 requires CUDA; BF16 requires
-CUDA or MPS. The field is serialized in every
+Managed checkpoint evaluation uses CUDA when available, otherwise CPU, in
+float32; standalone evaluation and search use CPU. TF32 requires CUDA;
+BF16 requires CUDA or MPS. The field is serialized in every
 `SelfPlay`, so a run's recorded config names the precision it trained under,
 and a reduced-precision run is a declared recipe variant, never an edit of a
 float32 recipe. Precision changes no `ModelConfig` field, checkpoint or world
