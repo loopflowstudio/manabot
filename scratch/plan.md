@@ -68,7 +68,7 @@ The test exercises both branches of the Room’s blue/red choice and the legal o
 
 ## Concept review disposition
 
-Ninth review (`10eb24410`, `scratch/concept-review.html`): 1a, 2a, 3a are pass 7, adopted headless for review; 1b (document per-step commitment), 1c (pool tags), 2b and 3b passed over. Reviews two through seven are designs 1–3 and the deferred findings (detail in `7cb3655f1:scratch/plan.md`). Eighth review (`65036139e`, `scratch/concept-review.html`): 1a is design 4 and the split below; 2a puts the fixed-tap continuation first in the split Task; 3a is design 5; 4a is design 6. All made for review. Its pass 4a verification found no defect; its handoff invariant is recorded in the split Task.
+Tenth review (`bc08ad68f`, `scratch/concept-review.html`) found no open mismatch after pass 7 and recommends keeping both deferred Tasks separate and hash v35 as built (its 1a/2a/3a, made for review; v35 is irreversible once released). Ninth review (`10eb24410`): 1a, 2a, 3a are pass 7, adopted headless for review; 1b (document per-step commitment), 1c (pool tags), 2b and 3b passed over. Reviews two through seven are designs 1–3 and the deferred findings (detail in `7cb3655f1:scratch/plan.md`). Eighth review (`65036139e`, `scratch/concept-review.html`): 1a is design 4 and the split below; 2a puts the fixed-tap continuation first in the split Task; 3a is design 5; 4a is design 6. All made for review. Its pass 4a verification found no defect; its handoff invariant is recorded in the split Task.
 
 ## Deferred findings
 

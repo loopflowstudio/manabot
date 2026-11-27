@@ -19,3 +19,4 @@
 - Pass 6 loads the two-life Room position and chooses blue in the vector test. The card acceptance fixture covers both colors and the Canyon orders. Engine Budget timing and digests remain for the paired CI run.
 - Ninth review (`10eb24410`) choices adopted headless for review as pass 7: `commit_start` on `ManaProduction::Bonus` (1a), committed-only `payment_obligations` with declinable tail life in `saved_obligations` (2a), the three convoke cleanups (3a).
 - Pass 7's constructed land test uses two Heartbeats and a previously floated blue unit to check where commitment starts and ends. The Ward fixture loses the ability to pay after activating Citadel and then floats a Forest before declining.
+- Tenth review (`bc08ad68f`) found no open mismatch. Its three sign-off choices (coupled payment and non-mana activation ownership as separate Tasks, hash v35 as built) match the plan and remain for human review; v35 cannot be revised once released.
