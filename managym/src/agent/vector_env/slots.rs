@@ -12,24 +12,25 @@ use crate::{
 use std::{collections::HashSet, sync::Arc};
 
 /// Loading a branch never spends a fresh seed. A fresh load uses the slot's
-/// next scheduled seed and the vector's ordinary roster sampler.
+/// next scheduled seed (or an explicit seed when supplied) and the vector's
+/// ordinary roster sampler.
 #[derive(Clone)]
 pub enum SlotLoad {
-    Fresh(usize, Option<GameSetup>),
+    Fresh(usize, Option<GameSetup>, Option<u64>),
     Snapshot(usize, Arc<GameSnapshot>, RestoreOptions),
 }
 
 impl SlotLoad {
     pub fn with_slot(&self, slot: usize) -> Self {
         match self {
-            Self::Fresh(_, setup) => Self::Fresh(slot, setup.clone()),
+            Self::Fresh(_, setup, seed) => Self::Fresh(slot, setup.clone(), *seed),
             Self::Snapshot(_, source, options) => Self::Snapshot(slot, source.clone(), *options),
         }
     }
 
     pub fn slot(&self) -> usize {
         match self {
-            Self::Fresh(slot, _) | Self::Snapshot(slot, ..) => *slot,
+            Self::Fresh(slot, ..) | Self::Snapshot(slot, ..) => *slot,
         }
     }
 }
@@ -153,7 +154,7 @@ impl VectorEnv {
             && self.slots[slot] == SlotState::FreshOpening;
         let mut next_seed = self.next_seeds[slot];
         let (env, obs, mut info, state, source_digest) = match request {
-            SlotLoad::Fresh(_, setup) => {
+            SlotLoad::Fresh(_, setup, explicit_seed) => {
                 if let Some(setup) = setup {
                     if !self.uniform_roster.is_empty() {
                         return Err(AgentError(
@@ -161,6 +162,9 @@ impl VectorEnv {
                         ));
                     }
                     Self::validate_player_configs(setup.len())?;
+                }
+                if let Some(seed) = *explicit_seed {
+                    next_seed = seed;
                 }
                 let mut env = previous.replacement_root(next_seed);
                 let (obs, info) = Self::deal_fresh_game(
@@ -222,7 +226,7 @@ impl VectorEnv {
         };
         Ok(SlotReplacement {
             setup: match request {
-                SlotLoad::Fresh(_, setup) => setup.clone(),
+                SlotLoad::Fresh(_, setup, _) => setup.clone(),
                 SlotLoad::Snapshot(..) => None,
             },
             result,

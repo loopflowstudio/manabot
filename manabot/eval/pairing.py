@@ -8,6 +8,7 @@ evidence as a blob of the Etude match.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
@@ -22,9 +23,15 @@ from manabot.eval.admission import register_anchor
 from manabot.eval.agents import game_players, registration
 from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.card_evaluation import trace_card_tables
-from manabot.eval.evaluation import EvaluationRequest, attempt_play_counts, evaluate
+from manabot.eval.evaluation import (
+    EvaluationRequest,
+    EvaluationResult,
+    attempt_play_counts,
+    evaluate,
+)
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
+from manabot.sim.agent import GamePlayer
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 from manabot.sim.registration import (
     ETUDE_COMPUTE_CLASS,
@@ -33,7 +40,18 @@ from manabot.sim.registration import (
 )
 
 
-def play_pairing(
+@dataclass(frozen=True)
+class AdmittedPairing:
+    """Validated pairing request, built game players and output destination."""
+
+    request: EvaluationRequest
+    agents: dict[str, GamePlayer]
+    legs: int
+    participants: tuple[str, str]
+    retained: Path
+
+
+def admit_pairing(
     match: Match,
     agents: Sequence[object],
     *,
@@ -43,12 +61,11 @@ def play_pairing(
     game_seconds: float,
     arena: str,
     precision: EvalPrecision = "float32",
-) -> Result:
-    """Return the paired deal's outcome, behaviour and replay-derived card data.
-
-    Missing legs or card evidence raise after the arena diagnostics are retained.
-    An invalid leg with evidence keeps its null score.
-    """
+    max_commands: int = 10_000,
+    bootstrap_seed: int = 6510,
+    output_dir: Path | None = None,
+) -> AdmittedPairing:
+    """Validate match players and build registrations, request and game players."""
     legs = 4 if matchup_mode == "cross" else 8
     # An indexed Etude match is one deal. A legacy multi-game match declares legs.
     expected_games = legs if match.index is None else 1
@@ -96,10 +113,88 @@ def play_pairing(
             ETUDE_COMPUTE_CLASS if precision != "float32" else None
         ),
     )
-    retained = (
-        Path(os.environ.get("ETUDE_OUTPUT_DIR") or Path(".runs") / arena)
-        / "arena"
-        / match.key
+    root = (
+        output_dir
+        if output_dir is not None
+        else Path(os.environ.get("ETUDE_OUTPUT_DIR") or Path(".runs") / arena)
+    )
+    retained = root / "arena" / match.key
+    request = EvaluationRequest(
+        key=key,
+        candidate=candidate,
+        opponent=opponent,
+        checkpoint_paths=paths,
+        deal_seeds=(deal,),
+        matchup_mode=matchup_mode,
+        authored_matchup=matchup,
+        game_seconds=game_seconds,
+        max_commands=max_commands,
+        bootstrap_seed=bootstrap_seed,
+        purpose=arena,
+    )
+    seated = dict(zip(participants, game_players(match.players, agents), strict=True))
+    return AdmittedPairing(
+        request=request,
+        agents=seated,
+        legs=legs,
+        participants=participants,
+        retained=retained,
+    )
+
+
+def pairing_result(
+    result: EvaluationResult,
+    *,
+    out: Path,
+    cards: Path,
+    matchup: AuthoredMatchup | DeckMatchup,
+    legs: int,
+    participants: tuple[str, str],
+) -> Result:
+    """Assemble Etude tables and card blobs from a settled pairing attempt."""
+    if result.error:
+        raise ValueError(result.error)
+    counts = (
+        attempt_play_counts(out, result.rows)
+        if result.request.opponent.runner_kind == "code"
+        and result.status == "completed"
+        else None
+    )
+    tables = evaluation_tables(
+        result.rows, matchup=matchup, legs=legs, play_counts=counts
+    )
+    trace = json.loads((out / "trace.json").read_bytes())
+    evidence = trace_card_tables(cards, trace, participants)
+    if len(evidence.blobs) != legs:
+        raise ValueError("pairing requires card evidence for every leg")
+    return Result(tables={**tables, **evidence.tables}, blobs=evidence.blobs)
+
+
+def play_pairing(
+    match: Match,
+    agents: Sequence[object],
+    *,
+    matchup: AuthoredMatchup | DeckMatchup,
+    deal: int,
+    matchup_mode: Literal["cross", "all"],
+    game_seconds: float,
+    arena: str,
+    precision: EvalPrecision = "float32",
+) -> Result:
+    """Return the paired deal's outcome, behaviour and replay-derived card data.
+
+    Missing legs or card evidence raise after the arena diagnostics are retained.
+    An invalid leg with evidence keeps its null score.
+    """
+    admitted = admit_pairing(
+        match,
+        agents,
+        matchup=matchup,
+        deal=deal,
+        matchup_mode=matchup_mode,
+        game_seconds=game_seconds,
+        arena=arena,
+        precision=precision,
     )
     journal_root = "/dev/shm" if Path("/dev/shm").is_dir() else None
     with TemporaryDirectory(dir=journal_root) as journal:
@@ -108,40 +203,19 @@ def play_pairing(
         cards = Path(journal) / "cards"
         try:
             result = evaluate(
-                EvaluationRequest(
-                    key=key,
-                    candidate=candidate,
-                    opponent=opponent,
-                    checkpoint_paths=paths,
-                    deal_seeds=(deal,),
-                    matchup_mode=matchup_mode,
-                    authored_matchup=matchup,
-                    game_seconds=game_seconds,
-                    max_commands=10_000,
-                    bootstrap_seed=6510,
-                    purpose=arena,
-                ),
+                admitted.request,
                 out_dir=out,
                 card_evidence_dir=cards,
-                agents=dict(
-                    zip(participants, game_players(match.players, agents), strict=True)
-                ),
+                agents=admitted.agents,
             )
-            if result.error:
-                raise ValueError(result.error)
-            counts = (
-                attempt_play_counts(out, result.rows)
-                if opponent.runner_kind == "code" and result.status == "completed"
-                else None
+            return pairing_result(
+                result,
+                out=out,
+                cards=cards,
+                matchup=matchup,
+                legs=admitted.legs,
+                participants=admitted.participants,
             )
-            tables = evaluation_tables(
-                result.rows, matchup=matchup, legs=legs, play_counts=counts
-            )
-            trace = json.loads((out / "trace.json").read_bytes())
-            evidence = trace_card_tables(cards, trace, participants)
-            if len(evidence.blobs) != legs:
-                raise ValueError("pairing requires card evidence for every leg")
-            return Result(tables={**tables, **evidence.tables}, blobs=evidence.blobs)
         finally:
             if out.is_dir():
-                shutil.copytree(out, retained, dirs_exist_ok=True)
+                shutil.copytree(out, admitted.retained, dirs_exist_ok=True)

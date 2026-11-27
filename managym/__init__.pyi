@@ -574,7 +574,10 @@ class SlotLoad:
     def branch_root(self) -> tuple[GameSnapshot, RestoreOptions] | None: ...
     @staticmethod
     def fresh(
-        slot: int, player_configs: GameSetup | list[PlayerConfig] | None = None
+        slot: int,
+        player_configs: GameSetup | list[PlayerConfig] | None = None,
+        *,
+        seed: int | None = None,
     ) -> SlotLoad: ...
     @staticmethod
     def snapshot(

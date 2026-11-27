@@ -726,9 +726,7 @@ impl Env {
         let done = game.step(action)?;
         let mut result = finish_game_step(game, agent, done);
         // The profiler scope borrows self, so this cannot call remember_heuristic_events.
-        if self.player_policies.contains(&PlayerPolicy::Heuristic) {
-            self.heuristic_events.clone_from(&result.0.recent_events);
-        }
+        self.heuristic_events.clone_from(&result.0.recent_events);
         if done {
             self.add_profiler_info(&mut result.4);
         }
@@ -736,9 +734,15 @@ impl Env {
     }
 
     fn remember_heuristic_events(&mut self, observation: &Observation) {
-        if self.player_policies.contains(&PlayerPolicy::Heuristic) {
-            self.heuristic_events.clone_from(&observation.recent_events);
-        }
+        self.heuristic_events.clone_from(&observation.recent_events);
+    }
+
+    /// Current chooser view preserving the last step's emitted events, matching
+    /// what scalar `Env::reset` / `Env::step` returns to external callers.
+    pub(crate) fn decision_observation(&self) -> Result<Observation, AgentError> {
+        let mut obs = self.observation_for_player(self.current_agent_index().unwrap_or(0))?;
+        obs.recent_events.clone_from(&self.heuristic_events);
+        Ok(obs)
     }
 
     fn require_external_chooser(&self) -> Result<(), AgentError> {

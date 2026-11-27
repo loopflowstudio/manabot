@@ -271,6 +271,9 @@ def test_evaluation_child_modules_import_without_torch() -> None:
         import manabot.eval.agents
         assert "torch" not in sys.modules
         assert "manabot.training" not in sys.modules
+        # The vectorized match runner runs in game processes and must stay Torch-free.
+        import manabot.eval.vector
+        assert "torch" not in sys.modules
         """
     )
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)

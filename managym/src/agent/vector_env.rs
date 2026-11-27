@@ -292,7 +292,8 @@ impl VectorEnv {
     }
 
     /// Detached chooser observations only for requested active streams.
-    /// Optional Python analyses call this; the buffered policy path does not.
+    /// Preserves the last step's events so external heuristic/frame readers
+    /// match scalar `Env` output; the buffered policy path does not call this.
     pub fn decision_observations(
         &self,
         active: &[bool],
@@ -304,8 +305,7 @@ impl VectorEnv {
             .zip(active)
             .map(|(env, on)| {
                 if *on {
-                    env.observation_for_player(env.current_agent_index().unwrap_or(0))
-                        .map(Some)
+                    env.decision_observation().map(Some)
                 } else {
                     Ok(None)
                 }
@@ -1049,7 +1049,7 @@ mod tests {
     fn load_fresh(vector: &mut VectorEnv, slot: usize, setup: Option<GameSetup>) {
         vector
             .load_slots_into(
-                &[SlotLoad::Fresh(slot, setup)],
+                &[SlotLoad::Fresh(slot, setup, None)],
                 |_, _| Ok(()),
                 |_, _, _| Ok(()),
             )
@@ -1124,7 +1124,10 @@ mod tests {
                 .unwrap();
             load(&mut vector, branch());
             assert_eq!(CONSTRUCTIONS.get() - before, 1);
-            assert_eq!(load(&mut vector, SlotLoad::Fresh(0, None)).seed, u64::MAX);
+            assert_eq!(
+                load(&mut vector, SlotLoad::Fresh(0, None, None)).seed,
+                u64::MAX
+            );
             assert_eq!(CONSTRUCTIONS.get() - before, 2);
         }
     }
@@ -1604,7 +1607,11 @@ mod tests {
         let generation = vector.current_game_generations();
         assert!(vector
             .load_slots_into(
-                &[SlotLoad::Fresh(0, Some(sample_player_configs().into()))],
+                &[SlotLoad::Fresh(
+                    0,
+                    Some(sample_player_configs().into()),
+                    None
+                )],
                 |_, _| Err(AgentError("injected admission".into()).into()),
                 |_, _, _| Ok(())
             )
@@ -1636,13 +1643,16 @@ mod tests {
         let next = vector.next_seeds.clone();
         let mut swapped = sample_player_configs();
         swapped.reverse();
-        let replacement = SlotLoad::Fresh(0, Some(swapped.clone().into()));
+        let replacement = SlotLoad::Fresh(0, Some(swapped.clone().into()), None);
         let mut invalid = sample_player_configs();
         invalid[0].deck.main.insert("Not A Real Card".into(), 1);
         for bad in [invalid, vec![]] {
             assert!(vector
                 .load_slots_into(
-                    &[replacement.clone(), SlotLoad::Fresh(2, Some(bad.into()))],
+                    &[
+                        replacement.clone(),
+                        SlotLoad::Fresh(2, Some(bad.into()), None)
+                    ],
                     |_, _| Ok(()),
                     |_, _, _| panic!("failed admission wrote a row")
                 )
@@ -1656,6 +1666,36 @@ mod tests {
         load_fresh(&mut vector, 0, None);
         assert_eq!(vector.current_game_seeds(), [29, 24, 25]);
         assert_eq!(vector.current_player_configs()[0], swapped);
+    }
+
+    #[test]
+    fn fresh_load_with_explicit_seed_matches_scalar_deal() {
+        let players = sample_player_configs();
+        let mut vector = VectorEnv::new(2, 10, true, [PlayerPolicy::Agent; 2]);
+        vector.reset_all(players.clone()).unwrap();
+        let mut swapped = players.clone();
+        swapped.reverse();
+        let explicit_seed = 987654321u64;
+        let loaded = vector
+            .load_slots_into(
+                &[SlotLoad::Fresh(
+                    1,
+                    Some(swapped.clone().into()),
+                    Some(explicit_seed),
+                )],
+                |_, _| Ok(()),
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+        assert_eq!(loaded[0].0.seed, explicit_seed);
+        assert_eq!(vector.current_game_seeds(), [10, explicit_seed]);
+        assert_eq!(vector.next_fresh_seeds()[1], explicit_seed + 2);
+        let mut scalar = Env::new(explicit_seed, true, false, false);
+        scalar.reset(swapped).unwrap();
+        assert_eq!(
+            vector.state_digests(Some(&[false, true])).unwrap()[1],
+            Some(scalar.state_digest().unwrap())
+        );
     }
 
     #[test]

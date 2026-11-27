@@ -159,7 +159,7 @@ impl PySlotLoad {
     /// A fresh game using the setup already configured for this slot.
     #[getter]
     fn uses_slot_setup(&self) -> bool {
-        matches!(self.0, SlotLoad::Fresh(_, None))
+        matches!(self.0, SlotLoad::Fresh(_, None, _))
     }
 
     /// Detached replay authority for a recording wrapper, including the intervention.
@@ -174,13 +174,17 @@ impl PySlotLoad {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (slot, player_configs=None))]
-    fn fresh(slot: usize, player_configs: Option<Bound<'_, PyAny>>) -> PyResult<Self> {
+    #[pyo3(signature = (slot, player_configs=None, *, seed=None))]
+    fn fresh(
+        slot: usize,
+        player_configs: Option<Bound<'_, PyAny>>,
+        seed: Option<u64>,
+    ) -> PyResult<Self> {
         let setup = player_configs
             .as_ref()
             .map(super::bindings::game_setup)
             .transpose()?;
-        Ok(Self(SlotLoad::Fresh(slot, setup)))
+        Ok(Self(SlotLoad::Fresh(slot, setup, seed)))
     }
 
     #[staticmethod]
