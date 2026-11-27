@@ -4,6 +4,15 @@ A manual payment must return the payer’s next legal choice, finish the cast, o
 
 Pass 1 (`1c521e300`) propagated empty, forced and automatic decision errors and applied the zero-life cost rule. The Room at −1 offers blue and red, isolated stepping poisons only the malformed slot under both skip settings, and all 23 focused debug tests passed.
 
+## Pass 2 · A root probe misses changes to other mana sources
+
+The test `tarnished_citadel_and_the_great_henge_change_another_mana_source` uses ordinary mana activations and checks `{4}` castability for Solemn Simulacrum. Angel of Vitality goes from 2/2 to 4/4 at 25 life. Raucous Audience produces `{G}` or `{G}{G}` based on whether its controller has a creature with power at least 4.
+
+- At 28 life, either of two Tarnished Citadels activated on its own leaves the player at 25 and Audience still produces `{G}{G}`. After both colored activations, life is 22 and Audience produces only `{G}`. Two Citadel outputs plus Audience then total three mana. Audience before the second Citadel can fund the spell. A model with root source outputs and two correct −3 deltas would admit both colored Citadels before Audience. Even comparing every source after each isolated root probe would miss the second threshold crossing.
+- At 22 life, The Great Henge gains 3 life with Angel's replacement and produces `{G}{G}`. At 25, Audience adds `{G}{G}`, enabling the cast. A model that retains its root `{G}` output would reject the order as unaffordable.
+
+Pause pass 2 here. The isolated root probe and frozen source list in design 2 cannot certify a full payment, and classifying a source from the outcome of that probe does not identify every branch needing exact evaluation. Replan how to refresh dependent source eligibility, outputs and bounds at the payment state that produced the change. Keep the signed-life and trailing-life-cost goals and the Citadel/Canyon fixtures. The README's description of the planned probe is pending that revision. No production code changed in this pass.
+
 ## Reproduced on a TLA Limited board
 
 Cast **Sokka, Bold Boomeranger** for {U}{R} with an empty pool, two untapped lands and **Heartbeat of Spring**. Activate **Tarnished Citadel** for colored mana first. Its ability deals 3 damage to its controller. Each land that produces mana triggers Heartbeat once. Citadel, Canyon and Heartbeat are in the TLE bonus sheet used in TLA Limited (`managym/cards/tests/fixtures/tle-bonus-sheet.jsonl`).

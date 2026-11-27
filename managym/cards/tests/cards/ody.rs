@@ -1,9 +1,11 @@
 //! Tests for cards filed in `src/ody.rs`, in card order.
 
 use crate::support::{
-    game::{five_color_setup, five_color_unfunded_setup, move_to_hand},
+    game::{clear_summoning_sickness, five_color_setup, five_color_unfunded_setup, move_to_hand},
     inspect::{has_action, library_card, offered_cards, zone_of},
-    play::{activate, cast, cast_card, cast_owned, choose, choose_mode, select_card, settle},
+    play::{
+        activate, cast, cast_card, cast_owned, castable, choose, choose_mode, select_card, settle,
+    },
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
@@ -155,6 +157,55 @@ fn tarnished_citadel_and_heartbeat_offer_both_colors_at_negative_life() {
         })
         .collect();
     assert_eq!(modes, [1, 3]); // Blue and red.
+}
+
+#[test]
+fn tarnished_citadel_and_the_great_henge_change_another_mana_source() {
+    for (name, life, count, mode, before, produced) in [
+        ("Tarnished Citadel", 28, 2, 1, "GG", "UUG"),
+        ("The Great Henge", 22, 1, 0, "G", "GGGG"),
+    ] {
+        let mut s = five_color_unfunded_setup(&[
+            name,
+            "Angel of Vitality",
+            "Raucous Audience",
+            "Solemn Simulacrum",
+        ]);
+        let sources: Vec<_> = (0..count)
+            .map(|_| s.force_permanent_on_battlefield(0, name))
+            .collect();
+        let audience = s.force_permanent_on_battlefield(0, "Raucous Audience");
+        clear_summoning_sickness(&mut s, audience);
+        s.force_permanent_on_battlefield(0, "Angel of Vitality");
+        s.game_mut().scenario_set_life(PlayerId(0), life);
+        s.allow_priority_floats();
+        let spell = move_to_hand(&mut s, "Solemn Simulacrum");
+        if count == 2 {
+            assert!(castable(&mut s, spell));
+        }
+
+        let audience_output = |game: &managym::flow::game::Game| {
+            game.characteristics(audience).activated_abilities[0]
+                .mana_choices()
+                .unwrap()
+        };
+        let root = s.game().clone();
+        assert_eq!(audience_output(&root), [Mana::parse(before)]);
+        // At 28, either Citadel alone leaves Audience producing {G}{G}.
+        // Once the first damage lands, the second activation changes it.
+        for (index, source) in sources.into_iter().enumerate() {
+            activate(&mut s, source, 0);
+            let (life, output) = if index == 0 { (25, "GG") } else { (22, "G") };
+            assert_eq!(s.life(0), life);
+            assert_eq!(audience_output(s.game()), [Mana::parse(output)]);
+            choose_mode(&mut s, mode);
+        }
+        activate(&mut s, audience, 0);
+        choose_mode(&mut s, 0);
+        assert_eq!(s.game().state.players[0].mana_pool, Mana::parse(produced));
+        assert_eq!(audience_output(&root), [Mana::parse(before)]);
+        assert_eq!(castable(&mut s, spell), count == 1);
+    }
 }
 
 #[test]
