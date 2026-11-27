@@ -26,6 +26,8 @@
     handToggle?: { out: boolean; ontoggle: () => void } | null;
     /** Highlighted while hovering a target choice naming this player. */
     pointed?: boolean;
+    /** A short half: a smaller life numeral and tighter spacing, so floating mana stays in view without scrolling. */
+    compact?: boolean;
     side: 'you' | 'opponent';
     drop?: boolean;
     onactivate: (element: HTMLElement) => void;
@@ -34,7 +36,7 @@
     deckOpen?: boolean;
   }
 
-  let { drop = false, player, name, definitionNames, caption, offers, live, damage = 0, stopLifeDelta = 0, choosing = false, handToggle = null, pointed = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
+  let { drop = false, player, name, definitionNames, caption, offers, live, damage = 0, stopLifeDelta = 0, choosing = false, handToggle = null, pointed = false, compact = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   // The hand's cards are on the board (its row or its ribbon); the plate counts them.
@@ -62,7 +64,7 @@
   const label = $derived(`${name}, ${player.life} life${player.hexproof ? ', hexproof' : ''}${counters ? `, ${counters}` : ''}${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
 </script>
 
-<section class="plate" class:choosing aria-label={name === 'You' ? 'Your plate' : `${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
+<section class="plate" class:choosing class:compact aria-label={name === 'You' ? 'Your plate' : `${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
   <button
     type="button"
     class="who"
@@ -138,6 +140,8 @@
   .plate.choosing::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
   .life { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
   .numeral { font-family: var(--font-serif); font-size: 40px; font-weight: 600; line-height: 44px; color: var(--text); font-variant-numeric: lining-nums tabular-nums; }
+  .plate.compact { gap: 2px; padding: 6px 10px 4px; }
+  .plate.compact .numeral { font-size: 28px; line-height: 32px; }
   .zones { display: grid; grid-template-columns: 1fr; gap: 0; margin: 0; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
   .zones > li, .zone-open {
     display: flex; justify-content: space-between; gap: 4px; padding: 1px 4px; border-radius: var(--radius-sm);

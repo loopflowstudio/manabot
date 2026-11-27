@@ -1252,6 +1252,9 @@
    */
   const handWell = $derived(tucked || board.you.player.hand.length === 0 ? 0 : handHeight);
   const bottomReserve = $derived(tucked ? PEEK_FACE : handWell);
+  /** Each half's height, px: the board less your hand's well, split evenly. A plate under `PLATE_COMPACT` tightens so it does not scroll. */
+  const halfHeight = $derived(boardHeight > 0 ? (boardHeight - handWell) / 2 : Infinity);
+  const PLATE_COMPACT = 215;
   const ribbonSide = $derived(ribbonSeat === null ? null : ribbonSeat === boardProjection.agent.player_index ? 'you' : 'opponent');
   /**
    * Each plate's Show hand / Tuck hand, for its own seat and this game only.
@@ -1741,7 +1744,7 @@
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} definitionNames={boardProjection.definition_names} drop={snapped?.kind === 'player' && snapped.index === boardProjection.opponent.player_index} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
         stopLifeDelta={stopDeltas.players.get(boardProjection.opponent.player_index) ?? 0}
-        choosing={opponentChoosing} handToggle={handToggle('opponent', topSide)} pointed={pointedPlayerIndex === boardProjection.opponent.player_index} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)}
+        choosing={opponentChoosing} handToggle={handToggle('opponent', topSide)} pointed={pointedPlayerIndex === boardProjection.opponent.player_index} compact={halfHeight < PLATE_COMPACT} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)}
         ondeck={() => { oppDeckOpen = !oppDeckOpen; }} deckOpen={oppDeckOpen} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
         <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={boardAsked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} {touched} beat={activeSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
@@ -1765,7 +1768,7 @@
     {@render ribbon('bottom', 'you', board.you, !tucked || you.name === 'You' ? 'Your hand' : `${possessive(players.you)} hand`)}
     {#if trayShown}
       <!-- What is offered from outside the board floats beside the battlefield, clear of both hands. -->
-      <div class="tray" role="group" aria-label="Choices from outside the board" data-testid="tray">{@render trayItems()}</div>
+      <div class="tray" class:above-hand={!tucked && handWell > 0 && ribbonOut('opponent', topSide.hand)} role="group" aria-label="Choices from outside the board" data-testid="tray">{@render trayItems()}</div>
     {/if}
 
     {#if partitionGroup && !finished && activeCursor === null}
@@ -2338,6 +2341,8 @@
     display: flex; align-items: flex-end; gap: 10px; max-width: 60%; padding: 10px 12px; overflow-x: auto;
     border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--bg-surface); box-shadow: var(--shadow-raised);
   }
+  /* With the top hand out in play it would sit over its right end: the tray drops to just above your hand instead. */
+  .tray.above-hand { top: auto; bottom: calc(var(--hand-well) + 12px); transform: none; }
   .tray-card { flex: none; display: grid; justify-items: center; gap: 4px; text-align: center; }
   .tray-caption { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; color: var(--text-secondary); }
 
