@@ -8,11 +8,7 @@ Pass 2 (`a9359c03b`) carries signed life through mana, checks trailing fees and 
 
 The first pass 2 attempt found the counterexample below (`34092c814`, test `tarnished_citadel_and_the_great_henge_change_another_mana_source` in `managym/cards/tests/cards/ody.rs`) and changed no production code. The concept review (`24f1ec2f3`, `scratch/concept-review.html`) replanned around it.
 
-## Pass 3 counterexample · an activated ability can disappear while its fee is paid
-
-`7124e6444` records it: `mana_upfront_fee_can_remove_the_activated_ability` (`managym/src/flow/mana/tests.rs`) grants Gray Ogre `{1}{R}, {T}: Add {B}{B}` while its controller has unspent mana. Spending the last `{R}` of the fee removes the grant, and `complete_mana_upfront` panics on an empty ability list. The test currently asserts the state just before the invalid lookup.
-
-`Decision::ManaUpfront` holds `(permanent, ability_index)` and six readers re-index the live list: `flow/mana.rs` reservations (≈3201), obligations (≈4900/4987), upfront spending (≈5033), completion (≈5058) and `agent/continuation.rs:1108`. Third review (`f5992e81f`) adds two traps: cloning `characteristics()` bakes a dynamic output at announcement (`finalize_characteristics`, `flow/statics.rs` ≈945), and Pass 2's sacrifice coupling misses a Treasure feeding a Metalcraft-style `ControlsAtLeast` mana ability (that read lands in `reads.fields`, not `StateReads`).
+Pass 3 (`abfabece991`) owns the announced mana activation and its priced fee, reads dynamic output at completion, reserves paid taps from the owed cost, classifies Treasure against battlefield reads, and bumps the match-state hash to v35. Twelve focused debug checks passed, including live and snapshot-restored Ogre, Henge repricing, and conditional Treasure.
 
 ## Why a frozen source list fails
 
@@ -24,7 +20,7 @@ Angel of Vitality is 4/4 at 25 life or more; Raucous Audience makes `{G}{G}` whi
 - **One-shot prevention shield + two Citadels.** The first hit consumes the shield; a root probe of each sees it unconsumed.
 - **Sacrifice source + White Lotus Tile / Avatar Kyoshi.** Sacrificing changes a dynamic output.
 
-Coupling is board-level: what a payment step writes (life, sacrifice, taps, counters, pool, effects) intersecting what the layer board reads (`LayerBoard.reads: StateReads`, `dynamic_activations`, `has_triggered_mana_abilities`, `has_activated_cost_reduction` in `flow/layers.rs`, `flow/statics.rs`). The pure witness models the source list at the question’s root. Pass 3 will rebuild it after a coupled transition.
+Coupling is board-level: what a payment step writes (life, sacrifice, taps, counters, pool, effects) intersecting what the layer board reads (`LayerBoard.reads: ReadSet`, `dynamic_activations`, `has_triggered_mana_abilities`, `has_activated_cost_reduction` in `flow/layers.rs`, `flow/statics.rs`). The pure witness models the source list at the question’s root. Pass 4 rebuilds it after a coupled transition.
 
 Colored convoke lives in `while_paying` (`flow/mana/help.rs`), wrapped by three outer callers and skipped by nested surfaces (`automatic_upfront_path`, `mana_choice_actions`/`mana_choice_completes_payment`, `mana_spend_choices`, `mana_tap_cost_actions`, `automatic_payment_action`); `automatic_payability`, `choice_tap_witness` and `useful_payment_taps` assume taps never change another source.
 
@@ -40,18 +36,12 @@ The run is headless; these follow the concept review's recommendations (1a, 2a, 
 2. **Exact life.** Signed `LifeBudget { life: i32, cant_change: bool }`; activation `life_cost` checked against the running budget; post-mana life (announced `payment.life()`, cast `life_alternative`, resolution tail life) is a trailing `Obligation::PayLife(u32)` at completion (CR 601.2h).
 3. **Colored convoke in the model.** `ManaSource.convoke_colors: ManaTypeSet`; the witness reduces an owed colored pip by tapping such a source; delete `while_paying`/`convoke_search`. Fallback if this exceeds a pass: one wrapper routing all eight surfaces through `while_paying`. Never defer it: with pass 1, an unfixed Guardian play is an `AgentError`.
 
-Preserve native action identities, source order, the chooser, individual Heartbeat bonus decisions, spend restrictions and receipts. No changes to Rayon, GPU collection, card definitions or serialized formats. The `PaymentScan` debug rebuild check must keep holding: probes and coupled search run on forks and leave `&self` untouched.
+Preserve native action identities, source order, the chooser, individual Heartbeat bonus decisions, spend restrictions and receipts. Keep existing replay and action formats and version the canonical state hash when it changes. The `PaymentScan` debug rebuild check must keep holding: probes and coupled search run on forks and leave `&self` untouched.
 
 ## Remaining passes
 
-3. **Owned in-flight mana activation** (`flow/decision.rs`, `flow/mana.rs`, `agent/continuation.rs`, `state/hash.rs`, `flow/payment.rs`, `flow/statics.rs`). Made for review (third review 1a, 2a, 4a):
-   - `Decision::ManaUpfront` gains `activation: Box<ManaUpfrontActivation>`: the mana cost priced at announcement (CR 601.2f), the upfront cost flags (tap, tap cost, counters, life, sacrifice), the unfinalized output `Effect` from the raw layer view and the CR 605.3b suffix. `permanent` and `ability_index` stay as provenance only. One helper evaluates the output against the live board; all six readers use the record. Passed over: boxing the whole `ActivatedAbilityDefinition` (unrelated fields in the hash, finalized/raw confusion).
-   - The activation is canonical state: serialize it and bump `MATCH_STATE_HASH_VERSION` 34 → 35 (`git grep` finds no stored fixture pinning it). Passed over: `#[serde(skip)]`, which lets two different pending activations hash alike.
-   - `payment_tapped_source` (`flow/payment.rs` ≈1592) reads the cost component, not live characteristics.
-   - Sacrifice coupling: the layer board records battlefield-predicate reads by mana abilities and statics, and a sacrifice source couples against them or when the sacrificed permanent carries statics or replacements. Plain TLA Treasure boards stay uncoupled.
-   - Tests: the Ogre test executes the published PayCost on live and restored positions and reaches the `{B}{B}` choice; a dynamic-output activation whose fee is paid by Henge (22 → 25 life, Angel 4/4) produces `{G}{G}`; a Treasure + conditional-mana board is classified coupled (constructed position if no catalog card).
-   - Teaches: whether the coupled fork can rebuild sources mid-activation with no live lookup.
 4. **Coupled regime** (`flow/mana.rs`, `flow/layers.rs`, `flow/statics.rs`). Forked search with pure-finish-first, mutator-only branching, reservation replay, memoization and shortcut deferral; ordinary Forests stay in the pure handoff. Turn the Pass 2 test into expected behavior: at 28 life only Citadel → Audience → Citadel is offered; at 22 life Henge-first is admitted; Canyon at 25 offers Audience first; shield, sacrifice and the Treasure + conditional-mana cases (constructed if needed); 10 Forests + coupled sources checking `{15}` returns quickly in debug.
+   - Before handing off to the pure model, account for reads in saved mana outputs as well as reads in the current layer board. An owned output remains in the continuation if its source's grant has ended.
 5. **Colored convoke, collection check and acceptance.** Convoke in the model; the Guardian of Vitu-Ghazi board completes its cast. Restore a pre-activation snapshot into one slot of a two-slot native vector with skipping on; both slots return and match scalar play. Acceptance demo, debug nextest for touched crates, engine budget comparison, and the `managym/README.md` mana-payment section for the built design.
 
 ## Reproduced on a TLA Limited board
@@ -83,7 +73,7 @@ The test exercises both branches of the Room’s blue/red choice and the legal o
 
 ## Concept review disposition
 
-Second review (`24f1ec2f3`): 1a, 2a, 3a, 4a are design 1–3 above, made for review. Third review (`f5992e81f`): 1a (owned `ManaUpfrontActivation`), 2a (hash bump) and 4a (sacrifice coupling gap) are pass 3, made for review; its dynamic-output trap is a pass 3 test; 3a puts the non-mana sibling in deferred findings; its coupled-search and convoke invariants are passes 4–5 unchanged.
+Second review (`24f1ec2f3`): 1a, 2a, 3a, 4a are design 1–3 above, made for review. Third review (`f5992e81f`): pass 3 implements 1a, 2a and 4a for review. 3a puts the non-mana sibling in deferred findings.
 
 ## Deferred findings
 

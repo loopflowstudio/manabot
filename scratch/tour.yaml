@@ -1,23 +1,27 @@
-at: 7124e6444da77fa1753bcce03b6bdb41a1016904
+at: abfabece9918248a44543daf1ade902a4d42743a
 first:
   - path: scratch/plan.md
-    why: Reproductions and the exact-search ownership dependency
+    why: Payment reproductions and the remaining exact search
   - path: managym/README.md
-    why: Payment order and signed life during production
-  - path: managym/src/flow/mana/tests.rs
-    why: In-flight activation counterexample, nested fees and scan checks
+    why: Announced fees and live mana outputs
   - path: managym/src/flow/decision.rs
-    why: Mana activation and spending continuations
+    why: The owned mana activation and its continuation
+  - path: managym/src/state/hash.rs
+    why: Versioned identity includes the pending activation
   - path: managym/src/flow/mana.rs
-    why: Activation completion, life obligations and suffix probes
+    why: Activation announcement, reservation, spending, and output
+  - path: managym/src/agent/continuation.rs
+    why: The visible continuation uses the announced fee
+  - path: managym/src/flow/payment.rs
+    why: Announced cost components reserve source taps
   - path: managym/src/flow/layers.rs
-    why: State reads for mana outputs and activation terms
+    why: Static and mana effects that read battlefield counts
   - path: managym/src/flow/statics.rs
     why: Board-wide classification of payment writes
   - path: managym/src/flow/play.rs
     why: Cast and activation admission with trailing fees
-  - path: managym/src/flow/payment.rs
-    why: Cost progress retains the unpaid fee
+  - path: managym/src/flow/mana/tests.rs
+    why: Live and restored payment, pricing, and sacrifice regressions
   - path: managym/cards/tests/cards/ody.rs
     why: Four Heartbeat positions and payment order regressions
   - path: managym/cards/tests/cards/one.rs
