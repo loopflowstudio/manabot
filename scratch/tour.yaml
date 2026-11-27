@@ -1,0 +1,12 @@
+at: f118a157115300ebb4c45458b6e9a63612aa089d
+first:
+  - path: docs/engine-python.md
+    why: Public API and decision guarantees
+  - path: managym/src/flow/state_edit.rs
+    why: Edit data, prevalidation and quiet moves
+  - path: managym/src/flow/zones.rs
+    why: Battlefield departure bookkeeping shared with normal play
+  - path: managym/src/agent/policy_history.rs
+    why: Shared expiry of links to departed objects
+  - path: managym/src/flow/state_edit/tests.rs
+    why: Combat, library, history and atomicity checks
