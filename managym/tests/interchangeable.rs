@@ -1649,25 +1649,11 @@ fn snapshot_trace(game: &Game) -> TraceStep {
 fn pick_deterministic_index(game: &Game, step_num: usize) -> usize {
     let space = game.action_space().unwrap();
     let frame = game.semantic_decision_frame().unwrap();
-    // `PayCost` is an automatic-payment shortcut whose tie-breaker among
-    // equal-score colors intentionally reads battlefield `PermanentId` order
-    // (see `flow/mana/autotapper.rs`). When explicit source taps are offered
-    // beside `PayCost`, choose among the explicit actions so the oracle tests
-    // rules-level equivalence rather than autotapper's slot-order tiebreak.
-    let has_manual_taps = space.actions.iter().any(|a| {
-        matches!(
-            a,
-            Action::TapForMana { .. }
-                | Action::ActivateAbility { .. }
-                | Action::WaterbendTap { .. }
-        )
-    });
     let mut indexed: Vec<(String, usize)> = space
         .actions
         .iter()
         .zip(&frame.offers)
         .enumerate()
-        .filter(|(_, (a, _))| !(has_manual_taps && matches!(a, Action::PayCost { .. })))
         .map(|(i, (a, o))| (action_key(game, &o.label, a), i))
         .collect();
     indexed.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
@@ -1696,38 +1682,20 @@ fn verify_folded_pair(base: &Game, surviving_idx: usize, alias_object: ObjectId,
         if kept_branch.is_game_over() {
             break;
         }
-        let was_waterbend = kept_branch
-            .action_space()
-            .is_some_and(|s| s.kind == ActionSpaceKind::Waterbend);
         let left_idx = pick_deterministic_index(&kept_branch, step_num);
         let right_idx = pick_deterministic_index(&removed_branch, step_num);
         let la = kept_branch.action_space().unwrap().actions[left_idx].clone();
         let ra = removed_branch.action_space().unwrap().actions[right_idx].clone();
-        // `autotapper` intentionally breaks ties between equal-reluctance
-        // colors (e.g. Island vs Mountain) by `PermanentId` order; stop this
-        // continuation before an automatic payment shortcut fires.
-        // Likewise, a London mulligan redraw shuffles the unordered hand into
-        // the library with Fisher-Yates (uniformly distributed, but dependent
-        // on the pre-shuffle hand slot index under a fixed PRNG seed).
-        if matches!(la, Action::PayCost { .. })
-            || (kept_branch.state.turn.turn_number == 0
-                && matches!(la, Action::ChooseMode { mode: 1, .. }))
+        // A London mulligan redraw shuffles the unordered hand into the library
+        // with Fisher-Yates (uniformly distributed, but dependent on the
+        // pre-shuffle hand slot index under a fixed PRNG seed).
+        if kept_branch.state.turn.turn_number == 0 && matches!(la, Action::ChooseMode { mode: 1, .. })
         {
             break;
         }
         history.push((step_num, la, ra));
         kept_branch.step(left_idx).unwrap();
         removed_branch.step(right_idx).unwrap();
-        // Waterbend does not offer manual land taps: if the last WaterbendTap
-        // auto-completed the remaining generic mana through `autotapper`, stop
-        // here rather than comparing `autotapper`'s `PermanentId`-order tiebreak.
-        if was_waterbend
-            && kept_branch
-                .action_space()
-                .is_none_or(|s| s.kind != ActionSpaceKind::Waterbend)
-        {
-            break;
-        }
     }
 }
 
