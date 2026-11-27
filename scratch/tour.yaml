@@ -58,10 +58,12 @@ first:
     why: End-to-end Academy alias, Command, stale-revision, and replay contract
   - path: academy/ui/src/lib/board/view.test.ts
     why: Drawn-alias anchoring and pile stability unit tests
+  - path: protocol/advice-v1.schema.json
+    why: Generated aliases and synchronized loyalty field definitions
   - path: managym/perf/baseline.json
     why: Adopted CI Engine Budget baseline (-10.6% search, +3.2% steps)
 hide:
-  - path: conformance/authored-matches/
+  - path: conformance/authored-match-w17-v2/
     why: Regenerated authored-match replay fixtures for hash bump
   - path: conformance/authored-match-parity-w17-v2/
     why: Regenerated authored-match parity receipts for autotapper and folding
@@ -71,7 +73,5 @@ hide:
     why: Regenerated Academy demo opening fixtures
   - path: tests/fixtures/pinned_pilot/
     why: Re-recorded pinned-pilot fixtures for folded spaces
-  - path: protocol/
-    why: Six byte-exact JSON schema copies adding optional aliases array
   - path: scratch/
     why: Working notes, concept review, QA page, and ship-review artifacts
