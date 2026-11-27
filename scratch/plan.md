@@ -8,6 +8,16 @@ Pass 2 (`a9359c03b`) carries signed life through mana, checks trailing fees and 
 
 The first pass 2 attempt found the counterexample below (`34092c814`, test `tarnished_citadel_and_the_great_henge_change_another_mana_source` in `managym/cards/tests/cards/ody.rs`) and changed no production code. The concept review (`24f1ec2f3`, `scratch/concept-review.html`) replanned around it.
 
+## Pass 3 counterexample · an activated ability can disappear while its fee is paid
+
+Pass 3 recorded the counterexample in `7124e6444`. The focused debug proof passed.
+
+The constructed position `mana_upfront_fee_can_remove_the_activated_ability` in `managym/src/flow/mana/tests.rs` grants Gray Ogre `{1}{R}, {T}: Add {B}{B}` while its controller has unspent mana. Start with `{R}` and an untapped Mountain. Announce the activation and tap the Mountain. The native tap advances payment and spends `{1}{R}`. The final red unit removes the grant while the activation is in flight, so `complete_mana_upfront` panics with an empty ability list at index 0. The retained test taps and spends those same units on a fork and asserts that the activation remains pending, the live ability is gone, and the root digest is unchanged.
+
+`Decision::ManaUpfront` retains the permanent and a live ability index. The payment model uses that lookup for reservations and saved obligations. Execution and the continuation projection also use it. Rebuilding sources on an exact fork leaves the activation with no authority to read. It must retain the announced cost and chosen ability through nested payment, then evaluate any dynamic output against the board at resolution. The source index still identifies the offered action and its provenance.
+
+Realign pass 3 around an owned activation in `flow/decision.rs` before adding forked search in `flow/mana.rs`. Decide how the activation binds to snapshots and state hashes (`state/hash.rs`), since `ManaUpfront` is part of the canonical state. The acceptance check should execute the published PayCost on live and restored positions and reach the `{B}{B}` choice after the grant disappears. The forked search, colored convoke and collection checks remain pending.
+
 
 ## Why a frozen source list fails
 

@@ -1,11 +1,15 @@
-at: a9359c03bae5236ea02a347c188452299256dd76
+at: 7124e6444da77fa1753bcce03b6bdb41a1016904
 first:
+  - path: scratch/plan.md
+    why: Reproductions and the exact-search ownership dependency
   - path: managym/README.md
     why: Payment order and signed life during production
-  - path: scratch/plan.md
-    why: Reproductions and the remaining coupled positions
+  - path: managym/src/flow/mana/tests.rs
+    why: In-flight activation counterexample, nested fees and scan checks
+  - path: managym/src/flow/decision.rs
+    why: Mana activation and spending continuations
   - path: managym/src/flow/mana.rs
-    why: Ordered life obligations and isolated suffix probes
+    why: Activation completion, life obligations and suffix probes
   - path: managym/src/flow/layers.rs
     why: State reads for mana outputs and activation terms
   - path: managym/src/flow/statics.rs
@@ -18,8 +22,6 @@ first:
     why: Four Heartbeat positions and payment order regressions
   - path: managym/cards/tests/cards/one.rs
     why: Ward payment can fund its life fee
-  - path: managym/src/flow/mana/tests.rs
-    why: Coupling flags, nested fees and read-only scans
   - path: managym/src/flow/tick.rs
     why: Empty decisions error at the step boundary
   - path: managym/src/agent/vector_env.rs
