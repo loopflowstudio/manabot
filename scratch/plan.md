@@ -50,10 +50,9 @@ the Etude binding and its deployment are evaluated separately.
 - Jack Heart redirected the release dependency in steer `44a4f9bb`
   (2026-11-27). Build on editable EXP-77 (`c5923cf`) and
   6db832 (`49b085a`) now, while keeping `pyproject.toml` and `uv.lock`
-  pinned. The merge gate is a published `etude-sdk 0.5.0`. At release, run
-  `uv lock --upgrade-package etude-sdk` and update the repository's lower and
-  upper bounds plus its exact play-runtime pin before checking the locked
-  environment.
+  pinned. The merge gate is a published `etude-sdk 0.5.0`. At release, update
+  the dependency bounds and exact play-runtime pin, then run
+  `uv lock --upgrade-package etude-sdk` and check the locked environment.
 
 ## What exists
 
@@ -93,11 +92,10 @@ the Etude binding and its deployment are evaluated separately.
   (`AGENTS`, `AGENTS_TF32`, `AGENTS_BF16`) and the tournament precision.
   The float32 compute envelope and the paired seeds stay stable across
   precision comparisons.
-- **Vector runner (`manabot/eval/vector.py`, name for review):** `play_pairings`
-  stays Torch-free and async over `MatchSource`; pass 5 binds it to Etude's
-  `Matches`, passes `rows=prepared.batch` on awaited `Forward`, and isolates
-  `ForwardError` per affected checkpoint slots rather than letting it abort
-  unrelated held matches.
+- **Vector runner:** TLA trophies adapt Etude's `Matches` to
+  `play_pairings`, which passes `rows=prepared.batch` to the awaited forward
+  and isolates `ForwardError` to held matches drawing on that checkpoint.
+  The per-slot budget advances with live decision rounds.
 
 ## Passes
 
@@ -105,24 +103,8 @@ the Etude binding and its deployment are evaluated separately.
 2. **Vector runner, locally (done, `dd11bd0a3f`).** Seeded `SlotLoad.fresh(..., seed=)`; `RecordedVectorEnv.record_in_memory`/`slot_record`; shared admission/finalization (`eval/pairing.py`, `eval/match.py`); Torch-free async `play_pairings` (`eval/vector.py`). Trace parity with `play_pairing` proved field by field and by `replay_game`/`audit`/`replay_failure` (heuristic and GRU memory); raw `game_trace_sha256` differs only through wall-clock timings and `mode="vector"`.
 3. **Local measurement and runner cleanup (done, `08a854747f`, `7e79ad34ae`).** Consolidated per-leg setup (`resolve_game_match`, `game_runtime_identities`, `arena_source_sha256`, `set_execution_limits`), dropped `_` prefixes on `eval/vector.py` helpers, added `experiments/eval_throughput.py`, and measured all 12 Apple M4 Max arms in `experiments/reports/eval_throughput.md` (128/128 outcome and replay parity; MPS vector-64 2.41–2.66× CPU batch-1, host arena + replay now 79–83% of single-process wall).
    **MLX follow-up (done, `d2012147d4`, `c4924ee4ed`).** MLX vector-64 reached 2,033 and 1,915 games/hr, with 128/128 replay passes and identical leg traces against CPU and MPS for each model. Local timings and reproduction are in `experiments/reports/eval_throughput.md`.
-4. **Unblocked remainder: match cleanup and CUDA arms (next).** Needs no SDK release.
-   - Deduplicate `manabot/eval/match.py`: collapse `play_cell`'s ~165-line copy
-     of `replay_block`/trace/stats retention onto `finalize_settled_cell`
-     (accepting an `Iterable[dict[str, Any]]` with `try/finally` trace write).
-     Existing eval tests (`tests/eval/test_vector_eval.py`,
-     `tests/eval/test_elemental_play.py`) must pass unchanged.
-   - Run `experiments/eval_throughput.py` on a rented CUDA L4 (RunPod via
-     Doppler, `--max-usd 5`): CPU batch-1, CUDA vector-64 float32 and bf16 for
-     trained `w160l8` and seeded `w384l8`, same 32 deals and checkpoint bytes,
-     replay parity checked. Add the arms, games/hour, rows per forward and each
-     arm's limiting stage to `experiments/reports/eval_throughput.md`.
-     Teaches whether CUDA batching is host-bound below 34M as MTG-328 implied.
-5. **Etude binding and local Gate 1.** Build and test the managed adapter
-   against editable EXP-77 and 6db832. Stream TLA trophies through
-   `play_many` and migrate scalar jobs to async callbacks. Run both checkpoint
-   sizes on M4 Max with the socket and direct transports, each with MLX and
-   MPS on the same 32 deals, and record replay parity and throughput in
-   `experiments/reports/eval_throughput.md`.
+4. **Match retention and L4 measurement (done, `3d685ce0aa`, `966e8ff296`).** Shared scalar and vector retention, with both requested test files passing unchanged. All six L4 arms replayed 128/128 games. Float32 vector-64 reached 3,648 and 3,380 games/hr against on-pod CPU baselines of 293 and 195. Bf16 reached 3,192 and 3,908 games/hr, with 11 changed traces and one changed outcome on the trained model. The rental is closed and the receipts are summarized in the report.
+5. **Etude binding and local Gate 1 (done, `a27d8c0264`, `92a578b417`).** Managed `play_many`, async scalar callbacks, and live-round game budgets. All 1,024 M4 Max games replayed and matched leg traces across EXP-77 and 6db832 with MLX and MPS. 6db832's direct mode gained 3.4–8.4% while pickling `Prepared` in-band. The SDK publication remains a merge gate.
 
 ## Docs
 
@@ -143,8 +125,9 @@ moot once EXP-77 counts `rows=` on pre-collated inputs.
 - Etude: Apple GPU detection for the shared agent process (`310ac1`, committed
   at `de0c927`, unreleased); never evicting the only loaded checkpoint in
   `Forwards._evict`.
-- Game-side recording cost (`scratch/questions.md`): the limit on CUDA below
-  ~34M and on single-process MPS (~79–83% of wall time in pass 3).
+- Game-side recording and replay (`scratch/questions.md`) account for 72–89%
+  of the L4 vector arms. The in-process Etude bus still pickles opaque
+  `Prepared` inputs in-band.
 - Compacting padded joined batches in `agent_loader` if profiling shows it.
 - `torch.compile` (optional per the Task).
 

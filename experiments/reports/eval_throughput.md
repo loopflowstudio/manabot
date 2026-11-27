@@ -1,9 +1,10 @@
-# Paired evaluation throughput on Apple Silicon
+# Paired evaluation throughput
 
-Exploratory calibration for MTG-497 at commit `08a854747f` (2026-11-27). The
-comparison measures completed, replay-verified games per hour through the full
-paired arena on one Apple M4 Max host (16 CPU cores, 40-core GPU, 128 GiB
-unified memory, macOS 26.7.4, PyTorch 2.15.0).
+Exploratory calibration for MTG-497. The comparison measures completed,
+replay-verified games per hour through the full paired arena. The first
+measurements ran at `08a854747f` on 2026-11-27 on an Apple M4 Max
+(16 CPU cores, 40-core GPU, 128 GiB unified memory, macOS 26.7.4, PyTorch
+2.15.0).
 
 ## Workload
 
@@ -20,19 +21,20 @@ unified memory, macOS 26.7.4, PyTorch 2.15.0).
   25,609 total game decisions (7,861 checkpoint decisions, 30.7%), so its
   games/hour reflects shorter policy-acting sequences rather than trained game
   length.
-- Each arm runs sequentially in one process with one Torch CPU thread, float32,
-  and the real evaluation loader. Model loading and deal construction are
-  outside the timer. Timing includes arena admission, decision preparation,
-  gameplay, recording, replay verification, and writing retained evidence.
+- Each arm runs sequentially in one process with one Torch CPU thread and the
+  real evaluation loader. The Apple arms use float32. Model loading and deal
+  construction are outside the timer. Timing includes arena admission,
+  decision preparation, gameplay, recording, replay verification, and writing
+  retained evidence.
 - Forward time includes host-to-device transfer and synchronous readback of
   logits. Replay time comes from the arena's replay receipts. Other arena time
   is the remaining wall time, including observation preparation, viewer frames,
   and native steps. Forward batch size counts only decisions served by the
   checkpoint. A 256-slot arm on this 32-deal corpus has at most 128 live games.
 
-## Results
+## Apple Silicon results
 
-Every arm finished 128/128 games with 128/128 replay passes and exact
+Every Apple arm finished 128/128 games with 128/128 replay passes and exact
 leg-for-leg parity (identical winners, scores, decision counts, and checkpoint
 forward row totals) against CPU scalar.
 
@@ -81,16 +83,14 @@ forward row totals) against CPU scalar.
   accelerator speedups above ~2,000 games/hr are capped by host recording and
   replay cost; multi-process game workers sharing one GPU agent process (Etude
   EXP-77 `play_many`) are needed to scale past that host ceiling.
-- **64 slots saturates single-process MPS on this 128-game workload.** Going
+- **64 slots gave the highest measured throughput on MPS.** Going
   from 16 to 64 slots increases mean rows per forward (6.29 → 15.78 at
   `w160l8`; 4.06 → 8.72 at `w384l8`) and trims forward time by 5–10 s. Going
   from 64 to 256 slots (capped at 128 active games by the 32-deal corpus)
   leaves wall time flat within run noise. Mean batch size stays below slot
-  count because heuristic turns run natively without a forward (leaving 44.3%
-  of `w160l8` decisions and 30.7% of `w384l8` decisions on the checkpoint) and
-  active slots drain at the end of the 128-game batch.
-- **CUDA L4 float32/bf16 arms** remain for pass 4 once `etude-sdk > 0.4.7`
-  ships `play_many`.
+  count because the game process picks heuristic actions separately (leaving
+  44.3% of `w160l8` decisions and 30.7% of `w384l8` decisions on the checkpoint)
+  and active slots drain at the end of the 128-game batch.
 
 ## MLX on Apple Silicon
 
@@ -116,6 +116,80 @@ work outside the forward was the largest stage for both models. Together,
 that work and replay took 83–86% of wall time, leaving a measured 1.8–2.2%
 end-to-end gain over MPS across these single runs.
 
+## RunPod L4
+
+At `966e8ff296` (2026-11-27), the benchmark ran on one RunPod NVIDIA L4
+with an AMD EPYC 9254 host, Linux 6.8, driver 595.112.07, and PyTorch
+2.15.0+cu132. Both models used the checkpoint bytes from the Apple arms.
+The on-pod CPU baselines and the four CUDA arms ran sequentially with one
+Torch CPU thread. Comparisons in this section use the on-pod baseline for
+each model at the same revision.
+
+| Checkpoint | Arm | Games/hr | Wall (s) | Forward (s) | Other arena (s) | Replay (s) | Forward rows | Mean / max rows | Limiting stage |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Trained `w160l8` | CPU scalar float32 | 293 | 1,570.7 | 1,353.8 | 164.8 | 52.1 | 11,209 | 1.00 / 1 | `forward` |
+| Trained `w160l8` | CUDA vector-64 float32 | 3,648 | 126.3 | 24.0 | 58.5 | 43.9 | 11,209 | 18.59 / 36 | `other_arena` |
+| Trained `w160l8` | CUDA vector-64 bf16 | 3,192 | 144.4 | 40.5 | 59.0 | 44.8 | 11,252 | 18.66 / 38 | `other_arena` |
+| Seeded `w384l8` | CPU scalar float32 | 195 | 2,359.0 | 2,155.3 | 152.9 | 50.8 | 6,712 | 1.00 / 1 | `forward` |
+| Seeded `w384l8` | CUDA vector-64 float32 | 3,380 | 136.3 | 29.5 | 64.9 | 42.0 | 6,712 | 9.91 / 54 | `other_arena` |
+| Seeded `w384l8` | CUDA vector-64 bf16 | 3,908 | 117.9 | 12.6 | 63.6 | 41.7 | 6,712 | 9.91 / 54 | `other_arena` |
+
+Float32 CUDA delivered 12.4× the CPU baseline throughput on `w160l8`
+and 17.3× on `w384l8`. Forwards were the limiting stage in both CPU arms.
+Arena work and replay took 72–89% of time across the four CUDA arms.
+Bfloat16 forwards took 43% as long on `w384l8`, raising whole-run throughput
+by 16%. On `w160l8`, bfloat16 forwards took 1.69× as long and throughput fell
+by 12%. Each figure comes from one arm on one worker.
+
+All 768 games passed Command replay. Both float32 CUDA arms matched their
+CPU baselines on all 128 action traces and scores, as did `w384l8` bf16.
+The trained bf16 arm kept the same seeds and deck pairings and matched
+117 traces and 127 scores. Both bf16 arms declared
+`etude-policy-bf16-auto-v1` in their retained registrations.
+
+Etude rental `mtg497-l4-d7fe257a1d5b` used `--max-usd 5` and ended at 18:15
+UTC. Its launcher recorded USD 0.6441 billed plus approximately USD 0.1802
+pending. RunPod confirmed the pod was gone. The local receipts and per-leg
+comparison are under `.runs/eval-throughput/l4-966e8ff296/`.
+
+## Gate 1 on Apple Silicon
+
+The managed TLA trophy callback ran at `92a578b417` on the M4 Max with a fresh
+native extension (sha256 `2dbae64fbde0...`). Each float32 arm used 64 slots,
+one game process, and 15 inference threads. The panel used the same checkpoint
+bytes and held-out deck pairings as above, under the managed `tla-trophies`
+arena's seed derivation. The timer includes the Etude run and result delivery.
+EXP-77 `c5923cf` used its shared socket with placement set by the harness because
+its automatic accelerator detection is NVIDIA-only. 6db832 `49b085a` selected
+its direct inference thread through ordinary Etude placement.
+
+| Checkpoint | Transport | Backend | Games/hr | Wall (s) | Forward calls | Mean rows/forward | Forward round trips (s) |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Trained `w160l8` | EXP-77 socket | MLX | 4,749 | 97.0 | 731 | 16.61 | 31.5 |
+| Trained `w160l8` | EXP-77 socket | MPS | 4,009 | 115.0 | 731 | 16.61 | 46.7 |
+| Trained `w160l8` | 6db832 direct | MLX | 5,091 | 90.5 | 731 | 16.61 | 26.0 |
+| Trained `w160l8` | 6db832 direct | MPS | 4,344 | 106.1 | 731 | 16.61 | 41.2 |
+| Seeded `w384l8` | EXP-77 socket | MLX | 4,930 | 93.5 | 559 | 12.11 | 34.6 |
+| Seeded `w384l8` | EXP-77 socket | MPS | 4,377 | 105.3 | 559 | 12.11 | 46.9 |
+| Seeded `w384l8` | 6db832 direct | MLX | 5,096 | 90.4 | 559 | 12.11 | 30.2 |
+| Seeded `w384l8` | 6db832 direct | MPS | 4,607 | 100.0 | 559 | 12.11 | 40.8 |
+
+All 1,024 games passed replay. Each model's four arms agreed on every deal and
+player seed, selected action, offer, frame digest, state digest and final
+score. The trained model won 115 of 128 games and used 12,140 policy rows in
+each arm. The seeded model won 9 of 128 and used 6,770 rows.
+
+Direct mode gained 3.4–8.4% over the socket at the same backend. Its receipts
+show zero socket bytes and zero arrays passed by pointer. `Prepared` is an
+opaque dataclass to the Etude transport, which pickled every input in-band:
+4.13 GB per trained-model arm and 2.44 GB per seeded-model arm. These are
+measurements of direct inference with that serialized input path.
+
+An initial run on the older local engine build produced 23 wall-clock
+timeouts while other deals were being replayed. The regression test and
+`92a578b417` move the slot budget to live decision rounds. The reported
+measurements all use the rebuilt engine and the corrected clock.
+
 ## Reproduce
 
 Fetch the corpus and the trained policy into local files.
@@ -139,6 +213,18 @@ uv run --extra evaluation python -m experiments.eval_throughput \
 uv run --extra evaluation --extra mlx python -m experiments.eval_throughput \
   --output-dir .runs/eval-throughput/w160-mlx-64 --device mlx --runner vector --slots 64 \
   --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors
+uv run --extra evaluation python -m experiments.eval_throughput \
+  --output-dir .runs/eval-throughput/w160-l4-bf16 --device cuda --runner vector --slots 64 \
+  --precision bf16 --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors
 ```
 
+On the L4 host, run the scalar CPU baseline and both CUDA precision arms with
+each checkpoint, keeping the same checkpoint file and 32 deals. Use
+`--precision float32` and a fresh output directory for the other CUDA arm.
+
 The CLI writes `summary.json` alongside the per-deal diagnostics in `arena/`.
+For the managed comparison, use `EvalRun.play_many` with
+`experiments.tla_trophies.play_many` and `AGENTS`. The Gate 1 harness, receipts,
+and per-leg comparison are under `.runs/eval-throughput/gate1-92a578b417/`.
+Install the chosen Etude checkout with `uv pip install --no-deps -e PATH`
+and run with `uv run --no-sync` to keep the editable SDK in use.

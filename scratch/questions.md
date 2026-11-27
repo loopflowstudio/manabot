@@ -47,6 +47,11 @@ Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
 
 Ideas outside this Task:
 
+- **Zero-copy transport for policy inputs.** Gate 1's 6db832 bus passed zero
+  arrays by pointer. Its array discovery sees containers and NumPy arrays,
+  while `Prepared` arrives as a dataclass and is pickled in-band. The report
+  measures the direct bus with the production input shape. What interface
+  should expose those buffers without duplicating `Prepared`?
 - **Game-side recording cost.** Host work is 0.85 s per game against the
   heuristic and 1.5 s in self-play, the limit on CUDA below about 34M (MTG-328
   saw 21% L4 utilization). In a profile of one pairing, `evaluation_metadata`
