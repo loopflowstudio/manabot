@@ -90,6 +90,10 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-testid=game][data-live=true]')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('action-option').first()).toContainText('Keep hand');
+  // A mulligan is answers alone: its list has no fold, and no button repeats a row.
+  await expect(page.getByTestId('legal-choice-count')).toBeVisible();
+  await expect(page.getByTestId('choices-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('prompt-action')).toHaveCount(0);
   await page.keyboard.press('1');
   await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', 'PRIORITY');
 

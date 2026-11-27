@@ -2,12 +2,14 @@
 
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
 
 from managym.academy import server
+from managym.academy.recording import Recording
 from managym.academy.replay_index import (
     canonical_projection_sha256,
     project_replay,
@@ -20,6 +22,7 @@ from managym.academy.watch import (
     inspect_watch,
     step_watch,
 )
+from managym.experience_projection import serialize_observation
 
 
 @pytest.fixture
@@ -117,6 +120,106 @@ def test_watch_steps_are_exact_and_actor_safe(watch: WatchCreated) -> None:
         trace_id
     )
     assert [player["kind"] for player in metadata["players"]] == ["bot", "bot"]
+
+
+def hands_by_seat(observation: dict[str, Any]) -> dict[int, list[Any]]:
+    return {
+        observation[side]["player_index"]: observation[side]["hand"]
+        for side in ("agent", "opponent")
+    }
+
+
+def without_hands(observation: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **observation,
+        **{
+            side: {
+                key: value
+                for key, value in observation[side].items()
+                if key not in ("hand", "hand_hidden_count")
+            }
+            for side in ("agent", "opponent")
+        },
+    }
+
+
+def test_watch_shows_both_hands_at_every_position(watch: WatchCreated) -> None:
+    trace_id = watch["id"]
+    client = TestClient(server.app)
+    url = f"/api/traces/{trace_id}"
+    game = server._live_game_for_trace(trace_id).game
+
+    def live_hands() -> dict[int, list[Any]]:
+        return {
+            seat: serialize_observation(game.env.observation_for_player(seat))["agent"][
+                "hand"
+            ]
+            for seat in (0, 1)
+        }
+
+    # Before any step the only position is the board itself.
+    opening = client.get(f"{url}/positions/latest?reveal=true").json()
+    assert hands_by_seat(opening["observation"]) == live_hands()
+    assert all(live_hands().values())
+
+    for revision in range(20):
+        step_watch(trace_id, revision)
+    positions = client.get(f"{url}/recording").json()["positions"]
+    assert {position["kind"] for position in positions} == {
+        "choice",
+        "consequences",
+        "state",
+    }
+    reads: list[dict[str, Any]] = []
+    for position in positions:
+        assert position["can_reveal"]
+        acting = client.get(f"{url}/positions/{position['key']}").json()
+        shown = client.get(f"{url}/positions/{position['key']}?reveal=true").json()
+        assert shown["revealed"] and not acting["revealed"]
+        board = shown["observation"]
+        assert all(
+            not board[side].get("hand_hidden_count") for side in ("agent", "opponent")
+        )
+        assert (
+            sum(map(len, hands_by_seat(board).values()))
+            == board["agent"]["zone_counts"]["HAND"]
+            + board["opponent"]["zone_counts"]["HAND"]
+        )
+        if position["kind"] != "choice":
+            # Only the hands differ: the board keeps this position's seats,
+            # decision context and inspected cards, never the next step's.
+            assert without_hands(board) == without_hands(acting["observation"])
+        assert {**shown, "observation": None, "revealed": None} == {
+            **acting,
+            "observation": None,
+            "revealed": None,
+        }
+        reads.append(shown)
+    # The board after a step is the board the next choice is made on.
+    for before, after in zip(reads, reads[1:]):
+        if before["kind"] == "consequences" and after["kind"] != "consequences":
+            assert hands_by_seat(before["observation"]) == hands_by_seat(
+                after["observation"]
+            )
+    assert hands_by_seat(reads[-1]["observation"]) == live_hands()
+
+    # The other hand is stored for the spectator view and never exported.
+    stored = game.attempt_store.load(trace_id)
+    assert stored["final_opponent_hand"] == live_hands()[1]
+    exported = client.get(url).text
+    assert "final_opponent_hand" not in exported
+    assert "analysis_observation" not in exported
+
+    # A record written before the final hand was stored draws the acting view
+    # at its last position.
+    older = Recording(
+        trace_id,
+        {key: value for key, value in stored.items() if key != "final_opponent_hand"},
+    )
+    assert not older.can_reveal(older.by_key["latest"])
+    assert older.can_reveal(older.by_key["after:0"])
+    with pytest.raises(ValueError, match="spectator_view_unavailable"):
+        older.read("latest", reveal=True)
 
 
 def test_watch_roots_fork_both_seats_without_mutating_match(
@@ -435,7 +538,8 @@ def test_unified_watch_reads_are_bounded_and_do_not_produce(
     assert reveal["history_labels"] == choice["history_labels"]
     assert reveal["outputs"] == choice["outputs"]
     assert client.get(f"{url}/positions/after:1").json()["kind"] == "consequences"
-    assert client.get(f"{url}/positions/latest?reveal=true").status_code == 409
+    latest = client.get(f"{url}/positions/latest?reveal=true").json()
+    assert latest["revealed"] and latest["observation"]["opponent"]["hand"]
     assert client.get(f"{url}/positions/absent").status_code == 404
     assert len(game.canonical_decisions) == 2
     server.end_game(trace_id, "expired")

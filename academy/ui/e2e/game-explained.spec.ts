@@ -24,6 +24,10 @@ async function playToDeath(page: Page): Promise<boolean> {
     const deathLines = page.locator('[data-testid=game-log] [data-testid=history-consequence]').filter({ hasText: /died · lethal damage/ });
     if (await deathLines.count() > 0) return true;
     if (await page.getByTestId('result-card').isVisible()) break;
+    if (await page.locator('[data-testid=walk-bar][data-walking=true]').count()) {
+      await page.keyboard.press('Space');
+      await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+    }
     await showEachCreaturesChoice(page);
     const rows = page.getByTestId('action-option');
     const labels = await rows.allTextContents();

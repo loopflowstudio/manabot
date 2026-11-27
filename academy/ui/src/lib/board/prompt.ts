@@ -16,7 +16,7 @@ import { stackName, type BoardView, type PlacedOffer } from './view';
 function anyCards(view: BoardView): boolean {
   const permanents = [view.you, view.opponent].flatMap(side => [...side.creatures, ...side.support])
     .flatMap(pile => pile.items).flatMap(item => [item, ...item.attached]);
-  return view.hand.some(item => item.offers.length) || permanents.some(item => item.offers.length)
+  return [view.you, view.opponent].some(side => side.hand.some(item => item.offers.length)) || permanents.some(item => item.offers.length)
     || view.stack.some(item => item.offers.length) || view.you.offers.length + view.opponent.offers.length > 0;
 }
 

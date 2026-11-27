@@ -37,7 +37,7 @@ export interface Position {
   step: string | null;
   actor: number | null;
   automatic: boolean;
-  /** Both hands may show here: a Watch spectator view, or any position of a complete game you played. */
+  /** Both hands may show here: any Watch position with a captured spectator hand, or any position of a complete game you played. */
   can_reveal: boolean;
   /** The revision the position's decision or transition starts at; null at the latest state. */
   revision?: number | null;

@@ -555,7 +555,7 @@ test('attack marquee starts only in the rows and Escape preserves the draft', as
   await otterCard.click();
   const end = await center(tigerCard);
   const marquee = page.getByTestId('attack-marquee');
-  for (const outside of [page.locator('.half.you .plate'), page.locator('.hand')]) {
+  for (const outside of [page.locator('.half.you .plate'), page.locator('.half.opponent .plate')]) {
     const from = await center(outside);
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();

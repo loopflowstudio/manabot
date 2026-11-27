@@ -36,7 +36,8 @@ pending choice with the same legal offers and permitted information.
   observation serialization
 - **`play_protocol.py`**: Pydantic models for `/ws/play` requests (`resume`,
   `new_game`, `rematch`, `swap_sides`, `command`, `decision_group_command`,
-  `action`, `pass_turn`, `retry_mirror`, `set_stops`, `show_analysis`)
+  `action`, `pass_turn`, `retry_mirror`, `set_stops`, `show_analysis`,
+  `set_open_hands`)
 - **`presentation.py`**: per-viewer semantic presentation projection (moves,
   consequences, causes, rules, and viewer-safe per-event labels) derived from
   the engine's unhashed presentation sink
@@ -131,11 +132,19 @@ its [evidence and remaining integration work](https://github.com/loopflowstudio/
 are separate from complete-game replay certification.
 
 Live play renders the board (`academy/ui/src/lib/board/`): one window with the
-board, the hand and a rail holding the stack, the decision and every legal
-offer by number. `boardView` places each offer exactly once in that list and
-at least once on the card or player it acts on, as a prompt button (pass, pay,
-declines and combat answers without another creature) or in a tray for subjects
-the board does not draw. A card with one offer commits it on click; several
+board, both hands as upright 1:1 ribbons on its bottom and top edges (the
+opponent's as card backs plus rules-revealed cards, or full face-up cards while
+Open hands is on) and a rail holding the stack, the decision and every legal
+offer by number. Off-board offers such as Lessons sit in a board-level tray.
+`yourHand` says how the bottom hand behaves: `"out"` (Play and Study)
+keeps it out all the time, in depth the battlefield reserves under your rows,
+and takes drags from it; `"tucked"` (Watch, Review and **See its line**) tucks
+both hands over a fixed two-half battlefield, and the active seat's glides in
+with its offers and recorded probabilities on those cards. `boardView` places
+each offer exactly once in that list and, where it acts on one, on its card or
+player, or in the tray for subjects the board does not draw; pass and pay are
+the primary button, and the rail's other prompt buttons (declines, combat
+answers without another creature) show only while the list is folded. A card with one offer commits it on click; several
 open at the card. Pointer drag routes through the same offer and combat-draft
 paths: drag playable cards from hand onto the battlefield, pull lines from
 sources to legal targets or blockers to attackers, and drag a marquee across
@@ -329,15 +338,19 @@ and an acting-view belief summary, never private sampled hands or branch audits.
 choice time. Traces from the removed compound-decision policies may retain
 conditional root-sequence factors and values; these remain labeled separately
 from native microchoice marginals. Anchors without critics have no value estimate. Watch's acting-view
-inspection endpoint never returns the full mixed canonical replay. The separate
-private analysis observation supplies **Show both hands**, available at Watch
-choices that captured a spectator view (including active watches) and at every
-position of a completed played game (`end_reason == "game_over"`). Choices
-default to the acting bot's view, independently of the stable seat-0 board
-orientation. Consequence and result boards use the recorded seat-0 view where
-actor-private post-action snapshots are absent, with the perspective explicitly
-labeled. Unavailable views stay unavailable. Ordinary trace reads always strip
-the analysis snapshot, and bot inputs, decision evidence and acting-view history
+inspection endpoint never returns the full mixed canonical replay. Watch defaults
+to fixed seats (Seat 1 bottom, Seat 2 top) with **Show both hands** on across
+every position: choices read their own `analysis_observation`, consequences read
+`events[i + 1]["analysis_observation"]`, and the final position reads
+`Trace.final_opponent_hand`. `Recording.read(..., reveal=True)` starts from the
+redacted position board and merges only the hands by seat (`with_both_hands`),
+preserving board orientation and never leaking a later step's `decision_context`
+or inspected cards. Older Watch records without `final_opponent_hand` fall back
+to the acting view at their last position (`can_reveal` false). Completed played
+games (`end_reason == "game_over"`) continue to supply **Show both hands** via
+`ReplayedViews`, while unfinished played games never reveal both hands. Ordinary
+trace reads (`prepare_trace_payload`) strip both `analysis_observation` and
+`final_opponent_hand`, and bot inputs, decision evidence and acting-view history
 retain their acting-view scope.
 
 **Try another line** uses retained Study roots from either acting seat, executes
@@ -497,6 +510,44 @@ so a game played without analysis saves the same row as before. Frames carry
 `show_analysis {"shown": false}` closes the worker; a new game or a closed
 game closes it too. `GameNumbers.analysis_shown` counts the marked decisions
 and the Review position index exposes `analysis_shown` per choice.
+
+### Open hands while you play
+
+`GameConfig.open_hands` (default `False`, omitted from `to_record()` when false)
+controls whether the human player sees the bot's hand in Play. During a live
+Play session, `set_open_hands {"open": bool}` on `/ws/play` toggles it on the
+session and persists the updated `GameConfig` so resume, rematch and swap sides
+keep the current setting (refused in Watch; allowed in both open- and
+closed-decklist Play games). After game over, `set_open_hands` still answers
+with the bot's remaining hand as a peek without modifying the saved trace
+config.
+
+Every frame-bearing `/ws/play` reply (`observation`, `game_over` and
+`command_outcome`, including cached reconnect recovery) and the toggle's own
+`{"type": "open_hands_state"}` reply carry the side-channel field
+`open_hand: {"revision": int, "hand": CardState[]} | null` attached in
+`_reply` (`OPEN_HAND_REPLIES`), computed directly from the bot seat's
+`env.observation_for_player`. A frame-bearing reply is named by its type, not
+by a top-level `frame` key: an accepted Command's frame is nested in
+`command_outcome.update.frame`. `set_stops` answers an `observation`, so it
+carries the hand; `analysis_state` does not. The `open_hands_state` reply also
+carries `setup`, like every reply, so Rematch and Swap play/draw read the
+setting as last left; the client's saved Play again matchup drops it, and a
+game played on from another starts with it off while each prefix event keeps
+its source's `open_hands` mark. The client has no separate flag: the switch and the top-bar chip
+are on while `gameStore.openHand` is not null, and the opponent's plate then
+offers Show hand / Tuck hand over the face-up ribbon (tucked, it shows its
+cards' name bars in the depth the top rows always keep clear; turning open hands on again brings it out). Each plate's
+toggle acts on its own seat (`RibbonOverrides` in `board/view.ts`); only a live
+offer on a hand card holds a ribbon out. The
+client draws `open_hand` in place of top-ribbon card backs only at now
+(`activeCursor === null`) when `open_hand.revision` matches the current frame
+revision; beat playback and history lookback draw that historical board's own
+opponent hand and backs. `ExperienceFrame`, `frame_hash`, `ReplayDecision`,
+`DecisionAddressV2`, step boards, `/api/traces/{id}` and the bot's own engine
+observation never carry `open_hand`. Each deliberate human decision committed
+while on records `TraceEvent.open_hands: true` (omitted when false), and
+`GameNumbers.open_hands` counts those decisions for Review.
 
 ### Numbers
 
