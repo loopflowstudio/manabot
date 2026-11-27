@@ -74,6 +74,22 @@ def test_hand_packed_gru_matches_nn_gru_outputs_states_and_gradients(
         torch.testing.assert_close(got, want, atol=1e-12, rtol=1e-10)
 
 
+def assert_float32_outputs_and_gradients(
+    outputs: torch.Tensor,
+    final: torch.Tensor,
+    gru: nn.GRU,
+    data: torch.Tensor,
+    initial: torch.Tensor | None,
+) -> None:
+    assert outputs.dtype == torch.float32
+    assert final.dtype == torch.float32
+    (outputs.square().sum() + final.square().sum()).backward()
+    checked = [*gru.parameters(), data, *([initial] if initial is not None else [])]
+    for tensor in checked:
+        assert tensor.grad is not None and torch.isfinite(tensor.grad).all()
+        assert tensor.grad.abs().sum() > 0
+
+
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("with_initial", [False, True])
 def test_packed_gru_normalizes_reduced_kernel_outputs_with_gradients(
@@ -83,22 +99,9 @@ def test_packed_gru_normalizes_reduced_kernel_outputs_with_gradients(
     gru = nn.GRU(6, 7, batch_first=True)
     data = torch.randn(sum(SIZES), 6, requires_grad=True)
     initial = torch.randn(SIZES[0], 7, requires_grad=True) if with_initial else None
-    hook = gru.register_forward_hook(cast_gru_output(dtype))
-    try:
-        outputs, final = packed_gru(gru, data, SIZES, initial)
-    finally:
-        hook.remove()
-    assert outputs.dtype == torch.float32
-    assert final.dtype == torch.float32
-    (outputs.square().sum() + final.square().sum()).backward()
-    for param in gru.parameters():
-        assert param.grad is not None and torch.isfinite(param.grad).all()
-        assert param.grad.abs().sum() > 0
-    assert data.grad is not None and torch.isfinite(data.grad).all()
-    assert data.grad.abs().sum() > 0
-    if initial is not None:
-        assert initial.grad is not None and torch.isfinite(initial.grad).all()
-        assert initial.grad.abs().sum() > 0
+    gru.register_forward_hook(cast_gru_output(dtype))
+    outputs, final = packed_gru(gru, data, SIZES, initial)
+    assert_float32_outputs_and_gradients(outputs, final, gru, data, initial)
 
 
 @pytest.mark.parametrize("with_initial", [False, True])
@@ -128,24 +131,11 @@ def test_packed_gru_disables_autocast_and_returns_parameter_dtype(
             )
         )
 
-    hook = gru.register_forward_pre_hook(observe)
-    try:
-        with torch.autocast("cpu", dtype=torch.bfloat16):
-            outputs, final = packed_gru(gru, data, SIZES, initial)
-    finally:
-        hook.remove()
+    gru.register_forward_pre_hook(observe)
+    with torch.autocast("cpu", dtype=torch.bfloat16):
+        outputs, final = packed_gru(gru, data, SIZES, initial)
     assert seen == [(False, torch.float32, torch.float32 if with_initial else None)]
-    assert outputs.dtype == torch.float32
-    assert final.dtype == torch.float32
-    (outputs.square().sum() + final.square().sum()).backward()
-    for param in gru.parameters():
-        assert param.grad is not None and torch.isfinite(param.grad).all()
-        assert param.grad.abs().sum() > 0
-    assert data.grad is not None and torch.isfinite(data.grad).all()
-    assert data.grad.abs().sum() > 0
-    if initial is not None:
-        assert initial.grad is not None and torch.isfinite(initial.grad).all()
-        assert initial.grad.abs().sum() > 0
+    assert_float32_outputs_and_gradients(outputs, final, gru, data, initial)
 
 
 def test_only_packed_gru_references_packed_sequence_in_torch_backend() -> None:

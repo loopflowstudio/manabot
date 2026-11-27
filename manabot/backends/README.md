@@ -451,23 +451,20 @@ other module under `manabot/backends/torch/` constructs `PackedSequence`:
 ```python
 from manabot.backends.torch.packed_gru import packed_gru
 
-# data: [N, I] in packed descending-length order; sizes: live counts per step
-# initial: [sizes[0], H] or None; returns (outputs [N, H], final [sizes[0], H])
-# both in gru.weight_ih_l0.dtype, with gradients preserved through any cast.
 outputs, final = packed_gru(self.gru, data, sizes, initial)
 ```
 
-On every device (CPU, MPS and CUDA), `packed_gru` runs with autocast disabled,
-casts `data` and any `initial` state to `gru.weight_ih_l0.dtype`, and returns
-`outputs` and `final` in that parameter dtype without detaching gradients.
-Under `bf16` autocast, recurrences therefore run in float32 alongside their
-float32 weights rather than letting CUDA's fused GRU return `float16` or
-`bfloat16` states into float32 join tables (or run unscaled `float16`
-recurrences without a gradient scaler). On MPS it projects all packed rows once
-and runs a hand-written backward that carries only the state gradient through
-the reverse step loop, as MLX's `gru_recurrence` does, avoiding MPS `nn.GRU`'s
-roughly twenty dispatched ops per step over a `PackedSequence`. CPU and CUDA
-call `nn.GRU` inside `torch.autocast(device, enabled=False)`.
+On CPU, MPS and CUDA, `packed_gru` disables autocast, casts `data` and any
+`initial` state to `gru.weight_ih_l0.dtype`, and returns packed step outputs
+`[N,H]` and sorted final states `[sizes[0],H]` in that parameter dtype without
+detaching gradients. Under `bf16` autocast, recurrences stay float32 alongside
+their float32 weights instead of letting CUDA's fused GRU return `float16` or
+`bfloat16` into float32 join tables (or run unscaled `float16` recurrences
+without a gradient scaler). CPU and CUDA call `nn.GRU`; MPS projects all
+packed rows once and runs a hand-written backward that carries only the state
+gradient through the reverse step loop, as MLX's `gru_recurrence` does,
+avoiding MPS `nn.GRU`'s roughly twenty dispatched ops per step over a
+`PackedSequence`.
 
 `Learner` and `forward_precision` accept `"float32"`, `"tf32"` and `"bf16"`,
 refusing unknown precision names and `"bf16"` on CPU with `ValueError` rather

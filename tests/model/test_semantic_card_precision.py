@@ -4,7 +4,6 @@ MANABOT_REQUIRE_CUDA=1 makes missing CUDA a failure, never a successful skip.
 The admission command prints actual recurrent output dtypes for the run log.
 """
 
-from contextlib import nullcontext
 from copy import deepcopy
 import io
 import json
@@ -18,7 +17,7 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import PackedSequence
 
-from manabot.backends.torch.arrays import on_device
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
@@ -39,28 +38,27 @@ from manabot.training.rollout.collection import (
     close_collector,
     open_collector,
 )
-from tests.model.memory_fold_fixture import memory_fold_observation
 from tests.model.prepared_routes import device_input, program_input
 from tests.model.test_decision_memory import policy
 from tests.model.test_packed_gru import cast_gru_output
+from tests.training.test_memory_learner_fold import memory_fold_observation
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _exercise_gru_memory_cases(
+def exercise_gru_memory(
     model: ActorCritic,
     retained: PrefixObservation,
-    device: torch.device,
-    precision: Literal["float32", "bf16"] | None = None,
+    precision: Literal["float32", "bf16"] = "float32",
 ) -> None:
     """Exercise cold/warm serving folds, learner fold, and stateless GRU memory."""
     assert model.decision_memory is not None and model.decision_memory.gru is not None
-    ctx = (
-        (lambda: forward_precision(precision, device))
-        if precision is not None
-        else nullcontext
-    )
-    with PolicyInference(model) as scope, torch.no_grad(), ctx():
+    device = device_of(model)
+    with (
+        PolicyInference(model) as scope,
+        torch.no_grad(),
+        forward_precision(precision, device),
+    ):
         cold = scope.prepare(retained)
         assert cold.memory is not None and cold.memory.fold is not None
         assert any(level.record_nodes is not None for level in cold.memory.fold.levels)
@@ -83,7 +81,7 @@ def _exercise_gru_memory_cases(
         assert batch.memory is not None
         assert (batch.memory.fold is not None) is expect_fold
         model.zero_grad(set_to_none=True)
-        with ctx():
+        with forward_precision(precision, device):
             logits, values = model.forward_distribution(batch)
         assert torch.isfinite(logits).all() and torch.isfinite(values).all()
         loss = logits.float().square().mean() + values.float().square().mean()
@@ -117,21 +115,18 @@ def test_definition_join_preserves_float32_outputs_and_gradients() -> None:
 def test_definition_join_accepts_recurrent_output_dtype(dtype: torch.dtype) -> None:
     """Inject the observed CUDA boundary at `nn.GRU` on CPU; not CUDA admission."""
     encoder = SemanticCardEncoder("ur-lessons-vs-gw-allies", 8)
-    hook = encoder.encoder.register_forward_hook(cast_gru_output(dtype))
-    try:
-        table = encoder.definitions(program_input(encoder, torch.tensor([1, 2])))
-        assert table.dtype == torch.float32
-        assert torch.isfinite(table).all()
-        table.sum().backward()
-        assert encoder.token_embedding.weight.grad is not None
-        assert torch.isfinite(encoder.token_embedding.weight.grad).all()
-        assert encoder.token_embedding.weight.grad.abs().sum() > 0
-        empty = encoder.definitions(
-            program_input(encoder, torch.empty(0, dtype=torch.long))
-        )
-        assert empty.dtype == table.dtype and not empty.any()
-    finally:
-        hook.remove()
+    encoder.encoder.register_forward_hook(cast_gru_output(dtype))
+    table = encoder.definitions(program_input(encoder, torch.tensor([1, 2])))
+    assert table.dtype == torch.float32
+    assert torch.isfinite(table).all()
+    table.sum().backward()
+    assert encoder.token_embedding.weight.grad is not None
+    assert torch.isfinite(encoder.token_embedding.weight.grad).all()
+    assert encoder.token_embedding.weight.grad.abs().sum() > 0
+    empty = encoder.definitions(
+        program_input(encoder, torch.empty(0, dtype=torch.long))
+    )
+    assert empty.dtype == table.dtype and not empty.any()
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
@@ -142,11 +137,8 @@ def test_decision_memory_joins_accept_recurrent_output_dtype(
     space, retained = memory_fold_observation()
     model = policy(space, "gru", 4, live=True, bucketed=True)
     assert model.decision_memory is not None and model.decision_memory.gru is not None
-    hook = model.decision_memory.gru.register_forward_hook(cast_gru_output(dtype))
-    try:
-        _exercise_gru_memory_cases(model, retained, torch.device("cpu"))
-    finally:
-        hook.remove()
+    model.decision_memory.gru.register_forward_hook(cast_gru_output(dtype))
+    exercise_gru_memory(model, retained)
 
 
 @pytest.mark.parametrize("declared", ["float32", "bf16"])
@@ -257,7 +249,7 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
                 strict=True,
             ):
                 torch.testing.assert_close(a, b, atol=0, rtol=0)
-        _exercise_gru_memory_cases(mem_agent, retained, torch.device("cuda"), declared)
+        exercise_gru_memory(mem_agent, retained, declared)
         assert dtypes == {"torch.float32"}
         print(
             json.dumps(
