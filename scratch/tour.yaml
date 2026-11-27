@@ -1,4 +1,4 @@
-at: ecbe3c85bcb96ba3b258bf687b6f7e7c1703540c
+at: 888e500087e3286803c5aeea64dd6dfdd2b00358
 first:
   - path: managym/README.md
     why: Indistinguishable-object contract, allowlist, manual-mana rules, and live-in-zone aliases
@@ -21,9 +21,12 @@ first:
   - path: managym/decision_group.py
     why: Typed Offer.aliases (list[SubjectRef]) model aligned with decision_group
   - path: managym/src/flow/interchangeable.rs
-    why: Fail-closed reference census, equivalence predicate, and action folding
+    why: Fail-closed census, shared equivalence pass, action folding, and target/permanent partitioning
   - path: managym/src/flow/mana/interchangeable.rs
     why: Mana-payment skip moved onto shared equivalence predicate
+  - path: managym/src/flow/mana/autotapper.rs
+    why: Deterministic color/output tiebreak (TapRank) independent of PermanentId order
+  - path: managym/src/flow/mana.rs
   - path: managym/src/flow/game.rs
     why: Paired PublishedDecision seam keeping ActionSpace and aliases together
   - path: managym/src/flow/tick.rs
@@ -33,7 +36,10 @@ first:
   - path: managym/src/flow/decision_group/combat.rs
     why: Shared combat normalizers and committed-decline filtering in CombatGroup::describe
   - path: managym/src/agent/decision_surface.rs
-    why: Legacy compound lowering through aliases and shared combat normalizer
+    why: Deduplicated candidate lists, RoleSelection count/subset decoding, and alias lowering
+  - path: managym/src/agent/observation.rs
+    why: Allocation-light observation construction keeping bench_steps throughput ahead of baseline
+  - path: managym/src/flow/selection_sampling.rs
   - path: managym/src/decision_context.rs
     why: Viewer-safe live-in-zone SubjectRef alias projection backing DecisionOffer.aliases
   - path: managym/academy/server.py
@@ -41,11 +47,13 @@ first:
   - path: academy/ui/src/lib/board/view.ts
     why: Anchoring folded SubjectRef aliases on drawn board and hand objects
   - path: academy/ui/src/lib/board/Board.svelte
-  - path: academy/ui/src/lib/board/Rail.svelte
   - path: academy/ui/src/routes/replay/+page.svelte
     why: Wrap long hex digest stop reasons on pre-change recordings
   - path: managym/tests/interchangeable.rs
-    why: Behavioral oracle, per-row matrix, and coupled combat tests
+    why: Behavioral oracle through autotapper, per-row matrix, and coupled combat tests
+  - path: managym/tests/rules/structured_offers.rs
+    why: Deduplicated targets, waterbend count roles, and blocker/attacker lowering tests
+  - path: managym/tests/rules/structured_attacker_offers.rs
   - path: tests/academy/test_interchangeable_offers.py
     why: End-to-end Academy alias, Command, stale-revision, and replay contract
   - path: academy/ui/src/lib/board/view.test.ts
@@ -53,6 +61,8 @@ first:
 hide:
   - path: conformance/authored-matches/
     why: Regenerated authored-match replay fixtures for hash bump
+  - path: conformance/authored-match-parity-w17-v2/
+    why: Regenerated authored-match parity receipts for autotapper and folding
   - path: conformance/semantic-kernel-w17-v6/evidence-interchangeable-v1.json
     why: Recorded semantic conformance evidence (14 cases, zero divergence)
   - path: managym/academy/fixtures/
