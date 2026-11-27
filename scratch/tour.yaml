@@ -1,0 +1,9 @@
+at: d6026151f7299ebe803dd7e5937f816afc7351a8
+first:
+  - path: academy/ui/src/lib/board/view.test.ts
+    why: Update folded hand offer test to view.you.hand
+  - path: .lf/qa/academy.md
+    why: Document folded offer aliases and ribbon click offsets
+hide:
+  - path: scratch/
+    why: Fix-forward plan, verify notes, QA captures, and ship-review
