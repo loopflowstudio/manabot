@@ -557,6 +557,9 @@ pub enum ManaProduction {
         tapped: ObjectId,
         produced: crate::state::mana::Mana,
         pending: Vec<PendingManaBonus>,
+        /// First unit of this production in the pool when paying an announced cost.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        commit_start: Option<usize>,
     },
 }
 
@@ -2884,11 +2887,14 @@ impl Game {
                     && self.pending_choice.is_none()
                     && self.mana_capture(player).is_some())
                 .then(|| self.state.players[player.0].mana_pool.total());
-                // Mana made for no nested cost pays toward an announced cost
-                // being paid as it is produced.
-                let start = resume
-                    .is_none()
-                    .then(|| self.state.players[player.0].mana_pool.unit_count());
+                // Bonus choices only append mana. Keep the boundary from
+                // before the original output until the whole production ends.
+                let start = match production {
+                    ManaProduction::Output { .. } => resume
+                        .is_none()
+                        .then(|| self.state.players[player.0].mana_pool.unit_count()),
+                    ManaProduction::Bonus { commit_start, .. } => *commit_start,
+                };
                 let origin = match production {
                     ManaProduction::Output { source, .. } => *source,
                     ManaProduction::Bonus { source, .. } => Some(*source),
@@ -2903,7 +2909,14 @@ impl Game {
                         tapped: Some(tapped),
                     } => {
                         let bonuses = self.production_bonuses(player, tapped);
-                        self.resolve_mana_bonuses(player, *source, mana, bonuses, resume.take())
+                        self.resolve_mana_bonuses(
+                            player,
+                            *source,
+                            mana,
+                            bonuses,
+                            resume.take(),
+                            start,
+                        )
                     }
                     ManaProduction::Output { .. } => resume.take(),
                     ManaProduction::Bonus {
@@ -2917,6 +2930,7 @@ impl Game {
                         produced,
                         std::mem::take(pending),
                         resume.take(),
+                        start,
                     ),
                 };
                 if let Some(before) = before {
@@ -2937,14 +2951,11 @@ impl Game {
                     // the same pip. Commit only when production finishes.
                     if let Some(start) = start {
                         self.commit_produced_mana(player, start);
-                    }
-                    // The announced payment its output paid toward advances
-                    // as a fixed tap's does.
-                    if start.is_some()
-                        && matches!(self.paying(), Some((payer, _, CostComponent::Mana { .. })) if payer == player)
-                    {
-                        let payment = self.pending_payment(player)?.clone();
-                        return self.advance_payment(player, payment);
+                        if matches!(self.paying(), Some((payer, _, CostComponent::Mana { .. })) if payer == player)
+                        {
+                            let payment = self.pending_payment(player)?.clone();
+                            return self.advance_payment(player, payment);
+                        }
                     }
                 }
                 Ok(())

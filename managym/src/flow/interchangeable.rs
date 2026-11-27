@@ -1537,6 +1537,7 @@ impl<'a> ReferenceCensus<'a> {
                         tapped,
                         produced: _,
                         pending,
+                        commit_start: _,
                     } => {
                         self.mark_object(*source);
                         self.mark_object(*tapped);

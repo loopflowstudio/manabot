@@ -1410,7 +1410,8 @@ fn fixed_mana_tap_can_open_a_bonus_choice() {
         .add(&produced, Some(origin));
     let tapped = fork.tapped_for_mana(mountain);
     let bonuses = fork.production_bonuses(player, &tapped);
-    let decision = fork.resolve_mana_bonuses(player, mountain_object, &produced, bonuses, None);
+    let decision =
+        fork.resolve_mana_bonuses(player, mountain_object, &produced, bonuses, None, None);
     assert!(matches!(
         decision.as_deref(),
         Some(Decision::ManaChoice {
@@ -1820,17 +1821,19 @@ fn mana_counter_cost_preserves_enclosing_payment() {
             },
         ];
         if resolving {
+            let mut payment = PaymentProgress::new(
+                player,
+                vec![
+                    CostComponent::mana(ManaCost::parse("2R")),
+                    CostComponent::Life(2),
+                ],
+                Vec::new(),
+                Vec::new(),
+            );
+            payment.committed = true;
             game.continue_resolution(
                 EffectFrame::new(player, Vec::new()),
-                Some(Decision::Payment(PaymentProgress::new(
-                    player,
-                    vec![
-                        CostComponent::mana(ManaCost::parse("2R")),
-                        CostComponent::Life(2),
-                    ],
-                    Vec::new(),
-                    Vec::new(),
-                ))),
+                Some(Decision::Payment(payment)),
             );
             game.tick().unwrap();
         } else {
@@ -1930,6 +1933,95 @@ fn mana_counter_cost_preserves_enclosing_payment() {
         );
         assert_eq!(game.state.stack_objects.len(), usize::from(!resolving));
     }
+}
+
+#[test]
+fn declinable_ward_with_life_allows_floating_mana() {
+    use crate::agent::action::Action;
+    use crate::flow::{
+        decision::{Decision, EffectFrame},
+        game::Game,
+        payment::{CostComponent, PaymentProgress},
+    };
+    use crate::state::{
+        game_object::PlayerId,
+        player::{ManaFloats, PlayerConfig},
+    };
+
+    let player = PlayerId(0);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new(
+                "payer",
+                [("Forest".into(), 39), ("Tarnished Citadel".into(), 1)].into(),
+            ),
+            PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+        ],
+        349,
+        false,
+    );
+    game.keep_opening_hands();
+    game.mana_floats[player.0] = ManaFloats::All;
+    let citadel = game
+        .scenario_force_battlefield(player, "Tarnished Citadel", true)
+        .unwrap();
+    let forest = game
+        .scenario_force_battlefield(player, "Forest", true)
+        .unwrap();
+    game.scenario_set_life(player, 4);
+    game.state
+        .mana_pool_mut(player)
+        .add(&Mana::parse("2"), None);
+    game.continue_resolution(
+        EffectFrame::new(player, Vec::new()),
+        Some(Decision::Payment(PaymentProgress::new(
+            player,
+            vec![
+                CostComponent::mana(ManaCost::parse("2")),
+                CostComponent::Life(2),
+            ],
+            Vec::new(),
+            Vec::new(),
+        ))),
+    );
+    game.tick().unwrap();
+    assert!(game
+        .action_space()
+        .unwrap()
+        .actions
+        .contains(&Action::PayCost { player }));
+    assert_eq!(game.saved_obligations(player), [Obligation::PayLife(2)]);
+
+    let activate = mana_action_index(
+        &game,
+        Action::ActivateAbility {
+            player,
+            permanent: citadel,
+            ability_index: 0,
+        },
+    );
+    game.step(activate).unwrap();
+    let blue = mana_action_index(&game, Action::ChooseMode { player, mode: 1 });
+    game.step(blue).unwrap();
+
+    let tap = mana_action_index(
+        &game,
+        Action::TapForMana {
+            player,
+            permanent: forest,
+        },
+    );
+    game.step(tap).unwrap();
+    assert!(!game
+        .action_space()
+        .unwrap()
+        .actions
+        .contains(&Action::PayCost { player }));
+    let decline = mana_action_index(&game, Action::Decline { player });
+    game.step(decline).unwrap();
+    assert!(game.state.suspended_decision.is_none());
+    assert_eq!(game.state.players[player.0].life, 1);
+    assert_eq!(game.pooled_mana(player), Mana::parse("2UG"));
 }
 
 #[test]
@@ -2549,6 +2641,24 @@ fn automatic_prefix_lower_bound_keeps_the_first_witness() {
             }
         }
     }
+}
+
+#[test]
+fn automatic_prefix_lower_bound_counts_colored_convoke() {
+    let mut model = forests(2);
+    let sources = Arc::make_mut(&mut model.sources);
+    sources[0].convoke_colors = ManaTypeSet::of(crate::state::mana::Color::White);
+    sources[1].fixed = None;
+    sources[1].convoke_colors = ManaTypeSet::of(crate::state::mana::Color::White);
+    let bound = |cost| {
+        model.prefix_lower_bound(
+            &Mana::default(),
+            &tap_obligations(&ManaCost::parse(cost), 0, 0, true),
+        )
+    };
+    assert_eq!(bound("WW"), 2);
+    assert_eq!(bound("1W"), 2, "a source's mana and convoke share a tap");
+    assert_eq!(bound("1U"), 3, "white convoke cannot pay blue");
 }
 
 #[test]

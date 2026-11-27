@@ -2,7 +2,7 @@
 
 use crate::support::{
     game::{clear_summoning_sickness, five_color_setup, five_color_unfunded_setup, move_to_hand},
-    inspect::{has_action, library_card, offered_cards, zone_of},
+    inspect::{card_of, has_action, library_card, now, offered_cards, top_spell, zone_of},
     play::{
         activate, cast, cast_card, cast_owned, castable, choose, choose_mode, select_card, settle,
         spend_named,
@@ -14,8 +14,8 @@ use managym::{
         ability::Effect,
         card::ActivatedAbilityDefinition,
         effect::{Affected, EffectDuration, Modification},
-        game_object::PlayerId,
-        mana::{Mana, ManaCost},
+        game_object::{PermanentId, PlayerId},
+        mana::{Color, Mana, ManaCost},
         zone::ZoneType,
     },
 };
@@ -293,20 +293,58 @@ fn tarnished_citadel_still_costs_three_life_beside_angel_of_vitality() {
     assert!(s.game().state.loss(0).is_some_and(|loss| loss.life_total));
 }
 
-#[test]
-fn heartbeat_bonus_keeps_the_generic_spend_choice() {
-    let spell = "Sokka, Bold Boomeranger";
-    let mut s = five_color_unfunded_setup(&[spell, "Tarnished Citadel", "Heartbeat of Spring"]);
+fn heartbeat_modal_land() -> (crate::support::game::Scenario, PermanentId) {
+    let mut s = five_color_unfunded_setup(&[
+        "Sokka, Bold Boomeranger",
+        "Tarnished Citadel",
+        "Heartbeat of Spring",
+    ]);
     s.game_mut().skip_trivial = false;
     let citadel = s.force_permanent_on_battlefield(0, "Tarnished Citadel");
     s.force_permanent_on_battlefield(0, "Heartbeat of Spring");
-    let source = s.game().state.permanents[citadel].as_ref().unwrap().object;
+    let source = card_of(&s, citadel);
     s.game_mut().state[source].activated_abilities = vec![ActivatedAbilityDefinition {
         tap_source: true,
         effects: vec![Effect::mana_choice(["UR", "UG"].map(Mana::parse))],
         ..Default::default()
     }];
-    let object = move_to_hand(&mut s, spell);
+    (s, citadel)
+}
+
+#[test]
+fn heartbeat_bonuses_commit_the_original_output_with_its_source() {
+    let (mut s, citadel) = heartbeat_modal_land();
+    s.force_permanent_on_battlefield(0, "Heartbeat of Spring");
+    s.set_player_mana_pool(0, "U");
+    let source = card_of(&s, citadel);
+    let spell = move_to_hand(&mut s, "Sokka, Bold Boomeranger");
+
+    cast_card(&mut s, spell);
+    activate(&mut s, citadel, 0);
+    choose_mode(&mut s, 0); // Produce {U}{R}.
+    choose_mode(&mut s, 1); // First Heartbeat adds {R}.
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("UURR"));
+    assert!(s.game().state.stack_objects.is_empty());
+    assert_eq!(mana_modes(&s), [0, 1]);
+    choose_mode(&mut s, 0); // Second Heartbeat adds {U}.
+
+    let cast = top_spell(&s);
+    assert_eq!(cast.object, now(&s, spell));
+    let spent = cast.spent.mana();
+    assert_eq!(
+        spent.iter().map(|unit| unit.color).collect::<Vec<_>>(),
+        [Color::Blue as u8, Color::Red as u8]
+    );
+    assert!(spent
+        .iter()
+        .all(|unit| unit.source.is_some_and(|origin| origin.object == source)));
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("UUR"));
+}
+
+#[test]
+fn heartbeat_bonus_keeps_the_generic_spend_choice() {
+    let (mut s, citadel) = heartbeat_modal_land();
+    let object = move_to_hand(&mut s, "Sokka, Bold Boomeranger");
     s.game_mut().state[object].mana_cost = Some(ManaCost::parse("1U"));
 
     cast_card(&mut s, object);
@@ -315,9 +353,6 @@ fn heartbeat_bonus_keeps_the_generic_spend_choice() {
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("UR"));
     assert_eq!(mana_modes(&s), [0, 1]);
     choose_mode(&mut s, 0); // Heartbeat adds {U}.
-    if has_action(&s, |action| matches!(action, Action::PayCost { .. })) {
-        choose(&mut s, |action| matches!(action, Action::PayCost { .. }));
-    }
     spend_named(&mut s, |label| label.contains("{U}"));
     assert_eq!(s.game().state.stack_objects.len(), 1);
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("R"));

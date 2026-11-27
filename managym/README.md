@@ -1146,6 +1146,10 @@ gained along the way can fund it. State-based loss for zero or less life is
 checked after the payment completes. An empty non-terminal choice returns a
 step error under either skipping setting.
 
+While a resolution payment such as ward can still be declined, the payer may
+float mana before declining. Paying still requires enough life for the full
+cost when the player commits to it.
+
 The same check accounts for convoke alongside mana sources. An untapped
 creature can pay one owed mana of its color or one generic mana by convoking.
 Spending the tap this way leaves it unavailable for mana or another owed tap.

@@ -898,7 +898,7 @@ enum PaymentStep {
     Spend,
     Output(usize),
     Waterbend(PermanentId),
-    Convoke(PermanentId, Color),
+    Convoke(PermanentId),
     Tap(ObjectId),
 }
 
@@ -918,13 +918,11 @@ impl PaymentStep {
                 player,
                 mode: *mode,
             }),
-            Self::Waterbend(permanent) | Self::Convoke(permanent, _) => {
-                Some(Action::WaterbendTap {
-                    player,
-                    permanent: *permanent,
-                })
-            }
-            Self::Fixed(_) | Self::Spend => None,
+            Self::Waterbend(permanent) => Some(Action::WaterbendTap {
+                player,
+                permanent: *permanent,
+            }),
+            Self::Convoke(_) | Self::Fixed(_) | Self::Spend => None,
         }
     }
 }
@@ -2228,7 +2226,7 @@ impl PaymentModel<'_> {
                             next.prefix = next.prefix.map(|n| n - 1);
                             if let Some(mut path) = self.witness(next, policy, visited) {
                                 let step = if convoke {
-                                    PaymentStep::Convoke(source.permanent, color)
+                                    PaymentStep::Convoke(source.permanent)
                                 } else {
                                     PaymentStep::Waterbend(source.permanent)
                                 };
@@ -3043,9 +3041,8 @@ impl PaymentModel<'_> {
         Some(path)
     }
 
-    /// Before AutomaticPrefix's first Spend, only fixed production and
-    /// waterbend can add payment capacity. Even ignoring colors and counted
-    /// tap competition, the largest outputs must cover the pool's shortfall.
+    /// A tap can supply fixed mana or pay a pip directly. Even ignoring
+    /// competition between taps, the largest outputs must cover the pool's shortfall.
     /// Budgets below this lower bound have no witness. Other leading
     /// obligations retain the ordinary search's zero start.
     fn prefix_lower_bound(&self, pool: &Mana, obligations: &[Obligation]) -> usize {
@@ -3057,6 +3054,7 @@ impl PaymentModel<'_> {
         if need == 0 {
             return 0;
         }
+        let convoke = (*taps == Taps::Convoke).then(|| owed_convoke_colors(cost));
         let mut outputs: Vec<u64> = self
             .sources
             .iter()
@@ -3066,7 +3064,14 @@ impl PaymentModel<'_> {
                     .fixed
                     .as_ref()
                     .map_or(0, |output| u64::from(output.usable_total(cost)));
-                fixed.max(u64::from(source.pays_by_tap(*taps) && cost.generic() > 0))
+                let direct = source.pays_by_tap(*taps) && cost.generic() > 0
+                    || convoke.is_some_and(|owed| {
+                        source
+                            .convoke_colors
+                            .iter()
+                            .any(|color| owed.contains(color))
+                    });
+                fixed.max(u64::from(direct))
             })
             .collect();
         outputs.sort_unstable_by(|left, right| right.cmp(left));
@@ -3591,18 +3596,16 @@ impl Game {
                         life_delta,
                     });
                 }
-                Decision::Payment(progress) => {
+                Decision::Payment(progress) if !progress.can_decline() => {
                     if let Some(CostComponent::Mana { cost, .. }) = progress.owed.first() {
-                        if !progress.can_decline() || progress.tail_life() > 0 {
-                            result.push(Obligation::Pay {
-                                cost: cost.clone(),
-                                taps: if progress.waterbends() {
-                                    Taps::Any
-                                } else {
-                                    Taps::None
-                                },
-                            });
-                        }
+                        result.push(Obligation::Pay {
+                            cost: cost.clone(),
+                            taps: if progress.waterbends() {
+                                Taps::Any
+                            } else {
+                                Taps::None
+                            },
+                        });
                         result.extend(Obligation::life(progress.tail_life()));
                     }
                 }
@@ -4267,7 +4270,7 @@ impl Game {
                     if plain_generic && generic_failed {
                         return false;
                     }
-                    let ok = if is_fixed || helped {
+                    let ok = if is_fixed {
                         if let Some(cache) = fixed_cache.as_mut() {
                             if let Some(cached) = cache.get(source_index, ()) {
                                 debug_assert_eq!(
@@ -4961,7 +4964,7 @@ impl Game {
         )?;
         path.iter()
             .take_while(|step| !matches!(step, PaymentStep::Spend))
-            .all(|step| step.action(player).is_none())
+            .all(|step| matches!(step, PaymentStep::Fixed(_)))
             .then_some(path)
     }
 
@@ -5121,7 +5124,7 @@ impl Game {
             .add(&produced, Some(origin));
         let tapped = self.tapped_for_mana(permanent);
         let bonuses = self.production_bonuses(player, &tapped);
-        let resolved = self.resolve_mana_bonuses(player, source, &produced, bonuses, None);
+        let resolved = self.resolve_mana_bonuses(player, source, &produced, bonuses, None, None);
         assert!(
             resolved.is_none(),
             "an automatic tap's bonuses need no choice"
@@ -5245,6 +5248,7 @@ impl Game {
         produced: &Mana,
         bonuses: Vec<PendingManaBonus>,
         resume: Option<Box<Decision>>,
+        commit_start: Option<usize>,
     ) -> Option<Box<Decision>> {
         let mut pending = bonuses.into_iter();
         while let Some(bonus) = pending.next() {
@@ -5258,6 +5262,7 @@ impl Game {
                         tapped,
                         produced: produced.clone(),
                         pending: pending.collect(),
+                        commit_start,
                     },
                     resume,
                 }));
@@ -5509,11 +5514,13 @@ impl Game {
             }
             return obligations;
         };
-        let obligations = self.payment_obligations(player);
-        if matches!(&caller.decision, Decision::Payment(payment) if payment.can_decline() && payment.tail_life() == 0)
-        {
-            // An optional cost only enters the witness when it is accepted.
-            return obligations;
+        let mut obligations = self.payment_obligations(player);
+        if let Decision::Payment(payment) = &caller.decision {
+            if payment.can_decline() {
+                // The caller is testing payment of this optional mana cost.
+                obligations.extend(Obligation::life(payment.tail_life()));
+                return obligations;
+            }
         }
         obligations.into_iter().skip(1).collect()
     }
