@@ -1,9 +1,11 @@
 """Etude receives prepared host rows and returns ordered, masked policy logits."""
 
+import asyncio
+from collections.abc import Sequence
 from pathlib import Path
 
 from etude.checkpoints import CheckpointRef
-from etude.eval.records import Code, checkpoint_player
+from etude.eval.records import Code, Match as EtudeMatch, checkpoint_player
 from etude.records import ArtifactRef
 import numpy as np
 import pytest
@@ -24,8 +26,12 @@ from manabot.eval.agents import (
     Sampler,
     agents_for,
     build,
+    checkpoint_reader,
     etude_registration,
     game_players,
+    local_forward,
+    local_scalar_sampler,
+    play_scalar,
     registration,
 )
 import manabot.eval.game as game
@@ -35,6 +41,7 @@ from manabot.infra.identity import file_sha256
 from manabot.policy.batching import concatenate
 from manabot.policy.decision_memory import MemoryFold
 from manabot.policy.prepare import Prepared, prepare
+from manabot.sim.agent import GamePlayer
 from manabot.sim.card_evidence import EvidenceRef
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import (
@@ -106,16 +113,18 @@ def test_loader_batches_prepared_rows_without_sampling(
     assert participant.writer_revision == "a" * 40
     assert participant.stored_programs == 0
     forward = load(ref)
-    sampler = build(checkpoint_player(ref), {ref.key: forward})
+    sampler = build(checkpoint_player(ref), {ref.key: local_forward(forward)})
     assert isinstance(sampler, Sampler)
+    spec = checkpoint_reader(1)(ref).spec
     # Etude passes a config-less checkpoint seat its bare forward, never built.
-    [seated] = game_players([checkpoint_player(ref)], [forward])
+    [seated] = game_players([checkpoint_player(ref)], [local_forward(forward)])
     assert isinstance(seated, Sampler)
+    assert seated.checkpoint_key == ref.key
     env = Env(match, space, Reward(RewardConfig()), seed=71)
     try:
         obs, _ = env.reset()
         batch = {key: value[None] for key, value in obs.items()}
-        row = prepare(batch, sampler.spec.tables, binding=sampler.spec.binding)
+        row = prepare(batch, spec.tables, binding=spec.binding)
         [single] = forward([row])
         assert single.shape == row.legal.shape and single.dtype == np.float32
         joined = forward([row, row])
@@ -129,8 +138,8 @@ def test_loader_batches_prepared_rows_without_sampling(
                 key: np.concatenate([value, value], axis=0)
                 for key, value in batch.items()
             },
-            sampler.spec.tables,
-            binding=sampler.spec.binding,
+            spec.tables,
+            binding=spec.binding,
         )
         [combined] = forward([batched])
         assert combined.shape == batched.legal.shape and combined.dtype == np.float32
@@ -144,8 +153,19 @@ def test_loader_batches_prepared_rows_without_sampling(
         np.testing.assert_allclose(mixed[1], combined, atol=1e-6, rtol=1e-5)
         with pytest.raises(TypeError, match="nonempty host Prepared"):
             forward([object()])
-        assert sampler.choose(env, obs, 123) == sampler.choose(env, obs, 123)
-        assert seated.choose(env, obs, 123) == sampler.choose(env, obs, 123)
+        player = checkpoint_player(ref)
+        managed_match = EtudeMatch(players=(player, player))
+
+        def choose(match: EtudeMatch, agents: Sequence[GamePlayer]) -> tuple[int, int]:
+            a, b = agents
+            return a.choose(env, obs, 123), b.choose(env, obs, 123)
+
+        managed = asyncio.run(
+            play_scalar(choose, managed_match, [seated, local_forward(forward)])
+        )
+        local = local_scalar_sampler(player, forward, checkpoint_reader(1))
+        expected = local.choose(env, obs, 123)
+        assert managed == (expected, expected)
     finally:
         env.close()
 
@@ -242,8 +262,9 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
         ),
     )
     forward = load(ref)
-    sampler = build(checkpoint_player(ref), {ref.key: forward})
+    sampler = build(checkpoint_player(ref), {ref.key: local_forward(forward)})
     assert isinstance(sampler, Sampler)
+    spec = checkpoint_reader(1)(ref).spec
     rows = []
     for env in (shared_effect_root(1), kellan_upgrade_root()):
         obs = encode_observation(
@@ -252,8 +273,8 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
         rows.append(
             prepare(
                 {k: v[None] for k, v in obs.items()},
-                sampler.spec.tables,
-                binding=sampler.spec.binding,
+                spec.tables,
+                binding=spec.binding,
             )
         )
     expected = [forward([row])[0] for row in rows]
@@ -266,6 +287,7 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
 
 def test_select_device_order_and_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MANABOT_EVAL_DEVICE", raising=False)
+    monkeypatch.setattr(agent_loader.platform, "system", lambda: "Linux")
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
     monkeypatch.setattr(agent_loader, "mlx_available", lambda: True)
@@ -307,6 +329,22 @@ def test_select_device_order_and_override(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("MANABOT_EVAL_DEVICE", "tpu")
     with pytest.raises(ValueError, match=r"cuda, mlx, mps, cpu"):
         select_device()
+
+
+def test_apple_mlx_selection_does_not_import_torch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from builtins import __import__ as real_import
+
+    def import_module(name: str, *args: object, **kwargs: object) -> object:
+        assert name != "torch"
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.delenv("MANABOT_EVAL_DEVICE", raising=False)
+    monkeypatch.setattr(agent_loader.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(agent_loader, "mlx_available", lambda: True)
+    monkeypatch.setattr("builtins.__import__", import_module)
+    assert select_device() == "mlx"
 
 
 def test_missing_mlx_extra_falls_back_to_mps(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -421,8 +459,9 @@ def test_concatenate_joins_decision_memory_rows_and_rejects_folds(
         ),
     )
     forward = load(ref)
-    sampler = build(checkpoint_player(ref), {ref.key: forward})
+    sampler = build(checkpoint_player(ref), {ref.key: local_forward(forward)})
     assert isinstance(sampler, Sampler)
+    spec = checkpoint_reader(1)(ref).spec
 
     # Collect one empty-memory turn-0 row and two distinct nonempty histories.
     rows: list[Prepared[np.ndarray]] = []
@@ -446,9 +485,9 @@ def test_concatenate_joins_decision_memory_rows_and_rejects_folds(
         rows.append(
             prepare(
                 batch,
-                sampler.spec.tables,
-                binding=sampler.spec.binding,
-                memory_summaries=sampler.spec.model.decision_memory_summaries,
+                spec.tables,
+                binding=spec.binding,
+                memory_summaries=spec.model.decision_memory_summaries,
             )
         )
     lengths = [row.memory.lengths[0] for row in rows if row.memory is not None]
@@ -532,8 +571,9 @@ def test_loader_apple_gpu_matches_cpu_logits_and_supports_bf16(
     )
     monkeypatch.setenv("MANABOT_EVAL_DEVICE", "cpu")
     cpu_forward = load(ref)
-    sampler = build(checkpoint_player(ref), {ref.key: cpu_forward})
+    sampler = build(checkpoint_player(ref), {ref.key: local_forward(cpu_forward)})
     assert isinstance(sampler, Sampler)
+    spec = checkpoint_reader(1)(ref).spec
 
     env = Env(match, space, Reward(RewardConfig()), seed=74)
     rows: list[Prepared[np.ndarray]] = []
@@ -544,9 +584,9 @@ def test_loader_apple_gpu_matches_cpu_logits_and_supports_bf16(
                 rows.append(
                     prepare(
                         {key: value[None] for key, value in obs.items()},
-                        sampler.spec.tables,
-                        binding=sampler.spec.binding,
-                        memory_summaries=sampler.spec.model.decision_memory_summaries
+                        spec.tables,
+                        binding=spec.binding,
+                        memory_summaries=spec.model.decision_memory_summaries
                         if memory != "none"
                         else 0,
                     )
@@ -634,7 +674,7 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(
             content_suite=matchup.content_suite,
             role="challenger",
         )
-        agents[name] = build(player, {ref.key: load(ref)})
+        agents[name] = local_scalar_sampler(player, load(ref), checkpoint_reader(1))
     registrations["heuristic"] = register_anchor(
         registrations["tap-on"], "heuristic", player_id="heuristic"
     )

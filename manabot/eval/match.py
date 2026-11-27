@@ -89,7 +89,6 @@ def build_cell_plan(
     player_a: PlayerRegistration,
     player_b: PlayerRegistration,
     deal_seeds: tuple[int, ...],
-    out_dir: Path,
     comparison_seed_aliases: dict[str, str] | None = None,
     game_seconds: float = 120.0,
     max_commands: int = 10_000,
@@ -224,8 +223,7 @@ def build_cell_plan(
                 CellWorkItem(
                     game=game,
                     registrations=seat_players,
-                    evidence_path=out_dir
-                    / "failures"
+                    evidence_path=Path("failures")
                     / f"{cell_id}.{deal_seed}.{leg}.jsonl",
                 )
             )
@@ -549,7 +547,6 @@ def play_cell(
         player_a=player_a,
         player_b=player_b,
         deal_seeds=deal_seeds,
-        out_dir=out_dir,
         comparison_seed_aliases=comparison_seed_aliases,
         game_seconds=game_seconds,
         max_commands=max_commands,
@@ -562,7 +559,7 @@ def play_cell(
         game, registrations, evidence = (
             item.game,
             item.registrations,
-            item.evidence_path,
+            out_dir / item.evidence_path,
         )
         allowance = (
             game_seconds

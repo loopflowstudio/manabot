@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 import json
 from pathlib import Path
 from typing import Any, Literal
@@ -26,10 +26,9 @@ import torch
 
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
-from manabot.eval import vector as vector_runner
+from manabot.eval import agents as agent_module, vector as vector_runner
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import build, local_forward
 from manabot.eval.card_query import CardSelection, audit, card_data, card_db
@@ -42,7 +41,7 @@ from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 from manabot.sim.replay import read_trace, replay_failure, replay_game
 import managym
-from managym.recording import GameRecord
+from managym.recording import GameRecord, RecordedVectorEnv
 
 
 @pytest.fixture
@@ -280,6 +279,10 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         #    legs 6 & 7 immediately without waiting for stragglers.
         batch_sizes: list[int] = []
         observed_active_counts: list[int] = []
+        forwards_per_step: list[int] = []
+        clock = 0.0
+        elapsed_per_round = 0.1
+        previous_forwards = 0
         original_step = RecordedVectorEnv.step_isolated_into_buffers
 
         def spy_step(
@@ -290,8 +293,12 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
             *,
             annotations: list[dict[str, object] | None] | None = None,
         ) -> None:
+            nonlocal clock, previous_forwards
             if active is not None:
                 observed_active_counts.append(sum(active))
+            forwards_per_step.append(len(batch_sizes) - previous_forwards)
+            previous_forwards = len(batch_sizes)
+            clock += elapsed_per_round
             original_step(
                 self,
                 actions,
@@ -301,7 +308,6 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
             )
 
         monkeypatch.setattr(RecordedVectorEnv, "step_isolated_into_buffers", spy_step)
-        clock = vector_runner.monotonic
         finalize = vector_runner.finalize_match
         replay_pause = 0.0
         steps_at_settlement: list[int] = []
@@ -314,11 +320,30 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
 
         # The first completed deal's replay takes longer than the game budget.
         # Other live legs should continue once the coordinator resumes stepping.
-        monkeypatch.setattr(vector_runner, "monotonic", lambda: clock() + replay_pause)
+        monkeypatch.setattr(vector_runner, "monotonic", lambda: clock + replay_pause)
         monkeypatch.setattr(vector_runner, "finalize_match", delayed_finalize)
-        async_forward = _row_pure_async_forward(sync_forward, batch_sizes)
+        reads = 0
+        read_checkpoint = agent_module.read_checkpoint_inputs
+
+        def count_checkpoint(
+            path: Path, digest: str | None, size: int | None
+        ) -> agent_module.CheckpointInputs:
+            nonlocal reads
+            reads += 1
+            return read_checkpoint(path, digest, size)
+
+        monkeypatch.setattr(agent_module, "read_checkpoint_inputs", count_checkpoint)
         source = LocalMatches(
-            [(match, [async_forward, build(heuristic, {})]) for match in matches]
+            [
+                (
+                    match,
+                    [
+                        _row_pure_async_forward(sync_forward, batch_sizes),
+                        build(heuristic, {}),
+                    ],
+                )
+                for match in matches
+            ]
         )
 
         async def collect() -> list[tuple[Match, Result | Exception]]:
@@ -348,6 +373,8 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
             vector_results[match.key] = outcome
             active.store(match, outcome)
 
+    assert reads == 1
+    assert max(forwards_per_step) == 1
     # Pre-collated batches carried more than one row.
     assert max(batch_sizes) > 1
     # All 6 slots stayed busy while legs were pending (backfill happened immediately).
@@ -369,6 +396,7 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         )
     )
 
+    charged_seconds = 0.0
     # Exact trace, Command, digest, score, behaviour and card parity per deal.
     for match in matches:
         serial_res = serial_results[match.key]
@@ -390,6 +418,7 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         )
         assert len(vector_games) == len(serial_games) == 4
         for s_game, v_game in zip(serial_games, vector_games, strict=True):
+            charged_seconds += v_game["execution_seconds"]
             assert _canonical_game_summary(v_game) == _canonical_game_summary(s_game)
             if v_game["seat_players"][0] == "candidate":
                 assert v_game["match_hypers"]["mana_payment"] == ["auto", "manual"]
@@ -405,6 +434,10 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         )
         assert vector_eval["status"] == "completed"
         assert vector_eval["error"] is None
+
+    assert charged_seconds == pytest.approx(
+        len(observed_active_counts) * elapsed_per_round
+    )
 
     with card_db("vector-parity", track_vector) as db:
         data = card_data(db, CardSelection(experiment="vector-parity"))
@@ -446,7 +479,7 @@ def test_vector_runner_matches_play_pairing_with_gru_memory_and_blanking(
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(serial_root))
     serial_res = play_pairing(
         match,
-        [sync_forward, build(opponent, {ref.key: sync_forward})],
+        [sync_forward, sync_forward],
         matchup=matchup,
         deal=1,
         matchup_mode="cross",
@@ -480,7 +513,7 @@ def test_vector_runner_matches_play_pairing_with_gru_memory_and_blanking(
     [(got_match, got_result)] = asyncio.run(run())
     assert got_match == match
     assert isinstance(got_result, Result), got_result
-    assert max(batch_sizes) > 1
+    assert batch_sizes[0] == 4
     assert got_result.tables["plays"] == serial_res.tables["plays"]
 
     serial_games = read_trace(
@@ -718,3 +751,63 @@ def test_vector_runner_isolates_admission_and_checkpoint_failures(
 
     with pytest.raises(RuntimeError, match="inference server unavailable"):
         asyncio.run(run_exploding())
+
+
+def test_vector_runner_bounds_deferred_layouts_before_play(
+    tmp_path: Path,
+    cpu_eval: None,
+) -> None:
+    checkpoint = _fixture_checkpoint(tmp_path, 51, ObservationSpace())
+    different_layout = _fixture_checkpoint(
+        tmp_path, 52, ObservationSpace(ObservationConfig(max_actions=32))
+    )
+    heuristic = Code(name="heuristic")
+    matches = [
+        Match(
+            players=(checkpoint_player(ref), heuristic),
+            games=4,
+            config={"deal": deal},
+        )
+        for deal, ref in enumerate([checkpoint, *([different_layout] * 6)])
+    ]
+
+    async def forward(inputs: list[object], *, rows: int | None = None) -> list[object]:
+        [batch] = inputs
+        assert isinstance(batch, Prepared) and rows == batch.batch
+        return [torch.zeros(batch.legal.shape).numpy()]
+
+    class CountingMatches(LocalMatches):
+        granted = 0
+
+        async def take(self, limit: int) -> list[tuple[Match, Sequence[object]]]:
+            granted = await super().take(limit)
+            self.granted += len(granted)
+            return granted
+
+    source = CountingMatches(
+        [(match, [forward, build(heuristic, {})]) for match in matches]
+    )
+    matchup = _allies_lessons_matchup()
+
+    def spec_for(match: Match) -> PairingSpec:
+        return PairingSpec(
+            matchup=matchup,
+            deal=int(match.config["deal"]),
+            matchup_mode="cross",
+            game_seconds=60,
+            max_commands=1,
+            arena="fixture-layouts",
+        )
+
+    async def run() -> list[tuple[str, int]]:
+        settled = []
+        async for match, outcome in play_pairings(
+            source, spec_for, slots=5, output_dir=tmp_path
+        ):
+            assert isinstance(outcome, Result), outcome
+            settled.append((match.key, source.granted))
+        return settled
+
+    settled = asyncio.run(run())
+    assert settled[0] == (matches[0].key, 6)
+    assert {key for key, _ in settled} == {match.key for match in matches}

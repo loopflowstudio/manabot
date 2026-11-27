@@ -814,6 +814,21 @@ class MLXActorCritic(nn.Module):
     def clear_cache(self) -> None:
         self._static.cache.clear()
 
+    def prepare_inference(self) -> None:
+        """Keep only compute weights on the fixed-weight inference device."""
+        self.clear_cache()
+        with mx.stream(self.inference_device):
+            self.set_dtype(precision_dtype(self.precision))
+            mx.eval(self.parameters())
+        self.cache_programs()
+
+    def evaluate_logits(self, batch: Prepared[np.ndarray]) -> np.ndarray:
+        """Evaluate and transfer only policy logits to the host."""
+        with mx.stream(self.inference_device):
+            logits, _ = self.forward_distribution(batch)
+            mx.eval(logits)
+        return to_numpy(logits)
+
     def evaluate(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         """Evaluated logits [B,A] and values [B] as NumPy (`BackendPolicy.evaluate`)."""
         with mx.stream(self.inference_device):

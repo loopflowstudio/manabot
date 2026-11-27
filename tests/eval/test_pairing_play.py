@@ -28,7 +28,7 @@ from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.eval import pairing
 from manabot.eval.agent_loader import load
-from manabot.eval.agents import blank_decision_memory, build
+from manabot.eval.agents import ScalarSampler, blank_decision_memory, build
 from manabot.eval.card_query import CardSelection, audit, card_data, card_db
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.match import derive_seed
@@ -132,13 +132,7 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
         )
     assert candidate.key != opponent.key
     match = Match(players=(candidate, opponent), games=4)
-    # As Etude seats them: a bare forward without config, a built player with one.
-    agents = [
-        build(player, {player.checkpoint.key: load(player.checkpoint)})
-        if player.config
-        else load(player.checkpoint)
-        for player in (candidate, opponent)
-    ]
+    agents = [load(player.checkpoint) for player in (candidate, opponent)]
     evaluate = Mock(wraps=pairing.evaluate)
     monkeypatch.setattr(pairing, "evaluate", evaluate)
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path))
@@ -177,9 +171,9 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
     assert decklists[0].any()
     assert bool(decklists[1].any()) == (disclosure == "open")
     assert request.opponent.player_spec.get("blank_decision_memory", False) == blank
-    assert (
-        evaluate.call_args.kwargs["agents"]["opponent"].blank_decision_memory == blank
-    )
+    sampled_opponent = evaluate.call_args.kwargs["agents"]["opponent"]
+    assert isinstance(sampled_opponent, ScalarSampler)
+    assert sampled_opponent.sampler.blank_decision_memory == blank
     if blank:
         assert request.candidate.checkpoint_sha256 == request.opponent.checkpoint_sha256
         assert request.candidate.identity_sha256 != request.opponent.identity_sha256

@@ -99,7 +99,9 @@ impl RootRoster {
 enum SlotState {
     Unset,
     /// Replacing an untouched opening with a snapshot returns its seed.
-    FreshOpening,
+    FreshOpening {
+        automatic_seed: bool,
+    },
     Playing,
     Terminal,
     Poisoned,
@@ -291,9 +293,14 @@ impl VectorEnv {
         self.envs.iter_mut().map(Env::take_exposure).collect()
     }
 
+    /// Retain the last step's events for detached chooser views.
+    pub fn enable_decision_events(&mut self) {
+        for env in &mut self.envs {
+            env.enable_decision_events();
+        }
+    }
+
     /// Detached chooser observations only for requested active streams.
-    /// Preserves the last step's events so external heuristic/frame readers
-    /// match scalar `Env` output; the buffered policy path does not call this.
     pub fn decision_observations(
         &self,
         active: &[bool],
@@ -667,7 +674,7 @@ impl VectorEnv {
             .iter()
             .zip(&self.slots)
             .map(|(env, state)| match state {
-                SlotState::FreshOpening | SlotState::Playing => {
+                SlotState::FreshOpening { .. } | SlotState::Playing => {
                     env.current_agent_index().map_or(-1, |i| i as i64)
                 }
                 _ => -1,
@@ -993,7 +1000,9 @@ impl VectorEnv {
         self.slots[slot] = if env.is_game_over() {
             SlotState::Terminal
         } else {
-            SlotState::FreshOpening
+            SlotState::FreshOpening {
+                automatic_seed: true,
+            }
         };
         Ok(opening)
     }
@@ -1703,13 +1712,45 @@ mod tests {
             .unwrap();
         assert_eq!(loaded[0].0.seed, explicit_seed);
         assert_eq!(vector.current_game_seeds(), [10, explicit_seed]);
-        assert_eq!(vector.next_fresh_seeds()[1], explicit_seed + 2);
+        assert_eq!(vector.next_fresh_seeds(), [12, 13]);
         let mut scalar = Env::new(explicit_seed, true, false, false);
         scalar.reset(swapped).unwrap();
         assert_eq!(
             vector.state_digests(Some(&[false, true])).unwrap()[1],
             Some(scalar.state_digest().unwrap())
         );
+        let snapshot = vector.envs[1].snapshot().unwrap();
+        vector
+            .load_slots_into(
+                &[SlotLoad::Snapshot(1, snapshot.into(), Default::default())],
+                |_, _| Ok(()),
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+        assert_eq!(vector.next_fresh_seeds(), [12, 13]);
+        load_fresh(&mut vector, 1, None);
+        assert_eq!(vector.current_game_seeds(), [10, 13]);
+        assert_eq!(vector.next_fresh_seeds(), [12, 15]);
+    }
+
+    #[test]
+    fn decision_events_survive_fresh_replacement_and_step() {
+        let mut vector = VectorEnv::new(1, 42, true, [PlayerPolicy::Agent; 2]);
+        vector.enable_decision_events();
+        vector.reset_all(sample_player_configs()).unwrap();
+        load_fresh(&mut vector, 0, None);
+        let mut saw_events = false;
+        for _ in 0..8 {
+            let steps = vector.step(&[0]).unwrap();
+            let expected = &steps[0].obs;
+            let observed = vector.decision_observations(&[true]).unwrap();
+            assert_eq!(
+                observed[0].as_ref().unwrap().recent_events,
+                expected.recent_events
+            );
+            saw_events |= !expected.recent_events.is_empty();
+        }
+        assert!(saw_events);
     }
 
     #[test]

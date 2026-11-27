@@ -26,17 +26,19 @@ from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.report import Curve, Matches, Report, Score
 from etude.spec import Input, Variable
 from etude.train.tracking import track
+from pydantic import Field
 
 from experiments.mana_taps import OBSERVATION
 from experiments.tla_frontier import HEURISTIC, learning, model
 from manabot.data import load_manifest
-from manabot.eval.agents import AGENTS
+from manabot.eval.agents import agents_for
 from manabot.eval.vector import PairingSpec, play_pairings
 from manabot.experiment.setup import machine_setup
 from manabot.infra.identity import StrictModel
 from manabot.pools import Pool, PoolCorpus, PoolSplit
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import DeckMatchup
+from manabot.sim.registration import EvalPrecision
 from manabot.training.decks import UniformDecks
 from manabot.training.panels import ML, PERF
 from manabot.training.report import behaviour_curves
@@ -191,6 +193,10 @@ class Deal(StrictModel):
     first: int
     second: int
     seed: int
+    # Keep float32's stored seating keys stable.
+    precision: EvalPrecision = Field(
+        default="float32", exclude_if=lambda value: value == "float32"
+    )
 
 
 def pairing_spec(match: Match) -> PairingSpec:
@@ -208,6 +214,7 @@ def pairing_spec(match: Match) -> PairingSpec:
         matchup_mode="cross",
         game_seconds=120,
         arena="tla-trophies",
+        precision=deal.precision,
     )
 
 
@@ -223,7 +230,9 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     return held_out_jobs([run for run in state.runs if run.launch == RAW_JOB])
 
 
-def held_out_jobs(runs: Sequence[TrainingRunSummary]) -> list[EvalJob]:
+def held_out_jobs(
+    runs: Sequence[TrainingRunSummary], *, precision: EvalPrecision = "float32"
+) -> list[EvalJob]:
     checkpoints = [c for run in runs for c in run.checkpoints]
     if not checkpoints:
         return []
@@ -236,7 +245,9 @@ def held_out_jobs(runs: Sequence[TrainingRunSummary]) -> list[EvalJob]:
         Seating(
             name=f"Held-out pair {i + 1}",
             players=(CheckpointSlot(), heuristic),
-            config=Deal(first=i * 2, second=i * 2 + 1, seed=40900 + i),
+            config=Deal(
+                first=i * 2, second=i * 2 + 1, seed=40900 + i, precision=precision
+            ),
             games=seeds,
         )
         for i in range(32)
@@ -244,7 +255,7 @@ def held_out_jobs(runs: Sequence[TrainingRunSummary]) -> list[EvalJob]:
     return [
         EvalJob(
             play_many=play_many,
-            agents=AGENTS,
+            agents=agents_for(precision),
             checkpoints=checkpoints,
             tournament=Benchmark(
                 name=BENCHMARK,
@@ -252,7 +263,7 @@ def held_out_jobs(runs: Sequence[TrainingRunSummary]) -> list[EvalJob]:
                     name="tla-trophies",
                     # This file and pairing.py when the stored games were played.
                     files=ENVIRONMENT_FILES,
-                    config={"pools": corpus_input().sha256},
+                    config={"pools": corpus_input().sha256, "precision": precision},
                 ),
                 seatings=seatings,
             ),

@@ -43,6 +43,9 @@ def device_available(device: EvalDevice) -> bool:
     if device == "mlx":
         return mlx_available()
 
+    if device == "cuda" and platform.system() == "Darwin":
+        return False
+
     import torch
 
     if device == "cuda":
@@ -79,12 +82,8 @@ def mlx_logits(path: Path, precision: EvalPrecision) -> Logits:
     backend = resolve("mlx", precision="bfloat16" if precision == "bf16" else precision)
     model, _ = backend.load_policy(path)
     model.to("gpu").eval()
-    model.cache_programs()
-
-    def logits(batch: Prepared[np.ndarray]) -> np.ndarray:
-        return model.evaluate(batch)[0]
-
-    return logits
+    model.prepare_inference()
+    return model.evaluate_logits
 
 
 def torch_logits(
@@ -114,7 +113,7 @@ def torch_logits(
     apply_matmul_precision(precision)
     model, _ = load_checkpoint(str(path))
     model.to(device).eval()
-    with torch.inference_mode():
+    with torch.inference_mode(), forward_precision(precision, device):
         model.cache_programs()
 
     def logits(batch: Prepared[np.ndarray]) -> np.ndarray:

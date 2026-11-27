@@ -27,7 +27,7 @@ from experiments.elemental_grid import (
 )
 from experiments.elemental_long import H2HGame
 from manabot.eval.admission import register_anchor
-from manabot.eval.agents import game_players, play_scalar, registration
+from manabot.eval.agents import play_scalar, registration
 from manabot.eval.behaviour import Play, checkpoint_counts
 from manabot.eval.card_evaluation import trace_card_tables
 from manabot.eval.evaluation import attempt_play_counts
@@ -35,6 +35,7 @@ from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.eval.results import EvaluationRow
 from manabot.infra.identity import canonical_sha256
+from manabot.sim.agent import GamePlayer
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS
@@ -149,7 +150,7 @@ async def play(match: Match[Conditions], agents: Sequence[object]) -> Result:
     return await play_scalar(play_match, match, agents)
 
 
-def play_match(match: Match[Conditions], agents: Sequence[object]) -> Result:
+def play_match(match: Match[Conditions], agents: Sequence[GamePlayer]) -> Result:
     conditions = Conditions.model_validate(match.config)
     if len(conditions.groups) != 1:
         raise ValueError("new Elemental matches contain exactly one group")
@@ -213,7 +214,7 @@ def play_match(match: Match[Conditions], agents: Sequence[object]) -> Result:
             legs=(leg,),
             card_evidence_dir=cards,
             reducers=None if pair else {"play": Play()},
-            agents=dict(zip(names, game_players(match.players, agents), strict=True)),
+            agents=dict(zip(names, agents, strict=True)),
         )
         found = trace_card_tables(cards, trace, names)
         games = [

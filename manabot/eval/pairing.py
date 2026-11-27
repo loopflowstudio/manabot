@@ -7,20 +7,28 @@ module admits players, retains the arena trace and returns each game's card
 evidence as a blob of the Etude match.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
-from typing import Literal
+from typing import Literal, cast
 
+from etude.eval.agents import ModelForward
 from etude.eval.records import CheckpointPlayer, Code, Match
 from etude.eval.result import Result
 
 from manabot.eval.admission import register_anchor
-from manabot.eval.agents import game_players, registration
+from manabot.eval.agents import (
+    CheckpointReader,
+    ScalarSampler,
+    checkpoint_reader,
+    local_scalar_sampler,
+    registration,
+)
 from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.card_evaluation import trace_card_tables
 from manabot.eval.evaluation import (
@@ -41,19 +49,19 @@ from manabot.sim.registration import (
 
 
 @dataclass(frozen=True)
-class AdmittedPairing:
+class AdmittedPairing[Seat]:
     """Validated pairing request, built game players and output destination."""
 
     request: EvaluationRequest
-    agents: dict[str, GamePlayer]
+    agents: dict[str, Seat]
     legs: int
     participants: tuple[str, str]
     retained: Path
 
 
-def admit_pairing(
+def admit_pairing[Seat](
     match: Match,
-    agents: Sequence[object],
+    agents: Sequence[Seat],
     *,
     matchup: AuthoredMatchup | DeckMatchup,
     deal: int,
@@ -64,7 +72,8 @@ def admit_pairing(
     max_commands: int = 10_000,
     bootstrap_seed: int = 6510,
     output_dir: Path | None = None,
-) -> AdmittedPairing:
+    read: CheckpointReader | None = None,
+) -> AdmittedPairing[Seat]:
     """Validate match players and build registrations, request and game players."""
     legs = 4 if matchup_mode == "cross" else 8
     # An indexed Etude match is one deal. A legacy multi-game match declares legs.
@@ -97,6 +106,7 @@ def admit_pairing(
                 content_suite=matchup.content_suite,
                 role="challenger" if name == "candidate" else "anchor",
                 precision=precision,
+                read=read,
             )
         )
         paths[name] = str(player.checkpoint.path)
@@ -136,7 +146,7 @@ def admit_pairing(
         bootstrap_seed=bootstrap_seed,
         purpose=arena,
     )
-    seated = dict(zip(participants, game_players(match.players, agents), strict=True))
+    seated = dict(zip(participants, agents, strict=True))
     return AdmittedPairing(
         request=request,
         agents=seated,
@@ -190,36 +200,50 @@ def play_pairing(
     Missing legs or card evidence raise after the arena diagnostics are retained.
     An invalid leg with evidence keeps its null score.
     """
+    read = checkpoint_reader(len(match.players))
+    seated = [
+        local_scalar_sampler(player, cast(ModelForward, agent), read)
+        if isinstance(player, CheckpointPlayer) and not isinstance(agent, ScalarSampler)
+        else cast(GamePlayer, agent)
+        for player, agent in zip(match.players, agents, strict=True)
+    ]
     admitted = admit_pairing(
         match,
-        agents,
+        seated,
         matchup=matchup,
         deal=deal,
         matchup_mode=matchup_mode,
         game_seconds=game_seconds,
         arena=arena,
         precision=precision,
+        read=read,
     )
+    with pairing_attempt(admitted.retained) as (out, cards):
+        result = evaluate(
+            admitted.request,
+            out_dir=out,
+            card_evidence_dir=cards,
+            agents=admitted.agents,
+        )
+        return pairing_result(
+            result,
+            out=out,
+            cards=cards,
+            matchup=matchup,
+            legs=admitted.legs,
+            participants=admitted.participants,
+        )
+
+
+@contextmanager
+def pairing_attempt(retained: Path) -> Iterator[tuple[Path, Path]]:
+    """Keep deal diagnostics locally and leave card evidence to Etude's blobs."""
     journal_root = "/dev/shm" if Path("/dev/shm").is_dir() else None
     with TemporaryDirectory(dir=journal_root) as journal:
         out = Path(journal) / "deal"
-        # Only the deal directory is retained. Etude stores card evidence as blobs.
         cards = Path(journal) / "cards"
         try:
-            result = evaluate(
-                admitted.request,
-                out_dir=out,
-                card_evidence_dir=cards,
-                agents=admitted.agents,
-            )
-            return pairing_result(
-                result,
-                out=out,
-                cards=cards,
-                matchup=matchup,
-                legs=admitted.legs,
-                participants=admitted.participants,
-            )
+            yield out, cards
         finally:
             if out.is_dir():
-                shutil.copytree(out, admitted.retained, dirs_exist_ok=True)
+                shutil.copytree(out, retained, dirs_exist_ok=True)

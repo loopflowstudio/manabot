@@ -150,8 +150,15 @@ impl VectorEnv {
     fn prepare_slot(&self, request: &SlotLoad) -> Result<SlotReplacement, AgentError> {
         let slot = request.slot();
         let previous = &self.envs[slot];
-        let rewind = matches!(request, SlotLoad::Snapshot(..))
-            && self.slots[slot] == SlotState::FreshOpening;
+        let replaces_opening = matches!(request, SlotLoad::Snapshot(..))
+            && matches!(self.slots[slot], SlotState::FreshOpening { .. });
+        let rewind = replaces_opening
+            && matches!(
+                self.slots[slot],
+                SlotState::FreshOpening {
+                    automatic_seed: true
+                }
+            );
         let mut next_seed = self.next_seeds[slot];
         let (env, obs, mut info, state, source_digest) = match request {
             SlotLoad::Fresh(_, setup, explicit_seed) => {
@@ -163,18 +170,26 @@ impl VectorEnv {
                     }
                     Self::validate_player_configs(setup.len())?;
                 }
-                if let Some(seed) = *explicit_seed {
-                    next_seed = seed;
-                }
-                let mut env = previous.replacement_root(next_seed);
+                let mut dealt_seed = explicit_seed.unwrap_or(next_seed);
+                let mut env = previous.replacement_root(dealt_seed);
                 let (obs, info) = Self::deal_fresh_game(
                     &self.uniform_roster,
                     &mut env,
-                    &mut next_seed,
+                    &mut dealt_seed,
                     self.seed_stride,
                     setup.as_ref().unwrap_or(&self.player_configs[slot]),
                 )?;
-                (env, obs, info, SlotState::FreshOpening, None)
+                let automatic_seed = explicit_seed.is_none();
+                if automatic_seed {
+                    next_seed = dealt_seed;
+                }
+                (
+                    env,
+                    obs,
+                    info,
+                    SlotState::FreshOpening { automatic_seed },
+                    None,
+                )
             }
             SlotLoad::Snapshot(_, source, options) => {
                 if !source.compatible(
@@ -219,7 +234,7 @@ impl VectorEnv {
             terminal,
             source_digest,
         };
-        let recording = if rewind || self.slots[slot] == SlotState::Poisoned {
+        let recording = if replaces_opening || self.slots[slot] == SlotState::Poisoned {
             Default::default()
         } else {
             previous.current_recording()?

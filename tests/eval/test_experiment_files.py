@@ -50,6 +50,7 @@ from experiments import (
 )
 from experiments.elemental_grid import DECKS
 from experiments.elemental_long import heuristic_games, pair_design, rated_updates
+from manabot.eval.agents import AGENTS_BF16
 from manabot.eval.card_metrics import CARD_ROLLUPS
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -343,6 +344,19 @@ def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
         tla_trophies.Deal(first=2 * i, second=2 * i + 1, seed=40900 + i)
         for i in range(32)
     ]
+
+
+def test_trophy_job_uses_one_precision_for_agents_environment_and_deals(
+    tmp_path: Path,
+) -> None:
+    raw = _finished_run(tmp_path, [100], name="raw", job=tla_trophies.RAW_JOB)
+    (job,) = tla_trophies.held_out_jobs([raw], precision="bf16")
+    assert job.agents == AGENTS_BF16
+    assert job.tournament.environment.config["precision"] == "bf16"
+    assert all(
+        tla_trophies.Deal.model_validate(seating.config).precision == "bf16"
+        for seating in job.tournament.seatings
+    )
 
 
 def test_floor_resume_only_serializes_an_explicit_tau_scale() -> None:
