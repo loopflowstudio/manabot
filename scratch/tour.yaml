@@ -1,18 +1,22 @@
-at: 9b0dfdd01b63b07a32de4d1060d7e506ab7740fa
+at: 8a62e56fa19d9c3db468c4c86ffc7c9c90bb7620
 first:
   - path: docs/evaluation.md
-    why: Managed device selection and precision options
+    why: Managed callbacks, device selection and precision contracts
   - path: experiments/reports/eval_throughput.md
-    why: Apple throughput, replay parity, and reproduction
-  - path: manabot/eval/agent_loader.py
-    why: Backend selection and the masked logit contract
+    why: L4 and Apple throughput, transport receipts and replay parity
+  - path: experiments/tla_trophies.py
+    why: Managed streaming declaration for held-out trophy deals
+  - path: manabot/eval/agents.py
+    why: Prepared inputs, seeded sampling and async scalar forwards
   - path: manabot/eval/vector.py
-    why: Batched decisions and replayable match completion
+    why: Batched rounds, slot backfill and isolated checkpoint failures
+  - path: manabot/eval/match.py
+    why: Shared replay and retention for both runners
+  - path: manabot/eval/agent_loader.py
+    why: Framework and precision selection at the loading boundary
   - path: manabot/policy/batching.py
     why: Joining prepared rows with decision memory
-  - path: manabot/backends/mlx/checkpoint.py
-    why: Metal availability and portable checkpoint loading
+  - path: tests/eval/test_vector_eval.py
+    why: Replay parity, timing budgets and forward failure isolation
   - path: tests/eval/test_etude_agents.py
-    why: Device precedence, fallback, and numerical parity
-  - path: tests/test_package_boundaries.py
-    why: Framework imports stay out of game processes
+    why: Device fallback and precision coverage
