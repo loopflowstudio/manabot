@@ -67,8 +67,8 @@ class Arm:
 
 
 ARMS: dict[str, Arm] = {
-    "w160l8-complete": Arm("w160l8", "complete-games", 64, 512, True),
-    "w160l8-exact": Arm("w160l8", "exact-quota", EXACT_TRANSITIONS, 512, True),
+    "w160l8-fresh-complete": Arm("w160l8", "complete-games", 64, 512, False),
+    "w160l8-fresh-exact": Arm("w160l8", "exact-quota", EXACT_TRANSITIONS, 512, False),
     "w384l8-complete": Arm("w384l8", "complete-games", 64, 128, False),
     "w384l8-exact": Arm("w384l8", "exact-quota", EXACT_TRANSITIONS, 128, False),
 }
@@ -132,11 +132,11 @@ def _recipe(name: str) -> SelfPlay:
 
 
 def w160l8_complete() -> SelfPlay:
-    return _recipe("w160l8-complete")
+    return _recipe("w160l8-fresh-complete")
 
 
 def w160l8_exact() -> SelfPlay:
-    return _recipe("w160l8-exact")
+    return _recipe("w160l8-fresh-exact")
 
 
 def w384l8_complete() -> SelfPlay:
