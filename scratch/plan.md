@@ -29,6 +29,14 @@ The kickoff design (register 11 historical pairs and add `catalog_tokens()["prog
 - **2a: leave the three unused `EXECUTION_TEXT` strings alone** ("creature type choice", "chosen creature type", "normal combat damage"). Retiring them would add six unrelated `token_renames.rs` entries.
 - **3a: the `execution/*` and `DecisionMemory::*` cleanup is its own 0.3.0 outcome** (see Deferred findings).
 
+## Docs written in place
+
+- `docs/engine.md` (`### Program-token vocabulary` clarifying `catalog_tokens()` vs `record_vocabulary()` and exact admission rules)
+- `managym/__init__.pyi` (docstrings on `catalog_tokens()` and `record_vocabulary()`; signatures unchanged)
+- `managym/cards/tests/cards/README.md` (`## Effect vocabulary checks` updated for the debug `TokenWriter::into_rules_tokens` guard, shared `decision_memory=False` vocabulary rule, storage-ID projection rule, and dense+v11 admission tests)
+- `docs/development.md` (effect/runtime-projection validation note referencing the debug emission guard)
+- `manabot/README.md` (`### Semantic catalog dimensions` clarifying runtime program-token sources and `(kind, 0x…)` admission failures)
+
 ## Remaining: one implementation pass
 
 1. Add `record_vocabulary::program_vocabulary()`, a `OnceLock<HashSet<(u16, i32)>>` following the guard rule. It is internal Rust, with no PyO3 or stub change.
