@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MTG-487 QA — fix-forward after steady Watch seats and hand ribbons</title>
+<style>
+  :root { --paper: #f7f5f0; --ink: #1d1b18; --ink2: #5b564d; --rule: #ddd6c8; --ok: #2f6b3a; --warn: #9a5b12; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.55 ui-sans-serif, system-ui, sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1, h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; }
+  h1 { font-size: 30px; margin: 0 0 4px; }
+  h2 { font-size: 22px; margin: 40px 0 8px; border-top: 1px solid var(--rule); padding-top: 20px; }
+  .sub { color: var(--ink2); margin: 0 0 24px; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; margin-left: 8px; vertical-align: middle; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); }
+  code { background: #ece7dc; padding: 0 4px; border-radius: 3px; font-size: 13px; }
+  pre { background: #ece7dc; padding: 10px 12px; border-radius: 4px; overflow-x: auto; font-size: 12.5px; }
+  figure { margin: 16px 0 22px; }
+  img { width: 100%; border: 1px solid var(--rule); border-radius: 4px; margin: 8px 0 4px; }
+  figcaption { color: var(--ink2); font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  td, th { text-align: left; border-bottom: 1px solid var(--rule); padding: 6px 8px; vertical-align: top; }
+</style>
+</head>
+<body><main>
+<h1>MTG-487 QA — Fix-Forward Verification</h1>
+<p class="sub">Fix-forward pass at <code>67abc1a6e7</code> (post-merge <code>65dcf2340a</code> over <code>080ea64372</code> “Steady Watch seats, hand ribbons, and open hands in Play”, plus <code>ebb3032688</code> fixing <code>view.you.hand</code>). The static SPA was rebuilt with <code>ACADEMY_STATIC_BUILD=1</code> and driven through real configured launches (<code>managym academy play</code> and <code>managym academy watch</code>) in headless Chromium at 1280×800, followed by the deferred Academy UI Playwright specs. Zero browser console errors, page errors, or failed requests occurred across all six live runs; no code fixes were needed.</p>
+
+<table>
+<tr><th>Scenario</th><th>Result</th></tr>
+<tr><td>Play: Turn 1 folded hand ribbon — 3 Plains in one offer; drag alias #19 onto battlefield</td><td class="ok">works</td></tr>
+<tr><td>Play: 5 Youthful Knights folded into one cast; click alias #27</td><td class="ok">works</td></tr>
+<tr><td>Play: Manual payment (Kyoshi Village + 3 Plains at {1}{W}); hover &amp; click alias #85, toggle Open hands, reload, click alias #85</td><td class="ok">3 offers; Knight resolves</td></tr>
+<tr><td>Play: Short board (1280×800 with Decisions open and Open hands active)</td><td class="ok">no plate overflow</td></tr>
+<tr><td>Combat: Attack draft clicking 2 non-first Raging Goblins (#127, #124 of #129/#127/#124)</td><td class="ok">1 <code>decision_group_command</code></td></tr>
+<tr><td>Combat: Block draft dragging blocker #127 onto alias attacker #130 (canonical #132)</td><td class="ok">canonical block accepted</td></tr>
+<tr><td>Targets: Burst Lightning clicked on alias Raging Goblin #131 (canonical #128)</td><td class="ok">canonical #128 dies; #131 survives</td></tr>
+<tr><td>Cleanup discard: 8 identical Plains on turn 2</td><td class="ok">no prompt; graveyard gains 1</td></tr>
+<tr><td>Watch: Steady seats (Seat 1 bottom, Seat 2 top) with folded hand offers on both ribbons</td><td class="ok">both ribbons show <code>✓</code> on all copies</td></tr>
+<tr><td>Deferred CI Playwright specs: <code>mana-payment</code>, <code>decision-surface</code>, <code>watch</code>, <code>drag-play</code></td><td class="ok">28 / 28 passed (21.9s)</td></tr>
+</table>
+
+<h2>1 · Play: folded hand ribbon, drag alias, manual payment &amp; Open hands <span class="tag ok">works</span></h2>
+<p><code>14 Kyoshi Village / 10 Plains / 16 Youthful Knight</code> against <code>40 Plains</code> (<code>passive</code>, <code>--order play</code>, <code>--seed 11</code>) at 1280×800.</p>
+<ul>
+  <li><b>Turn 1 hand ribbon:</b> <b>Choices</b> showed 1 <code>Play Plains</code> offer (subject <code>#16</code>, aliases <code>[#21, #19]</code>) alongside <code>Play Kyoshi Village</code> and <code>Pass priority</code>. All three Plains in the bottom hand ribbon carried <code>.legal</code> while the opponent’s top ribbon showed 7 card backs. Dragging alias <code>#19</code> onto the battlefield showed the <code>Play Plains</code> drop zone and sent canonical <code>offer_id: 0</code>.</li>
+  <li><b>Folded cast &amp; manual payment:</b> After disabling Auto-tap in Settings (header chip <code>Manual tap ×</code>), five Youthful Knights in hand folded into one <code>Cast Youthful Knight</code>; clicking alias <code>#27</code> opened the manual payment stop with 3 rows (<code>Tap Kyoshi Village for {G}/{W}</code>, <code>Tap Plains for {W}</code> subject <code>#82</code> with aliases <code>[#84, #85]</code>, and <code>Auto pay</code>).</li>
+  <li><b>Alias hover/tap + Open hands + reload:</b> Pointing at alias Plains <code>#85</code> previewed tapping canonical <code>#82</code> (<code>data-payment-source="1"</code>). Clicking alias <code>#85</code> sent <code>offer_id: 1</code> and tapped <code>#82</code> (<code>committed</code>). Enabling <b>Open hands</b> mid-payment slid out all 7 opponent Plains face-up along the top ribbon with zero plate overflow. Reloading mid-payment preserved both Open hands (<code>data-out="true"</code>) and the remaining payment (canonical <code>#84</code>, alias <code>#85</code>); clicking alias <code>#85</code> finished paying and Youthful Knight resolved onto the battlefield. Opening the <b>Decisions</b> strip at 1280×800 kept both plates overflow-free (<code>191/191</code> and <code>338/338</code>).</li>
+</ul>
+<figure><img src="qa-img/s1-hand-folded.jpg" alt="Turn 1 hand ribbon with three folded Plains"><figcaption>Turn 1 at 1280×800: three Plains in the bottom hand ribbon fold into one “Play Plains” row while every copy stays playable and draggable.</figcaption></figure>
+<figure><img src="qa-img/s1-payment-stop.jpg" alt="Manual payment stop with Kyoshi Village and three Plains"><figcaption>Manual payment stop: three rows in the rail; the two auto-planned Plains separate with 1/2 badges beside Kyoshi Village and the third Plains.</figcaption></figure>
+<figure><img src="qa-img/s1-after-alias-tap-open-hands.jpg" alt="Mid-payment after tapping alias Plains with Open hands active"><figcaption>After clicking alias Plains #85 and enabling Open hands: canonical #82 is committed, the opponent’s 7 Plains appear face-up along the top ribbon, and the remaining two Plains fold into one tap offer.</figcaption></figure>
+
+<h2>2 · Combat drafts, folded targets &amp; forced discard <span class="tag ok">works</span></h2>
+<ul>
+  <li><b>Attack draft:</b> <code>22 Mountain / 30 Raging Goblin / 8 Burst Lightning</code> vs <code>60 Plains</code> (<code>passive</code>, <code>--seed 5</code>). Clicking the last two Raging Goblins (<code>#127</code>, <code>#124</code> of <code>[#129, #127, #124]</code>) showed <code>Attack with 2 Space</code> and pile counter <code>1 of 2 Raging Goblin</code>; confirming sent exactly 1 <code>decision_group_command</code> and 0 raw <code>command</code> messages.</li>
+  <li><b>Block draft:</b> Goblin mirror vs <code>heuristic</code> (<code>--order draw</code>, <code>--seed 5</code>). Dragging blocker <code>#127</code> onto alias attacker <code>#130</code> (canonical <code>#132</code>) aligned the attacking pile to the front of the row, showed <code>Raging Goblin on Raging Goblin</code>, and confirmed in one <code>decision_group_command</code>.</li>
+  <li><b>Folded target:</b> <code>22 Mountain / 8 Raging Goblin / 30 Burst Lightning</code> vs goblins (<code>heuristic</code>, <code>--order draw</code>, <code>--seed 5</code>). Clicking alias goblin <code>#131</code> (canonical <code>#128</code>, offer <code>3</code>) sent <code>offer_id: 3</code>; canonical <code>#128</code> died and alias <code>#131</code> survived.</li>
+  <li><b>Cleanup discard:</b> <code>60 Plains</code> vs <code>60 Plains</code> (<code>passive</code>, <code>--seed 3</code>). Passing every priority through turn 5 moved a Plains to the graveyard without opening a discard prompt.</li>
+</ul>
+<figure><img src="qa-img/s2-attack-draft.jpg" alt="Attack draft naming two non-first Raging Goblins"><figcaption>Attack draft over three Raging Goblins (one from turn 1, two piled from turn 3): clicking non-first copies drafts cleanly with the pile stepper.</figcaption></figure>
+<figure><img src="qa-img/s2-block-draft.jpg" alt="Block draft dragged onto alias attacker"><figcaption>Block draft dragged onto alias attacker #130: the blocked pile aligns at the front of the row and confirms atomically.</figcaption></figure>
+<figure><img src="qa-img/s2-target-folded.jpg" alt="Burst Lightning target choice over three Raging Goblins"><figcaption>Burst Lightning target choice: offer #3 targets the turn-1 goblin and folded offer #4 targets the two turn-3 goblins (canonical #128, alias #131).</figcaption></figure>
+
+<h2>3 · Watch steady seats &amp; top/bottom hand ribbons <span class="tag ok">works</span></h2>
+<p><code>managym academy watch --player heuristic --player heuristic</code> on the goblin mirror (<code>--seed 5</code>) at 1280×800.</p>
+<pre>Steady seats maintained (top=seat 1, bottom=seat 0): true
+Seat 1 (bottom ribbon): 1 "Play Mountain" rail row, 5 Mountains in hand, topOut=false, botOut=true
+Seat 2 (top ribbon):    1 "Play Mountain" rail row, 3 Mountains in hand (#70, #74, #82), all 3 with ✓ pill, topOut=true, botOut=false
+Idle-seat plate toggle: bottom ribbon data-out flipped false → true; plate overflows=false</pre>
+<figure><img src="qa-img/s3-watch-seat1-bottom.jpg" alt="Watch Seat 1 bottom hand ribbon with five Mountains carrying the chosen mark"><figcaption>Watch at Seat 1’s turn 1 decision: bottom ribbon extends with the ✓ badge on all five folded Mountains while the rail lists “Play Mountain” once.</figcaption></figure>
+<figure><img src="qa-img/s3-watch-seat2-top.jpg" alt="Watch Seat 2 top hand ribbon with three Mountains carrying the chosen mark"><figcaption>Watch at Seat 2’s turn 2 decision: seats stay steady (Seat 2 stays on top), the top ribbon extends via <code>view.opponent.hand</code> with ✓ on all three folded Mountains, and Seat 1’s hand tucks to name bars below.</figcaption></figure>
+
+<h2>4 · Deferred CI Playwright browser specs <span class="tag ok">28 / 28 passed</span></h2>
+<p>Ran the Academy UI Playwright specs skipped in post-merge CI run <code>45961017088</code> against <code>playwright.release.config.ts</code>:</p>
+<pre>e2e/decision-surface.spec.ts   2 passed
+e2e/drag-play.spec.ts         18 passed
+e2e/mana-payment.spec.ts       4 passed
+e2e/watch.spec.ts              4 passed
+Total:                        28 passed (21.9s)</pre>
+
+<h2>What works, what wasn’t reached, and observations</h2>
+<ul>
+  <li><b>Works now:</b> All folded-offer flows across Play (bottom hand ribbon click/drag, board piles, manual mana payments, Open hands mid-payment, reload recovery, short-board Decisions strip), combat drafts (attacks, blocks, targets, skipped identical discard), and steady-seat Watch (both bottom Seat 1 and top Seat 2 hand ribbons carrying folded alias marks) work cleanly at 1280×800, and all 28 targeted release Playwright browser specs pass.</li>
+  <li><b>Not reached here:</b> Full CI matrix jobs (<code>Protocol v1 Conformance</code>, <code>test:e2e:launch</code>, <code>test:e2e:policy</code>, <code>test:e2e:search</code>, and the remaining non-MTG-487 release Playwright specs) are left to CI on the fix-forward PR.</li>
+  <li><b>Minor visual observation (out of scope for this fix-forward PR):</b> In Scenario 2c (<code>s2-target-folded.jpg</code>), two Raging Goblins cast on turn 3 share folded target offer #4 while the turn-1 goblin has separate offer #3 (differing in CR 302.6 summoning sickness under Haste). Because <code>pileKey</code> in <code>academy/ui/src/lib/board/view.ts</code> keys on <code>offer.label</code> (<code>"Target Raging Goblin"</code>) rather than <code>offer.id</code>, all three render in one <code>Raging Goblin ×3</code> pile even though clicking the leftmost copy targets offer #3 and clicking the other two targets offer #4. A transient targeting line also flashed briefly in that screenshot before the stack card settled.</li>
+</ul>
+</main></body></html>
