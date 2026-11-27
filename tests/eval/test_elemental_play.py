@@ -125,7 +125,7 @@ def test_match_retry_preserves_failure_journal(
         raise error_type("controlled failure")
 
     def forward(rows: list[Prepared]) -> list[np.ndarray]:
-        return [np.zeros(row.legal.shape[1], dtype=np.float32) for row in rows]
+        return [np.zeros(row.legal.shape, dtype=np.float32) for row in rows]
 
     native = error_type in (managym.AgentError, PanicException)
     with pytest.raises(

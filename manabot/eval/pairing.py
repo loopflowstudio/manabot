@@ -26,7 +26,11 @@ from manabot.eval.evaluation import EvaluationRequest, attempt_play_counts, eval
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
-from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
+from manabot.sim.registration import (
+    ETUDE_COMPUTE_CLASS,
+    EvalPrecision,
+    PlayerRegistration,
+)
 
 
 def play_pairing(
@@ -38,6 +42,7 @@ def play_pairing(
     matchup_mode: Literal["cross", "all"],
     game_seconds: float,
     arena: str,
+    precision: EvalPrecision = "float32",
 ) -> Result:
     """Return the paired deal's outcome, behaviour and replay-derived card data.
 
@@ -74,6 +79,7 @@ def play_pairing(
                 match=matchup.match(),
                 content_suite=matchup.content_suite,
                 role="challenger" if name == "candidate" else "anchor",
+                precision=precision,
             )
         )
         paths[name] = str(player.checkpoint.path)
@@ -85,7 +91,10 @@ def play_pairing(
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),
-        evaluation_compute_envelope_id=ETUDE_COMPUTE_CLASS,
+        evaluation_compute_envelope_id=candidate.compute_class_id,
+        seed_compute_envelope_id=(
+            ETUDE_COMPUTE_CLASS if precision != "float32" else None
+        ),
     )
     retained = (
         Path(os.environ.get("ETUDE_OUTPUT_DIR") or Path(".runs") / arena)

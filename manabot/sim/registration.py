@@ -12,9 +12,30 @@ from manabot.sim.execution import EvalCompute, EvalComputeV1
 from manabot.sim.search.branch import branch_backend
 from managym.disclosure import DecklistDisclosure
 
-# How a checkpoint served by Etude is registered: Etude chooses the device, and
-# the game process samples float32 logits with a seeded NumPy generator.
-ETUDE_COMPUTE_CLASS = "etude-policy-f32-auto-v1"
+# How a checkpoint served by Etude is registered: Etude chooses the device,
+# precision is declared explicitly, and the game process samples float32 logits
+# with a seeded NumPy generator.
+EvalPrecision = Literal["float32", "tf32", "bf16"]
+
+_ETUDE_COMPUTE_CLASSES: dict[EvalPrecision, str] = {
+    "float32": "etude-policy-f32-auto-v1",
+    "tf32": "etude-policy-tf32-auto-v1",
+    "bf16": "etude-policy-bf16-auto-v1",
+}
+ETUDE_COMPUTE_CLASS = _ETUDE_COMPUTE_CLASSES["float32"]
+ETUDE_COMPUTE_CLASSES = frozenset(_ETUDE_COMPUTE_CLASSES.values())
+
+
+def etude_compute_class(precision: EvalPrecision = "float32") -> str:
+    """Compute class id for an Etude-served checkpoint at a declared precision."""
+    if precision not in _ETUDE_COMPUTE_CLASSES:
+        allowed = ", ".join(_ETUDE_COMPUTE_CLASSES)
+        raise ValueError(
+            f"unsupported eval precision {precision!r}; choose from {allowed}"
+        )
+    return _ETUDE_COMPUTE_CLASSES[precision]
+
+
 ETUDE_SAMPLER_SPEC: dict[str, Any] = {
     "kind": "etude_checkpoint",
     "deterministic": False,
@@ -150,7 +171,7 @@ class PlayerRegistration(StrictModel):
                     expected_sampler["blank_decision_memory"] = True
                 if (
                     self.player_spec != expected_sampler
-                    or self.compute_class_id != ETUDE_COMPUTE_CLASS
+                    or self.compute_class_id not in ETUDE_COMPUTE_CLASSES
                 ):
                     raise ValueError(
                         "Etude checkpoint requires its explicit sampling contract"

@@ -15,15 +15,32 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.eval.admission import register_anchor
-from manabot.eval.agent_loader import load
-from manabot.eval.agents import Sampler, build, game_players, registration
+from manabot.eval.agent_loader import load, load_bf16, load_tf32, select_device
+from manabot.eval.agents import (
+    AGENTS,
+    AGENTS_BF16,
+    AGENTS_TF32,
+    Sampler,
+    agents_for,
+    build,
+    etude_registration,
+    game_players,
+    registration,
+)
 import manabot.eval.game as game
 from manabot.eval.match import play_cell
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import file_sha256
-from manabot.policy.prepare import prepare
+from manabot.policy.batching import concatenate
+from manabot.policy.decision_memory import MemoryFold
+from manabot.policy.prepare import Prepared, prepare
 from manabot.sim.card_evidence import EvidenceRef
 from manabot.sim.matchup import DeckMatchup
+from manabot.sim.registration import (
+    ETUDE_COMPUTE_CLASS,
+    PlayerRegistration,
+    etude_compute_class,
+)
 from manabot.sim.replay import replay_games
 import managym
 from managym.recording import read_records
@@ -99,11 +116,33 @@ def test_loader_batches_prepared_rows_without_sampling(
         batch = {key: value[None] for key, value in obs.items()}
         row = prepare(batch, sampler.spec.tables, binding=sampler.spec.binding)
         [single] = forward([row])
+        assert single.shape == row.legal.shape and single.dtype == np.float32
         joined = forward([row, row])
         assert len(joined) == 2
         for output in joined:
+            assert output.shape == row.legal.shape and output.dtype == np.float32
             np.testing.assert_allclose(output, single, atol=1e-6, rtol=1e-5)
-            assert np.isneginf(output[~row.legal[0]]).all()
+            assert np.isneginf(output[~row.legal]).all()
+        batched = prepare(
+            {
+                key: np.concatenate([value, value], axis=0)
+                for key, value in batch.items()
+            },
+            sampler.spec.tables,
+            binding=sampler.spec.binding,
+        )
+        [combined] = forward([batched])
+        assert combined.shape == batched.legal.shape and combined.dtype == np.float32
+        for index in range(2):
+            np.testing.assert_allclose(
+                combined[index : index + 1], single, atol=1e-6, rtol=1e-5
+            )
+        mixed = forward([row, batched])
+        assert [out.shape for out in mixed] == [row.legal.shape, batched.legal.shape]
+        np.testing.assert_allclose(mixed[0], single, atol=1e-6, rtol=1e-5)
+        np.testing.assert_allclose(mixed[1], combined, atol=1e-6, rtol=1e-5)
+        with pytest.raises(TypeError, match="nonempty host Prepared"):
+            forward([object()])
         assert sampler.choose(env, obs, 123) == sampler.choose(env, obs, 123)
         assert seated.choose(env, obs, 123) == sampler.choose(env, obs, 123)
     finally:
@@ -220,7 +259,298 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
     actual = forward(rows)
     assert len(actual) == len(expected)
     for single, joined in zip(expected, actual, strict=True):
+        assert joined.shape == single.shape
         np.testing.assert_allclose(joined, single, atol=1e-6, rtol=1e-5)
+
+
+def test_select_device_order_and_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MANABOT_EVAL_DEVICE", raising=False)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    assert select_device() == "cuda"
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    assert select_device() == "mps"
+
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
+    assert select_device() == "cpu"
+
+    monkeypatch.setenv("MANABOT_EVAL_DEVICE", "cpu")
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    assert select_device() == "cpu"
+
+    monkeypatch.setenv("MANABOT_EVAL_DEVICE", "mps")
+    assert select_device() == "mps"
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
+    with pytest.raises(ValueError, match="MPS is unavailable"):
+        select_device()
+
+    monkeypatch.setenv("MANABOT_EVAL_DEVICE", "cuda")
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    with pytest.raises(ValueError, match="CUDA is unavailable"):
+        select_device()
+
+    monkeypatch.setenv("MANABOT_EVAL_DEVICE", "tpu")
+    with pytest.raises(ValueError, match=r"cuda, mps, cpu"):
+        select_device()
+
+
+def test_declared_precision_compute_classes_and_loader_guards(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert etude_compute_class() == ETUDE_COMPUTE_CLASS == "etude-policy-f32-auto-v1"
+    assert etude_compute_class("tf32") == "etude-policy-tf32-auto-v1"
+    assert etude_compute_class("bf16") == "etude-policy-bf16-auto-v1"
+    with pytest.raises(ValueError, match="unsupported eval precision"):
+        etude_compute_class("fp16")  # type: ignore[arg-type]
+
+    assert agents_for("float32") == AGENTS
+    assert agents_for("tf32") == AGENTS_TF32
+    assert agents_for("bf16") == AGENTS_BF16
+    assert (AGENTS.load, AGENTS_TF32.load, AGENTS_BF16.load) == (
+        load,
+        load_tf32,
+        load_bf16,
+    )
+    with pytest.raises(ValueError, match="unsupported eval precision"):
+        agents_for("fp16")  # type: ignore[arg-type]
+
+    space = ObservationSpace()
+    model = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+    match = Match()
+    path = tmp_path / "precision.safetensors"
+    save_checkpoint(model, space, path, player_configs=match.to_rust())
+    ref = CheckpointRef(
+        address="fixture/precision",
+        artifact=ArtifactRef(
+            uri=path.as_uri(), sha256=file_sha256(path), size_bytes=path.stat().st_size
+        ),
+    )
+    for precision in ("float32", "tf32", "bf16"):
+        reg = registration(
+            checkpoint_player(ref),
+            name="cand",
+            match=match.config,
+            content_suite="fixture",
+            role="challenger",
+            precision=precision,
+        )
+        assert reg.compute_class_id == etude_compute_class(precision)
+        copied = etude_registration(reg, precision=precision)
+        assert copied.compute_class_id == etude_compute_class(precision)
+    with pytest.raises(ValueError, match="explicit sampling contract"):
+        PlayerRegistration.model_validate(
+            {**reg.model_dump(), "compute_class_id": "etude-policy-fp8-auto-v1"}
+        )
+
+    monkeypatch.setenv("MANABOT_EVAL_DEVICE", "cpu")
+    with pytest.raises(ValueError, match="precision tf32 requires CUDA"):
+        load_tf32(ref)
+    with pytest.raises(ValueError, match="precision bf16 requires CUDA or MPS"):
+        load_bf16(ref)
+
+
+@pytest.mark.parametrize("encoder", ["gru", "transformer"])
+def test_concatenate_joins_decision_memory_rows_and_rejects_folds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    encoder: str,
+) -> None:
+    from dataclasses import replace
+
+    monkeypatch.setenv("MANABOT_EVAL_DEVICE", "cpu")
+    torch.set_num_threads(1)
+    torch.manual_seed(73)
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=64,
+            max_decision_reference_details=2048,
+            max_decision_references=64,
+            max_decision_members=512,
+        )
+    )
+    model = ActorCritic(
+        space,
+        ModelConfig(
+            world=managym.WORLD_SETUP,
+            hidden_dim=8,
+            num_attention_heads=2,
+            attention_on=True,
+            attention_layers=1,
+            policy_film=True,
+            value_aggregation="masked_mean",
+            decision_memory=encoder,  # type: ignore[arg-type]
+            decision_memory_summaries=4,
+        ),
+    )
+    match = Match()
+    path = tmp_path / f"memory-{encoder}.safetensors"
+    save_checkpoint(model, space, path, player_configs=match.to_rust())
+    ref = CheckpointRef(
+        address=f"fixture/memory-{encoder}",
+        artifact=ArtifactRef(
+            uri=path.as_uri(), sha256=file_sha256(path), size_bytes=path.stat().st_size
+        ),
+    )
+    forward = load(ref)
+    sampler = build(checkpoint_player(ref), {ref.key: forward})
+    assert isinstance(sampler, Sampler)
+
+    # Collect one empty-memory turn-0 row and two distinct nonempty histories.
+    rows: list[Prepared[np.ndarray]] = []
+    env = Env(match, space, Reward(RewardConfig()), seed=73)
+    try:
+        obs, _ = env.reset(seed=73)
+        raw_obs = [obs]
+        for step_idx in range(18):
+            legal_actions = np.flatnonzero(obs["actions_valid"] > 0)
+            obs, _, terminated, truncated, _ = env.step(int(legal_actions[0]))
+            if terminated or truncated:
+                break
+            if step_idx in (6, 14):
+                raw_obs.append(obs)
+    finally:
+        env.close()
+    assert len(raw_obs) == 3
+
+    for obs in raw_obs:
+        batch = {key: value[None] for key, value in obs.items()}
+        rows.append(
+            prepare(
+                batch,
+                sampler.spec.tables,
+                binding=sampler.spec.binding,
+                memory_summaries=sampler.spec.model.decision_memory_summaries,
+            )
+        )
+    lengths = [row.memory.lengths[0] for row in rows if row.memory is not None]
+    assert lengths[0] == 0 and lengths[1] > 0 and lengths[2] > lengths[1]
+
+    expected = [forward([row])[0] for row in rows]
+    joined = forward(rows)
+    assert len(joined) == len(expected)
+    for single, batched in zip(expected, joined, strict=True):
+        assert batched.shape == single.shape and batched.dtype == np.float32
+        np.testing.assert_allclose(batched, single, atol=1e-5, rtol=1e-5)
+
+    # Multi-row Prepared inputs also join cleanly with single-row inputs.
+    two_rows = concatenate(rows[:2])
+    [first_two, third] = forward([two_rows, rows[2]])
+    assert first_two.shape == two_rows.legal.shape
+    np.testing.assert_allclose(first_two[0:1], expected[0], atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(first_two[1:2], expected[1], atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(third, expected[2], atol=1e-5, rtol=1e-5)
+
+    # Folded decision memory and mixed memory/non-memory layouts are refused.
+    assert rows[1].memory is not None
+    folded = replace(
+        rows[1],
+        memory=replace(
+            rows[1].memory,
+            fold=MemoryFold(levels=(), tails=np.zeros(1, np.int64), node_count=0),
+        ),
+    )
+    with pytest.raises(ValueError, match="folded decision memory"):
+        concatenate([rows[0], folded])
+    with pytest.raises(ValueError, match="optional layouts differ"):
+        concatenate([rows[0], replace(rows[1], memory=None)])
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
+@pytest.mark.parametrize("memory", ["none", "gru"])
+def test_loader_mps_matches_cpu_logits_and_supports_bf16(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    memory: str,
+) -> None:
+    torch.set_num_threads(1)
+    torch.manual_seed(74)
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=64,
+            max_decision_reference_details=2048,
+            max_decision_references=64,
+            max_decision_members=512,
+        )
+        if memory != "none"
+        else ObservationConfig()
+    )
+    model = ActorCritic(
+        space,
+        ModelConfig(
+            world=managym.WORLD_SETUP,
+            hidden_dim=16,
+            num_attention_heads=2,
+            attention_on=True,
+            attention_layers=1,
+            policy_film=True,
+            value_aggregation="masked_mean",
+            decision_memory=memory,  # type: ignore[arg-type]
+        ),
+    )
+    match = Match()
+    path = tmp_path / f"mps-{memory}.safetensors"
+    save_checkpoint(model, space, path, player_configs=match.to_rust())
+    ref = CheckpointRef(
+        address=f"fixture/mps-{memory}",
+        artifact=ArtifactRef(
+            uri=path.as_uri(), sha256=file_sha256(path), size_bytes=path.stat().st_size
+        ),
+    )
+    monkeypatch.setenv("MANABOT_EVAL_DEVICE", "cpu")
+    cpu_forward = load(ref)
+    sampler = build(checkpoint_player(ref), {ref.key: cpu_forward})
+    assert isinstance(sampler, Sampler)
+
+    env = Env(match, space, Reward(RewardConfig()), seed=74)
+    rows: list[Prepared[np.ndarray]] = []
+    try:
+        obs, _ = env.reset(seed=74)
+        for step_idx in range(10):
+            if step_idx in (0, 8):
+                rows.append(
+                    prepare(
+                        {key: value[None] for key, value in obs.items()},
+                        sampler.spec.tables,
+                        binding=sampler.spec.binding,
+                        memory_summaries=sampler.spec.model.decision_memory_summaries
+                        if memory != "none"
+                        else 0,
+                    )
+                )
+            legal_actions = np.flatnonzero(obs["actions_valid"] > 0)
+            obs, _, terminated, truncated, _ = env.step(int(legal_actions[0]))
+            if terminated or truncated:
+                break
+    finally:
+        env.close()
+    assert len(rows) == 2
+
+    combined = concatenate(rows)
+    [cpu_logits] = cpu_forward([combined])
+
+    monkeypatch.setenv("MANABOT_EVAL_DEVICE", "mps")
+    mps_forward = load(ref)
+    [mps_logits] = mps_forward([combined])
+    assert mps_logits.shape == combined.legal.shape and mps_logits.dtype == np.float32
+    assert np.isneginf(mps_logits[~combined.legal]).all()
+    np.testing.assert_allclose(
+        mps_logits[combined.legal], cpu_logits[combined.legal], atol=1e-4, rtol=1e-4
+    )
+
+    with pytest.raises(ValueError, match="precision tf32 requires CUDA"):
+        load_tf32(ref)
+
+    if torch.backends.mps.is_macos_or_newer(14, 0):
+        bf16_forward = load_bf16(ref)
+        [bf16_logits] = bf16_forward([combined])
+        assert (
+            bf16_logits.shape == combined.legal.shape
+            and bf16_logits.dtype == np.float32
+        )
+        assert np.isfinite(bf16_logits[combined.legal]).all()
+        assert np.isneginf(bf16_logits[~combined.legal]).all()
 
 
 @pytest.mark.parametrize("mode", ["all", "usable"])

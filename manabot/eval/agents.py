@@ -18,7 +18,7 @@ from manabot.env.decision_memory import blank_memory
 from manabot.env.env import Env
 from manabot.env.match import Match
 from manabot.env.observation import ObservationBuffers, ObservationSpace
-from manabot.eval.agent_loader import load
+from manabot.eval.agent_loader import load, load_bf16, load_tf32
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints
@@ -30,9 +30,10 @@ from manabot.sim.agent import GamePlayer
 from manabot.sim.heuristic import HeuristicPlayer
 from manabot.sim.players import CodePlayer, build_code_player
 from manabot.sim.registration import (
-    ETUDE_COMPUTE_CLASS,
     ETUDE_SAMPLER_SPEC,
+    EvalPrecision,
     PlayerRegistration,
+    etude_compute_class,
 )
 
 
@@ -78,12 +79,13 @@ class Sampler:
         )
         [output] = self.forward([row])
         logits = np.asarray(output, dtype=np.float32)
-        if logits.shape != legal.shape[1:] or not np.isfinite(logits[legal[0]]).all():
+        if logits.shape != legal.shape or not np.isfinite(logits[legal]).all():
             raise ValueError("forward returned malformed legal logits")
+        row_logits = logits[0]
         slots = np.flatnonzero(legal[0])
         if self.deterministic:
-            return int(slots[logits[slots].argmax()])
-        weights = np.exp(logits[slots].astype(np.float64) - logits[slots].max())
+            return int(slots[row_logits[slots].argmax()])
+        weights = np.exp(row_logits[slots].astype(np.float64) - row_logits[slots].max())
         return int(np.random.default_rng(seed).choice(slots, p=weights / weights.sum()))
 
 
@@ -154,6 +156,24 @@ def build(player: object, leaves: Mapping[str, Forward]) -> GamePlayer:
 
 
 AGENTS = Agents(load=load, build=build)
+AGENTS_TF32 = Agents(load=load_tf32, build=build)
+AGENTS_BF16 = Agents(load=load_bf16, build=build)
+
+_AGENTS_BY_PRECISION: dict[EvalPrecision, Agents] = {
+    "float32": AGENTS,
+    "tf32": AGENTS_TF32,
+    "bf16": AGENTS_BF16,
+}
+
+
+def agents_for(precision: EvalPrecision = "float32") -> Agents:
+    """Return the Etude `Agents` declaration for a declared evaluation precision."""
+    if precision not in _AGENTS_BY_PRECISION:
+        allowed = ", ".join(_AGENTS_BY_PRECISION)
+        raise ValueError(
+            f"unsupported eval precision {precision!r}; choose from {allowed}"
+        )
+    return _AGENTS_BY_PRECISION[precision]
 
 
 def game_players(
@@ -182,6 +202,7 @@ def registration(
     match: MatchConfig,
     content_suite: str,
     role: Literal["anchor", "incumbent", "challenger"],
+    precision: EvalPrecision = "float32",
 ) -> PlayerRegistration:
     """Admit local checkpoint bytes and its world without importing a framework.
 
@@ -212,7 +233,7 @@ def registration(
         action_abi_sha256=runtime["action_abi_sha256"],
         matchup_sha256=runtime["matchup_sha256"],
         player_seed_derivation_id="arena-pair-deal-player-v1",
-        compute_class_id=ETUDE_COMPUTE_CLASS,
+        compute_class_id=etude_compute_class(precision),
         runner_kind="checkpoint",
         player_spec=dict(ETUDE_SAMPLER_SPEC)
         | ({"blank_decision_memory": True} if blank_decision_memory(player) else {}),
@@ -226,14 +247,16 @@ def registration(
     )
 
 
-def etude_registration(player: PlayerRegistration) -> PlayerRegistration:
+def etude_registration(
+    player: PlayerRegistration, *, precision: EvalPrecision = "float32"
+) -> PlayerRegistration:
     """An execution copy naming the Etude sampler, leaving retained bytes alone."""
     if player.runner_kind == "code":
         return player
     return PlayerRegistration.model_validate(
         {
             **player.model_dump(),
-            "compute_class_id": ETUDE_COMPUTE_CLASS,
+            "compute_class_id": etude_compute_class(precision),
             "player_spec": dict(ETUDE_SAMPLER_SPEC),
         }
     )

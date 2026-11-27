@@ -164,7 +164,7 @@ class DecisionMemory(nn.Module):
             )
             _, hidden = self.gru(packed)
             summaries = self._summaries(hidden[-1][rows.schedule.restore])
-            result = records.new_zeros((batch, self.summaries, board_width))
+            result = summaries.new_zeros((batch, self.summaries, board_width))
             return result.index_copy(0, rows.nonempty_batches, summaries)
         assert self.transformer is not None and self.queries is not None
         lengths = records.new_tensor(rows.lengths)
