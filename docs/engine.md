@@ -38,22 +38,34 @@ stack, state-based actions and triggers.
 
 A decision reaches a player only when it has at least two legal actions. With
 one legal action the engine plays it and keeps going, so a forced choice never
-costs a model a forward pass and never produces a training row.
+costs a model a forward pass and never produces a training row. Every
+non-terminal decision must offer at least one legal action: an empty
+non-terminal action space, or an error while executing a forced or
+automatic-payment action, fails closed with `AgentError` rather than spinning
+or faking game over.
 
 From `Game::tick` in [`managym/src/flow/tick.rs`](../managym/src/flow/tick.rs):
 
 ```rust
 if let Some(space) = action_space {
+    let (space, aliases) = self.fold_action_space(space);
+    if space.actions.is_empty() {
+        return Err(AgentError(format!(
+            "empty non-terminal action space: {:?}",
+            space.kind
+        )));
+    }
+    if let Some(action) = self.automatic_payment_action(&space) {
+        self.execute_action(&action)?;
+        self.skip_trivial_count += 1;
+        continue;
+    }
     if !self.skip_trivial || space.actions.len() > 1 {
-        self.publish_action_space(space);
-        return false;
+        self.publish_folded_action_space(space, aliases);
+        return Ok(false);
     }
     self.skip_trivial_count += 1;
-    if let Some(action) = space.actions.first() {
-        if self.execute_action(action).is_err() {
-            return true;
-        }
-    }
+    self.execute_action(&space.actions[0])?;
     continue;
 }
 ```
@@ -61,6 +73,11 @@ if let Some(space) = action_space {
 - `skip_trivial` is on everywhere by default: training, evaluation, Academy and
   benchmarks. Turning it off is for explicit debugging and the constructed-position
   diagnostic fixtures only.
+- Under both `skip_trivial` settings, an empty non-terminal action space or a
+  failed forced/automatic action returns `Err(AgentError)` (raising
+  `managym.AgentError` from `Env.step`). In isolated vector stepping
+  (`step_isolated_into_buffers`), only the failing slot is poisoned while
+  sibling slots finish and return normally.
 - Before the single-action check, actions that differ only in which of several
   game-indistinguishable objects they name fold into one offer, so a choice
   among identical copies — such as discarding one card from two identical

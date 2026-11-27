@@ -59,3 +59,8 @@ The test exercises both branches of the Room’s blue/red choice and the legal o
 ## Concept review disposition
 
 All four review choices adopted above as made for review (1a, 2a with 2b fallback, 3a, 4a). Its `Game::play` hygiene note is in pass 1; the `PaymentScan` debug invariant is a constraint above. The review's replacement-ordering counterexample (Citadel + prevention + damage doubling) is covered by `BoardChanging`; no current card produces it, so no fixture is required.
+
+## Docs
+
+- `docs/engine.md` (`### Forced decisions`): updated `Game::tick` contract to document `Result<bool, AgentError>`, empty non-terminal action-space rejection under both `skip_trivial` settings, error propagation for forced/automatic actions, and isolated vector slot poisoning.
+- `managym/README.md` (mana payment & `PaymentScan`/`PaymentCache` architecture): documented colored convoke inside `PaymentModel` (replacing the `while_paying` reference), CR 119.4 `can_pay_life` and signed `LifeBudget` with trailing `Obligation::PayLife`, isolated-fork `mana_suffix()` probing (`LifeDelta` / `BoardChanging`) with the Tarnished Citadel / Airship Engine Room / Sunbaked Canyon / The Great Henge examples, and direct-path/cache rules.
