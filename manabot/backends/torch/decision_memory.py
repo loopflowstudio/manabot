@@ -10,8 +10,8 @@ from typing import Literal
 
 import torch
 from torch import nn
-from torch.nn.utils.rnn import PackedSequence
 
+from manabot.backends.torch.packed_gru import packed_gru
 from manabot.policy.decision_memory import MemoryRows
 
 
@@ -137,33 +137,36 @@ class DecisionMemory(nn.Module):
                 # A predecessor is evaluated once per execution chunk. Shared
                 # descendants contribute gradients to that same state; no state
                 # survives the forward/backward or a parameter update.
-                states = records.new_zeros((rows.fold.node_count + 1, 64))
+                states = self.gru.weight_ih_l0.new_zeros((rows.fold.node_count + 1, 64))
                 if rows.fold.root_states is not None:
                     assert rows.fold.root_nodes is not None
                     states = states.index_copy(
-                        0, rows.fold.root_nodes, rows.fold.root_states
+                        0, rows.fold.root_nodes, rows.fold.root_states.to(states.dtype)
                     )
                 for level in rows.fold.levels:
-                    packed = PackedSequence(
-                        records[level.records], torch.tensor(level.schedule.sizes)
+                    output, hidden = packed_gru(
+                        self.gru,
+                        records[level.records],
+                        level.schedule.sizes,
+                        states[level.parents],
                     )
-                    output, hidden = self.gru(packed, states[level.parents][None])
                     states = (
-                        states.index_copy(0, level.record_nodes, output.data)
+                        states.index_copy(0, level.record_nodes, output)
                         if level.record_nodes is not None
                         else states.index_copy(
-                            0, level.nodes, hidden[-1][level.schedule.restore]
+                            0, level.nodes, hidden[level.schedule.restore]
                         )
                     )
                 if rows.fold.retain is not None:
                     rows.fold.retain(states, references)
                 summaries = self._summaries(states[rows.fold.tails])
                 return summaries * (rows.fold.tails != 0)[:, None, None]
-            packed = PackedSequence(
-                records[rows.schedule.gather], torch.tensor(rows.schedule.sizes)
+            _, hidden = packed_gru(
+                self.gru,
+                records[rows.schedule.gather],
+                rows.schedule.sizes,
             )
-            _, hidden = self.gru(packed)
-            summaries = self._summaries(hidden[-1][rows.schedule.restore])
+            summaries = self._summaries(hidden[rows.schedule.restore])
             result = summaries.new_zeros((batch, self.summaries, board_width))
             return result.index_copy(0, rows.nonempty_batches, summaries)
         assert self.transformer is not None and self.queries is not None
