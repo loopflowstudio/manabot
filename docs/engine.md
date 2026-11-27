@@ -916,6 +916,39 @@ tokenized rules text, rows by `CardDefId`, with the same `keys` and
 `registry_names` beside them, so the tokens describe cards a model has not
 seen.
 
+### Program-token vocabulary
+
+`managym.catalog_tokens()` holds only the printed rules spans of catalog
+definitions (cards, tokens and back faces). Live observations also emit
+runtime program tokens in fact and shared-effect rows — suspended resolution
+frames, granted abilities and last-known characteristics — whose runtime-only
+symbols come from `managym.record_vocabulary()`.
+
+```python
+import managym
+
+catalog = managym.catalog_tokens()
+printed = set(zip(catalog["token_kind"], catalog["token_value"], strict=True))
+runtime = {
+    (kind, value)
+    for _space, name, _hashed, kind, value in managym.record_vocabulary()
+    if kind is not None
+    and value is not None
+    and not name.startswith("DecisionMemory::")
+}
+admitted_program_tokens = printed | runtime
+```
+
+`Integer` and `Boolean` carry their values directly. Every other token,
+including `Null` and `DefinitionRef`, needs an exact pair in
+`admitted_program_tokens`. Admission reports missing pairs as `(kind, 0x…)`.
+Policies with decision memory enabled also admit the `DecisionMemory::*` rows.
+
+An expanded naming source can supply a chosen card name outside the installed
+catalog. Suspended entries and named exile or search programs encode it as
+`Null`, and permanent facts omit its vocabulary row. Rules state and readable
+observations keep the chosen spelling.
+
 ### Deprecated names
 
 Engine names describe what managym produces. These earlier spellings, named for

@@ -19,7 +19,7 @@ use crate::{
         CardData, CastPermissionData, ContinuousEffectData, EventData, Observation, PermanentData,
         PlayerData, RestrictedManaData, StackObjectData, StackObjectKindData, TurnData,
     },
-    cards::tokens::name_value,
+    cards::{content_pack::default_content_pack, tokens::name_value},
     flow::turn::{PhaseKind, StepKind},
     state::mana::{ManaCost, ManaRestriction},
 };
@@ -1874,14 +1874,18 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
             .filter(|_| layout == InputLayout::OneToken)
         {
             use crate::state::permanent::EntryChoice;
-            let (kind, id) = match choice {
+            let fact = match choice {
                 EntryChoice::Color(c) => {
-                    (FactKind::ChosenColor, name_value(&format!("Color::{c:?}")))
+                    Some((FactKind::ChosenColor, name_value(&format!("Color::{c:?}"))))
                 }
-                EntryChoice::CreatureType(s) => (FactKind::ChosenSubtype, name_value(s)),
-                EntryChoice::CardName(s) => (FactKind::ChosenName, name_value(s)),
+                EntryChoice::CreatureType(s) => Some((FactKind::ChosenSubtype, name_value(s))),
+                EntryChoice::CardName(s) => default_content_pack()
+                    .catalog_name(s)
+                    .map(|name| (FactKind::ChosenName, name_value(name))),
             };
-            push(object, kind, id, 1);
+            if let Some((kind, id)) = fact {
+                push(object, kind, id, 1);
+            }
         }
         for subtype in &permanent.temp_subtypes {
             push(object, FactKind::AddedSubtype, name_value(subtype), 1);

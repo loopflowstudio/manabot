@@ -208,6 +208,15 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
         };
         assert_eq!(name, &names.get(index).unwrap().name);
         assert_eq!(*remaining, 4);
+        let capture = branch.capture_decision(PlayerId(0), 0).unwrap();
+        let description = capture
+            .frames
+            .iter()
+            .filter_map(|frame| frame.effect_execution_description.as_deref())
+            .find(|text| text.contains("named search:"))
+            .unwrap();
+        assert!(description.contains(&format!("named search: {name} (seat 2, up to 4)")));
+        assert_eq!(description.matches(name).count(), 1);
         let searched = witness(&branch);
         for stale in &path {
             assert!(branch.execute_semantic_command(stale).is_err());
