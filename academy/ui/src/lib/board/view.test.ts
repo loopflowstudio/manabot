@@ -380,7 +380,7 @@ describe('where decisions land', () => {
       expect(item.offers.map(placed => placed.offer.id)).toEqual([0]);
     }
     // Both copies in hand carry the canonical cast offer.
-    expect(view.hand.map(item => [item.card.id, item.offers.map(placed => placed.offer.id)])).toEqual([
+    expect(view.you.hand.map(item => [item.card.id, item.offers.map(placed => placed.offer.id)])).toEqual([
       [601, [1]],
       [602, [1]],
     ]);
