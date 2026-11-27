@@ -1212,7 +1212,12 @@
   const tucked = $derived(yourHand === 'tucked');
   const liveBoardCount = $derived(frame.projection.agent.battlefield.length + frame.projection.opponent.battlefield.length);
   let boardHeight = $state(0);
-  const steadyHandHeight = $derived(Math.max(HAND_SHORT, Math.min(HAND_STEADY, Math.round((boardHeight || 660) * HAND_SHARE))));
+  /**
+   * The least a half needs, px: its ribbon's 46 px peek (`--peek-face`), the rows' padding and gaps, and one line each
+   * of lands and creatures at their smallest cards. On a short board your hand gives up depth before a half clips its rows.
+   */
+  const HALF_FLOOR = 46 + 12 + 4 + ROW_GAP + Math.ceil(SUPPORT.minCard / CARD_RATIO) + Math.ceil(CREATURES.minCard / CARD_RATIO);
+  const steadyHandHeight = $derived(Math.max(HAND_SHORT, Math.min(HAND_STEADY, Math.round((boardHeight || 660) * HAND_SHARE), boardHeight ? boardHeight - 2 * HALF_FLOOR : Infinity)));
   const handHeight = $derived(
     !tucked && liveBoardCount >= 16
       ? handStrip(boardHeight, [

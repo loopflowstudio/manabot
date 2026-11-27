@@ -164,5 +164,7 @@
   @keyframes land { from { transform: translateY(-40%) scale(1.2); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .dealt { animation: none; } }
   .pool.empty { color: var(--text-secondary); }
+  /* A compact plate has no line to spare for an empty pool. */
+  .plate.compact .pool.empty { display: none; }
   .pool-class.own-line { display: block; }
 </style>

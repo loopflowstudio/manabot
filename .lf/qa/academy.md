@@ -109,7 +109,13 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   rects misses the 180 ms travels. Passing every offer against the default
   bot ends a game in seconds, which reaches the result card (**Rematch**,
   **Swap play/draw**, **Deal new decks**) quickly. Review's open-hands count is
-  under Settings → This game (`open-hands-count`).
+  under Settings → This game (`open-hands-count`). Settings is the
+  `game-menu` `<summary>`, not a button named Settings. Watch's Continue/Next
+  is `[data-testid=replay-transport] button[title^="Next position"]`; wait for
+  it to enable between presses (its label flips Continue ↔ Next). The short
+  case is Play at 1280×800 with **Decisions** open (board ≈531 px): check each
+  `[data-testid=player-plate]` has `scrollHeight == clientHeight` and that the
+  opponent's land row is not cut under the top ribbon's peek.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press Deal & Play (the landing's start button;
