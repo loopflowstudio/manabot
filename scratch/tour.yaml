@@ -1,7 +1,9 @@
-at: abfabece9918248a44543daf1ade902a4d42743a
+at: 0d7bb67437103525629e1b2adb21db649fa021e6
 first:
   - path: scratch/plan.md
-    why: Payment reproductions and the remaining exact search
+    why: Payment reproductions and the fork search blocker
+  - path: managym/src/flow/mana/tests.rs
+    why: Damage replacement, activation ownership, and payment regressions
   - path: managym/README.md
     why: Announced fees and live mana outputs
   - path: managym/src/flow/decision.rs
@@ -20,8 +22,6 @@ first:
     why: Board-wide classification of payment writes
   - path: managym/src/flow/play.rs
     why: Cast and activation admission with trailing fees
-  - path: managym/src/flow/mana/tests.rs
-    why: Live and restored payment, pricing, and sacrifice regressions
   - path: managym/cards/tests/cards/ody.rs
     why: Four Heartbeat positions and payment order regressions
   - path: managym/cards/tests/cards/one.rs

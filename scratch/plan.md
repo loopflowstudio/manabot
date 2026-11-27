@@ -10,6 +10,14 @@ The first pass 2 attempt found the counterexample below (`34092c814`, test `tarn
 
 Pass 3 (`abfabece991`) owns the announced mana activation and its priced fee, reads dynamic output at completion, reserves paid taps from the owed cost, classifies Treasure against battlefield reads, and bumps the match-state hash to v35. Twelve focused debug checks passed, including live and snapshot-restored Ogre, Henge repricing, and conditional Treasure.
 
+Pass 4 stopped at a counterexample (`0d7bb6743`, `fixed_mana_suffix_reads_life_through_damage_replacement` in `managym/src/flow/mana/tests.rs`). The focused debug test passed. No forked search was added.
+
+## Pass 4 handoff
+
+The planned split sends this board to the pure solver. At 4 life, The Great Henge gains 2 and Tarnished Citadel deals 3 plus the life gained this turn, through a constructed damage replacement. The announced ability owes `{G}{G}{R}` and then 2 life. The root probes both finish and write only life, reporting independent deltas of +2 and −3. The live game offers Henge first and that action reaches an empty mana decision at 6 life, because Citadel would now deal 5. Citadel first deals 3, Henge gains 2, and the fee pays with 1 life remaining.
+
+The proof of independence must account for reads made by event replacements. The layer read set and the writes observed by one probe can both agree while the delta varies. Review the classification and pure handoff together before resuming pass 4. Start with `mana_suffix_coupling` in `flow/mana.rs` and damage replacement evaluation in `flow/proposed_event.rs`. Pass 5 remains pending. The full debug nextest run and release Engine Budget comparison remain deferred.
+
 ## Why a frozen source list fails
 
 Angel of Vitality is 4/4 at 25 life or more; Raucous Audience makes `{G}{G}` while its controller has a power-4 creature, else `{G}`. Casting Solemn Simulacrum (`{4}`):
@@ -40,7 +48,7 @@ Preserve native action identities, source order, the chooser, individual Heartbe
 
 ## Remaining passes
 
-4. **Coupled regime** (`flow/mana.rs`, `flow/layers.rs`, `flow/statics.rs`). Forked search with pure-finish-first, mutator-only branching, reservation replay, memoization and shortcut deferral; ordinary Forests stay in the pure handoff. Turn the Pass 2 test into expected behavior: at 28 life only Citadel → Audience → Citadel is offered; at 22 life Henge-first is admitted; Canyon at 25 offers Audience first; shield, sacrifice and the Treasure + conditional-mana cases (constructed if needed); 10 Forests + coupled sources checking `{15}` returns quickly in debug.
+4. **Coupled regime, pending realignment** (`flow/mana.rs`, `flow/layers.rs`, `flow/statics.rs`, `flow/proposed_event.rs`). The forked search depends on the classification change in the handoff above. The intended cases are Citadel → Audience → Citadel at 28 life, Henge-first at 22 life, Audience-first with Canyon at 25 life, shield consumption, sacrifice and Treasure with conditional mana, and a quick rejection of `{15}` with 10 Forests and coupled sources in debug.
    - Before handing off to the pure model, account for reads in saved mana outputs as well as reads in the current layer board. An owned output remains in the continuation if its source's grant has ended.
 5. **Colored convoke, collection check and acceptance.** Convoke in the model; the Guardian of Vitu-Ghazi board completes its cast. Restore a pre-activation snapshot into one slot of a two-slot native vector with skipping on; both slots return and match scalar play. Acceptance demo, debug nextest for touched crates, engine budget comparison, and the `managym/README.md` mana-payment section for the built design.
 
