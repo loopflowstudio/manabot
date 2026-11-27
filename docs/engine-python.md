@@ -587,124 +587,65 @@ journaling use the same replay inputs.
 
 ### Counterfactual state edits
 
-Apply typed `GameStateEdit` changes at a live decision to ask "what if this
-blocker were gone, this land were tapped, or life were lower?" without
-rebuilding the game from scratch. Turn, phase, stack, mana pools, summoning
-sickness, every untouched permanent, the 32-row policy-history window, decision
-memory and replay provenance stay intact, and the current decision's legal
-actions and observation refresh for the edited board.
+At a `Priority`, `DeclareAttacker`, or `DeclareBlocker` decision, apply a batch
+of `GameStateEdit` values to compare choices on a different board. Use the
+observed `Permanent.id` for a permanent and `permanent.characteristics.name`
+for its effective name. For a player, use the native seat index from
+`obs.agent.player_index` or `obs.opponent.player_index`.
 
 ```python
 import managym
 
-# Starting from a live Env at a Priority, DeclareAttacker or DeclareBlocker
-# decision with `obs = game.observation_for_player(game.current_agent_index())`:
 blocker = next(
     p for p in obs.opponent_permanents if p.characteristics.name == "Gray Ogre"
 )
-land = next(
-    p for p in obs.agent_permanents if p.characteristics.name == "Mountain"
-)
-
-# 1. Quick probe on a clone: leaves `game` untouched, freezes memory capture,
-#    and returns the refreshed Observation directly.
-what_if = game.clone_env()
-edited_obs = what_if.edit_game_state([
+edits = [
     managym.GameStateEdit.move_permanent(blocker.id, to="library_bottom"),
-])
-print(len(obs.action_space.actions), "->", len(edited_obs.action_space.actions))
-assert what_if.state_digest() != game.state_digest()
+    managym.GameStateEdit.set_life(obs.opponent.player_index, 5),
+]
 
-# 2. Replayable fork from a snapshot: preserves memory capture and composes
-#    with RestoreOptions modes and VectorEnv SlotLoad.snapshot.
-snap = game.snapshot()
-branch = snap.restore(
-    managym.RestoreOptions.exact(
-        game_state_edits=[
-            managym.GameStateEdit.set_tapped(land.id, True),
-            managym.GameStateEdit.set_life(obs.opponent.player_index, 5),
-        ]
-    )
-)
-replay_json = branch.snapshot().to_replay_json()
-reopened = managym.GameSnapshot.from_replay_json(replay_json).restore()
-assert reopened.state_digest() == branch.state_digest()
+# Probe a live decision. The clone retains decision memory and freezes capture.
+probe = game.clone_env()
+edited_obs = probe.edit_game_state(edits)
+
+# Fork the same decision with its original memory capture setting.
+options = managym.RestoreOptions.exact(game_state_edits=edits)
+branch = game.snapshot().restore(options)
+replay = branch.snapshot().to_replay_json()
+assert managym.GameSnapshot.from_replay_json(replay).state_digest == branch.state_digest()
 ```
-
-Both doors run the same atomic intervention path:
-
-- `env.edit_game_state(edits) -> Observation` validates the whole batch, applies
-  each edit in order, journals one `"game_state_edits"` intervention and
-  returns the refreshed decision observation. Clone first with `env.clone_env()`
-  when comparing against the unedited position. An empty batch returns the
-  current observation at a supported decision and leaves its revision and
-  journal intact.
-- `RestoreOptions.exact/shuffle_libraries/determinize(..., game_state_edits=edits)`
-  applies the edits **before** the restore mode, so `determinize` conditions on
-  the edited board and `SlotLoad.snapshot` can load edited branches into a
-  `VectorEnv`. Non-empty `game_state_edits` cannot be combined with
-  `forced_first_action`, because editing the board can change the legal action
-  list.
 
 | Constructor | Effect |
 |---|---|
-| `GameStateEdit.move_permanent(permanent, to="graveyard")` | Moves a battlefield permanent to its owner's `"graveyard"`, `"exile"` or `"library_bottom"` without firing rules events or leaves-battlefield triggers. Physical cards are conserved (a melded permanent moves both cards together); tokens cease to exist. Cards exiled by an exile-link on the moved permanent stay exiled and the dead link is dropped. `"library_bottom"` pins the card at the bottom of its owner's library so a subsequent `shuffle_libraries` leaves it pinned there. |
-| `GameStateEdit.set_tapped(permanent, tapped)` | Sets the permanent's tapped flag directly, without spending stun counters or firing tap/untap triggers. |
-| `GameStateEdit.set_damage(permanent, damage)` | Sets marked damage on the permanent (`damage >= 0`; `0` also clears the deathtouch-damage mark). Leaves `dealt_damage_this_turn` untouched. |
-| `GameStateEdit.set_counters(permanent, kind, count)` | Sets one counter kind (`count >= 0`; `0` removes it) through tracked state, updating keyword-counter timestamps and layer revisions. |
-| `GameStateEdit.set_life(player, life)` | Sets native seat `0` or `1` life directly without changing turn damage or life-change history. |
+| `move_permanent(permanent, to="graveyard")` | Moves a card to its owner's `"graveyard"`, `"exile"`, or `"library_bottom"`. A melded permanent moves both cards. Tokens cease to exist. Cards exiled until the permanent leaves stay in exile. A bottom placement stays pinned through `shuffle_libraries`. |
+| `set_tapped(permanent, tapped)` | Sets tap state directly, bypassing stun counters and tap or untap triggers. |
+| `set_damage(permanent, damage)` | Sets nonnegative marked damage. Zero also clears the deathtouch mark. `dealt_damage_this_turn` keeps its value. |
+| `set_counters(permanent, kind, count)` | Sets a nonnegative count of one named kind, updating keyword-counter timestamps. Zero removes that kind. Use `"plus_one_plus_one"` for the count exposed as `Permanent.plus1_counters`. Other counter names appear in `Permanent.counters`. |
+| `set_life(player, life)` | Sets life for native seat 0 or 1, preserving turn history. |
 
-Identifiers match the native observation contract:
+A successful non-empty batch applies in order and journals one
+`"game_state_edits"` intervention at the current action offset. The engine
+publishes the same decision with refreshed legal actions. Commands bound to the
+previous revision become stale. Opening hands, pending choices, suspended
+decisions and finished games cannot be edited. An empty live batch at a
+supported decision returns its observation and preserves the revision.
 
-- `permanent` is the observed `Permanent.id` from `obs.agent_permanents` or
-  `obs.opponent_permanents`. Look up printed/effective names via
-  `permanent.characteristics.name` (`permanent.name` is `None` unless an effect
-  overrode it).
-- `kind` is the engine's counter name (`"plus_one_plus_one"`,
-  `"minus_one_minus_one"`, `"stun"`, `"loyalty"`, `"lore"`, `"double_strike"`,
-  `"trample"`, and other `CounterKind` names). Note that on `Permanent`, `+1/+1`
-  counters are exposed as `permanent.plus1_counters` rather than in
-  `permanent.counters`, while `set_counters` always names them
-  `"plus_one_plus_one"`.
-- `player` is the native seat index (`0` or `1`, matching
-  `obs.agent.player_index` and `obs.opponent.player_index`), not relative to
-  the current viewer.
+Edits preserve turn, stack, mana, decision memory and the 32-row policy-history
+window. A moved permanent's history rows lose their live object links. Quiet
+moves produce no departure or arrival events. State-based actions, including
+lethal damage and unattached Auras, wait until the next ordinary check.
 
-What stays unchanged and when edits apply:
+During declarations, newly eligible creatures join the remaining prompts.
+The current declarer must stay eligible and retain a legal action. An invalid
+batch raises `managym.AgentError` and preserves the original state and journal.
+This includes a phased-out or unknown permanent, a second edit to a permanent
+already moved in the batch, and an unknown destination or counter kind.
 
-- **Supported decision boundaries:** `Priority`, `DeclareAttacker`, and
-  `DeclareBlocker`, outside opening/mulligan steps and with no pending choice
-  or suspended target/modal/payment decision.
-- **Declare-step eligibility:** At `DeclareAttacker` and `DeclareBlocker`,
-  newly eligible unprompted creatures (such as a blocker you just untapped)
-  join the remaining declarers for that step. If the batch leaves the focal
-  declarer ineligible or leaves no legal actions, the call rolls back and
-  raises `AgentError`.
-- **Policy history and memory:** Moving a permanent expires live object links
-  to it in `policy_history` without evicting rows or appending a synthetic
-  arrival; tap, damage, counter and life edits leave history untouched.
-  Decision memory keeps its existing prefix (`clone_env()` freezes capture;
-  `snapshot.restore()` preserves it unless `enable_decision_memory=False`).
-- **State-based actions wait:** Edits do not run state-based checks immediately.
-  Lethal marked damage, `0` life, or an unattached Aura remains on the board
-  until the game's next state-based check after the next action.
-- **Errors are atomic:** Any invalid batch raises `managym.AgentError` and
-  leaves both `Env` and its replay provenance unchanged. Rejected cases include
-  calling before `reset`, on a finished game, or at an unsupported/suspended
-  decision; unknown or phased-out `permanent`; moving a permanent twice or
-  editing it after moving it in the same batch; unknown `to` or counter `kind`;
-  negative `damage` or `count`; `player` outside `{0, 1}`; a declare-step edit
-  that invalidates the focal declarer or empties the action space; and
-  combining non-empty edits with `forced_first_action`.
-
-Every edited branch is replayable. `snapshot.to_replay_json()` journals the
-ordered `"game_state_edits"` intervention at the current action offset;
-`GameSnapshot.from_replay_json`, `read_record`, `walk`, and
-`managym academy replay` re-apply the edits and verify the state digest.
-Semantic `Command`s captured before the edit are rejected as stale against the
-refreshed decision frame. In Academy Replay, the move list labels the branch
-**Branch · game state edited**. Unlike the unrecorded test-only `scenario_*`
-helpers, `GameStateEdit` keeps cards conserved and replays verifiable.
+Snapshot restore applies edits before reseeding, shuffling or determinizing.
+`SlotLoad.snapshot` accepts the same options for a vector slot. A non-empty
+batch excludes `forced_first_action` because the action indices can change.
+Cold replay and `walk` reapply journaled edits. Academy Replay labels the
+decision **Branch · game state edited**.
 
 ## Ask questions of recorded games
 

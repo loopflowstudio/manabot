@@ -33,6 +33,7 @@ Headless realign took the review's recommendations; each binds replay digests, s
 - A bottom move keeps existing library facts. For a face-down card the owner receives a printing fact only if they could inspect the permanent. For a melded permanent the second component is bottommost.
 - An empty live batch returns the current observation at a supported decision without republishing or journaling. An empty restore batch is equivalent to omitting it.
 - A declared blocker has used its declaration even when an edit moves its attacker away. Retain that fact through later edits in the same step. Determinization may replace a known bottom card with another physical copy of the same printing, as it does for existing library facts.
+- Combat declarations use the first offer to identify the creature and rules player. This relies on each published declaration asking one creature to answer, including when another seat controls the decision.
 
 ## Open / deferred (for follow-up Tasks)
 

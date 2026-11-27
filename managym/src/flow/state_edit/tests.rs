@@ -218,6 +218,29 @@ fn library_bottom_keeps_existing_knowledge_and_pins_the_card() {
 }
 
 #[test]
+fn bottoming_a_melded_permanent_places_both_physical_cards() {
+    let mut game = game();
+    let first = put_on_board(&mut game, HERO, "Gray Ogre");
+    let object = game.permanent_object(first).unwrap();
+    let primary = game.state.card_of(object).unwrap();
+    let partner = game.state.zones.top(ZoneType::Library, HERO).unwrap();
+    let second = game.state.card_of(partner).unwrap();
+    game.move_object(partner, ZoneType::Exile);
+    game.state.zones.join_melded_card(object, second);
+
+    game.apply_game_state_edits(&[MovePermanent {
+        permanent: observed_id(&game, first),
+        to: LibraryBottom,
+    }])
+    .unwrap();
+
+    let library = game.state.zones.zone_objects(ZoneType::Library, HERO);
+    assert_eq!(game.state.card_of(library[0]), Some(second));
+    assert_eq!(game.state.card_of(library[1]), Some(primary));
+    assert!(game.state.zones.melded_card(object).is_none());
+}
+
+#[test]
 fn scalar_edits_preserve_turn_facts_and_validate_the_entire_batch() {
     let mut game = game();
     let ogre = put_on_board(&mut game, HERO, "Gray Ogre");

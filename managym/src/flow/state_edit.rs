@@ -6,10 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     agent::{
-        action::{Action, ActionSpaceKind, AgentError},
+        action::{ActionSpaceKind, AgentError},
         policy_history,
     },
-    flow::{game::Game, trigger::DelayedTriggerEvent},
+    flow::{combat::DeclarationKind, game::Game, trigger::DelayedTriggerEvent},
     state::{
         card::CardDefId,
         game_object::{ObjectId, PermanentId, PlayerId},
@@ -72,87 +72,75 @@ impl Game {
         let space = self
             .action_space()
             .ok_or_else(|| AgentError("game state edits require a live decision".into()))?;
-        match (space.kind, space.actions.first()) {
-            (ActionSpaceKind::Priority, Some(action)) => {
-                let player = action.player();
-                if !edits.is_empty() {
-                    self.apply_game_state_edits(edits)?;
-                    self.refresh_control();
-                    self.refresh_priority_actions(player);
-                }
-                Ok(())
-            }
-            (
-                ActionSpaceKind::DeclareAttacker,
-                Some(&Action::DeclareAttacker {
-                    player, permanent, ..
-                }),
-            ) => self.edit_declaration(edits, player, permanent, true),
-            (
-                ActionSpaceKind::DeclareBlocker,
-                Some(&Action::DeclareBlocker {
-                    player, blocker, ..
-                }),
-            ) => self.edit_declaration(edits, player, blocker, false),
-            _ => Err(AgentError(
+        let declaration = space.declarer();
+        if space.actions.is_empty()
+            || (declaration.is_none() && space.kind != ActionSpaceKind::Priority)
+        {
+            return Err(AgentError(
                 "game state edits require Priority, DeclareAttacker or DeclareBlocker".into(),
-            )),
+            ));
         }
-    }
-
-    fn edit_declaration(
-        &mut self,
-        edits: &[GameStateEdit],
-        player: PlayerId,
-        focal: PermanentId,
-        attacking: bool,
-    ) -> Result<(), AgentError> {
         if edits.is_empty() {
             return Ok(());
         }
-        let rollback = self.rollback_snapshot();
-        let completed_before = self
-            .state
-            .combat
-            .as_ref()
-            .expect("published declaration has combat")
-            .completed_declarers(attacking);
-        self.apply_game_state_edits(edits)?;
-        self.refresh_control();
-        let mut eligible = if attacking {
-            self.eligible_attackers(player)
+        if let Some((role, player, focal)) = declaration {
+            // Mandatory blocks and eligibility depend on the edited layers.
+            // Commit only once the original creature still has a legal offer.
+            let mut edited = self.rollback_snapshot();
+            edited.apply_game_state_edits(edits)?;
+            let completed = self
+                .state
+                .combat
+                .as_ref()
+                .expect("declaration has combat")
+                .completed_declarers(role);
+            edited.refresh_declaration(role, player, focal, completed)?;
+            *self = edited;
         } else {
-            self.eligible_blockers(player)
+            let player = space.actions[0].player();
+            self.apply_game_state_edits(edits)?;
+            self.refresh_priority_actions(player);
+        }
+        Ok(())
+    }
+
+    fn refresh_declaration(
+        &mut self,
+        role: DeclarationKind,
+        player: PlayerId,
+        focal: PermanentId,
+        mut completed_before: BTreeSet<PermanentId>,
+    ) -> Result<(), AgentError> {
+        let mut eligible = match role {
+            DeclarationKind::Attackers => self.eligible_attackers(player),
+            DeclarationKind::Blockers => self.eligible_blockers(player),
         };
         if !eligible.contains(&focal) {
-            *self = rollback;
             return Err(AgentError(
                 "game state edits made the current declarer ineligible".into(),
             ));
         }
         let combat = self.state.combat.as_ref().expect("declaration has combat");
-        let completed = combat.completed_declarers(attacking);
-        let mut detached = combat.detached_declarers.clone();
+        let completed = combat.completed_declarers(role);
         // A blocker has still answered even if its attacker left combat.
-        detached.extend(
-            completed_before
-                .difference(&completed)
-                .copied()
-                .filter(|&id| self.permanent_object(id).is_some()),
-        );
-        eligible.retain(|id| *id != focal && !completed.contains(id) && !detached.contains(id));
-
+        completed_before
+            .retain(|id| !completed.contains(id) && self.permanent_object(*id).is_some());
         let combat = self.state.combat.as_mut().expect("declaration has combat");
-        combat.detached_declarers = detached;
-        let space = if attacking {
-            combat.attackers_to_declare = eligible;
-            self.declare_attacker_action_space(player, focal)
-        } else {
-            combat.blockers_to_declare = eligible;
-            self.declare_blocker_action_space(player, focal)
+        combat.detached_declarers.extend(completed_before);
+        eligible.retain(|id| {
+            *id != focal && !completed.contains(id) && !combat.detached_declarers.contains(id)
+        });
+        let space = match role {
+            DeclarationKind::Attackers => {
+                combat.attackers_to_declare = eligible;
+                self.declare_attacker_action_space(player, focal)
+            }
+            DeclarationKind::Blockers => {
+                combat.blockers_to_declare = eligible;
+                self.declare_blocker_action_space(player, focal)
+            }
         };
         if space.actions.is_empty() {
-            *self = rollback;
             return Err(AgentError(
                 "game state edits left the current declaration without legal actions".into(),
             ));
@@ -161,12 +149,8 @@ impl Game {
         Ok(())
     }
 
-    /// Apply the state portion of an edit batch. The caller owns refreshing
-    /// the decision and rolling back if a declare step loses its focal choice.
-    pub(crate) fn apply_game_state_edits(
-        &mut self,
-        edits: &[GameStateEdit],
-    ) -> Result<(), AgentError> {
+    /// Resolve every target before writing, then refresh control for the whole batch.
+    fn apply_game_state_edits(&mut self, edits: &[GameStateEdit]) -> Result<(), AgentError> {
         let permanents = self.validate_game_state_edits(edits)?;
         for &edit in edits {
             match edit {
@@ -200,6 +184,7 @@ impl Game {
             }
         }
         self.assert_stack_consistent();
+        self.refresh_control();
         Ok(())
     }
 
@@ -271,7 +256,7 @@ impl Game {
             .snapshot_current_permanent(object)
             .expect("live permanent");
         let alias = lki.presentation_id;
-        let definition = lki.definition_id;
+        let shown = lki.definition_id.catalog_id();
         let row = &self.state[object];
         let id = row.id;
         let physical_card = row.is_card();
@@ -281,12 +266,7 @@ impl Game {
         if let Some(combat) = self.state.combat.as_mut() {
             combat.remove_defender(object);
         }
-        let partner = self
-            .state
-            .zones
-            .melded_card(object)
-            .and_then(|_| self.state.zones.separate_melded_card(object));
-        self.retire_permanent(lki, partner);
+        let partner = self.retire_permanent(lki);
         self.end_effects_on(object);
         self.state.delayed_triggers_mut().retain(|trigger| {
             !matches!(trigger.event, DelayedTriggerEvent::Leaves { watched, .. } if watched == object)
@@ -295,7 +275,7 @@ impl Game {
         policy_history::expire_links(self, id, Some(alias));
 
         if physical_card {
-            self.place_edited_card(object, to, definition.catalog_id(), owner_knows_card);
+            self.place_edited_card(object, to, shown, owner_knows_card);
             if let Some(partner) = partner {
                 self.place_edited_card(partner, to, None, true);
             }

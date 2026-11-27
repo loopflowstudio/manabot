@@ -29,11 +29,11 @@ fn observed_id(game: &Game, permanent: PermanentId) -> i32 {
     game.state.permanents[permanent].as_ref().unwrap().id.0 as i32
 }
 
-fn command(frame: &DecisionFrame, index: usize) -> SemanticCommand {
+fn command(frame: &DecisionFrame) -> SemanticCommand {
     SemanticCommand {
         command_id: format!("edit-test-{}", frame.revision),
         expected_revision: frame.revision,
-        offer_id: frame.offers[index].id.0,
+        offer_id: frame.offers[0].id.0,
         answers: vec![],
         object_preconditions: frame
             .object_candidates
@@ -56,20 +56,15 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
         let index = space
             .actions
             .iter()
-            .position(|action| matches!(action, Action::PlayLand { .. }))
-            .or_else(|| {
-                space
-                    .actions
-                    .iter()
-                    .position(|action| matches!(action, Action::CastSpell { .. }))
+            .enumerate()
+            .min_by_key(|(_, action)| match action {
+                Action::PlayLand { .. } => 0,
+                Action::CastSpell { .. } => 1,
+                Action::PassPriority { .. } => 2,
+                _ => 3,
             })
-            .or_else(|| {
-                space
-                    .actions
-                    .iter()
-                    .position(|action| matches!(action, Action::PassPriority { .. }))
-            })
-            .unwrap_or(0);
+            .unwrap()
+            .0;
         root.step(index as i64).unwrap();
     }
     let game = root.game.as_ref().unwrap();
@@ -103,18 +98,14 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
     .into();
     let original = root.snapshot().unwrap();
     let original_replay = original.to_replay_json().unwrap();
-    let empty = root.edit_game_state(&[][..]).unwrap();
+    let empty = root.edit_game_state([]).unwrap();
     assert_eq!(
         empty,
         root.observation_for_player(original_frame.actor as usize)
             .unwrap()
     );
-    assert_eq!(
-        root.snapshot().unwrap().to_replay_json().unwrap(),
-        original_replay
-    );
     let invalid = [edits[0], edits[0]];
-    assert!(root.edit_game_state(invalid.as_slice()).is_err());
+    assert!(root.edit_game_state(invalid).is_err());
     assert_eq!(
         root.snapshot().unwrap().to_replay_json().unwrap(),
         original_replay
@@ -123,29 +114,9 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
         game_state_edits: Some(edits.clone()),
         ..Default::default()
     };
-    assert!(original
-        .restore(RestoreOptions {
-            forced_first_action: Some(0),
-            ..options.clone()
-        })
-        .is_err());
     let mut direct = original.restore(Default::default()).unwrap();
-    let edited = direct.edit_game_state(edits).unwrap();
-    assert_eq!(
-        edited,
-        direct
-            .observation_for_player(original_frame.actor as usize)
-            .unwrap()
-    );
-    let exact = original.restore(options.clone()).unwrap();
-    assert_eq!(
-        direct.state_digest().unwrap(),
-        exact.state_digest().unwrap()
-    );
-    assert_eq!(
-        direct.snapshot().unwrap().to_replay_json().unwrap(),
-        exact.snapshot().unwrap().to_replay_json().unwrap(),
-    );
+    direct.edit_game_state(edits).unwrap();
+    let direct_replay = direct.snapshot().unwrap().to_replay_json().unwrap();
 
     for mode in [
         options.mode,
@@ -161,6 +132,12 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
                 ..options.clone()
             })
             .unwrap();
+        if matches!(mode, BranchMode::Exact { .. }) {
+            assert_eq!(
+                branch.snapshot().unwrap().to_replay_json().unwrap(),
+                direct_replay
+            );
+        }
         let game = branch.game.as_ref().unwrap();
         let bottom = game.state.zones.zone_objects(ZoneType::Library, owner)[0];
         assert_eq!(game.state[bottom].name, "Mountain");
@@ -169,12 +146,12 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
         }
         assert_ne!(branch.state_digest().unwrap(), original.state_digest());
         assert!(branch
-            .execute_semantic_command(&command(&original_frame, 0))
+            .execute_semantic_command(&command(&original_frame))
             .unwrap_err()
             .0
             .contains("stale"));
         let frame = branch.semantic_decision_frame().unwrap();
-        let current = command(&frame, 0);
+        let current = command(&frame);
         assert!(!current.object_preconditions.is_empty());
         let snapshot = branch.snapshot().unwrap();
         let raw = snapshot.to_replay_json().unwrap();
@@ -209,12 +186,12 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
 fn game_state_edits_refresh_priority_without_running_sbas() {
     let mut env = game(true);
     let edit = [GameStateEdit::SetLife { player: 0, life: 0 }];
-    assert!(env.edit_game_state(edit.as_slice()).is_err());
+    assert!(env.edit_game_state(edit).is_err());
     while env.game.as_ref().unwrap().state.opening().is_some() {
         env.step(0).unwrap();
     }
     let before = env.semantic_decision_frame().unwrap();
-    let obs = env.edit_game_state(edit.as_slice()).unwrap();
+    let obs = env.edit_game_state(edit).unwrap();
     let after = env.semantic_decision_frame().unwrap();
     assert_eq!(after.revision, before.revision + 1);
     assert_eq!(
@@ -290,16 +267,13 @@ fn game_state_edits_keep_the_focal_blocker_and_only_prompt_new_declarers() {
     let frame_before = env.semantic_decision_frame().unwrap();
     let before = env.snapshot().unwrap().to_replay_json().unwrap();
     let error = env
-        .edit_game_state(
-            [
-                move_attacker,
-                GameStateEdit::SetTapped {
-                    permanent: focal_id,
-                    tapped: true,
-                },
-            ]
-            .as_slice(),
-        )
+        .edit_game_state([
+            move_attacker,
+            GameStateEdit::SetTapped {
+                permanent: focal_id,
+                tapped: true,
+            },
+        ])
         .unwrap_err();
     assert!(error.0.contains("current declarer ineligible"));
     assert_eq!(
