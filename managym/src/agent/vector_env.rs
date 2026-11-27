@@ -1797,6 +1797,134 @@ mod tests {
     }
 
     #[test]
+    fn restored_manual_mana_payment_matches_scalar_while_sibling_advances() {
+        use crate::agent::action::Action;
+
+        let seed = 7;
+        let configs = vec![
+            PlayerConfig::new(
+                "payer",
+                BTreeMap::from([
+                    ("Island".into(), 36),
+                    ("Sokka, Bold Boomeranger".into(), 1),
+                    ("Tarnished Citadel".into(), 1),
+                    ("Airship Engine Room".into(), 1),
+                    ("Heartbeat of Spring".into(), 1),
+                ]),
+            ),
+            PlayerConfig::new("opponent", BTreeMap::from([("Forest".into(), 40)])),
+        ];
+        let mut payer = Env::new(seed, true, false, false);
+        payer.reset(configs.clone()).unwrap();
+        let game = payer.fixture_game_mut();
+        game.keep_opening_hands();
+        let player = game.active_player();
+        assert_eq!(player, PlayerId(0));
+        game.scenario_clear_hand(player);
+        game.scenario_force_card_in_hand(player, "Sokka, Bold Boomeranger")
+            .unwrap();
+        let citadel = game
+            .scenario_force_battlefield(player, "Tarnished Citadel", true)
+            .unwrap();
+        for card in ["Airship Engine Room", "Heartbeat of Spring"] {
+            game.scenario_force_battlefield(player, card, true).unwrap();
+        }
+        game.scenario_set_life(player, 2);
+        game.scenario_refresh_priority().unwrap();
+        let cast = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::CastSpell { .. }))
+            .expect("Sokka is castable with the two lands");
+        let (_, _, done, _, _) = payer.step(cast as i64).unwrap();
+        assert!(!done);
+
+        let mut vector = VectorEnv::new(2, seed, true, [PlayerPolicy::Agent; 2]);
+        vector.reset_all(configs.clone()).unwrap();
+        let mut sibling = Env::new(seed + 1, true, false, false);
+        sibling.reset(configs).unwrap();
+        vector
+            .load_slots_into(
+                &[SlotLoad::Snapshot(
+                    0,
+                    payer.snapshot().unwrap().into(),
+                    Default::default(),
+                )],
+                |_, _| Ok(()),
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+        assert_eq!(
+            vector.state_digests(None).unwrap(),
+            [
+                Some(payer.state_digest().unwrap()),
+                Some(sibling.state_digest().unwrap())
+            ]
+        );
+
+        for action in [
+            Action::ActivateAbility {
+                player,
+                permanent: citadel,
+                ability_index: 0,
+            },
+            Action::ChooseMode { player, mode: 1 }, // Produce blue.
+        ] {
+            let index = payer
+                .fixture_game_mut()
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|offer| *offer == action)
+                .unwrap_or_else(|| panic!("missing payment action: {action:?}"));
+            let actions = [index as i64, 0];
+            let rows = RefCell::new(Vec::new());
+            let info = vector
+                .step_isolated_into(
+                    &actions,
+                    &[true; 2],
+                    false,
+                    |slot, obs, reward, done, truncated| {
+                        rows.borrow_mut()
+                            .push((slot, obs.to_json(), reward, done, truncated));
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            assert!(info.iter().all(|info| !info.contains_key("game_error")));
+            let (obs, reward, done, truncated, _) = payer.step(actions[0]).unwrap();
+            let (next, next_reward, next_done, next_truncated, _) =
+                sibling.step(actions[1]).unwrap();
+            assert_eq!(
+                rows.into_inner(),
+                [
+                    (0, obs.to_json(), reward, done, truncated),
+                    (1, next.to_json(), next_reward, next_done, next_truncated),
+                ]
+            );
+            assert_eq!(
+                vector.state_digests(None).unwrap(),
+                [
+                    Some(payer.state_digest().unwrap()),
+                    Some(sibling.state_digest().unwrap())
+                ]
+            );
+            assert_eq!(obs.agent.life, -1);
+            if matches!(action, Action::ActivateAbility { .. }) {
+                assert!(!done);
+                assert_eq!(obs.action_space.actions.len(), 2); // Blue or red.
+            } else {
+                assert!(done);
+                assert_eq!(obs.stack_objects.len(), 1);
+                assert_eq!(payer.winner_index(), Some(1));
+            }
+        }
+    }
+
+    #[test]
     fn isolated_failure_preserves_successful_streams_and_seed_stride() {
         let mut vector = VectorEnv::new(3, 7, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(sample_player_configs()).unwrap();
