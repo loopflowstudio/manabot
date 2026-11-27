@@ -187,6 +187,14 @@ def main() -> None:
     parser.add_argument("--updates", type=int, default=3)
     parser.add_argument("--seed", type=int, default=25201)
     parser.add_argument("--max-facts", type=int)
+    parser.add_argument("--pretrained", type=Path, help="warm-start policy path")
+    parser.add_argument(
+        "--batch-closure",
+        choices=("complete-games", "exact-quota"),
+        help="override SelfPlay.batch_closure",
+    )
+    parser.add_argument("--transitions", type=int, help="override SelfPlay.transitions")
+    parser.add_argument("--workers", type=int, help="override SelfPlay.workers")
     parser.add_argument("--json", type=Path, help="write update rows and summary")
     parser.add_argument("--cuda-counts", type=Path, help="write CUDA launch counts")
     args = parser.parse_args()
@@ -195,6 +203,19 @@ def main() -> None:
     values.update(streams=args.streams, device=args.device)
     if args.max_facts is not None:
         values["observation"]["max_facts"] = args.max_facts
+    if args.pretrained is not None:
+        values["pretrained"] = str(args.pretrained.resolve())
+    if args.batch_closure is not None:
+        values["batch_closure"] = args.batch_closure
+        if (
+            args.batch_closure == "exact-quota"
+            and values.get("game_errors") is not None
+        ):
+            values["game_errors"]["recover_capacity"] = True
+    if args.transitions is not None:
+        values["transitions"] = args.transitions
+    if args.workers is not None:
+        values["workers"] = args.workers
     settings = SelfPlay.model_validate(values)
     result = measure(
         settings, seed=args.seed, updates=args.updates, cuda_counts=args.cuda_counts
