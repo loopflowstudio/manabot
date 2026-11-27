@@ -38,6 +38,7 @@ from experiments import (
     belief,
     elemental,
     h100_throughput,
+    l4_ceiling,
     llm_claude,
     mana_taps,
     opponent_memory,
@@ -88,6 +89,16 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         },
     ),
     (
+        l4_ceiling,
+        (),
+        {
+            "w384l8": 1,
+            "w512l8": 1,
+            "w512l12": 1,
+            "w768l8": 1,
+        },
+    ),
+    (
         tla_trophies_floor,
         (),
         {
@@ -125,6 +136,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "elemental",
         "etude_execution",
         "h100_throughput",
+        "l4_ceiling",
         "mana_taps",
         "opponent_memory",
         "seat_comparison",
