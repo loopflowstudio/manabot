@@ -1,22 +1,25 @@
-at: 8a62e56fa19d9c3db468c4c86ffc7c9c90bb7620
+at: bb911a15019f6db9d4ebc6e6aa9018f375d1b479
 first:
   - path: docs/evaluation.md
-    why: Managed callbacks, device selection and precision contracts
+    why: Managed callbacks, runtime targets and per-slot budgets
   - path: experiments/reports/eval_throughput.md
-    why: L4 and Apple throughput, transport receipts and replay parity
+    why: Throughput and replay receipts across CUDA and Apple Silicon
   - path: experiments/tla_trophies.py
-    why: Managed streaming declaration for held-out trophy deals
+    why: One precision declaration for agents, environment and deals
   - path: manabot/eval/agents.py
-    why: Prepared inputs, seeded sampling and async scalar forwards
+    why: Verified metadata, async sampling and the scalar adapter
   - path: manabot/eval/vector.py
-    why: Batched rounds, slot backfill and isolated checkpoint failures
-  - path: manabot/eval/match.py
-    why: Shared replay and retention for both runners
+    why: Checkpoint batching, round charges and slot backfill
+  - path: managym/recording.py
+    why: Detaching settled games before slot reuse
+  - path: managym/src/agent/vector_env/slots.rs
+    why: Explicit deals preserve the automatic seed sequence
+  - path: manabot/eval/evaluation.py
+    why: Attempt retention shared by scalar and vector play
   - path: manabot/eval/agent_loader.py
-    why: Framework and precision selection at the loading boundary
-  - path: manabot/policy/batching.py
-    why: Joining prepared rows with decision memory
+    why: Framework selection and fixed-weight inference
   - path: tests/eval/test_vector_eval.py
-    why: Replay parity, timing budgets and forward failure isolation
-  - path: tests/eval/test_etude_agents.py
-    why: Device fallback and precision coverage
+    why: Replay parity, checkpoint grouping, budgets and queue bounds
+hide:
+  - path: tests/public_api.json
+    why: Generated snapshot of the optional vector constructor argument

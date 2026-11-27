@@ -69,3 +69,15 @@ by checkpoint), 5a (one `MANABOT_EVAL_DEVICE` runtime-target knob), 6a
 (per-active-slot round charge), 4a (transport deferred). Open and not taken:
 Q1 (live viewer frames vs compact replay-verified annotations) changes
 stored traces; the runner keeps live frames until someone chooses.
+
+Pass 6 implementation choices (2026-11-27):
+
+- Cache metadata by local artifact path, SHA256 and size for the vector run,
+  using Etude's immutable artifact contract. Up to twice the slot count of
+  checkpoint entries are cached. The deferred layout queue holds up to the
+  slot count of matches.
+- Apply memory ablation to individual native row coordinates before their
+  checkpoint's one batch, including when both seats use the same weights.
+- Store precision in every new trophy environment config. This gives a new
+  environment identity even for float32. The default float32 deal keeps its
+  existing seating key, and paired game seeds stay stable across precisions.

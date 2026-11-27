@@ -25,8 +25,10 @@ the Etude binding and its deployment are evaluated separately.
 
 ## Upstream state (checked 2026-11-27)
 
-- Installed and PyPI `etude-sdk` is still `0.4.7`: `EvalRun` has only
-  synchronous `play`.
+- The dependency pin and latest published [etude-sdk on PyPI](https://pypi.org/project/etude-sdk/)
+  are `0.4.7` (verified 2026-11-27). That release has only synchronous
+  `EvalRun.play`. The pass 6 checks used the editable 6db832 checkout at
+  `154b8db`.
 - Etude EXP-77 (`~/src/etude.exp-77-saturate-the-gpu`) committed `play_many`
   (`2469c00`) and merged `main` at `c5923cf` (clean tree, unreleased). Its
   `docs/evaluation.md` states the contract: `EvalJob(play=...)` xor
@@ -69,7 +71,7 @@ the Etude binding and its deployment are evaluated separately.
 - **Native & vector runner (`managym/`, `manabot/eval/vector.py`,
   `manabot/eval/pairing.py`, `manabot/eval/match.py`,
   `manabot/sim/native_game.py`):** seeded `SlotLoad.fresh(..., seed=)`,
-  `RecordedVectorEnv.record_in_memory`/`slot_record`, shared per-leg setup
+  `RecordedVectorEnv.record_in_memory`/`take_slot_record`, shared per-leg setup
   (`resolve_game_match`, `game_runtime_identities`, `arena_source_sha256`,
   `set_execution_limits`), shared pairing admission/finalization, and Torch-free
   async `play_pairings` stepping up to `slots` legs on v11 CSR
@@ -95,7 +97,8 @@ the Etude binding and its deployment are evaluated separately.
 - **Vector runner:** TLA trophies adapt Etude's `Matches` to
   `play_pairings`, which passes `rows=prepared.batch` to the awaited forward
   and isolates `ForwardError` to held matches drawing on that checkpoint.
-  The per-slot budget advances with live decision rounds.
+  Each decision round divides its elapsed time among live slots. The game
+  limit and recorded execution time use the same charge.
 
 ## Review record
 
@@ -103,36 +106,14 @@ The superseded 4-leg review (F1–F6 of the earlier page) is fully settled in
 passes 1–3. `scratch/concept-review.html` was rewritten at `c1df3f02c2`
 (after pass 5); every claim below was checked against the code. Placement:
 
-- **Async seat (review F2, Q3) -> pass 6.** `agents.py:43` types
-  `Sampler.forward: Forward | ModelForward`; `choose()` casts to the sync form
-  (`agents.py:81`), so an Etude-built `Sampler` fails there; `play_scalar`
-  swaps `.forward` through `blocking`; `vector.py:827` groups batches by
-  `id(agent.forward)`. Adopted 3a, made for review: `Sampler` holds only the
-  async `Forward` plus `checkpoint_key`, one sync adapter serves
-  `play_scalar`, vector groups by `checkpoint_key` and reuses the
-  `Sampler`'s prepare/sample. Passed over 3b (key only) because the union stays.
-- **Loader (F3, Q5) -> pass 6 for code; L4 diagnosis deferred.** Probing
-  `cuda` imports Torch on macOS before MLX is chosen; MLX bf16 casts weights
-  every forward and copies critic values; Torch `cache_programs` runs outside
-  `forward_precision`. Q5 adopted 5a, made for review: one
-  `MANABOT_EVAL_DEVICE` knob documented as a runtime target
-  (`cuda|mlx|mps|cpu`); 5b (separate backend/device vars) passed over as two
-  knobs for one choice.
-- **Game budget and admission (F4, Q6) -> pass 6.** `vector.py:984` adds each
-  whole round to every active slot's `gameplay_seconds`, so 64-256 slots on
-  CPU hit `game_seconds=120` together; `vector.py:399` `execution_seconds`
-  includes other matches' replay pauses. Adopted 6a, made for review: charge
-  each round per active slot (`dt / active`) and record the same time as
-  execution time. Also verify/hash each checkpoint once per worker, create
-  temporary directories at finalization, bound the deferred queue.
-- **Ownership (F5) -> pass 6.** `vector.py:35` imports the training
-  `manabot.env.failures.RecordedVectorEnv` (`_TrainingCapture`), not
-  `managym.recording.RecordedVectorEnv`; an explicit `SlotLoad.fresh` seed
-  becomes the slot's later auto-seed (`slots.rs:155-167,144`); five sites
-  patch `slot_record` fields by hand; attempt retention duplicates
-  `evaluation._execute_attempt`; precision is declared at three unchecked
-  sites; `env.rs:729,737` now clones `recent_events` on every step, training
-  included.
+- **Async seats, loader, game budget and ownership (F2–F5).** Pass 6 resolved
+  these findings. The vector runner uses one async sampler forward per
+  checkpoint, shares its preparation and sampling with scalar play, and keeps
+  checkpoint admission within the game worker. Managym owns slot record
+  detachment, seed continuity and opt-in decision events. Scalar and vector
+  runners share attempt retention. The trophy job threads one precision
+  through the loader, environment and pairing. CUDA profiling remains deferred.
+
 - **Host work and live frames (F1, Q1/Q2) -> deferred.** 1a changes stored
   trace annotations and breaks the "same traces as serial play" acceptance
   below, so it is not taken headless; the runner keeps live frames (1b).
@@ -143,19 +124,7 @@ passes 1–3. `scratch/concept-review.html` was rewritten at `c1df3f02c2`
 1–5. Done (`0286257840`, `dd11bd0a3f`, `08a854747f`/`7e79ad34ae`,
 `d2012147d4`/`c4924ee4ed`, `3d685ce0aa`/`966e8ff296`, `a27d8c0264`/`92a578b417`);
 see "What exists".
-6. **Seat, loader, budget and ownership fix pass (next).** Everything placed
-   "pass 6" above, in one pass. Delivers: one async `Sampler` keyed by
-   checkpoint; no Torch import on macOS MLX selection; MLX bf16 cast once at
-   load, logits only; Torch program cache in the forward precision; per-slot
-   game budget; cached admission; eval on `managym.recording`; explicit seeds
-   that leave the slot's sequence alone (Rust: rebuild, debug nextest of
-   `vector_env`); one `take_slot_record`-style detach and one shared attempt
-   helper; one precision helper producing `Agents`, `Environment.config` and
-   `PairingSpec.precision`; the `recent_events` clone limited to envs that
-   build decision views. Teaches: whether the runner keeps trace parity
-   (`tests/eval/test_vector_eval.py`, `test_pairing_play.py`,
-   `test_etude_agents.py`) with the smaller surface. No new rental;
-   `experiments/eval_throughput.py` stays as measured.
+6. Done (`bb911a150`). Refactored sampling, loading, slot budgets and retention with exact trace parity. Verified 104 focused Python tests, 28 debug vector tests, the rebuilt CPython 3.13 extension, the public API snapshot, and a local Etude MPS bf16 trophy deal with four complete records.
 7. **Release (blocked on `etude-sdk 0.5.0` on PyPI; 0.4.7 on 2026-11-27).**
    Update the three `etude-sdk` bounds and the `==0.4.7` play-runtime pin in
    `pyproject.toml`, run `uv lock --upgrade-package etude-sdk`, then a locked
