@@ -59,3 +59,17 @@ Key observations:
 Launched across `colab-l4-4x` (`--max-usd 25`, 25 wall-hours / $6.25 ceiling per
 size, `updates=1200`, `schedule_steps=2000` matching `tla_trophies_colab_500k_v2`
 so winners can continue cleanly to u2000, `checkpoint_every=200`).
+
+### Separating representational depth from throughput
+
+Evaluation compares models **at equal updates** (pure learning capability,
+independent of L4 wall speed) in addition to equal wall/CU budget:
+- **Pure depth at fixed width:** `w512l12` (54.1M, 12L) vs `w512l8` (41.5M, 8L)
+  at matched updates.
+- **Width vs. depth at matched speed:** `w768l8` (91.2M, 8L) vs `w512l12`
+  (54.1M, 12L) at matched updates.
+- **Pure width at fixed depth:** `w384l8` → `w512l8` → `w768l8` (all 8L) at
+  matched updates, plus behavior curves (combat selectivity, chump rates,
+  off-turn play, mana use, per-card GIH WR) to see *what* deeper vs wider
+  models learn differently. If 12L shows a per-update gain over 8L regardless of
+  L4 step cost, follow up with a deeper arm (e.g. `w384l16` or `w512l16`).

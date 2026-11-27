@@ -108,10 +108,14 @@ HALF_TRAINING_SEATINGS = tuple(
     f"L4 ceiling half-training deal {i + 1}" for i in range(32)
 )
 VS_ANCHOR_PREFIX = "l4-ceiling-vs-w384l8-32"
+DEPTH_VS_WIDTH_PAIRS: tuple[tuple[SizeLabel, SizeLabel], ...] = (
+    ("w512l12", "w512l8"),
+    ("w768l8", "w512l12"),
+)
 
 
-def vs_anchor_seatings(size: SizeLabel) -> tuple[str, ...]:
-    return tuple(f"L4 ceiling {size} vs w384l8 deal {i + 1}" for i in range(32))
+def vs_seatings(first: SizeLabel, second: SizeLabel) -> tuple[str, ...]:
+    return tuple(f"L4 ceiling {first} vs {second} deal {i + 1}" for i in range(32))
 
 
 class Config(trophies.Config):
@@ -338,10 +342,20 @@ def size_evaluations(
                 against(
                     f"{VS_ANCHOR_PREFIX}-{size}",
                     trained,
-                    vs_anchor_seatings(size),
+                    vs_seatings(size, "w384l8"),
                     Aligned(clock="updates", job="w384l8"),
                 )
             )
+            for first, second in DEPTH_VS_WIDTH_PAIRS:
+                if size == first:
+                    jobs.append(
+                        against(
+                            f"l4-ceiling-{first}-vs-{second}-32",
+                            trained,
+                            vs_seatings(first, second),
+                            Aligned(clock="updates", job=second),
+                        )
+                    )
     return jobs
 
 
@@ -366,10 +380,17 @@ def report() -> Report:
             *(
                 head_to_head(
                     f"{size} against w384l8 at the same update",
-                    vs_anchor_seatings(size),
+                    vs_seatings(size, "w384l8"),
                 )
                 for size in SIZES
                 if size != "w384l8"
+            ),
+            *(
+                head_to_head(
+                    f"{first} against {second} at the same update",
+                    vs_seatings(first, second),
+                )
+                for first, second in DEPTH_VS_WIDTH_PAIRS
             ),
             *behaviour_curves(matches=held_out),
         ),
