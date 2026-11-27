@@ -1380,6 +1380,81 @@ fn mana_trigger_reads_keyword_changed_by_another_activation() {
 }
 
 #[test]
+fn repeatable_mana_suffix_grows_the_board_at_a_full_pool() {
+    use crate::agent::action::Action;
+    use crate::flow::game::Game;
+    use crate::state::{
+        ability::{Effect, ObjectSelector},
+        card::ActivatedAbilityDefinition,
+        game_object::PlayerId,
+        mana::Color,
+        player::{ManaFloats, PlayerConfig},
+        zone::ZoneType,
+    };
+
+    let player = PlayerId(0);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new(
+                "payer",
+                [("Gray Ogre".into(), 1), ("Forest".into(), 39)].into(),
+            ),
+            PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+        ],
+        345,
+        false,
+    );
+    game.keep_opening_hands();
+    game.mana_floats[player.0] = ManaFloats::All;
+    let permanent = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let object = game.permanent_object(permanent).unwrap();
+    game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        tap_source: true,
+        effects: vec![
+            Effect::add_mana(Mana::parse("G")),
+            Effect::create_tokens("token.clue", 1),
+            Effect::untap(ObjectSelector::This),
+        ],
+        ..Default::default()
+    }];
+    let mut full = Mana::default();
+    full.mana[Color::Green as usize] = u8::MAX;
+    *game.state.mana_pool_mut(player) = full.clone().into();
+    game.tick().unwrap();
+
+    let activate = Action::ActivateAbility {
+        player,
+        permanent,
+        ability_index: 0,
+    };
+    let choose = Action::ChooseMode { player, mode: 0 };
+    let mut hashes = vec![game.state.deterministic_hash()];
+    for clues in 1..=3 {
+        for action in [&activate, &choose] {
+            let index = game
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|offer| offer == action)
+                .unwrap_or_else(|| panic!("missing {action:?}"));
+            assert!(!game.step(index).unwrap());
+        }
+        assert_eq!(game.pooled_mana(player), full);
+        assert!(!game.state.permanents[permanent].as_ref().unwrap().tapped);
+        assert_eq!(
+            game.state.zones.size(ZoneType::Battlefield, player),
+            clues + 1
+        );
+        let hash = game.state.deterministic_hash();
+        assert!(!hashes.contains(&hash));
+        hashes.push(hash);
+    }
+}
+
+#[test]
 fn sacrificing_treasure_couples_to_battlefield_mana_conditions() {
     use crate::flow::game::Game;
     use crate::state::{
