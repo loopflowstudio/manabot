@@ -14,7 +14,7 @@ Pass 4's finite-resource contract (`ab008535c`) shares one mana-ability predicat
 
 Pass 4a (`494fb4c5e`) retains counter and sacrifice costs before computing mana output and walks the saved frame for obligations and reservations. All 56 focused debug checks passed across the mana and retained-batch fixtures, including live and restored replacement orders, counter and sacrifice outputs, and nested cast and resolution payments.
 
-Pass 4b (coupled regime) stopped at five counterexamples and moves to a separate Task (eighth review 1a, below). Each is a committed debug test that records the defect at the point of failure: `0d7bb6743` and `a90fd7109`, `de9787c04` (closed by design 5), `da29dbbdc` (closed by pass 4a) and `710163f05` (fixed tap opens a bonus choice). Their full analysis and designs 1, 4 and 7 are in `7cb3655f1:scratch/plan.md`.
+Pass 4b examined five counterexamples. This branch closes `de9787c04` through the finite-resource contract and `da29dbbdc` through pass 4a. The coupled-payment follow-up carries the remaining reproduction cases `0d7bb6743`, `a90fd7109` and `710163f05` (fixed tap opens a bonus choice). Their full analysis and designs 1, 4 and 7 are in `7cb3655f1:scratch/plan.md`.
 
 Pass 5 (`12950aefb`) removes the provisional coupling flags, defers automatic commitment through the last mana bonus, and puts colored convoke in the shared witness. All 65 focused debug checks passed, including Canyon-first beside Angel, choosing which mana to spend after Heartbeat, and the Room into Guardian cast in manual and automatic modes.
 
@@ -38,6 +38,10 @@ Headless choices following each concept review's recommendation; reversible inte
 Preserve native action identities, source order, the chooser, individual Heartbeat bonus decisions, spend restrictions and receipts. Keep replay and action formats. The `PaymentScan` debug rebuild check must keep holding.
 
 ## CI verification
+
+After syncing `624751ae71`, 76 distinct focused Rust tests passed, including
+the restored vector payment, isolated empty-decision errors with either skip
+setting, and the Guardian of Vitu-Ghazi cast using Airship Engine Room and convoke.
 
 Engine Budget still needs the paired release comparison against `managym/perf/baseline.json`. The branch diff selects `.github/workflows/engine-budget.yml` through CI. That workflow runs both binaries for both revisions on the same runner and compares timing and digests.
 
