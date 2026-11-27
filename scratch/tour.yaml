@@ -1,7 +1,11 @@
-at: 1c521e3001b01a04412b1054a7cddc7383f54268
+at: 34092c814f28b45b279a8b05b375ff57fbd0a063
 first:
+  - path: scratch/plan.md
+    why: Counterexample to freezing mana sources at announcement
   - path: docs/engine.md
     why: Forced decisions and errors at the step boundary
+  - path: managym/cards/tests/cards/ody.rs
+    why: Life changes alter a later mana activation
   - path: managym/src/flow/tick.rs
     why: Rejects empty decisions before skipping or publishing
   - path: managym/src/flow/mana.rs
@@ -10,6 +14,4 @@ first:
     why: Uses the shared life payment rule
   - path: managym/src/agent/vector_env.rs
     why: Exercises strict and isolated step failure
-  - path: managym/cards/tests/cards/ody.rs
-    why: Checks both legal colors at negative life
 hide: []
