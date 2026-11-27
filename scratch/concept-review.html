@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Concept Review · MTG-501 Post-Implementation Review</title>
+<title>Concept Review · MTG-501 Final Post-Pass-2 Review</title>
 <style>
   /* Palette, typography and surface tokens borrowed from Academy (academy/ui/src/app.css) */
   :root {
@@ -344,9 +344,9 @@
     border: 1px solid color-mix(in srgb, var(--forest) 38%, transparent);
     border-left: 4px solid var(--forest);
     border-radius: var(--radius-lg);
-    padding: 14px 18px;
+    padding: 16px 20px;
     margin-bottom: 24px;
-    font-size: 13px;
+    font-size: 13.5px;
   }
   .summary-card h3 { color: var(--forest-ink); margin-bottom: 6px; }
 
@@ -362,16 +362,16 @@
     color: var(--text-secondary);
   }
 
-  /* Hero Mismatch */
+  /* Hero Mismatch (0.3.0 debt) */
   .hero-mismatch {
-    background: var(--mountain-wash);
-    border: 1px solid color-mix(in srgb, var(--mountain) 40%, transparent);
-    border-left: 4px solid var(--mountain);
+    background: var(--swamp-wash);
+    border: 1px solid color-mix(in srgb, var(--swamp) 42%, transparent);
+    border-left: 4px solid var(--swamp);
     border-radius: var(--radius-lg);
     padding: 18px 20px;
   }
   .hero-mismatch h2 {
-    color: var(--mountain-ink);
+    color: var(--swamp-ink);
     font-size: 20px;
     margin-bottom: 8px;
   }
@@ -411,7 +411,7 @@
     display: inline-block;
     font-size: 11px;
     font-weight: 600;
-    color: var(--mountain-ink);
+    color: var(--swamp-ink);
     margin-bottom: 3px;
   }
 
@@ -490,7 +490,7 @@
     color: var(--island-ink);
   }
 
-  /* Matrix grid for naming surfaces */
+  /* Matrix grid for chosen-name surfaces */
   .surface-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -505,7 +505,6 @@
     font-size: 12.5px;
   }
   .surface-cell.ok { border-color: color-mix(in srgb, var(--forest) 45%, transparent); }
-  .surface-cell.bad { border-color: color-mix(in srgb, var(--mountain) 45%, transparent); }
   .surface-title { font-weight: 600; margin-bottom: 4px; }
 
   /* Findings cards */
@@ -610,10 +609,10 @@
   <div class="bar-inner">
     <div class="brand-row">
       <h1 class="brand-title">Concept Review · MTG-501</h1>
-      <span class="brand-meta">Post-implementation review · Program-token emission guard, naming projections &amp; admission</span>
+      <span class="brand-meta">Final post-Pass-2 review · Program-token emission guard, chosen-name projections &amp; admission</span>
     </div>
     <div class="bar-controls">
-      <span class="badge badge-this-work">Post-implementation · HEAD 182634051f</span>
+      <span class="badge badge-this-work">Clean for 0.2.x · HEAD 20e3291326</span>
       <button class="theme-btn" id="themeToggle" type="button" aria-label="Toggle color theme">Theme: Auto</button>
     </div>
   </div>
@@ -628,43 +627,59 @@
         <div class="section-kicker">Area reviewed &amp; why</div>
         <h3>Program-token emission, runtime projections, vocabulary registration, and policy admission across <code>managym</code> and <code>manabot</code></h3>
         <p>
-          Reviewed the full built change on <code>HEAD</code> (<code>182634051f</code>) as someone seeing it for the first time
-          against freshly fetched <code>origin/main</code> (<code>6a131c4dc9</code>): <code>TokenWriter</code> (<code>cards::tokens</code>),
-          vocabulary ownership (<code>agent::record_vocabulary</code>, <code>cards::token_renames</code>), runtime projections
-          (<code>agent::effect_execution</code>, <code>agent::observation</code>, <code>agent::observation_encoder</code>,
-          <code>agent::decision_memory</code>), exhaustive witnesses (<code>cards/tests/cards/observability.rs</code>, <code>tla.rs</code>),
-          and host admission (<code>policy::catalog</code>, <code>policy::admission</code>, <code>tests/model/test_effect_vocabulary.py</code>).
+          Reviewed the full change on <code>HEAD</code> (<code>20e3291326</code>) against freshly fetched <code>origin/main</code>
+          (<code>6a131c4dc9</code>), covering Pass 1 (<code>f35670541f</code> + docs <code>72cb914d66</code>) and Pass 2
+          (<code>5424678db4</code>): <code>TokenWriter</code> (<code>cards::tokens</code>), <code>ContentPack::catalog_name</code>
+          (<code>cards::content_pack</code>), vocabulary ownership (<code>agent::record_vocabulary</code>,
+          <code>cards::token_renames</code>), runtime projections (<code>agent::effect_execution</code>,
+          <code>agent::observation_encoder</code>, <code>agent::decision_memory</code>), witnesses
+          (<code>observability.rs</code>, <code>xln.rs</code>, <code>tla.rs</code>, <code>naming_tests.rs</code>),
+          and host admission (<code>policy::catalog</code>, <code>policy::admission</code>, <code>test_effect_vocabulary.py</code>).
         </p>
       </div>
       <ul class="meta-list">
-        <li><strong>Branch HEAD:</strong> <code>182634051f</code> (impl <code>f35670541f</code> + docs <code>72cb914d66</code>)</li>
-        <li><strong>Checked against:</strong> freshly fetched <code>origin/main</code> (<code>6a131c4dc9</code>; 1 unrelated commit ahead, 0 overlap in this area)</li>
+        <li><strong>Branch HEAD:</strong> <code>20e3291326</code> (Pass 1 <code>f35670541f</code> + Pass 2 <code>5424678db4</code>)</li>
+        <li><strong>Checked against:</strong> freshly fetched <code>origin/main</code> (<code>6a131c4dc9</code>; merged at <code>04bb87885b</code>, 0 overlap)</li>
         <li><strong>Public API line:</strong> <code>0.2.x</code> unchanged (<code>public_api.py check</code> passes)</li>
-        <li><strong>Verdict:</strong> Core architecture works; 3 unfinished-rule slices remain in this Task</li>
+        <li><strong>Verdict:</strong> 0 remaining <code>This work</code> mismatches; 2 structural items held for <code>0.3.0</code></li>
       </ul>
     </div>
     <div class="legend-row">
       <span><strong>Visual key:</strong></span>
-      <span class="badge badge-existing">Existing at HEAD (182634051f)</span>
-      <span class="badge badge-proposed">Proposed fix (dashed blue)</span>
-      <span class="badge badge-this-work">This work (MTG-501)</span>
+      <span class="badge badge-existing">Existing at HEAD (20e3291326)</span>
+      <span class="badge badge-proposed">Proposed 0.3.0 cleanup (dashed blue)</span>
+      <span class="badge badge-this-work">This work (MTG-501 · complete)</span>
       <span class="badge badge-separate">Separate outcome (0.3.0)</span>
       <span class="badge badge-irreversible">Checkpoint/API break</span>
     </div>
   </div>
 
-  <!-- What landed cleanly -->
+  <!-- Pass 2 Closure Summary -->
   <div class="summary-card">
-    <h3>What landed cleanly in <code>f35670541f</code> + <code>72cb914d66</code></h3>
+    <h3>All three Pass-1 review gaps closed cleanly in <code>5424678db4</code></h3>
     <p>
-      The core steer is in place and proved its value immediately: one internal cached <code>record_vocabulary::program_vocabulary()</code>
-      now backs all four previously divergent Rust checks using the exact <code>decision_memory=False</code> rule (excluding
-      <code>DecisionMemory::*</code>; only <code>Integer</code> and <code>Boolean</code> bypass via <code>TokenKind::is_numeric()</code>).
-      Running the debug guard at <code>TokenWriter::into_rules_tokens</code> caught three real unregistered symbols
-      (<code>LoyaltyCost::MinusX</code>, <code>/Modification::AddTypes</code>, <code>/Modification::AddColors</code>) beyond the live
-      <code>"enters attached to"</code> bug, while keeping the 11 dead <code>0.2.6</code> <code>GrantClock</code> tokens out and locking Koh's
-      departed once-per-turn trigger LKI path in <code>tla.rs</code>. However, inspecting the built diff surfaced
-      <strong>three places where the change's own rules stop early or rely on a workaround</strong> — all small, concrete slices of MTG-501.
+      <strong>1. Guard restored across all 46 <code>observability.rs</code> witness tests:</strong>
+      <code>witness_pack()</code> is gone; <code>tokens_of()</code> runs on <code>default_content_pack()</code> through
+      <code>TokenWriter::into_rules_tokens()</code>. Turning the guard back on immediately proved its worth by surfacing five
+      real missing runtime tokens (<code>/Modification::ModeChosen</code>, <code>DamageKind::Combat</code>,
+      <code>DamageRecipientFilter::Any</code>, <code>TriggerCondition::TappedForMana</code>, field <code>"mode"</code>).
+      Only <code>every_effect_variant_reaches_the_learning_tokens</code> uses the narrow <code>#[doc(hidden)] *_unchecked</code>
+      helpers so it can aggregate omissions across every <code>Effect</code> variant against <code>program_vocabulary()</code>.
+    </p>
+    <p>
+      <strong>2. One out-of-catalog chosen-name rule across all four surfaces:</strong>
+      <code>ContentPack::catalog_name()</code> and <code>TokenWriter</code>'s <code>StringField::ChosenCardName</code> now cover
+      <code>Decision::SearchNamed</code>, <code>ZoneEntry.chosen</code> (<code>EntryChoice::CardName</code>),
+      <code>Effect::ExileNamed</code>, and <code>FactKind::ChosenName</code> uniformly: uncatalogued names stay intact in rules
+      state and readable text notes (with clean <code>SearchNamed</code> formatting) while encoding <code>Null</code> in programs
+      and omitting permanent <code>ChosenName</code> facts. Locked by <code>xln.rs</code> (Sorcerous Spyglass),
+      <code>effect_execution.rs</code> (suspended <code>ExileNamed</code>), and <code>naming_tests.rs</code>.
+    </p>
+    <p>
+      <strong>3. Shared-effect admission covered:</strong>
+      <code>tests/model/test_effect_vocabulary.py</code> now exercises <code>effect_vocabulary</code> alongside dense and v11
+      <code>fact_vocabulary</code>, verifying acceptance of registered modification pairs and exact <code>(kind, 0x…)</code>
+      rejection of unknown and disabled <code>DecisionMemory::*</code> tokens.
     </p>
   </div>
 
@@ -680,7 +695,7 @@
             <th>Domain concept (what a person knows &amp; does)</th>
             <th>Code concept on <code>HEAD</code> (types, records &amp; APIs)</th>
             <th>Line up?</th>
-            <th>What is wrong where it is No / Partial</th>
+            <th>Assessment / what is wrong where No or Partial</th>
           </tr>
         </thead>
         <tbody>
@@ -694,35 +709,33 @@
             </td>
             <td class="col-fit"><span class="badge badge-yes">Yes</span></td>
             <td class="col-why">
-              Consolidated all four Rust oracles (<code>tokens.rs</code>, <code>record_vocabulary.rs</code>, <code>observability.rs</code>, <code>token_renames.rs</code>) onto one cached set matching <code>admission.py:510</code>.
+              One Rust source of truth backs all four checks (<code>tokens.rs</code>, <code>record_vocabulary.rs</code>, <code>observability.rs</code>, <code>token_renames.rs</code>) and matches <code>admission.py:510</code> (only <code>Integer</code> and <code>Boolean</code> bypass; <code>Null</code> and <code>DefinitionRef</code> require exact pairs).
             </td>
           </tr>
           <tr>
             <td class="col-domain">
-              <strong>Debug emission guard enforces every runtime &amp; witness test</strong><br />
-              Any default-pack token stream emitted in a debug test panics if it leaves the policy vocabulary.
+              <strong>Debug emission guard on runtime &amp; witness streams</strong><br />
+              Every default-pack runtime or witness stream panics in debug if it emits an unregistered non-numeric token.
             </td>
             <td class="col-code">
-              <code>TokenWriter::into_rules_tokens()</code> checks <code>std::ptr::eq(self.pack, default_content_pack())</code>; <code>observability.rs:2350</code> clones the pack in <code>witness_pack()</code> and routes <code>tokens_of()</code> through it.
+              <code>TokenWriter::into_rules_tokens()</code> (checks <code>ptr::eq(self.pack, default_content_pack())</code>); <code>tokens_of()</code> uses <code>default_content_pack()</code>; <code>#[doc(hidden)] *_unchecked</code> used only by the multi-variant <code>Effect</code> aggregator.
             </td>
-            <td class="col-fit"><span class="badge badge-no">No</span></td>
+            <td class="col-fit"><span class="badge badge-yes">Yes</span></td>
             <td class="col-why">
-              <div class="mismatch-kind">Biggest mismatch · Test workaround disables the guard on 46 tests</div>
-              To let 1 test (<code>every_effect_variant_reaches_the_learning_tokens</code>) collect all omissions before failing, <code>witness_pack()</code> clones the entire <code>ContentPack</code> purely to defeat pointer equality — and wiring it into <code>tokens_of()</code> silently turns off the guard across <strong>46 other tests</strong> in <code>observability.rs</code> (triggers, continuous effects, selectors, target relations, card probes).
+              Zero <code>ContentPack</code> clones. Every runtime emitter (<code>effect_execution</code>, <code>continuation</code>, <code>observation</code>, <code>observation_encoder</code>, <code>decision_memory</code>) and all 46 <code>tokens_of()</code> witness tests run guarded; the one aggregating test checks the exact same <code>program_vocabulary()</code>.
             </td>
           </tr>
           <tr>
             <td class="col-domain">
-              <strong>Out-of-catalog card names in runtime observations</strong><br />
-              A validated <code>NameVocabulary</code> can offer names without executable definitions (<code>names.rs:3-4</code>).
+              <strong>Out-of-catalog chosen card names</strong><br />
+              An expanded <code>NameVocabulary</code> can name a card absent from the installed catalog; rules &amp; readable text keep the spelling, policy tensors never emit an unknown hash.
             </td>
             <td class="col-code">
-              <code>effect_execution.rs:1768</code> masks unknown names to <code>None</code> (<code>Null</code>) in <code>Decision::SearchNamed</code> only; <code>Projection::entry</code>, <code>Effect::ExileNamed</code>, and <code>FactKind::ChosenName</code> emit the raw string/hash.
+              <code>ContentPack::catalog_name()</code> + <code>StringField::ChosenCardName</code> in <code>TokenWriter</code> + <code>observation_encoder.rs:1882</code>.
             </td>
-            <td class="col-fit"><span class="badge badge-no">No</span></td>
+            <td class="col-fit"><span class="badge badge-yes">Yes</span></td>
             <td class="col-why">
-              <div class="mismatch-kind">Rule applied to 1 of 4 surfaces · Text note side-effect</div>
-              <code>Decision::NameCard</code> feeds both <code>AfterNaming::Exile</code> (<code>ExileNamed</code> -&gt; <code>SearchNamed</code>) and <code>AfterNaming::Entry</code> (<code>EntryChoice::CardName</code> -&gt; <code>Projection::entry</code> &amp; <code>FactKind::ChosenName</code>). Only <code>SearchNamed</code> handles non-catalog names; the other 3 surfaces still panic/fail admission. Wrapping <code>known</code> as <code>Option</code> also changed <code>SearchNamed</code> text notes to <code>Some("...")</code> / duplicate <code>None</code> + <code>Searching for ...</code> lines.
+              Applied uniformly to all four surfaces fed by <code>Decision::NameCard</code> (<code>SearchNamed</code>, <code>ZoneEntry.chosen</code>, <code>Effect::ExileNamed</code>, <code>FactKind::ChosenName</code>). Uses <code>self.pack.catalog_name</code> inside <code>TokenWriter</code> and restores <code>self.field</code> on error.
             </td>
           </tr>
           <tr>
@@ -731,52 +744,52 @@
               LKI never leaks raw storage IDs; Aura entry attachments project visible references.
             </td>
             <td class="col-code">
-              <code>EffectiveTrigger</code> derives <code>clock()</code>; <code>"enters attached to"</code> in <code>EXECUTION_TEXT</code>; <code>tla.rs:16195</code> &amp; <code>effect_execution.rs:1994</code> regressions.
+              <code>EffectiveTrigger</code> derives <code>clock()</code>; <code>"enters attached to"</code> in <code>EXECUTION_TEXT</code>; <code>tla.rs:16195</code> &amp; <code>effect_execution.rs:2050</code> regressions.
             </td>
             <td class="col-fit"><span class="badge badge-yes">Yes</span></td>
             <td class="col-why">
-              Verified directly against <code>program_vocabulary()</code> and the exact 11 forbidden <code>0.2.6</code> pairs.
+              Verified directly against <code>program_vocabulary()</code> and the exact 11 forbidden <code>0.2.6</code> <code>GrantClock</code>/<code>PermanentId</code>/<code>PublicId</code> pairs.
             </td>
           </tr>
           <tr>
             <td class="col-domain">
-              <strong>Python policy admission across all program transports</strong><br />
-              Every host admission path accepts registered tokens and clearly rejects unknown pairs.
+              <strong>Python policy admission across program transports</strong><br />
+              Host admission accepts every printed &amp; runtime token and rejects unknown or disabled pairs with exact <code>(kind, 0x…)</code> keys.
             </td>
             <td class="col-code">
-              <code>fact_vocabulary</code> (tested dense + v11 in <code>test_effect_vocabulary.py</code>), <code>effect_vocabulary</code> (<code>admission.py:683</code>), <code>decision_reference_details</code> (<code>admission.py:401</code>).
+              <code>fact_vocabulary</code> (dense &amp; v11), <code>effect_vocabulary</code>, and <code>decision_reference_details</code> in <code>admission.py</code>; <code>tests/model/test_effect_vocabulary.py</code>.
             </td>
-            <td class="col-fit"><span class="badge badge-partial">Partial</span></td>
+            <td class="col-fit"><span class="badge badge-yes">Yes</span></td>
             <td class="col-why">
-              <div class="mismatch-kind">Surface gap · Error hint still omitted</div>
-              <code>test_effect_vocabulary.py</code> covers dense and v11 <code>fact_vocabulary</code>, but does not test <code>effect_vocabulary</code> (shared continuous effects — the exact transport that carries the newly registered <code>/Modification::AddTypes</code> and <code>/Modification::AddColors</code> tokens!). Also, <code>admission.py:516</code> error text was not updated with the <code>record_vocabulary()</code> hint noted in <code>scratch/plan.md</code>.
+              Both fact transports (dense + v11) and the shared-effect transport (<code>effect_vocabulary</code>) are covered against the rebuilt native extension, including rejection of unknown keys and disabled <code>DecisionMemory::*</code> tokens.
             </td>
           </tr>
           <tr>
             <td class="col-domain">
               <strong>Runtime-only program symbols &amp; decision-memory names</strong><br />
-              Clean separation between record-id names and runtime program tokens.
+              Record-id names vs. runtime program tokens vs. optional decision-memory tags.
             </td>
             <td class="col-code">
-              ~350 fake <code>("token", "execution/&lt;kind&gt;/&lt;name&gt;", ...)</code> rows + 44 phantom <code>DecisionMemory::*</code> <code>Variant</code> tokens filtered in 4 places.
+              ~360 synthetic <code>("token", "execution/&lt;kind&gt;/&lt;name&gt;", …)</code> rows + 44 phantom <code>DecisionMemory::*</code> <code>Variant</code> tokens filtered in 4 places.
             </td>
             <td class="col-fit"><span class="badge badge-no">No</span></td>
             <td class="col-why">
-              <div class="mismatch-kind">Deferred to 0.3.0 (checkpoint/API compatibility)</div>
-              <code>f35670541f</code> added 4 more synthetic <code>execution/*</code> rows, and 4 separate places now repeat <code>!name.starts_with("DecisionMemory::")</code> (<code>record_vocabulary.rs:173</code>, <code>catalog.py:50</code>, <code>docs/engine.md:52</code>, <code>test_effect_vocabulary.py:93</code>). Correctly held for <code>0.3.0</code> per Task steer #2.
+              <div class="mismatch-kind">Biggest remaining mismatch · Separate outcome (0.3.0, checkpoint/API break)</div>
+              One table (<code>record_vocabulary()</code>) serves two unrelated roles, and 44 record-only <code>DecisionMemory::*</code> labels pretend to be <code>Variant</code> program tokens — forcing <code>!name.starts_with("DecisionMemory::")</code> in 4 places. Held for <code>0.3.0</code> per Task steer #2.
             </td>
           </tr>
           <tr>
             <td class="col-domain">
               <strong>Printed card spans (<code>catalog_tokens()</code>)</strong><br />
-              Printed definition spans vs. full runtime vocabulary.
+              Printed definition spans vs. full admitted program vocabulary.
             </td>
             <td class="col-code">
-              <code>managym.catalog_tokens()</code> unchanged; docstrings and guides clarified across 5 docs.
+              <code>managym.catalog_tokens()</code> unchanged; split documented in <code>docs/engine.md</code>, <code>managym/__init__.pyi</code>, <code>manabot/README.md</code>, <code>docs/development.md</code>, and <code>cards/tests/cards/README.md</code>.
             </td>
             <td class="col-fit"><span class="badge badge-partial">Partial</span></td>
             <td class="col-why">
-              Name still suggests a full vocabulary, but <code>0.2.x</code> signature stays unchanged per steer #2 and docs now state the split explicitly.
+              <div class="mismatch-kind">Name vs. scope · Separate outcome (0.3.0, API break)</div>
+              The function name still reads like the full vocabulary (which misled issue #629), though docstrings and docs now state the printed-only scope explicitly while <code>0.2.x</code> stays patch-compatible.
             </td>
           </tr>
         </tbody>
@@ -784,89 +797,105 @@
     </div>
   </section>
 
-  <!-- Section 2: Biggest Mismatch + Before / After -->
+  <!-- Chosen-name surface verification -->
+  <section>
+    <div class="section-kicker">Pass-2 rule verification</div>
+    <h2>All four chosen-name surfaces now obey one shared contract</h2>
+    <div class="surface-grid">
+      <div class="surface-cell ok">
+        <div class="surface-title">1. <code>Decision::SearchNamed</code></div>
+        <code>effect_execution.rs:1774</code><br />
+        <code>default_content_pack().catalog_name(name)</code> -> <code>Text</code> or <code>Null</code>; clean note <code>named search: {name} (seat …, up to …)</code>.
+      </div>
+      <div class="surface-cell ok">
+        <div class="surface-title">2. <code>ZoneEntry.chosen</code></div>
+        <code>effect_execution.rs:877</code> + <code>tokens.rs:565</code><br />
+        <code>EntryChoice::CardName</code> sets <code>StringField::ChosenCardName</code> -> <code>Text</code> or <code>Null</code>; note <code>chosen on entry: {name}</code>.
+      </div>
+      <div class="surface-cell ok">
+        <div class="surface-title">3. <code>Effect::ExileNamed</code></div>
+        <code>tokens.rs:672</code> + <code>:493</code><br />
+        <code>("Effect", Some("ExileNamed"), "name")</code> sets <code>StringField::ChosenCardName</code> -> <code>Text</code> or <code>Null</code>; text keeps exact spelling.
+      </div>
+      <div class="surface-cell ok">
+        <div class="surface-title">4. <code>FactKind::ChosenName</code></div>
+        <code>observation_encoder.rs:1882</code><br />
+        <code>default_content_pack().catalog_name(s)</code> omits the fact row if uncatalogued; <code>Observation</code> &amp; rules state keep <code>EntryChoice::CardName</code>.
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: Biggest Remaining Mismatch (0.3.0 Separate Outcome) -->
   <section>
     <div class="hero-mismatch">
-      <div class="section-kicker" style="color: var(--mountain-ink);">Biggest mismatch on HEAD (182634051f)</div>
-      <h2><code>observability.rs::witness_pack()</code> clones the entire <code>ContentPack</code> to spoof the guard's pointer check — silently turning off the guard on 46 tests</h2>
+      <div class="section-kicker" style="color: var(--swamp-ink);">Biggest remaining mismatch (held for 0.3.0 per steer #2)</div>
+      <h2><code>record_vocabulary()</code> carries ~360 fake <code>execution/*</code> record rows and 44 phantom <code>DecisionMemory::*</code> program tokens</h2>
       <p>
-        <code>TokenWriter::into_rules_tokens</code> (<code>cards/tokens.rs:306</code>) only runs its vocabulary check when
-        <code>std::ptr::eq(self.pack, default_content_pack())</code>. To stop <code>every_effect_variant_reaches_the_learning_tokens</code>
-        from panicking on the first missing variant, <code>observability.rs:2350-2359</code> clones the entire default catalog into a
-        second static <code>witness_pack()</code> and routes the file-wide helper <code>tokens_of()</code> through it.
-        Result: <strong>46 of the 47 <code>tokens_of()</code> call sites in <code>observability.rs</code> now skip the debug guard completely</strong>
-        — including the exhaustive witnesses for every <code>Modification</code>, <code>TriggerCondition</code>, <code>ObjectSelector</code>,
-        <code>TriggeredManaOutput</code>, and <code>TargetRelation</code>!
+        With every MTG-501 emission and admission gap now closed on <code>HEAD</code>, the only genuine conceptual mismatch left
+        in this area is the pre-existing <code>0.2.x</code> boundary shape of <code>record_vocabulary()</code>: runtime-only
+        program tokens have no first-class home, so <code>record_vocabulary.rs</code> invents synthetic
+        <code>("token", "execution/&lt;kind&gt;/&lt;name&gt;", …)</code> record-id rows purely to smuggle <code>(kind, token)</code>
+        pairs into <code>catalog.py</code>'s <code>record_token_keys</code> — while 44 <code>DecisionMemory::*</code> labels
+        are registered with phantom <code>TokenKind::Variant</code> tokens that no runtime program ever emits and that four separate
+        sites must filter out with <code>!name.starts_with("DecisionMemory::")</code>.
       </p>
     </div>
 
     <div class="compare">
       <div class="panel existing">
         <div class="panel-head">
-          <span class="panel-title">Existing at HEAD (<code>182634051f</code>)</span>
+          <span class="panel-title">Existing on <code>0.2.x</code> HEAD (<code>20e3291326</code>)</span>
           <span class="badge badge-existing">Existing</span>
         </div>
 
         <div class="diagram-box">
-          <strong><code>witness_pack()</code> = full <code>ContentPack</code> clone to bypass <code>ptr::eq</code></strong>
+          <strong><code>record_vocabulary()</code> conflates 3 concepts</strong>
           <div class="pill-row">
-            <span class="tok ok">1 caller checks program_vocabulary() explicitly</span>
-            <span class="tok bad">46 tokens_of() callers silently unguarded!</span>
-            <span class="tok bad">every_continuous_effect_variant... unguarded</span>
-            <span class="tok bad">every_trigger_condition... unguarded</span>
-            <span class="tok bad">every_object_and_player_selector... unguarded</span>
-            <span class="tok warn">Clones entire card/token catalog in test binary</span>
+            <span class="tok ok">Real record ids (keywords, counters, subtypes)</span>
+            <span class="tok warn">~360 fake execution/&lt;kind&gt;/&lt;name&gt; rows</span>
+            <span class="tok bad">44 DecisionMemory::* with phantom Variant token</span>
+            <span class="tok bad">4 repeated starts_with("DecisionMemory::") filters</span>
           </div>
         </div>
 
-        <pre><code>// managym/cards/tests/cards/observability.rs:2350-2359
-fn witness_pack() -&gt; &amp;'static ContentPack {
-    static PACK: OnceLock&lt;ContentPack&gt; = OnceLock::new();
-    // Spoofs a different pointer address to dodge ptr::eq!
-    PACK.get_or_init(|| default_content_pack().clone())
-}
+        <pre><code>// managym/src/agent/record_vocabulary.rs (0.2.x)
+// 1. Phantom Variant token on record-only memory names:
+RECORD_NAMES.iter().map(|n| variant(&amp;format!("DecisionMemory::{n}")))
 
-fn tokens_of(definition: &amp;ObjectDefinition) -&gt; Vec&lt;(TokenKind, i32)&gt; {
-    // Used by 47 tests; 46 of them never check program_vocabulary()
-    definition_tokens(definition, witness_pack()).unwrap()
-}</code></pre>
+// 2. Fake record-id row to carry runtime program tokens:
+out.push(record(Token, &amp;format!("execution/{}/{name}", kind as u16), Some((kind, name))));
+
+// 3. Repeated prefix filter in 4 places:
+//    record_vocabulary.rs:173 · catalog.py:50
+//    docs/engine.md:937 · test_effect_vocabulary.py:94
+.filter(|entry| !entry.name.starts_with("DecisionMemory::"))</code></pre>
       </div>
 
       <div class="panel proposed">
         <div class="panel-head">
-          <span class="panel-title">Proposed fix (restore guard + explicit unchecked aggregator)</span>
-          <span class="badge badge-proposed">Proposed</span>
+          <span class="panel-title">Proposed <code>0.3.0</code> cleanup (separate Task)</span>
+          <span class="badge badge-proposed">Proposed · 0.3.0</span>
         </div>
 
         <div class="diagram-box">
-          <strong><code>tokens_of()</code> stays on <code>default_content_pack()</code>; no pack clone</strong>
+          <strong>One concept, one surface — zero synthetic rows or prefix filters</strong>
           <div class="pill-row">
-            <span class="tok ok">All 46 observability.rs tests guarded automatically</span>
-            <span class="tok prop">Zero ContentPack clones</span>
-            <span class="tok prop">One shared check helper (unregistered_program_tokens)</span>
-            <span class="tok prop">Only every_effect_variant... collects without early panic</span>
+            <span class="tok prop">Real record ids only (DecisionMemory::* has token = None)</span>
+            <span class="tok prop">Direct runtime program-token list (no fake execution/* ids)</span>
+            <span class="tok ok">0 starts_with("DecisionMemory::") filters</span>
+            <span class="tok warn">Legacy keys bound in binding.py / token_renames.rs</span>
           </div>
         </div>
 
-        <pre><code>// managym/src/cards/tokens.rs (one explicit diagnostic path)
-#[doc(hidden)]
-pub fn definition_tokens_unchecked(
-    definition: &amp;ObjectDefinition,
-    pack: &amp;ContentPack,
-) -&gt; Result&lt;Vec&lt;(TokenKind, i32)&gt;, ContentError&gt; { ... }
+        <pre><code>// Proposed 0.3.0 shape (requires checkpoint/API migration)
+// 1. DecisionMemory::* are record names, never program tokens:
+RECORD_NAMES.iter().map(|n| record(Token, &amp;format!("DecisionMemory::{n}"), None))
 
-#[doc(hidden)]
-pub fn rules_tokens_unchecked&lt;T: Serialize&gt;(
-    value: &amp;T,
-    pack: &amp;ContentPack,
-) -&gt; Result&lt;Vec&lt;(u16, i32)&gt;, ContentError&gt; { ... }
+// 2. Runtime-only program tokens exported directly (no fake record rows):
+pub fn runtime_program_tokens() -&gt; Vec&lt;(u16, i32, String)&gt;
 
-// managym/cards/tests/cards/observability.rs
-fn tokens_of(definition: &amp;ObjectDefinition) -&gt; Vec&lt;(TokenKind, i32)&gt; {
-    definition_tokens(definition, default_content_pack()).unwrap()
-}
-// Only every_effect_variant_reaches_the_learning_tokens uses *_unchecked
-// and checks every token against program_vocabulary() before asserting.</code></pre>
+// 3. catalog.py builds record_token_keys from printed | runtime_program_tokens()
+//    and binds pre-0.3.0 execution/* keys via binding.py / token_renames.rs.</code></pre>
       </div>
     </div>
   </section>
@@ -874,168 +903,85 @@ fn tokens_of(definition: &amp;ObjectDefinition) -&gt; Vec&lt;(TokenKind, i32)&gt
   <!-- Section 3: Concrete Walkthrough (Normal / Failure / Recovery) -->
   <section>
     <div class="section-kicker">Concrete interaction &amp; stress test</div>
-    <h2>Tracing the proposed fixes on normal, failure, and recovery paths</h2>
+    <h2>Walking MTG-501 on <code>HEAD</code> through normal, failure, and recovery paths</h2>
 
     <div class="walkthrough">
       <div class="step-card">
         <div class="step-num">1 · NORMAL PATH</div>
-        <h3>Every witness &amp; runtime projection checks one vocabulary</h3>
+        <h3>Printed + runtime tokens stay locked in sync</h3>
         <ul class="tight">
-          <li>All 46 <code>tokens_of()</code> tests in <code>observability.rs</code> run on <code>default_content_pack()</code> and pass through <code>into_rules_tokens()</code>'s debug guard automatically — zero cloned <code>ContentPack</code>s.</li>
-          <li>Every legal <code>Decision::NameCard</code> choice in production comes from <code>default_content_pack().name_candidates()</code>, so <code>SearchNamed</code>, <code>Projection::entry</code>, <code>Effect::ExileNamed</code>, and <code>FactKind::ChosenName</code> all emit registered tokens/names unchanged.</li>
-          <li>Both <code>fact_vocabulary</code> and <code>effect_vocabulary</code> admit the full <code>printed | non-DecisionMemory</code> union in Python.</li>
+          <li>Every runtime emitter (<code>effect_execution</code>, <code>continuation</code>, <code>observation</code>, <code>observation_encoder</code>, <code>decision_memory</code>) finishes in <code>TokenWriter::into_rules_tokens()</code>.</li>
+          <li>In debug tests on <code>default_content_pack()</code>, every non-numeric token is checked against cached <code>program_vocabulary()</code>; release builds skip the check at zero runtime cost.</li>
+          <li>In Python, <code>fact_vocabulary</code> (dense &amp; v11), <code>effect_vocabulary</code>, and <code>decision_reference_details</code> admit that exact same set.</li>
         </ul>
       </div>
 
       <div class="step-card">
         <div class="step-num">2 · FAILURE PATH</div>
-        <h3>New unprinted variants &amp; expanded-fixture names fail or degrade consistently</h3>
+        <h3>New unprinted symbols fail at emission and admission</h3>
         <ul class="tight">
-          <li><strong>New unprinted <code>TriggerCondition</code> / <code>Modification</code> / <code>ObjectSelector</code>:</strong> With <code>tokens_of()</code> back on <code>default_content_pack()</code>, the existing witness tests in <code>observability.rs:2416-2831</code> immediately panic in debug builds instead of silently passing via <code>witness_pack()</code>.</li>
-          <li><strong>Multi-variant effect drift:</strong> <code>every_effect_variant_reaches_the_learning_tokens</code> still reports <em>every</em> missing <code>(kind, 0xword)</code> across all <code>Effect</code> variants in one assertion via <code>*_unchecked</code> + <code>program_vocabulary()</code>.</li>
-          <li><strong>Out-of-catalog name in an entry choice (<code>scenario_naming_vocabulary()</code> + Sorcerous Spyglass):</strong> Instead of silently passing <code>SearchNamed</code> while crashing <code>Projection::entry</code> and <code>FactKind::ChosenName</code>, every chosen-name projection follows one consistent rule.</li>
+          <li><strong>Unregistered runtime variant/field/label:</strong> Debug Rust tests panic at <code>into_rules_tokens()</code> listing every missing <code>(kind, 0x…)</code> pair before code reaches Python or training.</li>
+          <li><strong>Out-of-catalog chosen name (expanded fixture):</strong> <code>SearchNamed</code>, <code>ZoneEntry.chosen</code>, and <code>Effect::ExileNamed</code> emit <code>Null</code>, and <code>FactKind::ChosenName</code> omits the row; rules state and readable text preserve the exact spelling.</li>
+          <li><strong>Unknown or disabled <code>DecisionMemory::*</code> pair in Python:</strong> <code>Catalog.require_tokens</code> raises <code>ValueError</code> naming every missing <code>(kind, 0x…)</code> pair.</li>
         </ul>
       </div>
 
       <div class="step-card">
         <div class="step-num">3 · RECOVERY &amp; COMPATIBILITY</div>
-        <h3>Zero public API change; checkpoints &amp; pinned pilots untouched</h3>
+        <h3>Zero 0.2.x breakage; existing checkpoints &amp; pilots survive</h3>
         <ul class="tight">
-          <li><strong>Survives unchanged:</strong> <code>managym.catalog_tokens()</code>, <code>managym.record_vocabulary()</code>, <code>tests/public_api.json</code>, printed token spans, pinned pilots, and existing `0.2.x` checkpoints.</li>
-          <li><strong>What changes on purpose:</strong> <code>observability.rs</code> regains guard coverage on 46 tests (surfacing any latent unregistered witness token now, not in production); chosen-name projections align across all 4 surfaces; <code>SearchNamed</code> notes stop printing <code>Some("...")</code> / duplicate lines.</li>
+          <li><strong>Survives unchanged:</strong> <code>managym.catalog_tokens()</code>, <code>managym.record_vocabulary()</code>, <code>tests/public_api.json</code>, printed token spans, pinned pilots, and existing <code>0.2.x</code> checkpoints (the 9 appended <code>execution/*</code> rows only grow the tail).</li>
+          <li><strong>Counterexample checked:</strong> Departed Koh inheriting a once-per-turn trigger under a suspended frame (<code>tla.rs:16195</code>) emits zero <code>GrantClock</code>/<code>PermanentId</code>/<code>PublicId</code> tokens and stays 100% inside <code>program_vocabulary()</code>.</li>
         </ul>
       </div>
     </div>
   </section>
 
-  <!-- Section 4: Findings & Counterexamples -->
+  <!-- Section 4: Findings Inventory -->
   <section>
-    <div class="section-kicker">Findings &amp; counterexamples</div>
-    <h2>What remains in MTG-501 vs. deferred to <code>0.3.0</code></h2>
+    <div class="section-kicker">Findings &amp; disposition</div>
+    <h2>Nothing left in MTG-501; two structural cleanups tracked for <code>0.3.0</code></h2>
 
     <div class="finding-list">
 
-      <!-- Finding 1 -->
       <article class="finding">
         <div class="finding-head">
-          <h3>1. Delete <code>witness_pack()</code> clone; restore <code>tokens_of()</code> to <code>default_content_pack()</code></h3>
-          <div class="finding-tags">
-            <span class="badge badge-this-work">This work</span>
-            <span class="badge badge-no">Biggest mismatch</span>
-          </div>
-        </div>
-        <p>
-          <code>managym/cards/tests/cards/observability.rs:2350-2359</code> works around <code>into_rules_tokens()</code>'s
-          <code>std::ptr::eq(self.pack, default_content_pack())</code> check by cloning the whole <code>ContentPack</code> and
-          wiring that clone into <code>tokens_of()</code>, disabling the debug guard on 46 other tests in the file.
-        </p>
-        <div class="counterexample">
-          <strong>Counterexample:</strong> Add a new <code>Modification</code> or <code>TriggerCondition</code> variant whose only test
-          coverage is <code>every_continuous_effect_variant_reaches_the_learning_tokens</code> (<code>observability.rs:2670</code>) or
-          <code>every_trigger_condition_and_ability_reaches_the_learning_tokens</code> (<code>:2416</code>), without adding a card that prints it
-          or registering it in <code>record_vocabulary.rs</code>. On <code>HEAD</code>, those tests pass because <code>tokens_of()</code>
-          silently uses the cloned <code>witness_pack()</code>. Moving <code>tokens_of()</code> back to <code>default_content_pack()</code>
-          (and using an explicit <code>#[doc(hidden)] *_unchecked</code> helper <em>only</em> in <code>every_effect_variant_reaches_the_learning_tokens</code>)
-          closes that hole and drops the full-catalog clone. Note: running <code>observability.rs</code> after restoring <code>tokens_of()</code>
-          may surface additional unprinted witness variants — fixing them is exactly what steer #3 asked for.
-        </div>
-      </article>
-
-      <!-- Finding 2 -->
-      <article class="finding">
-        <div class="finding-head">
-          <h3>2. Finish the out-of-catalog card-name rule across all 4 chosen-name surfaces (not just <code>Decision::SearchNamed</code>)</h3>
-          <div class="finding-tags">
-            <span class="badge badge-this-work">This work</span>
-            <span class="badge badge-no">Half-applied rule</span>
-          </div>
-        </div>
-        <p>
-          <code>effect_execution.rs:1766-1774</code> added a <code>default_content_pack().name_candidates().contains(name)</code>
-          check to mask expanded-fixture names to <code>Null</code> in <code>Decision::SearchNamed</code> — but left the other three
-          runtime surfaces fed by the exact same <code>Decision::NameCard</code> (<code>decision.rs:3626-3641</code>) unaligned:
-        </p>
-
-        <div class="surface-grid">
-          <div class="surface-cell ok">
-            <div class="surface-title">1. <code>Decision::SearchNamed</code></div>
-            <code>effect_execution.rs:1768</code><br />
-            Masks unknown name to <code>None</code> (<code>Null</code>). Note: wraps known names as <code>Some("...")</code> in <code>notes</code> and emits duplicate note when <code>None</code>.
-          </div>
-          <div class="surface-cell bad">
-            <div class="surface-title">2. <code>ZoneEntry.chosen</code></div>
-            <code>effect_execution.rs:871-874</code><br />
-            <code>self.field("chosen on entry", choice)</code> serializes <code>EntryChoice::CardName(name)</code> raw -&gt; <strong>panics in debug guard</strong>.
-          </div>
-          <div class="surface-cell bad">
-            <div class="surface-title">3. <code>Effect::ExileNamed</code></div>
-            <code>decision.rs:3628</code> + <code>out.effects</code><br />
-            Queued <code>Effect::ExileNamed { name, count }</code> serializes <code>name</code> raw if suspended before resolving -&gt; <strong>panics in debug guard</strong>.
-          </div>
-          <div class="surface-cell bad">
-            <div class="surface-title">4. <code>FactKind::ChosenName</code></div>
-            <code>observation_encoder.rs:1882</code><br />
-            <code>EntryChoice::CardName(s) =&gt; name_value(s)</code> writes raw hash -&gt; <strong>fails Python <code>fact_vocabulary</code></strong> (<code>RecordNamespace.NAME</code>).
-          </div>
-        </div>
-
-        <div class="counterexample">
-          <strong>Counterexample:</strong> Put an enters-choosing-a-card-name permanent (e.g. <code>Sorcerous Spyglass</code>,
-          <code>xln.rs:128</code>) on the stack, inject <code>scenario_naming_vocabulary()</code>, and pick index <code>0</code>
-          (a Scryfall fixture name outside <code>default_content_pack()</code>). Observing while another entry replacement is pending
-          panics in <code>Projection::entry</code> -&gt; <code>into_rules_tokens()</code>, and observing on the battlefield emits an unregistered
-          <code>FactKind::ChosenName</code> hash that fails Python <code>fact_vocabulary</code>. Apply one shared helper for out-of-catalog
-          chosen names across <code>SearchNamed</code>, <code>Projection::entry</code>, and <code>FactKind::ChosenName</code> (and keep
-          <code>SearchNamed</code>'s text note clean without <code>Option</code> <code>Debug</code> wrapping).
-        </div>
-      </article>
-
-      <!-- Finding 3 -->
-      <article class="finding">
-        <div class="finding-head">
-          <h3>3. Cover <code>effect_vocabulary</code> (shared-effect programs) in <code>test_effect_vocabulary.py</code> and check <code>admission.py</code> error text</h3>
-          <div class="finding-tags">
-            <span class="badge badge-this-work">This work</span>
-            <span class="badge badge-partial">Surface gap</span>
-          </div>
-        </div>
-        <p>
-          <code>manabot/policy/admission.py</code> admits runtime program tokens on three paths:
-          <code>fact_vocabulary</code> (<code>:592</code>), <code>effect_vocabulary</code> (<code>:695</code>, shared continuous effects),
-          and <code>decision_reference_details</code> (<code>:401</code>).
-          <code>f35670541f</code> specifically added <code>/Modification::AddTypes</code> and <code>/Modification::AddColors</code> for
-          <code>ContinuousEffectData</code>, which travel through <code>effect_vocabulary</code> — yet <code>tests/model/test_effect_vocabulary.py</code>
-          only exercises <code>fact_vocabulary</code> (dense &amp; v11) and <code>Catalog.require_tokens</code> directly.
-          Adding a bounded <code>effect_vocabulary</code> probe (covering acceptance of registered modification program tokens and rejection of
-          unknown / disabled <code>DecisionMemory::*</code> tokens) closes that transport gap.
-          Additionally, <code>scratch/plan.md</code> noted updating the error message in <code>admission.py:516</code> to point readers to
-          <code>record_vocabulary()</code>; decide whether to keep the existing message or clarify it.
-        </p>
-      </article>
-
-      <!-- Finding 4 -->
-      <article class="finding">
-        <div class="finding-head">
-          <h3>4. Untangle ~350 synthetic <code>execution/&lt;kind&gt;/&lt;name&gt;</code> rows and 44 phantom <code>DecisionMemory::*</code> tokens out of <code>record_vocabulary()</code></h3>
+          <h3>1. Untangle ~360 synthetic <code>execution/&lt;kind&gt;/&lt;name&gt;</code> rows and 44 phantom <code>DecisionMemory::*</code> tokens out of <code>record_vocabulary()</code></h3>
           <div class="finding-tags">
             <span class="badge badge-separate">Separate outcome (0.3.0)</span>
             <span class="badge badge-irreversible">Checkpoint/API break</span>
           </div>
         </div>
         <p>
-          Still the underlying structural debt in this area, and properly kept out of <code>0.2.x</code> per Task steer #2.
-          Because <code>DecisionMemory::*</code> still carries phantom <code>Some((TokenKind::Variant, hash))</code> tokens
-          (<code>record_vocabulary.rs:96</code>), four separate places now repeat <code>!name.starts_with("DecisionMemory::")</code>
-          (<code>record_vocabulary.rs:173</code>, <code>catalog.py:50</code>, <code>docs/engine.md:52</code>,
-          <code>test_effect_vocabulary.py:93</code>), and <code>f35670541f</code> had to add 4 more synthetic
-          <code>execution/&lt;kind&gt;/&lt;name&gt;</code> record rows.
+          MTG-501 added 9 more synthetic <code>execution/*</code> rows (4 in Pass 1, 5 in Pass 2) because <code>0.2.x</code>
+          <code>record_vocabulary()</code> is the only transport for runtime-only program tokens, and four places still repeat
+          <code>!name.starts_with("DecisionMemory::")</code> because <code>record_vocabulary.rs:96</code> registers
+          <code>DecisionMemory::*</code> via <code>variant(...)</code> instead of <code>record(Token, …, None)</code>.
         </p>
+        <div class="counterexample">
+          <strong>Counterexample:</strong> A new contributor adds a <code>DecisionMemory::*</code> entry expecting its
+          <code>Variant</code> token to work in a default policy, or adds a new consumer of <code>record_vocabulary()</code>
+          without remembering the <code>!name.starts_with("DecisionMemory::")</code> filter — silently diverging from
+          <code>catalog.py</code> and <code>program_vocabulary()</code>.
+          <strong>What it takes in <code>0.3.0</code>:</strong> expose runtime program tokens directly; give
+          <code>DecisionMemory::*</code> <code>token = None</code>; delete the 4 prefix filters; bind legacy
+          <code>execution/*</code> and <code>DecisionMemory::*</code> keys in <code>binding.py</code> / <code>token_renames.rs</code>.
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <h3>2. Review the name of <code>managym.catalog_tokens()</code> alongside the <code>0.3.0</code> vocabulary split</h3>
+          <div class="finding-tags">
+            <span class="badge badge-separate">Separate outcome (0.3.0)</span>
+            <span class="badge badge-irreversible">Public API break</span>
+          </div>
+        </div>
         <p>
-          <strong>What this would take in <code>0.3.0</code>:</strong>
-          (1) expose runtime-only program tokens directly instead of disguised as <code>RecordNamespace::Token</code> record names;
-          (2) change <code>DecisionMemory::*</code> in <code>record_vocabulary.rs:94</code> from <code>variant(...)</code> to <code>record(Token, ..., None)</code>;
-          (3) drop the 4 prefix-filter hacks and build <code>record_token_keys</code> directly in <code>catalog.py</code>; and
-          (4) bind legacy <code>execution/*</code> and <code>DecisionMemory::*</code> keys in <code>binding.py</code> / <code>token_renames.rs</code>.
+          <code>catalog_tokens()</code> holds printed definition spans only, which is why issue #629 expected runtime tokens to
+          appear there. On <code>0.2.x</code>, five docs and <code>managym/__init__.pyi</code> now explain the split clearly
+          without changing the published signature; renaming or pairing it with an explicit runtime-token export belongs with
+          Finding 1 in <code>0.3.0</code>.
         </p>
       </article>
 
@@ -1044,29 +990,28 @@ fn tokens_of(definition: &amp;ObjectDefinition) -&gt; Vec&lt;(TokenKind, i32)&gt
 
   <!-- Section 5: Numbered Questions -->
   <section>
-    <div class="section-kicker">Choices for the follow-up pass</div>
-    <h2>Numbered questions — reply with option codes (e.g. <code>1a, 2a, 3a</code>)</h2>
+    <div class="section-kicker">Decisions</div>
+    <h2>Numbered questions — reply with option codes (e.g. <code>1a, 2a</code>)</h2>
 
     <div class="questions">
 
       <div class="q-card">
         <div class="q-head">
-          <h3>1. How should <code>observability.rs</code> reconcile multi-variant error aggregation with the <code>into_rules_tokens</code> debug guard?</h3>
+          <h3>1. Ready to ship MTG-501 as it stands on <code>HEAD 20e3291326</code>?</h3>
           <span class="badge badge-this-work">This work</span>
         </div>
         <div class="q-options">
           <div class="opt rec">
             <div class="opt-id">1a</div>
             <div>
-              <strong>Recommended · Delete <code>witness_pack()</code>, restore <code>tokens_of()</code> to <code>default_content_pack()</code>, and add a narrow <code>#[doc(hidden)]</code> unchecked helper used only inside <code>every_effect_variant_reaches_the_learning_tokens</code>.</strong>
-              All 46 other tests in <code>observability.rs</code> regain debug-guard coverage automatically, no <code>ContentPack</code> is cloned, and the exhaustive effect check still prints every missing variant at once.
+              <strong>Recommended · Ship as-is.</strong>
+              All five Task steer items and all three Pass-2 rule-completion slices are implemented, tested, and documented with zero public API change and no remaining conceptual mismatches in MTG-501's scope.
             </div>
           </div>
           <div class="opt">
             <div class="opt-id">1b</div>
             <div>
-              <strong>Keep <code>witness_pack()</code> strictly inside <code>every_effect_variant_reaches_the_learning_tokens</code> and restore <code>tokens_of()</code> to <code>default_content_pack()</code>.</strong>
-              Regains guard coverage on the 46 other tests without adding any <code>#[doc(hidden)]</code> Rust function, at the cost of keeping the full-catalog clone hack in that one test.
+              <strong>Hold to clarify <code>admission.py:516</code>'s error message string</strong> (naming both <code>catalog_tokens()</code> and <code>record_vocabulary()</code>) before publishing.
             </div>
           </div>
         </div>
@@ -1074,43 +1019,20 @@ fn tokens_of(definition: &amp;ObjectDefinition) -&gt; Vec&lt;(TokenKind, i32)&gt
 
       <div class="q-card">
         <div class="q-head">
-          <h3>2. How should non-catalog names from an expanded <code>NameVocabulary</code> (<code>scenario_naming_vocabulary()</code>) be handled in runtime observations?</h3>
-          <span class="badge badge-this-work">This work</span>
+          <h3>2. Track the <code>record_vocabulary()</code> / <code>DecisionMemory::*</code> untangling and <code>catalog_tokens()</code> naming as a <code>0.3.0</code> Task?</h3>
+          <span class="badge badge-separate">Separate outcome (0.3.0)</span>
         </div>
         <div class="q-options">
           <div class="opt rec">
             <div class="opt-id">2a</div>
             <div>
-              <strong>Recommended · Apply one consistent rule across all chosen-name surfaces (<code>Decision::SearchNamed</code>, <code>Projection::entry</code>'s <code>EntryChoice::CardName</code>, and <code>FactKind::ChosenName</code>):</strong>
-              encode non-catalog names as <code>Null</code> / omitted in policy tensors while preserving the exact name cleanly in text notes (without <code>Option</code> <code>Debug</code> wrapping or duplicate lines). Matches <code>names.rs:3-4</code>'s contract that a validated vocabulary may include non-definition names.
+              <strong>Recommended · File as a <code>0.3.0</code> Task</strong> bundled with the scheduled <code>0.3.0</code> compatibility removals so synthetic <code>execution/*</code> rows and the four <code>DecisionMemory::</code> prefix filters disappear cleanly in one breaking release.
             </div>
           </div>
           <div class="opt">
             <div class="opt-id">2b</div>
             <div>
-              <strong>Keep production projections strict (revert the <code>Null</code> masking in <code>SearchNamed</code>) and treat <code>scenario_naming_vocabulary()</code> as a naming-prompt fixture only.</strong>
-              Avoids carrying <code>default_content_pack().name_candidates().contains(name)</code> fallback code in production projections, but requires <code>naming_tests.rs</code> to stop asserting post-selection <code>SearchNamed</code> observations on non-catalog names.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="q-card">
-        <div class="q-head">
-          <h3>3. Should MTG-501 also update <code>admission.py:516</code>'s error message text alongside adding an <code>effect_vocabulary</code> test?</h3>
-          <span class="badge badge-this-work">This work</span>
-        </div>
-        <div class="q-options">
-          <div class="opt rec">
-            <div class="opt-id">3a</div>
-            <div>
-              <strong>Recommended · Add the <code>effect_vocabulary</code> probe to <code>test_effect_vocabulary.py</code> and keep <code>admission.py:516</code>'s error wording unchanged</strong> (<code>"policy received a program token outside the vocabulary; missing keys: ..."</code>), avoiding churn in downstream regex matches while docs/docstrings carry the <code>catalog_tokens()</code> vs. <code>record_vocabulary()</code> distinction.
-            </div>
-          </div>
-          <div class="opt">
-            <div class="opt-id">3b</div>
-            <div>
-              <strong>Also append a brief source hint to <code>admission.py:516</code></strong> (e.g. mentioning <code>catalog_tokens()</code> / <code>record_vocabulary()</code>) and update matching test regexes so future incidents like #629 immediately check both tables.
+              <strong>Leave the <code>0.2.x</code> boundary shape indefinitely</strong> and rely on the debug emission guard and <code>docs/engine.md</code> documentation.
             </div>
           </div>
         </div>
