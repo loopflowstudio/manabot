@@ -83,7 +83,7 @@ Verified in code during realign: `policy_history::record` clears only `context_i
 ## Done when
 
 - `uv run python -m pytest tests/env/test_game_state_edits.py -q` after a rebuild: a seeded game to a mid-game `DeclareBlocker` and a later `Priority`, every edit through both doors; original digest unchanged; turn/step/stack/mana/other permanents/decision memory and the full 32-row history (links expired, no eviction, no `Arrival`) as expected; legal actions updated; cold replay matches digest, actions, history and continuation and rejects pre-edit Commands; `VectorEnv` `SlotLoad.snapshot` with edits; `determinize` and possible worlds on edited envs (bottom pin kept, token absent); pre-validation and declare rollback leave Env and provenance unchanged; edits + `forced_first_action` rejected; untapped blocker gets prompted.
-- `CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --profile ci --test scenario_tests --test-threads 2` (debug): dies-trigger creature moved → empty stack, no pending triggers, `creatures_died == 0`; attacking/blocking creature and attacked planeswalker moved mid-combat, combat damage clean; enchanted creature moved → Aura to graveyard on next SBA; token moved → gone from all zones; exile-link source moved → linked card stays exiled; 32-row window preserved; debug cache and `assert_stack_consistent` hold across steps.
+- `CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --profile ci --lib --test-threads 2 state_edit` (debug; the native tests are lib unit tests in `flow/state_edit/tests.rs` and `agent/env/state_edit_tests.rs`): dies-trigger creature moved → empty stack, no pending triggers, `creatures_died == 0`; attacking/blocking creature and attacked planeswalker moved mid-combat, combat damage clean; enchanted creature moved → Aura to graveyard on next SBA; token moved → gone from all zones; exile-link source moved → linked card stays exiled; 32-row window preserved; debug cache and `assert_stack_consistent` hold across steps.
 - Academy `academy/ui/src/lib/board/replay.test.ts` covers the new branch label.
 - Existing consumers pass: `tests/verify/test_competency.py`, `tests/env/test_decision_group.py`, recording/replay tests, `managym/tests/source_taps.rs`. `uv run python scripts/public_api.py check` clean (`record` for additions only).
 
@@ -103,6 +103,6 @@ More edit variants (hand, graveyard, exile, placement, mana, sickness, control);
 2. **Republish + journal** landed in `a1e8d430d`. Three native regressions pass for priority refresh, blocker rollback and eligibility, and cold replay of an object-bound Command through exact, shuffled and determinized restores.
 3. **Python, recording, Academy** landed in `70e45c2a5`. Seven focused Python tests, 30 Academy move-list tests and the public API check pass.
 
-The focused Python checks ran against a CPython 3.13 debug wheel. The full
-scenario and consumer suites in Done when are left to CI. Ship-review still
-needs the decisions recorded under Concept review.
+No pass remains. The focused Python checks ran against a CPython 3.13 debug wheel; the full
+consumer suites in Done when are left to CI. Ship-review still needs the Q1–Q4 and melded-move
+decisions recorded under Concept review.
