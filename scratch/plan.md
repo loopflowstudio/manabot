@@ -37,17 +37,12 @@ The kickoff design (register 11 historical pairs and add `catalog_tokens()["prog
 - `docs/development.md` (effect/runtime-projection validation note referencing the debug emission guard)
 - `manabot/README.md` (`### Semantic catalog dimensions` clarifying runtime program-token sources and `(kind, 0x…)` admission failures)
 
-## Remaining: one implementation pass
+## Implementation
 
-1. Add `record_vocabulary::program_vocabulary()`, a `OnceLock<HashSet<(u16, i32)>>` following the guard rule. It is internal Rust, with no PyO3 or stub change.
-2. Guard `TokenWriter::into_rules_tokens` under `cfg(debug_assertions)` with that set. If `observability.rs:2365` needs to aggregate across many effects, add an unchecked `#[cfg(test)]` helper.
-3. Point the four Rust oracles (`record_vocabulary.rs:438`, `observability.rs:2374` and `:5651`, `token_renames.rs:277`) at `program_vocabulary()`. This drops the Null exemption and the catalog-only walk. If that lets a runtime-only rename resolve, keep the existing dispositions unless a test forces a change.
-4. Register "enters attached to" in `EXECUTION_TEXT`, which adds one record row (fresh rows bind by mean imputation in `bind_catalog`). Add a directed test that executes `Projection::entry` with `attached_to`.
-5. Steer 4: add a directed test with a departed permanent holding an acquired once-per-turn trigger under a suspended frame (Koh, or another TLA card that inherits one). Its LKI program must stay inside `program_vocabulary()`, and none of the 11 0.2.6 pairs from issue 629 may appear (for example `GrantClock` 0x42b9f74a, field `grantor` 0x274966b7).
-6. Run the Rust suite in debug (`CARGO_BUILD_JOBS=2`, `--test-threads 2`). Fix every unregistered runtime token the guard finds: project storage IDs as visible references, never register ID structs. Record each fix here.
-7. Steer 5: in `tests/model/test_effect_vocabulary.py`, check that `fact_vocabulary` with production host tables accepts every non-`DecisionMemory` `record_vocabulary()` token and the TLA printed spans on both the dense and v11 paths. An unknown pair must be rejected with its `(kind, 0xword)` (keep the existing unknown/null/definition-reference tests). After registering the new row, run `tests/model/test_pinned_pilot.py` to confirm stored-pilot predictions are unchanged.
-
-Validation: rebuild the extension; `cargo nextest run --profile ci` in debug for managym and its cards crate; `uv run pytest -q tests/model/test_effect_vocabulary.py tests/semantic/test_learning_projection.py tests/model/test_pinned_pilot.py`; `uv run python scripts/public_api.py check`, which must be unchanged.
+- `f35670541` shares one Rust vocabulary across the debug emission guard and four checks, registers the attachment label, exercises Koh's departed acquired trigger, and verifies both Python fact transports.
+- The first debug Nextest run reported 2,393 passes, three failures and three skips. Named searches from the expanded fixture now encode an unregistered name as `Null` while retaining the spelling in text. The variable-loyalty-cost path needed `LoyaltyCost::MinusX`. The resolved-modification witness needed closing tokens for `AddTypes` and `AddColors`.
+- The seven focused debug reruns passed, including the three failures, the exhaustive effect witness, Koh's last-known characteristics, the entry attachment, and the missing-pairs diagnostic. CI will run the full corrected suite.
+- The rebuilt CPython 3.13 extension passed 57 Python tests across effect vocabulary, learning projection, pinned pilots, admission, record coverage and catalog naming. The optional `u1952` checkpoint was absent. The public API matched `tests/public_api.json`.
 
 ## Deferred findings
 

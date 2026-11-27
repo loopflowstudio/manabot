@@ -1,0 +1,17 @@
+at: f35670541f72e997d9a3ebb41196e234330bb1f4
+first:
+  - path: docs/engine.md
+    why: Defines the vocabulary a catalog policy admits
+  - path: managym/src/agent/record_vocabulary.rs
+    why: Combines printed spans and registered runtime pairs
+  - path: managym/src/cards/tokens.rs
+    why: Checks every default-pack runtime stream in debug
+  - path: managym/src/agent/effect_execution.rs
+    why: Projects entry attachments and named searches
+  - path: managym/cards/tests/cards/tla.rs
+    why: Exercises Koh's departed once-per-turn trigger
+  - path: managym/cards/tests/cards/observability.rs
+    why: Checks every effect against the same vocabulary
+  - path: tests/model/test_effect_vocabulary.py
+    why: Verifies dense and packed Python admission
+hide: []
