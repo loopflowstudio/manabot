@@ -37,14 +37,17 @@ use managym::{
         decision_surface::{AtomicCommand, DecisionSubmission, DecisionSurfaceError},
         observation::{EventEntityKind, KeywordData, Observation},
         policy_history::HistoryReference,
+        record_vocabulary::missing_program_tokens,
     },
     cards::setups::authored_setup,
+    cards::tokens::{name_value, TokenKind},
     decision::Command,
     flow::{event::GameEvent, turn::StepKind},
     possible_worlds::{viewer_observation, PossibleWorldSpace},
     search_state::witness,
     state::{
-        card::{Keyword, Keywords, SpellProfile, StaticAbility},
+        ability::{Effect, ObjectSelector},
+        card::{ActivatedAbilityDefinition, Keyword, Keywords, SpellProfile, StaticAbility},
         effect::{CopyEffect, CopyException, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost, ManaExpiry, ManaRestriction, SpendingContext},
@@ -16186,6 +16189,66 @@ fn koh_inherited_death_trigger_uses_last_known_abilities() {
         ActionSpaceKind::Learn,
         "Koh had Eyetwitch's death trigger immediately before dying"
     );
+}
+
+#[test]
+fn koh_departed_once_each_turn_trigger_stays_in_program_vocabulary() {
+    let mut s = five_color_setup(&["Koh, the Face Stealer", "Suki, Courageous Rescuer"]);
+    let koh = koh_inherits(&mut s, "Suki, Courageous Rescuer");
+    let object = card_of(&s, koh);
+    // Make the same resolving frame read Koh's LKI after he leaves.
+    s.game_mut().state[object]
+        .activated_abilities
+        .push(ActivatedAbilityDefinition {
+            effects: vec![
+                Effect::exile(ObjectSelector::This),
+                Effect::may_discard(1, Vec::new()),
+            ],
+            ..Default::default()
+        });
+    move_to_hand(&mut s, "Plains");
+    activate(&mut s, koh, 1);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
+    let lki = s.game().object_lki(object).expect("departed Koh");
+    assert!(lki
+        .granted_abilities
+        .iter()
+        .any(|trigger| trigger.clock().is_some()));
+
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let marker = (
+        TokenKind::Text as u16,
+        name_value("last known characteristics"),
+    );
+    let program = &observation
+        .continuation
+        .iter()
+        .find(|frame| frame.effect_execution.contains(&marker))
+        .expect("suspended frame retains Koh's last known characteristics")
+        .effect_execution;
+    assert!(program.contains(&(
+        TokenKind::Variant as u16,
+        name_value("TriggerCondition::OnceEachTurn"),
+    )));
+    // The exact structure and field pairs leaked by the 0.2.6 clock payload.
+    for forbidden in [
+        (1, 0x15d1e4cc), // /PublicId
+        (1, 0x1a65bcdc), // /PermanentId
+        (1, 0x1e2e1716), // PermanentId
+        (1, 0x42b9f74a), // GrantClock
+        (1, 0x4a2e5134), // /GrantClock
+        (1, 0x7069dc33), // PublicId
+        (2, 0x169280b1), // timestamp
+        (2, 0x274966b7), // grantor
+        (2, 0x463aa4fe), // static_slot
+        (2, 0x4d7d0f4e), // ability_index
+        (2, 0x7771479d), // clock
+    ] {
+        assert!(!program.contains(&forbidden), "leaked {forbidden:?}");
+    }
+    let missing = missing_program_tokens(program);
+    assert!(missing.is_empty(), "unregistered LKI tokens: {missing:?}");
 }
 
 /// CR 607.5: Koh inheriting Boiling Rock Rioter acquires both linked abilities

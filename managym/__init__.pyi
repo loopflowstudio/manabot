@@ -175,7 +175,10 @@ class CatalogTokens(TypedDict):
 LearningCatalog = CatalogTokens  # Deprecated spelling, removed in 0.3.0.
 
 def catalog_tokens() -> CatalogTokens:
-    """Tokenized rules text of every catalog definition, rows by CardDefId."""
+    """Printed rules spans for cards, tokens and back faces, indexed by CardDefId.
+
+    Runtime-only program symbols come from ``record_vocabulary()``.
+    """
 
 def card_definitions_json() -> str:
     """Every catalog definition as the JSON its catalog tokens serialize."""
@@ -189,9 +192,12 @@ def catalog_token_renames() -> tuple[
     """Historical catalog tokens and record names with their optional successors."""
 
 def record_vocabulary() -> list[tuple[str, str, int, int | None, int | None]]:
-    """Every name fact/shared-effect encoders hash, as `(namespace, name,
-    value, token_kind, token_value)`; the token is card text's for the same
-    concept. Namespaces: `token`, `name`, `restriction`."""
+    """Every name fact/shared-effect encoders hash and runtime-only program
+    tokens, as `(namespace, name, value, token_kind, token_value)`.
+
+    When present, `(token_kind, token_value)` is the learning token shared with
+    printed card text or appended for runtime-only program symbols. Namespaces:
+    `token`, `name`, `restriction`."""
 
 @deprecated("use catalog_tokens; removed in 0.3.0")
 def learning_catalog() -> CatalogTokens: ...
