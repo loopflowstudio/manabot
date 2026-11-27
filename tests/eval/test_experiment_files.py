@@ -36,6 +36,7 @@ import pytest
 from experiments import (
     batched_baseline,
     belief,
+    collection_overlap,
     elemental,
     llm_claude,
     mana_taps,
@@ -57,6 +58,16 @@ FRONTIER_JOBS = {"tla-frontier-c5fba4-w64": 1, "tla-frontier-c5fba4-w160l8": 1}
 # Each file, the flags its declaration needs, and its runs per job.
 DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
     (batched_baseline, (), {"batched_baseline": 1}),
+    (
+        collection_overlap,
+        (),
+        {
+            "w160l8-fresh-complete": 1,
+            "w160l8-fresh-exact": 1,
+            "w384l8-complete": 1,
+            "w384l8-exact": 1,
+        },
+    ),
     (
         elemental,
         ("--revision", "HEAD", "--updates", "2", "--hours", "1", "--usd-per-run", "1"),
@@ -110,6 +121,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     assert found - NOT_YET_RUNNABLE == {
         "batched_baseline",
         "belief",
+        "collection_overlap",
         "elemental",
         "etude_execution",
         "mana_taps",

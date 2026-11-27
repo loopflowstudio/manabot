@@ -133,10 +133,12 @@ learner state and native streams at the saved update boundary.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
 Collector or batch-closure changes also require
-`uv run --extra dev --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
-Fixtures asserting exact rollout shapes or transition counts must explicitly
-select `batch_closure="exact-quota"` as well as one learning seat; whole-game
-closure treats the transition quota as a minimum.
+`uv run --extra dev --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/training/test_collection.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
+Fixtures asserting exact transition counts must explicitly select
+`batch_closure="exact-quota"` (and `learning_seats="one"` when asserting the
+rectangular `[transitions, streams]` shape; two-seat exact quota packs
+`streams × transitions` rows into `[rows, 1]` with explicit trajectory spans);
+whole-game closure treats the transition quota as a minimum.
 The native encoder is the only one, so an observation change is written once
 in `managym/src/agent/` with a directed test that asserts its named columns or
 rows on a constructed position, and its `observability.rs` entry. Python
