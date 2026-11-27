@@ -1,0 +1,97 @@
+<!doctype html><meta charset=utf-8><title>MTG-500 QA · manual mana payment</title>
+<style>
+body{font:15px/1.5 -apple-system,system-ui,sans-serif;background:#f6f3ec;color:#1c1c1e;max-width:960px;margin:2rem auto;padding:0 1rem}
+h1{font-weight:600;font-size:1.5rem} h2{font-size:1.1rem;margin-top:2rem;border-bottom:1px solid #d6d1c4;padding-bottom:.2rem}
+pre{background:#ffffff;border:1px solid #e1dccf;border-radius:6px;padding:.7rem;overflow:auto;font-size:12px;max-height:420px}
+.ok{color:#2f6b3a;font-weight:600} .warn{color:#8a5a12;font-weight:600} td,th{padding:.25rem .6rem;text-align:left;border-bottom:1px solid #e1dccf}
+</style>
+<h1>MTG-500 QA · manual mana payment finishes</h1>
+<p>Surface: the installed <code>managym</code> wheel (debug build of <code>b5bde7a20</code>) in a fresh venv, driven as a training collector and a scripted player would drive it. No Rust tests were run.</p>
+<table><tr><th>Scenario</th><th>Result</th></tr>
+<tr><td>1. The four reported Sokka positions, every payment order, skipping on and off</td><td class=ok>all finish; no empty decision</td></tr>
+<tr><td>2. 0.2.6 control on the same positions</td><td class=ok>empty decisions reproduce on 0.2.6 and are gone here</td></tr>
+<tr><td>3. Reported setup: native VectorEnv, 32 slots, manual payment both seats, TLA decks with Citadel/Canyon/Heartbeat/Henge, 600 random games</td><td class=ok>0 slot errors, 17,525 PayOrNot decisions, slowest step 0.94 s</td></tr>
+<tr><td>4. Returning user: same seeded games on base vs branch</td><td class=ok>identical observations at 7,512 decisions</td></tr>
+<tr><td>5. Returning user: replays written by base restored on branch</td><td class=warn>all refused (state digest v34 → v35), by design</td></tr></table>
+
+<h2>1 · Every payment order in the four positions</h2>
+<p>From the cast of Sokka, each legal action was taken on an <code>env.clone_env()</code> child, recursively, until the payer had priority with Sokka on the stack or the game ended. Losing at −1 or 0 life after the cast completes is the correct rules result (CR 704 after payment). Canyon at 5 life with skipping on runs through the payer's forced passes to the opponent's turn, so it was followed separately:</p>
+<pre>managym /Users/jack/src/manabot.mtg-500-fix-infinite-spin/.runs/venv/lib/python3.13/site-packages/managym/__init__.py
+
+## Airship Engine Room, life 2, skip_trivial=True: 4 leaves in 0.0s
+   outcome counts: {&#x27;GAMEOVER&#x27;: 4}
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=1
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=3
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=0
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=1
+
+## Airship Engine Room, life 2, skip_trivial=False: 4 leaves in 0.0s
+   outcome counts: {&#x27;GAMEOVER&#x27;: 4}
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=1 &gt; PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=1
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=3 &gt; PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=0
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=0 &gt; PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=3
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=1 &gt; PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=1
+
+## Airship Engine Room, life 3, skip_trivial=True: 4 leaves in 0.0s
+   outcome counts: {&#x27;GAMEOVER&#x27;: 4}
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=1
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=3
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=0
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=1
+
+## Airship Engine Room, life 3, skip_trivial=False: 4 leaves in 0.0s
+   outcome counts: {&#x27;GAMEOVER&#x27;: 4}
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=1 &gt; PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=1
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=3 &gt; PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=0
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=0 &gt; PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=3
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Airship Engine Room] ab=1 &gt; MODAL:ChooseMode[] mode=1 &gt; PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=1
+
+## Sunbaked Canyon, life 3, skip_trivial=True: 1 leaves in 0.0s
+   outcome counts: {&#x27;GAMEOVER&#x27;: 1}
+   GAMEOVER life=None over=True won=False stack=1 :: 
+
+## Sunbaked Canyon, life 3, skip_trivial=False: 1 leaves in 0.0s
+   outcome counts: {&#x27;GAMEOVER&#x27;: 1}
+   GAMEOVER life=None over=True won=False stack=1 :: PAYORNOT:PriorityActivateAbility[Sunbaked Canyon] ab=0 &gt; MODAL:ChooseMode[] mode=0 &gt; PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0 &gt; MODAL:ChooseMode[] mode=1
+
+## Sunbaked Canyon, life 5, skip_trivial=True: 2 leaves in 0.0s
+   outcome counts: {&#x27;ABANDONED-PRIORITY&#x27;: 2}
+   ABANDONED-PRIORITY life=20 over=False won=False stack=0 :: PAYORNOT:PriorityActivateAbility[Tarnished Citadel] ab=0
+   ABANDONED-PRIORITY life=20 over=False won=False stack=0 :: PAYORNOT:PriorityActivateAbility[Sunbaked Canyon] ab=0
+
+## Sunbaked Canyon, life 5, skip_trivial=False: 2 leaves in 0.0s
+   outcome counts: {&#x27;PRIORITY&#x27;: 2}
+./venv/bin/python -I -W ignore qa_positions.py  0.03s user 0.01s system 97% cpu 0.041 total
+</pre>
+<pre>skip=True first=Citadel: payer life 1, turn 2, Sokka on the battlefield
+skip=True first=Canyon:  payer life 1, turn 2, Sokka on the battlefield
+skip=False Citadel &gt; blue &gt; Canyon &gt; red: payer life 1, Sokka on the stack
+skip=False Canyon &gt; red &gt; Citadel &gt; blue: payer life 1, Sokka on the stack</pre>
+<h2>2 · Control against the public 0.2.6 wheel</h2>
+<pre>$ uv run --no-project --with managym==0.2.6 python repro_mana_payment.py
+Airship Engine Room, 2 life: ActionSpaceEnum.Modal, modes []
+Airship Engine Room, 3 life: ActionSpaceEnum.Modal, modes [1, 3]
+Sunbaked Canyon, 3 life: ActionSpaceEnum.Modal, modes []
+Sunbaked Canyon, 5 life: ActionSpaceEnum.Modal, modes [1]
+--- this branch (debug wheel):
+Airship Engine Room, 2 life: ActionSpaceEnum.Modal, modes [1, 3]
+Airship Engine Room, 3 life: ActionSpaceEnum.Modal, modes [1, 3]
+Sunbaked Canyon, 3 life: Citadel colored activation absent
+Sunbaked Canyon, 5 life: ActionSpaceEnum.Modal, modes [1]</pre>
+<p>At Canyon/3 life, Citadel first is no longer offered because it cannot finish the payment. Canyon is the only first source, as the plan's table requires.</p>
+<h2>3 · Collection in the reported shape</h2>
+<p><code>.runs/qa_collect.py</code>: a parent process watches a heartbeat file and would <code>sample</code> and kill the child after 60 s without a finished step. It never fired. Slots that finish load with <code>SlotLoad.fresh</code>, and errors come from <code>get_last_info()</code> after <code>step_isolated_into_buffers</code>.</p>
+<pre>{&quot;games&quot;: 600, &quot;vector_steps&quot;: 3705, &quot;slowest_step_s&quot;: 0.935, &quot;errors&quot;: {}, &quot;decision_kinds&quot;: {&quot;Modal&quot;: 5898, &quot;LookAndSelect&quot;: 5407, &quot;Priority&quot;: 56977, &quot;Discard&quot;: 766, &quot;PayOrNot&quot;: 17525, &quot;DeclareAttacker&quot;: 13489, &quot;Learn&quot;: 1293, &quot;DeclareBlocker&quot;: 3861, &quot;ChooseTarget&quot;: 3410, &quot;OrderTriggers&quot;: 1384, &quot;Waterbend&quot;: 7625, &quot;Scry&quot;: 925}}
+.runs/venv/bin/python -I .runs/qa_collect.py 32 600 7  185.63s user 1.63s system 85% cpu 3:38.60 total
+</pre>
+<p>The 0.94 s slowest step came while a base-revision build was sharing the CPU. This run cannot tell whether it was a payment step.</p>
+<h2>4–5 · Data from before the change</h2>
+<pre>base (3feefa8ee) restores its own 9 replays: digest same as base: True
+branch restores the same 9 replays: refused: PyAgentError snapshot state_digest mismatch (all 9)
+per-decision observation hashes, 40 seeded manual-payment games, both seats:
+  base 7512 lines, branch 7512 lines, cmp: IDENTICAL</pre>
+<p>Play is unchanged on ordinary boards. Snapshot replays recorded before this change fail restore because the match-state hash moved to v35, and restore checks the final digest. This is the documented consequence of the reviewed choice (third review 2a). Unfinished games and retained replays from 0.2.x releases will not restore after upgrade, as with earlier hash bumps on main.</p>
+<h2>Not reached</h2>
+<ul><li>The original Linux game (no replay or seed was attached). Its rate of about one stall per 50k games cannot be reached by a bounded laptop run.</li>
+<li><code>ShardedVectorEnv</code> (manabot, needs Torch). The native <code>VectorEnv</code> step, where the stall was sampled, was driven directly.</li>
+<li>Engine Budget timings (CI's paired release run).</li></ul>
