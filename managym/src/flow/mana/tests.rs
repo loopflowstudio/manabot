@@ -1466,6 +1466,122 @@ fn counter_cost_cannot_be_replenished_by_another_counter_only_mana_ability() {
 }
 
 #[test]
+fn mana_counter_cost_can_require_replacement_order() {
+    use crate::agent::action::Action;
+    use crate::flow::{
+        game::Game,
+        proposed_event::{
+            BatchProgress, CounterProvenance, EventBinding, EventCause, ProposedEvent,
+        },
+    };
+    use crate::state::{
+        ability::Effect,
+        card::{ActivatedAbilityDefinition, ReplacementEffect},
+        game_object::PlayerId,
+        permanent::CounterKind,
+        player::{ManaFloats, PlayerConfig},
+    };
+
+    let player = PlayerId(0);
+    let caradora = "Caradora, Heart of Alacria";
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new(
+                "payer",
+                [
+                    ("Forest".into(), 37),
+                    (caradora.into(), 1),
+                    ("Doubling Season".into(), 1),
+                    ("Gray Ogre".into(), 1),
+                ]
+                .into(),
+            ),
+            PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+        ],
+        347,
+        false,
+    );
+    game.keep_opening_hands();
+    game.scenario_force_battlefield(player, caradora, true)
+        .unwrap();
+    let season = game
+        .scenario_force_battlefield(player, "Doubling Season", true)
+        .unwrap();
+    let season = game.permanent_object(season).unwrap();
+    // Doubling Season normally modifies effects only. Make its doubling
+    // apply to costs too, so the order changes the number of counters paid.
+    for effect in &mut game.state[season].replacement_effects {
+        if let ReplacementEffect::ModifyCounters { effects_only, .. } = effect {
+            *effects_only = false;
+        }
+    }
+    let permanent = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let object = game.permanent_object(permanent).unwrap();
+    let kind = CounterKind::PlusOnePlusOne;
+    game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        tap_source: true,
+        add_counters: Some((kind, 1)),
+        effects: vec![Effect::add_mana(Mana::parse("G"))],
+        ..Default::default()
+    }];
+    game.mana_floats[player.0] = ManaFloats::All;
+    game.tick().unwrap();
+    let action = Action::ActivateAbility {
+        player,
+        permanent,
+        ability_index: 0,
+    };
+    assert!(game.action_space().unwrap().actions.contains(&action));
+
+    let mut fork = game.clone();
+    assert!(fork.tap_permanent(permanent, true));
+    let mut batch = fork.event_batch(
+        EventBinding::None,
+        [ProposedEvent::CounterChange {
+            provenance: CounterProvenance::new(EventCause::Cost),
+            target: object,
+            kind,
+            delta: 1,
+            by: Some(player),
+        }],
+    );
+    let BatchProgress::Decision(order) = fork.advance_event_batch(&mut batch, Some(player)) else {
+        panic!("expected a choice between the two counter replacements");
+    };
+    let super::Decision::OrderReplacement {
+        player: chooser,
+        candidates,
+    } = *order
+    else {
+        panic!("expected OrderReplacement");
+    };
+    assert_eq!(chooser, player);
+    assert_eq!(candidates.len(), 2);
+    // Resume each counter event with its own order. The engine must retain
+    // the activation while the payer makes this decision.
+    let mut totals = Vec::new();
+    for candidate in candidates {
+        let mut branch = fork.clone();
+        let mut batch = batch.clone();
+        branch.choose_replacement(&mut batch, &candidate);
+        assert!(matches!(
+            branch.advance_event_batch(&mut batch, Some(player)),
+            BatchProgress::Complete { .. }
+        ));
+        totals.push(
+            branch.state.permanents[permanent]
+                .as_ref()
+                .unwrap()
+                .counter_count(kind),
+        );
+    }
+    totals.sort_unstable();
+    assert_eq!(totals, [3, 4]);
+}
+
+#[test]
 fn pending_mana_activation_reserves_its_counter() {
     use crate::flow::{
         decision::{Decision, EffectFrame, SuspendedResolution},
