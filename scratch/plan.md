@@ -47,7 +47,7 @@ the Etude binding awaits its SDK release.
 - `manabot` `origin/main` added three Academy/action-folding commits since our
   base (`080ea64372`, `65dcf2340a`, `b611abb3d7`); none touch eval, batching,
   or `SlotLoad`. (`57d4ea59b5` GRU bf16 fix is already in our base.)
-- **Unblocking artifact for pass 4:** an `etude-sdk` release `> 0.4.7` shipping
+- **Unblocking artifact for pass 5:** an `etude-sdk` release `> 0.4.7` shipping
   EXP-77 `play_many` and async `play`. First command once available:
   `uv lock --upgrade-package etude-sdk && uv sync --extra dev --extra artifacts --extra evaluation`,
   then read `etude.eval.run.EvalRun`, `etude.jobs.EvalJob`,
@@ -85,7 +85,7 @@ the Etude binding awaits its SDK release.
   scale past ~2,000 games/hr. (Prior L4 reference from MTG-328: 0.85 s/game
   host work, 21% L4 busy below ~34M.)
 
-## Design notes (open / still shaping pass 4)
+## Design notes (open / still shaping pass 5)
 
 - **Precision (made for review, see `scratch/questions.md`; irreversible once
   rows are stored):** declared per agent set (`AGENTS`, `AGENTS_TF32`,
@@ -93,7 +93,7 @@ the Etude binding awaits its SDK release.
   keeps `etude-policy-f32-auto-v1`; seeds pinned to the float32 envelope.
   Fallback if rejected before L4 bf16 rows are recorded: float32 only.
 - **Vector runner (`manabot/eval/vector.py`, name for review):** `play_pairings`
-  stays Torch-free and async over `MatchSource`; pass 4 binds it to Etude's
+  stays Torch-free and async over `MatchSource`; pass 5 binds it to Etude's
   `Matches`, passes `rows=prepared.batch` on awaited `Forward`, and isolates
   `ForwardError` per affected checkpoint slots rather than letting it abort
   unrelated held matches.
@@ -104,7 +104,19 @@ the Etude binding awaits its SDK release.
 2. **Vector runner, locally (done, `dd11bd0a3f`).** Seeded `SlotLoad.fresh(..., seed=)`; `RecordedVectorEnv.record_in_memory`/`slot_record`; shared admission/finalization (`eval/pairing.py`, `eval/match.py`); Torch-free async `play_pairings` (`eval/vector.py`). Trace parity with `play_pairing` proved field by field and by `replay_game`/`audit`/`replay_failure` (heuristic and GRU memory); raw `game_trace_sha256` differs only through wall-clock timings and `mode="vector"`.
 3. **Local measurement and runner cleanup (done, `08a854747f`, `7e79ad34ae`).** Consolidated per-leg setup (`resolve_game_match`, `game_runtime_identities`, `arena_source_sha256`, `set_execution_limits`), dropped `_` prefixes on `eval/vector.py` helpers, added `experiments/eval_throughput.py`, and measured all 12 Apple M4 Max arms in `experiments/reports/eval_throughput.md` (128/128 outcome and replay parity; MPS vector-64 2.41–2.66× CPU batch-1, host arena + replay now 79–83% of single-process wall).
    **MLX follow-up (done, `d2012147d4`, `c4924ee4ed`).** MLX vector-64 reached 2,033 and 1,915 games/hr, with 128/128 replay passes and identical leg traces against CPU and MPS for each model. Local timings and reproduction are in `experiments/reports/eval_throughput.md`.
-4. **Etude binding, L4 arm, cleanup, docs (blocked on `etude-sdk > 0.4.7`; PyPI still `0.4.7` as of 2026-11-27, EXP-77 committed at `c5923cf` and `310ac1` at `de0c927`, both unreleased).**
+4. **Unblocked remainder: match cleanup and CUDA arms (next).** Needs no SDK release.
+   - Deduplicate `manabot/eval/match.py`: collapse `play_cell`'s ~165-line copy
+     of `replay_block`/trace/stats retention onto `finalize_settled_cell`
+     (accepting an `Iterable[dict[str, Any]]` with `try/finally` trace write).
+     Existing eval tests (`tests/eval/test_vector_eval.py`,
+     `tests/eval/test_elemental_play.py`) must pass unchanged.
+   - Run `experiments/eval_throughput.py` on a rented CUDA L4 (RunPod via
+     Doppler, `--max-usd 5`): CPU batch-1, CUDA vector-64 float32 and bf16 for
+     trained `w160l8` and seeded `w384l8`, same 32 deals and checkpoint bytes,
+     replay parity checked. Add the arms, games/hour, rows per forward and each
+     arm's limiting stage to `experiments/reports/eval_throughput.md`.
+     Teaches whether CUDA batching is host-bound below 34M as MTG-328 implied.
+5. **Etude binding and docs (blocked on `etude-sdk > 0.4.7`; PyPI still `0.4.7` on 2026-11-27, EXP-77 committed at `c5923cf` and `310ac1` at `de0c927`, both unreleased).**
    - Upgrade `etude-sdk` and bind `play_many` over `play_pairings` (pass
      `rows=prepared.batch` to awaited `Forward`; catch `ForwardError` to drop
      affected slots and yield `(match, error)` per match without failing
@@ -112,18 +124,13 @@ the Etude binding awaits its SDK release.
    - Convert `play_pairing` and experiment `EvalJob(play=...)` callbacks
      (`experiments/{elemental,llm_claude,llm_qwen,mana_taps,opponent_memory,tla_frontier,tla_trophies}.py`)
      to `async def` (or `play_many=` where appropriate).
-   - Deduplicate `manabot/eval/match.py`: collapse `play_cell`'s ~165-line copy
-     of `replay_block`/trace/stats retention onto `finalize_settled_cell`
-     (accepting an `Iterable[dict[str, Any]]` with `try/finally` trace write).
-   - Run and add the CUDA L4 float32 and bf16 arms (`--max-usd 5`) to
-     `experiments/reports/eval_throughput.md`.
-   - Write docs for what ships: `docs/evaluation.md#etude-agents`,
+   - Update docs for managed `play_many`: `docs/evaluation.md#etude-agents`,
      `docs/training.md`, `docs/experiments.md`, `manabot/README.md`.
 
 ## Docs
 
 Managed loading, precision and Apple device selection are documented in
-`docs/evaluation.md#etude-agents`. Pass 4 updates the docs for managed
+`docs/evaluation.md#etude-agents`. Pass 5 updates the docs for managed
 `play_many`.
 
 ## Review record

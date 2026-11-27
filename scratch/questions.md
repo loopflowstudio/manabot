@@ -46,7 +46,7 @@ Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
   optional keyword-only `seed: int | None = None` to `SlotLoad.fresh` in Rust
   and `managym/__init__.pyi` (non-breaking; recorded in `tests/public_api.json`).
 - **Sync `play` removal and `play_many` committed in EXP-77 (`c5923cf`, unreleased).** When `etude-sdk > 0.4.7` ships,
-  every Manabot `play` callback converts to `async def` (or `play_many=`) in pass 4.
+  every Manabot `play` callback converts to `async def` (or `play_many=`) in pass 5.
 
 Ideas outside this Task:
 
