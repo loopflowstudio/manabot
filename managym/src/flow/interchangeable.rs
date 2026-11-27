@@ -2719,98 +2719,21 @@ impl Game {
             }
         }
 
-        // Group duplicate-key candidates that also pass cheap object/permanent
-        // equivalence before running `ReferenceCensus::run` or acquiring
-        // `board_scan()`. Copies differing cheaply by counters, damage,
-        // attachment, or combat role exit before any census walk.
-        let mut cheap_group: Vec<usize> = vec![usize::MAX; candidates.len()];
-        let mut watch: Vec<ObjectId> = Vec::new();
-        let mut watch_slot: Vec<usize> = vec![usize::MAX; candidates.len()];
-        let mut has_perm_dup = false;
-        let mut next_group = 0usize;
-        for i in 0..candidates.len() {
-            if cheap_group[i] != usize::MAX {
-                continue;
-            }
-            let (key, _, rep_obj) = candidates[i];
-            let is_perm = key.1.is_permanent();
-            let mut group = usize::MAX;
-            for j in (i + 1)..candidates.len() {
-                if cheap_group[j] != usize::MAX || candidates[j].0 != key {
-                    continue;
-                }
-                if !self.same_object_pair_cheap(is_perm, rep_obj, candidates[j].2) {
-                    continue;
-                }
-                if group == usize::MAX {
-                    group = next_group;
-                    next_group += 1;
-                    has_perm_dup |= is_perm;
-                    cheap_group[i] = group;
-                    watch_slot[i] = push_unique(&mut watch, rep_obj);
-                }
-                cheap_group[j] = group;
-                watch_slot[j] = push_unique(&mut watch, candidates[j].2);
-            }
-        }
-
-        if watch.is_empty() {
+        let Some(rep_of) = self.find_interchangeable_reps(candidates.len(), |i| {
+            let (key, _, obj) = candidates[i];
+            Some((key, key.1.is_permanent(), obj))
+        }) else {
             return (space, None);
-        }
-
-        let census = ReferenceCensus::run_with_perm_flag(self, &watch, has_perm_dup);
-        if census.all_named() {
-            return (space, None);
-        }
-
-        let _scan = has_perm_dup.then(|| self.board_scan());
+        };
 
         // Map original action index -> (representative original action index, folded object)
         // for actions that fold into an earlier representative.
         let mut folded_into: Vec<Option<(usize, ObjectId)>> = vec![None; space.actions.len()];
-        let mut any_folded = false;
-
-        // Track post-census representatives per cheap group.
-        let mut perm_reps: Vec<(usize, usize, PermanentId, Arc<Characteristics>)> = Vec::new();
-        let mut card_rep: Vec<Option<usize>> = vec![None; next_group];
-
-        for (ci, &(key, orig_idx, object)) in candidates.iter().enumerate() {
-            let g = cheap_group[ci];
-            if g == usize::MAX || census.is_named(watch_slot[ci]) {
-                continue;
+        for (ci, rep_ci) in rep_of.into_iter().enumerate() {
+            if let Some(rep_ci) = rep_ci {
+                let (_, orig_idx, object) = candidates[ci];
+                folded_into[orig_idx] = Some((candidates[rep_ci].1, object));
             }
-            if key.1.is_permanent() {
-                let Some(perm_id) = self.state.permanent_of(object) else {
-                    continue;
-                };
-                let matched_rep = perm_reps
-                    .iter()
-                    .find(|&&(rep_g, _, rep_perm_id, ref rep_view)| {
-                        rep_g == g
-                            && self.post_census_permanents_equivalent(
-                                rep_perm_id,
-                                rep_view,
-                                perm_id,
-                            )
-                    })
-                    .map(|&(_, rep_orig_idx, _, _)| rep_orig_idx);
-
-                if let Some(rep_orig_idx) = matched_rep {
-                    folded_into[orig_idx] = Some((rep_orig_idx, object));
-                    any_folded = true;
-                } else if let Some(view) = self.foldable_permanent_view(perm_id) {
-                    perm_reps.push((g, orig_idx, perm_id, view));
-                }
-            } else if let Some(rep_orig_idx) = card_rep[g] {
-                folded_into[orig_idx] = Some((rep_orig_idx, object));
-                any_folded = true;
-            } else {
-                card_rep[g] = Some(orig_idx);
-            }
-        }
-
-        if !any_folded {
-            return (space, None);
         }
 
         // Compact surviving actions in place in emission order and remap alias
@@ -2849,75 +2772,19 @@ impl Game {
             .iter()
             .map(|&id| self.permanent_bucket(id))
             .collect();
-
-        let mut cheap_group = vec![usize::MAX; permanents.len()];
-        let mut watch = Vec::new();
-        let mut watch_slot = vec![usize::MAX; permanents.len()];
-        let mut next_group = 0usize;
-
-        for i in 0..permanents.len() {
-            if cheap_group[i] != usize::MAX {
-                continue;
-            }
-            let Some((bucket_i, obj_i)) = buckets[i] else {
-                continue;
-            };
-            let mut group = usize::MAX;
-            for j in (i + 1)..permanents.len() {
-                if cheap_group[j] != usize::MAX || permanents[i] == permanents[j] {
-                    continue;
-                }
-                let Some((bucket_j, obj_j)) = buckets[j] else {
-                    continue;
-                };
-                if bucket_i != bucket_j || !self.same_object_pair_cheap(true, obj_i, obj_j) {
-                    continue;
-                }
-                if group == usize::MAX {
-                    group = next_group;
-                    next_group += 1;
-                    cheap_group[i] = group;
-                    watch_slot[i] = push_unique(&mut watch, obj_i);
-                }
-                cheap_group[j] = group;
-                watch_slot[j] = push_unique(&mut watch, obj_j);
-            }
-        }
-
-        if watch.is_empty() {
+        let Some(rep_of) = self.find_interchangeable_reps(buckets.len(), |i| {
+            buckets[i].map(|(bucket, obj)| (bucket, true, obj))
+        }) else {
             return permanents.iter().map(|&id| vec![id]).collect();
-        }
-
-        let census = ReferenceCensus::run_with_perm_flag(self, &watch, true);
-        if census.all_named() {
-            return permanents.iter().map(|&id| vec![id]).collect();
-        }
-
-        let _scan = self.board_scan();
+        };
         let mut classes: Vec<Vec<PermanentId>> = Vec::with_capacity(permanents.len());
-        let mut perm_reps: Vec<(usize, usize, PermanentId, Arc<Characteristics>)> = Vec::new();
-
+        let mut class_of = vec![0usize; permanents.len()];
         for (i, &perm_id) in permanents.iter().enumerate() {
-            let g = cheap_group[i];
-            if g == usize::MAX || census.is_named(watch_slot[i]) {
-                classes.push(vec![perm_id]);
-                continue;
-            }
-            let matched = perm_reps
-                .iter()
-                .find(|&&(rep_g, _, rep_perm, ref rep_view)| {
-                    rep_g == g
-                        && self.post_census_permanents_equivalent(rep_perm, rep_view, perm_id)
-                })
-                .map(|&(_, class_idx, _, _)| class_idx);
-            if let Some(class_idx) = matched {
-                classes[class_idx].push(perm_id);
+            if let Some(rep_i) = rep_of[i] {
+                classes[class_of[rep_i]].push(perm_id);
             } else {
-                let class_idx = classes.len();
+                class_of[i] = classes.len();
                 classes.push(vec![perm_id]);
-                if let Some(view) = self.foldable_permanent_view(perm_id) {
-                    perm_reps.push((g, class_idx, perm_id, view));
-                }
             }
         }
         classes
@@ -2926,7 +2793,10 @@ impl Game {
     /// Keep the first representative of each equivalence class of
     /// game-indistinguishable permanent or graveyard targets in `targets`,
     /// preserving emission order and leaving players and stack targets intact.
-    pub(crate) fn deduplicate_interchangeable_targets(&self, targets: Vec<Target>) -> Vec<Target> {
+    pub(crate) fn deduplicate_interchangeable_targets(
+        &self,
+        mut targets: Vec<Target>,
+    ) -> Vec<Target> {
         if targets.len() < 2 {
             return targets;
         }
@@ -2942,30 +2812,51 @@ impl Game {
                 Target::Player(_) | Target::StackSpell(_) | Target::StackAbility(_) => None,
             })
             .collect();
+        let Some(rep_of) = self.find_interchangeable_reps(buckets.len(), |i| {
+            buckets[i].map(|(bucket, obj)| (bucket, bucket.is_permanent(), obj))
+        }) else {
+            return targets;
+        };
+        let mut i = 0;
+        targets.retain(|_| {
+            let keep = rep_of[i].is_none();
+            i += 1;
+            keep
+        });
+        targets
+    }
 
-        let mut cheap_group = vec![usize::MAX; targets.len()];
+    /// Shared three-stage equivalence pass: cheap key + record grouping,
+    /// fail-closed `ReferenceCensus`, then post-census layered permanent
+    /// comparison under one `board_scan()`. Returns `None` when no item folds
+    /// into an earlier representative.
+    fn find_interchangeable_reps<K: Copy + Eq>(
+        &self,
+        len: usize,
+        item: impl Fn(usize) -> Option<(K, bool, ObjectId)>,
+    ) -> Option<Vec<Option<usize>>> {
+        let mut cheap_group = vec![usize::MAX; len];
         let mut watch = Vec::new();
-        let mut watch_slot = vec![usize::MAX; targets.len()];
+        let mut watch_slot = vec![usize::MAX; len];
         let mut has_perm_dup = false;
         let mut next_group = 0usize;
 
-        for i in 0..targets.len() {
+        for i in 0..len {
             if cheap_group[i] != usize::MAX {
                 continue;
             }
-            let Some((bucket_i, obj_i)) = buckets[i] else {
+            let Some((key_i, is_perm, obj_i)) = item(i) else {
                 continue;
             };
-            let is_perm = bucket_i.is_permanent();
             let mut group = usize::MAX;
-            for j in (i + 1)..targets.len() {
+            for j in (i + 1)..len {
                 if cheap_group[j] != usize::MAX {
                     continue;
                 }
-                let Some((bucket_j, obj_j)) = buckets[j] else {
+                let Some((key_j, _, obj_j)) = item(j) else {
                     continue;
                 };
-                if bucket_i != bucket_j || !self.same_object_pair_cheap(is_perm, obj_i, obj_j) {
+                if key_i != key_j || !self.same_object_pair_cheap(is_perm, obj_i, obj_j) {
                     continue;
                 }
                 if group == usize::MAX {
@@ -2981,49 +2872,53 @@ impl Game {
         }
 
         if watch.is_empty() {
-            return targets;
+            return None;
         }
 
         let census = ReferenceCensus::run_with_perm_flag(self, &watch, has_perm_dup);
         if census.all_named() {
-            return targets;
+            return None;
         }
 
         let _scan = has_perm_dup.then(|| self.board_scan());
-        let mut perm_reps: Vec<(usize, PermanentId, Arc<Characteristics>)> = Vec::new();
-        let mut card_seen = vec![false; next_group];
-        let mut kept = Vec::with_capacity(targets.len());
+        let mut rep_of = vec![None; len];
+        let mut any_folded = false;
+        let mut perm_reps: Vec<(usize, usize, PermanentId, Arc<Characteristics>)> = Vec::new();
+        let mut card_rep: Vec<Option<usize>> = vec![None; next_group];
 
-        for (i, target) in targets.into_iter().enumerate() {
+        for i in 0..len {
             let g = cheap_group[i];
             if g == usize::MAX || census.is_named(watch_slot[i]) {
-                kept.push(target);
                 continue;
             }
-            match target {
-                Target::Permanent(perm_id) => {
-                    let duplicate = perm_reps.iter().any(|&(rep_g, rep_perm, ref rep_view)| {
+            let Some((_, is_perm, object)) = item(i) else {
+                continue;
+            };
+            if is_perm {
+                let Some(perm_id) = self.state.permanent_of(object) else {
+                    continue;
+                };
+                let matched = perm_reps
+                    .iter()
+                    .find(|&&(rep_g, _, rep_perm, ref rep_view)| {
                         rep_g == g
                             && self.post_census_permanents_equivalent(rep_perm, rep_view, perm_id)
-                    });
-                    if !duplicate {
-                        kept.push(target);
-                        if let Some(view) = self.foldable_permanent_view(perm_id) {
-                            perm_reps.push((g, perm_id, view));
-                        }
-                    }
+                    })
+                    .map(|&(_, rep_idx, _, _)| rep_idx);
+                if let Some(rep_idx) = matched {
+                    rep_of[i] = Some(rep_idx);
+                    any_folded = true;
+                } else if let Some(view) = self.foldable_permanent_view(perm_id) {
+                    perm_reps.push((g, i, perm_id, view));
                 }
-                Target::GraveyardCard(_) => {
-                    if !card_seen[g] {
-                        card_seen[g] = true;
-                        kept.push(target);
-                    }
-                }
-                Target::Player(_) | Target::StackSpell(_) | Target::StackAbility(_) => {
-                    kept.push(target);
-                }
+            } else if let Some(rep_idx) = card_rep[g] {
+                rep_of[i] = Some(rep_idx);
+                any_folded = true;
+            } else {
+                card_rep[g] = Some(i);
             }
         }
-        kept
+
+        any_folded.then_some(rep_of)
     }
 }

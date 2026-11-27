@@ -1370,15 +1370,8 @@ impl Observation {
         };
         slice.sort_unstable();
         let mut counts = BTreeMap::new();
-        let mut i = 0;
-        while i < slice.len() {
-            let def = slice[i];
-            let start = i;
-            i += 1;
-            while i < slice.len() && slice[i] == def {
-                i += 1;
-            }
-            counts.insert(def, (i - start) as u32);
+        for run in slice.chunk_by(|a, b| a == b) {
+            counts.insert(run[0], run.len() as u32);
         }
         counts
     }
@@ -1614,82 +1607,29 @@ impl Observation {
         }
 
         let other = PlayerId(1 - agent_player.0);
-        let fast_disjoint = game.pending_public_entries().is_empty()
-            && game.state.suspended_decision.is_none()
-            && !game.looks_at_library_top(agent_player)
-            && !(game.shares_information(agent_player, other) && game.looks_at_library_top(other));
+        let needs_dedup = !game.pending_public_entries().is_empty()
+            || game.state.suspended_decision.is_some()
+            || game.looks_at_library_top(agent_player)
+            || (game.shares_information(agent_player, other) && game.looks_at_library_top(other));
 
-        if fast_disjoint {
-            // Fast path: Hand, Command (emblems), Graveyard, and Exile are
-            // mutually disjoint zones, so no `HashSet` deduplication is needed.
-            let mut agent_cap = game.state.zones.size(ZoneType::Hand, agent_player)
-                + game.state.zones.size(ZoneType::Graveyard, agent_player)
-                + game.state.zones.size(ZoneType::Exile, agent_player);
-            let mut opp_cap = game.state.zones.size(ZoneType::Graveyard, other)
-                + game.state.zones.size(ZoneType::Exile, other);
-            if game.shares_information(agent_player, other) {
-                opp_cap += game.state.zones.size(ZoneType::Hand, other);
-            }
-            agent_cap += game.emblems().count();
-            self.agent_cards.reserve(agent_cap);
-            self.opponent_cards.reserve(opp_cap);
-
-            for perspective in [agent_player, other] {
-                if !game.shares_information(agent_player, perspective) {
-                    continue;
-                }
-                for object_id in game
-                    .state
-                    .zones
-                    .zone_objects(ZoneType::Hand, perspective)
-                    .iter()
-                {
-                    self.push_card(
-                        Self::card_data(game, *object_id, ZoneType::Hand),
-                        game.state[*object_id].owner,
-                    );
-                }
-            }
-            for (_, object_id) in game.emblems() {
-                self.push_card(
-                    Self::card_data(game, object_id, ZoneType::Command),
-                    game.state[object_id].owner,
-                );
-            }
-            for player in [agent_player, other] {
-                for object_id in game
-                    .state
-                    .zones
-                    .zone_objects(ZoneType::Graveyard, player)
-                    .iter()
-                {
-                    self.push_card(
-                        Self::card_data(game, *object_id, ZoneType::Graveyard),
-                        game.state[*object_id].owner,
-                    );
-                }
-                for object_id in game
-                    .state
-                    .zones
-                    .zone_objects(ZoneType::Exile, player)
-                    .iter()
-                {
-                    if !game.hides_face_down_exile(*object_id, agent_player) {
-                        self.push_card(
-                            Self::card_data(game, *object_id, ZoneType::Exile),
-                            game.state[*object_id].owner,
-                        );
-                    }
-                }
-            }
-            return;
+        let agent_cap = game.state.zones.size(ZoneType::Hand, agent_player)
+            + game.state.zones.size(ZoneType::Graveyard, agent_player)
+            + game.state.zones.size(ZoneType::Exile, agent_player)
+            + game.emblems().count();
+        let mut opp_cap = game.state.zones.size(ZoneType::Graveyard, other)
+            + game.state.zones.size(ZoneType::Exile, other);
+        if game.shares_information(agent_player, other) {
+            opp_cap += game.state.zones.size(ZoneType::Hand, other);
         }
+        self.agent_cards.reserve(agent_cap);
+        self.opponent_cards.reserve(opp_cap);
 
         // Inspection paths can overlap (hand, library top and a pending
-        // search). Emit each object once, retaining first-visible order.
-        let mut seen = HashSet::new();
+        // search). When none are active, Hand/Command/Graveyard/Exile are
+        // mutually disjoint, so skip HashSet deduplication.
+        let mut seen = needs_dedup.then(HashSet::new);
         let mut add_object = |object_id: ObjectId, zone: ZoneType| {
-            if seen.insert(object_id) {
+            if seen.as_mut().is_none_or(|set| set.insert(object_id)) {
                 self.push_card(
                     Self::card_data(game, object_id, zone),
                     game.state[object_id].owner,
@@ -1699,13 +1639,15 @@ impl Observation {
 
         // A replacement question identifies prospective battlefield entrants
         // publicly before their retained zone moves commit.
-        for object in game.pending_public_entries() {
-            if let Some(zone) = game.state.zones.zone_of(object) {
-                add_object(object, zone);
+        if needs_dedup {
+            for object in game.pending_public_entries() {
+                if let Some(zone) = game.state.zones.zone_of(object) {
+                    add_object(object, zone);
+                }
             }
         }
 
-        for perspective in [agent_player, PlayerId(1 - agent_player.0)] {
+        for perspective in [agent_player, other] {
             if !game.shares_information(agent_player, perspective) {
                 continue;
             }
@@ -1716,6 +1658,10 @@ impl Observation {
                 .iter()
             {
                 add_object(*object_id, ZoneType::Hand);
+            }
+
+            if !needs_dedup {
+                continue;
             }
 
             // A library top the viewer or controlled player may inspect (CR 401.2).

@@ -189,6 +189,19 @@ impl OutputTiebreak {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+struct TapRank {
+    kinds: Kinds,
+    tiebreak: OutputTiebreak,
+}
+
+impl TapRank {
+    fn tap(&mut self, kind: Kind, output: &Mana, count: usize) {
+        self.kinds.tap(kind, count);
+        self.tiebreak.tap(output, count);
+    }
+}
+
 /// Checks the search over source classes may spend on one payment.
 pub(super) const CHECKS: usize = 1024;
 /// Pooled-unit spending states read to find what one payment leaves floating.
@@ -294,14 +307,12 @@ impl Chooser<'_> {
             .then_with(|| cmp_mana_output(self.output(a), self.output(b)))
     }
 
-    fn rank(&self, taps: &[usize]) -> (Kinds, OutputTiebreak) {
-        let mut kinds = Kinds::default();
-        let mut tiebreak = OutputTiebreak::default();
+    fn rank(&self, taps: &[usize]) -> TapRank {
+        let mut rank = TapRank::default();
         for &index in taps {
-            kinds.tap(self.kind(index), 1);
-            tiebreak.tap(self.output(index), 1);
+            rank.tap(self.kind(index), self.output(index), 1);
         }
-        (kinds, tiebreak)
+        rank
     }
 
     fn cmp_tap_outputs(&self, a: &[usize], b: &[usize]) -> std::cmp::Ordering {
@@ -357,12 +368,11 @@ impl Chooser<'_> {
             }
         }
         chosen.sort_unstable();
-        let better = match self.rank(&chosen).cmp(&self.rank(taps)) {
-            std::cmp::Ordering::Less => true,
-            std::cmp::Ordering::Greater => false,
-            std::cmp::Ordering::Equal => self.cmp_tap_outputs(&chosen, taps).is_lt(),
-        };
-        better.then_some(chosen)
+        self.rank(&chosen)
+            .cmp(&self.rank(taps))
+            .then_with(|| self.cmp_tap_outputs(&chosen, taps))
+            .is_lt()
+            .then_some(chosen)
     }
 
     fn pooled(&self, taps: &[usize]) -> Mana {
@@ -552,13 +562,11 @@ struct ClassSearch<'a, 'b> {
     bound: Kept,
     /// The kind-and-output preferred payment's rank: no payment beats it when
     /// every source adds one mana.
-    floor_kinds: Kinds,
-    floor_tiebreak: OutputTiebreak,
+    floor: TapRank,
     best: Kept,
-    best_kinds: Kinds,
-    best_tiebreak: OutputTiebreak,
+    best_rank: TapRank,
     /// True once the class search itself has visited a payment at `bound` with
-    /// `kinds <= floor_kinds`: classes are visited in canonical preference
+    /// `kinds <= floor.kinds`: classes are visited in canonical preference
     /// order, so no later branch can beat its tiebreak.
     found_optimal: bool,
     taps: Vec<usize>,
@@ -566,22 +574,13 @@ struct ClassSearch<'a, 'b> {
 }
 
 impl ClassSearch<'_, '_> {
-    /// `kinds` counts the taps chosen so far. Taps only add to it, so once
+    /// `rank.kinds` counts the taps chosen so far. Taps only add to it, so once
     /// the best payment keeps every follow-up a branch past its kinds holds
     /// nothing better.
-    fn visit(
-        &mut self,
-        position: usize,
-        pooled: Mana,
-        tapped: usize,
-        kinds: Kinds,
-        tiebreak: OutputTiebreak,
-    ) {
+    fn visit(&mut self, position: usize, pooled: Mana, tapped: usize, rank: TapRank) {
         if self.found_optimal
             || (self.best == self.bound
-                && ((self.best_kinds, self.best_tiebreak)
-                    <= (self.floor_kinds, self.floor_tiebreak)
-                    || kinds > self.best_kinds))
+                && (self.best_rank <= self.floor || rank.kinds > self.best_rank.kinds))
         {
             return;
         }
@@ -592,12 +591,12 @@ impl ClassSearch<'_, '_> {
         // A payment that already pays the cost makes every further tap
         // surplus, so the remaining classes stay untapped.
         if pooled.can_pay(cost) {
-            self.candidate(position, &pooled, kinds, tiebreak);
+            self.candidate(position, &pooled, rank);
             return;
         }
         // Any further tap strictly increases `kinds`, so a branch already at
-        // `best_kinds` cannot improve on a bound-achieving payment.
-        if self.best == self.bound && kinds >= self.best_kinds {
+        // `best_rank.kinds` cannot improve on a bound-achieving payment.
+        if self.best == self.bound && rank.kinds >= self.best_rank.kinds {
             return;
         }
         // Every tap of a payment without surplus pays at least one mana.
@@ -614,23 +613,19 @@ impl ClassSearch<'_, '_> {
             for _ in 0..count {
                 next.add(self.classes[position].output);
             }
-            let mut chosen = kinds;
-            chosen.tap(self.classes[position].kind, count);
-            let mut next_tiebreak = tiebreak;
-            next_tiebreak.tap(self.classes[position].output, count);
+            let mut next_rank = rank;
+            next_rank.tap(
+                self.classes[position].kind,
+                self.classes[position].output,
+                count,
+            );
             self.counts[position] = count;
-            self.visit(position + 1, next, tapped + count, chosen, next_tiebreak);
+            self.visit(position + 1, next, tapped + count, next_rank);
         }
         self.counts[position] = 0;
     }
 
-    fn candidate(
-        &mut self,
-        position: usize,
-        pooled: &Mana,
-        kinds: Kinds,
-        tiebreak: OutputTiebreak,
-    ) {
+    fn candidate(&mut self, position: usize, pooled: &Mana, rank: TapRank) {
         let chooser = self.chooser;
         let owed = u16::from(chooser.cost.mana_value);
         if pooled.usable_total(chooser.cost) > owed {
@@ -656,21 +651,18 @@ impl ClassSearch<'_, '_> {
             return;
         };
         let kept = chooser.kept(set);
-        let better = match (kept, std::cmp::Reverse((kinds, tiebreak))).cmp(&(
-            self.best,
-            std::cmp::Reverse((self.best_kinds, self.best_tiebreak)),
-        )) {
-            std::cmp::Ordering::Greater => true,
-            std::cmp::Ordering::Less => false,
-            std::cmp::Ordering::Equal => chooser.cmp_tap_outputs(&taps, &self.taps).is_lt(),
-        };
+        let better = kept > self.best
+            || (kept == self.best
+                && rank
+                    .cmp(&self.best_rank)
+                    .then_with(|| chooser.cmp_tap_outputs(&taps, &self.taps))
+                    .is_lt());
         if better {
             self.best = kept;
-            self.best_kinds = kinds;
-            self.best_tiebreak = tiebreak;
+            self.best_rank = rank;
             self.taps = taps;
         }
-        if kept == self.bound && kinds <= self.floor_kinds {
+        if kept == self.bound && rank.kinds <= self.floor.kinds {
             self.found_optimal = true;
         }
     }
@@ -799,7 +791,7 @@ impl PaymentModel<'_> {
         // The kind-and-output preferred payment is scored first: at the bound
         // nothing beats it. Short of the bound it stays the floor of the search
         // and the pruned witness competes with it.
-        let (floor_kinds, floor_tiebreak) = chooser.rank(preferred.as_deref().unwrap_or(&taps));
+        let floor = chooser.rank(preferred.as_deref().unwrap_or(&taps));
         let mut best = score(preferred.as_deref().unwrap_or(&taps), &mut budget);
         if best == bound {
             let taps = preferred.clone().unwrap_or(taps);
@@ -821,29 +813,21 @@ impl PaymentModel<'_> {
             ahead[position] =
                 ahead[position + 1] + class.output.usable_total(cost) * class.members.len() as u16;
         }
-        let (best_kinds, best_tiebreak) = chooser.rank(&taps);
+        let best_rank = chooser.rank(&taps);
         let mut search = ClassSearch {
             chooser: &chooser,
             counts: vec![0; classes.len()],
             classes,
             ahead,
             bound: chooser.kept(bound),
-            floor_kinds,
-            floor_tiebreak,
+            floor,
             best: chooser.kept(best),
-            best_kinds,
-            best_tiebreak,
+            best_rank,
             found_optimal: false,
             taps,
             budget,
         };
-        search.visit(
-            0,
-            pool.clone(),
-            0,
-            Kinds::default(),
-            OutputTiebreak::default(),
-        );
+        search.visit(0, pool.clone(), 0, TapRank::default());
         debug_assert!(
             chooser.pooled(&search.taps).can_pay(cost),
             "the chosen sources pay the cost"
