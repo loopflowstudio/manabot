@@ -420,7 +420,8 @@ vector runner joins each checkpoint's v11 observations in a single host
 `Prepared` batch and awaits `Forward([prepared], rows=prepared.batch)`.
 A checkpoint forward failure settles the affected matches as errors while
 unrelated slots continue. For a local Etude run, pass the generator and
-agent set to `active.play_many`.
+agent set to `active.play_many`. The game timer covers live decision rounds.
+The Etude run deadline covers admission, replay and result delivery too.
 
 `manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path` and
 prefers CUDA, followed by MLX, MPS, and CPU. MLX uses

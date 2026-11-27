@@ -23,6 +23,7 @@ from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
 import time
+from time import monotonic
 from typing import Any, Literal, Protocol, cast
 from uuid import uuid4
 
@@ -163,6 +164,7 @@ class SlotState:
     slot: int
     leg: PendingLeg
     started: float
+    gameplay_started: float
     revision: int = 0
     decision_counts: dict[str, int] = field(default_factory=dict)
     policy_counts: dict[str, ActionCutoffCounts] = field(default_factory=dict)
@@ -382,7 +384,7 @@ def policy_cutoff_report(
         ],
         "identities": vector.identities,
         "context": {},
-        "seconds": time.monotonic() - slot_state.started,
+        "seconds": monotonic() - slot_state.started,
     }
 
 
@@ -394,7 +396,7 @@ def settle_leg(
     """Bind the slot's canonical record, settle audit fields and retain failures."""
     leg = slot_state.leg
     game = leg.game
-    game["execution_seconds"] = time.monotonic() - slot_state.started
+    game["execution_seconds"] = monotonic() - slot_state.started
     if leg.active_match.space.config.action_overflow == "first-legal":
         game["policy_action_cutoff"] = policy_cutoff_report(slot_state, vector)
     game["worker_performance"] = EvalPerformance(
@@ -515,6 +517,9 @@ async def play_pairings(
     current_space: ObservationSpace | None = None
     source_exhausted = False
     legs_per_match_hint = 4
+    # Only rounds that advance live legs consume their cooperative game budgets.
+    # Replay, result delivery and replenishing slots belong to the coordinator.
+    gameplay_seconds = 0.0
 
     vector: RecordedVectorEnv | None = None
     state_buffers: dict[str, np.ndarray] | None = None
@@ -615,7 +620,7 @@ async def play_pairings(
                 await fetch_legs(len(free), drain_if_empty=False)
             loads: list[managym.SlotLoad] = []
             loaded_slots: list[int] = []
-            now = time.monotonic()
+            now = monotonic()
             for slot in free:
                 if not pending_legs:
                     break
@@ -625,6 +630,7 @@ async def play_pairings(
                     slot=slot,
                     leg=leg,
                     started=now,
+                    gameplay_started=gameplay_seconds,
                     decision_counts=dict.fromkeys(leg.game["seat_players"], 0),
                 )
                 loaded_slots.append(slot)
@@ -675,7 +681,7 @@ async def play_pairings(
                 slot_states = [None] * num_envs
                 initial_setups: list[managym.GameSetup] = []
                 initial_seeds: list[int] = []
-                now = time.monotonic()
+                now = monotonic()
                 fallback_setup: managym.GameSetup | None = None
                 for slot in range(num_envs):
                     if pending_legs:
@@ -687,6 +693,7 @@ async def play_pairings(
                             slot=slot,
                             leg=leg,
                             started=now,
+                            gameplay_started=gameplay_seconds,
                             decision_counts=dict.fromkeys(leg.game["seat_players"], 0),
                         )
                     else:
@@ -713,8 +720,7 @@ async def play_pairings(
 
             assert state_buffers is not None and current_space is not None
 
-            # Check per-game command caps and wall-clock timeouts before stepping.
-            now = time.monotonic()
+            # Check per-game command caps and active gameplay time before stepping.
             limit_expired: list[tuple[int, str, str]] = []
             for slot, slot_state in enumerate(slot_states):
                 if slot_state is None:
@@ -724,7 +730,9 @@ async def play_pairings(
                     limit_expired.append(
                         (slot, "command_cap", "game exceeded its Command cap")
                     )
-                elif now - slot_state.started >= spec.game_seconds:
+                elif (
+                    gameplay_seconds - slot_state.gameplay_started >= spec.game_seconds
+                ):
                     limit_expired.append(
                         (slot, "timeout", "game wall-clock budget exhausted")
                     )
@@ -767,6 +775,7 @@ async def play_pairings(
                 continue
 
             num_envs = len(slot_states)
+            round_started = monotonic()
             active_mask = [st is not None for st in slot_states]
             actors = vector.current_agent_indices()
             raw_observations = vector.decision_observations(active_mask)
@@ -972,6 +981,7 @@ async def play_pairings(
                 recover_capacity=True,
                 annotations=annotations,
             )
+            gameplay_seconds += monotonic() - round_started
 
             infos = vector.get_last_info()
             terminated = state_buffers["terminated"]

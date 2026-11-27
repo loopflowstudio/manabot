@@ -29,6 +29,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
+from manabot.eval import vector as vector_runner
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import build, local_forward
 from manabot.eval.card_query import CardSelection, audit, card_data, card_db
@@ -300,6 +301,21 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
             )
 
         monkeypatch.setattr(RecordedVectorEnv, "step_isolated_into_buffers", spy_step)
+        clock = vector_runner.monotonic
+        finalize = vector_runner.finalize_match
+        replay_pause = 0.0
+        steps_at_settlement: list[int] = []
+
+        def delayed_finalize(active_match: vector_runner.ActiveMatch) -> Result:
+            nonlocal replay_pause
+            replay_pause += 90.0
+            steps_at_settlement.append(len(observed_active_counts))
+            return finalize(active_match)
+
+        # The first completed deal's replay takes longer than the game budget.
+        # Other live legs should continue once the coordinator resumes stepping.
+        monkeypatch.setattr(vector_runner, "monotonic", lambda: clock() + replay_pause)
+        monkeypatch.setattr(vector_runner, "finalize_match", delayed_finalize)
         async_forward = _row_pure_async_forward(sync_forward, batch_sizes)
         source = LocalMatches(
             [(match, [async_forward, build(heuristic, {})]) for match in matches]
@@ -324,6 +340,7 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
 
         yielded = asyncio.run(collect())
         assert len(yielded) == 2
+        assert steps_at_settlement[0] < len(observed_active_counts)
 
         vector_results: dict[str, Result] = {}
         for match, outcome in yielded:
