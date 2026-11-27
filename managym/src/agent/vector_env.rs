@@ -875,7 +875,7 @@ impl VectorEnv {
                     Ok(()) => Ok(out.info),
                     Err(ObservationWriteError::Encoding(
                         error @ ObservationEncodeError::Capacity { .. },
-                    )) if recover_capacity && !out.terminated && !out.truncated => {
+                    )) if recover_capacity => {
                         self.slots[index] = SlotState::Poisoned;
                         Ok(InfoDict::from([
                             ("game_error".into(), InfoValue::String(error.to_string())),
@@ -1716,6 +1716,40 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn isolated_encoding_recovers_capacity_error_on_terminal_step() {
+        let mut vector = VectorEnv::new(1, 7, true, [PlayerPolicy::Agent; 2]);
+        vector.reset_all(sample_player_configs()).unwrap();
+        let mut saw_terminal = false;
+        for _ in 0..500 {
+            let infos = vector
+                .step_isolated_into(&[0], &[true], true, |_index, _obs, _reward, terminated, truncated| {
+                    if terminated || truncated {
+                        Err(ObservationEncodeError::Capacity {
+                            field: "damage relations",
+                            capacity: 64,
+                            actual: 65,
+                        }
+                        .into())
+                    } else {
+                        Ok(())
+                    }
+                })
+                .unwrap();
+            if matches!(
+                infos[0].get("game_error_class"),
+                Some(InfoValue::String(class)) if class == "ObservationCapacity"
+            ) {
+                saw_terminal = true;
+                assert_eq!(vector.slots[0], super::SlotState::Poisoned);
+                load_fresh(&mut vector, 0, None);
+                assert_ne!(vector.slots[0], super::SlotState::Poisoned);
+                break;
+            }
+        }
+        assert!(saw_terminal, "expected to reach a terminal step");
     }
 
     #[test]
