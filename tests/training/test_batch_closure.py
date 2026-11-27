@@ -1,10 +1,13 @@
 """The collector closes a batch at the exact quota or at complete games."""
 
+from collections.abc import Callable, Iterator
 from copy import deepcopy
+from functools import wraps
 import json
 from pathlib import Path
 import subprocess
 import sys
+from threading import Event
 from typing import Any, Literal
 
 import numpy as np
@@ -12,12 +15,15 @@ import pytest
 
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.collection import (
+    CollectionScope as TorchCollectionScope,
     CollectionSession as TorchCollectionSession,
 )
 from manabot.backends.torch.learner import Learner
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
+from manabot.infra.profiler import Profiler
+from manabot.policy.spans import ObservationSelection
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.learning import BatchClosure, DampedPolicyLearning, Learning
 from manabot.training.loops import self_play as self_play_loop
@@ -31,6 +37,7 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
+from manabot.training.rollout.numerics import InferredChunk
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorPolicy,
@@ -42,6 +49,7 @@ from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.verify.games import INTERACTIVE_DECK
 from tests.fixtures.dense_collector import dense_collector
+from tests.training.test_memory_self_play import MEMORY, model as memory_model
 from tests.training.test_two_seat_learning import ScriptedGames, _agent
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -291,8 +299,10 @@ def test_two_seat_exact_quota_zero_idle_mixed_spans_and_cross_update_finish(
         close_collector(collector)
 
 
+@pytest.mark.parametrize("collection_pipeline", [False, True])
 def test_two_seat_exact_quota_cross_update_failure_receipt_replays_and_keeps_learned(
     tmp_path: Path,
+    collection_pipeline: bool,
 ) -> None:
     space = ObservationSpace(ObservationConfig(max_permanents_per_player=1))
     match = Match(MatchConfig(hero_deck={"Forest": 12}, villain_deck={"Forest": 12}))
@@ -304,6 +314,7 @@ def test_two_seat_exact_quota_cross_update_failure_receipt_replays_and_keeps_lea
         agent,
         num_envs=2,
         seed=7,
+        collection_pipeline=collection_pipeline,
         match=match,
         space=space,
         game_errors=policy,
@@ -501,8 +512,16 @@ def test_self_play_step_splits_rates_and_logs_viewer_bootstrap_gap(
     assert np.isfinite(row2["viewer_bootstrap_gap/mean_signed"])
 
 
-def test_two_seat_pipeline_is_deterministic_across_worker_counts() -> None:
+@pytest.mark.parametrize("decision_memory", ["none", "gru"])
+def test_two_seat_pipeline_is_deterministic_across_worker_counts(
+    decision_memory: Literal["none", "gru"],
+) -> None:
     agent = _agent("scalar")
+    if decision_memory == "gru":
+        agent = type(agent)(
+            ObservationSpace(MEMORY),
+            memory_model(decision_memory),
+        )
     expected = None
     for workers in (1, 2, 4):
         collector = _two_seat_exact_collector(
@@ -530,6 +549,54 @@ def test_two_seat_pipeline_is_deterministic_across_worker_counts() -> None:
                 assert result == expected
         finally:
             close_collector(collector)
+
+
+def test_pipeline_joins_running_inference_after_native_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = _agent("scalar")
+    collector = _two_seat_exact_collector(agent, num_envs=2, collection_pipeline=True)
+    inference_started, step_entered, inference_finished = Event(), Event(), Event()
+    prepare_step = TorchCollectionScope.prepare_step
+
+    @wraps(prepare_step)
+    def synchronize(
+        scope: TorchCollectionScope,
+        observation: ObservationSelection,
+        profiler: Profiler,
+        *,
+        cohort: int,
+        execution_rows: int | None,
+    ) -> Iterator[Callable[[], InferredChunk]]:
+        for infer in prepare_step(
+            scope, observation, profiler, cohort=cohort, execution_rows=execution_rows
+        ):
+            if cohort == 0:
+                yield infer
+                continue
+
+            def infer_after_step() -> InferredChunk:
+                inference_started.set()
+                assert step_entered.wait(10)
+                result = infer()
+                inference_finished.set()
+                return result
+
+            yield infer_after_step
+
+    def fail_step(*args: object, **kwargs: object) -> None:
+        assert inference_started.wait(10)
+        step_entered.set()
+        raise RuntimeError("native step failed")
+
+    monkeypatch.setattr(TorchCollectionScope, "prepare_step", synchronize)
+    monkeypatch.setattr(collector._cohorts[0].streams, "step_into_buffers", fail_step)
+    try:
+        with pytest.raises(RuntimeError, match="native step failed"):
+            collect(collector, agent, 3)
+        assert inference_finished.is_set()
+    finally:
+        close_collector(collector)
 
 
 def test_two_seat_exact_quota_handles_all_terminal_boundary_with_zero_cuts() -> None:
