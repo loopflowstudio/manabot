@@ -4,7 +4,8 @@
  * `boardView(frame)` is the one place that decides where each legal offer
  * appears: on the card or player it acts on (an anchor), as a button beside
  * the prompt, or in the tray for subjects the board does not draw (Lessons
- * outside the game, cards in hidden or collapsed zones). Every offer is also a
+ * outside the game, cards in hidden or collapsed zones). Both players' hands
+ * are drawn, so a top-seat chooser's offers sit on its own hand cards. Every offer is also a
  * row of the full list, in authority order, so nothing strategic is reachable
  * only by the board. The view chooses nothing: a commit is always one offer.
  *
@@ -62,6 +63,10 @@ export interface SideView {
   /** Lands, then other noncreature permanents: the row nearest the player. */
   support: Pile[];
   offers: PlacedOffer[];
+  /** The hand cards this viewer sees, less a spell being announced (drawn on the stack). */
+  hand: HandItem[];
+  /** Hand cards this viewer cannot see: drawn as backs. */
+  hiddenHand: number;
 }
 
 export interface HandItem {
@@ -90,7 +95,6 @@ export interface TrayItem {
 export interface BoardView {
   you: SideView;
   opponent: SideView;
-  hand: HandItem[];
   stack: StackItem[];
   /** Subject-less and declining offers, in list order; the first pass/pay is primary. */
   buttons: PlacedOffer[];
@@ -115,7 +119,7 @@ const ROLE_ORDER = ['target', 'source', 'choice'];
 function drawnObjects(frame: ExperienceFrame): Set<number> {
   const { agent, opponent } = frame.projection;
   return new Set([
-    ...agent.hand, ...agent.stack, ...opponent.stack,
+    ...agent.hand, ...opponent.hand, ...agent.stack, ...opponent.stack,
     ...agent.battlefield, ...opponent.battlefield,
   ].map(card => card.id));
 }
@@ -222,7 +226,7 @@ function attachedItems(players: readonly PlayerState[], offersAt: (anchor: Ancho
   return items;
 }
 
-/** One player's rows. An Aura or Equipment sits with its host, on the host's side (an opponent's Aura on your creature is drawn with your creature). */
+/** One player's rows; its hand is filled in once the stack is known. An Aura or Equipment sits with its host, on the host's side (an opponent's Aura on your creature is drawn with your creature). */
 function side(player: PlayerState, items: ReadonlyMap<number, PermanentItem>, offersAt: (anchor: Anchor) => PlacedOffer[]): SideView {
   const hosts = player.battlefield.map(permanent => items.get(permanent.id)!).filter(item => {
     const host = item.permanent.attached_to === undefined ? undefined : items.get(item.permanent.attached_to);
@@ -236,6 +240,8 @@ function side(player: PlayerState, items: ReadonlyMap<number, PermanentItem>, of
     creatures: piles(creatures),
     support: piles(support),
     offers: offersAt({ kind: 'player', index: player.player_index }),
+    hand: [],
+    hiddenHand: Math.max(0, (player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0)) - player.hand.length),
   };
 }
 
@@ -381,11 +387,26 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   const at = new Map<string, PlacedOffer[]>();
   const anchorKey = (anchor: Anchor): string =>
     anchor.kind === 'player' ? `player:${anchor.index}` : 'id' in anchor ? `${anchor.kind}:${anchor.id}` : anchor.kind;
-  for (const placed of list) {
-    const key = anchorKey(placed.anchor);
+  const place = (anchor: Anchor, placed: PlacedOffer): void => {
+    const key = anchorKey(anchor);
     const group = at.get(key);
-    if (group) group.push(placed);
-    else at.set(key, [placed]);
+    if (group) {
+      if (!group.includes(placed)) group.push(placed);
+    } else {
+      at.set(key, [placed]);
+    }
+  };
+  for (const placed of list) {
+    place(placed.anchor, placed);
+    // Alias anchors go only on drawn objects (battlefield and hand) so piles
+    // stay whole and every copy sends the canonical offer; tray/list stay one per offer.
+    if (placed.anchor.kind === 'object') {
+      for (const alias of placed.offer.aliases ?? []) {
+        if (alias.kind === 'object' && drawn.has(alias.id.entity)) {
+          place({ kind: 'object', id: alias.id.entity }, placed);
+        }
+      }
+    }
   }
   const placedAt = new Set<PlacedOffer>();
   const offersAt = (anchor: Anchor): PlacedOffer[] => {
@@ -404,8 +425,10 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   alignCombatRows(you, them);
   const stack = stackItems(frame, offersAt);
   const onStack = new Set(stack.map(item => item.card?.id));
-  const hand = agent.hand.filter(card => !onStack.has(card.id))
-    .map(card => ({ card, offers: offersAt({ kind: 'object', id: card.id }) }));
+  for (const drawn of [you, them]) {
+    drawn.hand = drawn.player.hand.filter(card => !onStack.has(card.id))
+      .map(card => ({ card, offers: offersAt({ kind: 'object', id: card.id }) }));
+  }
 
   const buttons = offersAt({ kind: 'button' });
   // Anything anchored to something not drawn falls back to the tray.
@@ -414,7 +437,6 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   return {
     you,
     opponent: them,
-    hand,
     stack,
     buttons,
     primary: buttons.find(placed => PRIMARY_VERBS.has(placed.offer.verb)) ?? null,
@@ -436,8 +458,8 @@ export function offerPlacements(view: BoardView): Map<number, number> {
   for (const s of [view.you, view.opponent]) {
     s.offers.forEach(count);
     fieldItems(s).forEach(item => item.offers.forEach(count));
+    s.hand.forEach(item => item.offers.forEach(count));
   }
-  view.hand.forEach(item => item.offers.forEach(count));
   view.stack.forEach(item => item.offers.forEach(count));
   view.buttons.forEach(count);
   view.tray.forEach(item => count(item.placed));
@@ -644,4 +666,39 @@ export function handFan(count: number, width: number, card: { min: number; max: 
   const size = Math.max(Math.min(card.min, card.max), Math.min(card.max, side));
   if (size * count + gap * (count - 1) <= width) return { card: size, step: size + gap, covered: false };
   return { card: size, step: Math.max(HAND_MIN_SLICE, (width - size) / (count - 1)), covered: true };
+}
+
+// ———————————————— Hand ribbons: the person's say
+
+type RibbonSide = 'you' | 'opponent';
+type RibbonOverride = 'pinned' | { tucked: unknown } | null;
+
+/**
+ * What a person asked of each hand ribbon, beside what the position asks.
+ * `'pinned'` keeps a seat's hand out until it is tucked; `{ tucked }` holds it
+ * tucked for that position (compared by identity) and lapses when another
+ * position is shown. Each seat has its own; neither moves the other.
+ */
+export type RibbonOverrides = Readonly<Record<RibbonSide, RibbonOverride>>;
+
+export const NO_RIBBON_OVERRIDES: RibbonOverrides = { you: null, opponent: null };
+
+/**
+ * Whether `side`'s hand is out at position `at`. `position` is what the
+ * position asks by itself (its seat is acting, or open hands shows it);
+ * `offered` is an offer sitting on one of its cards, which no tuck hides.
+ */
+export function ribbonIsOut(overrides: RibbonOverrides, side: RibbonSide, at: unknown, by: { position: boolean; offered: boolean }): boolean {
+  if (by.offered) return true;
+  const override = overrides[side];
+  if (override === 'pinned') return true;
+  if (override !== null && override.tucked === at) return false;
+  return by.position;
+}
+
+/** Show hand / Tuck hand on `side`'s plate at position `at`: only that seat changes. */
+export function toggleRibbon(overrides: RibbonOverrides, side: RibbonSide, at: unknown, position: boolean): RibbonOverrides {
+  const out = ribbonIsOut(overrides, side, at, { position, offered: false });
+  const next: RibbonOverride = out ? (position ? { tucked: at } : null) : (position ? null : 'pinned');
+  return { ...overrides, [side]: next };
 }

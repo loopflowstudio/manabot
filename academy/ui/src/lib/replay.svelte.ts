@@ -18,7 +18,8 @@ export class ReplayStore {
   headUncertain = $state(false);
   work = $state<WorkStatus | null>(null);
   workDisconnected = $state(false);
-  reveal = $state(false);
+  /** Show both hands where the position allows; null takes the recording's default (on for a Watch) when it opens. */
+  reveal = $state<boolean | null>(null);
   private generation = 0;
   private id = '';
   private sourceGeneration = 0;
@@ -62,6 +63,7 @@ export class ReplayStore {
       const index = await this.readIndex(id);
       if (generation !== this.generation) return;
       this.index = index;
+      this.reveal ??= index.watch;
       const selected = key ? index.positions.findIndex(position => position.key === key) : Math.max(0, index.positions.findIndex(position => position.kind === 'choice'));
       if (selected < 0) { this.error = 'Saved position is unavailable. Select an available position.'; this.busy = false; return; }
       await this.seek(selected);
@@ -78,7 +80,7 @@ export class ReplayStore {
     this.busy = true; this.error = '';
     try {
       // Reveal is a per-position capability the server grants.
-      const reveal = this.reveal && position.can_reveal;
+      const reveal = Boolean(this.reveal) && position.can_reveal;
       let current = await this.api<RecordedPosition>(`/api/traces/${encodeURIComponent(this.id)}/positions/${encodeURIComponent(position.key)}?reveal=${reveal}`);
       if (generation !== this.generation) return;
       // A large transition can span history pages. Retain every ordered beat

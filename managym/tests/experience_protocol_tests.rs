@@ -173,3 +173,35 @@ fn permanent_details_round_trip_alongside_historical_permanents() {
     row["unknown_detail"] = json!(true);
     assert!(from_value::<LegacyPermanentView>(row).is_err());
 }
+
+#[test]
+fn interaction_offer_aliases_omit_when_empty_and_round_trip_when_present() {
+    use managym::experience::InteractionOffer;
+    use serde_json::{from_value, json, to_value};
+
+    let source: serde_json::Value = serde_json::from_str(FIXTURE).expect("fixture JSON");
+    let offer_json = source["recovery"]["frame"]["offers"][0].clone();
+    assert!(offer_json.get("aliases").is_none());
+    let plain: InteractionOffer =
+        from_value(offer_json.clone()).expect("offer without aliases parses");
+    assert!(plain.aliases.is_empty());
+    assert_eq!(to_value(&plain).unwrap(), offer_json);
+
+    let mut with_aliases = offer_json;
+    with_aliases["aliases"] = json!([
+        { "kind": "object", "id": { "entity": 42, "incarnation": 0 } }
+    ]);
+    let parsed: InteractionOffer =
+        from_value(with_aliases.clone()).expect("offer with aliases parses");
+    assert_eq!(parsed.aliases.len(), 1);
+    assert_eq!(
+        parsed.aliases[0],
+        managym::experience::SubjectRef::Object {
+            id: managym::experience::ObjectRenderId {
+                entity: 42,
+                incarnation: 0,
+            }
+        }
+    );
+    assert_eq!(to_value(&parsed).unwrap(), with_aliases);
+}

@@ -20,10 +20,14 @@
     damage?: number;
     /** Signed net life change for this player at the active historical/walk stop (`< 0` loss/damage, `> 0` gain). */
     stopLifeDelta?: number;
-    /** Set while this player is choosing: "choosing…". */
+    /** Set while this player is choosing: "Choosing…" and an accent bar down the plate. */
     choosing?: boolean;
+    /** Bring this player's hand ribbon out, or tuck it; null when the board offers neither. */
+    handToggle?: { out: boolean; ontoggle: () => void } | null;
     /** Highlighted while hovering a target choice naming this player. */
     pointed?: boolean;
+    /** A short half: a smaller life numeral and tighter spacing, so floating mana stays in view without scrolling. */
+    compact?: boolean;
     side: 'you' | 'opponent';
     drop?: boolean;
     onactivate: (element: HTMLElement) => void;
@@ -32,14 +36,12 @@
     deckOpen?: boolean;
   }
 
-  let { drop = false, player, name, definitionNames, caption, offers, live, damage = 0, stopLifeDelta = 0, choosing = false, pointed = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
+  let { drop = false, player, name, definitionNames, caption, offers, live, damage = 0, stopLifeDelta = 0, choosing = false, handToggle = null, pointed = false, compact = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
-  // An opponent's hand cards this viewer may see (Show both hands, or a card
-  // revealed to it) open like a graveyard; your own are the hand strip.
-  const shownHand = $derived(side === 'opponent' && player.hand.length ? player.hand : null);
-  const zones = $derived<{ key: string; count: number; cards: CardState[] | null; shown?: number }[]>([
-    { key: 'Hand', count: hand, cards: shownHand, shown: shownHand?.length },
+  // The hand's cards are on the board's edge ribbon; the plate counts them.
+  const zones = $derived<{ key: string; count: number; cards: CardState[] | null }[]>([
+    { key: 'Hand', count: hand, cards: null },
     { key: 'Library', count: player.library_count, cards: null },
     { key: 'Graveyard', count: Math.max(player.zone_counts.GRAVEYARD ?? 0, player.graveyard.length), cards: player.graveyard },
     ...(player.command?.length ? [{ key: 'Emblems', count: player.command.length, cards: player.command }] : []),
@@ -62,7 +64,7 @@
   const label = $derived(`${name}, ${player.life} life${player.hexproof ? ', hexproof' : ''}${counters ? `, ${counters}` : ''}${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
 </script>
 
-<section class="plate" aria-label={name === 'You' ? 'Your plate' : `${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
+<section class="plate" class:choosing class:compact aria-label={name === 'You' ? 'Your plate' : `${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
   <button
     type="button"
     class="who"
@@ -88,9 +90,13 @@
       <li data-graveyard-side={zone.key === 'Graveyard' ? side : undefined}>
         {#if zone.cards && zone.cards.length}
           <button type="button" class="zone-open" onclick={event => onzone(zone.key, zone.cards!, event.currentTarget)}
-            aria-label={`${zone.key}: ${zone.count}${zone.shown !== undefined && zone.shown < zone.count ? `, ${zone.shown} shown` : ''}. Show cards`}
-            data-testid={zone.key === 'Hand' ? 'shown-hand' : undefined}>
-            <span>{zone.key}</span><b>{zone.shown !== undefined && zone.shown < zone.count ? `${zone.shown} of ${zone.count}` : zone.count}</b>
+            aria-label={`${zone.key}: ${zone.count}. Show cards`}>
+            <span>{zone.key}</span><b>{zone.count}</b>
+          </button>
+        {:else if zone.key === 'Hand' && handToggle}
+          <button type="button" class="zone-open" aria-pressed={handToggle.out} onclick={handToggle.ontoggle}
+            data-testid="hand-toggle" aria-label={`Hand: ${zone.count}. ${handToggle.out ? 'Tuck hand' : 'Show hand'}`}>
+            <span>{handToggle.out ? 'Tuck hand' : 'Show hand'}</span><b>{zone.count}</b>
           </button>
         {:else if zone.key === 'Library' && ondeck}
           <button type="button" class="zone-open" aria-pressed={deckOpen} onclick={ondeck}
@@ -120,7 +126,7 @@
 </section>
 
 <style>
-  .plate { display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; overflow-y: auto; padding: 10px 10px 8px; }
+  .plate { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; overflow-y: auto; padding: 10px 10px 8px; }
   /* A short half scrolls the plate; its parts keep their height rather than overlap. */
   .plate > * { flex-shrink: 0; }
   .who { display: block; text-align: left; border-radius: var(--radius-sm); padding: 2px 4px; margin: -2px -4px; background: none; border: 0; color: inherit; }
@@ -129,9 +135,13 @@
   .who.pointed { outline: 2px dashed var(--damage); outline-offset: 2px; box-shadow: 0 0 0 2px var(--accent); }
   /* Kind and deck wrap to a second line rather than cut a long deck name. */
   .caption { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-  .choosing { display: block; margin-top: 2px; color: var(--warning-text); }
+  .who .choosing { display: block; margin-top: 2px; color: var(--warning-text); }
+  /* The seat choosing: a bar down its plate's outer edge. */
+  .plate.choosing::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
   .life { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
   .numeral { font-family: var(--font-serif); font-size: 40px; font-weight: 600; line-height: 44px; color: var(--text); font-variant-numeric: lining-nums tabular-nums; }
+  .plate.compact { gap: 2px; padding: 6px 10px 4px; }
+  .plate.compact .numeral { font-size: 28px; line-height: 32px; }
   .zones { display: grid; grid-template-columns: 1fr; gap: 0; margin: 0; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
   .zones > li, .zone-open {
     display: flex; justify-content: space-between; gap: 4px; padding: 1px 4px; border-radius: var(--radius-sm);
@@ -154,5 +164,7 @@
   @keyframes land { from { transform: translateY(-40%) scale(1.2); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .dealt { animation: none; } }
   .pool.empty { color: var(--text-secondary); }
+  /* A compact plate has no line to spare for an empty pool. */
+  .plate.compact .pool.empty { display: none; }
   .pool-class.own-line { display: block; }
 </style>

@@ -409,7 +409,7 @@ fn run_away_together_returns_two_creatures_controlled_by_different_players() {
     ] {
         s.restore(&root);
         cast_card(&mut s, spell);
-        let mut first = offered_targets(&s);
+        let mut first = crate::support::inspect::offered_targets_with_aliases(&s);
         first.sort();
         let mut all = [mine, other_mine, theirs].map(Target::Permanent).to_vec();
         all.sort();

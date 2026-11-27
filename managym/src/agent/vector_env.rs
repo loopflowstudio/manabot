@@ -1349,9 +1349,25 @@ mod tests {
     #[test]
     fn first_legal_policy_prefix_keeps_vector_execution_identity() {
         use crate::agent::observation_encoder::{encode, ActionOverflow, ObservationEncoderConfig};
+        let land_names: Vec<String> = crate::cards::content_pack::default_content_pack()
+            .definitions()
+            .filter(|def| {
+                def.kind == crate::state::game_object::ObjectKind::Card
+                    && def.printed.types.is_land()
+                    && crate::cards::content_pack::default_content_pack()
+                        .definition_id(&def.printed.name)
+                        .is_some()
+            })
+            .map(|def| def.printed.name.clone())
+            .take(70)
+            .collect();
+        assert_eq!(land_names.len(), 70);
+        let mut deck: BTreeMap<String, usize> =
+            land_names.iter().map(|name| (name.clone(), 1)).collect();
+        *deck.entry("Mountain".into()).or_insert(0) += 30;
         let players: Vec<_> = ["a", "b"]
             .into_iter()
-            .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 100)])))
+            .map(|name| PlayerConfig::new(name, deck.clone()))
             .collect();
         let mut vector = VectorEnv::new(1, 213, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(players).unwrap();
@@ -1359,10 +1375,8 @@ mod tests {
             vector.envs[0].step(0).unwrap(); // Both seats keep.
         }
         vector.envs[0].scenario_clear_hand(0).unwrap();
-        for _ in 0..70 {
-            vector.envs[0]
-                .scenario_force_card_in_hand(0, "Mountain")
-                .unwrap();
+        for name in &land_names {
+            vector.envs[0].scenario_force_card_in_hand(0, name).unwrap();
         }
         let observation = vector.envs[0].scenario_refresh().unwrap();
         assert_eq!(observation.action_space.actions.len(), 71);

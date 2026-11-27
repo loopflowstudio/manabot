@@ -10,7 +10,10 @@
 //!    most reluctant kind, then of the next kind down, so a basic land pays
 //!    before a land with another ability, a mana rock or a creature,
 //! 5. the fewest taps whose output has a color, keeping colored sources,
-//! 6. the pruned witness, then the earlier candidate in class order.
+//! 6. deterministic color/output class (smaller total output, restricted/classed
+//!    mana before ordinary, WUBRGC order `W < U < B < R < G < C`), then source
+//!    order (`PermanentId`), so permuting interchangeable basics never changes
+//!    which color an automatic payment taps.
 //!
 //! The kind of a source is a tiebreak, never an avoidance: a reluctant
 //! source is tapped whenever that keeps a follow-up another payment loses.
@@ -130,6 +133,75 @@ fn colored(output: &Mana) -> bool {
         .any(|amounts| amounts[..Color::Colorless as usize].iter().any(|n| *n > 0))
 }
 
+/// Deterministic total order on fixed mana outputs among sources of equal
+/// reluctance and coloredness: shared `OutputTiebreak` order (smaller total
+/// output first, restricted/classed outputs before ordinary ones, then combined
+/// WUBRGC totals `W < U < B < R < G < C`), breaking remaining ties by ordinary
+/// vs classed breakdown and `ManaClass` details.
+pub(super) fn cmp_mana_output(a: &Mana, b: &Mana) -> std::cmp::Ordering {
+    OutputTiebreak::of(a)
+        .cmp(&OutputTiebreak::of(b))
+        .then_with(|| b.classes().len().cmp(&a.classes().len()))
+        .then_with(|| b.mana.cmp(&a.mana))
+        .then_with(|| {
+            for ((ac, aa), (bc, ba)) in a.classes().iter().zip(b.classes()) {
+                let ord = ac.cmp(bc).then_with(|| ba.cmp(aa));
+                if ord != std::cmp::Ordering::Equal {
+                    return ord;
+                }
+            }
+            std::cmp::Ordering::Equal
+        })
+}
+
+/// Deterministic output-class tiebreak for a set of tapped fixed sources,
+/// smaller preferred: smaller total mana, more restricted/classed taps first,
+/// then higher WUBRGC totals (`W < U < B < R < G < C`), matching `ClassSearch`
+/// visitation order.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+struct OutputTiebreak {
+    total: u16,
+    classed: std::cmp::Reverse<u16>,
+    colors: std::cmp::Reverse<[u16; 6]>,
+}
+
+impl OutputTiebreak {
+    fn of(output: &Mana) -> Self {
+        let mut tiebreak = Self::default();
+        tiebreak.tap(output, 1);
+        tiebreak
+    }
+
+    fn tap(&mut self, output: &Mana, count: usize) {
+        let count = count as u16;
+        self.total += output.total() * count;
+        if !output.classes().is_empty() {
+            self.classed.0 += count;
+        }
+        for (slot, &amount) in self.colors.0.iter_mut().zip(&output.mana) {
+            *slot += u16::from(amount) * count;
+        }
+        for (_, amounts) in output.classes() {
+            for (slot, &amount) in self.colors.0.iter_mut().zip(amounts) {
+                *slot += u16::from(amount) * count;
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+struct TapRank {
+    kinds: Kinds,
+    tiebreak: OutputTiebreak,
+}
+
+impl TapRank {
+    fn tap(&mut self, kind: Kind, output: &Mana, count: usize) {
+        self.kinds.tap(kind, count);
+        self.tiebreak.tap(output, count);
+    }
+}
+
 /// Checks the search over source classes may spend on one payment.
 pub(super) const CHECKS: usize = 1024;
 /// Pooled-unit spending states read to find what one payment leaves floating.
@@ -229,21 +301,45 @@ impl Chooser<'_> {
         (self.reluctance[index], colored(self.output(index)))
     }
 
-    fn kinds(&self, taps: &[usize]) -> Kinds {
-        let mut kinds = Kinds::default();
-        for index in taps {
-            kinds.tap(self.kind(*index), 1);
-        }
-        kinds
+    fn cmp_source(&self, a: usize, b: usize) -> std::cmp::Ordering {
+        self.kind(a)
+            .cmp(&self.kind(b))
+            .then_with(|| cmp_mana_output(self.output(a), self.output(b)))
     }
 
-    /// The payment the kind preference picks when no follow-up matters, or
-    /// `None` when it is no less reluctant than `taps`, the pruned witness.
+    fn rank(&self, taps: &[usize]) -> TapRank {
+        let mut rank = TapRank::default();
+        for &index in taps {
+            rank.tap(self.kind(index), self.output(index), 1);
+        }
+        rank
+    }
+
+    fn cmp_tap_outputs(&self, a: &[usize], b: &[usize]) -> std::cmp::Ordering {
+        let mut oa: Vec<&Mana> = a.iter().map(|&index| self.output(index)).collect();
+        let mut ob: Vec<&Mana> = b.iter().map(|&index| self.output(index)).collect();
+        oa.sort_unstable_by(|x, y| cmp_mana_output(x, y));
+        ob.sort_unstable_by(|x, y| cmp_mana_output(x, y));
+        for (x, y) in oa.iter().zip(&ob) {
+            let ord = cmp_mana_output(x, y);
+            if ord != std::cmp::Ordering::Equal {
+                return ord;
+            }
+        }
+        oa.len().cmp(&ob.len())
+    }
+
+    /// The payment the kind and color/output preference picks when no follow-up
+    /// matters, or `None` when it is no better than `taps`, the pruned witness.
     /// Every usable source starts tapped and each surplus one is dropped,
-    /// the most reluctant first and the later of equals first: the reverse
-    /// of a greedy choice, exact when every source adds one mana.
+    /// the most reluctant / highest output-order first and the later of equals
+    /// first: the reverse of a greedy choice, exact when every source adds one
+    /// mana.
     fn preferred(&self, taps: &[usize], budget: &mut Budget) -> Option<Vec<usize>> {
-        let worst = taps.iter().map(|index| self.kind(*index)).max()?;
+        let worst = taps
+            .iter()
+            .copied()
+            .max_by(|&a, &b| self.cmp_source(a, b))?;
         let mut order: Vec<usize> = self
             .fixed
             .iter()
@@ -252,28 +348,31 @@ impl Chooser<'_> {
             .collect();
         if !order
             .iter()
-            .any(|index| !taps.contains(index) && self.kind(*index) < worst)
+            .any(|&index| !taps.contains(&index) && self.cmp_source(index, worst).is_lt())
         {
             return None;
         }
-        order.sort_unstable_by_key(|index| std::cmp::Reverse((self.kind(*index), *index)));
+        order.sort_unstable_by(|&a, &b| self.cmp_source(b, a).then_with(|| b.cmp(&a)));
         let owed = u16::from(self.cost.mana_value);
         let mut chosen = order.clone();
+        let mut pooled = self.pooled(&chosen);
         for index in order {
-            let pooled = self.pooled(&chosen);
             if pooled.usable_total(self.cost) <= owed {
                 break;
             }
             budget.take();
-            if self
-                .model
-                .is_surplus(&pooled, self.output(index), self.cost, &[])
-            {
+            let output = self.output(index);
+            if self.model.is_surplus(&pooled, output, self.cost, &[]) {
                 chosen.retain(|kept| *kept != index);
+                pooled.spend(output);
             }
         }
         chosen.sort_unstable();
-        (self.kinds(&chosen) < self.kinds(taps)).then_some(chosen)
+        self.rank(&chosen)
+            .cmp(&self.rank(taps))
+            .then_with(|| self.cmp_tap_outputs(&chosen, taps))
+            .is_lt()
+            .then_some(chosen)
     }
 
     fn pooled(&self, taps: &[usize]) -> Mana {
@@ -442,7 +541,11 @@ impl Chooser<'_> {
                 )),
             }
         }
-        classes.sort_by_key(|(_, class)| class.kind);
+        classes.sort_by(|(_, a), (_, b)| {
+            a.kind
+                .cmp(&b.kind)
+                .then_with(|| cmp_mana_output(a.output, b.output))
+        });
         classes.into_iter().map(|(_, class)| class).collect()
     }
 }
@@ -457,21 +560,28 @@ struct ClassSearch<'a, 'b> {
     ahead: Vec<u16>,
     counts: Vec<usize>,
     bound: Kept,
-    /// The kind-preferred payment's sources: no payment taps less when every
-    /// source adds one mana.
-    floor: Kinds,
+    /// The kind-and-output preferred payment's rank: no payment beats it when
+    /// every source adds one mana.
+    floor: TapRank,
     best: Kept,
-    best_kinds: Kinds,
+    best_rank: TapRank,
+    /// True once the class search itself has visited a payment at `bound` with
+    /// `kinds <= floor.kinds`: classes are visited in canonical preference
+    /// order, so no later branch can beat its tiebreak.
+    found_optimal: bool,
     taps: Vec<usize>,
     budget: Budget,
 }
 
 impl ClassSearch<'_, '_> {
-    /// `kinds` counts the taps chosen so far. Taps only add to it, so once
-    /// the best payment keeps every follow-up a branch at or past its kinds
-    /// holds nothing better.
-    fn visit(&mut self, position: usize, pooled: Mana, tapped: usize, kinds: Kinds) {
-        if self.best == self.bound && (self.best_kinds <= self.floor || kinds >= self.best_kinds) {
+    /// `rank.kinds` counts the taps chosen so far. Taps only add to it, so once
+    /// the best payment keeps every follow-up a branch past its kinds holds
+    /// nothing better.
+    fn visit(&mut self, position: usize, pooled: Mana, tapped: usize, rank: TapRank) {
+        if self.found_optimal
+            || (self.best == self.bound
+                && (self.best_rank <= self.floor || rank.kinds > self.best_rank.kinds))
+        {
             return;
         }
         if !self.budget.take() {
@@ -481,7 +591,12 @@ impl ClassSearch<'_, '_> {
         // A payment that already pays the cost makes every further tap
         // surplus, so the remaining classes stay untapped.
         if pooled.can_pay(cost) {
-            self.candidate(position, &pooled, kinds);
+            self.candidate(position, &pooled, rank);
+            return;
+        }
+        // Any further tap strictly increases `kinds`, so a branch already at
+        // `best_rank.kinds` cannot improve on a bound-achieving payment.
+        if self.best == self.bound && rank.kinds >= self.best_rank.kinds {
             return;
         }
         // Every tap of a payment without surplus pays at least one mana.
@@ -498,23 +613,33 @@ impl ClassSearch<'_, '_> {
             for _ in 0..count {
                 next.add(self.classes[position].output);
             }
-            let mut chosen = kinds;
-            chosen.tap(self.classes[position].kind, count);
+            let mut next_rank = rank;
+            next_rank.tap(
+                self.classes[position].kind,
+                self.classes[position].output,
+                count,
+            );
             self.counts[position] = count;
-            self.visit(position + 1, next, tapped + count, chosen);
+            self.visit(position + 1, next, tapped + count, next_rank);
         }
         self.counts[position] = 0;
     }
 
-    fn candidate(&mut self, position: usize, pooled: &Mana, kinds: Kinds) {
+    fn candidate(&mut self, position: usize, pooled: &Mana, rank: TapRank) {
         let chooser = self.chooser;
-        for class in (0..position).filter(|class| self.counts[*class] > 0) {
-            if !self.budget.take()
-                || chooser
-                    .model
-                    .is_surplus(pooled, self.classes[class].output, chooser.cost, &[])
-            {
-                return;
+        let owed = u16::from(chooser.cost.mana_value);
+        if pooled.usable_total(chooser.cost) > owed {
+            for class in (0..position).filter(|class| self.counts[*class] > 0) {
+                if !self.budget.take()
+                    || chooser.model.is_surplus(
+                        pooled,
+                        self.classes[class].output,
+                        chooser.cost,
+                        &[],
+                    )
+                {
+                    return;
+                }
             }
         }
         let mut taps: Vec<usize> = (0..position)
@@ -526,10 +651,19 @@ impl ClassSearch<'_, '_> {
             return;
         };
         let kept = chooser.kept(set);
-        if (kept, std::cmp::Reverse(kinds)) > (self.best, std::cmp::Reverse(self.best_kinds)) {
+        let better = kept > self.best
+            || (kept == self.best
+                && rank
+                    .cmp(&self.best_rank)
+                    .then_with(|| chooser.cmp_tap_outputs(&taps, &self.taps))
+                    .is_lt());
+        if better {
             self.best = kept;
-            self.best_kinds = kinds;
+            self.best_rank = rank;
             self.taps = taps;
+        }
+        if kept == self.bound && rank.kinds <= self.floor.kinds {
+            self.found_optimal = true;
         }
     }
 }
@@ -654,10 +788,10 @@ impl PaymentModel<'_> {
                 .affordable(taps, &chooser.pooled(taps), budget)
                 .expect("no limit is set before the class search")
         };
-        // The kind-preferred payment is scored first: at the bound nothing
-        // beats it. Short of the bound it stays the floor of the search and
-        // the pruned witness competes with it.
-        let floor = chooser.kinds(preferred.as_deref().unwrap_or(&taps));
+        // The kind-and-output preferred payment is scored first: at the bound
+        // nothing beats it. Short of the bound it stays the floor of the search
+        // and the pruned witness competes with it.
+        let floor = chooser.rank(preferred.as_deref().unwrap_or(&taps));
         let mut best = score(preferred.as_deref().unwrap_or(&taps), &mut budget);
         if best == bound {
             let taps = preferred.clone().unwrap_or(taps);
@@ -679,6 +813,7 @@ impl PaymentModel<'_> {
             ahead[position] =
                 ahead[position + 1] + class.output.usable_total(cost) * class.members.len() as u16;
         }
+        let best_rank = chooser.rank(&taps);
         let mut search = ClassSearch {
             chooser: &chooser,
             counts: vec![0; classes.len()],
@@ -687,11 +822,12 @@ impl PaymentModel<'_> {
             bound: chooser.kept(bound),
             floor,
             best: chooser.kept(best),
-            best_kinds: chooser.kinds(&taps),
+            best_rank,
+            found_optimal: false,
             taps,
             budget,
         };
-        search.visit(0, pool.clone(), 0, Kinds::default());
+        search.visit(0, pool.clone(), 0, TapRank::default());
         debug_assert!(
             chooser.pooled(&search.taps).can_pay(cost),
             "the chosen sources pay the cost"
@@ -863,7 +999,7 @@ mod tests {
     }
 
     #[test]
-    fn prefers_follow_ups_then_hand_cards_then_instants_then_source_order() {
+    fn prefers_follow_ups_then_hand_cards_then_instants_then_output_order() {
         let model = lands(&["G", "R"]);
         let probe = |hand, instant| PaymentProbe {
             followups: vec![ManaCost::parse("G"), ManaCost::parse("R")],
@@ -872,7 +1008,7 @@ mod tests {
             tapping: vec![None; 2],
         };
         // {1} keeps one of the two. Equal counts: the hand card wins, then
-        // the instant, then the witness's Forest tap.
+        // the instant, then WUBRGC output order (R before G).
         assert_eq!(choose(&model, "1", &[], Some(probe(0b01, 0))).0.taps, [1]);
         assert_eq!(choose(&model, "1", &[], Some(probe(0b10, 0))).0.taps, [0]);
         assert_eq!(
@@ -883,8 +1019,8 @@ mod tests {
             choose(&model, "1", &[], Some(probe(0b11, 0b10))).0.taps,
             [0]
         );
-        assert_eq!(choose(&model, "1", &[], Some(probe(0b11, 0))).0.taps, [0]);
-        assert_eq!(choose(&model, "1", &[], Some(probe(0, 0))).0.taps, [0]);
+        assert_eq!(choose(&model, "1", &[], Some(probe(0b11, 0))).0.taps, [1]);
+        assert_eq!(choose(&model, "1", &[], Some(probe(0, 0))).0.taps, [1]);
         // More follow-ups beat a hand card: two abilities at {G}{G}{G}
         // against one instant at {R}.
         let mut ability = ManaCost::parse("GGG");
@@ -897,6 +1033,116 @@ mod tests {
         };
         let model = lands(&["G", "G", "G", "R"]);
         assert_eq!(choose(&model, "1", &[], Some(abilities)).0.taps, [3]);
+    }
+
+    #[test]
+    fn equal_reluctance_color_tiebreak_is_independent_of_source_order() {
+        // Permuting [Plains, Forest] or [Island, Mountain] yields the exact
+        // same color tapped regardless of battlefield PermanentId order, both
+        // without follow-ups and with tied follow-ups.
+        for (a, b, expected_color) in [
+            (["W", "G"], ["G", "W"], "W"),
+            (["U", "R"], ["R", "U"], "U"),
+            (["B", "G"], ["G", "B"], "B"),
+        ] {
+            let want = Mana::parse(expected_color);
+            for probe in [PaymentProbe::default(), hand(&[a[0], a[1]]), hand(&["1"])] {
+                for order in [a, b] {
+                    let model = lands(&order);
+                    let (choice, searched) = choose(&model, "1", &[], Some(probe.clone()));
+                    assert_eq!(searched, 0);
+                    assert_eq!(choice.taps.len(), 1);
+                    let tapped = model.sources[choice.taps[0]].fixed.as_ref().unwrap();
+                    assert_eq!(
+                        tapped, &want,
+                        "order {order:?}, probe {probe:?} tapped {tapped:?}"
+                    );
+                }
+            }
+        }
+        // Tapping the earlier vs later Plains on [Plains, Forest, Plains]
+        // leaves [Forest, Plains] vs [Plains, Forest]; a subsequent {1} taps
+        // the remaining Plains in both branches.
+        let board = lands(&["W", "G", "W"]);
+        let after_first = board.tapped(std::iter::once(0));
+        let after_last = board.tapped(std::iter::once(2));
+        let first_choice = choose(&after_first, "1", &[], Some(hand(&[]))).0;
+        let last_choice = choose(&after_last, "1", &[], Some(hand(&[]))).0;
+        assert_eq!(
+            after_first.sources[first_choice.taps[0]].fixed.as_ref(),
+            Some(&Mana::parse("W"))
+        );
+        assert_eq!(
+            after_last.sources[last_choice.taps[0]].fixed.as_ref(),
+            Some(&Mana::parse("W"))
+        );
+    }
+
+    #[test]
+    fn restricted_mana_classes_share_one_order_across_preferred_and_class_search() {
+        use crate::state::mana::ManaRestriction;
+
+        let ally_g = Mana::restricted_to(ManaRestriction::only([], ["Ally"]), [0, 0, 0, 0, 1, 0]);
+        let lesson_w =
+            Mana::restricted_to(ManaRestriction::only([], ["Lesson"]), [1, 0, 0, 0, 0, 0]);
+        let lesson_g =
+            Mana::restricted_to(ManaRestriction::only([], ["Lesson"]), [0, 0, 0, 0, 1, 0]);
+
+        // Combined WUBRGC order places Lesson:{W} ahead of Ally:{G} in both
+        // cmp_mana_output and OutputTiebreak; same-color classes break ties by ManaClass.
+        assert_eq!(
+            super::cmp_mana_output(&lesson_w, &ally_g),
+            std::cmp::Ordering::Less
+        );
+        assert!(super::OutputTiebreak::of(&lesson_w) < super::OutputTiebreak::of(&ally_g));
+        assert_eq!(
+            super::cmp_mana_output(&ally_g, &lesson_g),
+            std::cmp::Ordering::Less
+        );
+
+        let mut cost = ManaCost::parse("1");
+        cost.purpose = SpendingContext::ability(["Ally", "Lesson"]);
+        let mut tied_a = ManaCost::parse("1");
+        tied_a.purpose = SpendingContext::ability(["Ally"]);
+        let mut tied_b = ManaCost::parse("1");
+        tied_b.purpose = SpendingContext::ability(["Lesson"]);
+        let tied_probe = PaymentProbe {
+            followups: vec![tied_a, tied_b],
+            hand: 0,
+            instant: 0,
+            tapping: vec![None; 2],
+        };
+
+        for (first, second, want) in [
+            (&ally_g, &lesson_w, &lesson_w),
+            (&lesson_w, &ally_g, &lesson_w),
+            (&ally_g, &lesson_g, &ally_g),
+            (&lesson_g, &ally_g, &ally_g),
+        ] {
+            let mut model = lands(&["G", "G"]);
+            let sources = std::sync::Arc::make_mut(&mut model.sources);
+            sources[0].fixed = Some(first.clone());
+            sources[1].fixed = Some(second.clone());
+            let witness = model
+                .plan(
+                    Mana::default(),
+                    vec![pay_cost(&cost)],
+                    SourcePolicy::FixedOnly,
+                )
+                .unwrap();
+            for probe in [PaymentProbe::default(), tied_probe.clone()] {
+                let choice = model.choose_taps(
+                    &Mana::default(),
+                    &cost,
+                    &[],
+                    &witness,
+                    || vec![Reluctance::Land; 2],
+                    || probe.clone(),
+                );
+                assert_eq!(choice.taps.len(), 1);
+                assert_eq!(model.sources[choice.taps[0]].fixed.as_ref(), Some(want));
+            }
+        }
     }
 
     #[test]
@@ -923,7 +1169,7 @@ mod tests {
         // follow-up {R}{G}, which the remaining doubled Forest completes.
         let model = lands(&["GG", "RR"]);
         let (choice, searched) = choose(&model, "1", &[], Some(hand(&["RG"])));
-        assert_eq!(choice.taps, [0]);
+        assert_eq!(choice.taps, [1]);
         assert_eq!(searched, 0);
         let (choice, _) = choose(&model, "1", &[], Some(hand(&["RRG"])));
         assert_eq!(choice.taps, [0]);
@@ -1095,8 +1341,8 @@ mod tests {
         assert_eq!(searched, 0);
         assert!(choice.exhausted);
         assert!(choice.checks <= ceiling(15, 25, followups.len()));
-        // The bound and the witness's score, then the whole class budget.
-        assert_eq!(choice.checks, 5 + 5 + CHECKS);
+        // Ten preferred drops, the bound, two scores, then the whole class budget.
+        assert_eq!(choice.checks, 10 + 5 + 5 + 5 + CHECKS);
         // The first candidate taps three whole colors and keeps the other two.
         assert_eq!(choice.taps.len(), 15);
         assert!(choice.taps.iter().all(|index| index % 5 < 3));
@@ -1108,18 +1354,20 @@ mod tests {
             .map(|index| ["W", "U", "B", "R", "G"][index % 5])
             .collect();
         let model = lands(&outputs);
-        // Four of a color survive the witness's one tap of each: the bound
-        // and the witness's score are the only work.
+        // Four of a color survive one tap of each color: the class search
+        // confirms no better color-order tiebreak keeps all five and stops.
         let kept = ["WWWW", "UUUU", "BBBB", "RRRR", "GGGG"];
         let (choice, searched) = choose(&model, "5", &[], Some(hand(&kept)));
-        assert_eq!((choice.checks, searched, choice.exhausted), (10, 0, false));
+        assert_eq!((choice.checks, searched, choice.exhausted), (412, 0, false));
         assert_eq!(choice.taps, [0, 1, 2, 3, 4]);
-        // Five of every color but white do not; the first candidate, all five
-        // Plains, keeps them all and ends the search.
+        // Five of every color but white: the preferred payment (all five Plains)
+        // keeps them all at WitnessAtBound without entering the class search.
         let whole = ["UUUUU", "BBBBB", "RRRRR", "GGGGG"];
         let (choice, searched) = choose(&model, "5", &[], Some(hand(&whole)));
         assert_eq!(choice.taps, [0, 5, 10, 15, 20]);
-        assert_eq!((choice.checks, searched, choice.exhausted), (15, 0, false));
+        assert_eq!(choice.stage, Stage::WitnessAtBound);
+        assert_eq!((searched, choice.exhausted), (0, false));
+        assert!(choice.checks <= ceiling(5, 25, whole.len()));
         // Thirty Forests have one payment up to identity.
         let (choice, _) = choose(&lands(&["G"; 30]), "7", &[], Some(hand(&["G"])));
         assert_eq!((choice.checks, choice.followups), (2, 1));
@@ -1140,8 +1388,8 @@ mod tests {
         let (choice, searched) = choose(&model, "5", &[], Some(hand(&followups)));
         assert_eq!(searched, 0);
         assert!(choice.checks <= ceiling(3, 24, followups.len()));
-        assert_eq!((choice.checks, choice.exhausted), (191, false));
-        assert_eq!(choice.taps, [0, 1, 2]);
+        assert_eq!((choice.checks, choice.exhausted), (233, false));
+        assert_eq!(choice.taps, [0, 1, 3]);
     }
 
     #[test]
@@ -1171,7 +1419,7 @@ mod tests {
         assert_eq!(searched, 0);
         assert_eq!(choice.followups, 64);
         assert!(choice.checks <= ceiling(8, 20, 64));
-        assert_eq!((choice.checks, choice.exhausted), (1142, true));
+        assert_eq!((choice.checks, choice.exhausted), (1207, true));
         assert_eq!(choice.taps.len(), 8);
     }
 
@@ -1232,7 +1480,7 @@ mod tests {
         // Both Forests keep the Mountains for {R}{R}.
         assert_eq!(choice.taps, [0, 2]);
         assert!(choice.checks <= ceiling(2, 18, followups.len()));
-        assert_eq!((choice.checks, choice.exhausted), (15, false));
+        assert_eq!((choice.checks, choice.exhausted), (43, false));
         // With a saved obligation the same board prunes only.
         let (choice, searched) = choose(&model, "1G", &[pay("RR")], None);
         assert_eq!(choice.taps, [0, 1]);

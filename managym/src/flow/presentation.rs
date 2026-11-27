@@ -229,7 +229,7 @@ impl Game {
         }
         // `Game::clone` omits the sink, as for search.
         let mut position = self.clone();
-        position.current_action_space = None;
+        position.clear_published_decision();
         let sink = self.presentation.as_deref_mut().expect("checked above");
         let index = sink.positions.len() as u32;
         sink.positions.push(position);

@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame, PermanentState } from '$lib/types';
-import { fitRow, footprint, handFan, handStrip, pileWidth, offerPlacements, possessive, splitHalf, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
+import { NO_RIBBON_OVERRIDES, fitRow, footprint, handFan, handStrip, pileWidth, offerPlacements, possessive, ribbonIsOut, splitHalf, toggleRibbon, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
 import { decidesBy, shortName } from '$lib/opponent-name';
 import { counterTerms, permissionTerms } from './inspect';
 
@@ -120,11 +120,28 @@ describe('where decisions land', () => {
 
   it('draws Learn: discards on hand cards, Lessons in the tray by name, declining as a button', () => {
     const view = boardView(navigation.LEARN.frame, PLAYERS);
-    expect(view.hand.filter(item => item.offers.length).length).toBe(6);
+    expect(view.you.hand.filter(item => item.offers.length).length).toBe(6);
     expect(view.tray.map(item => item.name)).toEqual(['Accumulate Wisdom', 'Firebending Lesson', "It'll Quench Ya!"]);
     expect(view.buttons.map(placed => placed.offer.label)).toEqual(['Decline Learn']);
     // A click on the Learn spell on the stack never declines.
     expect(view.stack.flatMap(item => item.offers)).toEqual([]);
+  });
+
+  it('draws a top-seat chooser\'s offers on its own hand, and unseen hand cards as backs', () => {
+    const { frame } = navigation.LEARN;
+    const { agent, opponent } = frame.projection;
+    // The same decision seen from the other seat's side of the table, hands face-up.
+    const view = boardView({ ...frame, projection: { ...frame.projection, agent: opponent, opponent: agent } }, PLAYERS);
+    expect(view.opponent.hand.filter(item => item.offers.length).length).toBe(6);
+    expect(view.opponent.hiddenHand).toBe(0);
+    expect(view.tray.map(item => item.name)).toEqual(['Accumulate Wisdom', 'Firebending Lesson', "It'll Quench Ya!"]);
+    expect([...offerPlacements(view).values()].every(count => count === 1)).toBe(true);
+    // Closed: the count stays, the cards are backs, and their offers fall back to the tray.
+    const closed = boardView({ ...frame, projection: { ...frame.projection, agent: opponent,
+      opponent: { ...agent, hand: [], hand_hidden_count: agent.hand.length, zone_counts: { ...agent.zone_counts, HAND: agent.hand.length } } } }, PLAYERS);
+    expect(closed.opponent.hand).toEqual([]);
+    expect(closed.opponent.hiddenHand).toBe(agent.hand.length);
+    expect(closed.tray.length).toBe(view.tray.length + 6);
   });
 
   it('inspects tray cards as themselves: stash counters, a condition, a controlled opponent\'s hand', () => {
@@ -268,6 +285,110 @@ describe('where decisions land', () => {
     const after = boardView(frame, PLAYERS).you.support.find(pile => pile.items.some(item => item.permanent.id === land.id))!;
     expect(after.items.map(item => item.permanent.id)).toEqual([land.id]);
   });
+
+  it('places folded offer aliases on drawn copies on the board and in hand, keeping piles whole and trays deduplicated', () => {
+    const frame = structuredClone(navigation.PAY_OR_NOT.frame);
+    const { agent, opponent } = frame.projection;
+    const basePerm = agent.battlefield[0];
+    const plains = [501, 502, 503].map(id => ({
+      ...basePerm,
+      id,
+      name: 'Plains',
+      controller_id: agent.id,
+      tapped: false,
+      damage: 0,
+      summoning_sick: false,
+      power: null,
+      toughness: null,
+      base_power: null,
+      base_toughness: null,
+      plus1_counters: 0,
+      attached_to: undefined,
+      effects: undefined,
+      copy_of: undefined,
+      types: { is_creature: false, is_land: true, is_spell: false, is_artifact: false, is_enchantment: false, is_planeswalker: false, is_battle: false },
+    }));
+    const handBase = agent.hand[0] ?? {
+      id: 0, registry_key: 1, name: 'Youthful Knight', zone: 'HAND', owner_id: agent.id,
+      power: 2, toughness: 1, mana_value: 2,
+      types: { is_creature: true, is_land: false, is_spell: true, is_artifact: false, is_enchantment: false, is_planeswalker: false, is_battle: false },
+    };
+    const knights = [601, 602].map(id => ({ ...handBase, id, name: 'Youthful Knight', zone: 'HAND' }));
+    const graveCards = [701, 702].map(id => ({ ...handBase, id, name: 'Mountain', zone: 'GRAVEYARD' }));
+    agent.battlefield = plains;
+    opponent.battlefield = [];
+    agent.hand = knights;
+    agent.graveyard = graveCards;
+    frame.projection.decision_context = undefined;
+    const ref = (id: number) => ({
+      kind: 'object' as const,
+      id: { entity: id, incarnation: 0 },
+    });
+    const obj = (id: number, label: string) => ({
+      entity_id: id,
+      subject: ref(id),
+      display_id: id,
+      label,
+    });
+    const baseOffer = frame.offers[0];
+    frame.offers = [
+      {
+        ...baseOffer,
+        id: 0,
+        verb: 'activate',
+        action_type: 'TAP_FOR_COST',
+        label: 'Tap Plains for {W}',
+        confirm_label: 'Tap Plains for {W}',
+        source: null,
+        subjects: [{ role: 'choice', object: obj(501, 'Plains') }],
+        aliases: [ref(502), ref(503)],
+        focus: [501],
+      },
+      {
+        ...baseOffer,
+        id: 1,
+        verb: 'cast',
+        action_type: 'PRIORITY_CAST_SPELL',
+        label: 'Cast Youthful Knight',
+        confirm_label: 'Cast Youthful Knight',
+        source: ref(601),
+        subjects: [{ role: 'source', object: obj(601, 'Youthful Knight') }],
+        aliases: [ref(602)],
+        focus: [601],
+      },
+      {
+        ...baseOffer,
+        id: 2,
+        verb: 'choose',
+        action_type: 'SELECT_CARD',
+        label: 'Select Mountain',
+        confirm_label: 'Select Mountain',
+        source: null,
+        subjects: [{ role: 'choice', object: obj(701, 'Mountain') }],
+        aliases: [ref(702)],
+        focus: [701],
+      },
+    ];
+
+    const view = boardView(frame, PLAYERS);
+    // Rail lists each canonical offer once.
+    expect(view.list.map(placed => placed.offer.id)).toEqual([0, 1, 2]);
+    // All three Plains share one pile and every copy carries the canonical offer.
+    expect(view.you.support).toHaveLength(1);
+    expect(view.you.support[0].items.map(item => item.permanent.id)).toEqual([501, 502, 503]);
+    for (const item of view.you.support[0].items) {
+      expect(item.offers.map(placed => placed.offer.id)).toEqual([0]);
+    }
+    // Both copies in hand carry the canonical cast offer.
+    expect(view.you.hand.map(item => [item.card.id, item.offers.map(placed => placed.offer.id)])).toEqual([
+      [601, [1]],
+      [602, [1]],
+    ]);
+    // Graveyard aliases never duplicate tray cards.
+    expect(view.tray).toHaveLength(1);
+    expect(view.tray[0].placed.offer.id).toBe(2);
+    expect(view.tray[0].card?.id).toBe(701);
+  });
 });
 
 describe('fitRow', () => {
@@ -370,7 +491,7 @@ describe('the spell being cast', () => {
     expect(view.stack[0].card?.id).toBe(source.display_id);
     expect(view.stack[0].entry.label).toBe(source.label);
     expect(view.stack.length).toBe((frame.projection.stack_objects ?? []).length + 1);
-    expect(view.hand.map(item => item.card.id)).not.toContain(source.display_id);
+    expect(view.you.hand.map(item => item.card.id)).not.toContain(source.display_id);
   });
 
   it('draws a spell announced from outside the hand with its card', () => {
@@ -512,5 +633,38 @@ describe('stack provenance', () => {
     expect(stackProvenance({ ...spell, from_prepared: true })).toEqual(['prepared']);
     expect(stackProvenance(spell)).toEqual([]);
     expect(stackProvenance({ ...spell, flashback: true })).toEqual(['flashback']);
+  });
+});
+
+describe('hand ribbon overrides', () => {
+  const asked = { position: true, offered: false };
+  const quiet = { position: false, offered: false };
+
+  it('shows one seat without moving the other, and keeps it out across positions', () => {
+    const shown = toggleRibbon(NO_RIBBON_OVERRIDES, 'opponent', 'a', false);
+    expect(ribbonIsOut(shown, 'opponent', 'a', quiet)).toBe(true);
+    expect(ribbonIsOut(shown, 'opponent', 'b', quiet)).toBe(true);
+    expect(ribbonIsOut(shown, 'you', 'a', quiet)).toBe(false);
+    expect(ribbonIsOut(toggleRibbon(shown, 'opponent', 'b', false), 'opponent', 'b', quiet)).toBe(false);
+  });
+
+  it('tucks the acting seat for the position it is at, then lets it out again', () => {
+    const tucked = toggleRibbon(NO_RIBBON_OVERRIDES, 'you', 'a', true);
+    expect(ribbonIsOut(tucked, 'you', 'a', asked)).toBe(false);
+    expect(ribbonIsOut(tucked, 'opponent', 'a', asked)).toBe(true);
+    expect(ribbonIsOut(tucked, 'you', 'b', asked)).toBe(true);
+    expect(ribbonIsOut(toggleRibbon(tucked, 'you', 'a', true), 'you', 'a', asked)).toBe(true);
+  });
+
+  it('tucking a pinned hand that the position also asks for unpins it', () => {
+    const pinned = toggleRibbon(NO_RIBBON_OVERRIDES, 'you', 'a', false);
+    const tucked = toggleRibbon(pinned, 'you', 'b', true);
+    expect(ribbonIsOut(tucked, 'you', 'b', asked)).toBe(false);
+    expect(ribbonIsOut(tucked, 'you', 'c', quiet)).toBe(false);
+  });
+
+  it('an offer on a hand card holds the hand out whatever was asked', () => {
+    const tucked = toggleRibbon(NO_RIBBON_OVERRIDES, 'you', 'a', true);
+    expect(ribbonIsOut(tucked, 'you', 'a', { position: true, offered: true })).toBe(true);
   });
 });

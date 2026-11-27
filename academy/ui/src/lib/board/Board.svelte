@@ -16,12 +16,27 @@
    * may jump), the recorded policy (`evidence`, shown on each offer's card and
    * row) and a bottom edge (`bottom`: the transport and the decision strip).
    *
+   * Both hands are ribbons: cards past the plate column, bleeding off the
+   * board's top and bottom edges, over one battlefield. `yourHand` says how
+   * yours behaves. `out` (live play, Study): it is out all the time, in
+   * depth the battlefield keeps clear under your rows, and it is where cards
+   * are dragged from. `tucked` (a recording): the battlefield is two equal
+   * halves, each hand is tucked to its cards' name bars and glides out over
+   * its own rows for the seat acting or as its plate says. The opponent's hand
+   * is the top ribbon in either layout: its hidden cards as backs, the cards
+   * this viewer may see face-up. Live play with open hands on passes the
+   * bot's hand (`openHand`), drawn face-up and out in place of the backs at
+   * the position being played, never on a past board, and tucked to its
+   * cards' name bars by its plate. A ribbon moves only by `translateY`, so the
+   * battlefield never shifts under it.
+   *
    * Live play also takes pointer drags (`drag.ts`): each drop goes where a
    * click goes, so a drag adds no choice a click or key cannot make.
    */
   import { onMount, setContext, untrack, type Snippet } from 'svelte';
   import ArtCredits from '$lib/components/ArtCredits.svelte';
   import ThemeSwitch from '$lib/components/ThemeSwitch.svelte';
+  import { CARD_BACK_URL, loadArt } from '$lib/card-art';
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
   import {
@@ -82,12 +97,14 @@
   import Strip from './Strip.svelte';
   import type { DecisionMark } from '$lib/analysis';
   import { decidesBy, shortName } from '$lib/opponent-name';
-  import { CARD_RATIO, fieldItems, footprint, handFan, handStrip, inspectableCards, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type HandItem, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem, type TrayItem } from './view';
+  import { CARD_RATIO, fieldItems, footprint, handFan, handStrip, inspectableCards, pileShapes, NO_RIBBON_OVERRIDES, possessive, ribbonIsOut, splitHalf, toggleRibbon, boardView, type HalfSplit, type HandItem, type PermanentItem, type PlacedOffer, type RibbonOverrides, type RowLimits, type SideView, type StackItem, type TrayItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
     /** Play submits live Commands. Study clicks and keys try an isolated branch. */
     interaction: 'play' | 'study' | 'read-only';
+    /** How your hand ribbon behaves: always out in its own depth, or gliding over the rows as a recording's does. */
+    yourHand: 'out' | 'tucked';
     status: string;
     you: { name: string; deck: string | null };
     opponent: { name: string; deck: string | null; description?: string };
@@ -106,8 +123,14 @@
     presentation: PresentationPlayer;
     /** Set while the opponent is choosing, or the server is working, in words. */
     thinking: string | null;
-    /** The opponent is the one choosing now. */
-    opponentChoosing: boolean;
+    /** The seat choosing now, marked on its plate; null when nobody is (consequences, game over). */
+    choosingSeat: 0 | 1 | null;
+    /** A recording's seat whose hand ribbon is out; the other stays tucked. */
+    ribbonSeat?: 0 | 1 | null;
+    /** The opponent's hand at this frame, while live play has open hands on; null otherwise. */
+    openHand?: readonly CardState[] | null;
+    /** Live play has open hands on, whether or not this frame's hand has arrived; turning it on again shows a tucked hand. */
+    openHands?: boolean;
     /** When the work the game waits on started, epoch seconds; null when nothing runs. */
     workStarted: number | null;
     /** The live session is gone; offers are the last recorded decision's. */
@@ -181,8 +204,8 @@
   }
 
   let {
-    frame, interaction, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', notes = [], canPassTurn,
-    presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
+    frame, interaction, yourHand, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', notes = [], canPassTurn,
+    presentation, thinking, choosingSeat, ribbonSeat = null, openHand = null, openHands = false, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
     since: sinceGiven, history: historyGiven, onjump, readOnly = onjump !== undefined, currentMove = null, cursorSeq = null, stepBoardsError = null, onclearcursor,
     evidence = null, moveMarks, shownMoves, heading = null, bottom, strip, notices, result, menu, bar, chips = [], historyHref = '/games',
     group = null, groupPreview, ongroupact, groupRejection = null, ondismissgrouprejection, stepBoards = [],
@@ -219,6 +242,7 @@
   const said = $derived(shortName(opponent.name));
   const players = $derived({ you: shortName(you.name), opponent: said });
   const projection = $derived(frame.projection);
+  const opponentChoosing = $derived(choosingSeat !== null && choosingSeat === projection.opponent.player_index);
   const names = $derived(new Map([...projection.agent.battlefield, ...projection.opponent.battlefield]
     .map(permanent => [permanent.id, permanent.name ?? 'permanent'])));
 
@@ -370,7 +394,7 @@
   const placingBlocker = $derived(draggedBlocker ?? armed);
   /** Each creature's place in the draft and what pressing it does. */
   const draftMarks = $derived.by(() => {
-    if (!combatGroup) return null;
+    if (!combatGroup || activeCursor !== null) return null;
     const places = new Map<number, 'can' | 'in' | 'armed'>();
     const notes = new Map<number, string>();
     const refusedId = activeRefusal?.item?.entity ?? null;
@@ -609,7 +633,7 @@
   const payKnown = $derived(live && payAnswer?.frameHash === frame.frame_hash && payAnswer.offerId === payOffer?.offer.id
     ? payAnswer.answered : null);
   const payKnownPlan = $derived(paymentPlan(payKnown, frame));
-  const unpiled = $derived((payKnownPlan ?? payPlanned)?.sources ?? null);
+  const unpiled = $derived((payOffer ? payKnownPlan : payPlanned)?.sources ?? null);
   const primaryText = $derived(primaryLabel(frame, view, payKnown));
   const line = $derived(
     activeGroup && activeRefusal ? activeRefusal.reason
@@ -672,6 +696,8 @@
     connection !== null ? selection : cursorSeq !== null ? { seq: cursorSeq, scope: 'line' } : null,
   );
   const cursor = $derived(activeCursor?.seq ?? null);
+  /** Live Play is still walking past beats: hold upcoming choices in the rail until the board catches up. */
+  const catchingUp = $derived(!readOnly && walking);
   // Arrange and pile panels hide while the board walks the past; their Confirm
   // waits for them so a click never commits cards nobody has seen.
   const groupShown = $derived(combatGroup !== null || activeCursor === null);
@@ -806,6 +832,26 @@
   const drawn = $derived(activeCursor !== null ? { ...frame, projection: cursorHit?.projection ?? frame.projection, offers: [] } : drafted);
   const board = $derived(activeCursor !== null ? boardView(drawn, players) : view);
   const boardProjection = $derived(drawn.projection);
+  /**
+   * The top ribbon's side. With open hands on, at the position being played,
+   * the bot's whole hand in its own order: a card the rules already revealed
+   * keeps its offers, and the rest take the place of the backs. A past board
+   * (beat playback, lookback) draws only what it held. This is the one
+   * opponent hand the board knows: the ribbon, Inspect and the trackers'
+   * faces all read it.
+   */
+  const openShown = $derived(openHand !== null && activeCursor === null);
+  const topSide = $derived.by<SideView>(() => {
+    const theirs = board.opponent;
+    if (!openHand || !openShown) return theirs;
+    const revealed = new Map(theirs.hand.map(item => [item.card.id, item]));
+    const held = new Set(openHand.map(card => card.id));
+    const hand = [
+      ...openHand.map(card => revealed.get(card.id) ?? { card, offers: [] }),
+      ...theirs.hand.filter(item => !held.has(item.card.id)),
+    ];
+    return { ...theirs, hand, hiddenHand: Math.max(0, theirs.hand.length + theirs.hiddenHand - hand.length) };
+  });
   const priorBoardProjection = $derived.by(() => {
     if (activeCursor === null) return null;
     const minSeq = Math.min(...active.seqs, activeCursor.seq);
@@ -1093,7 +1139,7 @@
   // The inspected object as it is in this frame, by id; a name alone when it has left.
   const permanents = $derived(new Map([...boardProjection.agent.battlefield, ...boardProjection.opponent.battlefield].map(permanent => [permanent.id, permanent])));
   const boardNames = $derived(new Map([...permanents].map(([id, permanent]) => [id, permanent.name ?? 'permanent'])));
-  const cards = $derived(new Map(inspectableCards([boardProjection.agent, boardProjection.opponent]).map(card => [card.id, card])));
+  const cards = $derived(new Map([...inspectableCards([boardProjection.agent, boardProjection.opponent]), ...topSide.hand.map(item => item.card)].map(card => [card.id, card])));
   const shown = $derived(inspectMode === 'dock' ? docked : hovered?.subject ?? null);
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
@@ -1124,7 +1170,7 @@
     show(item ? { name: item.permanent.name ?? 'Permanent', text: item.permanent.text_box ?? null, permanent: item.permanent.id, card: null } : null, element);
   }
   function previewCard(card: CardState | null, element: HTMLElement | null): void {
-    point(card ? board.hand.find(item => item.card.id === card.id)?.offers ?? null : null);
+    point(card ? [...board.you.hand, ...topSide.hand].find(item => item.card.id === card.id)?.offers ?? null : null);
     show(card ? { name: card.name, text: card.text_box ?? null, permanent: null, card: card.id } : null, element);
   }
   /** A tray card inspects as itself: its rules text, counters and permissions. */
@@ -1142,9 +1188,8 @@
 
   /** Rules text for a name in the log, from any card of that name this viewer can see. */
   function textOf(name: string): string | null {
-    const players = [boardProjection.agent, boardProjection.opponent];
-    const card = inspectableCards(players).find(candidate => candidate.name === name);
-    const permanent = players.flatMap(player => player.battlefield).find(candidate => candidate.name === name);
+    const card = [...cards.values()].find(candidate => candidate.name === name);
+    const permanent = [...permanents.values()].find(candidate => candidate.name === name);
     return card?.text_box ?? permanent?.text_box ?? null;
   }
   function openZone(title: string, cards: CardState[], element: HTMLElement): void {
@@ -1154,41 +1199,98 @@
 
   // ———————————————— Hand
 
-  // Hand cards keep one steady size across turns (~124 px wide, fitting a full
-  // 7-card hand on a laptop without pumping as cards are drawn/played or as
-  // permanents tap/untap). Only a genuinely crowded board (16+ permanents)
-  // reclaims height down toward `HAND_CROWDED`. An empty hand collapses to its label.
-  /** Strip heights, px: the card is the strip less 22 px of lift and padding, at 63:88. */
+  // Your hand in play keeps one steady size across turns (~124 px wide, fitting
+  // a full 7-card hand on a laptop without pumping as cards are drawn/played or
+  // as permanents tap/untap). Only a genuinely crowded board (16+ permanents)
+  // reclaims height down toward `HAND_CROWDED`, and a short board (the docked
+  // Decisions chart open on a laptop) takes it down toward `HAND_SHORT`. An
+  // empty hand gives its depth back.
+  /** The depth your rows keep clear for it, px: the card is that less 22 px of lift and padding, at 63:88. */
   const HAND_STEADY = 196;
   const HAND_CROWDED = 160;
+  const HAND_SHORT = 132;
   const HAND_CARD_MAX = 124;
   const HAND_SHARE = 0.30;
+  const tucked = $derived(yourHand === 'tucked');
   const liveBoardCount = $derived(frame.projection.agent.battlefield.length + frame.projection.opponent.battlefield.length);
   let boardHeight = $state(0);
-  const steadyHandHeight = $derived(Math.max(HAND_CROWDED, Math.min(HAND_STEADY, Math.round((boardHeight || 660) * HAND_SHARE))));
+  /**
+   * The least a half needs, px: its ribbon's 46 px peek (`--peek-face`), the rows' padding and gaps, and one line each
+   * of lands and creatures at their smallest cards. On a short board your hand gives up depth before a half clips its rows.
+   */
+  const HALF_FLOOR = 46 + 12 + 4 + ROW_GAP + Math.ceil(SUPPORT.minCard / CARD_RATIO) + Math.ceil(CREATURES.minCard / CARD_RATIO);
+  const steadyHandHeight = $derived(Math.max(HAND_SHORT, Math.min(HAND_STEADY, Math.round((boardHeight || 660) * HAND_SHARE), boardHeight ? boardHeight - 2 * HALF_FLOOR : Infinity)));
   const handHeight = $derived(
-    liveBoardCount >= 16
+    !tucked && liveBoardCount >= 16
       ? handStrip(boardHeight, [
           { creatures: pileShapes(view.opponent.creatures), support: pileShapes(view.opponent.support), width: theirRows.width },
           { creatures: pileShapes(view.you.creatures), support: pileShapes(view.you.support), width: yourRows.width },
         ], { gap: ROW_GAP, creatures: CREATURES, support: SUPPORT },
-        { min: liveBoardCount >= 24 ? HAND_CROWDED : 176, max: steadyHandHeight, step: 8 })
+        { min: Math.min(liveBoardCount >= 24 ? HAND_CROWDED : 176, steadyHandHeight), max: steadyHandHeight, step: 8 })
       : steadyHandHeight,
   );
   /** The players' plates' column. */
   const PLATE_WIDTH = 148;
-  /** The hand's cards keep clear of its label at the left edge. */
-  const HAND_LABEL_WIDTH = 80;
-  let handWidth = $state(0);
-  /** A crowded hand's cards shrink to the width of a card in the crowded strip before they overlap. */
+  /** A crowded hand's cards shrink to the width of a card at the crowded depth before they overlap. */
   const HAND_FLOOR = Math.floor((HAND_CROWDED - 22) * CARD_RATIO);
   const handFull = $derived(Math.max(56, Math.min(HAND_CARD_MAX, Math.floor((handHeight - 22) * CARD_RATIO))));
-  // Cards offered from outside the board (a castable card in exile, Lessons outside the game) sit beside the hand, a size smaller, and take their width from it.
+  // Cards offered from outside the board (a castable card in exile, Lessons outside the game) are a size smaller than the hand's.
   const trayCard = $derived(Math.round(Math.min(handFull, 120) * 0.78));
-  const trayReserve = $derived(view.tray.length && !finished && activeCursor === null ? Math.min(Math.floor(handWidth * 0.45), view.tray.length * (trayCard + 10) + 30) : 0);
-  const fan = $derived(handFan(board.hand.length, handWidth - HAND_LABEL_WIDTH - 24 - trayReserve, { min: HAND_FLOOR, max: handFull }, 10));
-  // Keep the hand track steady while cards are in hand so drawing/playing never pumps the battlefield.
-  const handTrack = $derived(board.hand.length === 0 && trayReserve === 0 ? '30px' : `${handHeight}px`);
+  const trayShown = $derived(view.tray.length > 0 && !finished && !arrangeGroup && !partitionGroup && activeCursor === null);
+
+  // ———————————————— Hand ribbons
+
+  const RIBBON_CARD = { min: 80, max: 112 };
+  let cardBackArt = $state<string | null>(null);
+  onMount(() => {
+    let active = true;
+    void loadArt(CARD_BACK_URL).then(ok => { if (active && ok) cardBackArt = CARD_BACK_URL; });
+    return () => { active = false; };
+  });
+  /**
+   * Play keeps the whole hand's depth clear under your rows, so the hand that is always out covers no land.
+   * It is given back only with no card held: a last card being announced is on the stack, and still in hand.
+   */
+  const handWell = $derived(tucked || board.you.player.hand.length === 0 ? 0 : handHeight);
+  /** Each half's height, px: the board less your hand's well, split evenly. A plate under `PLATE_COMPACT` tightens so it does not scroll. */
+  const halfHeight = $derived(boardHeight > 0 ? (boardHeight - handWell) / 2 : Infinity);
+  const PLATE_COMPACT = 215;
+  const ribbonSide = $derived(ribbonSeat === null ? null : ribbonSeat === boardProjection.agent.player_index ? 'you' : 'opponent');
+  /**
+   * Each plate's Show hand / Tuck hand, for its own seat and this game only.
+   * A recording's tuck lasts for the position it was made at; live play has
+   * one open hand to tuck, and it stays tucked until shown again or open hands
+   * is turned off.
+   */
+  let ribbonSay = $state.raw<{ match: string; overrides: RibbonOverrides }>({ match: '', overrides: NO_RIBBON_OVERRIDES });
+  const ribbonOverrides = $derived(ribbonSay.match === frame.match_id ? ribbonSay.overrides : NO_RIBBON_OVERRIDES);
+  const ribbonAt = $derived<unknown>(tucked ? boardProjection : 'play');
+  // Live play's tuck lasts while open hands stays on; turning it off clears it so on again brings the hand out.
+  $effect(() => {
+    if (openHands) return;
+    untrack(() => {
+      if (!tucked && ribbonSay.overrides !== NO_RIBBON_OVERRIDES) {
+        ribbonSay = { match: '', overrides: NO_RIBBON_OVERRIDES };
+      }
+    });
+  });
+  /** What the position asks by itself: the acting seat's hand on a recording; in play your own hand, always, and the open hand. */
+  function ribbonAsked(side: 'you' | 'opponent'): boolean {
+    return (tucked ? ribbonSide === side : side === 'you') || (side === 'opponent' && openShown);
+  }
+  /** A ribbon is out for the seat acting, while open hands shows it, as its plate last said, and whenever a live offer sits on one of its cards. A recording's pills never hold a hand out: the rail lists them too. */
+  function ribbonOut(side: 'you' | 'opponent', hand: HandItem[]): boolean {
+    return ribbonIsOut(ribbonOverrides, side, ribbonAt, { position: ribbonAsked(side), offered: live && hand.some(item => item.offers.length > 0) });
+  }
+  /** The plate's Show hand / Tuck hand for its own seat: a recording's hand, or play's open hand, unless a live offer holds it out. Your hand in play has none: it covers nothing. */
+  function handToggle(side: 'you' | 'opponent', sideView: SideView): { out: boolean; ontoggle: () => void } | null {
+    if (sideView.hand.length === 0 || (live && sideView.hand.some(item => item.offers.length > 0))) return null;
+    if (!tucked && !(side === 'opponent' && openShown)) return null;
+    return {
+      out: ribbonOut(side, sideView.hand),
+      ontoggle: () => { ribbonSay = { match: frame.match_id, overrides: toggleRibbon(ribbonOverrides, side, ribbonAt, ribbonAsked(side)) }; },
+    };
+  }
 
   // ———————————————— Pointer gestures
 
@@ -1218,7 +1320,7 @@
     const opener = (event.currentTarget as HTMLElement).querySelector<HTMLElement>('[data-testid=board-card]');
     if (!opener) return;
     const rect = opener.getBoundingClientRect();
-    gesture = press({ kind: 'play', overField: false, card: item.card, offers: item.offers, width: fan.card, grab: { x: event.clientX - rect.left, y: event.clientY - rect.top }, opener },
+    gesture = press({ kind: 'play', overField: false, card: item.card, offers: item.offers, width: rect.width, grab: { x: event.clientX - rect.left, y: event.clientY - rect.top }, opener },
       event.pointerId, frame.revision, { x: event.clientX, y: event.clientY });
   }
   /** Resolve the element under the pointer against the same offers and preview used for clicks. */
@@ -1252,12 +1354,16 @@
     const side = yours ? view.you : view.opponent;
     return side.offers.length ? { endpoint: { kind: 'player', index: side.player.player_index }, title: yours ? you.name : said, offers: side.offers, element } : null;
   }
+  /** Over a battlefield half and above the depth your hand keeps: where releasing a carried card plays it. */
+  function overField(hit: Element | null, y: number): boolean {
+    return !!hit?.closest('.board .half') && !!boardEl && y < boardEl.getBoundingClientRect().bottom - handWell;
+  }
   function onDragMove(event: PointerEvent): void {
     if (current.phase !== 'pressed' && current.phase !== 'dragging') return;
     const next = moveGesture(current, event.pointerId, { x: event.clientX, y: event.clientY }, drag => {
       if (drag.kind === 'marquee') return drag;
       const hit = document.elementFromPoint(event.clientX, event.clientY);
-      return drag.kind === 'play' ? { ...drag, overField: !!hit?.closest('.board .half') } : connectTarget(drag, hit);
+      return drag.kind === 'play' ? { ...drag, overField: overField(hit, event.clientY) } : connectTarget(drag, hit);
     });
     if (next === current) return;
     if (current.phase === 'pressed') {
@@ -1433,7 +1539,7 @@
       ...boardProjection.opponent.battlefield.map(p => p.name ?? ''),
       ...boardProjection.opponent.graveyard.map(c => c.name ?? ''),
       ...boardProjection.opponent.exile.map(c => c.name ?? ''),
-      ...boardProjection.opponent.hand.map(c => c.name ?? ''),
+      ...topSide.hand.map(item => item.card.name ?? ''),
     ].filter(Boolean);
     if (!names.length) return;
     void loadTrackerCardFaces(names).then(faces => { trackerFaces = faces; });
@@ -1515,10 +1621,10 @@
         return;
       }
     }
-    if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); passTurn(); return; }
+    if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); if (!catchingUp) passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
-      // Live grouped decisions fold raw single-step offers under a collapsed disclosure, not numbered shortcuts.
-      if (!menuAt && activeGroup) return;
+      // Do not blindly commit hidden choices while the walk is still catching up, or raw steps inside a live group.
+      if (catchingUp || (!menuAt && activeGroup)) return;
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
@@ -1554,7 +1660,7 @@
   }} />
 
 <div class="game" class:dragging class:with-sidebar={sidebarOpen} data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
-  data-turn={turnNumber} data-step={turnStep} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
+  data-turn={turnNumber} data-step={turnStep} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} bind:this={root}>
   <header class="topbar chrome-bar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
     <p class="matchup type-caption" data-testid="deck-names">
@@ -1631,13 +1737,14 @@
   {/if}
 
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (clicking an earlier board returns to now; Esc and Space do the same from the keyboard) -->
-  <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:this={boardEl} bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
+  <div class="board" class:tucked id="board" data-testid="game-board" aria-label="Board" bind:this={boardEl} bind:clientHeight={boardHeight}
+    style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handWell}px`} style:--hand-well={`${handWell}px`}
     data-board={activeCursor !== null ? (cursorHit ? 'step' : 'missing') : 'frame'}
     onclick={event => { if (activeCursor !== null && !(event.target instanceof Element && event.target.closest('.zone, .combat-table-sheet'))) clearActiveCursor(); }}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} definitionNames={boardProjection.definition_names} drop={snapped?.kind === 'player' && snapped.index === boardProjection.opponent.player_index} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
         stopLifeDelta={stopDeltas.players.get(boardProjection.opponent.player_index) ?? 0}
-        choosing={opponentChoosing} pointed={pointedPlayerIndex === boardProjection.opponent.player_index} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)}
+        choosing={opponentChoosing} handToggle={handToggle('opponent', topSide)} pointed={pointedPlayerIndex === boardProjection.opponent.player_index} compact={halfHeight < PLATE_COMPACT} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)}
         ondeck={() => { oppDeckOpen = !oppDeckOpen; }} deckOpen={oppDeckOpen} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
         <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={boardAsked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} {touched} beat={activeSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
@@ -1647,6 +1754,7 @@
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={boardProjection.agent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.agent.player_index} name={you.name} caption={you.deck} offers={board.you.offers} {live} damage={damage.players.get(boardProjection.agent.player_index) ?? 0}
         stopLifeDelta={stopDeltas.players.get(boardProjection.agent.player_index) ?? 0}
+        choosing={choosingSeat !== null && choosingSeat === boardProjection.agent.player_index} handToggle={handToggle('you', board.you)}
         pointed={pointedPlayerIndex === boardProjection.agent.player_index}
         side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)}
         ondeck={selfTracker ? () => { myDeckOpen = !myDeckOpen; } : undefined} deckOpen={myDeckOpen} />
@@ -1655,40 +1763,13 @@
         <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={boardAsked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} {touched} beat={activeSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
-    <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth}>
-      <span class="type-heading hand-label text-ink-2">Hand · {board.hand.length}</span>
-      <div class="hand-cards" style:width={`${fan.card + Math.max(0, board.hand.length - 1) * fan.step}px`}>
-        {#each board.hand as item, index (item.card.id)}
-          {@const away = carried?.card.id === item.card.id}
-          <!-- svelte-ignore a11y_no_static_element_interactions (the press starts a pointer drag; the card's button is the control) -->
-          <div class="hand-card" class:playable={live && item.offers.length > 0} class:draggable={canDrag && playable(item.offers)} style:left={`${index * fan.step}px`}
-            onpointerdown={event => pressHand(event, item)}>
-            <BoardCard name={item.card.name} width={fan.card} slice={fan.covered && index < board.hand.length - 1 ? fan.step : null} card={item.card} offers={item.offers} {live} asked={board.asked.has(item.card.id)}
-              dim={away || (acting && !openingHandDecision && item.offers.length === 0) ? 'hand' : null} travel={!away}
-              onactivate={element => activate(item.card.name, item.offers, element)}
-              onpreview={element => previewCard(element ? item.card : null, element)} />
-          </div>
-        {/each}
-      </div>
-      {#if view.tray.length && !finished && !arrangeGroup && !partitionGroup && activeCursor === null}
-        <div class="tray" role="group" aria-label="Choices from outside the board" data-testid="tray" style:max-width={`${trayReserve}px`}>
-          {#each view.tray as item (item.placed.offer.id)}
-            {#if item.name}
-              <div class="tray-card" style:width={`${trayCard}px`}>
-                <span class="type-caption tray-caption" title={offerText(item.placed.offer)}><ManaText text={offerText(item.placed.offer)} size={12} /></span>
-                <BoardCard name={item.name} width={trayCard} offers={[item.placed]} {live}
-                  onactivate={() => act(item.placed)}
-                  onpreview={element => previewTray(item, element)} />
-              </div>
-            {:else}
-              <button type="button" class="btn btn-secondary btn-sm" disabled={!live} onclick={() => act(item.placed)}>
-                <kbd>{item.placed.number}</kbd><ManaText text={offerText(item.placed.offer)} size={13} />
-              </button>
-            {/if}
-          {/each}
-        </div>
-      {/if}
-    </section>
+    <!-- After the halves, so a ribbon is drawn over the rows it covers when it is out. -->
+    {@render ribbon('top', 'opponent', topSide, `${possessive(said)} hand`)}
+    {@render ribbon('bottom', 'you', board.you, !tucked || you.name === 'You' ? 'Your hand' : `${possessive(players.you)} hand`)}
+    {#if trayShown}
+      <!-- What is offered from outside the board floats beside the battlefield, clear of both hands. -->
+      <div class="tray" class:above-hand={!tucked && handWell > 0 && ribbonOut('opponent', topSide.hand)} role="group" aria-label="Choices from outside the board" data-testid="tray">{@render trayItems()}</div>
+    {/if}
 
     {#if partitionGroup && !finished && activeCursor === null}
       <!-- Over the board, foldable so the battlefield stays readable around it. -->
@@ -1763,7 +1844,7 @@
 
     {#if dragging && carried}
       <!-- Where releasing plays the card, and what it does: the battlefield above the hand. -->
-      <div class="drop-zone" class:over={carried.overField} style:bottom={handTrack} data-testid="drop-zone" data-over={carried.overField} aria-hidden="true">
+      <div class="drop-zone" class:over={carried.overField} style:bottom={`${handWell}px`} data-testid="drop-zone" data-over={carried.overField} aria-hidden="true">
         <span class="drop-label type-caption">{dropLabel(carried)}</span>
       </div>
     {/if}
@@ -1846,11 +1927,6 @@
         </div>
       </section>
     {/if}
-    {#if strip?.open}
-      <div class="strip-overlay">
-        <Strip marks={strip.marks} selected={strip.selected} onjump={strip.onjump} note={strip.note} scale={strip.scale} onclose={strip.ontoggle} />
-      </div>
-    {/if}
   </div>
 
   <div class="rail-slot" id="rail-choices">
@@ -1860,9 +1936,68 @@
       {evidence} {moveMarks} {shownMoves} {onjump} recording={readOnly} {currentMove}
       onselectline={connection !== null ? selectHistoryLine : undefined}
       cursorLineIds={active.lineIds} cursorSourceSeq={active.sourceSeq}
+      {catchingUp} walkCaption={active.caption}
+      walkProgress={activeStopIndex >= 0 ? `${activeStopIndex + 1} of ${scrubber.stops.length}` : null}
+      onnow={returnToNow}
       draft={combatGroup ? combatControls : arrangeGroup ? arrangeControls : partitionGroup ? partitionControls : undefined}
       groupKind={activeGroup?.kind ?? null} />
   </div>
+
+  {#snippet trayItems()}
+    {#each view.tray as item (item.placed.offer.id)}
+      {#if item.name}
+        <div class="tray-card" style:width={`${trayCard}px`}>
+          <span class="type-caption tray-caption" title={offerText(item.placed.offer)}><ManaText text={offerText(item.placed.offer)} size={12} /></span>
+          <BoardCard name={item.name} width={trayCard} offers={[item.placed]} {live}
+            onactivate={() => act(item.placed)}
+            onpreview={element => previewTray(item, element)} />
+        </div>
+      {:else}
+        <button type="button" class="btn btn-secondary btn-sm" disabled={!live} onclick={() => act(item.placed)}>
+          <kbd>{item.placed.number}</kbd><ManaText text={offerText(item.placed.offer)} size={13} />
+        </button>
+      {/if}
+    {/each}
+  {/snippet}
+
+  {#snippet ribbon(edge: 'top' | 'bottom', side: 'you' | 'opponent', sideView: SideView, label: string)}
+    {@const count = sideView.hand.length + sideView.hiddenHand}
+    {@const steady = side === 'you' && !tucked}
+    {@const lay = steady ? handFan(count, yourRows.width - 24, { min: HAND_FLOOR, max: handFull }, 10) : handFan(count, theirRows.width - 24, RIBBON_CARD, 8)}
+    {@const height = footprint(lay.card, true)}
+    {@const out = ribbonOut(side, sideView.hand)}
+    {#if count}
+      <div class={`ribbon at-${edge}`} class:out class:steady class:open={side === 'opponent' && openShown} data-testid="hand-ribbon" data-ribbon={edge} data-out={out}
+        style:height={`${height + 16}px`} style:--card-height={`${height}px`}>
+        <div class="ribbon-cards" style:width={`${lay.card + (count - 1) * lay.step}px`}>
+          {#if sideView.hand.length}
+            <!-- The cards this viewer sees are a keyboard region; backs alone are only the plate's count. -->
+            <section use:region={{ across: connection !== null }} class="ribbon-faces" class:hand={side === 'you'}
+              aria-label={`${label}, ${count} ${count === 1 ? 'card' : 'cards'}${sideView.hiddenHand ? `, ${sideView.hand.length} shown` : ''}`}>
+              <!-- Omit side so cards drawn into the opponent's open ribbon fade in place instead of flying from the plate. -->
+              {#each sideView.hand as item, index (item.card.id)}
+                {@const away = steady && carried?.card.id === item.card.id}
+                <!-- svelte-ignore a11y_no_static_element_interactions (the press starts a pointer drag; the card's button is the control) -->
+                <div class="ribbon-card face" class:draggable={steady && canDrag && playable(item.offers)} style:left={`${index * lay.step}px`}
+                  onpointerdown={steady ? event => pressHand(event, item) : undefined}>
+                  <BoardCard name={item.card.name} width={lay.card} slice={lay.covered && index < count - 1 ? lay.step : null} card={item.card} offers={item.offers} {live}
+                    bar={edge === 'bottom' && !steady ? 'head' : 'foot'} asked={board.asked.has(item.card.id)}
+                    dim={away || (steady && acting && !openingHandDecision && item.offers.length === 0) ? 'hand' : null} travel={!away}
+                    onactivate={element => activate(item.card.name, item.offers, element)}
+                    onpreview={element => previewCard(element ? item.card : null, element)} />
+                </div>
+              {/each}
+            </section>
+          {/if}
+          {#each { length: sideView.hiddenHand } as _, index (index)}
+            <div class="ribbon-card back" class:art={cardBackArt !== null} aria-hidden="true" data-testid="card-back" style:left={`${(sideView.hand.length + index) * lay.step}px`}
+              style:width={`${lay.card}px`} style:height={`${height}px`}
+              style:background-image={cardBackArt ? `url('${cardBackArt}')` : undefined}></div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+  {/snippet}
 
   {#snippet partitionControls()}
     <div class="combat-draft" data-testid="partition-draft">
@@ -1939,8 +2074,12 @@
       <span aria-hidden="true">{strip!.open ? '▾' : '▸'}</span> Decisions · {strip!.marks.filter(mark => mark.decision).length}
     </button>
   {/snippet}
-  {#if showWalkBar || bottom}
+  {#if showWalkBar || bottom || strip?.open}
     <div class="bottom">
+      {#if strip?.open}
+        <!-- Under the board, in its own row: it never lies over a hand or the battlefield. -->
+        <Strip marks={strip.marks} selected={strip.selected} onjump={strip.onjump} note={strip.note} scale={strip.scale} compact={!tucked} onclose={strip.ontoggle} />
+      {/if}
       {#if showWalkBar}
         <div class="walk-bar" data-testid="walk-bar" data-walking={walking} data-cursor={cursor ?? undefined}>
           <div class="walk-row">
@@ -2122,7 +2261,9 @@
   .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .connection { color: var(--warning-text); }
 
+  /* Tucked ribbons peek by their name bar (`--peek-face`) or card back (`--peek-back`); the rows keep `--peek-face` clear so gliding moves nothing. */
   .board {
+    --peek-face: 46px; --peek-back: 40px;
     grid-row: 2; grid-column: 1;
     position: relative; min-height: 0; min-width: 0; display: grid;
     transition: grid-template-rows var(--motion-move) var(--motion-move-ease);
@@ -2132,24 +2273,55 @@
   .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); background: var(--bg-muted); }
   .half :global(.plate) { border-right: 1px solid var(--border); }
   .rows { isolation: isolate; display: grid; min-height: 0; min-width: 0; padding: 6px 10px; gap: 6px; }
-  .opponent .rows { grid-template-rows: minmax(0, 42fr) minmax(0, 58fr); }
-  .you .rows { grid-template-rows: minmax(0, 58fr) minmax(0, 42fr); }
+  /* Each half keeps its ribbon's depth clear, whatever the ribbon is doing; your half runs under your hand to the board's edge. */
+  .half.you { grid-row: 2 / span 2; }
+  .opponent .rows { grid-template-rows: minmax(0, 42fr) minmax(0, 58fr); margin-top: var(--peek-face); }
+  .you .rows { grid-template-rows: minmax(0, 58fr) minmax(0, 42fr); margin-bottom: var(--hand-well); }
+  .board.tucked .you .rows { margin-bottom: var(--peek-face); }
   .row { min-height: 0; min-width: 0; }
   .row.support { border-top: 1px dashed transparent; }
   .opponent .row.creatures, .you .row.support { padding-top: 4px; }
 
-  .hand { position: relative; isolation: isolate; min-height: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0 12px 8px var(--hand-label); overflow: hidden; }
-  .hand-label { position: absolute; left: 14px; bottom: 10px; }
-  .hand-cards { position: relative; height: 100%; }
-  .hand-card { position: absolute; bottom: 0; transition: transform var(--motion-fast) ease-out; }
-  .hand-card:hover, .hand-card:focus-within { transform: translateY(-10px); z-index: 30; }
-  /* A playable card is dragged, never panned; while a card is carried, its neighbours stay still. */
-  .rows.selectable, .hand-card.draggable { touch-action: none; }
+  /*
+   * A hand ribbon: cards past the plate column, bleeding off the board's edge.
+   * It moves by translateY alone and takes no clicks itself, so the rows under
+   * it stay where they are and stay pressable around its cards. Tucked, a card
+   * shows its name bar; pointing at or focusing one brings that card alone out.
+   */
+  .ribbon { position: absolute; left: var(--plate); right: 0; isolation: isolate; overflow: hidden; display: flex; justify-content: center; pointer-events: none; }
+  .ribbon.at-top { top: 0; }
+  .ribbon.at-bottom { bottom: 0; }
+  .ribbon-cards { position: relative; height: 100%; }
+  .ribbon-faces { position: absolute; inset: 0; }
+  .ribbon-card { position: absolute; pointer-events: auto; transition: transform var(--motion-move) var(--motion-move-ease); }
+  .ribbon.at-top .ribbon-card { top: 0; transform: translateY(calc(var(--peek) - var(--card-height))); }
+  .ribbon.at-bottom .ribbon-card { bottom: 0; transform: translateY(calc(var(--card-height) - var(--peek))); }
+  .ribbon-card.face { --peek: var(--peek-face); }
+  .ribbon-card.back {
+    --peek: var(--peek-back); pointer-events: none; border: 1px solid var(--border-strong); border-radius: var(--radius-card);
+    background: var(--bg-surface) center / cover no-repeat;
+    box-shadow: inset 0 0 0 3px var(--bg-surface), inset 0 0 0 4px var(--border-strong), var(--lift);
+  }
+  .ribbon-card.back.art { border-color: var(--border); box-shadow: var(--lift); }
+  .ribbon.out .ribbon-card.face, .ribbon .ribbon-card.face:hover, .ribbon .ribbon-card.face:focus-within { transform: none; }
+  /* Open hands: a card turned face-up glides out from where its back was. */
+  @starting-style { .ribbon.open .ribbon-card.face { transform: translateY(calc(var(--peek-back) - var(--card-height))); } }
+  /* The card brought out orders over its neighbours, inside the ribbon's own stacking. */
+  .ribbon-card.face:hover, .ribbon-card.face:focus-within { z-index: 30; }
+  .ribbon.out .ribbon-card.face :global(.tcard:not(.offered, .chosen, .legal, .asked)) { box-shadow: var(--lift); }
+  /* Your hand in play lies in its own depth: a card raised by its offer shows whole, over the rows' edge. */
+  .ribbon.steady { overflow: visible; }
+  /* A card at the top edge has nowhere to rise: its offer brings it inward, and its focus ring sits inside its edge. */
+  .ribbon.at-top.out :global(.tcard.legal) { --rise: 6px; }
+  .ribbon.at-top.out :global(.tcard.legal:hover) { --rise: 8px; }
+  .ribbon.at-top.out :global(.tcard:is(.asked, .armed)) { --rise: 12px; }
+  .ribbon.at-top :global(.tcard:focus-visible) { outline-offset: -2px; }
+  /* A playable card is dragged, never panned. */
+  .rows.selectable, .ribbon-card.draggable { touch-action: none; }
   .game :global([data-connect-source]) { touch-action: none; }
   .game :global(button[data-connect-target]:not([data-drop])) { outline: 2px dashed var(--accent); outline-offset: 2px; }
   .game :global(button[data-drop]) { outline: 2px solid var(--accent); outline-offset: 2px; }
   .dragging { user-select: none; }
-  .dragging .hand-card:hover, .dragging .hand-card:focus-within { transform: none; }
 
   .marquee {
     position: fixed; z-index: var(--layer-drag); pointer-events: none;
@@ -2169,8 +2341,14 @@
   }
   .drop-zone.over .drop-label { border-color: var(--accent); color: var(--text); }
 
-  /* Beside the hand, never over the battlefield: the same strip holds what you can play from your hand and from elsewhere. */
-  .tray { flex: none; align-self: stretch; display: flex; align-items: flex-end; gap: 10px; margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--border-strong); overflow-x: auto; }
+  /* What is offered from outside the board: a panel at the battlefield's right edge, over the centre line, clear of both hands. */
+  .tray {
+    position: absolute; right: 12px; top: calc((100% - var(--hand-well)) / 2); transform: translateY(-50%); z-index: var(--layer-panel);
+    display: flex; align-items: flex-end; gap: 10px; max-width: 60%; padding: 10px 12px; overflow-x: auto;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--bg-surface); box-shadow: var(--shadow-raised);
+  }
+  /* With the top hand out in play it would sit over its right end: the tray drops to just above your hand instead. */
+  .tray.above-hand { top: auto; bottom: calc(var(--hand-well) + 12px); transform: none; }
   .tray-card { flex: none; display: grid; justify-items: center; gap: 4px; text-align: center; }
   .tray-caption { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; color: var(--text-secondary); }
 
@@ -2181,7 +2359,7 @@
     animation: appear var(--motion-move) ease-out;
   }
   .combat-table-sheet {
-    position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: var(--layer-panel);
+    position: absolute; left: 50%; bottom: calc(var(--hand-well) + 10px); transform: translateX(-50%); z-index: var(--layer-panel);
     width: min(640px, calc(100% - 28px)); max-height: 46%; display: flex; flex-direction: column;
     border: 1px solid var(--border-strong); border-radius: var(--radius-md);
     background: color-mix(in srgb, var(--bg-surface) 96%, transparent); box-shadow: var(--shadow-raised);
@@ -2244,7 +2422,7 @@
   .walk-tick.passed .tick-bar { background: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); }
   .walk-tick.active .tick-bar { background: var(--accent); height: 8px; }
   .walk-tick:hover .tick-bar, .walk-tick:focus-visible .tick-bar { background: var(--text); }
-  .result-card.folded { top: auto; bottom: 12px; left: auto; right: 12px; transform: none; width: auto; padding: 6px; }
+  .result-card.folded { top: auto; bottom: calc(var(--hand-well) + 10px); left: auto; right: 12px; transform: none; width: auto; padding: 6px; }
   .result-card .fold { justify-self: end; color: var(--text-secondary); }
   .result-card .fold:hover { color: var(--text); }
 
@@ -2256,7 +2434,7 @@
     background: var(--bg-surface); box-shadow: var(--shadow-raised);
     animation: appear var(--motion-fast) ease-out;
   }
-  .partition-panel.folded { top: auto; bottom: 12px; left: auto; right: 12px; transform: none; width: auto; max-height: none; padding: 6px; }
+  .partition-panel.folded { top: auto; bottom: calc(var(--hand-well) + 10px); left: auto; right: 12px; transform: none; width: auto; max-height: none; padding: 6px; }
   .partition-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .partition-head .fold { flex: none; color: var(--text-secondary); }
   .partition-head .fold:hover { color: var(--text); }
@@ -2297,15 +2475,6 @@
   .strip-toggle:hover { color: var(--text); }
   .bottom { grid-row: 3; grid-column: 1; min-width: 0; border-top: 1px solid var(--border); background: var(--bg-surface); }
   .game.with-sidebar .bottom { grid-column: 2; }
-  /* Decision / analysis strip floats over the lower board so opening it never squishes the battlefield. */
-  .strip-overlay {
-    position: absolute; left: 12px; right: 12px; bottom: 10px; z-index: var(--layer-panel);
-    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--bg-surface) 95%, transparent);
-    backdrop-filter: blur(6px);
-    box-shadow: var(--shadow-raised);
-    animation: appear var(--motion-fast) ease-out;
-  }
 
   .menu {
     position: fixed; z-index: 300; min-width: 220px; max-width: 320px; padding: 8px; display: grid; gap: 2px;
@@ -2371,7 +2540,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .hand-card, .board { transition: none; }
+    .ribbon-card, .board { transition: none; }
     .menu, .preview, .result-card, .partition-panel, .keys { animation: none; }
   }
 </style>

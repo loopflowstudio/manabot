@@ -1147,11 +1147,7 @@ impl Observation {
             viewer.0 < game.state.players.len(),
             "viewer must name a player"
         );
-        let expose_actions = game
-            .current_action_space
-            .as_ref()
-            .and_then(|space| space.player)
-            == Some(viewer);
+        let expose_actions = game.action_space().and_then(|space| space.player) == Some(viewer);
         Self::for_player_with_events(game, viewer, std::iter::empty(), expose_actions)
     }
 
@@ -1193,10 +1189,7 @@ impl Observation {
 
         // Action descriptions ask payment questions of one board.
         let _payments = game.payment_scan();
-        let action_space = game
-            .current_action_space
-            .as_ref()
-            .map(|space| ActionSpaceData {
+        let action_space = game.action_space().map(|space| ActionSpaceData {
                 action_space_type: space.kind,
                 actions: if expose_actions {
                     space
@@ -1353,9 +1346,32 @@ impl Observation {
 
     /// Copies of each definition id among `objects`.
     fn definition_counts(definitions: impl IntoIterator<Item = u32>) -> BTreeMap<u32, u32> {
+        let mut stack = [0u32; 64];
+        let mut len = 0usize;
+        let mut spill: Vec<u32> = Vec::new();
+        for def in definitions {
+            if spill.is_empty() {
+                if len < stack.len() {
+                    stack[len] = def;
+                    len += 1;
+                } else {
+                    spill.reserve(128);
+                    spill.extend_from_slice(&stack);
+                    spill.push(def);
+                }
+            } else {
+                spill.push(def);
+            }
+        }
+        let slice: &mut [u32] = if spill.is_empty() {
+            &mut stack[..len]
+        } else {
+            &mut spill
+        };
+        slice.sort_unstable();
         let mut counts = BTreeMap::new();
-        for definition in definitions {
-            *counts.entry(definition).or_default() += 1;
+        for run in slice.chunk_by(|a, b| a == b) {
+            counts.insert(run[0], run.len() as u32);
         }
         counts
     }
@@ -1590,11 +1606,30 @@ impl Observation {
             }
         }
 
+        let other = PlayerId(1 - agent_player.0);
+        let needs_dedup = !game.pending_public_entries().is_empty()
+            || game.state.suspended_decision.is_some()
+            || game.looks_at_library_top(agent_player)
+            || (game.shares_information(agent_player, other) && game.looks_at_library_top(other));
+
+        let agent_cap = game.state.zones.size(ZoneType::Hand, agent_player)
+            + game.state.zones.size(ZoneType::Graveyard, agent_player)
+            + game.state.zones.size(ZoneType::Exile, agent_player)
+            + game.emblems().count();
+        let mut opp_cap = game.state.zones.size(ZoneType::Graveyard, other)
+            + game.state.zones.size(ZoneType::Exile, other);
+        if game.shares_information(agent_player, other) {
+            opp_cap += game.state.zones.size(ZoneType::Hand, other);
+        }
+        self.agent_cards.reserve(agent_cap);
+        self.opponent_cards.reserve(opp_cap);
+
         // Inspection paths can overlap (hand, library top and a pending
-        // search). Emit each object once, retaining first-visible order.
-        let mut seen = HashSet::new();
+        // search). When none are active, Hand/Command/Graveyard/Exile are
+        // mutually disjoint, so skip HashSet deduplication.
+        let mut seen = needs_dedup.then(HashSet::new);
         let mut add_object = |object_id: ObjectId, zone: ZoneType| {
-            if seen.insert(object_id) {
+            if seen.as_mut().is_none_or(|set| set.insert(object_id)) {
                 self.push_card(
                     Self::card_data(game, object_id, zone),
                     game.state[object_id].owner,
@@ -1604,13 +1639,15 @@ impl Observation {
 
         // A replacement question identifies prospective battlefield entrants
         // publicly before their retained zone moves commit.
-        for object in game.pending_public_entries() {
-            if let Some(zone) = game.state.zones.zone_of(object) {
-                add_object(object, zone);
+        if needs_dedup {
+            for object in game.pending_public_entries() {
+                if let Some(zone) = game.state.zones.zone_of(object) {
+                    add_object(object, zone);
+                }
             }
         }
 
-        for perspective in [agent_player, PlayerId(1 - agent_player.0)] {
+        for perspective in [agent_player, other] {
             if !game.shares_information(agent_player, perspective) {
                 continue;
             }
@@ -1621,6 +1658,10 @@ impl Observation {
                 .iter()
             {
                 add_object(*object_id, ZoneType::Hand);
+            }
+
+            if !needs_dedup {
+                continue;
             }
 
             // A library top the viewer or controlled player may inspect (CR 401.2).
@@ -1841,12 +1882,15 @@ impl Observation {
             loyalty_activated_this_turn: permanent.loyalty_activated_this_turn,
             once_each_turn_used: (permanent.activated_this_turn.len()
                 + game.state.turn.used_trigger_grants.count(permanent.object)
-                + game
-                    .state
-                    .turn
-                    .ability_triggers_this_turn
-                    .range(printed_abilities.clone())
-                    .count()) as i32,
+                + if game.state.turn.ability_triggers_this_turn.is_empty() {
+                    0
+                } else {
+                    game.state
+                        .turn
+                        .ability_triggers_this_turn
+                        .range(printed_abilities.clone())
+                        .count()
+                }) as i32,
             granted_firebending: i32::from(characteristics.firebending),
             temp_subtypes: characteristics
                 .added_subtypes
@@ -1888,14 +1932,18 @@ impl Observation {
                     _ => None,
                 }
             }),
-            blocking: game.state.combat.as_ref().and_then(|combat| {
-                combat
-                    .attacker_to_blockers
-                    .iter()
-                    .find(|(_, blockers)| blockers.contains(&perm_id))
-                    .and_then(|(attacker, _)| game.state.permanents[*attacker].as_ref())
-                    .map(|attacker| attacker.id.0 as i32)
-            }),
+            blocking: (!permanent.attacking)
+                .then(|| game.state.combat.as_ref())
+                .flatten()
+                .filter(|combat| !combat.attacker_to_blockers.is_empty())
+                .and_then(|combat| {
+                    combat
+                        .attacker_to_blockers
+                        .iter()
+                        .find(|(_, blockers)| blockers.contains(&perm_id))
+                        .and_then(|(attacker, _)| game.state.permanents[*attacker].as_ref())
+                        .map(|attacker| attacker.id.0 as i32)
+                }),
             hexproof_from: characteristics
                 .static_abilities
                 .iter()
@@ -1921,14 +1969,19 @@ impl Observation {
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             attacked_this_turn: game.state.turn.attack_count(permanent.object) > 0,
             entered_this_turn: permanent.entered_this_turn(game.state.turn.turn_number),
-            combat_damage_to_players: game
-                .state
-                .turn
-                .damage_pairs
-                .combat_players(permanent.object)
-                .map(|p| p.0)
-                .collect(),
-            damaged_permanents: {
+            combat_damage_to_players: if game.state.turn.damage_pairs.is_empty() {
+                Vec::new()
+            } else {
+                game.state
+                    .turn
+                    .damage_pairs
+                    .combat_players(permanent.object)
+                    .map(|p| p.0)
+                    .collect()
+            },
+            damaged_permanents: if game.state.turn.damage_pairs.is_empty() {
+                Vec::new()
+            } else {
                 let mut targets: Vec<_> = game
                     .state
                     .turn
@@ -1941,13 +1994,16 @@ impl Observation {
                 targets.sort_unstable();
                 targets
             },
-            ability_resolutions: game
-                .state
-                .turn
-                .ability_resolutions_this_turn
-                .range(printed_abilities)
-                .map(|((_, _, index), count)| (*index, *count))
-                .collect(),
+            ability_resolutions: if game.state.turn.ability_resolutions_this_turn.is_empty() {
+                Vec::new()
+            } else {
+                game.state
+                    .turn
+                    .ability_resolutions_this_turn
+                    .range(printed_abilities)
+                    .map(|((_, _, index), count)| (*index, *count))
+                    .collect()
+            },
             used_abilities: characteristics
                 .activated_abilities
                 .iter()
@@ -1986,7 +2042,7 @@ impl Observation {
                         .unwrap_or(0),
                     card_types: CardTypeData::from_types(&characteristics.types),
                     keywords: KeywordData::from_keywords(&characteristics.keywords),
-                    ..Self::printed_characteristics_data(game, permanent.object)
+                    mana_cost: object.mana_cost.clone().unwrap_or_default(),
                 }
             },
         };

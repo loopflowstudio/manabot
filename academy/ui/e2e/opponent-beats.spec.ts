@@ -3,10 +3,11 @@
  * steady-height caption and scrubber in `.bottom`, pointer rest on the caption
  * holds, clicking a tick holds at that stop, "Show their turn again" replays
  * from the turn's first stop, Space and clicking the earlier board only return
- * to now without acting, the rail stays live (pressing a choice or number key
- * returns to now and commits), selecting a history line + ← → + Esc move the
- * same cursor, and reduced motion never auto-walks while still allowing manual
- * stepping.
+ * to now without acting, upcoming legal choices wait in the rail while the
+ * walk is catching up (and return live on manual lookback, where pressing a
+ * choice or number key returns to now and commits), selecting a history line +
+ * ← → + Esc move the same cursor, and reduced motion never auto-walks while
+ * still allowing manual stepping.
  */
 import { expect, test, type Page } from '@playwright/test';
 import { showEachCreaturesChoice } from './fixtures/combat';
@@ -50,6 +51,10 @@ async function playUntil<T>(page: Page, until: () => Promise<T | null | false>, 
     const result = await until();
     if (result) return result;
     if (await page.getByTestId('result-card').isVisible()) throw new Error(`the game ended after ${decisions} decisions before the awaited state`);
+    if (await page.locator('[data-testid=walk-bar][data-walking=true]').count()) {
+      await page.keyboard.press('Space');
+      await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+    }
     await showEachCreaturesChoice(page);
     const rows = page.getByTestId('action-option');
     const labels = await rows.allTextContents();
@@ -68,7 +73,8 @@ interface WalkSnapshot {
   walking: boolean;
   ticks: number;
   moveTicks: number;
-  railDisabled: boolean;
+  optionsShown: number;
+  skipVisible: boolean;
   onStep: boolean;
   outlined: number;
   windowMarks: number;
@@ -81,7 +87,6 @@ async function snapshotWhileWalking(page: Page): Promise<WalkSnapshot | null> {
     const bar = document.querySelector<HTMLElement>('[data-testid=walk-bar][data-walking=true]');
     if (!bar) return null;
     const caption = bar.querySelector('[data-testid=walk-caption]')?.textContent?.trim() ?? '';
-    const row = document.querySelector<HTMLElement>('[data-testid=action-option]');
     const board = document.querySelector('[data-testid=game-board]')!;
     const topBar = document.querySelector('[data-testid=turn-number]')?.textContent?.trim() ?? '';
     return {
@@ -89,7 +94,8 @@ async function snapshotWhileWalking(page: Page): Promise<WalkSnapshot | null> {
       walking: bar.getAttribute('data-walking') === 'true',
       ticks: bar.querySelectorAll('[data-testid=walk-tick]').length,
       moveTicks: bar.querySelectorAll('[data-testid=walk-tick][data-move-start=true]').length,
-      railDisabled: row?.getAttribute('aria-disabled') === 'true',
+      optionsShown: document.querySelectorAll('[data-testid=action-option], [data-testid=primary-action]').length,
+      skipVisible: document.querySelector('[data-testid=walk-skip]') !== null,
       onStep: board.getAttribute('data-board') === 'step',
       outlined: board.querySelectorAll('[data-testid=board-card][data-offer-count]:not([data-offer-count="0"])').length,
       windowMarks: document.querySelectorAll('[data-testid=player-damage], [data-testid=damage-dealt], [data-testid=result-card], [data-testid=recent]').length,
@@ -99,7 +105,7 @@ async function snapshotWhileWalking(page: Page): Promise<WalkSnapshot | null> {
   });
 }
 
-test('the board walks the opponent turn with a steady-height caption and scrubber; Space returns to now and number keys act', async ({ page }, testInfo) => {
+test('the board walks the opponent turn with a steady-height caption and scrubber; Space returns to now and reveals choices', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
@@ -116,6 +122,8 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
     revision = await main.getAttribute('data-frame-revision');
     seen = await snapshotWhileWalking(page);
     if (!seen) return false;
+    // Number keys do not blindly commit hidden upcoming moves while catching up.
+    await page.keyboard.press('1');
     // Immediately press Space while walking: returns to now and sends nothing.
     await page.keyboard.press('Space');
     return true;
@@ -126,17 +134,19 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
   expect(seen!.caption).toMatch(/ cast | played | discarded | attacked with | dealt | died| blocked | activated |Trigger/i);
   expect(seen!.ticks).toBeGreaterThanOrEqual(1);
   expect(seen!.moveTicks).toBeGreaterThanOrEqual(1);
-  // The rail stays live throughout the walk (no MTG-396 aria-disabled hold).
-  expect(seen!.railDisabled).toBe(false);
+  // Upcoming legal choices wait in the rail until the walk catches up.
+  expect(seen!.optionsShown).toBe(0);
+  expect(seen!.skipVisible).toBe(true);
   // A past board has no live card offers outlined, and window totals/result card wait.
   if (seen!.onStep) expect(seen!.outlined).toBe(0);
   expect(seen!.windowMarks).toBe(0);
   // The top bar names the cursor and Esc for now.
   expect(seen!.topBar).toContain('Esc for now');
 
-  // Space returned to now without submitting any Command.
+  // Space returned to now without submitting any Command and revealed the legal choices.
   await expect(board).toHaveAttribute('data-board', 'frame');
   await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+  await expect(page.getByTestId('action-option').first()).toBeVisible();
   expect(sent.count).toBe(beforeSpace);
   await expect(main).toHaveAttribute('data-frame-revision', revision!);
 

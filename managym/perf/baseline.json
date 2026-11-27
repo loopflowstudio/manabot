@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "09b3737f5c97acc252a45a2ed2f8c2288c5aacf0",
-    "date": "2026-11-26",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45754619140",
-    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
-    "reason": "Eliminate layer-evaluation CoW cloning and per-read Arc churn (MTG-484): digests unchanged; keep the speedup. Same-runner search total 150.773s -> 116.880s (-22.5%), worst reply 3.859s -> 2.909s (-24.6%), steps 15,877.6 -> 18,551.8/s (+16.8%)"
+    "commit": "4c85b7f3202d01c1d74922709da95f048d104979",
+    "date": "2026-11-27",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45927645401",
+    "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6975P-C (4 vCPU), release",
+    "reason": "Canonicalize indistinguishable game objects across legal actions and tie-break autotapper equal-reluctance sources by color/output class (MTG-487): action spaces and digests move intentionally; same-runner search total 71.261s -> 63.715s (-10.6%), worst reply 1.780s -> 1.700s (-4.5%), steps 31,166.3 -> 32,175.9/s (+3.2%)"
   },
   "bench_search": {
-    "worst_s": 2.9086568415,
-    "total_s": 116.88,
+    "worst_s": 1.700499218,
+    "total_s": 63.715,
     "seeds": {
       "1": {
-        "worst_s": 2.9086568415,
-        "total_s": 53.15507039100001,
-        "digest": 18024496392822331241
+        "worst_s": 1.340348774,
+        "total_s": 25.717211274,
+        "digest": 16432375288198849020
       },
       "2": {
-        "worst_s": 1.8174924575,
-        "total_s": 34.118013759,
-        "digest": 3384997483956805958
+        "worst_s": 1.1355771495,
+        "total_s": 18.353014688000002,
+        "digest": 12945150739141146268
       },
       "3": {
-        "worst_s": 2.592518525,
-        "total_s": 29.606667264000002,
-        "digest": 13611476192356854111
+        "worst_s": 1.700499218,
+        "total_s": 19.6449115285,
+        "digest": 200128212830785895
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 18551.801724240155,
-    "steps": 115941,
+    "steps_per_s": 32175.86105283769,
+    "steps": 119453,
     "games": 512,
-    "digest": 4186394851247720253
+    "digest": 9897414478134187774
   }
 }

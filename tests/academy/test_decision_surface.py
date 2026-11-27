@@ -206,13 +206,16 @@ def test_precision_four_mana_branch(tmp_path: Path) -> None:
             session.new_game({"demo": "precision-mana"})["frame"]
         )
         frame = _choose(session, frame, _label(frame, "Cast Deadly Precision"))
-        frame = _choose(
-            session,
-            frame,
-            next(
-                offer for offer in frame.offers if offer.action_type == "CHOOSE_TARGET"
-            ),
-        )
+        if frame.action_space == "CHOOSE_TARGET":
+            frame = _choose(
+                session,
+                frame,
+                next(
+                    offer
+                    for offer in frame.offers
+                    if offer.action_type == "CHOOSE_TARGET"
+                ),
+            )
         before = len(frame.projection.agent.battlefield)
         revision = frame.revision
         alternative = next(
@@ -280,7 +283,10 @@ def test_trace_record_preserves_nested_policy_evidence() -> None:
     expected.pop("played_from")
     expected.pop("seat_swaps")
     expected["events"][0].pop("boards")
+    expected.pop("final_opponent_hand")
     expected["events"][0].pop("analysis_shown")
+    expected["events"][0].pop("open_hands")
+    expected["config"].pop("open_hands")
     expected["config"].pop("mana_payment")
     expected["config"].pop("mana_floats")
     expected["config"].pop("hero_deck_pool")

@@ -2187,6 +2187,31 @@
           "title": "Actor",
           "type": "integer"
         },
+        "aliases": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "object": "#/$defs/ObjectSubject",
+                "player": "#/$defs/PlayerSubject",
+                "stack": "#/$defs/StackSubject"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ObjectSubject"
+              },
+              {
+                "$ref": "#/$defs/StackSubject"
+              },
+              {
+                "$ref": "#/$defs/PlayerSubject"
+              }
+            ]
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
         "choices": {
           "items": {
             "discriminator": {
@@ -2462,11 +2487,18 @@
           "type": "integer"
         },
         "printed_loyalty": {
-          "type": [
-            "integer",
-            "null"
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
           ],
-          "format": "int32"
+          "default": null,
+          "title": "Printed Loyalty"
         },
         "registry_key": {
           "maximum": 4294967295,
@@ -3058,6 +3090,8 @@
           "type": "array"
         },
         "loyalty_activated_this_turn": {
+          "default": false,
+          "title": "Loyalty Activated This Turn",
           "type": "boolean"
         },
         "name": {
@@ -3098,11 +3132,18 @@
           "title": "Power"
         },
         "printed_loyalty": {
-          "type": [
-            "integer",
-            "null"
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
           ],
-          "format": "int32"
+          "default": null,
+          "title": "Printed Loyalty"
         },
         "protection_from": {
           "items": {
@@ -4198,9 +4239,11 @@
           "type": "integer"
         },
         "loyalty_abilities_activated": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Loyalty Abilities Activated",
+          "type": "integer"
         },
         "mana_spent_casting": {
           "default": 0,

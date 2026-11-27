@@ -1700,7 +1700,7 @@ fn garruk_curse_breaker_loyalty_abilities() {
     use crate::support::{
         game::{clear_summoning_sickness, enter_battlefield, five_color_setup, set_counters},
         inspect::{keywords, tapped},
-        play::{activate, attack_with, choose, settle},
+        play::{activate, choose, settle},
     };
     use managym::{
         agent::action::Action,
@@ -1811,7 +1811,7 @@ fn garruk_curse_breaker_loyalty_abilities() {
     // On your next turn, the delayed trigger has expired.
     s.advance_to_active_step(1, StepKind::Main);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    attack_with(&mut s, ogre);
+    crate::support::play::attack_with_group(&mut s, &[ogre, other_ogre]);
     settle(&mut s);
     assert_eq!(
         s.game().characteristics(ogre).pt(),

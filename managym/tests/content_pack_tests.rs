@@ -96,7 +96,7 @@ fn trace_point(game: &Game) -> String {
         game.state.exile_links,
         game.state.suspended_decision,
         game.pending_choice,
-        game.current_action_space,
+        game.action_space(),
         game.state.rng,
     )
 }

@@ -1220,7 +1220,7 @@ mod tests {
     }
 
     fn pending_pass(game: &Game) -> Option<PendingDecision> {
-        let space = game.current_action_space.as_ref().unwrap();
+        let space = game.action_space().unwrap();
         capture(
             game,
             space,
@@ -1239,8 +1239,7 @@ mod tests {
         assert!(pending_pass(&game.rollback_snapshot()).is_some());
         game.decision_memory_enabled = false;
         let pass = game
-            .current_action_space
-            .as_ref()
+            .action_space()
             .unwrap()
             .actions
             .iter()
@@ -1256,8 +1255,7 @@ mod tests {
         assert!(first.step(usize::MAX).is_err());
         assert!(first.decision_memory.iter().all(DecisionLog::is_empty));
         let pass = first
-            .current_action_space
-            .as_ref()
+            .action_space()
             .unwrap()
             .actions
             .iter()
@@ -1359,7 +1357,7 @@ mod tests {
     fn decision_memory_pass_filter_is_public_and_forced_choices_are_omitted() {
         let mut game = game();
         assert!(pending_pass(&game).is_some());
-        let mut space = game.current_action_space.as_ref().unwrap().clone();
+        let mut space = game.action_space().unwrap().clone();
         space
             .actions
             .retain(|action| matches!(action, Action::PassPriority { .. }));
@@ -1464,7 +1462,7 @@ mod tests {
             duration: PlayerControlDuration::NextTurn,
             active: true,
         });
-        let space = game.current_action_space.as_ref().unwrap().clone();
+        let space = game.action_space().unwrap().clone();
         game.publish_action_space(space);
         let pending = pending_pass(&game).expect("seat zero still has the resources");
         assert_eq!(
