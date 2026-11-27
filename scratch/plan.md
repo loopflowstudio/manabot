@@ -23,7 +23,7 @@ Jack Heart added MLX in steer `d440244b`: prefer CUDA, then MLX, then MPS,
 then CPU. Measure MLX against the same Apple Silicon MPS and CPU arms while
 the Etude binding and its deployment are evaluated separately.
 
-## Upstream state (checked 2026-11-27)
+## Upstream state (checked 2026-11-27; PyPI still 0.4.7 at decision pass 3)
 
 - The dependency pin and latest published [etude-sdk on PyPI](https://pypi.org/project/etude-sdk/)
   are `0.4.7` (verified 2026-11-27). That release has only synchronous
@@ -85,8 +85,11 @@ the Etude binding and its deployment are evaluated separately.
   games/hr on seeded `w384l8` (2.41× CPU batch-1; forward 346.8→52.0 s, 21.3%);
   single-process `other_arena` + `replay` take ~79–83% of wall time, confirming
   multi-process game workers sharing a GPU agent (`play_many`) are needed to
-  scale past ~2,000 games/hr. (Prior L4 reference from MTG-328: 0.85 s/game
-  host work, 21% L4 busy below ~34M.)
+  scale past ~2,000 games/hr. MLX vector-64 (float32) matches MPS within
+  2% with 17–23% less forward time; managed `play_many` on MLX reaches
+  ~4,700–5,100 games/hr. RunPod L4 (`966e8ff296`): CUDA vector-64 3,380
+  (float32) and 3,908 (bf16) games/hr on `w384l8`, 17.3× CPU batch-1,
+  limited by `other_arena`.
 
 ## Design notes
 
