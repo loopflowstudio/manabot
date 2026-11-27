@@ -255,8 +255,7 @@ enum InternalOffer {
     },
     DeclareAttackers {
         player: PlayerId,
-        role: RoleId,
-        attackers: BTreeMap<CandidateId, ObjectId>,
+        roles: Vec<AttackerRole>,
         declaration_order: Vec<ObjectId>,
     },
     CombatAssignments {
@@ -265,8 +264,7 @@ enum InternalOffer {
     },
     Waterbend {
         player: PlayerId,
-        role: RoleId,
-        taps: BTreeMap<CandidateId, Action>,
+        roles: Vec<WaterbendRole>,
         min: usize,
         max: usize,
         remaining_generic: usize,
@@ -277,10 +275,40 @@ enum InternalOffer {
 }
 
 #[derive(Clone, Debug)]
+enum AttackerRole {
+    Subset {
+        role: RoleId,
+        attackers: BTreeMap<CandidateId, ObjectId>,
+    },
+    Count {
+        role: RoleId,
+        /// Each candidate maps to the canonical prefix of attackers for that count.
+        counts: BTreeMap<CandidateId, Vec<ObjectId>>,
+    },
+}
+
+#[derive(Clone, Debug)]
+enum WaterbendRole {
+    Subset {
+        role: RoleId,
+        taps: BTreeMap<CandidateId, Action>,
+        min: usize,
+        max: usize,
+    },
+    Count {
+        role: RoleId,
+        /// Each candidate maps to the canonical prefix of waterbend tap actions.
+        counts: BTreeMap<CandidateId, Vec<Action>>,
+        min_choice: usize,
+        max_choice: usize,
+    },
+}
+
+#[derive(Clone, Debug)]
 struct CombatChoice {
     role: RoleId,
-    targets: BTreeMap<CandidateId, Action>,
-    decline: Action,
+    targets: BTreeMap<CandidateId, Vec<Action>>,
+    decline: Vec<Action>,
 }
 
 #[derive(Clone, Debug)]
@@ -312,23 +340,34 @@ impl DecisionSurface {
                         }
                     }
                 }
-                InternalOffer::DeclareAttackers {
-                    role, attackers, ..
-                } => {
-                    bindings.extend(attackers.iter().map(|(candidate_id, object_ref)| {
-                        (*offer_id, *role, *candidate_id, *object_ref)
-                    }));
+                InternalOffer::DeclareAttackers { roles, .. } => {
+                    for role_entry in roles {
+                        match role_entry {
+                            AttackerRole::Subset { role, attackers } => {
+                                bindings.extend(attackers.iter().map(|(candidate_id, object_ref)| {
+                                    (*offer_id, *role, *candidate_id, *object_ref)
+                                }));
+                            }
+                            AttackerRole::Count { role, counts } => {
+                                for (candidate_id, objects) in counts {
+                                    if let Some(object_ref) = objects.last() {
+                                        bindings.push((*offer_id, *role, *candidate_id, *object_ref));
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 InternalOffer::CombatAssignments {
                     kind: ActionSpaceKind::DeclareAttacker,
                     choices,
                 } => {
                     for choice in choices {
-                        for (candidate_id, action) in &choice.targets {
-                            if let Action::DeclareAttacker {
+                        for (candidate_id, actions) in &choice.targets {
+                            if let Some(Action::DeclareAttacker {
                                 attack: Some(crate::flow::combat::AttackTarget::Permanent(defender)),
                                 ..
-                            } = action
+                            }) = actions.first()
                             {
                                 bindings.push((*offer_id, choice.role, *candidate_id, *defender));
                             }
@@ -400,31 +439,73 @@ impl DecisionSurface {
             }
             InternalOffer::DeclareAttackers {
                 player,
-                role,
-                attackers,
+                roles,
                 declaration_order,
             } => {
-                let candidates = candidate_answer(&submission.answers, *role)?;
-                if candidates.len() > attackers.len() {
-                    return Err(DecisionSurfaceError::CardinalityOutOfRange {
-                        role: *role,
-                        min: 0,
-                        max: attackers.len(),
-                        actual: candidates.len(),
-                    });
-                }
-
-                let mut selected = BTreeSet::new();
+                let mut answers = collect_role_answers(&submission.answers)?;
                 let mut selected_objects = BTreeSet::new();
-                for candidate in candidates {
-                    if !selected.insert(*candidate) {
-                        return Err(DecisionSurfaceError::DuplicateCandidate(*candidate));
+                for role_entry in roles {
+                    match role_entry {
+                        AttackerRole::Subset { role, attackers } => {
+                            let candidates = answers
+                                .remove(role)
+                                .ok_or(DecisionSurfaceError::MissingAnswer(*role))?;
+                            if candidates.len() > attackers.len() {
+                                return Err(DecisionSurfaceError::CardinalityOutOfRange {
+                                    role: *role,
+                                    min: 0,
+                                    max: attackers.len(),
+                                    actual: candidates.len(),
+                                });
+                            }
+                            let mut selected = BTreeSet::new();
+                            for candidate in candidates {
+                                if !selected.insert(*candidate) {
+                                    return Err(DecisionSurfaceError::DuplicateCandidate(
+                                        *candidate,
+                                    ));
+                                }
+                                let object_ref = attackers
+                                    .get(candidate)
+                                    .copied()
+                                    .ok_or(DecisionSurfaceError::UnknownCandidate(*candidate))?;
+                                selected_objects.insert(object_ref);
+                            }
+                        }
+                        AttackerRole::Count { role, counts } => {
+                            let candidates = answers
+                                .remove(role)
+                                .ok_or(DecisionSurfaceError::MissingAnswer(*role))?;
+                            let mut seen = BTreeSet::new();
+                            for candidate in candidates {
+                                if !seen.insert(*candidate) {
+                                    return Err(DecisionSurfaceError::DuplicateCandidate(
+                                        *candidate,
+                                    ));
+                                }
+                            }
+                            match candidates {
+                                [] => {}
+                                [candidate] => {
+                                    let objects = counts
+                                        .get(candidate)
+                                        .ok_or(DecisionSurfaceError::UnknownCandidate(*candidate))?;
+                                    selected_objects.extend(objects.iter().copied());
+                                }
+                                _ => {
+                                    return Err(DecisionSurfaceError::CardinalityOutOfRange {
+                                        role: *role,
+                                        min: 0,
+                                        max: 1,
+                                        actual: candidates.len(),
+                                    });
+                                }
+                            }
+                        }
                     }
-                    let object_ref = attackers
-                        .get(candidate)
-                        .copied()
-                        .ok_or(DecisionSurfaceError::UnknownCandidate(*candidate))?;
-                    selected_objects.insert(object_ref);
+                }
+                if let Some(role) = answers.keys().next() {
+                    return Err(DecisionSurfaceError::UnexpectedRole(*role));
                 }
 
                 // The wire choice is unordered, but rules events must retain
@@ -444,34 +525,30 @@ impl DecisionSurface {
                 })
             }
             InternalOffer::CombatAssignments { kind, choices } => {
-                let mut answers = BTreeMap::new();
-                for ChoiceAnswer::Candidates { role, candidates } in &submission.answers {
-                    if answers.insert(*role, candidates).is_some() {
-                        return Err(DecisionSurfaceError::DuplicateRole(*role));
-                    }
-                }
+                let mut answers = collect_role_answers(&submission.answers)?;
                 let mut actions = Vec::with_capacity(choices.len());
                 for choice in choices {
                     let selected = answers
                         .remove(&choice.role)
                         .ok_or(DecisionSurfaceError::MissingAnswer(choice.role))?;
-                    let action = match selected.as_slice() {
-                        [] => choice.decline.clone(),
-                        [candidate] => choice
-                            .targets
-                            .get(candidate)
-                            .cloned()
-                            .ok_or(DecisionSurfaceError::UnknownCandidate(*candidate))?,
+                    match selected {
+                        [] => actions.extend(choice.decline.iter().cloned()),
+                        [candidate] => {
+                            let chosen = choice
+                                .targets
+                                .get(candidate)
+                                .ok_or(DecisionSurfaceError::UnknownCandidate(*candidate))?;
+                            actions.extend(chosen.iter().cloned());
+                        }
                         _ => {
                             return Err(DecisionSurfaceError::CardinalityOutOfRange {
                                 role: choice.role,
                                 min: 0,
                                 max: 1,
                                 actual: selected.len(),
-                            })
+                            });
                         }
-                    };
-                    actions.push(action);
+                    }
                 }
                 if let Some(role) = answers.keys().next() {
                     return Err(DecisionSurfaceError::UnexpectedRole(*role));
@@ -484,34 +561,98 @@ impl DecisionSurface {
             }
             InternalOffer::Waterbend {
                 player,
-                role,
-                taps,
+                roles,
                 min,
                 max,
                 remaining_generic,
             } => {
-                let selected = candidate_answer(&submission.answers, *role)?;
-                if selected.len() < *min || selected.len() > *max {
+                let mut answers = collect_role_answers(&submission.answers)?;
+                let mut actions = Vec::new();
+                for role_entry in roles {
+                    match role_entry {
+                        WaterbendRole::Subset {
+                            role,
+                            taps,
+                            min: role_min,
+                            max: role_max,
+                        } => {
+                            let selected = answers
+                                .remove(role)
+                                .ok_or(DecisionSurfaceError::MissingAnswer(*role))?;
+                            if selected.len() < *role_min || selected.len() > *role_max {
+                                return Err(DecisionSurfaceError::CardinalityOutOfRange {
+                                    role: *role,
+                                    min: *role_min,
+                                    max: *role_max,
+                                    actual: selected.len(),
+                                });
+                            }
+                            let mut ids = BTreeSet::new();
+                            for candidate in selected {
+                                if !ids.insert(*candidate) {
+                                    return Err(DecisionSurfaceError::DuplicateCandidate(
+                                        *candidate,
+                                    ));
+                                }
+                                if !taps.contains_key(candidate) {
+                                    return Err(DecisionSurfaceError::UnknownCandidate(*candidate));
+                                }
+                            }
+                            // Canonical candidate order removes permutation aliases.
+                            actions.extend(ids.iter().map(|id| taps[id].clone()));
+                        }
+                        WaterbendRole::Count {
+                            role,
+                            counts,
+                            min_choice,
+                            max_choice,
+                        } => {
+                            let selected = answers
+                                .remove(role)
+                                .ok_or(DecisionSurfaceError::MissingAnswer(*role))?;
+                            let mut seen = BTreeSet::new();
+                            for candidate in selected {
+                                if !seen.insert(*candidate) {
+                                    return Err(DecisionSurfaceError::DuplicateCandidate(
+                                        *candidate,
+                                    ));
+                                }
+                            }
+                            if selected.len() < *min_choice || selected.len() > *max_choice {
+                                return Err(DecisionSurfaceError::CardinalityOutOfRange {
+                                    role: *role,
+                                    min: *min_choice,
+                                    max: *max_choice,
+                                    actual: selected.len(),
+                                });
+                            }
+                            if let [candidate] = selected {
+                                let chosen = counts
+                                    .get(candidate)
+                                    .ok_or(DecisionSurfaceError::UnknownCandidate(*candidate))?;
+                                actions.extend(chosen.iter().cloned());
+                            }
+                        }
+                    }
+                }
+                if let Some(role) = answers.keys().next() {
+                    return Err(DecisionSurfaceError::UnexpectedRole(*role));
+                }
+                let total_taps = actions.len();
+                if total_taps < *min || total_taps > *max {
+                    let first_role = match roles.first() {
+                        Some(WaterbendRole::Subset { role, .. })
+                        | Some(WaterbendRole::Count { role, .. }) => *role,
+                        None => RoleId(0),
+                    };
                     return Err(DecisionSurfaceError::CardinalityOutOfRange {
-                        role: *role,
+                        role: first_role,
                         min: *min,
                         max: *max,
-                        actual: selected.len(),
+                        actual: total_taps,
                     });
                 }
-                let mut ids = BTreeSet::new();
-                for candidate in selected {
-                    if !ids.insert(*candidate) {
-                        return Err(DecisionSurfaceError::DuplicateCandidate(*candidate));
-                    }
-                    if !taps.contains_key(candidate) {
-                        return Err(DecisionSurfaceError::UnknownCandidate(*candidate));
-                    }
-                }
-                // Canonical candidate order removes permutation aliases. Payment
-                // with mana is the final action unless taps exhaust generic cost.
-                let mut actions: Vec<_> = ids.iter().map(|id| taps[id].clone()).collect();
-                if selected.len() < *remaining_generic {
+                if total_taps < *remaining_generic {
                     actions.push(Action::PayCost { player: *player });
                 }
                 Ok(AtomicCommand::DeclarationSequence {
@@ -800,8 +941,8 @@ impl Game {
                 return Ok(None);
             }
         }
-        let mut choices = Vec::new();
-        let mut bound = Vec::new();
+        let mut blocker_targets: Vec<(PermanentId, Vec<PermanentId>)> = Vec::new();
+        let mut all_attackers: Vec<PermanentId> = Vec::new();
         for blocker in
             std::iter::once(first).chain(combat.blockers_to_declare.iter().rev().copied())
         {
@@ -815,49 +956,193 @@ impl Game {
             if targets.is_empty() && self.skip_trivial && blocker != first {
                 continue;
             }
-            let role = RoleId(
-                u16::try_from(choices.len()).map_err(|_| DecisionSurfaceError::IdentityOverflow)?,
-            );
-            let mut candidates = Vec::new();
-            let mut actions = BTreeMap::new();
-            for attacker in targets {
-                let id = next_candidate_id(candidates.len())?;
-                candidates.push(self.compound_permanent_candidate(attacker, id)?);
-                actions.insert(
-                    id,
-                    Action::DeclareBlocker {
+            for &attacker in &targets {
+                if !all_attackers.contains(&attacker) {
+                    all_attackers.push(attacker);
+                }
+            }
+            blocker_targets.push((blocker, targets));
+        }
+
+        let attacker_classes = self.partition_interchangeable_permanents(&all_attackers);
+        let mut attacker_class_of = BTreeMap::new();
+        for (class_idx, class) in attacker_classes.iter().enumerate() {
+            for &attacker in class {
+                attacker_class_of.insert(attacker, class_idx);
+            }
+        }
+        let blocker_ids: Vec<PermanentId> = blocker_targets.iter().map(|(b, _)| *b).collect();
+        let blocker_classes = self.partition_interchangeable_permanents(&blocker_ids);
+        let targets_of: BTreeMap<PermanentId, Vec<PermanentId>> =
+            blocker_targets.into_iter().collect();
+
+        // Track how many prior blocker roles could already block each attacker
+        // class so blocker #k receives up to `min(class_size, k + 1)` distinct
+        // representatives (preserving split-block vs double-block outcomes).
+        let mut attacker_class_seen = vec![0usize; attacker_classes.len()];
+        let mut choices = Vec::new();
+        let mut bound = Vec::new();
+
+        for bclass in blocker_classes {
+            let first_blocker = bclass[0];
+            let legal_targets = &targets_of[&first_blocker];
+            let blocker_name = self
+                .compound_permanent_candidate(first_blocker, CandidateId(0))?
+                .label;
+
+            // Count-based role when multiple identical blockers share either no
+            // legal targets or a single non-duplicated attacker.
+            if bclass.len() >= 2 && legal_targets.is_empty() {
+                let role = RoleId(
+                    u16::try_from(choices.len())
+                        .map_err(|_| DecisionSurfaceError::IdentityOverflow)?,
+                );
+                choices.push(ChoiceStep::Select {
+                    role,
+                    label: format!("Block with {blocker_name}"),
+                    candidates: CandidateSource {
+                        id: CandidateSourceId(u32::from(role.0)),
+                        depends_on: Vec::new(),
+                        initial: Some(Vec::new()),
+                    },
+                    min: 0,
+                    max: 0,
+                    ordered: false,
+                    distinct: true,
+                });
+                bound.push(CombatChoice {
+                    role,
+                    targets: BTreeMap::new(),
+                    decline: bclass
+                        .iter()
+                        .map(|&blocker| Action::DeclareBlocker {
+                            player,
+                            blocker,
+                            attacker: None,
+                        })
+                        .collect(),
+                });
+                continue;
+            }
+            if bclass.len() >= 2 && legal_targets.len() == 1 {
+                let attacker = legal_targets[0];
+                let attacker_name = self
+                    .compound_permanent_candidate(attacker, CandidateId(0))?
+                    .label;
+                let role = RoleId(
+                    u16::try_from(choices.len())
+                        .map_err(|_| DecisionSurfaceError::IdentityOverflow)?,
+                );
+                let mut candidates = Vec::with_capacity(bclass.len());
+                let mut actions = BTreeMap::new();
+                for count in 1..=bclass.len() {
+                    let id = next_candidate_id(candidates.len())?;
+                    let mut candidate = self.compound_permanent_candidate(attacker, id)?;
+                    if count > 1 {
+                        candidate.label = format!("{count} × {attacker_name}");
+                    }
+                    candidates.push(candidate);
+                    let seq = bclass
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, &blocker)| Action::DeclareBlocker {
+                            player,
+                            blocker,
+                            attacker: (idx < count).then_some(attacker),
+                        })
+                        .collect();
+                    actions.insert(id, seq);
+                }
+                choices.push(ChoiceStep::Select {
+                    role,
+                    label: format!("Block with {blocker_name}"),
+                    candidates: CandidateSource {
+                        id: CandidateSourceId(u32::from(role.0)),
+                        depends_on: Vec::new(),
+                        initial: Some(candidates),
+                    },
+                    min: 0,
+                    max: 1,
+                    ordered: false,
+                    distinct: true,
+                });
+                bound.push(CombatChoice {
+                    role,
+                    targets: actions,
+                    decline: bclass
+                        .iter()
+                        .map(|&blocker| Action::DeclareBlocker {
+                            player,
+                            blocker,
+                            attacker: None,
+                        })
+                        .collect(),
+                });
+                continue;
+            }
+
+            for blocker in bclass {
+                let targets = &targets_of[&blocker];
+                let role = RoleId(
+                    u16::try_from(choices.len())
+                        .map_err(|_| DecisionSurfaceError::IdentityOverflow)?,
+                );
+                let mut per_class_allowed = vec![0usize; attacker_classes.len()];
+                let mut per_class_emitted = vec![0usize; attacker_classes.len()];
+                for &attacker in targets {
+                    let class_idx = attacker_class_of[&attacker];
+                    if per_class_allowed[class_idx] == 0 {
+                        attacker_class_seen[class_idx] += 1;
+                        per_class_allowed[class_idx] =
+                            attacker_classes[class_idx].len().min(attacker_class_seen[class_idx]);
+                    }
+                }
+                let mut candidates = Vec::new();
+                let mut actions = BTreeMap::new();
+                for &attacker in targets {
+                    let class_idx = attacker_class_of[&attacker];
+                    if per_class_emitted[class_idx] >= per_class_allowed[class_idx] {
+                        continue;
+                    }
+                    per_class_emitted[class_idx] += 1;
+                    let id = next_candidate_id(candidates.len())?;
+                    candidates.push(self.compound_permanent_candidate(attacker, id)?);
+                    actions.insert(
+                        id,
+                        vec![Action::DeclareBlocker {
+                            player,
+                            blocker,
+                            attacker: Some(attacker),
+                        }],
+                    );
+                }
+                let name = self
+                    .compound_permanent_candidate(blocker, CandidateId(0))?
+                    .label;
+                let max = u16::from(!candidates.is_empty());
+                choices.push(ChoiceStep::Select {
+                    role,
+                    label: format!("Block with {name}"),
+                    candidates: CandidateSource {
+                        id: CandidateSourceId(u32::from(role.0)),
+                        depends_on: Vec::new(),
+                        initial: Some(candidates),
+                    },
+                    min: 0,
+                    max,
+                    ordered: false,
+                    distinct: true,
+                });
+                bound.push(CombatChoice {
+                    role,
+                    targets: actions,
+                    decline: vec![Action::DeclareBlocker {
                         player,
                         blocker,
-                        attacker: Some(attacker),
-                    },
-                );
+                        attacker: None,
+                    }],
+                });
             }
-            let name = self
-                .compound_permanent_candidate(blocker, CandidateId(0))?
-                .label;
-            let max = u16::from(!candidates.is_empty());
-            choices.push(ChoiceStep::Select {
-                role,
-                label: format!("Block with {name}"),
-                candidates: CandidateSource {
-                    id: CandidateSourceId(u32::from(role.0)),
-                    depends_on: Vec::new(),
-                    initial: Some(candidates),
-                },
-                min: 0,
-                max,
-                ordered: false,
-                distinct: true,
-            });
-            bound.push(CombatChoice {
-                role,
-                targets: actions,
-                decline: Action::DeclareBlocker {
-                    player,
-                    blocker,
-                    attacker: None,
-                },
-            });
         }
         let offer = DecisionOption {
             id: DecisionOptionId(0),
@@ -920,13 +1205,115 @@ impl Game {
             .ok_or_else(|| {
                 DecisionSurfaceError::Invariant("waterbend has no payable completion".into())
             })?;
-        let role = RoleId(0);
-        let mut candidates = Vec::new();
-        let mut taps = BTreeMap::new();
-        for permanent in legal_taps {
-            let id = next_candidate_id(candidates.len())?;
-            candidates.push(self.compound_permanent_candidate(permanent, id)?);
-            taps.insert(id, Action::WaterbendTap { player, permanent });
+        let classes = self.partition_interchangeable_permanents(&legal_taps);
+        let mut choices = Vec::new();
+        let mut roles = Vec::new();
+        if classes.iter().all(|class| class.len() == 1) || max <= 1 {
+            let role = RoleId(0);
+            let mut candidates = Vec::new();
+            let mut taps = BTreeMap::new();
+            for class in &classes {
+                let permanent = class[0];
+                let id = next_candidate_id(candidates.len())?;
+                candidates.push(self.compound_permanent_candidate(permanent, id)?);
+                taps.insert(id, Action::WaterbendTap { player, permanent });
+            }
+            choices.push(ChoiceStep::Select {
+                role,
+                label: "Tap for waterbend".into(),
+                candidates: CandidateSource {
+                    id: CandidateSourceId(0),
+                    depends_on: Vec::new(),
+                    initial: Some(candidates),
+                },
+                min: min as u16,
+                max: max as u16,
+                ordered: false,
+                distinct: true,
+            });
+            roles.push(WaterbendRole::Subset {
+                role,
+                taps,
+                min,
+                max,
+            });
+        } else {
+            let total_legal = legal_taps.len();
+            for class in &classes {
+                let role = RoleId(
+                    u16::try_from(choices.len())
+                        .map_err(|_| DecisionSurfaceError::IdentityOverflow)?,
+                );
+                let others = total_legal - class.len();
+                let class_min = min.saturating_sub(others);
+                let class_max = class.len().min(max);
+                let name = self
+                    .compound_permanent_candidate(class[0], CandidateId(0))?
+                    .label;
+                if class.len() == 1 {
+                    let permanent = class[0];
+                    let id = CandidateId(0);
+                    let candidate = self.compound_permanent_candidate(permanent, id)?;
+                    choices.push(ChoiceStep::Select {
+                        role,
+                        label: format!("Tap {name} for waterbend"),
+                        candidates: CandidateSource {
+                            id: CandidateSourceId(u32::from(role.0)),
+                            depends_on: Vec::new(),
+                            initial: Some(vec![candidate]),
+                        },
+                        min: class_min as u16,
+                        max: class_max as u16,
+                        ordered: false,
+                        distinct: true,
+                    });
+                    roles.push(WaterbendRole::Subset {
+                        role,
+                        taps: BTreeMap::from([(id, Action::WaterbendTap { player, permanent })]),
+                        min: class_min,
+                        max: class_max,
+                    });
+                } else {
+                    let count_start = class_min.max(1);
+                    let mut candidates = Vec::new();
+                    let mut counts = BTreeMap::new();
+                    for count in count_start..=class_max {
+                        let id = next_candidate_id(candidates.len())?;
+                        let mut candidate =
+                            self.compound_permanent_candidate(class[count - 1], id)?;
+                        if count > 1 {
+                            candidate.label = format!("{count} × {name}");
+                        }
+                        candidates.push(candidate);
+                        let seq = class[..count]
+                            .iter()
+                            .map(|&permanent| Action::WaterbendTap { player, permanent })
+                            .collect();
+                        counts.insert(id, seq);
+                    }
+                    let min_choice = usize::from(class_min > 0);
+                    let max_choice = usize::from(!candidates.is_empty());
+                    choices.push(ChoiceStep::Select {
+                        role,
+                        label: format!("Tap {name} for waterbend"),
+                        candidates: CandidateSource {
+                            id: CandidateSourceId(u32::from(role.0)),
+                            depends_on: Vec::new(),
+                            initial: Some(candidates),
+                        },
+                        min: min_choice as u16,
+                        max: max_choice as u16,
+                        ordered: false,
+                        distinct: true,
+                    });
+                    roles.push(WaterbendRole::Count {
+                        role,
+                        counts,
+                        min_choice,
+                        max_choice,
+                    });
+                }
+            }
         }
         let offer = DecisionOption {
             id: DecisionOptionId(0),
@@ -940,19 +1327,7 @@ impl Game {
             source: None,
             label: "Pay waterbend".into(),
             help: None,
-            choices: vec![ChoiceStep::Select {
-                role,
-                label: "Tap for waterbend".into(),
-                candidates: CandidateSource {
-                    id: CandidateSourceId(0),
-                    depends_on: Vec::new(),
-                    initial: Some(candidates),
-                },
-                min: min as u16,
-                max: max as u16,
-                ordered: false,
-                distinct: true,
-            }],
+            choices,
             confirm_label: "Pay waterbend".into(),
         };
         Ok(Some(DecisionSurface {
@@ -966,8 +1341,7 @@ impl Game {
                 DecisionOptionId(0),
                 InternalOffer::Waterbend {
                     player,
-                    role,
-                    taps,
+                    roles,
                     min,
                     max,
                     remaining_generic: usize::from(remaining_generic),
@@ -1154,6 +1528,7 @@ impl Game {
         let Some(legal_targets) = targets else {
             return Ok(None);
         };
+        let legal_targets = self.deduplicate_interchangeable_targets(legal_targets);
 
         let role = RoleId(1);
         let mut candidates = Vec::with_capacity(legal_targets.len());
@@ -1298,33 +1673,126 @@ impl Game {
                 &defenders,
             );
         }
-        let role = RoleId(1);
+        let classes = self.partition_interchangeable_permanents(&declaration_order);
+        let mut choices = Vec::new();
+        let mut roles = Vec::new();
+        let mut next_role = 1u16;
 
-        let mut candidates = Vec::with_capacity(declaration_order.len());
-        let mut attacker_by_candidate = BTreeMap::new();
-        for attacker in &declaration_order {
-            let object_ref = self.permanent_object(*attacker).ok_or_else(|| {
-                DecisionSurfaceError::Invariant(
-                    "legacy attacker prompt names a missing permanent".to_string(),
-                )
-            })?;
-            let candidate_id = next_candidate_id(candidates.len())?;
-            candidates.push(Candidate {
-                id: candidate_id,
-                value: CandidateValue::Subject {
-                    subject: SubjectRef::Object {
-                        id: self.object_render_ref(object_ref)?,
-                    },
-                },
-                label: self.observed_object_name(object_ref),
-                help: None,
-                preview: None,
-            });
-            attacker_by_candidate.insert(candidate_id, object_ref);
+        let mut singletons = Vec::new();
+        let mut multi_classes = Vec::new();
+        for class in classes {
+            if class.len() == 1 {
+                singletons.push(class[0]);
+            } else {
+                multi_classes.push(class);
+            }
         }
 
-        let max =
-            u16::try_from(candidates.len()).map_err(|_| DecisionSurfaceError::IdentityOverflow)?;
+        if !singletons.is_empty() {
+            let role = RoleId(next_role);
+            next_role = next_role
+                .checked_add(1)
+                .ok_or(DecisionSurfaceError::IdentityOverflow)?;
+            let mut candidates = Vec::with_capacity(singletons.len());
+            let mut attacker_by_candidate = BTreeMap::new();
+            for attacker in singletons {
+                let object_ref = self.permanent_object(attacker).ok_or_else(|| {
+                    DecisionSurfaceError::Invariant(
+                        "legacy attacker prompt names a missing permanent".to_string(),
+                    )
+                })?;
+                let candidate_id = next_candidate_id(candidates.len())?;
+                candidates.push(Candidate {
+                    id: candidate_id,
+                    value: CandidateValue::Subject {
+                        subject: SubjectRef::Object {
+                            id: self.object_render_ref(object_ref)?,
+                        },
+                    },
+                    label: self.observed_object_name(object_ref),
+                    help: None,
+                    preview: None,
+                });
+                attacker_by_candidate.insert(candidate_id, object_ref);
+            }
+            let max = u16::try_from(candidates.len())
+                .map_err(|_| DecisionSurfaceError::IdentityOverflow)?;
+            let source_id = CandidateSourceId(u32::from(choices.len() as u16));
+            choices.push(ChoiceStep::Select {
+                role,
+                label: "Attackers".to_string(),
+                candidates: CandidateSource {
+                    id: source_id,
+                    depends_on: Vec::new(),
+                    initial: Some(candidates),
+                },
+                min: 0,
+                max,
+                ordered: false,
+                distinct: true,
+            });
+            roles.push(AttackerRole::Subset {
+                role,
+                attackers: attacker_by_candidate,
+            });
+        }
+
+        for class in multi_classes {
+            let role = RoleId(next_role);
+            next_role = next_role
+                .checked_add(1)
+                .ok_or(DecisionSurfaceError::IdentityOverflow)?;
+            let class_objects: Vec<ObjectId> = class
+                .iter()
+                .map(|&permanent| {
+                    self.permanent_object(permanent).ok_or_else(|| {
+                        DecisionSurfaceError::Invariant(
+                            "legacy attacker prompt names a missing permanent".to_string(),
+                        )
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+            let name = self.observed_object_name(class_objects[0]);
+            let mut candidates = Vec::with_capacity(class_objects.len());
+            let mut counts = BTreeMap::new();
+            for count in 1..=class_objects.len() {
+                let candidate_id = next_candidate_id(candidates.len())?;
+                let rep_object = class_objects[count - 1];
+                let label = if count == 1 {
+                    name.clone()
+                } else {
+                    format!("{count} × {name}")
+                };
+                candidates.push(Candidate {
+                    id: candidate_id,
+                    value: CandidateValue::Subject {
+                        subject: SubjectRef::Object {
+                            id: self.object_render_ref(rep_object)?,
+                        },
+                    },
+                    label,
+                    help: None,
+                    preview: None,
+                });
+                counts.insert(candidate_id, class_objects[..count].to_vec());
+            }
+            let source_id = CandidateSourceId(u32::from(choices.len() as u16));
+            choices.push(ChoiceStep::Select {
+                role,
+                label: format!("Attackers ({name})"),
+                candidates: CandidateSource {
+                    id: source_id,
+                    depends_on: Vec::new(),
+                    initial: Some(candidates),
+                },
+                min: 0,
+                max: 1,
+                ordered: false,
+                distinct: true,
+            });
+            roles.push(AttackerRole::Count { role, counts });
+        }
+
         let id = DecisionOptionId(0);
         let offer = DecisionOption {
             id,
@@ -1334,19 +1802,7 @@ impl Game {
             source: None,
             label: "Declare attackers".to_string(),
             help: None,
-            choices: vec![ChoiceStep::Select {
-                role,
-                label: "Attackers".to_string(),
-                candidates: CandidateSource {
-                    id: CandidateSourceId(0),
-                    depends_on: Vec::new(),
-                    initial: Some(candidates),
-                },
-                min: 0,
-                max,
-                ordered: false,
-                distinct: true,
-            }],
+            choices,
             confirm_label: "Declare attackers".to_string(),
         };
 
@@ -1361,8 +1817,7 @@ impl Game {
                 id,
                 InternalOffer::DeclareAttackers {
                     player,
-                    role,
-                    attackers: attacker_by_candidate,
+                    roles,
                     declaration_order: declaration_order
                         .into_iter()
                         .map(|permanent| {
@@ -1385,42 +1840,69 @@ impl Game {
         defenders: &[crate::flow::combat::AttackTarget],
     ) -> Result<DecisionSurface, DecisionSurfaceError> {
         use crate::flow::combat::AttackTarget;
+        let defender_permanents: Vec<PermanentId> = defenders
+            .iter()
+            .filter_map(|&defender| match defender {
+                AttackTarget::Permanent(object) => self.lookup_current_permanent(object).ok(),
+                AttackTarget::Player(_) => None,
+            })
+            .collect();
+        let defender_classes = self.partition_interchangeable_permanents(&defender_permanents);
+        let mut defender_class_of = BTreeMap::new();
+        for (class_idx, class) in defender_classes.iter().enumerate() {
+            for &perm in class {
+                defender_class_of.insert(perm, class_idx);
+            }
+        }
         let mut choices = Vec::new();
         let mut bound = Vec::new();
-        for &permanent in attackers {
+        for (attacker_idx, &permanent) in attackers.iter().enumerate() {
             let role = RoleId(
                 u16::try_from(bound.len()).map_err(|_| DecisionSurfaceError::IdentityOverflow)?,
             );
+            let mut per_class_emitted = vec![0usize; defender_classes.len()];
             let mut candidates = Vec::new();
             let mut targets = BTreeMap::new();
             for &defender in defenders {
-                let id = next_candidate_id(candidates.len())?;
                 let candidate = match defender {
-                    AttackTarget::Player(seat) => Candidate {
-                        id,
-                        value: CandidateValue::Subject {
-                            subject: SubjectRef::Player {
-                                id: wire_player_id(seat)?,
+                    AttackTarget::Player(seat) => {
+                        let id = next_candidate_id(candidates.len())?;
+                        Candidate {
+                            id,
+                            value: CandidateValue::Subject {
+                                subject: SubjectRef::Player {
+                                    id: wire_player_id(seat)?,
+                                },
                             },
-                        },
-                        label: format!("Seat {}", seat.0 + 1),
-                        help: None,
-                        preview: None,
-                    },
-                    AttackTarget::Permanent(object) => self.compound_permanent_candidate(
-                        self.lookup_current_permanent(object)
-                            .map_err(|_| DecisionSurfaceError::InvalidCurrentTarget)?,
-                        id,
-                    )?,
+                            label: format!("Seat {}", seat.0 + 1),
+                            help: None,
+                            preview: None,
+                        }
+                    }
+                    AttackTarget::Permanent(object) => {
+                        let perm = self
+                            .lookup_current_permanent(object)
+                            .map_err(|_| DecisionSurfaceError::InvalidCurrentTarget)?;
+                        if let Some(&class_idx) = defender_class_of.get(&perm) {
+                            let limit = defender_classes[class_idx].len().min(attacker_idx + 1);
+                            if per_class_emitted[class_idx] >= limit {
+                                continue;
+                            }
+                            per_class_emitted[class_idx] += 1;
+                        }
+                        let id = next_candidate_id(candidates.len())?;
+                        self.compound_permanent_candidate(perm, id)?
+                    }
                 };
+                let id = candidate.id;
                 candidates.push(candidate);
                 targets.insert(
                     id,
-                    Action::DeclareAttacker {
+                    vec![Action::DeclareAttacker {
                         player,
                         permanent,
                         attack: Some(defender),
-                    },
+                    }],
                 );
             }
             let object = self
@@ -1442,11 +1924,11 @@ impl Game {
             bound.push(CombatChoice {
                 role,
                 targets,
-                decline: Action::DeclareAttacker {
+                decline: vec![Action::DeclareAttacker {
                     player,
                     permanent,
                     attack: None,
-                },
+                }],
             });
         }
         let id = DecisionOptionId(0);
@@ -2198,6 +2680,18 @@ impl Game {
             }
         }
     }
+}
+
+fn collect_role_answers(
+    answers: &[ChoiceAnswer],
+) -> Result<BTreeMap<RoleId, &[CandidateId]>, DecisionSurfaceError> {
+    let mut map = BTreeMap::new();
+    for ChoiceAnswer::Candidates { role, candidates } in answers {
+        if map.insert(*role, candidates.as_slice()).is_some() {
+            return Err(DecisionSurfaceError::DuplicateRole(*role));
+        }
+    }
+    Ok(map)
 }
 
 fn candidate_answer(

@@ -248,8 +248,15 @@ fn structured_offer_candidates_are_uncapped_past_legacy_tensor_width() {
     scenario.game_mut().scenario_clear_hand(PlayerId(0));
     scenario.force_card_in_hand(0, "Lightning Bolt");
     scenario.force_permanent_on_battlefield(0, "Mountain");
-    for _ in 0..33 {
-        scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+    for count in 0..33 {
+        let perm = scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+        if count > 0 {
+            scenario.game_mut().state.permanents[perm]
+                .as_mut()
+                .unwrap()
+                .counters
+                .change(managym::state::permanent::CounterKind::PlusOnePlusOne, count);
+        }
     }
     scenario
         .game_mut()
@@ -261,7 +268,7 @@ fn structured_offer_candidates_are_uncapped_past_legacy_tensor_width() {
         .structured_priority_offers()
         .expect("structured priority offers");
     let (_, candidates) = select_step(cast_offer(&set));
-    assert_eq!(candidates.len(), 35, "33 creatures plus both players");
+    assert_eq!(candidates.len(), 35, "33 distinguishable creatures plus both players");
     assert!(candidates.len() > 32);
     assert_eq!(
         candidates
@@ -270,6 +277,44 @@ fn structured_offer_candidates_are_uncapped_past_legacy_tensor_width() {
             .collect::<BTreeSet<_>>()
             .len(),
         candidates.len()
+    );
+}
+
+#[test]
+fn structured_offer_deduplicates_identical_target_candidates() {
+    let mut scenario = Scenario::new(
+        deck_of("Mountain", "Lightning Bolt"),
+        BTreeMap::from([("Gray Ogre".to_string(), 40)]),
+        182,
+    );
+    scenario.advance_to_active_step(0, StepKind::Main);
+    scenario.game_mut().scenario_clear_hand(PlayerId(0));
+    scenario.force_card_in_hand(0, "Lightning Bolt");
+    scenario.force_permanent_on_battlefield(0, "Mountain");
+    for _ in 0..5 {
+        scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+    }
+    scenario
+        .game_mut()
+        .scenario_refresh_priority()
+        .expect("priority space should refresh");
+
+    let set = scenario
+        .game()
+        .structured_priority_offers()
+        .expect("structured priority offers");
+    let (_, candidates) = select_step(cast_offer(&set));
+    assert_eq!(
+        candidates.len(),
+        3,
+        "5 identical Gray Ogres deduplicate to 1 candidate plus both players"
+    );
+    assert_eq!(
+        candidates
+            .iter()
+            .filter(|candidate| candidate.label == "Gray Ogre")
+            .count(),
+        1
     );
 }
 
@@ -448,20 +493,25 @@ fn compound_blockers_bind_roles_and_stop_at_priority() {
     let offers = root.compound_offers().unwrap();
     let offer = &offers.projection().offers[0];
     assert_eq!(offer.verb, DecisionVerb::DeclareBlockers);
-    assert_eq!(offer.choices.len(), 3);
-    let mut answers = Vec::new();
-    for ChoiceStep::Select {
-        role, candidates, ..
-    } in &offer.choices
-    {
-        answers.push(ChoiceAnswer::Candidates {
-            role: *role,
-            candidates: vec![candidates.initial.as_ref().unwrap()[0].id],
-        });
-    }
+    // 3 identical Gray Ogres facing 1 attacker fold into 1 count-based role (counts 1..=3).
+    assert_eq!(offer.choices.len(), 1);
+    let ChoiceStep::Select {
+        role,
+        candidates,
+        min,
+        max,
+        ..
+    } = &offer.choices[0];
+    assert_eq!((*min, *max), (0, 1));
+    let initial = candidates.initial.as_ref().unwrap();
+    assert_eq!(initial.len(), 3);
+    assert_eq!(initial[2].label, "3 × Gray Ogre");
     let submission = DecisionSubmission {
         offer_id: offer.id,
-        answers,
+        answers: vec![ChoiceAnswer::Candidates {
+            role: *role,
+            candidates: vec![initial[2].id],
+        }],
     };
     let mut applied = root.clone();
     applied
@@ -522,39 +572,37 @@ fn compound_waterbend_subset_is_order_independent_and_forced_suffix_safe() {
         let offers = root.compound_offers().unwrap();
         let offer = &offers.projection().offers[0];
         assert_eq!(offer.verb, DecisionVerb::PayWaterbend);
-        let ChoiceStep::Select {
+        // 1 Water Tribe Rallier + 4 identical Gray Ogres fold into 2 forced roles.
+        assert_eq!(offer.choices.len(), 2);
+        let mut answers = Vec::new();
+        for ChoiceStep::Select {
             role,
             min,
             max,
             candidates,
             ..
-        } = &offer.choices[0];
-        assert_eq!((*min, *max), (5, 5));
-        let mut selected: Vec<_> = candidates
-            .initial
-            .as_ref()
-            .unwrap()
-            .iter()
-            .map(|candidate| candidate.id)
-            .collect();
+        } in &offer.choices
+        {
+            assert_eq!((*min, *max), (1, 1));
+            let initial = candidates.initial.as_ref().unwrap();
+            assert_eq!(initial.len(), 1);
+            answers.push(ChoiceAnswer::Candidates {
+                role: *role,
+                candidates: vec![initial[0].id],
+            });
+        }
         let submission = DecisionSubmission {
             offer_id: offer.id,
-            answers: vec![ChoiceAnswer::Candidates {
-                role: *role,
-                candidates: selected.clone(),
-            }],
+            answers: answers.clone(),
         };
         let commands = root.compound_commands(&offers, &submission).unwrap();
         // With skip_trivial enabled, tapping Rallier leaves 4 identical Gray
         // Ogres whose folded 1-action prompts auto-complete as forced suffix taps.
         assert_eq!(commands.len(), if skip_trivial { 1 } else { 5 });
-        selected.reverse();
+        answers.reverse();
         let reversed = DecisionSubmission {
             offer_id: offer.id,
-            answers: vec![ChoiceAnswer::Candidates {
-                role: *role,
-                candidates: selected,
-            }],
+            answers,
         };
         assert_eq!(
             serde_json::to_value(root.compound_commands(&offers, &reversed).unwrap()).unwrap(),

@@ -593,7 +593,7 @@ fn target_three_identical_opponent_tokens_folds_to_one_and_compound_lowers_alias
     }
     game.scenario_refresh_priority().unwrap();
 
-    // Compound offer keeps all 3 token candidates; lowering a folded alias (token #2) succeeds.
+    // Compound offer deduplicates the 3 identical Ally tokens to 1 candidate.
     let offers = game.compound_offers().unwrap();
     let bolt_offer = offers
         .projection()
@@ -611,13 +611,12 @@ fn target_three_identical_opponent_tokens_folds_to_one_and_compound_lowers_alias
         .iter()
         .filter(|c| c.label == "Ally")
         .collect();
-    assert_eq!(token_candidates.len(), 3);
-    // Pick the 3rd Ally token (which is folded into the 1st Ally token at ChooseTarget).
+    assert_eq!(token_candidates.len(), 1);
     let submission = DecisionSubmission {
         offer_id: bolt_offer.id,
         answers: vec![ChoiceAnswer::Candidates {
             role: *role,
-            candidates: vec![token_candidates[2].id],
+            candidates: vec![token_candidates[0].id],
         }],
     };
     let mut compound_game = game.clone();
@@ -1272,25 +1271,61 @@ fn compound_waterbend_lowers_folded_aliases_under_both_skip_trivial_modes() {
         let offers = game.compound_offers().unwrap();
         let offer = &offers.projection().offers[0];
         assert_eq!(offer.verb, DecisionVerb::PayWaterbend);
+        // 1 Water Tribe Rallier + 3 identical Gray Ogres with min=3, max=4
+        // fold into 2 roles: Rallier (0..=1) and Gray Ogre (2 or 3 copies).
+        assert_eq!(offer.choices.len(), 2);
         let ChoiceStep::Select {
-            role,
-            min,
-            max,
-            candidates,
+            role: rallier_role,
+            min: r_min,
+            max: r_max,
+            candidates: r_cands,
             ..
         } = &offer.choices[0];
-        assert_eq!((*min, *max), (3, 4));
-        let all = candidates.initial.as_ref().unwrap();
-        assert_eq!(all.len(), 4);
+        let ChoiceStep::Select {
+            role: ogre_role,
+            min: o_min,
+            max: o_max,
+            candidates: o_cands,
+            ..
+        } = &offer.choices[1];
+        assert_eq!((*r_min, *r_max), (0, 1));
+        assert_eq!((*o_min, *o_max), (1, 1));
+        let r_list = r_cands.initial.as_ref().unwrap();
+        let o_list = o_cands.initial.as_ref().unwrap();
+        assert_eq!(r_list.len(), 1);
+        assert_eq!(o_list.len(), 2);
+        assert_eq!(o_list[0].label, "2 × Gray Ogre");
+        assert_eq!(o_list[1].label, "3 × Gray Ogre");
 
-        // Select Rallier (0) + the 2nd and 3rd Gray Ogres (2, 3), skipping the canonical 1st Ogre (1),
-        // plus paying remaining {2} mana via PayCost.
+        // Under-paying (0 Rallier + 2 Gray Ogres = 2 < min 3) is rejected by decode.
+        let under = DecisionSubmission {
+            offer_id: offer.id,
+            answers: vec![
+                ChoiceAnswer::Candidates {
+                    role: *rallier_role,
+                    candidates: vec![],
+                },
+                ChoiceAnswer::Candidates {
+                    role: *ogre_role,
+                    candidates: vec![o_list[0].id],
+                },
+            ],
+        };
+        assert!(offers.decode(&under).is_err());
+
+        // Select Rallier + 2 Gray Ogres (3 taps total), paying remaining {2} mana via PayCost.
         let submission = DecisionSubmission {
             offer_id: offer.id,
-            answers: vec![ChoiceAnswer::Candidates {
-                role: *role,
-                candidates: vec![all[0].id, all[2].id, all[3].id],
-            }],
+            answers: vec![
+                ChoiceAnswer::Candidates {
+                    role: *rallier_role,
+                    candidates: vec![r_list[0].id],
+                },
+                ChoiceAnswer::Candidates {
+                    role: *ogre_role,
+                    candidates: vec![o_list[0].id],
+                },
+            ],
         };
         let cmds = game.compound_commands(&offers, &submission).unwrap();
         assert!(!cmds.is_empty());
@@ -2260,19 +2295,24 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
         assert!(preview_two.refused.is_none(), "{:?}", preview_two.refused);
         assert_eq!(preview_two.declared_attackers.len(), 2);
 
-        // Compound DeclareAttackers lowering with non-canonical subset [last-asked].
+        // Compound DeclareAttackers with 3 identical tokens folds to 1 count-based role (counts 1..=3).
         let offers = game.compound_offers().unwrap();
         let offer = &offers.projection().offers[0];
         assert_eq!(offer.verb, DecisionVerb::DeclareAttackers);
         let ChoiceStep::Select {
-            role, candidates, ..
+            role,
+            candidates,
+            min,
+            max,
+            ..
         } = &offer.choices[0];
-        let last_cand = candidates.initial.as_ref().unwrap().last().unwrap().id;
+        assert_eq!((*min, *max), (0, 1));
+        let first_cand = candidates.initial.as_ref().unwrap()[0].id;
         let submission = DecisionSubmission {
             offer_id: offer.id,
             answers: vec![ChoiceAnswer::Candidates {
                 role: *role,
-                candidates: vec![last_cand],
+                candidates: vec![first_cand],
             }],
         };
         let mut lowered = game.clone();
@@ -2365,13 +2405,17 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
             "double block on folded attacker must stay paired on one canonical attacker"
         );
 
-        // Compound DeclareBlockers lowering: role 0 declines, role 1 blocks folded
-        // attacker #2, role 2 blocks attacker #1 -> preserves split block [1, 1].
+        // Compound DeclareBlockers: blocker 0 sees 1 deduplicated attacker candidate,
+        // blockers 1 and 2 see 2 attacker candidates so split-block [1, 1] stays expressible.
         let boffers = bgame.compound_offers().unwrap();
         let boffer = &boffers.projection().offers[0];
         assert_eq!(boffer.verb, DecisionVerb::DeclareBlockers);
         assert_eq!(boffer.choices.len(), 3);
-        let ChoiceStep::Select { role: r0, .. } = &boffer.choices[0];
+        let ChoiceStep::Select {
+            role: r0,
+            candidates: c0,
+            ..
+        } = &boffer.choices[0];
         let ChoiceStep::Select {
             role: r1,
             candidates: c1,
@@ -2382,8 +2426,11 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
             candidates: c2,
             ..
         } = &boffer.choices[2];
+        assert_eq!(c0.initial.as_ref().unwrap().len(), 1);
         let c1_list = c1.initial.as_ref().unwrap();
         let c2_list = c2.initial.as_ref().unwrap();
+        assert_eq!(c1_list.len(), 2);
+        assert_eq!(c2_list.len(), 2);
         let split_sub = DecisionSubmission {
             offer_id: boffer.id,
             answers: vec![

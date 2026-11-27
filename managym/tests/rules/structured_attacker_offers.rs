@@ -258,11 +258,11 @@ fn structured_attacker_offer_exhausts_two_deck_declarations_past_32() {
             ur_lessons_deck(),
             vec![
                 "Water Tribe Rallier",
-                "Water Tribe Rallier",
-                "Invasion Reinforcements",
                 "Invasion Reinforcements",
                 "Compassionate Healer",
-                "Compassionate Healer",
+                "Earth Kingdom Jailer",
+                "White Lotus Reinforcements",
+                "Kyoshi Warriors",
             ],
         ),
         (
@@ -270,11 +270,11 @@ fn structured_attacker_offer_exhausts_two_deck_declarations_past_32() {
             gw_allies_deck(),
             vec![
                 "Tiger-Seal",
-                "Tiger-Seal",
-                "Otter-Penguin",
                 "Otter-Penguin",
                 "Fire Nation Cadets",
-                "Fire Nation Cadets",
+                "First-Time Flyer",
+                "Forecasting Fortune Teller",
+                "Dragonfly Swarm",
             ],
         ),
     ];
@@ -431,20 +431,60 @@ fn structured_attacker_adapter_matches_seeded_two_deck_traces() {
                         .structured_offers()
                         .expect("structured attacker offer in acceptance game");
                     let offer = attacker_offer(&set);
-                    let (role, candidates) = attacker_candidates(offer);
-                    let mut mask = 0_usize;
-                    for (index, candidate) in candidates.iter().enumerate() {
-                        let bit = seed
-                            .wrapping_add(checkpoints as u64 * 0x9e37)
-                            .wrapping_add(u64::from(candidate.id.0) * 0x85eb)
-                            .count_ones()
-                            & 1;
-                        if bit == 1 {
-                            mask |= 1 << index;
+                    let mut answers = Vec::new();
+                    let mut selected_entities = BTreeSet::new();
+                    for ChoiceStep::Select {
+                        role,
+                        candidates,
+                        max,
+                        ..
+                    } in &offer.choices
+                    {
+                        let list = candidates.initial.as_deref().expect("initial candidates");
+                        if *max == 1 && list.len() > 1 {
+                            // Count-based equivalence-class role: pick 0..=list.len().
+                            let count = (seed
+                                .wrapping_add(checkpoints as u64 * 0x9e37)
+                                .wrapping_add(u64::from(role.0) * 0x85eb)
+                                as usize)
+                                % (list.len() + 1);
+                            if count == 0 {
+                                answers.push(ChoiceAnswer::Candidates {
+                                    role: *role,
+                                    candidates: Vec::new(),
+                                });
+                            } else {
+                                answers.push(ChoiceAnswer::Candidates {
+                                    role: *role,
+                                    candidates: vec![list[count - 1].id],
+                                });
+                                for candidate in &list[..count] {
+                                    selected_entities.insert(subject_entity(candidate));
+                                }
+                            }
+                        } else {
+                            let mut chosen = Vec::new();
+                            for candidate in list {
+                                let bit = seed
+                                    .wrapping_add(checkpoints as u64 * 0x9e37)
+                                    .wrapping_add(u64::from(candidate.id.0) * 0x85eb)
+                                    .count_ones()
+                                    & 1;
+                                if bit == 1 {
+                                    chosen.push(candidate.id);
+                                    selected_entities.insert(subject_entity(candidate));
+                                }
+                            }
+                            answers.push(ChoiceAnswer::Candidates {
+                                role: *role,
+                                candidates: chosen,
+                            });
                         }
                     }
-                    let (submission, selected_entities) =
-                        submission_for_mask(offer, role, candidates, mask);
+                    let submission = DecisionSubmission {
+                        offer_id: offer.id,
+                        answers,
+                    };
                     structured
                         .apply_offer_submission(&set, &submission)
                         .expect("seeded structured declaration");
@@ -572,9 +612,37 @@ fn compound_lowering_preserves_root_and_all_attacker_subsets() {
         .unwrap();
     let offers = game.compound_offers().unwrap();
     let offer = attacker_offer(&offers);
-    let (role, candidates) = attacker_candidates(offer);
-    for mask in 0..64 {
-        let (submission, _) = submission_for_mask(offer, role, candidates, mask);
+    // 6 identical Gray Ogres fold into 1 count-based role (counts 0..=6 -> 7 declarations).
+    let [ChoiceStep::Select {
+        role,
+        candidates,
+        min,
+        max,
+        ordered,
+        distinct,
+        ..
+    }] = offer.choices.as_slice()
+    else {
+        panic!("expected one count-based attacker role");
+    };
+    let list = candidates.initial.as_deref().expect("initial candidates");
+    assert_eq!((*min, *max), (0, 1));
+    assert!(!ordered && *distinct);
+    assert_eq!(list.len(), 6);
+    assert_eq!(list[0].label, "Gray Ogre");
+    assert_eq!(list[5].label, "6 × Gray Ogre");
+    for count in 0..=6 {
+        let submission = DecisionSubmission {
+            offer_id: offer.id,
+            answers: vec![ChoiceAnswer::Candidates {
+                role: *role,
+                candidates: if count == 0 {
+                    Vec::new()
+                } else {
+                    vec![list[count - 1].id]
+                },
+            }],
+        };
         let commands = game.compound_commands(&offers, &submission).unwrap();
         assert_eq!(commands.len(), 6);
         let mut sequential = game.clone();
