@@ -314,8 +314,11 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   prefix; require committed facts to remain, with unique rows and no old motion.
   Let keyboard Home scrolling settle before measuring a reading anchor. Prompt
   kinds in frames are lowercase; `data-action-space-kind` uses uppercase names
-  such as `CHOOSE_TARGET` and `LOOK_AND_SELECT`. Identical card copies have
-  separate cast offers, so choose an explicit occurrence in browser scripts.
+  such as `CHOOSE_TARGET` and `LOOK_AND_SELECT`. Identical card copies fold
+  into one canonical offer with `aliases[]`; click or drag any copy (for fanned
+  cards in a hand ribbon, wait for animations to settle and grab the uncovered
+  left slice `x + 14`; in a battlefield pile, index 0 sits on top so later
+  copies expose their right edge `width - 6`).
   In Replay, open Consequences with a real pointer click at the final frame;
   setting `<details>.open` cannot detect a hand overflowing over its summary.
   Check the hand ends above history. Recorded terminal results have no next-game
