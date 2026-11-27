@@ -1,1 +1,1 @@
-MTG-501 kickoff assumed that catalog membership may be exposed as an additive `program_vocabulary` field. Existing clients use the two flat token arrays as printed-card occurrences. The compatibility evidence and acceptance check are in `scratch/plan.md`.
+Concept-review choices 1a/2a/3a and the guard rule (exclude DecisionMemory::*, Null strict, default pack only) were adopted headless; see "Decisions made for review" in scratch/plan.md.
