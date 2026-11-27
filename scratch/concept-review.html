@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept Review · MTG-500 Phase-Accurate Mana Activation Continuation &amp; Replacement Ordering</title>
+<title>Concept Review · MTG-500 Fixed Mana Taps, Bonus Continuations &amp; Pass 4b Split</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -310,6 +310,11 @@
     background: var(--success-wash);
   }
 
+  .card-warn {
+    border-left: 4px solid var(--warning);
+    background: var(--warning-wash);
+  }
+
   .card-title {
     display: flex;
     align-items: center;
@@ -544,207 +549,265 @@
 
   <header>
     <div>
-      <div class="eyebrow">Concept Review · MTG-500 · Pass 4 Stop-Rule Realign (Post Counter-Cost Replacement Suspension)</div>
-      <h1>Phase-Accurate Mana Activation Continuation &amp; Replacement Ordering</h1>
+      <div class="eyebrow">Concept Review · MTG-500 · Eighth Pass (Post-4a &amp; Fixed-Tap Counterexample)</div>
+      <h1>Fixed Mana Taps, Bonus Continuations &amp; the Pass 4b Split</h1>
       <p class="lead">
-        <strong>Area reviewed:</strong> The mana-ability cost-commitment and output-production continuation lifecycle across
-        <code>managym/src/flow/mana.rs</code> (<code>complete_mana_upfront</code>, <code>upfront_mana_outputs</code>,
-        <code>payment_model</code>, <code>payment_obligations_owing</code>),
-        <code>managym/src/flow/decision.rs</code> (<code>FrameCompletion</code>, <code>EffectFrame</code>,
-        <code>Decision::ManaUpfront</code>, <code>Decision::ManaChoice</code>, <code>Decision::OrderReplacement</code>,
-        <code>SuspendedResolution::continuation</code>, <code>run_payment_frame</code>),
-        <code>managym/src/flow/proposed_event.rs</code> (<code>apply_immediate_event</code>, <code>advance_event_batch</code>),
-        <code>managym/src/flow/payment.rs</code> (<code>complete_announced_payment</code>),
-        <code>managym/src/state/hash.rs</code>, and continuation consumers
-        (<code>agent/continuation.rs</code>, <code>agent/effect_execution.rs</code>, <code>flow/interchangeable.rs</code>,
-        <code>flow/selection_sampling.rs</code>) — widened from Pass 4 attempt 4's immediate-event panic
-        (<code>da29dbbdc8</code>) to examine the full cost → output → suffix lifecycle and its parity with the coupled fork search.
+        <strong>Area taken:</strong> the manual and automatic mana-payment surface across fixed taps
+        (<code>ManaAbility</code>, <code>TapForMana</code>, <code>perform_automatic_tap</code>, <code>tap_bonuses</code>),
+        activated mana continuations (<code>FrameCompletion::ManaOutput</code>, <code>Decision::ManaChoice</code>),
+        provisional coupling flags (<code>PaymentCoupling</code>, <code>LayerBoard::payment_writes_couple</code>),
+        and colored convoke (<code>help.rs</code>). Pass 4a (<code>494fb4c5e8</code>) landed a new rules continuation,
+        Pass 4b stopped at counterexample #5 (<code>710163f05a</code>), and <code>scratch/plan.md</code> proposes
+        splitting Pass 4b into a separate Task to ship Issue #628.
       </p>
     </div>
     <button class="theme-btn" id="themeToggle" type="button">Theme: Auto</button>
   </header>
 
   <div class="meta-bar">
-    <div><strong>Branch:</strong> <code>jack/mtg-500-fix-infinite-spin-in-rayon-worker-during-manual</code></div>
-    <div><strong>HEAD:</strong> <code>cc268d738e</code> (Pass 1–3 + Design 5 contract <code>ab008535cb</code> · Repro <code>da29dbbdc8</code>)</div>
-    <div><strong>Fresh <code>origin/main</code>:</strong> <code>6a131c4dc9</code> (ancestor of HEAD; 0 sync drift · hash v34 → v35 on branch)</div>
-    <div><strong>Legend:</strong>
-      <span class="badge badge-yes">Landed</span>
-      <span class="badge badge-no">Mismatch</span>
-      <span class="badge badge-proposed">Proposed (Pass 4)</span>
-      <span class="badge badge-scope">This Work</span>
-      <span class="badge badge-existing">Separate Outcome</span>
+    <span><strong>HEAD:</strong> <code>7cb3655f18</code></span>
+    <span><strong>origin/main:</strong> <code>6a131c4dc9</code> (synced; 0 commits ahead)</span>
+    <span><strong>Built in branch:</strong> Passes 1, 2, 3, 4-contract, 4a</span>
+    <span><strong>Hash version:</strong> <code>34 → 35</code> (unreleased)</span>
+    <span><strong>Legend:</strong>
+      <span class="badge badge-existing">Existing / Built</span>
+      <span class="badge badge-proposed">Proposed</span>
+      <span class="badge badge-scope">This Work (MTG-500)</span>
+      <span class="badge badge-planned">Separate Task</span>
+    </span>
+  </div>
+
+  <div class="card card-proof">
+    <div class="card-title">
+      <h3>Executive Verdict · Pass 4a Holds; Two Real Mismatches Govern the Split</h3>
+      <span class="badge badge-yes">Pass 4a Verified</span>
     </div>
+    <ul class="compact small">
+      <li>
+        <strong>Pass 4a (<code>494fb4c5e8</code>) lines up cleanly with CR 601.2h / 605.3b / 608.2h.</strong>
+        <code>FrameCompletion::ManaOutput(Box&lt;PendingManaOutput&gt;)</code> evaluates dynamic outputs after counter and sacrifice
+        costs commit, preserves <code>chosen</code> LKI, keeps the fast path allocation-free, and walks enclosing reservations via
+        <code>SuspendedResolution::decisions()</code>. One invariant for the split Task: <code>payment_obligations_owing</code>
+        omits an in-flight <code>ManaOutput</code>/<code>ManaChoice</code> while suspended on <code>OrderReplacement</code>, so coupled
+        search must step <code>OrderReplacement</code> natively rather than handing off mid-frame.
+      </li>
+      <li>
+        <strong>Biggest mismatch on <code>HEAD</code> (exposed by <code>710163f05a</code>):</strong>
+        <em>"Fixed printed mana ability"</em> (<code>ManaAbility</code>) and <em>"guaranteed choice-free automatic tap"</em>
+        (<code>perform_automatic_tap</code>) are conflated into one path, and <code>tap_bonuses</code> evaluates trigger predicates
+        <strong>before</strong> tapping while <code>tapped_for_mana</code> evaluates them <strong>after</strong> tapping. Splitting
+        single-step manual <code>tap_for_mana_action</code> (which already has a caller continuation and can reuse
+        <code>ManaProduction::Bonus</code> with zero new <code>Decision</code> variants) from non-suspending automatic batches fixes the
+        panic structurally, and also stops multi-type fixed sources (<code>{T}: Add {U}{R}</code>) from vanishing beside normal
+        <span class="card-name">Heartbeat of Spring</span>.
+      </li>
+      <li>
+        <strong>Critical finding for the Pass 4b split (This Work before shipping MTG-500):</strong>
+        Leaving Pass 2's provisional coupling scaffolding (<code>PaymentCoupling::Coupled</code>, <code>ManaSource.tap_coupled</code>,
+        <code>LayerBoard.mana_activation_reads</code>, <code>ReadSet.battlefield</code>, <code>payment_writes_couple</code>) in MTG-500
+        without Pass 4b's fork search ships dead, already-refuted code that <strong>actively regresses</strong>
+        <span class="card-name">Tarnished Citadel</span> + <span class="card-name">Sunbaked Canyon</span> at 3 life whenever
+        <em>any</em> life-reading static (e.g. <span class="card-name">Angel of Vitality</span> alone) is in play, because
+        <code>PaymentCoupling::Coupled.life_delta()</code> returns <code>LifeDelta(0)</code>! Strip that superseded scaffolding back to
+        <code>mana_suffix_life_delta</code> in MTG-500 so Issue #628 ships clean and the split Task starts fresh on Design 4's whitelist.
+      </li>
+    </ul>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>1. Do the Domain Concepts and the Code's Concepts Line Up?</h2>
-
-  <p>
-    Pass 4 attempt 4 (<code>da29dbbdc8</code>) exposed a structural split in how activated abilities pay their costs.
-    Non-mana activated abilities (<code>complete_announced_payment</code>, <code>payment.rs:1429–1520</code>) already run
-    <code>CounterChange</code> and <code>Sacrifice</code> costs through a retained <code>EffectFrame.batch</code> backed by a
-    typed <code>FrameCompletion::Activated</code>. Activated mana abilities (<code>complete_mana_upfront</code>,
-    <code>mana.rs:5133–5207</code>) do the opposite: they send <code>CounterChange</code> to
-    <code>apply_immediate_event</code> (panicking whenever two counter replacements apply), evaluate
-    <code>upfront_mana_outputs</code> <em>before</em> <code>Effect::sacrifice_this()</code> runs, and park the sacrifice
-    alongside <code>activation.suffix</code> behind <code>FrameCompletion::Decision(ManaChoice)</code> — which both
-    <code>payment_model::reserve</code> and <code>payment_obligations_owing</code> ignore. Widening to live play also
-    reveals that once Pass 4's coupled fork search branches through <code>Decision::OrderReplacement</code>, leaving live
-    <code>OrderReplacement</code> unfiltered during payment directly produces <code>AgentError</code> on a stranding order.
-  </p>
+  <h2>1. Do Domain Concepts and Code Concepts Line Up?</h2>
 
   <table>
     <thead>
       <tr>
-        <th style="width: 20%;">Domain Concept</th>
-        <th style="width: 23%;">Code Concept (<code>HEAD</code>)</th>
-        <th style="width: 10%;">Aligns?</th>
-        <th style="width: 35%;">What Is Wrong (or Right)</th>
-        <th style="width: 12%;">Scope</th>
+        <th style="width: 22%">Domain Concept (CR &amp; Player)</th>
+        <th style="width: 24%">Code Concept on <code>HEAD</code></th>
+        <th style="width: 11%">Aligned?</th>
+        <th style="width: 43%">Diagnosis &amp; Disposition</th>
       </tr>
     </thead>
     <tbody>
       <tr>
         <td>
-          <strong>Step invariant, signed life, owned <code>ManaUpfront</code> &amp; monotone contract</strong><br>
-          <span class="muted small">Pass 1–3 + Design 5 finite-resource contract (CR 605.1a parity, pending counter reservation).</span>
+          <strong>Mana ability with counter or sacrifice costs &amp; dynamic output</strong><br>
+          <span class="small muted">Pay counters &amp; sacrifice (CR 601.2h), read output with LKI (CR 608.2h), then run suffix.</span>
         </td>
         <td>
-          <code>Game::tick()</code>, <code>LifeBudget</code>,<br>
-          <code>ManaUpfrontActivation</code> (v35),<br>
-          <code>mana_parts()</code> (<code>card.rs:846</code>)
+          <code>FrameCompletion::ManaOutput(Box&lt;PendingManaOutput&gt;)</code>,
+          <code>complete_mana_output</code><br>
+          <span class="small muted"><code>flow/decision.rs:79,122,1575</code>; <code>flow/mana.rs:5144-5221</code></span>
         </td>
-        <td><span class="badge badge-yes">Yes</span><br><span class="muted small">Landed</span></td>
         <td>
-          Landed in <code>1c521e300</code>, <code>a9359c03b</code>, <code>abfabece99</code>, and <code>ab008535cb</code>.
-          Zero live index lookups on <code>ManaUpfront</code>; every admitted mana ability strictly lowers unreserved finite resources.
+          <span class="badge badge-yes">Yes</span><br>
+          <span class="badge badge-existing" style="margin-top:4px">Built · Pass 4a</span>
         </td>
-        <td><span class="badge badge-yes">Landed</span></td>
+        <td>
+          Matches the rules lifecycle and mirrors <code>FrameCompletion::Activated</code>.
+          Zero allocation when no counter/sacrifice cost exists; <code>CounterChange</code> runs in <code>costs.batch</code>
+          before <code>sacrifice_this</code> in <code>costs.queue</code>; <code>SuspendedResolution::decisions()</code>
+          preserves enclosing reservations and obligations.
+        </td>
       </tr>
+
       <tr>
         <td>
-          <strong>Mana cost commitment through the event pipeline</strong><br>
-          <span class="muted small">All event-pipeline activation costs (counters, sacrifice) retain their caller across replacement choices, just like non-mana costs.</span>
+          <strong>Monotone finite-resource mana ability</strong><br>
+          <span class="small muted">Every CR 605.1a mana ability consumes a finite resource and has a bounded suffix.</span>
         </td>
         <td>
-          <code>complete_mana_upfront</code> (<code>mana.rs:5165</code>) calls <code>apply_immediate_event</code>;<br>
-          <code>complete_announced_payment</code> (<code>payment.rs:1506</code>) uses <code>EffectFrame.batch</code>
+          <code>ActivatedAbilityDefinition::mana_parts()</code> +
+          <code>reserve_mana_activation</code><br>
+          <span class="small muted"><code>state/src/card.rs</code>; <code>flow/mana.rs:3259</code></span>
         </td>
-        <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>Biggest mismatch — two incompatible cost-execution models.</strong>
-          <code>complete_mana_upfront</code> sends <code>CounterChange</code> to <code>apply_immediate_event</code>
-          (<code>proposed_event.rs:1531</code>), which panics (<code>"event requiring a choice needs a retained caller"</code>)
-          the moment two <code>ModifyCounters</code> replacements apply (<code>da29dbbdc8</code>). Non-mana activations already
-          own a retained cost <code>EffectFrame</code> with <code>FrameCompletion::Activated</code>; mana activations have no
-          equivalent <code>FrameCompletion</code>.
+          <span class="badge badge-yes">Yes</span><br>
+          <span class="badge badge-existing" style="margin-top:4px">Built · Pass 4</span>
         </td>
-        <td><span class="badge badge-scope">This Work</span></td>
+        <td>
+          One predicate owns classification across printed, token, and granted definitions; catalog CR 605.1a parity is
+          enforced in CI; pending <code>remove_counters</code>, taps, and source presence are reserved on
+          <code>Decision::ManaUpfront</code>.
+        </td>
       </tr>
+
       <tr>
         <td>
-          <strong>CR 601.2h / 605.3b output timing &amp; CR 608.2h LKI</strong><br>
-          <span class="muted small">Dynamic mana output evaluates <em>after</em> all costs (counters, sacrifice) commit and <em>before</em> the suffix runs, preserving LKI of a sacrificed source's chosen color/type.</span>
+          <strong>Tapping a permanent with a fixed mana ability (<code>{T}: Add M</code>) + triggered mana bonuses</strong><br>
+          <span class="small muted">Tapping pays <code>{T}</code>, triggers bonuses checked against the <em>tapped</em> permanent (CR 106.12a), and asks the player if a bonus offers &gt;1 type (CR 605.4a).</span>
         </td>
         <td>
-          <code>upfront_mana_outputs</code> called at <code>mana.rs:5182</code> <em>before</em> <code>Effect::sacrifice_this()</code>;<br>
-          reads live <code>permanents[permanent].chosen</code> (<code>mana.rs:3182</code>)
+          <code>ManaSource.fixed: Option&lt;Mana&gt;</code>,
+          <code>fixed_source_mana</code>,
+          <code>tap_bonuses</code>,
+          <code>perform_automatic_tap</code><br>
+          <span class="small muted"><code>flow/mana.rs:740,3387,4538,5230,5256,5298,5316</code></span>
         </td>
-        <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>Premature output baking + missing LKI.</strong>
-          (1) On <code>HEAD</code>, a dynamic sacrifice mana ability (e.g. counting creatures, graveyard, or
-          <code>permanents_sacrificed</code>) evaluates <em>before</em> the sacrifice commits.
-          (2) With suspended counter replacements, baking <code>Decision::ManaChoice</code> before the counter batch commits
-          freezes stale pre-counter power/counter counts (3 vs 4 counters can change the output!).
-          (3) Once sacrifice runs before output evaluation, reading live <code>permanents[permanent].chosen</code> returns
-          <code>None</code> unless captured as LKI beforehand.
+          <span class="badge badge-no">No · Biggest</span><br>
+          <span class="badge badge-planned" style="margin-top:4px">Split Task (or 2b)</span>
         </td>
-        <td><span class="badge badge-scope">This Work</span></td>
+        <td>
+          <strong>Three colliding mismatches:</strong>
+          (1) <em>One name for two operations</em>: <code>perform_automatic_tap</code> runs both single interactive
+          <code>Action::TapForMana</code> and multi-tap automatic batches (<code>produce_mana</code>,
+          <code>pay_mana_upfront</code>, <code>preview_tap</code>), panicking on any bonus choice (<code>710163f05a</code>).
+          (2) <em>Silent source loss</em>: <code>fixed_source_mana</code> drops any fixed source with
+          <code>outputs.len() &gt; 1</code> (e.g. <code>{T}: Add <span class="pip pip-u">U</span><span class="pip pip-r">R</span></code>
+          beside normal Heartbeat vanishes completely!).
+          (3) <em>Two timings for one predicate</em>: <code>tap_bonuses</code> evaluates <code>CardPredicate</code>
+          <strong>pre-tap</strong> (<code>tapped = false</code>), while <code>tapped_for_mana</code> evaluates it
+          <strong>post-tap</strong> (<code>tapped = true</code>), breaking both fixed and activated mana abilities when
+          <code>predicate.tapped</code> is set.
+        </td>
       </tr>
+
       <tr>
         <td>
-          <strong>Payment reservations &amp; obligations across suspended child frames</strong><br>
-          <span class="muted small">Enclosing mana payments and reservations remain visible while a replacement choice is suspended inside a mana activation.</span>
+          <strong>Committing newly produced mana toward an announced cost</strong><br>
+          <span class="small muted">Only commit a unit automatically when no competing unit from the same production can pay that pip.</span>
         </td>
         <td>
-          <code>payment_model::reserve</code> (<code>mana.rs:3280</code>) &amp;<br>
-          <code>payment_obligations_owing</code> (<code>mana.rs:3667</code>)<br>
-          inspect only <code>suspended.decision</code>
+          <code>commit_produced_mana(player, start)</code><br>
+          <span class="small muted"><code>flow/mana.rs:4556</code>; <code>flow/decision.rs:2927</code>; <code>flow/payment.rs:1280</code></span>
         </td>
-        <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>Silent caller erasure during <code>OrderReplacement</code>.</strong>
-          Unlike <code>SuspendedResolution::continuation()</code> (<code>decision.rs:1102</code>), neither <code>reserve</code>
-          nor <code>payment_obligations_owing</code> walks <code>suspended.frame.completion</code>. Whenever
-          <code>Decision::OrderReplacement</code> is parked on a cost or suffix frame, every saved <code>ManaOutput</code>,
-          <code>ManaChoice</code>, <code>ManaUpfront</code>, and resolution <code>Payment</code> disappears from both.
+          <span class="badge badge-no">No · Subtle</span><br>
+          <span class="badge badge-planned" style="margin-top:4px">With Bonus Fix</span>
         </td>
-        <td><span class="badge badge-scope">This Work</span></td>
+        <td>
+          <code>decision.rs:2927</code> calls <code>commit_produced_mana</code> <em>even when</em>
+          <code>next.is_some()</code> (a <code>ManaProduction::Bonus</code> choice is about to suspend). If
+          <span class="pip pip-u">U</span><span class="pip pip-r">R</span> pays <span class="pip pip-c">1</span><span class="pip pip-u">U</span>
+          with Heartbeat pending, eager commit spends <span class="pip pip-r">R</span> on <span class="pip pip-c">1</span>
+          before the bonus <span class="pip pip-u">U</span> arrives, stealing the payer's choice to float <span class="pip pip-r">R</span>.
+        </td>
       </tr>
+
       <tr>
         <td>
-          <strong>Fork-search &amp; live-offer parity on <code>OrderReplacement</code> during payment</strong><br>
-          <span class="muted small">Every offer the payer sees during a manual payment leaves a legal completion; opponent choices remain universal and unrestricted.</span>
+          <strong>Fixed-suffix life delta vs. board-level coupling</strong><br>
+          <span class="small muted">On uncoupled boards, fixed life/damage suffixes (Citadel, Henge) carry their exact signed <code>LifeDelta</code> through payment.</span>
         </td>
         <td>
-          <code>Decision::OrderReplacement</code> action space (<code>decision.rs:1918</code>) &amp; execution (<code>decision.rs:2661</code>) unconditionally offer all <code>0..candidates.len()</code>
+          <code>PaymentCoupling::{Independent, Coupled}</code>,
+          <code>ManaSource.tap_coupled</code>,
+          <code>LayerBoard.mana_activation_reads</code>,
+          <code>ReadSet.battlefield</code>,
+          <code>payment_writes_couple</code><br>
+          <span class="small muted"><code>flow/mana.rs:631,741,3349,3455</code>; <code>flow/statics.rs:329,366</code>; <code>flow/layers.rs:459,471</code></span>
         </td>
-        <td><span class="badge badge-no">No</span></td>
         <td>
-          <strong>Promoted from Deferred → This Work (Finish the rule on every surface it touches).</strong>
-          Once Pass 4's coupled fork search branches through <code>OrderReplacement</code> (OR for <code>chooser == payer</code>,
-          AND for <code>chooser != payer</code>), an activation can be certified legal via one order while another order strands
-          the cost. Leaving live <code>OrderReplacement</code> unfiltered lets the payer choose the stranding order and crash into
-          an empty <code>ManaChoice</code> (<code>AgentError</code>) — breaking MTG-500's own core invariant.
+          <span class="badge badge-no">No · Regresses</span><br>
+          <span class="badge badge-scope" style="margin-top:4px">This Work (MTG-500)</span>
         </td>
-        <td><span class="badge badge-scope">This Work</span></td>
+        <td>
+          <strong>Code the user never sees that actively breaks a real board if Pass 4b is split out.</strong>
+          The 5th review already refuted this read/write blacklist; without Pass 4b's coupled search,
+          <code>tap_coupled</code> is never read in production, and <code>PaymentCoupling::Coupled.life_delta()</code>
+          returns <code>LifeDelta(0)</code> — erasing Citadel's <code>-3</code> whenever <em>any</em> life-reading static
+          (e.g. <span class="card-name">Angel of Vitality</span> alone) is on the battlefield (Case 2 below).
+          Delete this scaffolding in MTG-500 and compute <code>mana_suffix_life_delta</code> directly.
+        </td>
       </tr>
+
       <tr>
         <td>
-          <strong>Positive arithmetic whitelist &amp; coupled fork search</strong><br>
-          <span class="muted small">Review 5 Design 4 (<code>BoardArithmeticProfile</code>, <code>ActivationFacts</code>, 3 roles) + Design 1 pure-handoff fork search.</span>
+          <strong>Colored convoke beside manual mana payment</strong><br>
+          <span class="small muted">Creatures with convoke may pay colored pips of their colors on every payment surface.</span>
         </td>
         <td>
-          Frozen <code>PaymentModel</code>, <code>LayerBoard.reads</code>,<br>
-          <code>payment_writes_couple</code>, <code>.life_delta()</code>
+          <code>while_paying</code> / <code>convoke_search</code><br>
+          <span class="small muted"><code>flow/mana/help.rs:260-319</code> (3 callers; 5 nested surfaces bypass)</span>
         </td>
-        <td><span class="badge badge-no">No</span><br><span class="muted small">Pass 4</span></td>
         <td>
-          Design 4 from Review 5 stands intact. With <code>FrameCompletion::ManaOutput</code>, coupled transitions that suspend
-          on <code>OrderReplacement</code> now complete cleanly on forks without panicking and without any search cap.
+          <span class="badge badge-no">No · Split Owner</span><br>
+          <span class="badge badge-scope" style="margin-top:4px">This Work · Pass 5</span>
         </td>
-        <td><span class="badge badge-scope">This Work</span></td>
+        <td>
+          Only <code>activation_payable_from</code>, <code>append_mana_floats</code>, and <code>useful_payment_taps</code>
+          wrap <code>while_paying</code>; nested surfaces (<code>automatic_upfront_path</code>, <code>mana_choice_actions</code>,
+          <code>mana_spend_choices</code>, <code>mana_tap_cost_actions</code>, <code>automatic_payment_action</code>) skip it,
+          turning legal <span class="card-name">Guardian of Vitu-Ghazi</span> plays into <code>AgentError</code> after Pass 1.
+        </td>
       </tr>
+
       <tr>
         <td>
-          <strong>Unified feasibility incl. colored convoke</strong><br>
-          <span class="muted small">Fold <code>convoke_colors: ManaTypeSet</code> into <code>PaymentModel</code> across all 8+ payment surfaces.</span>
+          <strong>State-coupled payment transitions &amp; payer replacement ordering</strong><br>
+          <span class="small muted">When one mana step changes another source's output, cost, or triggers, only completeable orders are offered.</span>
         </td>
         <td>
-          <code>PaymentModel</code> vs <code>while_paying</code> / <code>convoke_search</code> (<code>help.rs:260</code>)
+          Not yet built (Designs 1, 4, 7 in <code>scratch/plan.md</code>)<br>
+          <span class="small muted">Probed by 5 constructed/non-TLA counterexamples</span>
         </td>
-        <td><span class="badge badge-no">No</span><br><span class="muted small">Pass 5</span></td>
         <td>
-          Unchanged from prior reviews; remains Pass 5.
+          <span class="badge badge-planned">Planned</span><br>
+          <span class="badge badge-planned" style="margin-top:4px">Separate Task</span>
         </td>
-        <td><span class="badge badge-scope">This Work</span></td>
+        <td>
+          Needs closed <code>BoardArithmeticProfile</code> whitelist (Design 4), coupled <code>Game</code> fork search with
+          pure-model handoff (Design 1), fixed-tap bonus continuation, and live payer <code>OrderReplacement</code>
+          filtering (Design 7). None of its counterexamples occur in TLA Limited; splitting unblocks Issue #628.
+        </td>
       </tr>
+
       <tr>
         <td>
-          <strong>Owned non-mana activations</strong><br>
-          <span class="muted small">Announced non-mana abilities surviving grant loss while paying their costs.</span>
+          <strong>Announced non-mana activation whose grant ends while paying</strong><br>
+          <span class="small muted">CR 602.2: once announced, the activation's text and costs are locked.</span>
         </td>
         <td>
-          <code>Operation::Activation</code> re-reads <code>ability_index</code> in <code>prepare_activated_ability</code> (<code>play.rs:1871/1986</code>)
+          <code>Operation::Activation</code> re-reads <code>activated_abilities.get(ability_index)</code><br>
+          <span class="small muted"><code>flow/play.rs:1871,1986</code>; <code>flow/payment.rs:1411</code></span>
         </td>
-        <td><span class="badge badge-no">No</span><br><span class="muted small">Deferred</span></td>
         <td>
-          Independent of mana-ability payment continuation; requires owned capture on <code>Operation::Activation</code> /
-          <code>ActivatedTargeting</code> in <code>flow/play.rs</code> and <code>flow/payment.rs</code>. Separate Task (Review 3 choice 3a).
+          <span class="badge badge-no">No · Deferred</span><br>
+          <span class="badge badge-planned" style="margin-top:4px">Separate Task</span>
         </td>
-        <td><span class="badge badge-existing">Separate Outcome</span></td>
+        <td>
+          Unchanged from 3rd review (choice 3a). A grant ending during mana payment gives
+          <code>AgentError("invalid ability index")</code> or shifts to another ability. Own as a separate Task.
+        </td>
       </tr>
     </tbody>
   </table>
@@ -755,35 +818,50 @@
   <div class="grid-2">
     <div class="card">
       <div class="card-title">
-        <h3>Case 1 · Attempt 4 Panic &amp; Priority Recovery (<code>da29dbbdc8</code>)</h3>
+        <h3>Case 1 · Fixed Tap Opens a Bonus Choice (<code>710163f05a</code>)</h3>
         <span class="badge badge-no">Panics on HEAD</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
           <div>
-            Board at priority (<code>ManaFloats::All</code>, no enclosing payment): <span class="card-name">Gray Ogre</span>
-            with <code>{T}, Put a +1/+1 counter on this: Add <span class="pip pip-g">G</span></code>,
-            <span class="card-name">Caradora, Heart of Alacria</span> (<code>+1</code>), and cost-enabled
-            <span class="card-name">Doubling Season</span> (<code>×2</code>).
+            Board casting <span class="card-name">Sokka, Bold Boomeranger</span>
+            (<span class="pip pip-u">U</span><span class="pip pip-r">R</span>):
+            constructed <span class="card-name">Mountain</span> with
+            <code>ManaAbility { mana: <span class="pip pip-u">U</span><span class="pip pip-r">R</span> }</code>
+            and <span class="card-name">Heartbeat of Spring</span> with <code>predicate.tapped = true</code>.
           </div>
         </div>
         <div class="step-row fail">
           <div class="step-num">2</div>
           <div>
-            <strong>Failure on <code>HEAD</code>:</strong> Stepping <code>ActivateAbility(ogre, 0)</code> calls
-            <code>complete_mana_upfront</code> → taps Ogre → sends <code>CounterChange(+1)</code> to
-            <code>apply_immediate_event</code> → <strong>panics</strong> (<code>event requiring a choice needs a retained caller</code>).
+            <strong>Failure on <code>HEAD</code>:</strong>
+            <code>fixed_source_mana</code> calls <code>tap_bonuses</code> while Mountain is <em>untapped</em> →
+            <code>bonuses = []</code> → sets <code>source.fixed = Some(<span class="pip pip-u">U</span><span class="pip pip-r">R</span>)</code> →
+            offers <code>Action::TapForMana</code>. Stepping it enters <code>perform_automatic_tap</code>, taps Mountain,
+            calls <code>tapped_for_mana</code> (now <code>tapped = true</code> → matches Heartbeat!), gets
+            <code>Some(Decision::ManaChoice(Bonus))</code>, and <strong>panics</strong>
+            (<code>an automatic tap's bonuses need no choice</code>).
+          </div>
+        </div>
+        <div class="step-row fail">
+          <div class="step-num">2b</div>
+          <div>
+            <strong>Even worse with <em>normal</em> Heartbeat (<code>predicate.tapped = false</code>):</strong>
+            <code>fixed_source_mana</code> sees <code>outputs.len() == 2</code> (<span class="pip pip-u">U</span><span class="pip pip-u">U</span><span class="pip pip-r">R</span>,
+            <span class="pip pip-u">U</span><span class="pip pip-r">R</span><span class="pip pip-r">R</span>), returns <code>None</code>,
+            and Mountain <strong>disappears</strong> from <code>PaymentModel</code> — Sokka becomes uncastable!
           </div>
         </div>
         <div class="step-row ok">
           <div class="step-num">3</div>
           <div>
-            <strong>Recovery:</strong> <code>complete_mana_upfront</code> builds a cost <code>EffectFrame</code> with
-            <code>batch = [CounterChange(+1)]</code> and <code>completion = FrameCompletion::ManaOutput(Box&lt;PendingManaOutput&gt;)</code>.
-            <code>run_frame</code> suspends cleanly on <code>Decision::OrderReplacement</code>. Because no enclosing payment
-            exists, <strong>both</strong> orders are offered; stepping either commits 3 or 4 counters, fires
-            <code>FrameCompletion::ManaOutput</code>, and produces <span class="pip pip-g">G</span>.
+            <strong>Recovery:</strong>
+            Evaluate <code>tap_bonuses</code> with <code>tapped = true</code> (matching CR 106.12). Classify the fixed source as
+            <code>FixedOutput::Choice([UUR, URR])</code> (never put in an automatic batch). Offer manual <code>TapForMana</code>;
+            <code>tap_for_mana_action</code> runs <code>resolve_mana_bonuses</code> with the caller's <code>(frame, resume)</code>
+            and suspends cleanly on existing <code>Decision::ManaChoice { production: ManaProduction::Bonus }</code>.
+            Zero new <code>Decision</code> variants; zero hash change.
           </div>
         </div>
       </div>
@@ -791,39 +869,41 @@
 
     <div class="card">
       <div class="card-title">
-        <h3>Case 2 · Dynamic Output + Stranding Replacement Order</h3>
-        <span class="badge badge-no">Counterexample to Baking &amp; Deferral</span>
+        <h3>Case 2 · Counterexample to Splitting Without Cleanup</h3>
+        <span class="badge badge-no">Active Bug on HEAD</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
           <div>
-            Same board, casting a <span class="pip pip-g">G</span><span class="pip pip-g">G</span> spell;
-            <span class="card-name">Gray Ogre</span> (2/2) has <code>{T}, Put a +1/+1 counter on this: If you control a creature with power ≥ 6, add <span class="pip pip-g">G</span><span class="pip pip-g">G</span>, else <span class="pip pip-g">G</span></code>.
+            Board at <strong>3 life</strong> casting <span class="card-name">Sokka, Bold Boomeranger</span>
+            (<span class="pip pip-u">U</span><span class="pip pip-r">R</span>):
+            <span class="card-name">Tarnished Citadel</span> (3 damage suffix),
+            <span class="card-name">Sunbaked Canyon</span> (1 life cost),
+            and <span class="card-name">Angel of Vitality</span> (alone — no <span class="card-name">Raucous Audience</span>;
+            ordinary uncoupled mana!).
           </div>
         </div>
         <div class="step-row fail">
           <div class="step-num">2</div>
           <div>
-            <strong>Why pre-baking <code>ManaChoice</code> breaks:</strong> Evaluating <code>upfront_mana_outputs</code> before
-            the counter batch sees Ogre at 2/2 and bakes <span class="pip pip-g">G</span> forever — even after 4 counters make it 6/6!
-          </div>
-        </div>
-        <div class="step-row fail">
-          <div class="step-num">3</div>
-          <div>
-            <strong>Why unfiltered live <code>OrderReplacement</code> breaks:</strong> Coupled fork search certifies Ogre via
-            <code>Caradora → Season</code> (<code>(1+1)×2 = 4</code> counters → 6/6 → <span class="pip pip-g">G</span><span class="pip pip-g">G</span>).
-            If live play still offers <code>Season → Caradora</code> (<code>(1×2)+1 = 3</code> counters → 5/5 → <span class="pip pip-g">G</span>),
-            picking it hits <code>ManaChoice([<span class="pip pip-g">G</span>])</code> with 0 feasible modes → <strong><code>AgentError</code></strong>!
+            <strong>Failure on <code>HEAD</code> (if Pass 4b is split without cleanup):</strong>
+            Angel's static <code>LifeAtLeast(25)</code> sets <code>board.reads.state.life = true</code>.
+            <code>mana_activation_coupling</code> sees <code>payment_writes_couple(life) == true</code> and tags Citadel as
+            <code>PaymentCoupling::Coupled</code>. Then <code>Coupled.life_delta()</code> returns
+            <strong><code>LifeDelta(0)</code></strong> instead of <code>LifeDelta(-3)</code>!
+            The planner offers Citadel first → life drops to 0 → Canyon's 1-life cost cannot be paid →
+            <strong><code>AgentError</code></strong> (re-breaking the exact Issue #628 Canyon board!).
           </div>
         </div>
         <div class="step-row ok">
-          <div class="step-num">4</div>
+          <div class="step-num">3</div>
           <div>
-            <strong>Recovery:</strong> <code>FrameCompletion::ManaOutput</code> evaluates dynamic output <em>after</em> counters
-            commit, and live <code>OrderReplacement</code> filters modes via the same coupled authority while
-            <code>has_enclosing_payment(payer)</code> holds — offering only <code>Caradora → Season</code>.
+            <strong>Recovery (This Work in MTG-500):</strong>
+            Delete the superseded blacklist (<code>PaymentCoupling::Coupled</code>, <code>tap_coupled</code>,
+            <code>mana_activation_reads</code>, <code>ReadSet.battlefield</code>, <code>payment_writes_couple</code>) and
+            replace <code>mana_activation_coupling</code> with <code>mana_suffix_life_delta(player, object, suffix) -&gt; LifeDelta</code>.
+            Citadel keeps <code>LifeDelta(-3)</code>, so only Canyon-first is offered and the cast completes cleanly at −1 life.
           </div>
         </div>
       </div>
@@ -831,35 +911,38 @@
 
     <div class="card">
       <div class="card-title">
-        <h3>Case 3 · Sacrifice Dynamic Output &amp; Chosen-Color LKI</h3>
-        <span class="badge badge-no">Already Wrong on HEAD</span>
+        <h3>Case 3 · Counterexample to Eager <code>commit_produced_mana</code></h3>
+        <span class="badge badge-no">Steals Payer Choice</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
           <div>
-            Ability A: <code>{T}, Sacrifice this: Add <span class="pip pip-g">G</span> for each creature you control</code>
-            (or <code>If you sacrificed a permanent this turn, add <span class="pip pip-g">G</span><span class="pip pip-g">G</span>, else <span class="pip pip-g">G</span></code>).<br>
-            Ability B: <code>{T}, Sacrifice this: Add one mana of the chosen color</code> (<code>AddOneColorManaValue { chosen_color: true }</code>).
+            Casting a <span class="pip pip-c">1</span><span class="pip pip-u">U</span> spell (with a red instant in hand or
+            Converge) using <span class="card-name">Mountain</span> (<code>{T}: Add <span class="pip pip-u">U</span><span class="pip pip-r">R</span></code>)
+            + <span class="card-name">Heartbeat of Spring</span>.
           </div>
         </div>
         <div class="step-row fail">
           <div class="step-num">2</div>
           <div>
-            <strong>Failure on <code>HEAD</code>:</strong> <code>complete_mana_upfront</code> (<code>mana.rs:5182</code>) evaluates
-            <code>upfront_mana_outputs</code> <em>before</em> <code>Effect::sacrifice_this()</code> runs (<code>mana.rs:5195</code>),
-            counting the sacrificed creature as still on the battlefield and missing <code>permanents_sacrificed</code>.
-            Simply moving evaluation after sacrifice without LKI breaks Ability B because <code>permanents[permanent]</code> is
-            now <code>None</code> (<code>mana.rs:3182</code>).
+            <strong>Failure if <code>commit_produced_mana</code> runs before bonus suspends:</strong>
+            Mountain adds <span class="pip pip-u">U</span><span class="pip pip-r">R</span>, and <code>resolve_mana_bonuses</code>
+            returns <code>Some(ManaChoice(Bonus: [U, R]))</code>. Calling <code>commit_produced_mana(player, start)</code>
+            immediately sees only <span class="pip pip-r">R</span> left after <span class="pip pip-u">U</span> pays
+            <span class="pip pip-u">U</span>, so it greedily spends <span class="pip pip-r">R</span> on <span class="pip pip-c">1</span>
+            — before the bonus <span class="pip pip-u">U</span> enters the pool! The payer can no longer spend
+            <span class="pip pip-u">U</span><span class="pip pip-u">U</span> and float <span class="pip pip-r">R</span>.
+            (This also exists today in <code>decision.rs:2927</code> when an activated output suspends on a bonus.)
           </div>
         </div>
         <div class="step-row ok">
           <div class="step-num">3</div>
           <div>
-            <strong>Recovery:</strong> Capture <code>chosen: Option&lt;Arc&lt;EntryChoice&gt;&gt;</code> alongside
-            <code>source</code> and <code>tapped</code> before the cost frame runs. Run <code>Effect::sacrifice_this()</code> in
-            <code>cost_frame.queue</code>, then evaluate <code>output</code> in <code>FrameCompletion::ManaOutput</code> using
-            the post-sacrifice board and captured <code>chosen</code> LKI (CR 601.2h / 605.3b / 608.2h).
+            <strong>Recovery:</strong>
+            Only call <code>commit_produced_mana</code> when <code>next.is_none()</code> (every triggered bonus of the
+            production has resolved). When a bonus suspends, keep the produced units in the pool; once the bonus resolves,
+            <code>begin_mana_spend</code> auto-spends if unique and opens <code>Decision::ManaSpend</code> if ambiguous.
           </div>
         </div>
       </div>
@@ -867,34 +950,31 @@
 
     <div class="card">
       <div class="card-title">
-        <h3>Case 4 · Fast Path, Chained Replacements &amp; Opponent Chooser</h3>
-        <span class="badge badge-yes">Stress-Tested Edge Cases</span>
+        <h3>Case 4 · Pass 4a Verification &amp; Split-Task Handoff Invariant</h3>
+        <span class="badge badge-yes">Verified on HEAD</span>
       </div>
       <div class="trace">
         <div class="step-row ok">
           <div class="step-num">A</div>
           <div>
-            <strong>Fast path (no counter/sacrifice cost):</strong> Lands, <span class="card-name">Tarnished Citadel</span>,
-            <span class="card-name">The Great Henge</span>, mana dorks skip <code>cost_frame</code> entirely — identical
-            allocation profile to <code>HEAD</code>.
-          </div>
-        </div>
-        <div class="step-row ok">
-          <div class="step-num">B</div>
-          <div>
-            <strong>Combined counter + sacrifice + suffix:</strong> <code>cost_frame.batch</code> commits counters first (so
-            departure LKI sees added counters), <code>cost_frame.queue</code> runs <code>sacrifice_this</code> (suspending on
-            competing graveyard/exile replacements if any), <code>FrameCompletion::ManaOutput</code> computes output post-cost /
-            pre-suffix, and <code>suffix</code> runs in its child frame before exposing <code>ManaChoice</code>.
+            <strong>Live &amp; snapshot-restored counter replacement (<code>494fb4c5e8</code>):</strong>
+            <code>complete_mana_upfront</code> runs <code>CounterChange</code> in <code>costs.batch</code>,
+            <code>sacrifice_this</code> in <code>costs.queue</code>, and <code>FrameCompletion::ManaOutput</code>
+            evaluates dynamic output afterward with captured <code>chosen</code> LKI. All 56 focused tests pass.
           </div>
         </div>
         <div class="step-row warn">
-          <div class="step-num">C</div>
+          <div class="step-num">B</div>
           <div>
-            <strong>Opponent-controlled <code>OrderReplacement</code>:</strong> If a suffix affects the opponent
-            (e.g. <code>DealDamageToPlayer(EachPlayer)</code> with two opponent damage replacements), <code>chooser != payer</code>.
-            The fork search requires <strong>every</strong> opponent order to complete (universal AND); live play never filters
-            an opponent's replacement choice.
+            <strong>Split-Task invariant to preserve:</strong>
+            <code>SuspendedResolution::decisions()</code> walks <code>output.caller</code> and <code>output.resume</code>,
+            so <code>payment_model::reserve</code> and <code>payment_obligations_owing</code> see every enclosing
+            <code>ManaUpfront</code>, <code>Payment</code>, <code>ManaSpend</code>, and <code>PendingChoice::Pay</code>.
+            However, neither <code>FrameCompletion::ManaOutput</code> nor a buried <code>Decision::ManaChoice</code> emits
+            the in-flight activation's own pending output into <code>payment_obligations_owing</code>. Therefore, Design 1's
+            coupled search must <strong>never</strong> hand off to pure <code>PaymentModel</code> while
+            <code>Decision::OrderReplacement</code> is suspended — always step it natively on the fork until
+            <code>ManaChoice</code> is reached.
           </div>
         </div>
       </div>
@@ -906,196 +986,195 @@
 
   <div class="card card-callout">
     <div class="card-title">
-      <h3>Why the Current Boundary Breaks</h3>
-      <span class="badge badge-no">Before · HEAD (<code>cc268d738e</code>)</span>
+      <h3>Why Fixed Taps Break When Bonuses Can Choose</h3>
+      <span class="badge badge-no">Before · HEAD (<code>7cb3655f18</code>)</span>
     </div>
     <p class="small">
-      <code>complete_mana_upfront</code> mixes synchronous immediate-event calls with a post-output child frame: it assumes
-      counter costs never suspend, assumes output never depends on sacrifice or counter replacements, and relies on
-      <code>FrameCompletion::Decision(ManaChoice)</code> while <code>payment_model::reserve</code> and
-      <code>payment_obligations_owing</code> never inspect <code>frame.completion</code>.
+      A single function (<code>perform_automatic_tap</code>) and a single field (<code>ManaSource.fixed: Option&lt;Mana&gt;</code>)
+      try to serve two distinct concepts: (1) a <strong>printed fixed mana ability</strong> (<code>ManaAbility</code>), which
+      can still trigger a multi-type bonus choice via <code>Heartbeat of Spring</code>, and (2) a
+      <strong>guaranteed choice-free automatic tap</strong> safe to batch inside <code>produce_mana</code> /
+      <code>pay_mana_upfront</code> / <code>payment_preview</code>. Meanwhile, <code>tap_bonuses</code> evaluates
+      <code>CardPredicate</code> before tapping while <code>tapped_for_mana</code> evaluates it after tapping.
     </p>
   </div>
 
   <div class="diagram-wrap">
-    <svg viewBox="0 0 1100 355" xmlns="http://www.w3.org/2000/svg" font-family="DM Sans, -apple-system, sans-serif">
+    <svg viewBox="0 0 1100 370" xmlns="http://www.w3.org/2000/svg" font-family="DM Sans, -apple-system, sans-serif">
       <!-- BEFORE LANE -->
-      <text x="14" y="24" font-size="12" font-weight="700" letter-spacing="0.06em" fill="var(--error-text)">BEFORE · HEAD (TWO INCOMPATIBLE WORLDS)</text>
+      <text x="14" y="24" font-size="12" font-weight="700" letter-spacing="0.06em" fill="var(--error-text)">BEFORE · HEAD (CONFLATED FIXED-TAP PATH + PRE/POST-TAP TIMING DRIFT)</text>
 
-      <rect x="14" y="38" width="150" height="72" rx="8" fill="var(--bg-surface)" stroke="var(--border-strong)"/>
-      <text x="89" y="64" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">1. tap_source</text>
-      <text x="89" y="82" text-anchor="middle" font-size="11" fill="var(--text-secondary)">tap_permanent()</text>
-      <text x="89" y="97" text-anchor="middle" font-size="11" fill="var(--text-secondary)">capture tapped LKI</text>
+      <rect x="14" y="38" width="215" height="84" rx="8" fill="var(--error-wash)" stroke="var(--error)" stroke-width="1.6"/>
+      <text x="121" y="61" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--error-text)">1. fixed_source_mana()</text>
+      <text x="121" y="79" text-anchor="middle" font-size="11" fill="var(--text)">tap_bonuses() checks tapped=false</text>
+      <text x="121" y="95" text-anchor="middle" font-size="11" fill="var(--error-text)">len &gt; 1 → returns None (vanishes!)</text>
+      <text x="121" y="111" text-anchor="middle" font-size="11" fill="var(--error-text)">predicate.tapped=true → missed!</text>
 
-      <line x1="164" y1="74" x2="192" y2="74" stroke="var(--error)" stroke-width="1.8"/>
-      <polygon points="192,74 185,70 185,78" fill="var(--error)"/>
+      <line x1="229" y1="80" x2="262" y2="80" stroke="var(--error)" stroke-width="1.8"/>
+      <polygon points="262,80 255,76 255,84" fill="var(--error)"/>
 
-      <rect x="194" y="38" width="186" height="72" rx="8" fill="var(--error-wash)" stroke="var(--error)" stroke-width="1.6"/>
-      <text x="287" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--error-text)">2. apply_immediate_event</text>
-      <text x="287" y="80" text-anchor="middle" font-size="11" fill="var(--error-text)">CounterChange (remove/add)</text>
-      <text x="287" y="97" text-anchor="middle" font-size="11" font-weight="600" fill="var(--error-text)">PANIC on OrderReplacement!</text>
+      <rect x="264" y="38" width="215" height="84" rx="8" fill="var(--bg-surface)" stroke="var(--border-strong)"/>
+      <text x="371" y="61" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">2. Four Mixed Callers</text>
+      <text x="371" y="79" text-anchor="middle" font-size="11" fill="var(--text-secondary)">tap_for_mana_action (manual)</text>
+      <text x="371" y="95" text-anchor="middle" font-size="11" fill="var(--text-secondary)">produce_mana / pay_mana_upfront</text>
+      <text x="371" y="111" text-anchor="middle" font-size="11" fill="var(--text-secondary)">preview_tap (read-only batch)</text>
 
-      <line x1="380" y1="74" x2="408" y2="74" stroke="var(--error)" stroke-width="1.8"/>
-      <polygon points="408,74 401,70 401,78" fill="var(--error)"/>
+      <line x1="479" y1="80" x2="512" y2="80" stroke="var(--error)" stroke-width="1.8"/>
+      <polygon points="512,80 505,76 505,84" fill="var(--error)"/>
 
-      <rect x="410" y="38" width="210" height="72" rx="8" fill="var(--error-wash)" stroke="var(--error)" stroke-width="1.6"/>
-      <text x="515" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--error-text)">3. upfront_mana_outputs()</text>
-      <text x="515" y="80" text-anchor="middle" font-size="11" fill="var(--error-text)">life_cost + bake ManaChoice</text>
-      <text x="515" y="97" text-anchor="middle" font-size="11" font-weight="600" fill="var(--error-text)">TOO EARLY (pre-sacrifice!)</text>
+      <rect x="514" y="38" width="270" height="84" rx="8" fill="var(--error-wash)" stroke="var(--error)" stroke-width="1.6"/>
+      <text x="649" y="61" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--error-text)">3. perform_automatic_tap()</text>
+      <text x="649" y="79" text-anchor="middle" font-size="11" fill="var(--text)">tap_permanent() → tapped=true</text>
+      <text x="649" y="95" text-anchor="middle" font-size="11" fill="var(--text)">tapped_for_mana() matches Heartbeat</text>
+      <text x="649" y="111" text-anchor="middle" font-size="11" font-weight="700" fill="var(--error-text)">resolve_mana_bonuses(..., None)</text>
 
-      <line x1="620" y1="74" x2="648" y2="74" stroke="var(--border-strong)" stroke-width="1.6"/>
-      <polygon points="648,74 641,70 641,78" fill="var(--border-strong)"/>
+      <line x1="784" y1="80" x2="817" y2="80" stroke="var(--error)" stroke-width="1.8"/>
+      <polygon points="817,80 810,76 810,84" fill="var(--error)"/>
 
-      <rect x="650" y="38" width="224" height="72" rx="8" fill="var(--warning-wash)" stroke="var(--warning)" stroke-width="1.5"/>
-      <text x="762" y="62" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--warning-text)">4. child([sacrifice, suffix])</text>
-      <text x="762" y="80" text-anchor="middle" font-size="11" fill="var(--warning-text)">completion: Decision(ManaChoice)</text>
-      <text x="762" y="97" text-anchor="middle" font-size="11" fill="var(--warning-text)">blind to reserve() / obligations()</text>
-
-      <line x1="874" y1="74" x2="902" y2="74" stroke="var(--border-strong)" stroke-width="1.6"/>
-      <polygon points="902,74 895,70 895,78" fill="var(--border-strong)"/>
-
-      <rect x="904" y="38" width="182" height="72" rx="8" fill="var(--bg-surface)" stroke="var(--border-strong)"/>
-      <text x="995" y="64" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">5. ManaChoice</text>
-      <text x="995" y="82" text-anchor="middle" font-size="11" fill="var(--text-secondary)">stale choices if sacrifice</text>
-      <text x="995" y="97" text-anchor="middle" font-size="11" fill="var(--text-secondary)">changed board state</text>
+      <rect x="819" y="38" width="266" height="84" rx="8" fill="var(--error-wash)" stroke="var(--error)" stroke-width="1.8"/>
+      <text x="952" y="65" text-anchor="middle" font-size="13" font-weight="700" fill="var(--error-text)">4. assert!(resolved.is_none())</text>
+      <text x="952" y="85" text-anchor="middle" font-size="11.5" fill="var(--error-text)">PANIC: "an automatic tap's</text>
+      <text x="952" y="102" text-anchor="middle" font-size="11.5" fill="var(--error-text)">bonuses need no choice"</text>
 
       <!-- DIVIDER -->
-      <line x1="14" y1="142" x2="1086" y2="142" stroke="var(--border)" stroke-dasharray="5,5"/>
+      <line x1="14" y1="150" x2="1086" y2="150" stroke="var(--border)" stroke-dasharray="5,5"/>
 
       <!-- AFTER LANE -->
-      <text x="14" y="168" font-size="12" font-weight="700" letter-spacing="0.06em" fill="var(--info-text)">AFTER · PROPOSED (ONE PHASE-ACCURATE CONTINUATION — MIRRORS FrameCompletion::Activated)</text>
+      <text x="14" y="176" font-size="12" font-weight="700" letter-spacing="0.06em" fill="var(--info-text)">AFTER · PROPOSED (POST-TAP TRIGGER CHECK + SEPARATE INTERACTIVE TAP VS. CHOICE-FREE BATCH)</text>
 
-      <rect x="14" y="182" width="156" height="92" rx="8" fill="var(--bg-surface)" stroke="var(--info)" stroke-width="1.5"/>
-      <text x="92" y="206" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">1. Immediate Costs</text>
-      <text x="92" y="224" text-anchor="middle" font-size="11" fill="var(--text-secondary)">tap_source + life_cost</text>
-      <text x="92" y="240" text-anchor="middle" font-size="11" fill="var(--info-text)">capture LKI: source,</text>
-      <text x="92" y="255" text-anchor="middle" font-size="11" fill="var(--info-text)">tapped, chosen</text>
+      <rect x="14" y="192" width="248" height="146" rx="8" fill="var(--info-wash)" stroke="var(--info)" stroke-width="1.6"/>
+      <text x="138" y="216" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--info-text)">1. Post-Tap Bonus Classification</text>
+      <text x="138" y="236" text-anchor="middle" font-size="11" fill="var(--text)">tap_bonuses() matches with</text>
+      <text x="138" y="252" text-anchor="middle" font-size="11" font-weight="600" fill="var(--info-text)">tapped = true (CR 106.12)</text>
+      <line x1="30" y1="266" x2="246" y2="266" stroke="var(--border)"/>
+      <text x="138" y="285" text-anchor="middle" font-size="11" fill="var(--success-text)">• 1 output &amp; uncoupled → Exact(Mana)</text>
+      <text x="138" y="303" text-anchor="middle" font-size="11" fill="var(--info-text)">• &gt;1 outputs → Choice(ManaChoices)</text>
+      <text x="138" y="321" text-anchor="middle" font-size="11" fill="var(--text-secondary)">  (never dropped; never batched)</text>
 
-      <line x1="170" y1="228" x2="198" y2="228" stroke="var(--info)" stroke-width="1.8"/>
-      <polygon points="198,228 191,224 191,232" fill="var(--info)"/>
+      <!-- Upper branch: automatic batch -->
+      <path d="M 262 232 L 312 232" stroke="var(--success)" stroke-width="1.8" fill="none"/>
+      <polygon points="312,232 305,228 305,236" fill="var(--success)"/>
 
-      <rect x="200" y="182" width="232" height="92" rx="8" fill="var(--info-wash)" stroke="var(--info)" stroke-width="1.8"/>
-      <text x="316" y="205" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--info-text)">2. Cost Frame (if counters/sac)</text>
-      <text x="316" y="223" text-anchor="middle" font-size="11" fill="var(--text)">batch: [CounterChange (rem, add)]</text>
-      <text x="316" y="239" text-anchor="middle" font-size="11" fill="var(--text)">queue: [Effect::sacrifice_this?]</text>
-      <text x="316" y="257" text-anchor="middle" font-size="11" font-weight="600" fill="var(--info-text)">completion: ManaOutput(Box&lt;…&gt;)</text>
+      <rect x="314" y="192" width="356" height="68" rx="8" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.5"/>
+      <text x="492" y="214" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--success-text)">2a. Automatic Batch (Exact only)</text>
+      <text x="492" y="232" text-anchor="middle" font-size="11" fill="var(--text)">produce_mana / pay_mana_upfront / preview_tap</text>
+      <text x="492" y="248" text-anchor="middle" font-size="11" fill="var(--success-text)">guaranteed 1 outcome → fast path, zero suspension</text>
 
-      <!-- OrderReplacement loop on Cost Frame -->
-      <path d="M 275 274 C 275 306, 357 306, 357 274" fill="none" stroke="var(--info)" stroke-width="1.5" stroke-dasharray="3,2"/>
-      <polygon points="357,274 352,281 361,281" fill="var(--info)"/>
-      <text x="316" y="322" text-anchor="middle" font-size="11" font-weight="600" fill="var(--info-text)">OrderReplacement (filtered if paying)</text>
+      <line x1="670" y1="226" x2="716" y2="226" stroke="var(--success)" stroke-width="1.8"/>
+      <polygon points="716,226 709,222 709,230" fill="var(--success)"/>
 
-      <line x1="432" y1="228" x2="460" y2="228" stroke="var(--info)" stroke-width="1.8"/>
-      <polygon points="460,228 453,224 453,232" fill="var(--info)"/>
+      <rect x="718" y="192" width="367" height="68" rx="8" fill="var(--bg-surface)" stroke="var(--success)" stroke-width="1.4"/>
+      <text x="901" y="216" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">begin_mana_spend / Exact Preview</text>
+      <text x="901" y="234" text-anchor="middle" font-size="11" fill="var(--text-secondary)">99.9% of TLA basics &amp; single-color taps stay</text>
+      <text x="901" y="249" text-anchor="middle" font-size="11" fill="var(--text-secondary)">on PaymentModel::direct() &amp; autotapper</text>
 
-      <rect x="462" y="182" width="206" height="92" rx="8" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.8"/>
-      <text x="565" y="205" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--success-text)">3. complete_mana_output()</text>
-      <text x="565" y="223" text-anchor="middle" font-size="11" fill="var(--text)">eval output AFTER all costs,</text>
-      <text x="565" y="239" text-anchor="middle" font-size="11" fill="var(--text)">BEFORE suffix, w/ LKI chosen</text>
-      <text x="565" y="257" text-anchor="middle" font-size="11" font-weight="600" fill="var(--success-text)">builds Decision::ManaChoice</text>
+      <!-- Lower branch: manual / interactive TapForMana -->
+      <path d="M 262 302 L 312 302" stroke="var(--info)" stroke-width="1.8" fill="none"/>
+      <polygon points="312,302 305,298 305,306" fill="var(--info)"/>
 
-      <!-- Fast path arrow from 1 to 3 -->
-      <path d="M 92 182 C 92 152, 565 152, 565 180" fill="none" stroke="var(--success)" stroke-width="1.4" stroke-dasharray="4,3"/>
-      <polygon points="565,181 561,174 569,174" fill="var(--success)"/>
-      <text x="330" y="156" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--success-text)">fast path (99.9%): no counters &amp; no sacrifice → zero cost_frame allocation</text>
+      <rect x="314" y="272" width="356" height="72" rx="8" fill="var(--info-wash)" stroke="var(--info)" stroke-width="1.8"/>
+      <text x="492" y="294" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--info-text)">2b. Single Interactive Tap (Action::TapForMana)</text>
+      <text x="492" y="312" text-anchor="middle" font-size="11" fill="var(--text)">tap_for_mana_action takes (frame, resume) from suspended</text>
+      <text x="492" y="329" text-anchor="middle" font-size="11" fill="var(--info-text)">calls resolve_mana_bonuses(..., resume); skips eager commit if Some</text>
 
-      <line x1="668" y1="228" x2="696" y2="228" stroke="var(--info)" stroke-width="1.8"/>
-      <polygon points="696,228 689,224 689,232" fill="var(--info)"/>
+      <line x1="670" y1="308" x2="716" y2="308" stroke="var(--info)" stroke-width="1.8"/>
+      <polygon points="716,308 709,304 709,312" fill="var(--info)"/>
 
-      <rect x="698" y="182" width="184" height="92" rx="8" fill="var(--bg-surface)" stroke="var(--info)" stroke-width="1.5"/>
-      <text x="790" y="206" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text)">4. Suffix Frame (if any)</text>
-      <text x="790" y="224" text-anchor="middle" font-size="11" fill="var(--text-secondary)">queue: life/damage suffix</text>
-      <text x="790" y="240" text-anchor="middle" font-size="11" fill="var(--text-secondary)">completion: Decision(Choice)</text>
-      <text x="790" y="257" text-anchor="middle" font-size="11" fill="var(--info-text)">OrderReplacement filtered too</text>
-
-      <line x1="882" y1="228" x2="910" y2="228" stroke="var(--success)" stroke-width="1.8"/>
-      <polygon points="910,228 903,224 903,232" fill="var(--success)"/>
-
-      <rect x="912" y="182" width="174" height="92" rx="8" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.6"/>
-      <text x="999" y="206" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--success-text)">5. Decision::ManaChoice</text>
-      <text x="999" y="224" text-anchor="middle" font-size="11" fill="var(--text)">exact post-cost choices</text>
-      <text x="999" y="240" text-anchor="middle" font-size="11" fill="var(--text)">exact post-suffix life</text>
-      <text x="999" y="257" text-anchor="middle" font-size="11" fill="var(--success-text)">reserve/obligations intact</text>
+      <rect x="718" y="272" width="367" height="72" rx="8" fill="var(--success-wash)" stroke="var(--info)" stroke-width="1.6"/>
+      <text x="901" y="294" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--info-text)">Decision::ManaChoice (ManaProduction::Bonus)</text>
+      <text x="901" y="312" text-anchor="middle" font-size="11" fill="var(--text)">Existing resume path in decision.rs:2909-2947</text>
+      <text x="901" y="329" text-anchor="middle" font-size="11" fill="var(--success-text)">Zero new Decision/FrameCompletion variants · Hash stays v35</text>
     </svg>
   </div>
 
   <div class="grid-2">
     <div class="card card-proposed">
       <div class="card-title">
-        <h3>Proposed Continuation Type (<code>flow/decision.rs</code>)</h3>
-        <span class="badge badge-proposed">Proposed · Pass 4</span>
+        <h3>Proposed Cleanup in MTG-500 (Before Shipping)</h3>
+        <span class="badge badge-scope">This Work · Smaller &amp; Bug-Free</span>
       </div>
-      <pre><code>/// Retained mana activation awaiting its counter/sacrifice cost frame
-/// before evaluating dynamic output and running any suffix (CR 601.2h, 605.3b).
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct PendingManaOutput {
-    pub player: PlayerId,
-    #[serde(serialize_with = "crate::state::game_object::exact")]
-    pub source: Option&lt;ObjectId&gt;,
-    pub tapped: Option&lt;TappedForMana&gt;,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub chosen: Option&lt;std::sync::Arc&lt;crate::state::permanent::EntryChoice&gt;&gt;,
-    pub output: Effect,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub suffix: Vec&lt;Effect&gt;,
-    pub caller: Box&lt;EffectFrame&gt;,
-    pub resume: Option&lt;Box&lt;Decision&gt;&gt;,
+      <pre><code>// flow/mana.rs — replace mana_activation_coupling + PaymentCoupling
+// while Pass 4b lives in its own Task:
+fn mana_suffix_life_delta(
+    &amp;self,
+    player: PlayerId,
+    object: ObjectId,
+    suffix: &amp;[Effect],
+) -&gt; LifeDelta {
+    // Same isolated fork probe over fixed GainLife / DealDamageToPlayer(You):
+    // handles ProtectionFromEverything, Angel of Vitality (+1), damage doubling.
+    // Returns LifeDelta(0) only if suffix is non-fixed or mutates non-life.
 }
 
-// Appended to `pub enum FrameCompletion`:
-/// Mana-ability counter/sacrifice costs finished; evaluate output now.
-ManaOutput(Box&lt;PendingManaOutput&gt;),</code></pre>
+// Delete superseded Pass 2 scaffolding until the Split Task builds Design 4:
+// - ManaSource.tap_coupled (unread in production)
+// - PaymentCoupling::Coupled (actively drops Citadel's -3 beside Angel)
+// - LayerBoard.mana_activation_reads &amp; ReadSet.battlefield
+// - LayerBoard::payment_writes_couple (refuted in 5th review)</code></pre>
     </div>
 
     <div class="card card-proposed">
       <div class="card-title">
-        <h3>Every Consumer &amp; Authority Surface Touched</h3>
-        <span class="badge badge-proposed">Proposed · Pass 4</span>
+        <h3>Proposed Fixed-Tap Continuation (Split Task or 2b)</h3>
+        <span class="badge badge-proposed">Proposed · Zero Hash Change</span>
       </div>
-      <ul class="compact small">
-        <li><code>flow/mana.rs</code> (<code>complete_mana_upfront</code> &amp; <code>complete_mana_output</code>): fast-path when no counter/sacrifice costs; otherwise run <code>CounterChange</code> in <code>cost_frame.batch</code> + <code>sacrifice_this</code> in <code>cost_frame.queue</code> with <code>FrameCompletion::ManaOutput</code>. <code>upfront_mana_outputs</code> takes <code>chosen: Option&lt;&amp;EntryChoice&gt;</code> instead of reading live <code>permanents[permanent]</code>.</li>
-        <li><code>flow/mana.rs</code> (<code>payment_model::reserve</code> &amp; <code>payment_obligations_owing</code>): walk <code>suspended.frame.completion</code> through <code>Decision</code>, <code>ManaOutput</code>, <code>Frame</code>, <code>Event</code>, and <code>DiscardDuringResolution</code> so mid-batch queries retain every reservation and obligation.</li>
-        <li><code>flow/decision.rs</code> (<code>run_payment_frame</code>, <code>FrameCompletion::then</code>, <code>SuspendedResolution::continuation</code>): dispatch <code>ManaOutput</code> into <code>complete_mana_output</code> (looping into <code>suffix_frame</code> when non-empty); walk <code>pending.caller</code> and <code>pending.resume</code>.</li>
-        <li><code>flow/decision.rs</code> (<code>Decision::OrderReplacement</code> at <code>:1918</code> &amp; <code>:2661</code>): when <code>has_enclosing_payment(*player)</code> holds, filter offered modes (and validate execution) via the coupled feasibility authority.</li>
-        <li><code>flow/interchangeable.rs</code>, <code>flow/selection_sampling.rs</code>, <code>agent/effect_execution.rs</code>: exhaustive <code>ManaOutput</code> arms marking <code>source</code>, walking/rebinding <code>caller</code> + <code>resume</code>, and projecting execution tokens.</li>
-      </ul>
+      <pre><code>// 1. Evaluate trigger predicates with tapped = true (CR 106.12):
+fn tap_bonuses(&amp;self, triggers: &amp;[ManaTrigger], producer: PlayerId, tapped: PermanentId)
+    -&gt; Vec&lt;TriggeredManaOutput&gt;; // matches_view_as_tapped(..., tapped_override = true)
+
+// 2. Keep multi-outcome fixed sources in PaymentModel without batching them:
+enum FixedOutput {
+    Exact(Mana),           // 1 outcome, choice-free → FixedOnly / autotapper / batch
+    Choice(ManaChoices),   // &gt;1 bonus outcomes → manual TapForMana / SourcePolicy::All
+}
+
+// 3. tap_for_mana_action retains ManaProduction::Bonus (no panic!):
+let (frame, resume) = match self.state.suspended_decision_mut().take() {
+    Some(caller) =&gt; (caller.frame, Some(Box::new(caller.decision))),
+    None =&gt; (EffectFrame::new(player, Vec::new()), None),
+};
+let next = self.execute_mana_tap(player, permanent, None, resume);
+if next.is_none() { self.commit_produced_mana(player, start); }
+// If Some(next): install SuspendedResolution { frame, decision: *next }
+// and call advance_mana_upfront() — identical to decision.rs:2929-2934.</code></pre>
     </div>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>4. Engine Invariants · Throughput, Memory, Hash &amp; Termination</h2>
+  <h2>4. Engine Invariants · Throughput, Memory, Hash &amp; Scope Boundaries</h2>
 
   <div class="grid-4">
     <div class="measure-card">
       <h3>Hot-Path Throughput</h3>
       <p class="small muted">
-        99.9% of mana activations have neither counter nor sacrifice costs and skip <code>cost_frame</code> allocation
-        completely. Live <code>OrderReplacement</code> checks <code>has_enclosing_payment(player)</code> in O(1) — zero cost
-        on combat, spell resolution, death triggers, or priority floating.
+        Removing <code>mana_activation_reads</code>, <code>ReadSet.battlefield</code>, and <code>payment_writes_couple</code>
+        speeds up <code>LayerBoard</code> and <code>payment_sources</code> on MTG-500. In the split Task,
+        <code>FixedOutput::Exact(Mana)</code> keeps 100% of basic lands on <code>PaymentModel::direct()</code> and
+        <code>autotapper</code>.
       </p>
     </div>
     <div class="measure-card">
-      <h3>Memory &amp; Size Budget</h3>
+      <h3>Memory &amp; Variant Budget</h3>
       <p class="small muted">
-        Boxing <code>PendingManaOutput</code> inside <code>FrameCompletion::ManaOutput(Box&lt;…&gt;)</code> keeps
-        <code>size_of::&lt;FrameCompletion&gt;()</code> and <code>EffectFrame</code> identical to <code>HEAD</code>
-        (matching <code>DiscardPayment</code>, <code>Frame</code>, and <code>Decision</code>).
+        Reusing <code>ManaProduction::Bonus</code> inside <code>tap_for_mana_action</code> adds <strong>zero</strong>
+        <code>Decision</code> or <code>FrameCompletion</code> variants and keeps <code>size_of::&lt;EffectFrame&gt;()</code>
+        unchanged. Removing <code>ManaSource.tap_coupled</code> shrinks <code>ManaSource</code>.
       </p>
     </div>
     <div class="measure-card">
-      <h3>Hash &amp; Snapshot Fidelity</h3>
+      <h3>Hash &amp; Replay Compatibility</h3>
       <p class="small muted">
-        <code>origin/main</code> is hash v34; this branch already carries the unreleased bump to v35. Appending
-        <code>FrameCompletion::ManaOutput</code> leaves all existing JSON encodings byte-identical, serializes
-        <code>source</code> with <code>exact</code>, and preserves snapshot/determinization parity.
+        MTG-500 ships cleanly under its unreleased <code>MATCH_STATE_HASH_VERSION = 35</code> (vs. v34 on
+        <code>origin/main</code>). Neither the MTG-500 coupling cleanup nor the fixed-tap bonus continuation changes any
+        serialized state layout.
       </p>
     </div>
     <div class="measure-card">
-      <h3>Zero-Cap Termination</h3>
+      <h3>Finish the Rule on Every Surface</h3>
       <p class="small muted">
-        Each <code>OrderReplacement</code> step permanently pushes one <code>ReplacementId</code> onto
-        <code>pending.applied</code> (<code>proposed_event.rs:2245</code>). Combined with Design 5's monotone finite-resource
-        measure, every coupled fork terminates with no node or depth cap.
+        MTG-500's Pass 1 universal empty-decision error makes Pass 5 (colored convoke — <span class="card-name">Guardian
+        of Vitu-Ghazi</span>) and the Citadel + Canyon + Angel cleanup <strong>mandatory in MTG-500</strong>. The 5
+        constructed coupled-board counterexamples belong together in the split Task.
       </p>
     </div>
   </div>
@@ -1105,83 +1184,93 @@ ManaOutput(Box&lt;PendingManaOutput&gt;),</code></pre>
 
   <div class="choice-box">
     <div class="choice-header">
-      <strong>1. How should a mana activation retain its continuation across counter/sacrifice replacement choices?</strong>
-      <span class="badge badge-existing">Reversible internal engine design</span>
+      <strong>1. How should MTG-500 split off Pass 4b and ship Issue #628?</strong>
+      <span class="badge badge-scope">This Work · Reversible internal engine scope</span>
     </div>
     <div class="choice-grid-3">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">1a · Recommended</span> Dedicated <code>FrameCompletion::ManaOutput(Box&lt;PendingManaOutput&gt;)</code></div>
-        Mirrors <code>FrameCompletion::Paid</code> and <code>FrameCompletion::Activated</code>. Evaluates dynamic output
-        after all costs commit and before <code>suffix</code> runs, using captured LKI <code>chosen</code>. Zero extra
-        allocation when no counter/sacrifice cost is present.
+        <div class="opt-title"><span class="badge badge-proposed">1a · Recommended</span> Split Pass 4b out + delete superseded coupling scaffolding</div>
+        Ship MTG-500 with Passes 1–4a + Pass 5 (colored convoke, collection check, release benchmark, README) after
+        replacing <code>PaymentCoupling</code>/<code>payment_writes_couple</code>/<code>mana_activation_reads</code>/<code>tap_coupled</code>
+        with direct <code>mana_suffix_life_delta</code>. Fixes Case 2's regression, ships zero dead code, and hands the
+        split Task a clean base for Design 4's whitelist.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">1b · Passed over</span> Pre-bake <code>Decision::ManaChoice</code> into <code>FrameCompletion::Decision</code></div>
-        Fails both dynamic-output counterexamples: freezes stale output before counter replacements (3 vs 4 counters) and before
-        <code>sacrifice_source</code> changes battlefield/graveyard counts.
+        <div class="opt-title"><span class="badge badge-existing">1b · Passed over</span> Split Pass 4b out but leave provisional coupling flags on <code>main</code></div>
+        Leaves <code>tap_coupled</code> unused, ships a blacklist already refuted by the 5th review, and leaves Case 2
+        (Citadel + Canyon + Angel of Vitality at 3 life) broken with <code>AgentError</code>.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">1c · Passed over</span> Add a post-cost stage to <code>Decision::ManaUpfront</code></div>
-        Misuses a player-facing <code>Decision</code> variant as an internal non-interactive transition, complicating
-        <code>action_space</code>, continuation codes, and <code>FrameCompletion::Decision</code>.
+        <div class="opt-title"><span class="badge badge-existing">1c · Passed over</span> Keep Pass 4b inside MTG-500</div>
+        Holds the already-verified Issue #628 TLA Limited fix and Passes 1–4a behind a sixth pass covering four
+        interlocking coupled-board subsystems (fixed-tap bonus continuation, whitelist classifier, coupled fork search,
+        and live <code>OrderReplacement</code> filtering).
       </div>
     </div>
   </div>
 
   <div class="choice-box">
     <div class="choice-header">
-      <strong>2. Should live <code>Decision::OrderReplacement</code> filter stranding orders during payment in Pass 4?</strong>
-      <span class="badge badge-scope">This Work · Parity with Coupled Search</span>
+      <strong>2. Where should the fixed-tap bonus continuation &amp; post-tap <code>tap_bonuses</code> fix land?</strong>
+      <span class="badge badge-existing">Reversible · Zero hash or action-ID change</span>
     </div>
-    <div class="choice-grid">
+    <div class="choice-grid-3">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">2a · Recommended</span> Filter <code>OrderReplacement</code> when <code>chooser == payer</code> &amp; <code>has_enclosing_payment</code></div>
-        Uses the exact coupled feasibility authority Pass 4 already builds. Eliminates <code>AgentError</code> on stranding
-        replacement orders (Case 2) while leaving priority floating (<code>da29dbbdc8</code>), opponent choices (universal AND
-        in search), and non-payment gameplay completely unrestricted.
+        <div class="opt-title"><span class="badge badge-proposed">2a · Recommended</span> First slice of the split Coupled Payment Task</div>
+        Keeps MTG-500 tightly scoped to shipping Passes 1–4a + cleanup + Pass 5. No printed catalog card currently has a
+        multi-type <code>ManaAbility</code> or a <code>predicate.tapped = true</code> mana trigger; landing this as slice 1
+        of the split Task unblocks coupled search cleanly right before Designs 4, 1, and 7.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">2b · Passed over</span> Keep <code>OrderReplacement</code> filtering deferred to a separate Task</div>
-        Leaves a direct gap between Pass 4's coupled fork search (which certifies an activation via one order) and live play
-        (which offers the stranding order and crashes into an empty <code>ManaChoice</code>).
+        <div class="opt-title"><span class="badge badge-existing">2b · Viable alternative</span> Pull into MTG-500 before Pass 5</div>
+        Small (~60 lines), zero new <code>Decision</code> variants, zero hash change, and turns <code>710163f05a</code>
+        into a passing end-to-end cast immediately — plus fixes Ravnica bounce lands beside normal Heartbeat now.
+        Worth choosing if you want zero panic paths on constructed multi-type <code>ManaAbility</code> boards in MTG-500.
+      </div>
+      <div class="opt">
+        <div class="opt-title"><span class="badge badge-existing">2c · Passed over</span> Synthesize <code>ActivatedAbilityDefinition</code> for multi-type <code>ManaAbility</code></div>
+        Changes the offered action from <code>Action::TapForMana</code> to <code>Action::ActivateAbility</code> and shifts
+        ability indices when Heartbeat enters or leaves — breaking action identity and replay stability.
       </div>
     </div>
   </div>
 
   <div class="choice-box">
     <div class="choice-header">
-      <strong>3. How should <code>CounterChange</code> and <code>Sacrifice</code> costs be ordered inside the cost frame?</strong>
-      <span class="badge badge-existing">Reversible internal engine design</span>
+      <strong>3. When should <code>commit_produced_mana</code> run if a production suspends on <code>ManaProduction::Bonus</code>?</strong>
+      <span class="badge badge-existing">Reversible internal payment semantics</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">3a · Recommended</span> <code>CounterChange</code> in <code>cost_frame.batch</code>, <code>Effect::sacrifice_this()</code> in <code>cost_frame.queue</code></div>
-        Still a single <code>EffectFrame</code> with <code>FrameCompletion::ManaOutput</code>, and commits added/removed
-        counters onto the live permanent <em>before</em> <code>sacrifice_this</code> snapshots departure LKI.
+        <div class="opt-title"><span class="badge badge-proposed">3a · Recommended</span> Skip eager commit while <code>next.is_some()</code></div>
+        Applies uniformly in both <code>tap_for_mana_action</code> and <code>Decision::ManaChoice</code>
+        (<code>decision.rs:2927</code>). Prevents Case 3's greedy <span class="pip pip-r">R</span> spend on
+        <span class="pip pip-c">1</span> before a bonus <span class="pip pip-u">U</span> enters the pool; once bonuses
+        finish, <code>begin_mana_spend</code> still auto-spends unique units and opens <code>ManaSpend</code> when ambiguous.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">3b · Passed over</span> Combine <code>CounterChange</code> and <code>Sacrifice</code> in one simultaneous <code>EventBatch</code></div>
-        <code>advance_event_batch</code> snapshots <code>departing</code> LKI before any member commits
-        (<code>proposed_event.rs:989</code>), so newly added cost counters would be invisible to death/departure LKI.
+        <div class="opt-title"><span class="badge badge-existing">3b · Passed over</span> Keep eager commit before bonus suspends</div>
+        Matches current <code>decision.rs:2927</code>, but silently commits a colored unit toward generic costs before
+        the same tap's triggered bonus mana is available to choose from.
       </div>
     </div>
   </div>
 
   <div class="choice-box">
     <div class="choice-header">
-      <strong>4. Canonical state hash version for <code>FrameCompletion::ManaOutput</code>?</strong>
-      <span class="badge badge-existing">Reversible before merge to main</span>
+      <strong>4. Pass 5 colored convoke architecture in MTG-500?</strong>
+      <span class="badge badge-scope">This Work · Pass 5 (unchanged from 2nd review)</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">4a · Recommended</span> Keep <code>MATCH_STATE_HASH_VERSION = 35</code></div>
-        <code>origin/main</code> is v34; v35 is already this branch's unreleased bump from Pass 3. Appending a new
-        <code>FrameCompletion</code> variant leaves every existing serialized state unchanged, and both new payment
-        continuations land together under v35.
+        <div class="opt-title"><span class="badge badge-proposed">4a · Recommended</span> Fold <code>convoke_colors: ManaTypeSet</code> into <code>PaymentModel</code></div>
+        Deletes <code>while_paying</code> and <code>convoke_search</code> (<code>help.rs:260-319</code>) so all eight mana
+        surfaces automatically share one feasibility authority for <span class="card-name">Guardian of Vitu-Ghazi</span>.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">4b · Passed over</span> Bump to <code>MATCH_STATE_HASH_VERSION = 36</code></div>
-        Burns two hash versions inside one unmerged PR with no released v35 consumer to distinguish from.
+        <div class="opt-title"><span class="badge badge-existing">4b · Fallback</span> Single <code>while_paying</code> wrapper across all eight surfaces</div>
+        Smaller diff if folding convoke into <code>PaymentModel</code> grows past one pass, while still eliminating the
+        Pass 1 <code>AgentError</code> on every nested surface.
       </div>
     </div>
   </div>
@@ -1191,35 +1280,36 @@ ManaOutput(Box&lt;PendingManaOutput&gt;),</code></pre>
 
   <ol class="q-list">
     <li class="q-item">
-      <div class="q-stem">1. Cost-to-output continuation shape for activated mana abilities:</div>
+      <div class="q-stem">1. Pass 4b split boundary and provisional coupling cleanup for MTG-500:</div>
       <ol class="q-opts" type="a">
-        <li><strong>1a (Recommended):</strong> Add <code>FrameCompletion::ManaOutput(Box&lt;PendingManaOutput&gt;)</code> (evaluating dynamic output post-cost / pre-suffix with captured <code>chosen</code> LKI, fast-pathing when no counter/sacrifice cost exists) and walk <code>frame.completion</code> in <code>payment_model::reserve</code> and <code>payment_obligations_owing</code>.</li>
-        <li><strong>1b:</strong> Pre-bake <code>Decision::ManaChoice</code> into <code>FrameCompletion::Decision</code> (accepting stale dynamic outputs when counter replacements or sacrifice change board state).</li>
-        <li><strong>1c:</strong> Add a post-cost stage to <code>Decision::ManaUpfront</code> inside <code>FrameCompletion::Decision</code>.</li>
+        <li><strong>1a (Recommended):</strong> Split Pass 4b (coupled search, Design 4 whitelist, payer <code>OrderReplacement</code> filter) into a separate Task, delete the superseded Pass 2 coupling scaffolding (<code>PaymentCoupling::Coupled</code>, <code>tap_coupled</code>, <code>mana_activation_reads</code>, <code>ReadSet.battlefield</code>, <code>payment_writes_couple</code>) in favor of <code>mana_suffix_life_delta</code>, and ship MTG-500 with Passes 1–4a + Pass 5.</li>
+        <li><strong>1b:</strong> Split Pass 4b out without touching Pass 2's coupling flags (accepting dead code and Case 2's Citadel + Canyon + Angel regression on <code>main</code>).</li>
+        <li><strong>1c:</strong> Keep Pass 4b and the fixed-tap continuation inside MTG-500 instead of splitting.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">2. Live <code>Decision::OrderReplacement</code> filtering during manual mana payment:</div>
+      <div class="q-stem">2. Placement and shape of the fixed-tap bonus continuation (<code>710163f05a</code>):</div>
       <ol class="q-opts" type="a">
-        <li><strong>2a (Recommended):</strong> Pull into Pass 4 — filter <code>Decision::OrderReplacement</code> when <code>chooser == payer</code> and <code>has_enclosing_payment</code> is true (and treat <code>chooser != payer</code> as universal AND in fork search), guaranteeing fork-search / live-play parity with zero overhead outside payment.</li>
-        <li><strong>2b:</strong> Leave live <code>OrderReplacement</code> filtering deferred to a separate Task and accept <code>AgentError</code> if a payer chooses a stranding replacement order on a constructed board.</li>
+        <li><strong>2a (Recommended):</strong> Land post-tap <code>tap_bonuses</code>, <code>FixedOutput::{Exact, Choice}</code>, and <code>tap_for_mana_action</code>'s reuse of <code>ManaProduction::Bonus</code> as the first slice of the split Coupled Payment Task.</li>
+        <li><strong>2b:</strong> Land that ~60-line fix in MTG-500 ahead of Pass 5 (turning <code>710163f05a</code> into a passing end-to-end cast immediately with zero hash change), while still splitting coupled search + whitelist + <code>OrderReplacement</code> filtering out.</li>
+        <li><strong>2c:</strong> Synthesize <code>ActivatedAbilityDefinition</code> entries for multi-type <code>ManaAbility</code> sources instead of <code>FixedOutput::Choice</code>.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">3. Ordering counter costs and source sacrifice inside the cost frame:</div>
+      <div class="q-stem">3. Eager <code>commit_produced_mana</code> when a triggered mana bonus suspends:</div>
       <ol class="q-opts" type="a">
-        <li><strong>3a (Recommended):</strong> Put <code>CounterChange</code> (remove, then add) in <code>cost_frame.batch</code> and <code>Effect::sacrifice_this()</code> in <code>cost_frame.queue</code> so departure LKI reflects committed cost counters.</li>
-        <li><strong>3b:</strong> Combine both into one simultaneous <code>EventBatch</code> (matching <code>complete_announced_payment</code>'s single-batch layout).</li>
+        <li><strong>3a (Recommended):</strong> Run <code>commit_produced_mana</code> only when <code>next.is_none()</code> (in both <code>tap_for_mana_action</code> and <code>decision.rs:2927</code>), preserving the payer's unit choice once the bonus enters the pool.</li>
+        <li><strong>3b:</strong> Keep eager commitment before the bonus suspends.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">4. Canonical match-state hash version:</div>
+      <div class="q-stem">4. Colored convoke implementation in Pass 5 of MTG-500:</div>
       <ol class="q-opts" type="a">
-        <li><strong>4a (Recommended):</strong> Keep this branch's unreleased <code>MATCH_STATE_HASH_VERSION = 35</code> (vs v34 on <code>origin/main</code>).</li>
-        <li><strong>4b:</strong> Bump to <code>MATCH_STATE_HASH_VERSION = 36</code>.</li>
+        <li><strong>4a (Recommended):</strong> Fold <code>convoke_colors: ManaTypeSet</code> into <code>PaymentModel</code> and delete <code>while_paying</code> / <code>convoke_search</code>.</li>
+        <li><strong>4b:</strong> Route all eight mana surfaces through one <code>while_paying</code> wrapper as a fallback.</li>
       </ol>
     </li>
   </ol>
