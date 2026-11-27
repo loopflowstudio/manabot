@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 import json
@@ -317,7 +317,7 @@ def _evaluation_row(
 
 
 def finalize_settled_cell(
-    settled_games: Sequence[dict[str, Any]],
+    settled_games: Iterable[dict[str, Any]],
     *,
     plan: CellPlan,
     key: EvaluationKey,
@@ -331,7 +331,7 @@ def finalize_settled_cell(
     deadline: float | None = None,
     reducers: Mapping[str, Reducer[Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
-    """Replay, shard and persist an already-settled set of cell games."""
+    """Retain each settled block before requesting more games from the iterable."""
     reducers = dict(reducers or {})
     reduction = Reduction(tuple(reducers.values()))
     games: list[dict[str, Any]] = []
@@ -419,23 +419,25 @@ def finalize_settled_cell(
             [r for r in rows if r["deal_block"] in replayed_blocks],
         )
 
-    for game in settled_games:
-        finalize_game(game)
-        games.append(game)
-        rows.append(
-            _evaluation_row(
-                game, key=key, player_a=player_a, player_b=player_b, plan=plan
+    try:
+        for game in settled_games:
+            finalize_game(game)
+            games.append(game)
+            rows.append(
+                _evaluation_row(
+                    game, key=key, player_a=player_a, player_b=player_b, plan=plan
+                )
             )
-        )
-        block = game["deal_block"]
-        if sum(g["deal_block"] == block for g in games) == len(plan.played_legs):
-            replay_block(block)
-
-    if games:
-        games.sort(key=lambda g: (g["deal_block"], g["leg"]))
-        with perf.span("output_retention"):
-            trace_receipt = write_trace(trace_path, games)
-        trace_receipt["artifact_path"] = plan.trace_relative_path
+            block = game["deal_block"]
+            if sum(g["deal_block"] == block for g in games) == len(plan.played_legs):
+                replay_block(block)
+    finally:
+        # Build the diagnostic aggregate once, even if the game source fails.
+        if games:
+            games.sort(key=lambda g: (g["deal_block"], g["leg"]))
+            with perf.span("output_retention"):
+                trace_receipt = write_trace(trace_path, games)
+            trace_receipt["artifact_path"] = plan.trace_relative_path
     rows.sort(key=lambda r: (r["deal_block"], r["leg"]))
     attempted = {g["match_id"] for g in games}
     unattempted = [
@@ -448,6 +450,7 @@ def finalize_settled_cell(
     if not games:
         perf.write(out_dir / "performance.json")
         raise RuntimeError("no game started")
+    # Incomplete blocks also retain replay diagnostics.
     for block in sorted({g["deal_block"] for g in games} - replayed_blocks):
         replay_block(block)
     if card_evidence_dir is not None:
@@ -473,6 +476,7 @@ def finalize_settled_cell(
     perf.write(out_dir / "performance.json")
     atomic_json(out_dir / "rows.json", rows)
     if reducers:
+        # Tables contain private facts and stay separate from viewer records.
         tables = None
         if not replay_errors and reduction.error is None:
             try:
@@ -540,8 +544,6 @@ def play_cell(
     assign one seat and deck pair per game instead of playing whole deals.
     """
     checkpoint_paths = checkpoint_paths or {}
-    reducers = dict(reducers or {})
-    reduction = Reduction(tuple(reducers.values()))
     plan = build_cell_plan(
         key=key,
         player_a=player_a,
@@ -555,15 +557,6 @@ def play_cell(
         authored_matchup=authored_matchup,
         legs=legs,
     )
-    games: list[dict[str, Any]] = []
-    rows: list[dict[str, Any]] = []
-    replay_receipts: list[dict[str, Any]] = []
-    replay_errors: list[str] = []
-    card_evidence: list[dict[str, Any]] = []
-    replayed_blocks: set[int] = set()
-    replay_seconds = 0.0
-    perf = EvalPerformance("cell")
-    trace_path = out_dir / plan.trace_relative_path
 
     def run(item: CellWorkItem) -> dict[str, Any]:
         game, registrations, evidence = (
@@ -604,171 +597,17 @@ def play_cell(
             backend_name=backend_name,
         )
 
-    def replay_block(block: int) -> None:
-        """Publish replayed rows only after their immutable shard is retained."""
-        nonlocal replay_seconds
-        block_games = sorted(
-            (g for g in games if g["deal_block"] == block), key=lambda g: g["leg"]
-        )
-        block_rows = sorted(
-            (r for r in rows if r["deal_block"] == block), key=lambda r: r["leg"]
-        )
-        # Shards sit below games/ so reading that directory yields each game once.
-        relative = (
-            Path("games")
-            / "deals"
-            / f"{plan.cell_id}.{block_games[0]['deal_seed']}.jsonl"
-        )
-        shard = write_trace(out_dir / relative, block_games)
-        started = time.perf_counter()
-        if agents is not None:
-            outcome = replay_in_process(
-                block_games, card_evidence_dir, reduction if reducers else None
-            )
-        else:
-            outcome = replay_retained(
-                block_games,
-                game_seconds * len(block_games)
-                if deadline is None
-                else min(
-                    game_seconds * len(block_games), max(0, deadline - time.time())
-                ),
-                card_evidence_dir=card_evidence_dir,
-                reducers=reduction.reducers,
-            )
-            if outcome.statistics_rows and reduction.error is None:
-                for combined, reducer_rows in zip(
-                    reduction.rows, outcome.statistics_rows, strict=True
-                ):
-                    combined.extend(reducer_rows)
-        receipts = outcome.receipts
-        if outcome.analysis_error is not None:
-            reduction.fail(outcome.analysis_error)
-        if outcome.error is not None:
-            replay_errors.append(outcome.error)
-        if receipts is None:
-            receipts = [
-                {**ReplayReceipt().to_dict(), "passed": False} for _ in block_games
-            ]
-        replay_receipts.extend(receipts)
-        card_evidence.extend(ref.model_dump() for ref in outcome.card_evidence)
-        for row, receipt in zip(block_rows, receipts, strict=True):
-            row["trace_path"] = str(relative)
-            row["trace_shard_sha256"] = shard["sha256"]
-            row["replay_passed"] = receipt["passed"]
-            row["integrity"]["replay_mismatches"] = sum(
-                v
-                for k, v in receipt.items()
-                if k not in {"games", "decisions", "passed"}
-            )
-        replay_seconds += time.perf_counter() - started
-        perf.record("replay", started)
-        replayed_blocks.add(block)
-        commits = out_dir / "blocks"
-        commits.mkdir(exist_ok=True)
-        atomic_json(
-            commits / f"{block_games[0]['deal_seed']}.json",
-            {
-                "rows_sha256": canonical_sha256(block_rows),
-            },
-        )
-        # Atomic snapshots contain only fully finalized blocks. A killed
-        # coordinator cannot erase a previously validated complete block.
-        atomic_json(
-            out_dir / "rows.json",
-            [r for r in rows if r["deal_block"] in replayed_blocks],
-        )
-
-    def finalize(game: dict[str, Any]) -> None:
-        finalize_game(game)
-        games.append(game)
-        rows.append(
-            _evaluation_row(
-                game, key=key, player_a=player_a, player_b=player_b, plan=plan
-            )
-        )
-        block = game["deal_block"]
-        if sum(g["deal_block"] == block for g in games) == len(plan.played_legs):
-            replay_block(block)
-
-    try:
-        for item in plan.work:
-            finalize(run(item))
-    finally:
-        # Block shards and capture journals retain progress. Build the
-        # diagnostic aggregate once, including on coordinator failure,
-        # rather than recompressing the growing panel after every game.
-        if games:
-            games.sort(key=lambda g: (g["deal_block"], g["leg"]))
-            with perf.span("output_retention"):
-                trace_receipt = write_trace(trace_path, games)
-            trace_receipt["artifact_path"] = plan.trace_relative_path
-    rows.sort(key=lambda r: (r["deal_block"], r["leg"]))
-    attempted = {g["match_id"] for g in games}
-    unattempted = [
-        item.game["match_id"]
-        for item in plan.work
-        if item.game["match_id"] not in attempted
-    ]
-    perf.counters["unattempted_games"] = len(unattempted)
-    atomic_json(out_dir / "unattempted.json", unattempted)
-    if not games:
-        perf.write(out_dir / "performance.json")
-        raise RuntimeError("no game started")
-    # Incomplete blocks keep replay diagnostics too, but cannot contribute
-    # to an evaluation until every requested leg is valid.
-    for block in sorted({g["deal_block"] for g in games} - replayed_blocks):
-        replay_block(block)
-    if card_evidence_dir is not None:
-        trace_receipt["card_evidence"] = card_evidence
-    replay_payload = {
-        name: sum(r[name] for r in replay_receipts)
-        for name in replay_receipts[0]
-        if name != "passed"
-    }
-    replay_payload["passed"] = all(r["passed"] for r in replay_receipts)
-    replay_payload["seconds"] = replay_seconds
-    if replay_errors:
-        replay_payload["error"] = "; ".join(replay_errors)
-    perf.count("expected_games", len(plan.work))
-    perf.count("legs_per_block", len(plan.work) // len(deal_seeds))
-    perf.count("attempted_games", len(rows))
-    perf.count(
-        "valid_games",
-        sum(r["failure"] is None and r["replay_passed"] for r in rows),
+    return finalize_settled_cell(
+        (run(item) for item in plan.work),
+        plan=plan,
+        key=key,
+        player_a=player_a,
+        player_b=player_b,
+        deal_seeds=deal_seeds,
+        out_dir=out_dir,
+        game_seconds=game_seconds,
+        card_evidence_dir=card_evidence_dir,
+        in_process_replay=agents is not None,
+        deadline=deadline,
+        reducers=reducers,
     )
-    perf.count("failed_games", sum(r["failure"] is not None for r in rows))
-    perf.count("decisions", sum(r["decisions"] for r in rows))
-    perf.write(out_dir / "performance.json")
-    atomic_json(out_dir / "rows.json", rows)
-    if reducers:
-        # Tables contain private facts. Keep them separate from viewer
-        # records, and aggregate once across all deal blocks.
-        tables = None
-        if not replay_errors and reduction.error is None:
-            try:
-                tables = TypeAdapter(dict[str, list[Any]]).dump_python(
-                    dict(zip(reducers, reduction.finish(), strict=True)),
-                    mode="json",
-                )
-            except Exception as exc:
-                reduction.fail(f"analysis table encoding: {type(exc).__name__}: {exc}")
-        if reduction.error is not None:
-            tables = None
-        statistics_path = out_dir / "statistics.json"
-        atomic_private_json(
-            statistics_path,
-            {
-                "tables": tables,
-                "games": len(rows),
-                "complete_verified_games": sum(
-                    r["failure"] is None and r["replay_passed"] and r["terminated"]
-                    for r in rows
-                ),
-                "replay_passed": replay_payload["passed"],
-                "error": reduction.error or replay_payload.get("error"),
-                "analysis_error": reduction.error,
-            },
-        )
-        trace_receipt["statistics_path"] = str(statistics_path)
-    return rows, trace_receipt, replay_payload
