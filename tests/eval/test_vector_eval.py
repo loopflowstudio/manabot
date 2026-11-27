@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from etude.checkpoints import CheckpointRef
+from etude.eval.agents import Forward, ForwardError
 from etude.eval.records import (
     Benchmark,
     Code,
@@ -29,7 +30,7 @@ from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
 from manabot.eval.agent_loader import load
-from manabot.eval.agents import build
+from manabot.eval.agents import build, local_forward
 from manabot.eval.card_query import CardSelection, audit, card_data, card_db
 from manabot.eval.pairing import play_pairing
 from manabot.eval.vector import LocalMatches, PairingSpec, play_pairings
@@ -94,7 +95,7 @@ def _fixture_checkpoint(
 def _row_pure_async_forward(
     sync_forward: Callable[[list[object]], list[object]],
     batch_sizes: list[int],
-) -> Callable[[list[object]], Any]:
+) -> Forward:
     """Async forward recording batch sizes while evaluating rows independently.
 
     Batched BLAS GEMMs can reorder float32 additions across batch sizes; running
@@ -103,9 +104,10 @@ def _row_pure_async_forward(
     transport and verifying `batch > 1` inputs arrive from the runner.
     """
 
-    async def forward(inputs: list[object]) -> list[object]:
+    async def forward(inputs: list[object], *, rows: int | None = None) -> list[object]:
         assert len(inputs) == 1 and isinstance(inputs[0], Prepared)
         batch = inputs[0]
+        assert rows == batch.batch
         batch_sizes.append(batch.batch)
         await asyncio.sleep(0)
         return sync_forward(inputs)
@@ -523,9 +525,9 @@ def test_vector_runner_isolates_native_crash_and_keeps_other_legs_valid(
         RecordedVectorEnv, "step_isolated_into_buffers", inject_native_error
     )
 
-    sync_forward = load(ref)
+    forward = local_forward(load(ref))
     source = LocalMatches(
-        [(match, [sync_forward, build(heuristic, {})]) for match in matches]
+        [(match, [forward, build(heuristic, {})]) for match in matches]
     )
     vector_root = tmp_path / "crash-isolation"
 
@@ -586,7 +588,7 @@ def test_vector_runner_isolates_native_crash_and_keeps_other_legs_valid(
     assert reproduced["matches_error"] is True
 
 
-def test_vector_runner_yields_bad_match_exception_and_propagates_forward_error(
+def test_vector_runner_isolates_admission_and_checkpoint_failures(
     tmp_path: Path,
     cpu_eval: None,
 ) -> None:
@@ -601,7 +603,7 @@ def test_vector_runner_yields_bad_match_exception_and_propagates_forward_error(
     # 1. Invalid match yields Exception without breaking sibling valid match.
     bad_match = Match(players=(candidate, heuristic), games=99, config={"deal": 300})
     good_match = Match(players=(candidate, heuristic), games=4, config={"deal": 301})
-    sync_forward = load(ref)
+    forward = local_forward(load(ref))
 
     async def run_mixed() -> list[tuple[Match, Result | Exception]]:
         return [
@@ -609,8 +611,8 @@ def test_vector_runner_yields_bad_match_exception_and_propagates_forward_error(
             async for item in play_pairings(
                 LocalMatches(
                     [
-                        (bad_match, [sync_forward, build(heuristic, {})]),
-                        (good_match, [sync_forward, build(heuristic, {})]),
+                        (bad_match, [forward, build(heuristic, {})]),
+                        (good_match, [forward, build(heuristic, {})]),
                     ]
                 ),
                 lambda match: PairingSpec(
@@ -629,8 +631,57 @@ def test_vector_runner_yields_bad_match_exception_and_propagates_forward_error(
     assert isinstance(mixed[bad_match.key], ValueError)
     assert isinstance(mixed[good_match.key], Result)
 
-    # 2. Forward exception escapes the generator.
-    async def exploding_forward(_inputs: list[object]) -> list[object]:
+    failed_ref = _fixture_checkpoint(tmp_path, 42, space)
+    failed_match = Match(
+        players=(checkpoint_player(failed_ref), heuristic),
+        games=4,
+        config={"deal": 302},
+    )
+    error = ForwardError(failed_ref.key, "checkpoint unavailable")
+
+    async def broken_checkpoint(
+        inputs: list[object], *, rows: int | None = None
+    ) -> list[object]:
+        assert rows is not None and rows >= 1
+        raise error
+
+    async def run_checkpoint_failure() -> list[tuple[Match, Result | Exception]]:
+        opponent = build(heuristic, {})
+        return [
+            item
+            async for item in play_pairings(
+                LocalMatches(
+                    [
+                        (failed_match, [broken_checkpoint, opponent]),
+                        (good_match, [forward, opponent]),
+                    ]
+                ),
+                lambda match: PairingSpec(
+                    matchup=matchup,
+                    deal=int(match.config["deal"]),
+                    matchup_mode="cross",
+                    game_seconds=60,
+                    arena="fixture-mixed",
+                ),
+                slots=5,
+                output_dir=tmp_path / "checkpoint-failure",
+            )
+        ]
+
+    settled = asyncio.run(run_checkpoint_failure())
+    assert len(settled) == 2
+    assert (
+        dict((match.key, outcome) for match, outcome in settled)[failed_match.key]
+        is error
+    )
+    assert isinstance(
+        dict((match.key, outcome) for match, outcome in settled)[good_match.key], Result
+    )
+
+    # An unexpected forward exception still escapes the generator.
+    async def exploding_forward(
+        inputs: list[object], *, rows: int | None = None
+    ) -> list[object]:
         raise RuntimeError("inference server unavailable")
 
     async def run_exploding() -> None:

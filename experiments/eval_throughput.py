@@ -30,7 +30,7 @@ from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.eval.agent_loader import EVAL_DEVICES, load_with_precision
-from manabot.eval.agents import build
+from manabot.eval.agents import build, local_forward
 from manabot.eval.pairing import play_pairing
 from manabot.eval.vector import LocalMatches, PairingSpec, play_pairings
 from manabot.infra.files import atomic_json
@@ -193,7 +193,6 @@ def main() -> None:
     timing = ForwardTiming()
     forward = timed_forward(load_with_precision(ref, args.precision), timing)
     agents = (forward, build(heuristic, {}))
-    source = LocalMatches([(match, agents) for match in matches])
     started = time.perf_counter()
     if args.runner == "scalar":
         games = 0
@@ -211,6 +210,8 @@ def main() -> None:
             )
             games += completed_games(match, result)
     else:
+        vector_agents = (local_forward(forward), agents[1])
+        source = LocalMatches([(match, vector_agents) for match in matches])
         games = asyncio.run(run_vector(source, specs, args.slots, out))
     seconds = time.perf_counter() - started
     if games != 4 * len(matches):

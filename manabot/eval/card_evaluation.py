@@ -34,7 +34,7 @@ from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 from pydantic import Field, model_validator
 
-from manabot.eval.agents import AGENTS, registration
+from manabot.eval.agents import AGENTS, play_scalar, registration
 from manabot.eval.card_metrics import (
     CARD_ROLLUPS,
     METRIC_VERSION,
@@ -222,7 +222,11 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
     return tuple(entrants)
 
 
-def play_card_match(match: Match, agents: Sequence[object]) -> Result:
+async def play_card_match(match: Match, agents: Sequence[object]) -> Result:
+    return await play_scalar(play_cards, match, agents)
+
+
+def play_cards(match: Match, agents: Sequence[object]) -> Result:
     players = card_match_players(match)
     conditions = CardConditions.model_validate(match.config)
     paths: dict[str, str] = {}

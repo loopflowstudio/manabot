@@ -16,18 +16,18 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncGenerator, Callable, Sequence
 from dataclasses import dataclass, field, replace
-import inspect
 import math
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
 import time
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, cast
 from uuid import uuid4
 
-from etude.eval.records import Match
+from etude.eval.agents import Forward, ForwardError
+from etude.eval.records import CheckpointPlayer, Match
 from etude.eval.result import Result
 import numpy as np
 
@@ -290,16 +290,13 @@ def prepare_checkpoint_batch(
 
 
 async def invoke_forward(
-    forward: Callable[[list[object]], object],
+    forward: Forward,
     prepared: Prepared[np.ndarray],
 ) -> tuple[np.ndarray, float]:
-    """Call an async or sync forward with one pre-collated `Prepared` input."""
+    """Send one pre-collated input with its actual row count."""
     started = time.perf_counter()
-    output = forward([prepared])
-    if inspect.isawaitable(output):
-        output = await output
+    results = await forward([prepared], rows=prepared.batch)
     elapsed = time.perf_counter() - started
-    results = list(output)  # type: ignore[arg-type]
     if len(results) != 1:
         raise ValueError(
             f"forward returned {len(results)} outputs for 1 pre-collated input"
@@ -498,15 +495,14 @@ async def play_pairings(
     *,
     slots: int = 64,
     output_dir: Path | None = None,
-) -> AsyncIterator[tuple[Match, Result | Exception]]:
+) -> AsyncGenerator[tuple[Match, Result | Exception], None]:
     """Step paired-deal legs across one `RecordedVectorEnv` and yield settled matches.
 
     Every active slot needing the same checkpoint in a round is collated into
     one `Prepared` batch for one awaited forward. Finished or natively-failed
     slots backfill immediately so no slot sits idle while legs are pending.
-    Admission or per-match finalization errors yield `(match, exc)` without
-    failing other held matches; policy forward exceptions escape after closing
-    the native vector.
+    Admission, checkpoint forward and finalization errors yield `(match, exc)`
+    for the affected matches while other slots continue.
     """
     if slots < 1:
         raise ValueError("slots must be at least 1")
@@ -779,7 +775,7 @@ async def play_pairings(
             checkpoint_groups: dict[
                 tuple[int, str, bool],
                 tuple[
-                    Callable[[list[object]], object],
+                    Forward,
                     Spec,
                     bool,
                     list[tuple[int, Sampler, int]],
@@ -825,7 +821,7 @@ async def play_pairings(
                     )
                     if group_key not in checkpoint_groups:
                         checkpoint_groups[group_key] = (
-                            agent.forward,
+                            cast(Forward, agent.forward),
                             agent.spec,
                             agent.blank_decision_memory,
                             [],
@@ -847,18 +843,60 @@ async def play_pairings(
                     )
                     for _, spec, blank, members in group_list
                 ]
-                # A forward exception escapes the generator; finally closes the vector.
                 forward_outputs = await asyncio.gather(
                     *(
                         invoke_forward(forward, prepared)
                         for (forward, _, _, _), prepared in zip(
                             group_list, prepared_batches, strict=True
                         )
-                    )
+                    ),
+                    return_exceptions=True,
                 )
-                for (_, _, _, members), prepared, (logits, elapsed) in zip(
+                checkpoint_errors: dict[str, ForwardError] = {}
+                for output in forward_outputs:
+                    if isinstance(output, ForwardError):
+                        checkpoint_errors[output.checkpoint] = output
+                    elif isinstance(output, BaseException):
+                        raise output
+                if checkpoint_errors:
+                    failed_matches = {
+                        active: checkpoint_errors[player.checkpoint.key]
+                        for active in active_matches
+                        for player in active.match.players
+                        if isinstance(player, CheckpointPlayer)
+                        and player.checkpoint.key in checkpoint_errors
+                    }
+                    pending_legs = deque(
+                        leg
+                        for leg in pending_legs
+                        if leg.active_match not in failed_matches
+                    )
+                    deferred_matches = deque(
+                        (active, legs)
+                        for active, legs in deferred_matches
+                        if active not in failed_matches
+                    )
+                    for slot, state in enumerate(slot_states):
+                        if (
+                            state is not None
+                            and state.leg.active_match in failed_matches
+                        ):
+                            slot_states[slot] = None
+                            active_mask[slot] = False
+                    active_slots = [slot for slot in active_slots if active_mask[slot]]
+                    for active, error in failed_matches.items():
+                        active_matches.remove(active)
+                        active.cleanup()
+                        ready_errors.append((active.match, error))
+                    if not active_slots:
+                        continue
+
+                for (_, _, _, members), prepared, output in zip(
                     group_list, prepared_batches, forward_outputs, strict=True
                 ):
+                    if isinstance(output, BaseException):
+                        continue
+                    logits, elapsed = output
                     if (
                         logits.shape != prepared.legal.shape
                         or not np.isfinite(logits[prepared.legal]).all()
@@ -866,6 +904,8 @@ async def play_pairings(
                         raise ValueError("forward returned malformed legal logits")
                     per_row_latency = elapsed / len(members)
                     for row_idx, (slot, sampler, policy_seed) in enumerate(members):
+                        if not active_mask[slot]:
+                            continue
                         action = sample_action(
                             logits[row_idx],
                             prepared.legal[row_idx],
@@ -875,6 +915,8 @@ async def play_pairings(
                         chosen_actions[slot] = (action, per_row_latency)
 
             for slot, agent, policy_seed in code_slots:
+                if not active_mask[slot]:
+                    continue
                 raw = raw_observations[slot]
                 assert raw is not None
                 chosen_actions[slot] = choose_code_action(

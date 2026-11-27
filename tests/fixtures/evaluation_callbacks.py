@@ -19,7 +19,7 @@ from etude.jobs import Agents
 import pytest
 
 
-def play_callback(match: Match, agents: Sequence[object]) -> Tables | Result:
+async def play_callback(match: Match, agents: Sequence[object]) -> Tables | Result:
     """Run the fixture in its owning process and retain SDK execution in a child."""
     with Client(os.environ["MANABOT_TEST_CALLBACK"], authkey=b"fixture") as connection:
         connection.send(match)
@@ -91,7 +91,7 @@ class PanicException(BaseException):
     """Controlled PyO3-shaped panic for exercising BaseException retention."""
 
 
-def play_native_case(match: Match, agents: Sequence[object]) -> Result:
+async def play_native_case(match: Match, agents: Sequence[object]) -> Result:
     """Run real native games with one injected player failure or clock expiry."""
     import sys
     import time

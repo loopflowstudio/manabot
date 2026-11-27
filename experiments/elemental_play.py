@@ -27,7 +27,7 @@ from experiments.elemental_grid import (
 )
 from experiments.elemental_long import H2HGame
 from manabot.eval.admission import register_anchor
-from manabot.eval.agents import game_players, registration
+from manabot.eval.agents import game_players, play_scalar, registration
 from manabot.eval.behaviour import Play, checkpoint_counts
 from manabot.eval.card_evaluation import trace_card_tables
 from manabot.eval.evaluation import attempt_play_counts
@@ -145,7 +145,11 @@ def rows(kind: Kind, found: Sequence[Group]) -> list[Conditions]:
     return [Conditions(kind=kind, deck=g.model_deck, groups=(g,)) for g in found]
 
 
-def play(match: Match[Conditions], agents: Sequence[object]) -> Result:
+async def play(match: Match[Conditions], agents: Sequence[object]) -> Result:
+    return await play_scalar(play_match, match, agents)
+
+
+def play_match(match: Match[Conditions], agents: Sequence[object]) -> Result:
     conditions = Conditions.model_validate(match.config)
     if len(conditions.groups) != 1:
         raise ValueError("new Elemental matches contain exactly one group")

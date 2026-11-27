@@ -4,13 +4,15 @@ Every checkpoint plays the same held-out deals with seats and decks crossed.
 The published pool snapshot supplies both populations on the worker.
 """
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import aclosing
 from decimal import Decimal
 from functools import cache
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from etude.eval.game import Matches as MatchStream
 from etude.eval.records import (
     Benchmark,
     CheckpointSlot,
@@ -29,7 +31,7 @@ from experiments.mana_taps import OBSERVATION
 from experiments.tla_frontier import HEURISTIC, learning, model
 from manabot.data import load_manifest
 from manabot.eval.agents import AGENTS
-from manabot.eval.pairing import play_pairing
+from manabot.eval.vector import PairingSpec, play_pairings
 from manabot.experiment.setup import machine_setup
 from manabot.infra.identity import StrictModel
 from manabot.pools import Pool, PoolCorpus, PoolSplit
@@ -191,13 +193,11 @@ class Deal(StrictModel):
     seed: int
 
 
-def play(match: Match, agents: Sequence[object]) -> Result:
+def pairing_spec(match: Match) -> PairingSpec:
     deal = Deal.model_validate(match.config)
     pools = playable("held_out")
     a, b = pools[deal.first], pools[deal.second]
-    return play_pairing(
-        match,
-        agents,
+    return PairingSpec(
         matchup=DeckMatchup(
             population_sha256=corpus_input().sha256,
             entries=(a.id, b.id),
@@ -209,6 +209,14 @@ def play(match: Match, agents: Sequence[object]) -> Result:
         game_seconds=120,
         arena="tla-trophies",
     )
+
+
+async def play_many(
+    matches: MatchStream[Deal],
+) -> AsyncIterator[tuple[Match, Result | Exception]]:
+    async with aclosing(play_pairings(matches, pairing_spec)) as stream:
+        async for outcome in stream:
+            yield outcome
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
@@ -235,7 +243,7 @@ def held_out_jobs(runs: Sequence[TrainingRunSummary]) -> list[EvalJob]:
     )
     return [
         EvalJob(
-            play=play,
+            play_many=play_many,
             agents=AGENTS,
             checkpoints=checkpoints,
             tournament=Benchmark(

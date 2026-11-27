@@ -408,10 +408,19 @@ print(corpus.sql("""
 ## Etude agents
 
 Managed evaluations declare an agent set from `manabot.eval.agents` on each
-`EvalJob` and pass those agents to `active.play`. Etude owns game processes,
-checkpoint grouping, batching, model residency, retries and performance records.
-The callback is `play(match, agents)`, with objects in seat order; it runs the
-native game and Command replay in that Etude process.
+`EvalJob`. Etude owns game processes, checkpoint grouping, batching, model
+residency, retries and performance records. A scalar job declares
+`async def play(match, agents)` and gets one object per seat. The native game
+and Command replay run in that Etude process.
+
+TLA trophy evaluation declares `play_many(matches)`. The async generator
+pulls matches into 64 native game slots, replaces finished legs as new matches
+arrive, and yields a replay-checked result for each completed deal. The
+vector runner joins each checkpoint's v11 observations in a single host
+`Prepared` batch and awaits `Forward([prepared], rows=prepared.batch)`.
+A checkpoint forward failure settles the affected matches as errors while
+unrelated slots continue. For a local Etude run, pass the generator and
+agent set to `active.play_many`.
 
 `manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path` and
 prefers CUDA, followed by MLX, MPS, and CPU. MLX uses
@@ -436,10 +445,11 @@ the log zeroed at every decision, registered as a distinct player
 returns an Etude `Result` carrying outcome rows, heuristic behaviour counts
 and [card data](#card-data).
 
-Managed checkpoint registrations name `etude-policy-f32-auto-v1` and
-`numpy-pcg64-v1`. New tournaments have fresh `agents-v1` names and one native
-game group per Etude match. Frozen tournament keys, compute contracts and
-receipts are unchanged. `manabot.sim.execution` reads retained
+Managed checkpoint registrations carry the declared precision's compute class
+and `numpy-pcg64-v1`. Float32 keeps `etude-policy-f32-auto-v1`. The paired
+arena uses the same player seeds across precision settings. Declare the
+precision in the environment config of a new tournament that compares
+precision arms. `manabot.sim.execution` reads retained
 `shared-eval-v1` and `shared-eval-v2` records; it no longer allocates execution.
 Standalone local evaluation and training monitoring retain scalar checkpoint
 play through bounded local children.

@@ -2,14 +2,11 @@
 
 Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
 
-- **Open, irreversible once rows are stored: how precision is declared.**
-  The plan adopts the concept review's 1a for review: per-precision
+- **Precision declaration confirmed in steer `44a4f9bb`.**
+  The selected option is: per-precision
   `AGENTS_*`/`load_*`, precision a registration argument, the envelope id read
   from `candidate.compute_class_id`, precision in `Environment.config`, seeds
-  pinned to the float32 envelope. Alternatives: 1b, an environment variable
-  mirrored by hand into all call sites and `Environment.config`; 1c,
-  float32 only in this Task. Nothing reduced-precision is recorded until pass
-  4's rental, so this can still change before then.
+  pinned to the float32 envelope.
 - **Apple GPU inference before the Etude companion.** The loader selects MLX
   when available, then MPS, in Etude's direct mode, where every game process
   loads its own copy. MPS probe: 12 processes

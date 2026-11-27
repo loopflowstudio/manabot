@@ -101,13 +101,17 @@ def admit_pairing(
         )
         paths[name] = str(player.checkpoint.path)
     candidate, opponent = players
+    anchor = opponent.model_dump(mode="json")
+    if opponent.runner_kind == "checkpoint":
+        # The cohort identifies the opponent; the envelope identifies precision.
+        anchor["compute_class_id"] = ETUDE_COMPUTE_CLASS
     key = EvaluationKey(
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
         arena_version=arena,
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
-        anchor_cohort_sha256=canonical_sha256(opponent.model_dump(mode="json")),
+        anchor_cohort_sha256=canonical_sha256(anchor),
         evaluation_compute_envelope_id=candidate.compute_class_id,
         seed_compute_envelope_id=(
             ETUDE_COMPUTE_CLASS if precision != "float32" else None

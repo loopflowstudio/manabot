@@ -25,7 +25,7 @@ from etude.records import ArtifactRef
 import numpy as np
 from pydantic import BaseModel
 
-from manabot.eval.agents import AGENTS, etude_registration
+from manabot.eval.agents import AGENTS, etude_registration, play_scalar
 from manabot.eval.benchmark import Conditions, play_deal
 from manabot.eval.evaluation import (
     evaluation_status,
@@ -113,7 +113,11 @@ def registrations(duel: Duel) -> tuple[PlayerRegistration, PlayerRegistration]:
     return etude_registration(players[0]), etude_registration(players[1])
 
 
-def play(match: Match, agents: Sequence[object]) -> Tables:
+async def play(match: Match, agents: Sequence[object]) -> Tables:
+    return await play_scalar(play_match, match, agents)
+
+
+def play_match(match: Match, agents: Sequence[object]) -> Tables:
     """Etude game callback: one eight-leg deal between the two checkpoints."""
     duel = Duel.model_validate_json(Path(os.environ["MANABOT_DUEL"]).read_bytes())
     candidate, opponent = registrations(duel)

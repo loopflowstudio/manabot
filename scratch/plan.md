@@ -21,7 +21,7 @@ rows per forward for `w160l8` and a 34M model against CPU batch-1.
 
 Jack Heart added MLX in steer `d440244b`: prefer CUDA, then MLX, then MPS,
 then CPU. Measure MLX against the same Apple Silicon MPS and CPU arms while
-the Etude binding awaits its SDK release.
+the Etude binding and its deployment are evaluated separately.
 
 ## Upstream state (checked 2026-11-27)
 
@@ -47,11 +47,13 @@ the Etude binding awaits its SDK release.
 - `manabot` `origin/main` added three Academy/action-folding commits since our
   base (`080ea64372`, `65dcf2340a`, `b611abb3d7`); none touch eval, batching,
   or `SlotLoad`. (`57d4ea59b5` GRU bf16 fix is already in our base.)
-- **Unblocking artifact for pass 5:** an `etude-sdk` release `> 0.4.7` shipping
-  EXP-77 `play_many` and async `play`. First command once available:
-  `uv lock --upgrade-package etude-sdk && uv sync --extra dev --extra artifacts --extra evaluation`,
-  then read `etude.eval.run.EvalRun`, `etude.jobs.EvalJob`,
-  `etude.eval.game.Matches`, and `etude.eval.agents.Forward`.
+- Jack Heart redirected the release dependency in steer `44a4f9bb`
+  (2026-11-27). Build on editable EXP-77 (`c5923cf`) and
+  6db832 (`49b085a`) now, while keeping `pyproject.toml` and `uv.lock`
+  pinned. The merge gate is a published `etude-sdk 0.5.0`. At release, run
+  `uv lock --upgrade-package etude-sdk` and update the repository's lower and
+  upper bounds plus its exact play-runtime pin before checking the locked
+  environment.
 
 ## What exists
 
@@ -85,13 +87,12 @@ the Etude binding awaits its SDK release.
   scale past ~2,000 games/hr. (Prior L4 reference from MTG-328: 0.85 s/game
   host work, 21% L4 busy below ~34M.)
 
-## Design notes (open / still shaping pass 5)
+## Design notes
 
-- **Precision (made for review, see `scratch/questions.md`; irreversible once
-  rows are stored):** declared per agent set (`AGENTS`, `AGENTS_TF32`,
-  `AGENTS_BF16`), compute class from `etude_compute_class(precision)`, float32
-  keeps `etude-policy-f32-auto-v1`; seeds pinned to the float32 envelope.
-  Fallback if rejected before L4 bf16 rows are recorded: float32 only.
+- **Precision (confirmed in steer `44a4f9bb`):** declare the agent set
+  (`AGENTS`, `AGENTS_TF32`, `AGENTS_BF16`) and the tournament precision.
+  The float32 compute envelope and the paired seeds stay stable across
+  precision comparisons.
 - **Vector runner (`manabot/eval/vector.py`, name for review):** `play_pairings`
   stays Torch-free and async over `MatchSource`; pass 5 binds it to Etude's
   `Matches`, passes `rows=prepared.batch` on awaited `Forward`, and isolates
@@ -116,22 +117,17 @@ the Etude binding awaits its SDK release.
      replay parity checked. Add the arms, games/hour, rows per forward and each
      arm's limiting stage to `experiments/reports/eval_throughput.md`.
      Teaches whether CUDA batching is host-bound below 34M as MTG-328 implied.
-5. **Etude binding and docs (blocked on `etude-sdk > 0.4.7`; PyPI still `0.4.7` on 2026-11-27, EXP-77 committed at `c5923cf` and `310ac1` at `de0c927`, both unreleased).**
-   - Upgrade `etude-sdk` and bind `play_many` over `play_pairings` (pass
-     `rows=prepared.batch` to awaited `Forward`; catch `ForwardError` to drop
-     affected slots and yield `(match, error)` per match without failing
-     unrelated held matches).
-   - Convert `play_pairing` and experiment `EvalJob(play=...)` callbacks
-     (`experiments/{elemental,llm_claude,llm_qwen,mana_taps,opponent_memory,tla_frontier,tla_trophies}.py`)
-     to `async def` (or `play_many=` where appropriate).
-   - Update docs for managed `play_many`: `docs/evaluation.md#etude-agents`,
-     `docs/training.md`, `docs/experiments.md`, `manabot/README.md`.
+5. **Etude binding and local Gate 1.** Build and test the managed adapter
+   against editable EXP-77 and 6db832. Stream TLA trophies through
+   `play_many` and migrate scalar jobs to async callbacks. Run both checkpoint
+   sizes on M4 Max with the socket and direct transports, each with MLX and
+   MPS on the same 32 deals, and record replay parity and throughput in
+   `experiments/reports/eval_throughput.md`.
 
 ## Docs
 
 Managed loading, precision and Apple device selection are documented in
-`docs/evaluation.md#etude-agents`. Pass 5 updates the docs for managed
-`play_many`.
+`docs/evaluation.md#etude-agents`. The same section describes managed `play_many`.
 
 ## Review record
 

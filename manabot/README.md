@@ -1032,12 +1032,13 @@ execution remain outside it.
 
 ### Managed evaluation inference
 
-Etude owns process allocation, model residency and batching. Every evaluation
-job uses `manabot.eval.agents.AGENTS`: the loader returns deterministic masked
-logits from Prepared rows, and Torch-free game agents prepare and sample with
-the decision seed. Native play and replay run in the Etude game process.
-Standalone local checks remain scalar. See [evaluation](../docs/evaluation.md#etude-agents)
-for failure limits and retained compute identities.
+Etude owns process allocation, model residency and batching. The loader in
+`manabot.eval.agents.AGENTS` returns deterministic masked logits from Prepared
+rows. Torch-free game agents prepare observations and sample from each
+decision seed. Native play and replay run in the Etude game process. TLA
+trophies use `play_many` to step and refill concurrent games, batching policy
+rows within each round. See [evaluation](../docs/evaluation.md#etude-agents)
+for the async callback contracts and compute identities.
 
 ### Native decision text
 

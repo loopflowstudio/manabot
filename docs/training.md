@@ -1000,8 +1000,9 @@ what a run has published, oldest first, the same records evaluation reads.
 Checkpoints are evaluated by Etude, in their own jobs whose compute is
 counted apart from training. An experiment file's `eval_jobs(state)` returns the
 benchmarks it wants for the checkpoints its runs have recorded, played by
-manabot's `play(match, agents)` function (`manabot.eval.monitor.play`), and
-each pass plays only the matches that are new. The file's eval jobs that can
+an async `play(match, agents)` callback or the streaming
+`play_many(matches)` callback used for TLA trophies. Each pass plays only
+the matches that are new. The file's eval jobs that can
 share a machine play together as one run, `EXPERIMENT/evals-DIGEST`
 ([experiments](experiments.md#what-an-experiment-is)):
 

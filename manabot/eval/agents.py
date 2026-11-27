@@ -4,13 +4,14 @@ Model forwards belong to Etude. Builders read only local checkpoint metadata;
 no Torch, device probe, remote fetch or sampling happens in the loader protocol.
 """
 
+import asyncio
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 import json
 from typing import Any, Literal, cast
 
-from etude.eval.agents import Forward
-from etude.eval.records import CheckpointPlayer, Code, Player
+from etude.eval.agents import Forward, ModelForward
+from etude.eval.records import CheckpointPlayer, Code, Match as EtudeMatch, Player
 from etude.jobs import Agents
 import numpy as np
 
@@ -39,7 +40,7 @@ from manabot.sim.registration import (
 
 @dataclass(frozen=True)
 class Sampler:
-    forward: Forward
+    forward: Forward | ModelForward
     spec: Spec
     world_binding: Mapping[str, Any]
     deterministic: bool = False
@@ -77,7 +78,7 @@ class Sampler:
             ),
             programs=None,
         )
-        [output] = self.forward([row])
+        [output] = cast(ModelForward, self.forward)([row])
         logits = np.asarray(output, dtype=np.float32)
         if logits.shape != legal.shape or not np.isfinite(logits[legal]).all():
             raise ValueError("forward returned malformed legal logits")
@@ -109,7 +110,7 @@ def blank_decision_memory(player: CheckpointPlayer) -> bool:
     return blank
 
 
-def build(player: object, leaves: Mapping[str, Forward]) -> GamePlayer:
+def build(player: object, leaves: Mapping[str, Forward | ModelForward]) -> GamePlayer:
     if isinstance(player, CheckpointPlayer):
         checkpoint = read_container(player.checkpoint.path)
         # Keep only copied integer metadata in the game process: NumPy views
@@ -188,11 +189,47 @@ def game_players(
     if len(players) != len(agents):
         raise ValueError("one agent per seated player")
     return [
-        build(player, {player.checkpoint.key: cast(Forward, agent)})
+        build(player, {player.checkpoint.key: cast(Forward | ModelForward, agent)})
         if isinstance(player, CheckpointPlayer) and not player.config
         else cast(GamePlayer, agent)
         for player, agent in zip(players, agents, strict=True)
     ]
+
+
+async def play_scalar[MatchT: EtudeMatch, Outcome](
+    play: Callable[[MatchT, Sequence[object]], Outcome],
+    match: MatchT,
+    agents: Sequence[object],
+) -> Outcome:
+    """Run the scalar arena in a thread, sending forwards through Etude's event loop."""
+    loop = asyncio.get_running_loop()
+
+    def blocking(forward: Forward) -> ModelForward:
+        def call(inputs: list[object]) -> list[object]:
+            async def send() -> list[object]:
+                return await forward(inputs, rows=len(inputs))
+
+            return asyncio.run_coroutine_threadsafe(send(), loop).result()
+
+        return call
+
+    seated = []
+    for player, agent in zip(match.players, agents, strict=True):
+        if isinstance(agent, Sampler):
+            agent = replace(agent, forward=blocking(cast(Forward, agent.forward)))
+        elif isinstance(player, CheckpointPlayer) and not player.config:
+            agent = blocking(cast(Forward, agent))
+        seated.append(agent)
+    return await asyncio.to_thread(play, match, seated)
+
+
+def local_forward(forward: ModelForward) -> Forward:
+    """Present a synchronous local model to the vector runner's forward interface."""
+
+    async def call(inputs: list[object], *, rows: int | None = None) -> list[object]:
+        return forward(inputs)
+
+    return call
 
 
 def registration(

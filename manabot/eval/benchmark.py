@@ -28,7 +28,7 @@ from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 from pydantic import BaseModel
 
-from manabot.eval.agents import AGENTS, etude_registration
+from manabot.eval.agents import AGENTS, etude_registration, play_scalar
 from manabot.eval.behaviour import checkpoint_counts
 from manabot.eval.evaluation import (
     EvaluationRequest,
@@ -130,7 +130,11 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
     )
 
 
-def play(match: Match, agents: Sequence[object]) -> Tables:
+async def play(match: Match, agents: Sequence[object]) -> Tables:
+    return await play_scalar(play_match, match, agents)
+
+
+def play_match(match: Match, agents: Sequence[object]) -> Tables:
     """Etude game callback: one eight-leg deal of the checkpoint against its anchor."""
     if len(match.players) != 2:
         raise ValueError("expected one eight-leg checkpoint/heuristic deal")

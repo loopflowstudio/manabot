@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Sequence
 import json
 from pathlib import Path
@@ -425,7 +426,7 @@ def test_execution_rejects_invalid_participant_schedule(
         ).model_dump(mode="json"),
     )
     with pytest.raises(ValueError, match=error):
-        evaluation.play_card_match(match, ())
+        asyncio.run(evaluation.play_card_match(match, [object() for _ in entrants]))
 
 
 def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:

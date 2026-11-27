@@ -30,7 +30,7 @@ def _scheduled() -> tuple[str, list[Match]]:
     ]
 
 
-def _never_play(match: Match, agents: Sequence[object]) -> Tables:
+async def _never_play(match: Match, agents: Sequence[object]) -> Tables:
     pytest.fail(f"retained match was scheduled again: {match.key}")
 
 

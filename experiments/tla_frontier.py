@@ -83,7 +83,7 @@ from etude.train.tracking import track
 from pydantic import BaseModel, ConfigDict, Field
 
 from experiments import tla_frontier
-from manabot.eval.agents import AGENTS, game_players, registration
+from manabot.eval.agents import AGENTS, game_players, play_scalar, registration
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.setup import machine_setup
@@ -1053,7 +1053,11 @@ def _registration(
     ), path
 
 
-def play(match: Match[Pair], agents: Sequence[object]) -> Tables:
+async def play(match: Match[Pair], agents: Sequence[object]) -> Tables:
+    return await play_scalar(play_match, match, agents)
+
+
+def play_match(match: Match[Pair], agents: Sequence[object]) -> Tables:
     """One sampled pair/deal, four policy/deck/seat legs, with failure denominators."""
     protocol = PROTOCOL
     pair = Pair.model_validate(match.config)
