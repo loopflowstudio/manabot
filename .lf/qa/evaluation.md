@@ -62,7 +62,8 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
 - Editable Etude: a plain `uv run` re-syncs the venv to the locked
   `etude-sdk` and silently drops an editable checkout. Reinstall with
   `uv pip install -e <etude checkout>` and run everything with
-  `uv run --no-sync` (or `.venv/bin/python`).
+  `uv run --no-sync` (or `.venv/bin/python`). For pytest, set `UV_NO_SYNC=1`
+  so the CLI tests' own `uv run` subprocesses keep the editable SDK too.
 - Vector trophy evaluation (`play_pairings`): drive
   `experiments/eval_throughput.py` as in its report's Reproduce section
   with `--deals 4` (16 games): CPU scalar about 55 s, MPS/MLX vector-64
