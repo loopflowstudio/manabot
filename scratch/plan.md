@@ -17,8 +17,8 @@ published, green, held PR; it is not landed and auto-merge is not enabled.
 
 ## Base
 
-PR #636 (MTG-501) merged as `main` 624751ae71 on 2026-11-27. Pass 1 starts
-with `lf sync main`. It adds `PROGRAM_VOCABULARY`, `missing_program_tokens`,
+PR #636 (MTG-501) merged as `main` 624751ae71 on 2026-11-27 and is an
+ancestor of the implementation. It adds `PROGRAM_VOCABULARY`, `missing_program_tokens`,
 the debug emission guard, more `execution_names` registrations, the docs
 section "Program-token vocabulary", and three of the prefix filters this Task
 removes. Not stacked on #612; the two meet at the 0.3.0 cut.
@@ -134,9 +134,8 @@ changing. `managym/src/cards/token_renames.rs`, returned through
   `(Text, "creatures each player sacrifices", Some("permanents each player
   sacrifices"))`. Leaving them `None` while deleting the `execution/6/…` rows
   would mean-initialize both vectors on pre-rename checkpoints.
-- `LEGACY_EXECUTION_TOKENS`: the manual pre-0.3.0 runtime symbols (about 130:
-  structs, enums, fields, `EXECUTION_TEXT`) frozen as `(kind, name)` at the
-  change.
+- `LEGACY_EXECUTION_TOKENS`: 395 manually registered pre-0.3.0 runtime symbols
+  from structs, enums, fields and `EXECUTION_TEXT`, frozen as `(kind, name)`.
 - `LEGACY_DECISION_MEMORY_TOKENS`: the 44 pre-0.3.0 `DecisionMemory::*`
   names, retired as `(Variant, name, None)`, independent of later
   `RECORD_NAMES` edits.
@@ -255,18 +254,10 @@ emission guard, exact `(kind, 0x…)` diagnostics, the 44 memory names' hashes.
 
 ## Passes
 
-1. **Checkpoints survive the split (could prove the plan wrong).** `lf sync
-   main`. Native: complete `runtime_tokens()` over one pack walk, memory-owned
-   names, clean `record_names()`, the frozen ledger with the two renames moved
-   onto `TOKENS`, bindings for both new functions. Python: `catalog.py` (alias
-   assertion), `managym/decision_memory.py`, `RecordNamespace.TOKEN` in
-   `manabot/policy/decision_memory.py`, stubs. Rebuild the extension per the
-   agent guide. Shows: both pinned pilots and `test_checkpoint_binding.py`
-   pass unchanged, plus the constructed memory checkpoint; `kept permanent`
-   binds to its stored vector on a pre-rename checkpoint; a fresh policy has
-   the same embedding row count as before, with decision memory on and off.
-2. **Consumers and guards.** `PROGRAM_VOCABULARY` as the two-list union,
-   `observability.rs` helpers, `scripts/pilot_names.rs` with `names_at`
+1. **Checkpoints survive the split** (221af98c25). Both pinned pilots replayed unchanged, all eight checkpoint binding tests and both memory round trips passed, and the vocabulary probe printed `0 True 44`.
+2. **Consumers and guards.** The native debug guard already uses the two-list
+   union from pass 1. Update the `observability.rs` helpers and
+   `scripts/pilot_names.rs` with `names_at`
    detecting `runtime_tokens` in the archived crate (check `names --at
    ab2b757d9`), Python tests (union-equality, record coverage, effect
    vocabulary, pooled mana, `test_record_vocabulary.py:104`), the ledger
@@ -297,5 +288,5 @@ emission guard, exact `(kind, 0x…)` diagnostics, the 44 memory names' hashes.
 - A pre-change checkpoint, with and without decision memory, loads and plays
   its stored game to the same outputs.
 - A reader of `docs/engine.md` can compute the admitted program vocabulary
-  from three named lists without a string filter.
+  from the printed and runtime lists without a string filter.
 - The PR is open, green and marked held for 0.3.0.
