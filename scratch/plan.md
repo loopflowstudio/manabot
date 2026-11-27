@@ -45,6 +45,10 @@ The kickoff design (register 11 historical pairs and add `catalog_tokens()["prog
 
 Pass 2 validation covered all 593 selected `observability`, `xln` and `tla` cases across the debug run and targeted reruns, plus seven engine tests. The rebuilt cp313 extension passed all 14 tests in `tests/model/test_effect_vocabulary.py`. The public API matches its snapshot. The full suites are deferred to CI.
 
+## Final concept review (`a2c7f3b215`)
+
+No remaining mismatch in this Task's scope; all three pass-1 review gaps are closed in `5424678db`. Choices adopted headless for review: 1a (ship as-is; 1b, rewording the `admission.py:516` error, was passed over, matching the earlier 3a choice to keep the wording) and 2a (file the two items below as one 0.3.0 Task rather than leave the 0.2.x shape indefinitely). Nothing remains to build; full Rust debug and Python suites are deferred to CI.
+
 ## Deferred findings
 
 - **Untangle `record_vocabulary()` (0.3.0).** About 350 synthetic `("token", "execution/<kind>/<name>", …)` rows exist only to carry runtime program tokens into `catalog.py`'s `record_token_keys`. The 44 `DecisionMemory::*` names carry phantom `Variant` tokens. The fix: expose runtime program tokens directly; change `DecisionMemory::*` to `record(Token, …, None)`; build `record_token_keys` without the fake records; and bind legacy keys in `binding.py`/`token_renames.rs` so pre-0.3.0 checkpoints still load. This breaks checkpoint compatibility, so it belongs with the 0.3.0 removals as a separate Task.
