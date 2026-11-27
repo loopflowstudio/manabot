@@ -92,6 +92,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "attacked defender",
     "entering card",
     "entering definition",
+    "enters attached to",
     "enters back face up",
     "enters face down",
     "enters tapped",
@@ -1761,7 +1762,16 @@ pub(crate) fn project_decision(
             name,
             remaining,
             ..
-        } => out.field("named search", &(owner, name, remaining)),
+        } => {
+            // A naming fixture can offer names outside the installed catalog.
+            // They have no policy row, and the text still names the search.
+            let catalog = default_content_pack().name_candidates();
+            let known = catalog.contains(name).then_some(name);
+            out.field("named search", &(owner, known, remaining));
+            if known.is_none() {
+                out.note(|| format!("Searching for {name}."));
+            }
+        }
         Decision::SearchDistinctNames {
             predicate,
             remaining,
@@ -1966,7 +1976,10 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::state::{player::PlayerConfig, zone::ZoneType};
+    use crate::{
+        cards::tokens::{name_value, TokenKind},
+        state::{player::PlayerConfig, zone::ZoneType},
+    };
 
     fn entry_notes(game: &Game, face: EntryFace) -> Vec<String> {
         let mut out = Projection::new(game, PlayerId(0), true);
@@ -1975,6 +1988,40 @@ mod tests {
             ..Default::default()
         });
         out.text.expect("text projection").notes
+    }
+
+    #[test]
+    fn entry_attachment_uses_a_visible_reference() {
+        let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
+        let viewer = PlayerId(0);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            3034,
+            false,
+        );
+        let permanent = game
+            .scenario_force_battlefield(viewer, "Mountain", true)
+            .unwrap();
+        let object = game.state.permanents[permanent].as_ref().unwrap().object;
+        let mut projection = Projection::new(&game, viewer, false);
+        projection.entry(&ZoneEntry {
+            attached_to: Some(object),
+            ..Default::default()
+        });
+        let mut frame = ContinuationFrame::default();
+        projection.finish(&mut frame);
+        let label = (TokenKind::Text as u16, name_value("enters attached to"));
+        assert!(frame
+            .effect_execution
+            .windows(2)
+            .any(|pair| pair == [label, (TokenKind::Integer as u16, 1)]));
+        assert_eq!(
+            frame.effect_execution_references[0],
+            game.visible_reference(object, viewer)
+        );
     }
 
     /// A modal back face entering is not a transformation (CR 712.11,

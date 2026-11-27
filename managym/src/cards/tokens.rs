@@ -50,7 +50,8 @@ pub enum TokenKind {
 
 impl TokenKind {
     /// The kind a written `u16` names; writers only ever store these values.
-    fn of(kind: u16) -> Self {
+    #[doc(hidden)]
+    pub fn of(kind: u16) -> Self {
         match kind {
             1 => Self::Structure,
             2 => Self::Field,
@@ -63,6 +64,12 @@ impl TokenKind {
             9 => Self::ProgramKind,
             other => unreachable!("unknown token kind {other}"),
         }
+    }
+
+    /// Whether policy admission accepts this token without looking up its value.
+    #[doc(hidden)]
+    pub fn is_numeric(self) -> bool {
+        matches!(self, Self::Integer | Self::Boolean)
     }
 }
 
@@ -295,6 +302,27 @@ impl<'p> TokenWriter<'p> {
     }
 
     pub(crate) fn into_rules_tokens(self) -> Vec<(u16, i32)> {
+        #[cfg(debug_assertions)]
+        if std::ptr::eq(self.pack, super::content_pack::default_content_pack()) {
+            let vocabulary = crate::agent::record_vocabulary::program_vocabulary();
+            let mut missing = self
+                .tokens
+                .iter()
+                .filter(|&&(kind, _)| !TokenKind::of(kind).is_numeric())
+                .filter(|token| !vocabulary.contains(token))
+                .copied()
+                .collect::<Vec<_>>();
+            if !missing.is_empty() {
+                missing.sort_unstable();
+                missing.dedup();
+                let pairs = missing
+                    .iter()
+                    .map(|&(kind, value)| format!("({kind}, 0x{:08x})", value as u32))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                panic!("runtime program tokens outside the policy vocabulary: {pairs}");
+            }
+        }
         self.tokens
     }
 
@@ -708,6 +736,17 @@ impl ser::SerializeStructVariant for Compound<'_, '_> {
 mod tests {
     use super::*;
     use crate::cards::content_pack::default_content_pack;
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "(2, 0xffffffff), (8, 0x00000001)")]
+    fn runtime_token_guard_reports_all_unknown_pairs() {
+        let mut writer = TokenWriter::new(default_content_pack());
+        writer.push(TokenKind::Field, -1);
+        writer.push(TokenKind::Integer, -1);
+        writer.push(TokenKind::Null, 1);
+        writer.into_rules_tokens();
+    }
 
     #[test]
     fn learning_schema_numbers_the_engine_kinds() {

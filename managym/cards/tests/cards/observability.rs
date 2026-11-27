@@ -46,6 +46,7 @@ use managym::{
             encode, EncodedObservation, FactKind, InputLayout, ObservationEncoderConfig, CARD_DIM,
             FACT_DIM, PERMANENT_DIM, PLAYER_DIM, STACK_DIM, TURN_STATE_DIM,
         },
+        record_vocabulary::program_vocabulary,
         shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
     flow::{
@@ -61,7 +62,7 @@ use managym::{
     },
 };
 use managym::{
-    cards::content_pack::default_content_pack,
+    cards::content_pack::{default_content_pack, ContentPack},
     cards::tokens::{catalog_tokens, definition_tokens, name_value, rules_tokens, TokenKind},
     state::{
         ability::{
@@ -88,7 +89,7 @@ use managym::{
     Game, PlayerConfig,
 };
 use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 // ---------------------------------------------------------------------------
 // Where each piece of state is observed.
@@ -2346,8 +2347,15 @@ fn changed(before: &[f32], after: &[f32]) -> Vec<usize> {
         .collect()
 }
 
+fn witness_pack() -> &'static ContentPack {
+    static PACK: OnceLock<ContentPack> = OnceLock::new();
+    // Synthetic definitions use the real reference rows. Check their tokens
+    // explicitly against production so the witness can report all omissions.
+    PACK.get_or_init(|| default_content_pack().clone())
+}
+
 fn tokens_of(definition: &ObjectDefinition) -> Vec<(TokenKind, i32)> {
-    definition_tokens(definition, default_content_pack()).unwrap()
+    definition_tokens(definition, witness_pack()).unwrap()
 }
 
 fn spell(effects: Vec<Effect>) -> ObjectDefinition {
@@ -2369,30 +2377,8 @@ fn every_effect_variant_reaches_the_learning_tokens() {
     names.sort_unstable();
     names.dedup();
     assert_eq!(names.len(), EFFECT_VARIANTS, "one witness per variant");
-    let pack = default_content_pack();
-    let catalog = catalog_tokens(pack).unwrap();
-    let known: std::collections::BTreeSet<_> = catalog
-        .token_kind
-        .into_iter()
-        .zip(catalog.token_value)
-        .chain(
-            managym::agent::record_vocabulary::record_names()
-                .into_iter()
-                .filter_map(|entry| entry.token),
-        )
-        .collect();
+    let known = program_vocabulary();
     let mut missing = std::collections::BTreeSet::new();
-    let kinds = [
-        TokenKind::Structure,
-        TokenKind::Field,
-        TokenKind::Variant,
-        TokenKind::Integer,
-        TokenKind::Boolean,
-        TokenKind::Text,
-        TokenKind::DefinitionRef,
-        TokenKind::Null,
-        TokenKind::ProgramKind,
-    ];
     for effect in witnesses {
         let tokens = tokens_of(&spell(vec![effect.clone()]));
         let name = effect_token(&effect);
@@ -2402,31 +2388,15 @@ fn every_effect_variant_reaches_the_learning_tokens() {
             ("spell", tokens),
             (
                 "rules",
-                rules_tokens(&effect, pack)
+                rules_tokens(&effect, witness_pack())
                     .unwrap()
                     .into_iter()
-                    .map(|(kind, value)| {
-                        let kind = *kinds
-                            .iter()
-                            .find(|candidate| **candidate as u16 == kind)
-                            .expect("known token kind");
-                        (kind, value)
-                    })
+                    .map(|(kind, value)| (TokenKind::of(kind), value))
                     .collect(),
             ),
         ] {
             for (kind, value) in tokens {
-                let requires_lookup = match kind {
-                    TokenKind::Integer | TokenKind::Boolean => false,
-                    TokenKind::Structure
-                    | TokenKind::Field
-                    | TokenKind::Variant
-                    | TokenKind::Text
-                    | TokenKind::DefinitionRef
-                    | TokenKind::Null
-                    | TokenKind::ProgramKind => true,
-                };
-                if requires_lookup && !known.contains(&(kind as u16, value)) {
+                if !kind.is_numeric() && !known.contains(&(kind as u16, value)) {
                     missing.insert(format!(
                         "{name} ({path}): {kind:?} (kind {}), value {value} (0x{:08x})",
                         kind as u16, value as u32
@@ -5497,10 +5467,9 @@ fn pooled_mana_classes_are_programs_on_their_player() {
             .find(|definition| definition.name == "Animal Attendant")
             .unwrap();
         let tokens = tokens_of(&ObjectDefinition::card(definition));
-        let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
         for &(kind, value) in &classes[0].program {
             assert!(
-                literal.contains(&kind)
+                TokenKind::of(kind).is_numeric()
                     || tokens.iter().any(|&(k, v)| k as u16 == kind && v == value),
                 "program token ({kind}, {value}) is outside the definition's vocabulary"
             );
@@ -5648,21 +5617,10 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
 /// Every execution token of `frame` is a literal, a definition's token or a
 /// registered runtime name: the policy's whole token vocabulary.
 fn assert_execution_tokens_registered(frame: &ContinuationFrame) {
-    let vocabulary: std::collections::HashSet<(u16, i32)> =
-        managym::agent::record_vocabulary::record_names()
-            .into_iter()
-            .filter_map(|name| name.token)
-            .chain(
-                managym_cards::catalog()
-                    .iter()
-                    .flat_map(|definition| tokens_of(&ObjectDefinition::card(definition)))
-                    .map(|(kind, value)| (kind as u16, value)),
-            )
-            .collect();
-    let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
+    let vocabulary = program_vocabulary();
     for token in &frame.effect_execution {
         assert!(
-            literal.contains(&token.0) || vocabulary.contains(token),
+            TokenKind::of(token.0).is_numeric() || vocabulary.contains(token),
             "unregistered execution token {token:?}"
         );
     }

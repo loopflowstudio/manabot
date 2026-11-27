@@ -267,19 +267,11 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use crate::cards::{
-        content_pack::default_content_pack,
-        tokens::{catalog_tokens, name_value},
-    };
+    use crate::{agent::record_vocabulary::program_vocabulary, cards::tokens::name_value};
 
     #[test]
     fn each_historical_token_has_one_disposition_and_renames_resolve() {
-        let catalog = catalog_tokens(default_content_pack()).unwrap();
-        let current: HashSet<_> = catalog
-            .token_kind
-            .into_iter()
-            .zip(catalog.token_value)
-            .collect();
+        let current = program_vocabulary();
         let mut classified = HashSet::new();
         for &(kind, old, successor) in TOKENS {
             assert!(classified.insert((kind as u16, name_value(old))), "{old}");

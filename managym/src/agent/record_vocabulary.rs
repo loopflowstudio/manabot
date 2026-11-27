@@ -16,6 +16,8 @@
 //!
 //! Entry point: [`record_names`].
 
+use std::{collections::HashSet, sync::OnceLock};
+
 #[cfg(test)]
 use crate::state::card::SpellProfile;
 use crate::{
@@ -27,7 +29,7 @@ use crate::{
     },
     cards::{
         content_pack::default_content_pack,
-        tokens::{name_value, TokenKind},
+        tokens::{catalog_tokens, name_value, TokenKind},
     },
     state::{
         card::{Keyword, SourceQuality},
@@ -154,6 +156,27 @@ pub fn record_names() -> Vec<RecordName> {
     out
 }
 
+/// Exact program-token pairs available to policies without decision memory.
+/// Integer and boolean literals are admitted by kind.
+#[doc(hidden)]
+pub fn program_vocabulary() -> &'static HashSet<(u16, i32)> {
+    static VOCABULARY: OnceLock<HashSet<(u16, i32)>> = OnceLock::new();
+    VOCABULARY.get_or_init(|| {
+        let catalog = catalog_tokens(default_content_pack()).expect("default token catalog");
+        catalog
+            .token_kind
+            .into_iter()
+            .zip(catalog.token_value)
+            .chain(
+                record_names()
+                    .into_iter()
+                    .filter(|entry| !entry.name.starts_with("DecisionMemory::"))
+                    .filter_map(|entry| entry.token),
+            )
+            .collect()
+    })
+}
+
 /// Runtime-only programs have no printed card span from which to discover
 /// their vocabulary. Register their serde names and projection labels explicitly.
 fn execution_names(out: &mut Vec<RecordName>) {
@@ -174,6 +197,11 @@ fn execution_names(out: &mut Vec<RecordName>) {
         add(TokenKind::Text, name);
     }
     add(TokenKind::Variant, "CostComponent::Discard");
+    // Variable loyalty costs are supported before a printed ability uses one.
+    add(TokenKind::Variant, "LoyaltyCost::MinusX");
+    // The variants are record names. Their list bodies also emit closing tokens.
+    add(TokenKind::Structure, "/Modification::AddTypes");
+    add(TokenKind::Structure, "/Modification::AddColors");
     // A departed permanent's last known name (a token's, or one an effect
     // set) and a play grant's condition reach fact programs as rules text.
     for (_, definition) in default_content_pack().definition_entries() {
@@ -423,7 +451,7 @@ mod tests {
     #[test]
     fn runtime_only_programs_have_catalog_tokens() {
         use crate::{
-            cards::tokens::{catalog_tokens, rules_tokens},
+            cards::tokens::rules_tokens,
             flow::{
                 event::GameEvent,
                 game::CastChoices,
@@ -434,13 +462,7 @@ mod tests {
             state::{ability::LibraryEnd, game_object::PlayerId},
         };
         let pack = default_content_pack();
-        let catalog = catalog_tokens(pack).unwrap();
-        let known: std::collections::HashSet<_> = catalog
-            .token_kind
-            .into_iter()
-            .zip(catalog.token_value)
-            .chain(record_names().into_iter().filter_map(|entry| entry.token))
-            .collect();
+        let known = program_vocabulary();
         // Effect programs are covered by the cards crate's exhaustive witnesses.
         let mut tokens = rules_tokens(
             &[
@@ -527,7 +549,7 @@ mod tests {
         tokens.extend(rules_tokens(&CostComponent::Discard, pack).unwrap());
         for (kind, value) in tokens {
             assert!(
-                matches!(kind, 4 | 5) || known.contains(&(kind, value)),
+                TokenKind::of(kind).is_numeric() || known.contains(&(kind, value)),
                 "unregistered runtime token: kind {kind}, value {value}"
             );
         }

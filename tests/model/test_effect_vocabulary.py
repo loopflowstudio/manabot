@@ -10,10 +10,18 @@ import numpy as np
 import pytest
 
 from manabot.backends.torch.semantic_cards import SemanticCardEncoder
-from manabot.env.observation import ObservationSpace
-from manabot.policy.admission import Catalog
-from manabot.policy.prepare import Layout, Tables, record_key
+from manabot.env.observation import (
+    FACT_CONTINUATION_PROGRAM,
+    FACT_DETAIL_INDEX,
+    FACT_DIM,
+    FACT_KIND_INDEX,
+    FACT_VALUE_INDEX,
+    ObservationSpace,
+)
+from manabot.policy.admission import Catalog, fact_vocabulary
+from manabot.policy.prepare import Layout, Tables, record_key, record_word
 from manabot.policy.readings import legacy_readings
+from manabot.policy.spans import full_word
 import managym
 
 # Incident keys from diagnostic run 13bb90d47e30, not a second effect inventory.
@@ -49,7 +57,63 @@ def _catalog(tables: Tables) -> Catalog:
 
 @pytest.fixture(scope="module")
 def encoder() -> SemanticCardEncoder:
-    return SemanticCardEncoder("world", 4, records=True)
+    return SemanticCardEncoder("world", 4, records=True, decision_memory=False)
+
+
+def _admit_program(
+    catalog: Catalog, pairs: list[tuple[int, int]], *, packed: bool
+) -> None:
+    kinds, words = np.array(pairs, dtype=np.int32).T
+    if packed:
+        rows = np.zeros((len(pairs), FACT_DIM), dtype=np.int32)
+        rows[:, FACT_DETAIL_INDEX] = words
+        word = full_word
+    else:
+        rows = np.zeros((1, len(pairs), FACT_DIM), dtype=np.float32)
+        rows[..., FACT_DETAIL_INDEX] = words.view(np.uint32) >> 16
+        rows[..., FACT_DETAIL_INDEX + 1] = words & 0xFFFF
+        word = record_word
+    rows[..., FACT_KIND_INDEX] = FACT_CONTINUATION_PROGRAM
+    rows[..., FACT_VALUE_INDEX] = kinds
+    fact_kinds = rows[..., FACT_KIND_INDEX]
+    fact_vocabulary(
+        rows, fact_kinds, fact_kinds == FACT_CONTINUATION_PROGRAM, catalog, word=word
+    )
+
+
+@pytest.mark.parametrize("packed", [False, True], ids=["dense", "v11"])
+def test_facts_admit_printed_and_registered_program_tokens(
+    encoder: SemanticCardEncoder, packed: bool
+) -> None:
+    printed = managym.catalog_tokens()
+    pairs = set(zip(printed["token_kind"], printed["token_value"], strict=True))
+    pairs.update(
+        (kind, value)
+        for _, name, _, kind, value in managym.record_vocabulary()
+        if not name.startswith("DecisionMemory::")
+        and kind is not None
+        and value is not None
+    )
+    _admit_program(_catalog(_tables(encoder)), sorted(pairs), packed=packed)
+
+
+@pytest.mark.parametrize("packed", [False, True], ids=["dense", "v11"])
+def test_facts_reject_unknown_and_disabled_memory_program_tokens(
+    encoder: SemanticCardEncoder, packed: bool
+) -> None:
+    memory_pair = next(
+        (kind, value)
+        for _, name, _, kind, value in managym.record_vocabulary()
+        if name.startswith("DecisionMemory::")
+        and kind is not None
+        and value is not None
+    )
+    catalog = _catalog(_tables(encoder))
+    for kind, value in [(2, -1), memory_pair]:
+        with pytest.raises(
+            ValueError, match=rf"missing keys: \({kind}, 0x{value & 0xFFFFFFFF:08x}\)$"
+        ):
+            _admit_program(catalog, [(kind, value)], packed=packed)
 
 
 def test_koh_runtime_tokens_have_admitted_embedding_rows(
