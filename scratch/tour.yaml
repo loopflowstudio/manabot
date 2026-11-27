@@ -1,17 +1,27 @@
-at: 34092c814f28b45b279a8b05b375ff57fbd0a063
+at: a9359c03bae5236ea02a347c188452299256dd76
 first:
+  - path: managym/README.md
+    why: Payment order and signed life during production
   - path: scratch/plan.md
-    why: Counterexample to freezing mana sources at announcement
-  - path: docs/engine.md
-    why: Forced decisions and errors at the step boundary
-  - path: managym/cards/tests/cards/ody.rs
-    why: Life changes alter a later mana activation
-  - path: managym/src/flow/tick.rs
-    why: Rejects empty decisions before skipping or publishing
+    why: Reproductions and the remaining coupled positions
   - path: managym/src/flow/mana.rs
-    why: Returns errors for a missing automatic payment witness
+    why: Ordered life obligations and isolated suffix probes
+  - path: managym/src/flow/layers.rs
+    why: State reads for mana outputs and activation terms
+  - path: managym/src/flow/statics.rs
+    why: Board-wide classification of payment writes
   - path: managym/src/flow/play.rs
-    why: Uses the shared life payment rule
+    why: Cast and activation admission with trailing fees
+  - path: managym/src/flow/payment.rs
+    why: Cost progress retains the unpaid fee
+  - path: managym/cards/tests/cards/ody.rs
+    why: Four Heartbeat positions and payment order regressions
+  - path: managym/cards/tests/cards/one.rs
+    why: Ward payment can fund its life fee
+  - path: managym/src/flow/mana/tests.rs
+    why: Coupling flags, nested fees and read-only scans
+  - path: managym/src/flow/tick.rs
+    why: Empty decisions error at the step boundary
   - path: managym/src/agent/vector_env.rs
-    why: Exercises strict and isolated step failure
+    why: Isolated vector slots contain step failures
 hide: []
