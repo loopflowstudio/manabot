@@ -37,35 +37,9 @@ stack, state-based actions and triggers.
 ### Forced decisions
 
 With `skip_trivial` enabled, the engine plays singleton actions and keeps
-going, so a forced choice costs no model forward pass and produces no training
-row. Every non-terminal decision must offer at least one legal action. An empty
-non-terminal action space or a failed forced or automatic-payment action
-returns `AgentError`.
-
-From `Game::tick` in [`managym/src/flow/tick.rs`](../managym/src/flow/tick.rs):
-
-```rust
-if let Some(space) = action_space {
-    let (space, aliases) = self.fold_action_space(space);
-    if space.actions.is_empty() {
-        return Err(AgentError(format!(
-            "empty non-terminal action space: {:?}",
-            space.kind
-        )));
-    }
-    if let Some(action) = self.automatic_payment_action(&space)? {
-        self.execute_action(&action)?;
-        self.skip_trivial_count += 1;
-        continue;
-    }
-    if !self.skip_trivial || space.actions.len() > 1 {
-        self.publish_folded_action_space(space, aliases);
-        return Ok(false);
-    }
-    self.execute_action(&space.actions[0])?;
-    self.skip_trivial_count += 1;
-}
-```
+going. A forced choice costs no model forward pass and produces no training
+row. [`Game::tick`](../managym/src/flow/tick.rs) also executes automatic mana
+payments before publishing the next decision.
 
 - `skip_trivial` is on everywhere by default: training, evaluation, Academy and
   benchmarks. Turning it off is for explicit debugging and the constructed-position

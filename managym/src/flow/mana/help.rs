@@ -47,14 +47,28 @@ impl Game {
         }
     }
 
+    pub(super) fn announced_obligations(
+        &self,
+        player: PlayerId,
+        payment: &Payment,
+    ) -> Vec<Obligation> {
+        self.help_obligations(
+            player,
+            payment.mana().0,
+            payment.mana_permissions(),
+            payment.life(),
+        )
+    }
+
     /// `cost` as the payment model's obligations under `permissions`: delve
     /// pays as much generic as the graveyard holds, convoke and improvise taps
     /// may pay the rest of the generic, and mana pays everything.
-    pub(super) fn help_obligations(
+    fn help_obligations(
         &self,
         player: PlayerId,
         cost: &ManaCost,
         permissions: CostPermissionContext,
+        life: u32,
     ) -> Vec<Obligation> {
         let cost = match permissions.help.delve {
             Some(spell) => {
@@ -69,21 +83,9 @@ impl Game {
         } else {
             0
         };
-        tap_obligations(&cost, keyword, waterbend, permissions.help.convoke)
-    }
-
-    fn helped_payable(
-        &self,
-        player: PlayerId,
-        pool: &Mana,
-        model: &PaymentModel,
-        cost: &ManaCost,
-        permissions: CostPermissionContext,
-        life: u32,
-    ) -> bool {
-        let mut obligations = self.help_obligations(player, cost, permissions);
+        let mut obligations = tap_obligations(&cost, keyword, waterbend, permissions.help.convoke);
         obligations.extend(Obligation::life(life));
-        model.payable(pool.clone(), obligations, SourcePolicy::All)
+        obligations
     }
 
     /// Can `player` pay `cost` with mana and `permissions`, `pool` in their pool?
@@ -116,7 +118,11 @@ impl Game {
             model.reserve(SourceReservation::tap(permanent));
         }
         self.mark_help_taps(&mut model, permissions.help);
-        self.helped_payable(player, pool, &model, cost, permissions, life)
+        model.payable(
+            pool.clone(),
+            self.help_obligations(player, cost, permissions, life),
+            SourcePolicy::All,
+        )
     }
 
     /// What tapping `tapped` may pay of `cost` under `permissions`, before
@@ -189,7 +195,11 @@ impl Game {
                 .filter(|payment| {
                     let next_permissions = permissions.after_tap(*payment);
                     let rest = cost.less_pip(payment.color);
-                    self.helped_payable(player, &pool, model, &rest, next_permissions, life)
+                    model.payable(
+                        pool.clone(),
+                        self.help_obligations(player, &rest, next_permissions, life),
+                        SourcePolicy::All,
+                    )
                 })
                 .collect::<Vec<_>>()
         };

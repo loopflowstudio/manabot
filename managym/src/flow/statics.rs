@@ -6,8 +6,7 @@ use crate::{
         decision::EffectFrame,
         game::{Game, Revisions},
         layers::{
-            evaluate_board, matches_view, PredicateSource, ReadSet, SourceSeed, StateReads,
-            StaticSources,
+            evaluate_board, matches_view, PredicateSource, SourceSeed, StateReads, StaticSources,
         },
         proposed_event::{EntryFace, ZoneEntry},
         triggers::TriggerIndex,
@@ -325,7 +324,9 @@ pub(super) struct LayerBoard {
     /// gathers across the battlefield and command zone).
     pub(super) static_sources: StaticSources,
     pub(super) land_type_overwrites: Vec<CardPredicate>,
-    reads: ReadSet,
+    /// State revisions that invalidate this board. Per-node field reads only
+    /// order dependencies during layer evaluation.
+    reads: StateReads,
     /// Finalization can inspect state beyond the raw layer view. Ordinary
     /// fixed activations retain their finalized entry across state writes
     /// that leave the board unchanged.
@@ -422,7 +423,7 @@ impl DerivedCache {
             || self
                 .board
                 .as_ref()
-                .is_some_and(|board| board.reads.state.overlaps(state_changed));
+                .is_some_and(|board| board.reads.overlaps(state_changed));
         if board_changed
             || (state_changed.any()
                 && self
@@ -2023,7 +2024,7 @@ mod cache_tests {
     #[cfg(debug_assertions)]
     fn with_stale_board(game: &Game) {
         let mut board = game.compute_board(None);
-        board.reads.state.mana = !board.reads.state.mana;
+        board.reads.mana = !board.reads.mana;
         game.derived.borrow_mut().at(game.state.revisions()).board = Some(Arc::new(board));
     }
 
@@ -2151,6 +2152,7 @@ mod cache_tests {
             PlayerId(0),
             [affected],
             Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
+                tap_source: true,
                 effects: vec![Effect::If {
                     condition: Condition::UnspentManaAtLeast { count: 2 },
                     then: vec![Effect::add_mana(Mana::parse("RR"))],
@@ -2166,7 +2168,14 @@ mod cache_tests {
         *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RR").into();
         let after = branch.characteristics(id);
         assert!(Arc::ptr_eq(&board, &branch.layer_board()));
-        assert_ne!(before.activated_abilities, after.activated_abilities);
+        assert_eq!(
+            before.activated_abilities[0].mana_choices(),
+            Some(vec![Mana::parse("R")])
+        );
+        assert_eq!(
+            after.activated_abilities[0].mana_choices(),
+            Some(vec![Mana::parse("RR")])
+        );
         assert_eq!(
             game.characteristics(id),
             before,
@@ -2276,6 +2285,7 @@ mod cache_tests {
             PlayerId(0),
             [affected],
             Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
+                tap_source: true,
                 effects: vec![Effect::add_mana(Mana::parse("R"))],
                 ..Default::default()
             })),
@@ -2292,6 +2302,7 @@ mod cache_tests {
             PlayerId(0),
             [affected],
             Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
+                tap_source: true,
                 effects: vec![Effect::If {
                     condition: Condition::ControlsAtLeast {
                         distinct_names: false,

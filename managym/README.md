@@ -514,11 +514,12 @@ and the choice focuses the permanent just tapped. The payment model splits
 a cost's generic mana into what those taps may pay (`help_obligations`), so
 castability, offers and execution agree. `AdditionalCost::{Convoke, Improvise, Delve}` give a
 spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
-Offers and affordability ask the payment model with the help included
-(`payable_with_help`, `while_paying`), so a spell castable only with help is
-offered and a tap that would strand the cost is not; the automatic payer never
-takes help, so when mana alone cannot pay the taps and exiles are the player's
-picks.
+The same witness reserves a creature tapped for a colored pip, including
+while a nested mana ability is being paid. For example, Airship Engine Room
+can supply generic mana while a white creature remains available to convoke
+a white pip for Guardian of Vitu-Ghazi. The player chooses convoke, improvise
+and delve contributions even with automatic mana payment.
+
 Costs chosen while casting use the kicker choice: bargain
 (`AdditionalCost::Bargain`) adds a `Sacrifice` component toward `Bargain` and
 marks the spell kicked, and a conditional alternative
@@ -619,15 +620,13 @@ create stack objects. The initial fixed-source witness keeps source order;
 [automatic source preference](#automatic-source-preference) selects the taps.
 A nested automatic prefix considers concrete pool remainders and the parent's
 completion.
-The announced activation's own tap and sacrifice stay reserved through
-waterbend and nested mana decisions. Its unpaid life fee follows its mana,
-including when a spending decision holds the announcement. A mana ability
-pays its own life fee after its upfront mana and before its output. The
-payment witness carries a signed life total so damage or life gain during
-mana production can change which fees the payer can afford.
-
-Life payments follow CR 119.4 (`Game::can_pay_life`): paying 0 life is always
-legal, even at 0 or negative life; a positive fee needs that much payable life.
+An announced mana ability keeps its priced cost and rules text even if its
+source loses the ability during payment. It reserves the source’s owed tap,
+counters and sacrifice through nested decisions. Its unpaid life fee
+follows its mana, including when a spending decision holds the announcement.
+Mana output reads the board after all activation costs and their replacements
+resolve. A sacrificed source keeps its entry choice for output that depends
+on its chosen color or type.
 
 Most payment questions never reach the search. With four untapped Islands and
 an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
@@ -1140,29 +1139,16 @@ Cast, activation and resolution payments use the same feasibility check for
 mana, life and help. Mana abilities can change the payer's life during payment.
 The check carries signed life through those steps and accounts for fixed
 self-damage and life gain when their replacements resolve without a further
-choice or other rules-state change. Positive life costs require enough life
-when paid. A life fee on the announced cost follows mana production, so life
-gained along the way can fund it. State-based loss for zero or less life is
+choice or other rules-state change. Paying zero life is always legal. Positive
+fees require a life total that can change and covers the fee (CR 119.4, 119.8).
+A life fee on the announced cost follows mana production, so life gained along
+the way can fund it. State-based loss for zero or less life is
 checked after the payment completes. An empty non-terminal choice returns a
 step error under either skipping setting.
 
 While a resolution payment such as ward can still be declined, the payer may
 float mana before declining. Paying still requires enough life for the full
 cost when the player commits to it.
-
-The same check accounts for convoke alongside mana sources. An untapped
-creature can pay one owed mana of its color or one generic mana by convoking.
-Spending the tap this way leaves it unavailable for mana or another owed tap.
-For example, Airship Engine Room can supply generic mana while a white creature
-remains available to convoke a white pip for Guardian of Vitu-Ghazi.
-
-An activated mana ability keeps the cost priced when the player announces it.
-Paying that fee can remove a granted ability from its source. The announced
-ability still resolves, and an output that depends on the battlefield uses
-the state after all activation costs are paid, including counters and
-sacrifices. If paying a cost requires ordering replacement effects, that
-choice comes before the mana output. A sacrificed source keeps its entry
-choice for abilities that produce its chosen color or use its chosen type.
 
 These choices are on by default for every consumer. They do not expose undo,
 or production at priority unless a seat

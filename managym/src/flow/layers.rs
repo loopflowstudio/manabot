@@ -336,7 +336,7 @@ pub(super) struct EvaluatedBoard<'a> {
     /// has no matching land yet. Entry consults them before a land exists.
     pub land_type_overwrites: Vec<CardPredicate>,
     pub static_sources: StaticSources,
-    pub reads: ReadSet,
+    pub reads: StateReads,
 }
 
 pub(super) struct EvaluatedSlot<'a> {
@@ -382,7 +382,7 @@ struct Eval<'a, 'b, 's> {
     objects: Vec<Option<LayerObject>>,
     owned_views: Vec<Option<Characteristics>>,
     live: &'b [PermanentId],
-    reads: ReadSet,
+    reads: StateReads,
 }
 
 /// Definition-derived static node owned inline by a [`SourceSeed`].
@@ -454,7 +454,7 @@ pub(super) struct SourceSeed {
     statics: Vec<StaticEntry>,
     nodes: Vec<SeedNode>,
     nodes_layers: u16,
-    nodes_reads: ReadSet,
+    nodes_reads: StateReads,
     pub(super) has_dynamic_activations: bool,
     pub(super) has_board_statics: bool,
     pub(super) has_triggered_mana_abilities: bool,
@@ -462,18 +462,13 @@ pub(super) struct SourceSeed {
 
 /// Conservative reads used for both dependency pruning and cache invalidation.
 /// Walk each predicate/condition once, including nested alternatives.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct ReadSet {
+#[derive(Clone, Copy, Default)]
+struct ReadSet {
     fields: u16,
-    pub(super) state: StateReads,
+    state: StateReads,
 }
 
 impl ReadSet {
-    pub(super) fn merge(&mut self, other: Self) {
-        self.fields |= other.fields;
-        self.state.merge(other.state);
-    }
-
     fn predicate(&mut self, p: &CardPredicate) {
         if p.chosen_name || p.namesake || p.named.is_some() {
             self.fields |= NAME;
@@ -539,9 +534,7 @@ impl ReadSet {
                 self.fields |= CARD_TYPES
             }
             EffectValue::SourcePower => self.fields |= POWER,
-            EffectValue::GreatestSharedCreatureType => {
-                self.fields |= CARD_TYPES | SUBTYPES;
-            }
+            EffectValue::GreatestSharedCreatureType => self.fields |= CARD_TYPES | SUBTYPES,
             EffectValue::CreaturesWithCounters => {
                 self.fields |= CARD_TYPES;
                 self.state.counters = true;
@@ -579,15 +572,14 @@ impl ReadSet {
     fn layer_value(&mut self, value: &LayerValue) {
         if let LayerValue::Count(count) = value {
             match count.as_ref() {
-                LayerCount::CreatureTypes { .. } => {
-                    self.fields |= SUBTYPES;
-                }
+                LayerCount::CreatureTypes { .. } => self.fields |= SUBTYPES,
                 LayerCount::ColorsAmong(p) => {
                     self.fields |= COLORS;
                     self.predicate(p);
                 }
-                LayerCount::Graveyard { predicate, .. } => self.predicate(predicate),
-                LayerCount::YouControl(predicate) => self.predicate(predicate),
+                LayerCount::Graveyard { predicate, .. } | LayerCount::YouControl(predicate) => {
+                    self.predicate(predicate)
+                }
                 LayerCount::CountersOn { predicate, .. } => {
                     self.predicate(predicate);
                     self.state.counters = true;
@@ -613,11 +605,11 @@ impl ReadSet {
                     self.fields |= NAME;
                 }
             }
-            Condition::OpponentControlsMoreCreatures => {
-                self.fields |= CARD_TYPES;
+            Condition::OpponentControlsMoreCreatures => self.fields |= CARD_TYPES,
+            Condition::BattlefieldAtLeast { predicate, .. }
+            | Condition::SourceMatches(predicate) => {
+                self.predicate(predicate);
             }
-            Condition::BattlefieldAtLeast { predicate, .. } => self.predicate(predicate),
-            Condition::SourceMatches(predicate) => self.predicate(predicate),
             Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
                 for condition in conditions {
                     self.condition(condition);
@@ -1108,7 +1100,7 @@ pub(super) fn evaluate_board(
     live.clear();
     nodes.clear();
     let mut land_type_overwrites = Vec::new();
-    let mut reads = ReadSet::default();
+    let mut reads = StateReads::default();
     let mut static_sources = StaticSources::default();
     let mut active_layers = 0u16;
     let mut has_pt_counters = false;
@@ -1240,7 +1232,7 @@ pub(super) fn evaluate_board(
                     ability: ability.clone(),
                 };
                 if let Some(node) = build_dynamic_node(game, NodeSource::command(source), &entry) {
-                    reads.merge(node.reads());
+                    reads.merge(node.reads().state);
                     active_layers |= node.layers();
                     nodes.push(EvalNode::Dynamic(node));
                 }
@@ -1486,10 +1478,10 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         .filter_map(|entry| build_seed_node(game, node_source, entry))
         .collect();
     let mut nodes_layers = 0u16;
-    let mut nodes_reads = ReadSet::default();
+    let mut nodes_reads = StateReads::default();
     for node in &nodes {
         nodes_layers |= node.plan.layers;
-        nodes_reads.merge(node.plan.reads);
+        nodes_reads.merge(node.plan.reads.state);
     }
     let has_dynamic_activations = view.has_dynamic_activations();
     let has_board_statics = has_board_statics(&view.static_abilities);
@@ -1722,7 +1714,7 @@ impl Eval<'_, '_, '_> {
         active_layers: &mut u16,
         node: DynamicNode,
     ) -> u16 {
-        self.reads.merge(node.reads());
+        self.reads.merge(node.reads().state);
         let layers = node.layers();
         *active_layers |= layers;
         nodes.push(EvalNode::Dynamic(node));
