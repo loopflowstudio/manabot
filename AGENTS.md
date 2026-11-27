@@ -121,7 +121,12 @@ neutrally. Default trained policies to `PolicyDescriptor.recommended` before the
 first eligible one. Reserve preview space so hover never shifts layout, render
 braced mana/tap symbols (`{W}`–`{G}`, `{T}`, `{Q}`) through `ManaText`/`Pips`
 rather than raw text, and fit primary views into one 1280×800 screen with
-floating board overlays closed by default.
+floating board overlays closed by default. Show each offer once in a panel,
+never as a list row and a button together. Ring, lift or outline a card only
+for a live offer on it. Hold the next choices until the walk has caught up to
+the position they belong to. Draw hidden cards as card backs deep enough to
+read as cards. In Play your hand stays out and no strip, chart or tray covers
+it.
 
 ## Style
 
