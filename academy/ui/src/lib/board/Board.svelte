@@ -33,6 +33,7 @@
   import { onMount, setContext, untrack, type Snippet } from 'svelte';
   import ArtCredits from '$lib/components/ArtCredits.svelte';
   import ThemeSwitch from '$lib/components/ThemeSwitch.svelte';
+  import { CARD_BACK_URL, loadArt } from '$lib/card-art';
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
   import {
@@ -1238,7 +1239,13 @@
   // or in moves nothing on the battlefield.
   const RIBBON_CARD = { min: 80, max: 112 };
   const PEEK_FACE = 46;
-  const PEEK_BACK = 16;
+  const PEEK_BACK = 40;
+  let cardBackArt = $state<string | null>(null);
+  onMount(() => {
+    let active = true;
+    void loadArt(CARD_BACK_URL).then(ok => { if (active && ok) cardBackArt = CARD_BACK_URL; });
+    return () => { active = false; };
+  });
   const ribbons = $derived(handLayout === 'ribbons');
   const topReserve = $derived(ribbons ? PEEK_FACE : PEEK_BACK);
   const bottomReserve = $derived(ribbons ? PEEK_FACE : 0);
@@ -1993,8 +2000,9 @@
             </section>
           {/if}
           {#each { length: sideView.hiddenHand } as _, index (index)}
-            <div class="ribbon-card back" aria-hidden="true" data-testid="card-back" style:left={`${(sideView.hand.length + index) * lay.step}px`}
-              style:width={`${lay.card}px`} style:height={`${height}px`}></div>
+            <div class="ribbon-card back" class:art={cardBackArt !== null} aria-hidden="true" data-testid="card-back" style:left={`${(sideView.hand.length + index) * lay.step}px`}
+              style:width={`${lay.card}px`} style:height={`${height}px`}
+              style:background-image={cardBackArt ? `url('${cardBackArt}')` : undefined}></div>
           {/each}
         </div>
       </div>
@@ -2301,8 +2309,10 @@
   .ribbon.open .ribbon-card.face { --peek: var(--peek-back); }
   .ribbon-card.back {
     --peek: var(--peek-back); pointer-events: none; border: 1px solid var(--border-strong); border-radius: var(--radius-card);
-    background: repeating-linear-gradient(45deg, var(--bg-field) 0 6px, var(--bg-muted) 6px 12px);
+    background: var(--bg-surface) center / cover no-repeat;
+    box-shadow: inset 0 0 0 3px var(--bg-surface), inset 0 0 0 4px var(--border-strong), var(--lift);
   }
+  .ribbon-card.back.art { border-color: var(--border); box-shadow: var(--lift); }
   .ribbon.out .ribbon-card.face, .ribbon .ribbon-card.face:hover, .ribbon .ribbon-card.face:focus-within { transform: none; }
   /* Open hands: a card turned face-up glides out from where its back was. */
   @starting-style { .ribbon.open .ribbon-card.face { transform: translateY(calc(var(--peek-back) - var(--card-height))); } }
