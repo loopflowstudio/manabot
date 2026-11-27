@@ -132,17 +132,19 @@ its [evidence and remaining integration work](https://github.com/loopflowstudio/
 are separate from complete-game replay certification.
 
 Live play renders the board (`academy/ui/src/lib/board/`): one window with the
-board, your bottom hand workspace, the opponent's top-edge hand ribbon (card
-backs plus rules-revealed cards, or full face-up cards while Open hands is on)
-and a rail holding the stack, the decision and every legal offer by number. On
-recordings (Watch, Review and **See its line**), `handLayout="ribbons"` places
-both hands as upright 1:1 edge ribbons over a fixed two-half battlefield (the
-active seat glides in with its offers and recorded probabilities on those cards;
-off-board offers such as Lessons stay in a board-level tray), while Play and
-Study keep `handLayout="workspace"`. `boardView` places each offer exactly once in that list and
-at least once on the card or player it acts on, as a prompt button (pass, pay,
-declines and combat answers without another creature) or in a tray for subjects
-the board does not draw. A card with one offer commits it on click; several
+board, both hands as upright 1:1 ribbons on its bottom and top edges (the
+opponent's as card backs plus rules-revealed cards, or full face-up cards while
+Open hands is on) and a rail holding the stack, the decision and every legal
+offer by number. Off-board offers such as Lessons sit in a board-level tray.
+`handLayout` says how the bottom hand behaves: `"workspace"` (Play and Study)
+keeps it out all the time, in depth the battlefield reserves under your rows,
+and takes drags from it; `"ribbons"` (Watch, Review and **See its line**) tucks
+both hands over a fixed two-half battlefield, and the active seat's glides in
+with its offers and recorded probabilities on those cards. `boardView` places
+each offer exactly once in that list and, where it acts on one, on its card or
+player, or in the tray for subjects the board does not draw; pass and pay are
+the primary button, and the rail's other prompt buttons (declines, combat
+answers without another creature) show only while the list is folded. A card with one offer commits it on click; several
 open at the card. Pointer drag routes through the same offer and combat-draft
 paths: drag playable cards from hand onto the battlefield, pull lines from
 sources to legal targets or blockers to attackers, and drag a marquee across

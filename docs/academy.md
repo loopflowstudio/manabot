@@ -498,8 +498,10 @@ the import option to return to bundled decks.
 `managym academy play` starts the same game from the command line
 ([Start in a chosen game](#start-in-a-chosen-game)).
 
-The game fills the window: the board in the centre, your hand along the
-bottom and a rail with the stack, the current decision and every legal choice.
+The game fills the window: the board in the centre, your hand as a ribbon of
+cards along its bottom edge, out all the time under your lands, the opponent's
+along the top edge, and a rail with the stack, the current decision and every
+legal choice.
 Cards a legal action applies to are raised off the board; clicking one with a
 single action commits it ([controls below](#playing-on-the-board)). Decisions with a single
 legal action are taken for you and never shown. Reloading the page restores the
@@ -780,7 +782,9 @@ The rail flows from the past into the present:
   [Previewing payments](#previewing-payments)). The label stays on one line; a
   long one is shortened and its full text is the button's accessible name and
   tooltip. Declining, and a combat answer that does not name another creature,
-  are separate buttons, so a click on a card never declines. During a live
+  are rows of the list, never a card, so a click on a card never declines. Each
+  choice is shown once: while **Choices** is folded, those answers are buttons
+  under the primary one instead. During a live
   grouped decision (combat or card arrangement) the raw single-step offers fold
   under a closed disclosure (see [Grouped decisions](#grouped-decisions)).
 
@@ -1502,8 +1506,8 @@ The transport bar sits where live play has your hand's input:
 | Scrubber | arrows when focused | Any position; turns are ticked and choices marked under it |
 | | Home / End | The first or last position |
 
-Opened from its toggle in the bottom bar, the **Decisions** strip floats as an
-overlay over the lower board (dismissible with **×** or `Esc`): each choice is a
+Opened from its toggle in the bottom bar, the **Decisions** strip takes its own
+row under the board, never over a hand (closed with **×** or `Esc`): each choice is a
 tick, coloured by whose it was, or a point on that chooser's value line where
 a value was recorded; turns are ruled and numbered. Click it to jump. It starts
 folded in both Replay and live play so the board and hand stay unobstructed;
@@ -1529,8 +1533,10 @@ between a choice and what followed it.
 
 On recordings (Watch, Review and **See its line**), both hands sit as upright
 1:1 card ribbons bleeding along the top and bottom edges of a fixed two-half
-battlefield; live Play and **Try another line** (Study) keep your dedicated
-bottom hand row. Whichever seat is making the current choice shows
+battlefield, tucked to their name bars until asked for. Live Play and **Try
+another line** (Study) draw the same ribbons, with your own hand out all the
+time in depth the battlefield keeps clear under your lands. On a recording,
+whichever seat is making the current choice shows
 **Choosing…** and an accent bar on its plate, and its hand ribbon glides into
 full view with its legal offers and recorded policy probabilities directly on
 those cards — staying extended through that choice's consequences until the
@@ -1562,7 +1568,7 @@ you played, **Show both hands** appears only once the game finishes
 (`game_over`) and is never offered on an unfinished played game, even if it was
 played with open hands. Showing both hands never enriches the bot's recorded
 evidence or acting-view history. Entering **Try another line** (Study) always
-returns to the acting view and your bottom hand row, and restores your previous
+returns to the acting view with your hand out along the bottom edge, and restores your previous
 view on **Return to recorded decision**.
 
 **Settings** holds the recording's kind and status, each seat's identity
@@ -1671,7 +1677,7 @@ heading reads **Analysis by** the policy, and each option on its card and row
 carries the policy's probability and its estimate after it. Nothing is
 chosen, raised or reordered for you, and no key plays the policy's choice.
 
-Turning it on also opens the Decisions overlay over the lower board, which draws the policy's
+While it is on, the Decisions strip (closed until you open it from the bottom bar) draws the policy's
 estimate from your seat at each of your decisions this game, those made
 before you turned it on included (read after the fact, so they mark nothing), on Review's
 fixed 0–100 axis; hovering it names the nearest point by the move before it

@@ -119,6 +119,8 @@
   let expanded = $state<Set<string>>(new Set());
   let choicesOpen = $state(true);
   const hasChoicesBlock = $derived((!over && !recording) || frame.offers.length > 0);
+  /** The numbered list is on screen, so no other control repeats its rows. */
+  const choicesListed = $derived(hasChoicesBlock && choicesOpen && !waitingFor);
   const hasCursor = $derived((cursorLineIds?.size ?? 0) > 0);
   function isLineCurrent(entry: HistoryLine, fallbackId = false): boolean {
     if (hasCursor) return cursorLineIds!.has(entry.id);
@@ -396,7 +398,7 @@
             {/if}
           </div>
         {/if}
-        {#if hasChoicesBlock && choicesOpen && !waitingFor}
+        {#if choicesListed}
           <div use:region={{ across: !onjump }} class="choices" aria-label="All legal choices">
             <!-- An open live group folds raw single-step offers under a collapsed disclosure. -->
             {#if draft}
@@ -430,12 +432,15 @@
             </div>
             {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
           {/if}
-          {#each secondary as placed (placed.offer.id)}
-            <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
-              disabled={!live} onclick={() => onact(placed)}>
-              <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={offerText(placed.offer)} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
-            </button>
-          {/each}
+          <!-- The open list already holds every choice; these stand in for it only while it is folded. -->
+          {#if !choicesListed}
+            {#each secondary as placed (placed.offer.id)}
+              <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
+                disabled={!live} onclick={() => onact(placed)}>
+                <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={offerText(placed.offer)} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
+              </button>
+            {/each}
+          {/if}
         {/if}
 
         {#if detail && frame.prompt && !interrupted}

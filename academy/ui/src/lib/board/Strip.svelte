@@ -84,7 +84,7 @@
         <p class="caption type-caption text-ink-3" data-testid="strip-caption">{#if scale !== null}{scale}{:else if values.length}Value recorded at {values.length} of {decisions.length} decisions{/if}{#if note}<span class="note">{note}</span>{/if}</p>
       {/if}
       {#if onclose}
-        <button type="button" class="close type-caption" aria-label="Close analysis overlay" title="Close (Esc)" onclick={onclose}>×</button>
+        <button type="button" class="close type-caption" aria-label="Close decisions" title="Close (Esc)" onclick={onclose}>×</button>
       {/if}
     </div>
   {/if}

@@ -458,7 +458,6 @@
     { youSeat: decisionFrame?.projection.agent.player_index ?? 0, you: 'You', opponent: shortName(opponentName) },
   ));
   const liveMarks = $derived(liveScale ? withLiveAnalysisPoints(baseMarks, liveAnalysis.points) : baseMarks);
-  $effect(() => { if (liveAnalysis.shown) stripOpen = true; });
   const liveEvidence = $derived(liveAnalysis.shown && liveAnalysis.reading && decisionFrame
     && liveAnalysis.reading.revision === decisionFrame.revision && decisionFrame.offers.length
     ? analysedEvidence(decisionFrame, liveAnalysis.reading.decision, null, liveAnalysis.policy?.name ?? 'The policy') : null);
