@@ -11,6 +11,8 @@ hot paths before asking what to do—separate trajectory shifts from per-step
 overhead instead of punting investigation to `deliver`/`gate`.
 
 **Ask in concrete behavior, not code symbols.** Write each numbered question (in
-chat and on the page) as what the player or user sees under each option rather
-than internal field or function names, and give each distinct choice its own
-number so a bare reply like `4b` needs no follow-up.
+chat and on the page) as what the player or user sees under each option, and
+give each distinct choice its own number so a bare reply like `4b` needs no
+follow-up. Say what an engine term ("incarnation", "alias") is where it first
+appears, and state what answering decides. Offer a deferred finding as "fix here" against "leave", and
+file no follow-up Task until that is answered.
