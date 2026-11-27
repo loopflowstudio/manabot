@@ -1,4 +1,4 @@
-at: 888e500087e3286803c5aeea64dd6dfdd2b00358
+at: 9fa44386462d8252e17d84db5b7dd190b046074d
 first:
   - path: managym/README.md
     why: Indistinguishable-object contract, allowlist, manual-mana rules, and live-in-zone aliases
@@ -58,6 +58,8 @@ first:
     why: End-to-end Academy alias, Command, stale-revision, and replay contract
   - path: academy/ui/src/lib/board/view.test.ts
     why: Drawn-alias anchoring and pile stability unit tests
+  - path: managym/perf/baseline.json
+    why: Adopted CI Engine Budget baseline (-10.6% search, +3.2% steps)
 hide:
   - path: conformance/authored-matches/
     why: Regenerated authored-match replay fixtures for hash bump

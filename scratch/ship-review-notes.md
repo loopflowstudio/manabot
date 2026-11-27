@@ -45,3 +45,15 @@
   - **`4b`:** Deduplicate `CandidateSource` lists in `managym/src/agent/decision_surface.rs` (`compound_offers`, `structured_priority_offers`, `structured_attacker_offers` — targets, waterbend taps, attackers, blockers) through `fold_action_space` / equivalence classes with count-based roles where appropriate.
   - **`5b`:** Tie-break equal-reluctance, equal-followup mana sources in `managym/src/flow/mana/autotapper.rs` by deterministic color/output class before `PermanentId` / discovery order, update `autotapper.rs` tests, and remove the `autotapper`-shortcut early stops in `managym/tests/interchangeable.rs` so the behavioral oracle verifies through automatic payment shortcuts (previously filed `MTG-495` was already deleted).
   - **`bench_steps` throughput:** Profile and trim the hot path causing `bench_steps` throughput (`35,772.6/s` vs `39,802.6/s`, −10.1%) to dip 1.1% under the −10% CI floor (`36,184.2/s`), while keeping `bench_search` (−17.9%) and all 25 passing CI checks green; then adopt `managym/perf/baseline.json` at gate/CI.
+
+## Jack Heart — 2026-11-26 23:29
+
+> 1a
+> 1b
+> and mark complete when shipped
+
+---
+
+## Reading applied (delivery)
+
+- **Outcome:** Confirmed final boundaries (`list[SubjectRef]` aliases on `decision_group.Offer` & `InteractionOffer`, hash v34, `CandidateValue::Subject` count roles on deprecated 0.2.x compound surface) and proceed to `deliver` with `auto` enabled (`1b`) and complete MTG-487 once merged and verified.
