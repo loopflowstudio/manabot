@@ -109,28 +109,47 @@ It depends on how the batch is closed, and there are two ways.
 
 `batch_closure` declares which, independently of who learns.
 
-**Complete games: no.** This is the default for new stages, and two-seat learning
-always uses it. `transitions` is a floor on a stream's retained decisions, the
-total across seats when both learn, unless `games_per_stream` is set, which
-replaces the floor with a game count. A stream that has passed the floor stops at the end of its current game.
-Rows are packed into one `[rows, 1]` column with an end flag after each
-trajectory, and row counts vary by batch. The collector asserts that the last
-row is an end, and `bootstrapped_tail_fraction` is 0.
+**Complete games: no.** This is the default for new runs. `transitions` is a
+floor on a stream's retained decisions, the total across seats when both learn,
+unless `games_per_stream` is set, which replaces the floor with a game count. A
+stream that has passed the floor stops at the end of its current game and idles
+(`idle_stream_steps`) until every stream finishes. Rows are packed into one
+`[rows, 1]` column with an end flag after each trajectory, and row counts vary
+by batch. The collector asserts that the last row is an end, and
+`bootstrapped_tail_fraction` is 0.
 
-**Exact quota: yes.** With `batch_closure="exact-quota"`, which needs one learning
-seat and neither `games_per_stream` nor a game error policy, each stream collects exactly `transitions` learner decisions and the batch has
-shape `[transitions, streams]`. The scale ladder v1 run trained this way. One
-column can hold the end of a game begun in the last batch, some whole games,
-and the start of a game that hasn't finished.
+**Exact quota: yes.** With `batch_closure="exact-quota"`, each stream collects
+exactly `transitions` surviving learner decisions (counting both seats when
+`learning_seats="both"`), so the batch always has `streams × transitions` rows
+and error-free updates have zero idle stream steps. One stream can hold the end
+of a game begun in the last batch, some whole games, and the start of a game
+that hasn't finished:
 
-For an unfinished game, the stream pauses at the learning seat's next decision.
-That observation becomes `next_obs`, and no action is sampled for it. Three
-things follow:
+- With **one learning seat** (used by the scale ladder v1 run), the batch has
+  rectangular shape `[transitions, streams]` and an unfinished game pauses at
+  the learning seat's next decision.
+- With **both learning seats**, trajectories are packed into
+  `[streams × transitions, 1]` with explicit trajectory spans (`trajectories`),
+  each ending at either a real game result or a frozen critic bootstrap. When a
+  stream hits its quota mid-game, each seat with a pending decision bootstraps
+  from its current viewer-safe observation read under the collecting weights —
+  the acting seat from its next decision observation, and the waiting seat from
+  a viewer read of that position (evaluated by the same critic, which trains on
+  own-decision observations, affecting at most one waiting-seat row per stream
+  per update).
 
-1. **The value network stands in for the outcome.** `_targets` evaluates
+Exact quota rejects `games_per_stream`, `snapshot`, adaptive collection,
+two-model `opponent_mode="learning"` (`collect_pair`),
+`model.recent_events=True` (viewer reads at a cut carry no event history), and
+`game_errors` without `recover_capacity=True`.
+
+At an unfinished game's boundary, no action is sampled for the cut observation.
+Three things follow:
+
+1. **The value network stands in for the outcome.** Target computation evaluates
    `V(next_obs)` with the collecting weights, before any optimizer step, and
-   uses it as the last row's successor. No reward is invented, and the row is
-   not treated as a game end.
+   uses it as the span's successor. No reward is invented, and the row is not
+   treated as a game end.
 2. **These rows never see the real result directly.** They learn about the
    outcome only through that value estimate. The rest of the game lands in the
    next batch, whose rows do receive the result.
@@ -139,10 +158,11 @@ things follow:
    behavior policy. A single game can still be played by several versions of
    the policy.
 
-A column can also hit a true game end in the middle of a batch. The end flag
+A stream can also hit a true game end in the middle of a batch. The end flag
 cuts both the value lookup and the running sum at that row, so one game's
-credit never reaches the game before it. When a stream's last row is itself a
-game end, `next_obs` belongs to a fresh game and is ignored.
+credit never reaches the game before it. When a one-seat stream's last row is
+itself a game end, `next_obs` belongs to a fresh game and is ignored; in a
+packed two-seat batch, terminal spans carry no bootstrap index.
 
 An unfinished game always comes from a deliberate pause. A game that the engine
 truncates raises an error instead of counting as a draw, and a run that hits
@@ -419,7 +439,7 @@ so a result can't be picked by looking at the test.
 | Question | Metric | Reading it |
 | --- | --- | --- |
 | Is the agent improving? | Evaluation scores | The only strength signal. Self-play results can't show it, because both seats are the same agent. |
-| Did batches contain unfinished games? | `bootstrapped_tail_fraction` | Share of seat trajectories that end with a critic bootstrap. A column containing two completed games and one paused game contributes three trajectories. |
+| Did batches contain unfinished games? | `bootstrapped_tail_fraction` | Share of seat trajectories that end with a critic bootstrap. Each completed game or paused tail for a learning seat contributes one trajectory. |
 | Is the filter working as designed? | `retained` / `rows` | Should sit near a quarter. |
 | Is the policy moving too fast? | `collection_kl`, `numerical/clip_fraction` | Rising values mean updates are pushing against their limits. |
 | Is exploration collapsing? | `entropy` | A fast fall means the policy is committing early. |

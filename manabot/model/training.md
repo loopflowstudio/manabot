@@ -22,16 +22,24 @@ into the estimator. Changing reward signs cannot repair an incorrect trajectory.
 
 Gamma and lambda advance per retained same-player decision, including consecutive
 decisions. Opponent and skipped forced decisions add no discount steps. One-seat
-exact-quota tails bootstrap from the same player's paused observation. Both-seat
-self-play finishes current games after the combined decision floor, so actual
-rows may exceed the quota. Explicit games-per-stream controls work in either arm.
-Frozen/random opponents contribute no learner rows. Native winner identity sets
-terminal win/loss/draw labels; draws stay zero. Strict collection rejects
-truncation because continuing-task bootstrap from a missing final observation
-is unsupported. Opted-in game-error recovery instead quarantines the entire
-failed or truncated game, discards both seats' uncommitted rows and regathers.
-It finishes games even with one learning seat; that mode uses a decision floor,
-not the strict one-seat exact quota.
+exact-quota tails bootstrap from the same player's paused observation in a
+rectangular `[transitions, streams]` batch. Both-seat self-play defaults to
+`complete-games` (finishing current games after the combined decision floor, so
+actual rows may exceed `transitions`), and also supports
+`batch_closure="exact-quota"`, which packs exactly `streams × transitions`
+surviving rows into `[rows, 1]` with explicit trajectory spans and bootstraps
+each open seat at a mid-game cut from its viewer-safe observation read (rejecting
+`games_per_stream`, snapshots, adaptive collection, `collect_pair` and
+`model.recent_events=True`). Explicit games-per-stream controls work in either
+arm under `complete-games`. Frozen/random opponents contribute no learner rows.
+Native winner identity sets terminal win/loss/draw labels; draws stay zero.
+Strict collection rejects truncation because continuing-task bootstrap from a
+missing final observation is unsupported. Opted-in game-error recovery instead
+quarantines the entire failed or truncated game, discards both seats'
+uncommitted rows and regathers; under `complete-games` it finishes replacement
+games, while under `exact-quota` it requires `recover_capacity=True`, keeps rows
+earlier updates learned from (`learned_samples`), and steps the stream on until
+its surviving rows reach `transitions`.
 
 Collection freezes behavior within each batch. Complete games end before weights
 change; exact-quota games may span updates. Stored full legal-action probabilities,

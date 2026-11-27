@@ -154,7 +154,9 @@ Lease and spending limits remain in hours and dollars. See
 New self-play training learns from both seats by default (`baseline-v3`).
 Set `SelfPlay.learning_seats="one"` for an explicit one-seat control.
 Batches close after complete games by default, whoever learns; `batch_closure`
-declares it, and `"exact-quota"` is the one-seat alternative. See
+declares it, and `"exact-quota"` is the fixed-row alternative for either one or
+both learning seats (eliminating idle stream steps and bootstrapping unfinished
+games at the boundary). See
 [batch closure](../docs/training.md#batch-closure).
 Use `games_per_stream` on both arms to match complete-game budgets. Distinct
 learning models can use `PairedLearners` to update both independent optimizers
