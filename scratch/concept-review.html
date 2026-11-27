@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept Review · MTG-500 Manual Mana Payment at HEAD (Post-Pass 5 &amp; 6)</title>
+<title>Concept Review · MTG-500 Manual Mana Payment at HEAD (Post-Pass 7)</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -295,19 +295,14 @@
     margin-bottom: 16px;
   }
 
-  .card-callout {
-    border-left: 4px solid var(--error);
-    background: var(--error-wash);
+  .card-proof {
+    border-left: 4px solid var(--success);
+    background: var(--success-wash);
   }
 
   .card-proposed {
     border-left: 4px solid var(--info);
     background: var(--info-wash);
-  }
-
-  .card-proof {
-    border-left: 4px solid var(--success);
-    background: var(--success-wash);
   }
 
   .card-warn {
@@ -405,9 +400,9 @@
     border-color: color-mix(in srgb, var(--success) 35%, transparent);
   }
 
-  .step-row.warn {
-    background: var(--warning-wash);
-    border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+  .step-row.info {
+    background: var(--info-wash);
+    border-color: color-mix(in srgb, var(--info) 35%, transparent);
   }
 
   .step-num {
@@ -425,7 +420,7 @@
 
   .step-row.fail .step-num { background: var(--error); color: #fff; border-color: transparent; }
   .step-row.ok .step-num { background: var(--success); color: #fff; border-color: transparent; }
-  .step-row.warn .step-num { background: var(--warning); color: #fff; border-color: transparent; }
+  .step-row.info .step-num { background: var(--info); color: #fff; border-color: transparent; }
 
   .diagram-wrap {
     background: var(--bg);
@@ -446,10 +441,13 @@
   .measure-card {
     background: var(--bg);
     border: 1px solid var(--border);
-    border-top: 3px solid var(--info);
+    border-top: 3px solid var(--success);
     border-radius: 10px;
     padding: 12px 14px;
     font-size: 13px;
+  }
+  .measure-card.warn-top {
+    border-top-color: var(--warning);
   }
 
   .choice-box {
@@ -476,15 +474,8 @@
     margin-top: 10px;
   }
 
-  .choice-grid-3 {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-top: 10px;
-  }
-
   @media (max-width: 960px) {
-    .choice-grid, .choice-grid-3 { grid-template-columns: 1fr; }
+    .choice-grid { grid-template-columns: 1fr; }
   }
 
   .opt {
@@ -549,75 +540,70 @@
 
   <header>
     <div>
-      <div class="eyebrow">Concept Review · MTG-500 · Full Branch Review at HEAD (Post-Passes 5 &amp; 6)</div>
-      <h1>Manual Mana Payment, Deferred Bonus Commitment &amp; Optional Resolution Life</h1>
+      <div class="eyebrow">Concept Review · MTG-500 · Full Branch Review at HEAD (Post-Pass 7)</div>
+      <h1>Manual Mana Payment, Production Commitment &amp; Optional Resolution Life</h1>
       <p class="lead">
-        <strong>Area taken:</strong> the full manual and automatic mana-payment surface changed by MTG-500 against
-        freshly fetched <code>origin/main</code> (<code>3feefa8ee5..00c20c4dd2</code>): forced-decision error
+        <strong>Area taken:</strong> the complete manual and automatic mana-payment surface changed by MTG-500 against
+        freshly fetched <code>origin/main</code> (<code>3feefa8ee5..6ad2607690</code>): forced-decision error
         propagation (<code>tick.rs</code>, <code>env.rs</code>, <code>vector_env.rs</code>), signed life and
         <code>mana_suffix_life_delta</code>, the closed monotone CR 605.1a contract (<code>mana_parts()</code>),
         owned mana continuations (<code>ManaUpfrontActivation</code>, <code>FrameCompletion::ManaOutput</code>),
-        Pass 5's deferred bonus commitment (<code>ManaProduction::Bonus</code>, <code>decision.rs</code>) and
-        in-model colored convoke (<code>Taps::Convoke</code>, <code>ManaSource.convoke_colors</code>,
-        <code>help.rs</code>), plus optional resolution payments with trailing life (<code>Decision::Payment</code>).
-        Reviewed in full because Pass 5 added new rules/search types and changed <code>ManaChoice</code> commitment semantics.
+        whole-production bonus commitment (<code>ManaProduction::Bonus.commit_start</code>), committed vs. declinable
+        resolution life (<code>payment_obligations</code> / <code>saved_obligations</code>), and in-model colored
+        convoke (<code>Taps::Convoke</code>, <code>ManaSource.convoke_colors</code>, <code>prefix_lower_bound</code>).
+        Re-reviewed at <code>HEAD</code> because Pass 7 added <code>commit_start</code> to the serialized
+        <code>ManaProduction::Bonus</code> decision shape and restructured declinable resolution obligations.
       </p>
     </div>
     <button class="theme-btn" id="themeToggle" type="button">Theme: Auto</button>
   </header>
 
   <div class="meta-bar">
-    <span><strong>HEAD:</strong> <code>00c20c4dd2</code></span>
+    <span><strong>HEAD:</strong> <code>6ad2607690</code></span>
     <span><strong>origin/main:</strong> <code>3feefa8ee5</code> (freshly fetched; 0 commits ahead)</span>
-    <span><strong>Built in branch:</strong> Passes 1, 2, 3, 4-contract, 4a, 5, 6</span>
+    <span><strong>Built in branch:</strong> Passes 1, 2, 3, 4-contract, 4a, 5, 6, 7</span>
     <span><strong>Hash version:</strong> <code>34 → 35</code> (unreleased on branch)</span>
     <span><strong>Legend:</strong>
-      <span class="badge badge-existing">Existing / Built</span>
-      <span class="badge badge-proposed">Proposed</span>
-      <span class="badge badge-scope">This Work (MTG-500)</span>
-      <span class="badge badge-planned">Separate Task</span>
+      <span class="badge badge-existing">Existing / Built on HEAD</span>
+      <span class="badge badge-yes">Aligned</span>
+      <span class="badge badge-planned">Deferred · Separate Task</span>
+      <span class="badge badge-scope">Review Sign-Off</span>
     </span>
   </div>
 
-  <div class="card card-warn">
+  <div class="card card-proof">
     <div class="card-title">
-      <h3>Executive Verdict · Core Fixes Are Solid; Two Real Contract Mismatches Remain Before Shipping</h3>
-      <span class="badge badge-no">2 Fixes Needed in MTG-500</span>
+      <h3>Executive Verdict · All Shipped Concepts Align on <code>HEAD</code>; Ready for Human Sign-Off &amp; Paired CI Budget Check</h3>
+      <span class="badge badge-yes">0 Open Mismatches in MTG-500</span>
     </div>
     <ul class="compact small">
       <li>
-        <strong>Passes 1–4a, coupling cleanup, vector-env restore, and core convoke hold up cleanly.</strong>
-        Removing Pass 2's provisional coupling blacklist restored <span class="card-name">Tarnished Citadel</span> +
-        <span class="card-name">Sunbaked Canyon</span> beside <span class="card-name">Angel of Vitality</span>, and
-        folding colored convoke into <code>PaymentModel</code> deleted <code>while_paying</code> /
-        <code>convoke_search</code> so <span class="card-name">Guardian of Vitu-Ghazi</span> +
-        <span class="card-name">Airship Engine Room</span> works uniformly in Manual and Auto modes.
+        <strong>All three ninth-review mismatches were closed cleanly in Pass 7 (<code>21b91711be</code>):</strong>
+        (1) <code>ManaProduction::Bonus</code> now carries <code>commit_start: Option&lt;usize&gt;</code> from
+        <code>ManaProduction::Output</code> through every triggered bonus so the entire production commits in order
+        when the last bonus resolves; (2) <code>payment_obligations</code> is strictly committed-only while
+        <code>saved_obligations</code> appends <code>tail_life()</code> for declinable resolution payments; and
+        (3) <code>prefix_lower_bound</code> accounts for <code>Taps::Convoke</code>, <code>PaymentStep::Convoke</code>
+        drops its unread <code>Color</code>, and the dead <code>|| helped</code> branch is gone.
       </li>
       <li>
-        <strong>Biggest mismatch on <code>HEAD</code> (This Work · Pass 5 broke its own README contract):</strong>
-        <code>decision.rs:2889</code> recomputes <code>start = pool.unit_count()</code> on <em>every</em>
-        <code>Decision::ManaChoice</code> step and discards it when suspending on <code>ManaProduction::Bonus</code>.
-        When the final bonus resolves (<code>next.is_none()</code>), <code>commit_produced_mana(player, start)</code>
-        only examines the <strong>last bonus's units</strong> — abandoning the original output (and earlier bonuses)
-        as "previously floated mana," attributing the wrong source on the receipt, and leaving uncontested casts open
-        at <code>PayCost</code>. Pass 5's own test (<code>ody.rs:316</code>) masked this with
-        <code>if has_action(..., PayCost)</code>.
+        <strong>Every caller across all 10 <code>payment_obligations</code> sites and 4 <code>saved_obligations</code> sites agrees:</strong>
+        floating/activating before declining optional Ward <span class="pip pip-c">2</span> + Pay 2 life now behaves
+        identically to optional Ward <span class="pip pip-c">2</span>, while <code>PayCost</code>,
+        <code>useful_payment_taps</code>, <code>automatic_payability</code>, <code>automatic_taps</code>,
+        <code>help_taps</code>, and <code>ManaSpend</code> all enforce the 2-life tail.
       </li>
       <li>
-        <strong>Second real mismatch (This Work · Pass 2 conflated committed vs. declinable resolution life):</strong>
-        <code>payment_obligations</code> (<code>mana.rs:3596</code>) checks
-        <code>!progress.can_decline() || progress.tail_life() &gt; 0</code>, turning an <strong>optional,
-        declinable</strong> resolution payment (e.g. Ward <span class="pip pip-c">2</span> + Pay 2 life,
-        <code>can_decline() == true</code>) into a mandatory obligation that blocks activating or floating any mana
-        ability before declining — directly contradicting optional Ward <span class="pip pip-c">2</span>
-        (<code>tail_life == 0</code>).
+        <strong>Docs and tests match code on every surface:</strong>
+        <code>docs/engine.md</code> and <code>managym/README.md</code> match the implemented contracts verbatim;
+        <code>ody.rs</code> dropped its <code>if has_action(..., PayCost)</code> workaround and now asserts exact
+        source attribution on spent mana across two <span class="card-name">Heartbeat of Spring</span> bonuses plus
+        pre-floated mana.
       </li>
       <li>
-        <strong>Small Pass 5 convoke rough edges (This Work · cleanup):</strong>
-        <code>prefix_lower_bound</code> (<code>mana.rs:3069</code>) ignores <code>Taps::Convoke</code>,
-        <code>PaymentStep::Convoke(PermanentId, Color)</code> carries an unread <code>Color</code> mapped to
-        <code>Action::WaterbendTap</code>, and <code>useful_payment_taps</code> (<code>mana.rs:4270</code>) has a dead
-        <code>|| helped</code> branch left over from removing <code>while_paying</code>.
+        <strong>Remaining items are deliberate boundaries, not defects:</strong>
+        two cleanly scoped deferred Tasks (Coupled Mana Payment; Owned Non-Mana Activations), the one-way
+        <code>MATCH_STATE_HASH_VERSION</code> 34 → 35 bump once released, and the paired CI Engine Budget run.
       </li>
     </ul>
   </div>
@@ -628,10 +614,10 @@
   <table>
     <thead>
       <tr>
-        <th style="width: 22%">Domain Concept (CR &amp; Player)</th>
+        <th style="width: 23%">Domain Concept (CR &amp; Player)</th>
         <th style="width: 24%">Code Concept on <code>HEAD</code></th>
         <th style="width: 11%">Aligned?</th>
-        <th style="width: 43%">Diagnosis &amp; Disposition</th>
+        <th style="width: 42%">Verification &amp; Disposition</th>
       </tr>
     </thead>
     <tbody>
@@ -672,9 +658,9 @@
           <span class="badge badge-existing" style="margin-top:4px">Built · Pass 2 &amp; 5</span>
         </td>
         <td>
-          Pass 5 stripped the refuted <code>PaymentCoupling</code> / <code>payment_writes_couple</code> /
-          <code>tap_coupled</code> / <code>mana_activation_reads</code> blacklist. Citadel + Canyon at 3 life now keeps
-          <code>LifeDelta(-3)</code> beside <span class="card-name">Angel of Vitality</span>.
+          Isolated read-only fork probes fixed life gain / self-damage through replacements; provisional coupling
+          blacklist deleted in Pass 5. <span class="card-name">Tarnished Citadel</span> +
+          <span class="card-name">Sunbaked Canyon</span> works beside <span class="card-name">Angel of Vitality</span>.
         </td>
       </tr>
 
@@ -706,90 +692,84 @@
         <td>
           <code>ManaUpfrontActivation</code>,
           <code>FrameCompletion::ManaOutput(Box&lt;PendingManaOutput&gt;)</code><br>
-          <span class="small muted"><code>flow/decision.rs:42,79,122</code>; <code>flow/mana.rs:4999,5073</code></span>
+          <span class="small muted"><code>flow/decision.rs:42,79,122</code>; <code>flow/mana.rs:5002,5076</code></span>
         </td>
         <td>
           <span class="badge badge-yes">Yes</span><br>
           <span class="badge badge-existing" style="margin-top:4px">Built · Pass 3 &amp; 4a</span>
         </td>
         <td>
-          Cleanly models the rules phases; zero allocation when no counter/sacrifice cost is present; enclosing
-          reservations and obligations walk through <code>SuspendedResolution::decisions()</code>.
+          Models each CR phase without allocating when no counter/sacrifice cost is present; enclosing reservations and
+          obligations walk through <code>SuspendedResolution::decisions()</code>.
         </td>
       </tr>
 
       <tr>
         <td>
           <strong>Committing a mana production once its triggered bonuses finish</strong><br>
-          <span class="small muted">Output + every triggered bonus of one production join the pool, then uncontested units from that whole production commit in order while previously floated mana stays pooled (<code>managym/README.md:1209</code>).</span>
+          <span class="small muted">Output + every triggered bonus of one production join the pool, then uncontested units from that whole production commit in order while previously floated mana stays pooled.</span>
         </td>
         <td>
           <code>Decision::ManaChoice</code>,
-          <code>ManaProduction::Bonus</code>,
+          <code>ManaProduction::Bonus { commit_start, .. }</code>,
           <code>commit_produced_mana(player, start)</code><br>
-          <span class="small muted"><code>flow/decision.rs:553,2889-2948</code>; <code>flow/mana.rs:5241</code></span>
+          <span class="small muted"><code>flow/decision.rs:553-563,2892-2960</code>; <code>flow/mana.rs:5244</code></span>
         </td>
         <td>
-          <span class="badge badge-no">No · Biggest</span><br>
-          <span class="badge badge-scope" style="margin-top:4px">This Work (MTG-500)</span>
+          <span class="badge badge-yes">Yes</span><br>
+          <span class="badge badge-existing" style="margin-top:4px">Built · Pass 5 &amp; 7</span>
         </td>
         <td>
-          <strong>The code loses the production boundary across <code>ManaProduction::Bonus</code>.</strong>
-          <code>decision.rs:2889</code> recomputes <code>start = pool.unit_count()</code> before the final bonus, so
-          <code>commit_produced_mana</code> <em>only</em> visits the last bonus's units and abandons the original output
-          (and any earlier bonuses) as previously floated mana. Produces wrong receipt origins, strands uncontested
-          payments at <code>PayCost</code>, and forced <code>ody.rs:316</code> to work around it with
-          <code>if has_action(..., PayCost)</code>.
+          <code>commit_start</code> captures the pre-output pool boundary when <code>resume.is_none()</code> and threads
+          unchanged across any number of <code>Bonus</code> choices. Previously floated units stay untouched; land units
+          commit before bonus units with accurate receipts; <code>ody.rs</code> no longer needs a <code>PayCost</code>
+          workaround. Matches <code>managym/README.md:1213-1220</code>.
         </td>
       </tr>
 
       <tr>
         <td>
           <strong>Optional vs. committed resolution payment with trailing life</strong><br>
-          <span class="small muted">While a resolution payment is still declinable (<code>can_decline() == true</code>), tapping toward paying it requires the tail life, but activating/floating before declining never does.</span>
+          <span class="small muted">While a resolution payment is still declinable (<code>can_decline() == true</code>), tapping/paying toward it requires the tail life, while activating/floating before declining never does.</span>
         </td>
         <td>
-          <code>payment_obligations</code> +
-          <code>saved_obligations</code> for <code>Decision::Payment</code><br>
-          <span class="small muted"><code>flow/mana.rs:3594-3608,5512-5518</code></span>
+          <code>payment_obligations</code> (committed-only) +
+          <code>saved_obligations</code> / <code>payment_life_owed</code> (tail life when paying)<br>
+          <span class="small muted"><code>flow/mana.rs:3518,3599,5505-5526</code>; <code>flow/decision.rs:2101,2830</code></span>
         </td>
         <td>
-          <span class="badge badge-no">No · Split Rule</span><br>
-          <span class="badge badge-scope" style="margin-top:4px">This Work (MTG-500)</span>
+          <span class="badge badge-yes">Yes</span><br>
+          <span class="badge badge-existing" style="margin-top:4px">Built · Pass 2 &amp; 7</span>
         </td>
         <td>
-          <strong>One concept (<code>can_decline()</code>) behaves two contradictory ways.</strong>
-          <code>mana.rs:3596</code> checks <code>!progress.can_decline() || progress.tail_life() &gt; 0</code>,
-          making optional Ward <span class="pip pip-c">2</span> + Pay 2 life mandatory inside
-          <code>payment_obligations</code> (blocking floats and activations before declining) while optional Ward
-          <span class="pip pip-c">2</span> imposes no obligation. Move <code>tail_life()</code> for declinable payments
-          to <code>saved_obligations</code> so <code>payment_obligations</code> carries only committed obligations.
+          <code>can_decline()</code> now behaves identically whether <code>tail_life() == 0</code> or <code>&gt; 0</code>.
+          All 10 <code>payment_obligations</code> callers and all 4 <code>saved_obligations</code> callers agree;
+          verified by <code>declinable_ward_with_life_allows_floating_mana</code> and documented in
+          <code>managym/README.md:1149-1151</code>.
         </td>
       </tr>
 
       <tr>
         <td>
           <strong>Colored convoke inside the shared witness</strong><br>
-          <span class="small muted">A creature taps for one owed pip of its color or <span class="pip pip-c">1</span> on every payment surface.</span>
+          <span class="small muted">A creature taps for one owed pip of its color or <span class="pip pip-c">1</span> on every payment surface without a parallel search.</span>
         </td>
         <td>
           <code>Taps::Convoke</code>,
           <code>ManaSource.convoke_colors</code>,
-          <code>PaymentStep::Convoke</code><br>
-          <span class="small muted"><code>flow/mana.rs:705,726,901,921,2213,3069,4270</code>; <code>help.rs:20</code></span>
+          <code>PaymentStep::Convoke(PermanentId)</code>,
+          <code>prefix_lower_bound</code><br>
+          <span class="small muted"><code>flow/mana.rs:705,726,901,925,3057-3074,4273,4967</code>; <code>help.rs:20</code></span>
         </td>
         <td>
-          <span class="badge badge-no">No · Rough Edges</span><br>
-          <span class="badge badge-scope" style="margin-top:4px">This Work · Small Cleanup</span>
+          <span class="badge badge-yes">Yes</span><br>
+          <span class="badge badge-existing" style="margin-top:4px">Built · Pass 5 &amp; 7</span>
         </td>
         <td>
-          Core witness integration is clean and removes <code>while_paying</code>/<code>convoke_search</code> across
-          all 8 surfaces. Three small loose ends remain:
-          (1) <code>prefix_lower_bound</code> (<code>mana.rs:3069</code>) ignores <code>Taps::Convoke</code>;
-          (2) <code>PaymentStep::Convoke(PermanentId, Color)</code> has an unread <code>Color</code> mapped to
-          <code>Action::WaterbendTap</code>;
-          (3) dead <code>|| helped</code> at <code>mana.rs:4270</code> (<code>fixed_cache</code> is always
-          <code>None</code> when <code>helped</code> is true).
+          Unified across all 8 payment surfaces; deleted <code>while_paying</code> / <code>convoke_search</code>.
+          Pass 7 closed all three rough edges: <code>prefix_lower_bound</code> accounts for <code>Taps::Convoke</code>
+          (unit-tested), <code>PaymentStep::Convoke</code> carries only <code>PermanentId</code>, and dead
+          <code>|| helped</code> was removed.
         </td>
       </tr>
 
@@ -807,75 +787,48 @@
           <span class="badge badge-planned" style="margin-top:4px">Separate Tasks</span>
         </td>
         <td>
-          Unchanged from the 8th review. None of these occur on printed TLA Limited boards; already cleanly scoped into
-          the two deferred Tasks in <code>scratch/plan.md</code>.
+          Unchanged from the 8th/9th reviews. None occurs on printed TLA Limited boards; cleanly isolated in
+          <code>scratch/plan.md</code> as two independent follow-up Tasks with concrete slices and acceptance tests.
         </td>
       </tr>
     </tbody>
   </table>
 
   <!-- ====================================================================== -->
-  <h2>2. Concrete Failure, Counterexample &amp; Recovery Walkthroughs</h2>
+  <h2>2. Concrete Interaction, Counterexample &amp; Recovery Walkthroughs on <code>HEAD</code></h2>
 
   <div class="grid-2">
     <div class="card">
       <div class="card-title">
-        <h3>Case 1 · Bonus Commitment Drops the Original Production (<code>decision.rs:2889</code>)</h3>
-        <span class="badge badge-no">Active Mismatch on HEAD</span>
+        <h3>Case 1 · Reported Spin Reproduced &amp; Resolved (TLA Limited)</h3>
+        <span class="badge badge-yes">Verified · Pass 1, 2, 6</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
           <div>
-            Board casting <span class="card-name">Sokka, Bold Boomeranger</span>
-            (<span class="pip pip-u">U</span><span class="pip pip-r">R</span>) with an empty pool, a land with
-            <code>{T}: Add <span class="pip pip-u">U</span><span class="pip pip-r">R</span></code> (or <code>{U}{R}</code> /
-            <code>{U}{G}</code>), <span class="card-name">Heartbeat of Spring</span>, and an untapped
-            <span class="card-name">Treasure</span> (or <code>mana_floats</code> enabled).
+            Cast <span class="card-name">Sokka, Bold Boomeranger</span> (<span class="pip pip-u">U</span><span class="pip pip-r">R</span>)
+            at 2 life with <span class="card-name">Tarnished Citadel</span>, <span class="card-name">Airship Engine Room</span>,
+            and <span class="card-name">Heartbeat of Spring</span>. Activate Citadel first (−3 damage → −1 life).
           </div>
         </div>
         <div class="step-row fail">
-          <div class="step-num">2</div>
+          <div class="step-num">×</div>
           <div>
-            <strong>Failure on <code>HEAD</code>:</strong>
-            Step 1 (<code>ManaProduction::Output</code>) records <code>start = Some(0)</code>, adds
-            <code>[U (land, 0), R (land, 1)]</code>, suspends on <code>ManaProduction::Bonus</code>, and
-            <strong>discards <code>start = 0</code></strong>.
-            Step 2 (<code>ManaProduction::Bonus</code>, player picks <span class="pip pip-u">U</span>) recomputes
-            <code>start = Some(2)</code>, adds <code>U (Heartbeat, 2)</code>, and calls
-            <code>commit_produced_mana(player, 2)</code>.
-            Only index 2 is examined: <strong>Heartbeat's</strong> <span class="pip pip-u">U</span> commits to
-            <span class="pip pip-u">U</span> (wrong source on receipt!), while indices 0 and 1 are skipped completely.
-            <span class="pip pip-r">R</span> stays owed, so <code>advance_payment</code> sees <code>paid == false</code>
-            and leaves <code>PendingChoice::Pay</code> open with <code>[Activate(Treasure), PayCost]</code> even though
-            the cast is 100% paid with uncontested mana!
-          </div>
-        </div>
-        <div class="step-row fail">
-          <div class="step-num">2b</div>
-          <div>
-            <strong>Same defect on exact <span class="pip pip-c">1</span><span class="pip pip-u">U</span><span class="pip pip-r">R</span> &amp; in <code>ody.rs:316</code>:</strong>
-            On <span class="pip pip-c">1</span><span class="pip pip-u">U</span><span class="pip pip-r">R</span> (zero
-            spending choice!), indices 0 and 1 stay stranded in the pool while only Heartbeat's unit commits. On two
-            Heartbeats, both the original output <em>and</em> Heartbeat #1 are skipped. And on
-            <code>ody.rs:297</code> (<span class="pip pip-c">1</span><span class="pip pip-u">U</span>), Heartbeat's
-            <span class="pip pip-u">U</span> commits instead of the land's <span class="pip pip-u">U</span>, while
-            <code>if has_action(&amp;s, PayCost)</code> masks the extra step.
+            <strong>Before MTG-500 (<code>origin/main</code> / <code>0.2.6</code>):</strong>
+            unsigned life clamped −1 to 0, rejected both <span class="pip pip-u">U</span> and <span class="pip pip-r">R</span>,
+            published an empty <code>Modal</code> space, and spun forever inside <code>tick()</code> with
+            <code>skip_trivial=true</code> — hanging the Rayon worker barrier.
           </div>
         </div>
         <div class="step-row ok">
-          <div class="step-num">3</div>
+          <div class="step-num">✓</div>
           <div>
-            <strong>Recovery (This Work):</strong>
-            Carry <code>commit_start: Option&lt;usize&gt;</code> on <code>ManaProduction::Bonus</code> (set from
-            <code>start</code> on <code>Output</code>, preserved across chained bonuses). When <code>next.is_none()</code>,
-            call <code>commit_produced_mana(player, start)</code> over <code>start..pool.unit_count()</code>.
-            On <span class="pip pip-u">U</span><span class="pip pip-r">R</span>, the land's <span class="pip pip-u">U</span>
-            and <span class="pip pip-r">R</span> commit in production order, Heartbeat's <span class="pip pip-u">U</span>
-            floats, and Sokka casts immediately. On <span class="pip pip-c">1</span><span class="pip pip-u">U</span>,
-            the land's <span class="pip pip-u">U</span> commits to <span class="pip pip-u">U</span> and the payer
-            chooses between the land's <span class="pip pip-r">R</span> and Heartbeat's <span class="pip pip-u">U</span>
-            for <span class="pip pip-c">1</span>.
+            <strong>On <code>HEAD</code>:</strong>
+            signed <code>LifeBudget</code> accepts both <span class="pip pip-u">U</span> and <span class="pip pip-r">R</span>;
+            Engine Room supplies the other color; Sokka hits the stack with Heartbeat's bonus mana floating; SBA checks
+            life loss after payment. Verified identically in scalar <code>Env</code> and snapshot-restored
+            <code>ShardedVectorEnv</code> slots.
           </div>
         </div>
       </div>
@@ -883,44 +836,39 @@
 
     <div class="card">
       <div class="card-title">
-        <h3>Case 2 · Optional Ward With Life Blocks Floating Before Declining (<code>mana.rs:3596</code>)</h3>
-        <span class="badge badge-no">Contradictory Rule on HEAD</span>
+        <h3>Case 2 · Production Boundary Across Two Heartbeats + Pre-Floated Mana</h3>
+        <span class="badge badge-yes">Verified · Pass 7</span>
       </div>
       <div class="trace">
         <div class="step-row">
           <div class="step-num">1</div>
           <div>
-            Opponent's creature has optional <strong>Ward — Pay <span class="pip pip-c">2</span> and 2 life</strong>
-            (<code>Decision::Payment(progress)</code> with <code>can_decline() == true</code>,
-            <code>tail_life() == 2</code>). Payer is at <strong>1 life</strong> (or 3 life with
-            <span class="card-name">Tarnished Citadel</span> + 2 Islands) and wants to float mana from
-            <span class="card-name">Treasure</span> / <span class="card-name">Tarnished Citadel</span> before declining.
+            Cast <span class="card-name">Sokka</span> (<span class="pip pip-u">U</span><span class="pip pip-r">R</span>)
+            with <span class="pip pip-u">U</span> already floating (index 0), a land with
+            <code>{T}: Add <span class="pip pip-u">U</span><span class="pip pip-r">R</span> / <span class="pip pip-u">U</span><span class="pip pip-g">G</span></code>,
+            and <strong>two</strong> <span class="card-name">Heartbeat of Spring</span>s.
           </div>
         </div>
-        <div class="step-row fail">
+        <div class="step-row info">
           <div class="step-num">2</div>
           <div>
-            <strong>Failure on <code>HEAD</code>:</strong>
-            <code>payment_obligations</code> (<code>mana.rs:3596</code>) tests
-            <code>!progress.can_decline() || progress.tail_life() &gt; 0</code>, which evaluates to <code>true</code>
-            and injects <code>[Pay { {2} }, PayLife(2)]</code> as <em>mandatory</em> obligations!
-            <code>can_activate_mana_ability</code>, <code>append_mana_floats</code>, and <code>mana_choice_actions</code>
-            reject every mana activation that doesn't leave <span class="pip pip-c">2</span> + 2 life payable — even
-            though <code>Action::Decline</code> is legal and optional Ward <span class="pip pip-c">2</span>
-            (<code>tail_life == 0</code>) allows those exact activations!
+            <strong>Through both bonuses (<code>decision.rs:2892</code>):</strong>
+            <code>Output</code> captures <code>commit_start = Some(1)</code>, adds <code>U_land (1), R_land (2)</code>,
+            and threads <code>Some(1)</code> into Heartbeat #1 (adds <code>R_hb1 (3)</code>) and Heartbeat #2
+            (adds <code>U_hb2 (4)</code>). Pool reaches <code>[U_float, U_land, R_land, R_hb1, U_hb2]</code> while
+            stack stays empty.
           </div>
         </div>
         <div class="step-row ok">
-          <div class="step-num">3</div>
+          <div class="step-num">✓</div>
           <div>
-            <strong>Recovery (This Work):</strong>
-            Keep <code>payment_obligations</code> strictly for <em>committed</em> obligations:
-            <code>Decision::Payment(progress) if !progress.can_decline()</code> (restoring <code>origin/main</code>'s
-            rule). In <code>saved_obligations</code> (used only when evaluating taps/auto-taps <em>toward paying</em>
-            the current cost), append <code>Obligation::life(progress.tail_life())</code> for a declinable
-            <code>Decision::Payment</code>. Optional Ward <span class="pip pip-c">2</span> + 2 life now gates
-            <code>PayCost</code> and <code>useful_payment_taps</code> on 2 life while never blocking floats before
-            <code>Decline</code>.
+            <strong>Completion (<code>next.is_none()</code>):</strong>
+            <code>commit_produced_mana(player, 1)</code> walks <code>1..5</code>: <code>U_land</code> pays
+            <span class="pip pip-u">U</span>, <code>R_land</code> pays <span class="pip pip-r">R</span> (both receipt
+            origins = the land), Sokka casts immediately without an extra <code>PayCost</code>, and
+            <span class="pip pip-u">U</span><span class="pip pip-u">U</span><span class="pip pip-r">R</span> stays pooled.
+            On <span class="pip pip-c">1</span><span class="pip pip-u">U</span>, <code>U_land</code> pays
+            <span class="pip pip-u">U</span> and the generic spend choice stays open.
           </div>
         </div>
       </div>
@@ -928,63 +876,73 @@
 
     <div class="card">
       <div class="card-title">
-        <h3>Case 3 · Convoke In-Model Cleanup (<code>mana.rs:901,3069,4270</code>)</h3>
-        <span class="badge badge-warn">Latent Contract Drift</span>
+        <h3>Case 3 · Optional Ward + Life: Floating Before Declining vs. Paying</h3>
+        <span class="badge badge-yes">Verified · Pass 7</span>
+      </div>
+      <div class="trace">
+        <div class="step-row">
+          <div class="step-num">1</div>
+          <div>
+            Optional Ward <span class="pip pip-c">2</span> + Pay 2 life (<code>can_decline() == true</code>,
+            <code>tail_life() == 2</code>) at 4 life with <span class="pip pip-c">2</span> pooled,
+            <span class="card-name">Tarnished Citadel</span>, <span class="card-name">Forest</span>, and
+            <code>mana_floats = All</code>.
+          </div>
+        </div>
+        <div class="step-row info">
+          <div class="step-num">2</div>
+          <div>
+            <strong>Before activating Citadel:</strong>
+            <code>PayCost</code> is offered (<code>payment_life_owed = 2</code>, <code>saved_obligations = [PayLife(2)]</code>,
+            4 ≥ 2), while <code>payment_obligations = []</code> (committed-only). Player activates Citadel for
+            <span class="pip pip-u">U</span> (−3 damage → 1 life).
+          </div>
+        </div>
+        <div class="step-row ok">
+          <div class="step-num">✓</div>
+          <div>
+            <strong>After Citadel (1 life &lt; 2):</strong>
+            <code>PayCost</code> disappears because 2 life is no longer payable, tapping <span class="card-name">Forest</span>
+            to float <span class="pip pip-g">G</span> remains legal, and <code>Decline</code> completes cleanly at
+            1 life with <span class="pip pip-c">2</span><span class="pip pip-u">U</span><span class="pip pip-g">G</span>
+            floating. In Auto mode, <code>PayCost</code> sets <code>committed = true</code> first, moving
+            <code>[Pay, PayLife(2)]</code> into <code>payment_obligations</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <h3>Case 4 · Counterexample Audit on Pass 7</h3>
+        <span class="badge badge-yes">Checked · No Defect</span>
       </div>
       <div class="trace">
         <div class="step-row ok">
           <div class="step-num">A</div>
           <div>
-            <strong>What already works well:</strong>
-            <code>Taps::Convoke</code> + <code>ManaSource.convoke_colors</code> unified all 8 payment surfaces
-            (including nested <code>ManaUpfront</code>, <code>ManaChoice</code>, <code>ManaSpend</code>,
-            <code>ManaTap</code>, and <code>automatic_payment_action</code>) and deleted <code>while_paying</code> /
-            <code>convoke_search</code>. Bounds (<code>source_bounds</code>, <code>cost_coverable</code>,
-            <code>colors_coverable</code>) are sound upper bounds.
+            <strong>Priority float with Heartbeat (<code>resume.is_none()</code>, <code>self.paying().is_none()</code>):</strong>
+            <code>commit_start</code> holds <code>Some(pool.unit_count())</code> during <code>ManaProduction::Bonus</code>.
+            When the final bonus resolves, <code>commit_produced_mana</code> returns immediately on
+            <code>self.paying() == None</code>, and <code>mana_capture</code> tracks each step's delta once via
+            <code>before</code>. Deterministic in hash v35; zero side effects.
           </div>
         </div>
-        <div class="step-row warn">
+        <div class="step-row ok">
           <div class="step-num">B</div>
           <div>
-            <strong>Three small loose ends to close:</strong>
-            (1) <code>prefix_lower_bound</code> (<code>mana.rs:3069</code>) checks
-            <code>source.pays_by_tap(*taps) &amp;&amp; cost.generic() &gt; 0</code>, which returns <code>false</code> for
-            <code>Taps::Convoke</code> — harmless only because <code>AutomaticPrefix</code>'s current sole caller starts
-            on <code>Taps::None</code>, but a latent invariant break if reused.
-            (2) <code>PaymentStep::Convoke(PermanentId, Color)</code> carries an unused <code>Color</code> and converts
-            to <code>Action::WaterbendTap</code> (<code>mana.rs:921</code>) only as an <code>is_some()</code> sentinel.
-            (3) <code>mana.rs:4270</code> retains a dead <code>if is_fixed || helped</code> branch (<code>fixed_cache</code>
-            is always <code>None</code> when <code>helped</code> is true).
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">
-        <h3>Case 4 · Why <code>commit_start</code> Is Structurally Safe</h3>
-        <span class="badge badge-yes">Counterexample Check</span>
-      </div>
-      <div class="trace">
-        <div class="step-row ok">
-          <div class="step-num">1</div>
-          <div>
-            <strong>Can anything mutate <code>mana_pool</code> between <code>Output</code> and the final <code>Bonus</code>?</strong>
-            No. While <code>Decision::ManaChoice { production: ManaProduction::Bonus { .. }, resume: None }</code> is
-            suspended, the only legal actions are <code>Action::ChooseMode</code> for that bonus. No priority opens,
-            no step changes, and no mana is spent or emptied until <code>next.is_none()</code>. Therefore
-            <code>commit_start &lt;= pool.unit_count()</code> always holds, <code>0..commit_start</code> is exact
-            previously floated mana, and <code>commit_start..pool.unit_count()</code> is the exact unit slice of this
-            production (output + all bonuses).
+            <strong>Nested upfront activation with Heartbeat (<code>resume.is_some()</code>):</strong>
+            <code>commit_start</code> is <code>None</code> on <code>Output</code> and every chained <code>Bonus</code>,
+            so mana produced for an inner upfront fee never commits early to an outer announced cast.
           </div>
         </div>
         <div class="step-row ok">
-          <div class="step-num">2</div>
+          <div class="step-num">C</div>
           <div>
-            <strong>What about nested upfront/resolution choices (<code>resume.is_some()</code>)?</strong>
-            When <code>resume.is_some()</code>, <code>commit_start</code> is <code>None</code> on both
-            <code>Output</code> and every chained <code>Bonus</code>, so neither commits to an outer announced payment
-            (matching existing behavior and preserving nested fee receipts).
+            <strong>Convoke <code>prefix_lower_bound</code> soundness:</strong>
+            <code>fixed.max(u64::from(direct))</code> upper-bounds each untapped source's contribution per tap (either
+            fixed mana or 1 direct tap — waterbend, keyword generic, or matching-color convoke), keeping the lower bound
+            admissible for <code>AutomaticPrefix</code> on every <code>Taps</code> variant.
           </div>
         </div>
       </div>
@@ -992,146 +950,79 @@
   </div>
 
   <!-- ====================================================================== -->
-  <h2>3. Biggest Mismatch — Before &amp; After Architecture</h2>
-
-  <div class="card card-callout">
-    <div class="card-title">
-      <h3>Why Pass 5's Deferred Commit Loses the Original Production Across Bonuses</h3>
-      <span class="badge badge-no">Before · HEAD (<code>00c20c4dd2</code>)</span>
-    </div>
-    <p class="small">
-      <code>managym/README.md</code> states that once a production and its triggered bonuses finish, every uncontested
-      unit <em>from that production</em> commits toward the announced cost while previously floated mana stays pooled.
-      In code, <code>decision.rs:2889</code> computes <code>start</code> locally inside each <code>ManaChoice</code>
-      arm and never stores it on <code>ManaProduction::Bonus</code> — so suspending on a bonus throws away the
-      production boundary and reclassifies the source's own output as previously floated mana.
-    </p>
-  </div>
+  <h2>3. How the Final Architecture Holds Together on <code>HEAD</code></h2>
 
   <div class="diagram-wrap">
-    <svg viewBox="0 0 1100 350" xmlns="http://www.w3.org/2000/svg" font-family="DM Sans, -apple-system, sans-serif">
-      <!-- BEFORE LANE -->
-      <text x="14" y="24" font-size="12" font-weight="700" letter-spacing="0.06em" fill="var(--error-text)">BEFORE · HEAD (ManaProduction::Bonus DROPS start — ONLY FINAL BONUS COMMITS)</text>
+    <svg viewBox="0 0 1100 320" xmlns="http://www.w3.org/2000/svg" font-family="DM Sans, -apple-system, sans-serif">
+      <!-- TOP LANE: WHOLE-PRODUCTION COMMITMENT -->
+      <text x="14" y="24" font-size="12" font-weight="700" letter-spacing="0.06em" fill="var(--success-text)">BUILT ON HEAD · 1. WHOLE-PRODUCTION COMMITMENT (ManaProduction::Bonus.commit_start)</text>
 
-      <rect x="14" y="38" width="240" height="92" rx="8" fill="var(--bg-surface)" stroke="var(--border-strong)"/>
-      <text x="134" y="60" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">1. ManaChoice (Output)</text>
-      <text x="134" y="78" text-anchor="middle" font-size="11" fill="var(--text-secondary)">pool = [prev_float] (len = 1)</text>
-      <text x="134" y="94" text-anchor="middle" font-size="11" fill="var(--text)">start = Some(1) · adds U, R</text>
-      <text x="134" y="110" text-anchor="middle" font-size="11" fill="var(--error-text)">suspends on Bonus → drops start!</text>
+      <rect x="14" y="38" width="248" height="102" rx="8" fill="var(--bg-surface)" stroke="var(--success)" stroke-width="1.5"/>
+      <text x="138" y="60" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">ManaChoice · Output</text>
+      <text x="138" y="78" text-anchor="middle" font-size="11" fill="var(--text-secondary)">pool = [0..k: prior floats]</text>
+      <text x="138" y="95" text-anchor="middle" font-size="11" font-weight="600" fill="var(--success-text)">commit_start = resume.is_none() → Some(k)</text>
+      <text x="138" y="112" text-anchor="middle" font-size="11" fill="var(--text)">adds output units at k..</text>
+      <text x="138" y="128" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)">passes Some(k) → resolve_mana_bonuses</text>
 
-      <line x1="254" y1="84" x2="294" y2="84" stroke="var(--error)" stroke-width="1.8"/>
-      <polygon points="294,84 287,80 287,88" fill="var(--error)"/>
+      <line x1="262" y1="89" x2="304" y2="89" stroke="var(--success)" stroke-width="1.8"/>
+      <polygon points="304,89 297,85 297,93" fill="var(--success)"/>
 
-      <rect x="296" y="38" width="275" height="92" rx="8" fill="var(--error-wash)" stroke="var(--error)" stroke-width="1.6"/>
-      <text x="433" y="60" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--error-text)">2. ManaChoice (Bonus · Heartbeat)</text>
-      <text x="433" y="78" text-anchor="middle" font-size="11" fill="var(--text)">pool = [prev, U_land, R_land] (len = 3)</text>
-      <text x="433" y="94" text-anchor="middle" font-size="11" font-weight="700" fill="var(--error-text)">recomputes start = Some(3)!</text>
-      <text x="433" y="110" text-anchor="middle" font-size="11" fill="var(--text)">adds U_bonus at index 3 · next = None</text>
+      <rect x="306" y="38" width="276" height="102" rx="8" fill="var(--bg-surface)" stroke="var(--success)" stroke-width="1.5"/>
+      <text x="444" y="60" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">ManaChoice · Bonus (1..N)</text>
+      <text x="444" y="78" text-anchor="middle" font-size="11" fill="var(--text)">keeps commit_start = Some(k)</text>
+      <text x="444" y="95" text-anchor="middle" font-size="11" fill="var(--text)">appends bonus unit(s) to pool</text>
+      <text x="444" y="112" text-anchor="middle" font-size="11" fill="var(--text-secondary)">no other action can touch mana_pool</text>
+      <text x="444" y="128" text-anchor="middle" font-size="10.5" fill="var(--success-text)">last bonus returns next = None</text>
 
-      <line x1="571" y1="84" x2="611" y2="84" stroke="var(--error)" stroke-width="1.8"/>
-      <polygon points="611,84 604,80 604,88" fill="var(--error)"/>
+      <line x1="582" y1="89" x2="624" y2="89" stroke="var(--success)" stroke-width="1.8"/>
+      <polygon points="624,89 617,85 617,93" fill="var(--success)"/>
 
-      <rect x="613" y="38" width="472" height="92" rx="8" fill="var(--error-wash)" stroke="var(--error)" stroke-width="1.8"/>
-      <text x="849" y="60" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--error-text)">3. commit_produced_mana(player, 3) · BROKEN BOUNDARY</text>
-      <text x="849" y="78" text-anchor="middle" font-size="11" fill="var(--text)">Pool: [ 0: prev | 1: U_land (SKIPPED!) | 2: R_land (SKIPPED!) | 3: U_bonus ]</text>
-      <text x="849" y="96" text-anchor="middle" font-size="11" fill="var(--error-text)">• Commits U_bonus instead of U_land (wrong receipt origin)</text>
-      <text x="849" y="114" text-anchor="middle" font-size="11" fill="var(--error-text)">• Leaves R_land uncommitted → Sokka {U}{R} stays open at PayCost</text>
+      <rect x="626" y="38" width="460" height="102" rx="8" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.8"/>
+      <text x="856" y="60" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--success-text)">commit_produced_mana(player, k) + advance_payment</text>
+      <text x="856" y="80" text-anchor="middle" font-size="11" fill="var(--text)">0..k untouched · k..unit_count() commits uncontested units in order</text>
+      <text x="856" y="98" text-anchor="middle" font-size="11" fill="var(--success-text)">• Land output commits before bonus mana (exact receipt origins)</text>
+      <text x="856" y="116" text-anchor="middle" font-size="11" fill="var(--success-text)">• Contested pips stay pooled for explicit ManaSpend choice</text>
+      <text x="856" y="132" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)">• Priority float (self.paying() == None) exits immediately as no-op</text>
 
       <!-- DIVIDER -->
-      <line x1="14" y1="158" x2="1086" y2="158" stroke="var(--border)" stroke-dasharray="5,5"/>
+      <line x1="14" y1="164" x2="1086" y2="164" stroke="var(--border)" stroke-dasharray="5,5"/>
 
-      <!-- AFTER LANE -->
-      <text x="14" y="184" font-size="12" font-weight="700" letter-spacing="0.06em" fill="var(--info-text)">AFTER · PROPOSED (ManaProduction::Bonus CARRIES commit_start THROUGH EVERY BONUS)</text>
+      <!-- BOTTOM LANE: COMMITTED VS DECLINABLE OBLIGATIONS -->
+      <text x="14" y="190" font-size="12" font-weight="700" letter-spacing="0.06em" fill="var(--info-text)">BUILT ON HEAD · 2. COMMITTED vs. DECLINABLE RESOLUTION OBLIGATIONS</text>
 
-      <rect x="14" y="198" width="240" height="114" rx="8" fill="var(--info-wash)" stroke="var(--info)" stroke-width="1.6"/>
-      <text x="134" y="220" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--info-text)">1. ManaChoice (Output)</text>
-      <text x="134" y="238" text-anchor="middle" font-size="11" fill="var(--text-secondary)">pool = [prev_float] (len = 1)</text>
-      <text x="134" y="254" text-anchor="middle" font-size="11" font-weight="600" fill="var(--info-text)">commit_start = resume.is_none() → Some(1)</text>
-      <text x="134" y="272" text-anchor="middle" font-size="11" fill="var(--text)">adds U_land, R_land</text>
-      <text x="134" y="290" text-anchor="middle" font-size="11" fill="var(--info-text)">passes commit_start to resolve_mana_bonuses</text>
+      <rect x="14" y="204" width="320" height="98" rx="8" fill="var(--bg-surface)" stroke="var(--border-strong)" stroke-width="1.5"/>
+      <text x="174" y="226" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Decision::Payment(progress)</text>
+      <text x="174" y="245" text-anchor="middle" font-size="11" fill="var(--text-secondary)">e.g. Ward {2} + Pay 2 life (tail_life = 2)</text>
+      <text x="174" y="264" text-anchor="middle" font-size="11" fill="var(--info-text)">can_decline() == true → optional</text>
+      <text x="174" y="282" text-anchor="middle" font-size="11" fill="var(--success-text)">can_decline() == false → committed</text>
 
-      <line x1="254" y1="255" x2="294" y2="255" stroke="var(--info)" stroke-width="1.8"/>
-      <polygon points="294,255 287,251 287,259" fill="var(--info)"/>
+      <line x1="334" y1="236" x2="386" y2="236" stroke="var(--info)" stroke-width="1.8"/>
+      <polygon points="386,236 379,232 379,240" fill="var(--info)"/>
 
-      <rect x="296" y="198" width="275" height="114" rx="8" fill="var(--info-wash)" stroke="var(--info)" stroke-width="1.6"/>
-      <text x="433" y="220" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--info-text)">2. ManaChoice (Bonus · 1..N)</text>
-      <text x="433" y="238" text-anchor="middle" font-size="11" fill="var(--text)">reads commit_start = Some(1) from Bonus</text>
-      <text x="433" y="256" text-anchor="middle" font-size="11" fill="var(--text)">adds U_bonus at index 3</text>
-      <text x="433" y="274" text-anchor="middle" font-size="11" fill="var(--text-secondary)">if more bonuses: threads Some(1) forward</text>
-      <text x="433" y="292" text-anchor="middle" font-size="11" fill="var(--success-text)">last bonus: next = None</text>
+      <rect x="388" y="204" width="330" height="44" rx="8" fill="var(--info-wash)" stroke="var(--info)" stroke-width="1.5"/>
+      <text x="553" y="223" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--info-text)">payment_obligations (committed-only)</text>
+      <text x="553" y="239" text-anchor="middle" font-size="10.5" fill="var(--text)">Floats, ActivateAbility, ManaChoice before Decline</text>
 
-      <line x1="571" y1="255" x2="611" y2="255" stroke="var(--success)" stroke-width="1.8"/>
-      <polygon points="611,255 604,251 604,259" fill="var(--success)"/>
+      <line x1="334" y1="276" x2="386" y2="276" stroke="var(--success)" stroke-width="1.8"/>
+      <polygon points="386,276 379,272 379,280" fill="var(--success)"/>
 
-      <rect x="613" y="198" width="472" height="114" rx="8" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.8"/>
-      <text x="849" y="220" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--success-text)">3. commit_produced_mana(player, 1) · WHOLE PRODUCTION</text>
-      <text x="849" y="238" text-anchor="middle" font-size="11" fill="var(--text)">Pool: [ 0: prev (untouched) | 1..4: U_land, R_land, U_bonus (checked in order) ]</text>
-      <text x="849" y="256" text-anchor="middle" font-size="11" fill="var(--success-text)">• {U}{R}: U_land → {U}, R_land → {R}, U_bonus floats → casts immediately!</text>
-      <text x="849" y="274" text-anchor="middle" font-size="11" fill="var(--success-text)">• {1}{U}: U_land → {U}, R_land &amp; U_bonus contest {1} → ManaSpend choice kept!</text>
-      <text x="849" y="292" text-anchor="middle" font-size="11" fill="var(--text-secondary)">• Zero new Decision variants · fits existing unreleased hash v35</text>
+      <rect x="388" y="258" width="330" height="44" rx="8" fill="var(--success-wash)" stroke="var(--success)" stroke-width="1.5"/>
+      <text x="553" y="277" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--success-text)">saved_obligations + payment_life_owed</text>
+      <text x="553" y="293" text-anchor="middle" font-size="10.5" fill="var(--text)">PayCost, useful_payment_taps, automatic_taps, help_taps</text>
+
+      <line x1="718" y1="226" x2="758" y2="226" stroke="var(--info)" stroke-width="1.6"/>
+      <polygon points="758,226 751,222 751,230" fill="var(--info)"/>
+      <line x1="718" y1="280" x2="758" y2="280" stroke="var(--success)" stroke-width="1.6"/>
+      <polygon points="758,280 751,276 751,284" fill="var(--success)"/>
+
+      <rect x="760" y="204" width="326" height="44" rx="8" fill="var(--bg-surface)" stroke="var(--border)"/>
+      <text x="923" y="223" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--text)">Omits declinable Payment (returns [])</text>
+      <text x="923" y="239" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)">Player can always float mana before Decline</text>
+
+      <rect x="760" y="258" width="326" height="44" rx="8" fill="var(--bg-surface)" stroke="var(--border)"/>
+      <text x="923" y="277" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--text)">Appends PayLife(tail_life) when paying</text>
+      <text x="923" y="293" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)">Cannot commit to Ward without enough life</text>
     </svg>
-  </div>
-
-  <div class="grid-2">
-    <div class="card card-proposed">
-      <div class="card-title">
-        <h3>Proposed Fix 1 · Preserve <code>commit_start</code> on <code>ManaProduction::Bonus</code></h3>
-        <span class="badge badge-scope">This Work (MTG-500)</span>
-      </div>
-      <pre><code>// flow/decision.rs
-pub enum ManaProduction {
-    Output {
-        source: Option&lt;ObjectId&gt;,
-        tapped: Option&lt;TappedForMana&gt;,
-    },
-    Bonus {
-        source: ObjectId,
-        tapped: ObjectId,
-        produced: Mana,
-        pending: Vec&lt;PendingManaBonus&gt;,
-        /// Pool index where the enclosing production began
-        /// (when producing toward an announced cost, i.e. `resume.is_none()`).
-        commit_start: Option&lt;usize&gt;,
-    },
-}
-
-// flow/decision.rs (ManaChoice arm):
-let start = match production {
-    ManaProduction::Output { .. } =&gt; {
-        resume.is_none().then(|| self.state.players[player.0].mana_pool.unit_count())
-    }
-    ManaProduction::Bonus { commit_start, .. } =&gt; *commit_start,
-};
-// Thread `start` into `resolve_mana_bonuses(..., start, resume.take())`.
-// When `next.is_none()`: `if let Some(start) = start { self.commit_produced_mana(player, start); }`</code></pre>
-    </div>
-
-    <div class="card card-proposed">
-      <div class="card-title">
-        <h3>Proposed Fix 2 · Separate Committed vs. Declinable Resolution Life</h3>
-        <span class="badge badge-scope">This Work (MTG-500)</span>
-      </div>
-      <pre><code>// flow/mana.rs · payment_obligations (committed obligations only):
-Decision::Payment(progress) if !progress.can_decline() =&gt; {
-    if let Some(CostComponent::Mana { cost, .. }) = progress.owed.first() {
-        result.push(Obligation::Pay {
-            cost: cost.clone(),
-            taps: if progress.waterbends() { Taps::Any } else { Taps::None },
-        });
-        result.extend(Obligation::life(progress.tail_life()));
-    }
-}
-
-// flow/mana.rs · saved_obligations (trailing costs when tapping to pay):
-if let Decision::Payment(payment) = &amp;caller.decision {
-    if payment.can_decline() {
-        let mut obligations = self.payment_obligations(player);
-        obligations.extend(Obligation::life(payment.tail_life()));
-        return obligations;
-    }
-}
-self.payment_obligations(player).into_iter().skip(1).collect()</code></pre>
-    </div>
   </div>
 
   <!-- ====================================================================== -->
@@ -1141,107 +1032,98 @@ self.payment_obligations(player).into_iter().skip(1).collect()</code></pre>
     <div class="measure-card">
       <h3>Hot-Path Throughput</h3>
       <p class="small muted">
-        Pass 5's deletion of <code>mana_activation_reads</code>, <code>ReadSet.battlefield</code>, and
-        <code>payment_writes_couple</code> removed per-board overhead. Neither Fix 1 (<code>commit_start</code>) nor
-        Fix 2 (<code>saved_obligations</code>) adds work on ordinary TLA boards; Fix 1 eliminates a redundant
-        <code>PayCost</code> round-trip on multi-type bonus casts.
+        Zero extra work on ordinary TLA boards (no fork on boards without life-changing suffixes; Pass 5 removed the
+        provisional coupling scan). Pass 7 eliminates a redundant <code>PayCost</code> round-trip on multi-type bonus
+        casts. Paired CI Engine Budget comparison against <code>managym/perf/baseline.json</code> still validates
+        release speed and digests.
       </p>
     </div>
     <div class="measure-card">
       <h3>Memory &amp; Enum Budget</h3>
       <p class="small muted">
-        <code>ManaProduction::Bonus</code> already holds a <code>Mana</code> and <code>Vec&lt;PendingManaBonus&gt;</code>;
-        adding <code>commit_start: Option&lt;usize&gt;</code> does not grow <code>Decision</code> beyond its largest
-        variants or add any <code>Decision</code> / <code>FrameCompletion</code> variant.
+        <code>ManaProduction::Bonus</code> already owns <code>Mana</code> and <code>Vec&lt;PendingManaBonus&gt;</code>;
+        <code>commit_start: Option&lt;usize&gt;</code> adds no new <code>Decision</code> or <code>FrameCompletion</code>
+        variant and stays within existing enum size. <code>PendingManaOutput</code> is boxed and allocates only for
+        counter/sacrifice mana costs.
+      </p>
+    </div>
+    <div class="measure-card warn-top">
+      <h3>Hash v35 (One-Way Once Released)</h3>
+      <p class="small muted">
+        <code>MATCH_STATE_HASH_VERSION</code> moved <code>34 → 35</code> on this branch to cover
+        <code>ManaUpfrontActivation</code>, <code>FrameCompletion::ManaOutput</code>, and
+        <code>ManaProduction::Bonus.commit_start</code>. Reversible while on this branch;
+        <strong>irreversible once shipped in a release</strong>. Replay and action formats are unchanged.
       </p>
     </div>
     <div class="measure-card">
-      <h3>Hash &amp; Replay Identity</h3>
+      <h3>Surface Completeness</h3>
       <p class="small muted">
-        <code>MATCH_STATE_HASH_VERSION = 35</code> is already bumped and unreleased on this branch (vs. v34 on
-        <code>origin/main</code>). Adding <code>commit_start</code> to <code>ManaProduction::Bonus</code> lands cleanly
-        inside v35 with zero extra version churn. Replay and action formats stay untouched.
-      </p>
-    </div>
-    <div class="measure-card">
-      <h3>Finish the Rule on Every Surface</h3>
-      <p class="small muted">
-        Fix 1 closes the gap between <code>managym/README.md</code> and <code>decision.rs</code> and removes the
-        <code>if has_action(..., PayCost)</code> workaround in <code>ody.rs:316</code>. Fix 2 makes
-        <code>can_decline()</code> uniform across <code>tail_life == 0</code> and <code>tail_life &gt; 0</code>.
+        Every surface touched by MTG-500 obeys the same rules: Manual and Auto payment, <code>skip_trivial</code> on
+        and off, scalar <code>Env</code> and isolated <code>ShardedVectorEnv</code>, printed/token/granted catalog
+        parity, <code>docs/engine.md</code>, and <code>managym/README.md</code>.
       </p>
     </div>
   </div>
 
   <!-- ====================================================================== -->
-  <h2>5. Design Choices &amp; Trade-Offs</h2>
+  <h2>5. Branch Boundaries &amp; Sign-Off Choices</h2>
 
   <div class="choice-box">
     <div class="choice-header">
-      <strong>1. How should <code>Decision::ManaChoice</code> track the production slice across triggered bonuses?</strong>
-      <span class="badge badge-scope">This Work · Reversible before releasing hash v35</span>
+      <strong>1. Keep Coupled Mana Payment (including fixed-tap bonus continuation <code>710163f05</code>) as a separate Task?</strong>
+      <span class="badge badge-planned">Separate Task · Reversible before merge</span>
     </div>
-    <div class="choice-grid-3">
+    <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">1a · Recommended</span> Store <code>commit_start: Option&lt;usize&gt;</code> on <code>ManaProduction::Bonus</code></div>
-        Captured once on <code>ManaProduction::Output</code> when <code>resume.is_none()</code> and threaded through
-        <code>resolve_mana_bonuses</code>. Commits every uncontested unit of the whole production in production order
-        when the last bonus finishes, keeps previously floated mana untouched, matches <code>managym/README.md</code>,
-        and eliminates the <code>ody.rs:316</code> workaround.
+        <div class="opt-title"><span class="badge badge-proposed">1a · Recommended (Built on HEAD)</span> Ship MTG-500 now; land Coupled Mana Payment in its own Task</div>
+        MTG-500 already resolves the reported TLA Limited spin, all four Citadel/Canyon/Room/Heartbeat positions,
+        colored convoke, signed life, owned mana continuations, whole-production bonus commitment, and optional Ward
+        life. Keeping the 4-slice coupled regime (starting with <code>FixedOutput::Choice</code> / post-tap
+        <code>tap_bonuses</code>) in a dedicated Task keeps this PR bounded and reviewable.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">1b · Passed over</span> Leave <code>decision.rs:2889</code> as-is and rewrite <code>managym/README.md</code></div>
-        Would have to document an accidental quirk ("if a production triggers a bonus choice, its original output becomes
-        previously floated mana while only the final bonus commits"), leaves wrong receipt origins, and keeps extra
-        <code>PayCost</code> steps on uncontested casts.
-      </div>
-      <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">1c · Passed over</span> Track per-unit "newly produced" tags on <code>ManaPool</code></div>
-        Duplicates pool metadata across every mana addition in the engine just to replace a single <code>Option&lt;usize&gt;</code>
-        field on the already-suspended <code>Bonus</code> variant.
+        <div class="opt-title"><span class="badge badge-existing">1b · Passed over</span> Pull slice 1 (~60 lines, fixed-tap bonus continuation) into MTG-500</div>
+        Would handle constructed multi-type fixed lands beside Heartbeat in this PR, but no printed TLA or catalog fixed
+        source produces multiple types, and it adds another pass to an already-complete branch.
       </div>
     </div>
   </div>
 
   <div class="choice-box">
     <div class="choice-header">
-      <strong>2. How should optional resolution payments with trailing life (<code>can_decline() &amp;&amp; tail_life() &gt; 0</code>) enter obligations?</strong>
-      <span class="badge badge-scope">This Work · Reversible internal solver rule</span>
+      <strong>2. Keep owned non-mana activations (<code>Operation::Activation</code> in <code>flow/play.rs</code>) as a separate Task?</strong>
+      <span class="badge badge-planned">Separate Task · Reversible before merge</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">2a · Recommended</span> Keep <code>payment_obligations</code> committed-only; add <code>tail_life()</code> in <code>saved_obligations</code></div>
-        Restores <code>origin/main</code>'s clean invariant: <code>payment_obligations</code> holds only committed
-        obligations (never a declinable payment), so floating/activating before declining Ward <span class="pip pip-c">2</span>
-        + 2 life behaves identically to Ward <span class="pip pip-c">2</span>, while tapping toward paying Ward still
-        enforces the 2-life tail. Update <code>mana/tests.rs:1825</code> to set <code>committed = true</code> for its
-        committed-payment assertion and add a declinable-Ward test.
+        <div class="opt-title"><span class="badge badge-proposed">2a · Recommended (Built on HEAD)</span> Track in its own follow-up Task</div>
+        Non-mana activation re-lookup (<code>flow/play.rs:1871</code>) is outside the mana-ability payment bug and
+        would widen this PR across non-mana casting/activation paths.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">2b · Passed over</span> Keep <code>!progress.can_decline() || progress.tail_life() &gt; 0</code></div>
-        Leaves <code>can_decline()</code> inconsistent between Ward <span class="pip pip-c">2</span> and Ward
-        <span class="pip pip-c">2</span> + 2 life, blocking legal mana activations/floats before declining whenever the
-        payer cannot or chooses not to pay the optional life fee.
+        <div class="opt-title"><span class="badge badge-existing">2b · Passed over</span> Fold non-mana activation ownership into MTG-500</div>
+        Shares the same pattern as <code>ManaUpfrontActivation</code>, but expands review and regression surface
+        unrelated to Issue 628.
       </div>
     </div>
   </div>
 
   <div class="choice-box">
     <div class="choice-header">
-      <strong>3. Should we clean up the three Pass 5 convoke rough edges in the same final polish pass?</strong>
-      <span class="badge badge-scope">This Work · Reversible internal cleanup</span>
+      <strong>3. Confirm <code>MATCH_STATE_HASH_VERSION = 35</code> for the serialized decision additions?</strong>
+      <span class="badge badge-scope">Irreversible once released</span>
     </div>
     <div class="choice-grid">
       <div class="opt rec">
-        <div class="opt-title"><span class="badge badge-proposed">3a · Recommended</span> Clean up all three alongside Fixes 1 &amp; 2 (~15 lines)</div>
-        Account for <code>Taps::Convoke</code> in <code>prefix_lower_bound</code> (<code>mana.rs:3069</code>), drop
-        the dead <code>|| helped</code> at <code>mana.rs:4270</code>, and simplify <code>PaymentStep::Convoke</code>'s
-        unused <code>Color</code> / sentinel conversion so the convoke contract has no latent invariant gaps.
+        <div class="opt-title"><span class="badge badge-proposed">3a · Recommended (Built on HEAD)</span> Accept hash v35 as built</div>
+        <code>ManaUpfrontActivation</code>, <code>FrameCompletion::ManaOutput</code>, and
+        <code>ManaProduction::Bonus.commit_start</code> all land cleanly under one unreleased bump (<code>34 → 35</code>)
+        with no replay or action-space schema break.
       </div>
       <div class="opt">
-        <div class="opt-title"><span class="badge badge-existing">3b · Passed over</span> Leave the three rough edges untouched</div>
-        None triggers a bug on current callers, so skipping is safe today, but leaves dead code and a latent
-        <code>prefix_lower_bound</code> trap for future callers.
+        <div class="opt-title"><span class="badge badge-existing">3b · Alternative</span> Revise serialized decision shapes before releasing v35</div>
+        Only worth doing if you want to combine another serialized decision change (e.g., 2b) into the same hash bump.
       </div>
     </div>
   </div>
@@ -1251,27 +1133,26 @@ self.payment_obligations(player).into_iter().skip(1).collect()</code></pre>
 
   <ol class="q-list">
     <li class="q-item">
-      <div class="q-stem">1. Production boundary across <code>ManaProduction::Bonus</code> (replaces Pass 5's dropped <code>start</code>):</div>
+      <div class="q-stem">1. Scope boundary for Coupled Mana Payment (including fixed-tap bonus continuation <code>710163f05</code>):</div>
       <ol class="q-opts" type="a">
-        <li><strong>1a (Recommended):</strong> Carry <code>commit_start: Option&lt;usize&gt;</code> on <code>ManaProduction::Bonus</code> so the whole production commits once its last bonus finishes, and tighten <code>ody.rs</code> to verify receipt origin and direct completion on <span class="pip pip-u">U</span><span class="pip pip-r">R</span>. <em>(Reversible until hash v35 ships.)</em></li>
-        <li><strong>1b:</strong> Keep <code>decision.rs:2889</code> as-is and rewrite <code>managym/README.md</code> to describe per-step bonus commitment.</li>
-        <li><strong>1c:</strong> Tag newly produced units directly on <code>ManaPool</code> instead of storing <code>commit_start</code> on <code>Bonus</code>.</li>
+        <li><strong>1a (Recommended · on HEAD):</strong> Ship MTG-500 as-is and keep all four coupled-payment slices in the separate follow-up Task.</li>
+        <li><strong>1b:</strong> Pull slice 1 (fixed-tap bonus continuation) into MTG-500 before merging.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">2. Optional resolution payments with trailing life (<code>Decision::Payment</code> with <code>can_decline() &amp;&amp; tail_life() &gt; 0</code>):</div>
+      <div class="q-stem">2. Scope boundary for owned non-mana activations (<code>Operation::Activation</code> in <code>flow/play.rs</code>):</div>
       <ol class="q-opts" type="a">
-        <li><strong>2a (Recommended):</strong> Keep <code>payment_obligations</code> strictly committed-only (<code>!progress.can_decline()</code>) and append <code>Obligation::life(payment.tail_life())</code> in <code>saved_obligations</code> for declinable resolution payments. <em>(Reversible.)</em></li>
-        <li><strong>2b:</strong> Keep <code>!progress.can_decline() || progress.tail_life() &gt; 0</code> in <code>payment_obligations</code>.</li>
+        <li><strong>2a (Recommended · on HEAD):</strong> Keep as a separate follow-up Task.</li>
+        <li><strong>2b:</strong> Fold into MTG-500 alongside <code>ManaUpfrontActivation</code>.</li>
       </ol>
     </li>
 
     <li class="q-item">
-      <div class="q-stem">3. Pass 5 convoke rough edges (<code>prefix_lower_bound</code>, <code>PaymentStep::Convoke</code>, dead <code>|| helped</code>):</div>
+      <div class="q-stem">3. Serialized decision shapes under <code>MATCH_STATE_HASH_VERSION = 35</code> <em>(irreversible once cut in a release)</em>:</div>
       <ol class="q-opts" type="a">
-        <li><strong>3a (Recommended):</strong> Clean up all three in the same small pass as 1a and 2a. <em>(Reversible.)</em></li>
-        <li><strong>3b:</strong> Leave as-is since current callers don't hit them.</li>
+        <li><strong>3a (Recommended · on HEAD):</strong> Approve hash v35 with <code>ManaUpfrontActivation</code>, <code>FrameCompletion::ManaOutput</code>, and <code>ManaProduction::Bonus.commit_start</code> as built.</li>
+        <li><strong>3b:</strong> Hold hash v35 to revise or batch additional decision-state changes before release.</li>
       </ol>
     </li>
   </ol>
