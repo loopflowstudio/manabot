@@ -37,7 +37,7 @@ use managym::{
         decision_surface::{AtomicCommand, DecisionSubmission, DecisionSurfaceError},
         observation::{EventEntityKind, KeywordData, Observation},
         policy_history::HistoryReference,
-        record_vocabulary::program_vocabulary,
+        record_vocabulary::missing_program_tokens,
     },
     cards::setups::authored_setup,
     cards::tokens::{name_value, TokenKind},
@@ -16247,10 +16247,8 @@ fn koh_departed_once_each_turn_trigger_stays_in_program_vocabulary() {
     ] {
         assert!(!program.contains(&forbidden), "leaked {forbidden:?}");
     }
-    let vocabulary = program_vocabulary();
-    assert!(program
-        .iter()
-        .all(|token| TokenKind::of(token.0).is_numeric() || vocabulary.contains(token)));
+    let missing = missing_program_tokens(program);
+    assert!(missing.is_empty(), "unregistered LKI tokens: {missing:?}");
 }
 
 /// CR 607.5: Koh inheriting Boiling Rock Rioter acquires both linked abilities

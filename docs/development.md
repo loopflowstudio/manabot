@@ -149,13 +149,10 @@ Python edit; renaming one fails the import. Run
 `uv run --extra dev pytest tests/env/test_named_observation_layout.py -q`
 after changing the layout. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
-Changes to effects, runtime projections or runtime token registration require the
-[effect vocabulary checks](../managym/cards/tests/cards/README.md#effect-vocabulary-checks):
-the debug Rust emission guard (`TokenWriter::into_rules_tokens` checks every
-non-numeric runtime token on the default content pack in debug builds), the
-exhaustive witness check and the rebuilt-extension Python admission checks.
-These check token membership at emission and independently of which effects
-a game happens to reach. Changes to retained execution or its record vocabulary
+For changes to effects, runtime projections or token registrations, run the
+debug emission, exhaustive witness and Python admission checks in the
+[effect vocabulary guide](../managym/cards/tests/cards/README.md#effect-vocabulary-checks).
+Changes to retained execution or its record vocabulary
 also require
 `uv run --extra dev pytest tests/model/test_record_coverage.py -q` after rebuilding
 the native extension. This bounded sweep checks that emitted execution tokens

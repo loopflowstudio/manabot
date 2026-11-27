@@ -61,6 +61,27 @@ def encoder() -> SemanticCardEncoder:
     return SemanticCardEncoder("world", 4, records=True, decision_memory=False)
 
 
+@pytest.fixture(scope="module")
+def tables(encoder: SemanticCardEncoder) -> Tables:
+    return _tables(encoder)
+
+
+@pytest.fixture(scope="module")
+def catalog(tables: Tables) -> Catalog:
+    return _catalog(tables)
+
+
+@pytest.fixture(scope="module")
+def memory_pair() -> tuple[int, int]:
+    return next(
+        (kind, value)
+        for _, name, _, kind, value in managym.record_vocabulary()
+        if name.startswith("DecisionMemory::")
+        and kind is not None
+        and value is not None
+    )
+
+
 def _admit_program(
     catalog: Catalog, pairs: list[tuple[int, int]], *, packed: bool
 ) -> None:
@@ -84,7 +105,7 @@ def _admit_program(
 
 @pytest.mark.parametrize("packed", [False, True], ids=["dense", "v11"])
 def test_facts_admit_printed_and_registered_program_tokens(
-    encoder: SemanticCardEncoder, packed: bool
+    catalog: Catalog, packed: bool
 ) -> None:
     printed = managym.catalog_tokens()
     pairs = set(zip(printed["token_kind"], printed["token_value"], strict=True))
@@ -95,21 +116,13 @@ def test_facts_admit_printed_and_registered_program_tokens(
         and kind is not None
         and value is not None
     )
-    _admit_program(_catalog(_tables(encoder)), sorted(pairs), packed=packed)
+    _admit_program(catalog, sorted(pairs), packed=packed)
 
 
 @pytest.mark.parametrize("packed", [False, True], ids=["dense", "v11"])
 def test_facts_reject_unknown_and_disabled_memory_program_tokens(
-    encoder: SemanticCardEncoder, packed: bool
+    catalog: Catalog, memory_pair: tuple[int, int], packed: bool
 ) -> None:
-    memory_pair = next(
-        (kind, value)
-        for _, name, _, kind, value in managym.record_vocabulary()
-        if name.startswith("DecisionMemory::")
-        and kind is not None
-        and value is not None
-    )
-    catalog = _catalog(_tables(encoder))
     for kind, value in [(2, -1), memory_pair]:
         with pytest.raises(
             ValueError, match=rf"missing keys: \({kind}, 0x{value & 0xFFFFFFFF:08x}\)$"
@@ -118,35 +131,21 @@ def test_facts_reject_unknown_and_disabled_memory_program_tokens(
 
 
 def test_effects_admit_modification_program_tokens_and_reject_unknown_pairs(
-    encoder: SemanticCardEncoder,
+    catalog: Catalog, memory_pair: tuple[int, int]
 ) -> None:
-    catalog = _catalog(_tables(encoder))
-    modifications = np.array(
-        [
-            managym.catalog_token_value(f"Modification::{name}")
-            for name in ("AddTypes", "AddColors")
-        ]
-    )
-    closings = np.array(
-        [
-            managym.catalog_token_value(f"/Modification::{name}")
-            for name in ("AddTypes", "AddColors")
-        ]
-    )
+    names = ("Modification::AddTypes", "Modification::AddColors")
+    modifications = np.array([managym.catalog_token_value(name) for name in names])
+    closings = np.array([managym.catalog_token_value(f"/{name}") for name in names])
     definition = np.zeros(2, dtype=np.int32)
     structure = DETAIL_KIND_NAMES["program_structure"]
     effect_vocabulary(
         modifications, definition, np.full(2, structure), closings, catalog
     )
 
-    memory_word = next(
-        value
-        for _, name, _, _, value in managym.record_vocabulary()
-        if name.startswith("DecisionMemory::") and value is not None
-    )
+    memory_kind, memory_word = memory_pair
     with pytest.raises(
         ValueError,
-        match=rf"missing keys: \(1, 0xffffffff\), \(3, 0x{memory_word:08x}\)$",
+        match=rf"missing keys: \(1, 0xffffffff\), \({memory_kind}, 0x{memory_word:08x}\)$",
     ):
         effect_vocabulary(
             modifications,
@@ -158,11 +157,10 @@ def test_effects_admit_modification_program_tokens_and_reject_unknown_pairs(
 
 
 def test_koh_runtime_tokens_have_admitted_embedding_rows(
-    encoder: SemanticCardEncoder,
+    encoder: SemanticCardEncoder, tables: Tables, catalog: Catalog
 ) -> None:
-    tables = _tables(encoder)
     kinds, words = np.array(_KOH_KEYS, dtype=np.int64).T
-    _catalog(tables).require_tokens(kinds, words)
+    catalog.require_tokens(kinds, words)
     rows = tables.tokens(kinds, words)
     assert (rows > 0).all()
     assert (rows < encoder.token_embedding.num_embeddings).all()
@@ -194,13 +192,12 @@ def test_missing_koh_registration_is_rejected(
 
 
 def test_unseen_numeric_values_use_numeric_embedding_rows(
-    encoder: SemanticCardEncoder,
+    tables: Tables, catalog: Catalog
 ) -> None:
-    tables = _tables(encoder)
     kinds = np.array([4, 4, 5, 5])
     words = np.array([-(2**31), 1234567, -1234567, 1234567])
     assert not np.isin(record_key(kinds, words), tables.record_token_keys).any()
-    _catalog(tables).require_tokens(kinds, words)
+    catalog.require_tokens(kinds, words)
     np.testing.assert_array_equal(
         tables.tokens(kinds, words), tables.record_number_rows[kinds]
     )
@@ -209,23 +206,20 @@ def test_unseen_numeric_values_use_numeric_embedding_rows(
 
 @pytest.mark.parametrize("kind", [7, 8])
 def test_definition_reference_and_null_require_exact_pairs(
-    encoder: SemanticCardEncoder, kind: int
+    encoder: SemanticCardEncoder, tables: Tables, catalog: Catalog, kind: int
 ) -> None:
-    tables = _tables(encoder)
     keys = tables.record_token_keys
     key = keys[(keys >> 32) == kind][0]
     kinds, words = np.array([kind]), np.array([key & 0xFFFFFFFF])
-    _catalog(tables).require_tokens(kinds, words)
+    catalog.require_tokens(kinds, words)
     rows = tables.tokens(kinds, words)
     assert 0 < rows[0] < encoder.token_embedding.num_embeddings
-    without_pair = replace(_catalog(tables), tokens=keys[keys != key])
+    without_pair = replace(catalog, tokens=keys[keys != key])
     with pytest.raises(ValueError, match="program token outside the vocabulary"):
         without_pair.require_tokens(kinds, words)
 
 
 @pytest.mark.parametrize("kind", [0, 10])
-def test_invalid_program_token_kind_is_rejected(
-    encoder: SemanticCardEncoder, kind: int
-) -> None:
+def test_invalid_program_token_kind_is_rejected(catalog: Catalog, kind: int) -> None:
     with pytest.raises(ValueError, match="invalid program token kind"):
-        _catalog(_tables(encoder)).require_tokens(np.array([kind]), np.array([0]))
+        catalog.require_tokens(np.array([kind]), np.array([0]))

@@ -937,16 +937,12 @@ runtime = {
     and not name.startswith("DecisionMemory::")
 }
 admitted_program_tokens = printed | runtime
-# Every non-numeric (token_kind, token_value) pair a default policy admits
 ```
 
-Only `Integer` and `Boolean` program tokens bypass exact vocabulary lookup
-(they carry their numeric kind and exact value); `Null`, `DefinitionRef` and
-every other non-numeric token kind require an exact `(kind, value)` pair in
-`admitted_program_tokens`. `DecisionMemory::*` rows in `record_vocabulary()`
-belong only to policies with decision memory enabled. An unknown non-numeric
-program token fails policy admission and reports its missing `(kind, 0x…)`
-pairs.
+`Integer` and `Boolean` carry their values directly. Every other token,
+including `Null` and `DefinitionRef`, needs an exact pair in
+`admitted_program_tokens`. Admission reports missing pairs as `(kind, 0x…)`.
+Policies with decision memory enabled also admit the `DecisionMemory::*` rows.
 
 An expanded naming source can supply a chosen card name outside the installed
 catalog. Suspended entries and named exile or search programs encode it as

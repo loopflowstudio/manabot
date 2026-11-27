@@ -147,6 +147,7 @@ pub fn rules_tokens<T: Serialize>(
 }
 
 /// Serialize a definition for the exhaustive witness that aggregates missing pairs.
+#[cfg(feature = "fixtures")]
 #[doc(hidden)]
 pub fn definition_tokens_unchecked(
     definition: &ObjectDefinition,
@@ -158,6 +159,7 @@ pub fn definition_tokens_unchecked(
 }
 
 /// Serialize rules for the exhaustive witness that aggregates missing pairs.
+#[cfg(feature = "fixtures")]
 #[doc(hidden)]
 pub fn rules_tokens_unchecked<T: Serialize>(
     value: &T,
@@ -342,17 +344,8 @@ impl<'p> TokenWriter<'p> {
     pub(crate) fn into_rules_tokens(self) -> Vec<(u16, i32)> {
         #[cfg(debug_assertions)]
         if std::ptr::eq(self.pack, super::content_pack::default_content_pack()) {
-            let vocabulary = crate::agent::record_vocabulary::program_vocabulary();
-            let mut missing = self
-                .tokens
-                .iter()
-                .filter(|&&(kind, _)| !TokenKind::of(kind).is_numeric())
-                .filter(|token| !vocabulary.contains(token))
-                .copied()
-                .collect::<Vec<_>>();
+            let missing = crate::agent::record_vocabulary::missing_program_tokens(&self.tokens);
             if !missing.is_empty() {
-                missing.sort_unstable();
-                missing.dedup();
                 let pairs = missing
                     .iter()
                     .map(|&(kind, value)| format!("({kind}, 0x{:08x})", value as u32))

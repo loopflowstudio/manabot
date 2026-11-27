@@ -175,11 +175,9 @@ class CatalogTokens(TypedDict):
 LearningCatalog = CatalogTokens  # Deprecated spelling, removed in 0.3.0.
 
 def catalog_tokens() -> CatalogTokens:
-    """Printed tokenized rules spans of every catalog definition, rows by CardDefId.
+    """Printed rules spans for cards, tokens and back faces, indexed by CardDefId.
 
-    Covers printed card, token and back-face spans only; runtime-only program
-    tokens emitted for live effects and continuations come from
-    ``record_vocabulary()``.
+    Runtime-only program symbols come from ``record_vocabulary()``.
     """
 
 def card_definitions_json() -> str:

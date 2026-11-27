@@ -46,7 +46,7 @@ use managym::{
             encode, EncodedObservation, FactKind, InputLayout, ObservationEncoderConfig, CARD_DIM,
             FACT_DIM, PERMANENT_DIM, PLAYER_DIM, STACK_DIM, TURN_STATE_DIM,
         },
-        record_vocabulary::program_vocabulary,
+        record_vocabulary::missing_program_tokens,
         shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
     flow::{
@@ -2376,7 +2376,6 @@ fn every_effect_variant_reaches_the_learning_tokens() {
     names.dedup();
     assert_eq!(names.len(), EFFECT_VARIANTS, "one witness per variant");
     let pack = default_content_pack();
-    let known = program_vocabulary();
     // Aggregate omissions across every variant and both serialization paths.
     let mut missing = BTreeSet::new();
     for effect in witnesses {
@@ -2388,14 +2387,12 @@ fn every_effect_variant_reaches_the_learning_tokens() {
             ("spell", tokens),
             ("rules", rules_tokens_unchecked(&effect, pack).unwrap()),
         ] {
-            for (kind, value) in tokens {
-                let token_kind = TokenKind::of(kind);
-                if !token_kind.is_numeric() && !known.contains(&(kind, value)) {
-                    missing.insert(format!(
-                        "{name} ({path}): {token_kind:?} (kind {kind}), value {value} (0x{:08x})",
-                        value as u32
-                    ));
-                }
+            for (kind, value) in missing_program_tokens(&tokens) {
+                missing.insert(format!(
+                    "{name} ({path}): {:?} (kind {kind}), value {value} (0x{:08x})",
+                    TokenKind::of(kind),
+                    value as u32
+                ));
             }
         }
     }
@@ -5611,13 +5608,11 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
 /// Every execution token of `frame` is a literal, a definition's token or a
 /// registered runtime name: the policy's whole token vocabulary.
 fn assert_execution_tokens_registered(frame: &ContinuationFrame) {
-    let vocabulary = program_vocabulary();
-    for token in &frame.effect_execution {
-        assert!(
-            TokenKind::of(token.0).is_numeric() || vocabulary.contains(token),
-            "unregistered execution token {token:?}"
-        );
-    }
+    let missing = missing_program_tokens(&frame.effect_execution);
+    assert!(
+        missing.is_empty(),
+        "unregistered execution tokens: {missing:?}"
+    );
 }
 
 /// A choice interrupts the parent after it has drained three life. Its

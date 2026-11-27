@@ -1989,6 +1989,18 @@ mod tests {
         state::{player::PlayerConfig, zone::ZoneType},
     };
 
+    fn mountain_game(seed: u64) -> Game {
+        let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
+        Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            seed,
+            false,
+        )
+    }
+
     fn entry_notes(game: &Game, face: EntryFace) -> Vec<String> {
         let mut out = Projection::new(game, PlayerId(0), true);
         out.entry(&ZoneEntry {
@@ -2000,20 +2012,12 @@ mod tests {
 
     #[test]
     fn suspended_exile_named_retains_only_catalog_names_in_tokens() {
-        let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
         let viewer = PlayerId(0);
         for (name, token) in [
             ("Mountain", (TokenKind::Text as u16, name_value("Mountain"))),
             ("70,000 Light-Years from Home", (TokenKind::Null as u16, 0)),
         ] {
-            let mut game = Game::new(
-                vec![
-                    PlayerConfig::new("p0", deck.clone()),
-                    PlayerConfig::new("p1", deck.clone()),
-                ],
-                0,
-                false,
-            );
+            let mut game = mountain_game(0);
             game.keep_opening_hands();
             let effects = vec![
                 Effect::Scry { count: 1 },
@@ -2051,16 +2055,8 @@ mod tests {
 
     #[test]
     fn entry_attachment_uses_a_visible_reference() {
-        let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
         let viewer = PlayerId(0);
-        let mut game = Game::new(
-            vec![
-                PlayerConfig::new("p0", deck.clone()),
-                PlayerConfig::new("p1", deck),
-            ],
-            3034,
-            false,
-        );
+        let mut game = mountain_game(3034);
         let permanent = game
             .scenario_force_battlefield(viewer, "Mountain", true)
             .unwrap();
@@ -2088,15 +2084,7 @@ mod tests {
     /// `manifested`, `transformed`, `modal_back` or the `meld` pair.
     #[test]
     fn an_entry_face_reads_and_records_only_its_own_form() {
-        let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
-        let game = Game::new(
-            vec![
-                PlayerConfig::new("p0", deck.clone()),
-                PlayerConfig::new("p1", deck),
-            ],
-            712_11,
-            false,
-        );
+        let game = mountain_game(712_11);
         let modal = entry_notes(&game, EntryFace::ModalBack);
         assert!(modal.iter().any(|note| note == "enters back face up: true"));
         assert!(!modal

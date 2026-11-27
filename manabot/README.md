@@ -887,12 +887,12 @@ embedding. Native `record_vocabulary` lists every counter kind, color,
 subtype, keyword, modification, set name and combat restriction the encoders
 hash. Each reads the row of the card token for the same concept (a granted
 `flying` and a printed `Keyword::flying` share one row) or a row appended after
-the card tokens. Captured runtime program tokens read their rows from `catalog_tokens()` and
-non-`DecisionMemory::*` `record_vocabulary()` entries; integers and booleans
-read one row per kind plus their exact value. Fact and effect sources read the
-card encoder's row for that definition, and ability or frame ordinals are
-numbers. Any id or non-numeric program token outside the vocabulary fails
-admission, naming its missing `(kind, 0x…)` pairs. Checkpoints with `world="world"`
+the card tokens. Runtime program tokens use the printed and registered rows in
+the [program-token vocabulary](../docs/engine.md#program-token-vocabulary).
+Integers and booleans read one row per kind plus their exact value. Fact and
+effect sources read the card encoder's row for that definition, and ability
+or frame ordinals are numbers. Admission reports missing symbolic pairs as
+`(kind, 0x…)`. Checkpoints with `world="world"`
 that omit the field load the `hashed` layout through `ModelConfig.from_checkpoint`
 (elsewhere both values build the same model and omission reads as the default): 4096
 learned rows per id column, which held 80% of a w64 L2 model (1,958,402
