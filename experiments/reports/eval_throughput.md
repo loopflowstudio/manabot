@@ -192,11 +192,18 @@ measurements all use the rebuilt engine and the corrected clock.
 
 ## Reproduce
 
+Install the evaluation and artifact dependencies with
+`uv sync --extra evaluation --extra artifacts`. Add `--extra mlx` on Apple
+Silicon for the MLX arm. While the lock uses Etude SDK 0.4.7, install an
+editable Etude checkout that supports `play_many` with
+`uv pip install --no-deps -e PATH`. Use `uv run --no-sync` to keep that
+checkout in use.
+
 Fetch the corpus and the trained policy into local files.
 
 ```bash
-uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg409/pools-v2/corpus.json
-uv run --extra evaluation etude fetch 'tla_trophies_colab_500k_v2/w160l8@40902' \
+uv run --no-sync python -m manabot.data fetch experiments/data/mtg409/pools-v2/corpus.json
+uv run --no-sync etude fetch 'tla_trophies_colab_500k_v2/w160l8@40902' \
   policies/00002000-raw.safetensors .runs/eval-throughput/policy
 ```
 
@@ -205,15 +212,15 @@ Use a fresh output directory for each arm. The default creates the seeded
 `--checkpoint` to hold the bytes fixed across arms.
 
 ```bash
-uv run --extra evaluation python -m experiments.eval_throughput \
+uv run --no-sync python -m experiments.eval_throughput \
   --output-dir .runs/eval-throughput/w384-mps-64 --device mps --runner vector --slots 64
-uv run --extra evaluation python -m experiments.eval_throughput \
+uv run --no-sync python -m experiments.eval_throughput \
   --output-dir .runs/eval-throughput/w160-cpu-scalar --device cpu --runner scalar \
   --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors
-uv run --extra evaluation --extra mlx python -m experiments.eval_throughput \
+uv run --no-sync python -m experiments.eval_throughput \
   --output-dir .runs/eval-throughput/w160-mlx-64 --device mlx --runner vector --slots 64 \
   --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors
-uv run --extra evaluation python -m experiments.eval_throughput \
+uv run --no-sync python -m experiments.eval_throughput \
   --output-dir .runs/eval-throughput/w160-l4-bf16 --device cuda --runner vector --slots 64 \
   --precision bf16 --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors
 ```
@@ -226,5 +233,3 @@ The CLI writes `summary.json` alongside the per-deal diagnostics in `arena/`.
 For the managed comparison, use `EvalRun.play_many` with
 `experiments.tla_trophies.play_many` and `AGENTS`. The Gate 1 harness, receipts,
 and per-leg comparison are under `.runs/eval-throughput/gate1-92a578b417/`.
-Install the chosen Etude checkout with `uv pip install --no-deps -e PATH`
-and run with `uv run --no-sync` to keep the editable SDK in use.

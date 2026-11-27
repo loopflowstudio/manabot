@@ -407,6 +407,10 @@ print(corpus.sql("""
 
 ## Etude agents
 
+The async evaluation callbacks require Etude SDK 0.5.0. To try them before
+that release, install an editable Etude checkout that supports `play_many`
+and use `uv run --no-sync`. See the [throughput reproduction setup](../experiments/reports/eval_throughput.md#reproduce).
+
 Managed evaluations declare an agent set from `manabot.eval.agents` on each
 `EvalJob`. Etude owns game processes, checkpoint grouping, batching, model
 residency, retries and performance records. A scalar job declares
