@@ -1,12 +1,26 @@
-at: f118a157115300ebb4c45458b6e9a63612aa089d
+at: a1e8d430de84778695fde64a1f2a4227a5070f73
 first:
   - path: docs/engine-python.md
     why: Public API and decision guarantees
   - path: managym/src/flow/state_edit.rs
-    why: Edit data, prevalidation and quiet moves
+    why: Edit types, quiet moves and transactional declaration refresh
+  - path: managym/src/agent/env.rs
+    why: Live edit entry point and shared intervention dispatch
+  - path: managym/src/agent/env/provenance.rs
+    why: Journal operation and action offsets
+  - path: managym/src/agent/env/snapshot.rs
+    why: Restore order and forced action admission
+  - path: managym/src/agent/env/snapshot/replay.rs
+    why: Cold replay and verification
+  - path: managym/src/flow/tick.rs
+    why: Action builders shared with ordinary combat
+  - path: managym/src/flow/combat.rs
+    why: Declarations that survive removal from combat
   - path: managym/src/flow/zones.rs
     why: Battlefield departure bookkeeping shared with normal play
   - path: managym/src/agent/policy_history.rs
     why: Shared expiry of links to departed objects
+  - path: managym/src/agent/env/state_edit_tests.rs
+    why: Rollback, restored decisions and object-bound Commands
   - path: managym/src/flow/state_edit/tests.rs
     why: Combat, library, history and atomicity checks

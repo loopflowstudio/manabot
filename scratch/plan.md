@@ -97,13 +97,10 @@ More edit variants (hand, graveyard, exile, placement, mana, sickness, control);
 - `docs/engine.md` — table entry in Choosing a Python API pointing to `docs/engine-python.md#counterfactual-state-edits`.
 - `docs/academy.md` — mentions counterfactual state edits and the **Branch · game state edited** move-list label in Replay.
 
-Open question surfaced while writing docs:
-- Should `env.edit_game_state([])` (an empty edit list) be a no-op returning the current decision's `Observation` without journaling an empty `"game_state_edits"` intervention (consistent with `RestoreOptions(..., game_state_edits=[])`), or raise `managym.AgentError`?
-
 ## Passes
 
 1. **Core edit engine** landed on this branch in `f118a1571`; five focused native edit tests and four existing policy-history tests pass in debug.
-2. **Republish + journal**: shared declare builders extracted from `flow/tick.rs`; Priority in-place and declare rollback paths with eligibility rebuild (3a); `Intervention::GameStateEdits`, `apply_intervention`, `Env::edit_game_state`, `RestoreOptions` (edits before mode, `Arc` field, forced-action rejection), cold replay; Rust replay/determinize tests.
+2. **Republish + journal** landed in `a1e8d430d`. Three native regressions pass for priority refresh, blocker rollback and eligibility, and cold replay of an object-bound Command through exact, shuffled and determinized restores.
 3. **Python, recording, Academy, verify docs**: PyO3 + `managym/__init__.pyi` + `public_api.py record`; `managym/recording.py` strict union, `managym/academy/trace.py`, UI `BranchKind`/`BRANCHES` + test; `tests/env/test_game_state_edits.py`; verify `docs/engine-python.md` example and wording match the shipped implementation.
 
-Pass 2 calls `Game::apply_game_state_edits` in `managym/src/flow/state_edit.rs`. It applies the state changes after validation. The caller owns boundary admission, control refresh, decision publication and declaration rollback. The `set_counters` payload spells its counter name `counter` because `kind` tags the edit. Pass 3 should keep Python's `kind` constructor argument while matching that wire field.
+Pass 3 adds the binding in `managym/src/python/bindings.rs` and the restore argument in `managym/src/python/snapshot_bindings.rs`. The journal's `set_counters` payload uses `counter` for the counter name because `kind` tags the edit. Keep Python's `kind` constructor argument. Test exact physical placement under `shuffle_libraries` and the known bottom printing under `determinize`, which can substitute another copy of that printing.
