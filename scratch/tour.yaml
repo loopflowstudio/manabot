@@ -1,0 +1,15 @@
+at: 1c521e3001b01a04412b1054a7cddc7383f54268
+first:
+  - path: docs/engine.md
+    why: Forced decisions and errors at the step boundary
+  - path: managym/src/flow/tick.rs
+    why: Rejects empty decisions before skipping or publishing
+  - path: managym/src/flow/mana.rs
+    why: Returns errors for a missing automatic payment witness
+  - path: managym/src/flow/play.rs
+    why: Uses the shared life payment rule
+  - path: managym/src/agent/vector_env.rs
+    why: Exercises strict and isolated step failure
+  - path: managym/cards/tests/cards/ody.rs
+    why: Checks both legal colors at negative life
+hide: []
