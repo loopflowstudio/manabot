@@ -10,8 +10,9 @@ Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
   mirrored by hand into all call sites and `Environment.config`; 1c,
   float32 only in this Task. Nothing reduced-precision is recorded until pass
   4's rental, so this can still change before then.
-- **MPS before the Etude companion.** The loader selects `mps` in Etude's
-  direct mode, where every game process loads its own copy. Probe: 12 processes
+- **Apple GPU inference before the Etude companion.** The loader selects MLX
+  when available, then MPS, in Etude's direct mode, where every game process
+  loads its own copy. MPS probe: 12 processes
   sharing MPS reached 478 rows/s at w160l8 against 323 for one. If per-process
   GPU copies of a large checkpoint exhaust unified memory on the 16 GB mini,
   `MANABOT_EVAL_DEVICE=cpu` is the escape until Etude shares one agent process.
@@ -25,6 +26,10 @@ Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
   report states.
 - **Apple arms run on Apple hardware outside CI** (the mini if reachable, else
   the laptop), 128 games per arm. This is the real workload, not induced load.
+- **MLX comparison.** Reuse the pass 3 CPU scalar and MPS vector-64 receipts
+  and checkpoint bytes on the same M4 Max. Run one float32 vector-64 arm per
+  checkpoint. The timings come from separate sessions. Verify every replay
+  and compare the actions and state digests leg by leg.
 
 - **Runner trace parity (resolved in pass 2, `dd11bd0a3f`).** Eval keeps
   its existing `managym-game-v1` `GameRecord` format with zero changes to

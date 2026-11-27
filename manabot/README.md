@@ -52,9 +52,10 @@ CUDA. All five shipped recipes (`local`, `baseline`, `elemental`,
 (with `device="mps"` or `"cpu"` for self-play).
 [MLX training and recovery](backends/mlx.md#tracked-training-and-recovery)
 
-Torch MPS self-play requires Torch 2.15 or newer. Evaluation and search run
-on CPU. The device guide covers precision, belief inputs and frozen opponents.
-[Training devices](../docs/training.md#run-training)
+Torch MPS self-play requires Torch 2.15 or newer. Training monitoring and
+search use CPU. Managed Etude evaluations choose CUDA, MLX, MPS, or CPU.
+[Training devices](../docs/training.md#run-training) ·
+[Etude agents](../docs/evaluation.md#etude-agents)
 
 The loop logs completed updates and cumulative transitions, publishes raw
 and configured EMA policies, and saves the learner, Adam, EMA and counts under

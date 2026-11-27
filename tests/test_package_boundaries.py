@@ -257,23 +257,22 @@ _TORCH_FREE_MODULES = (
 )
 
 
-def test_evaluation_child_modules_import_without_torch() -> None:
+def test_evaluation_child_modules_import_without_array_framework() -> None:
     probe = textwrap.dedent(
         f"""
         import importlib
         import sys
         for name in {_TORCH_FREE_MODULES!r}:
             importlib.import_module(name)
-        heavy = sorted(m for m in ("torch", "etude.train") if m in sys.modules)
+        heavy = sorted(m for m in ("torch", "mlx", "etude.train") if m in sys.modules)
         assert not heavy, heavy
         # Etude's Agents declaration imports its own training record package;
         # game-side builders must still load no array framework or Manabot trainer.
         import manabot.eval.agents
-        assert "torch" not in sys.modules
         assert "manabot.training" not in sys.modules
-        # The vectorized match runner runs in game processes and must stay Torch-free.
         import manabot.eval.vector
-        assert "torch" not in sys.modules
+        heavy = sorted(m for m in ("torch", "mlx") if m in sys.modules)
+        assert not heavy, heavy
         """
     )
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)

@@ -407,14 +407,14 @@ print(corpus.sql("""
 
 ## Etude agents
 
-Managed evaluations declare the same `manabot.eval.agents.AGENTS` on every
-`EvalJob`, and pass those agents to `active.play`. Etude owns game processes,
+Managed evaluations declare an agent set from `manabot.eval.agents` on each
+`EvalJob` and pass those agents to `active.play`. Etude owns game processes,
 checkpoint grouping, batching, model residency, retries and performance records.
 The callback is `play(match, agents)`, with objects in seat order; it runs the
 native game and Command replay in that Etude process.
 
 `manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path` and
-selects the first available device in order: CUDA, MLX, MPS, CPU. MLX uses
+prefers CUDA, followed by MLX, MPS, and CPU. MLX uses
 Metal on Apple Silicon and requires `uv sync --extra evaluation --extra mlx`.
 Set `MANABOT_EVAL_DEVICE` to `cuda`, `mlx`, `mps`, or `cpu` to require a
 specific device. The default loader computes in float32 on each device.
