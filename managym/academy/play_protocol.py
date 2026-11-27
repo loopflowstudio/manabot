@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, TypeAlias, get_args
 
-from pydantic import Field, TypeAdapter
+from pydantic import Field, StrictBool, TypeAdapter
 
 from managym.decision_group import DecisionGroupChoice
 from managym.experience import Command, ProtocolModel, UInt64
@@ -102,6 +102,13 @@ class ShowAnalysisMessage(ProtocolModel):
     policy: str | None = None
 
 
+class SetOpenHandsMessage(ProtocolModel):
+    """Show or hide the bot's hand to the person playing this game."""
+
+    type: Literal["set_open_hands"]
+    open: StrictBool
+
+
 StartMessage: TypeAlias = ResumeMessage | NewGameMessage | RematchMessage
 GameMessage: TypeAlias = (
     SwapSidesMessage
@@ -112,6 +119,7 @@ GameMessage: TypeAlias = (
     | RetryMirrorMessage
     | SetStopsMessage
     | ShowAnalysisMessage
+    | SetOpenHandsMessage
 )
 PlayRequest: TypeAlias = Annotated[
     StartMessage | GameMessage, Field(discriminator="type")

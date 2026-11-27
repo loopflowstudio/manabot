@@ -121,7 +121,12 @@ neutrally. Default trained policies to `PolicyDescriptor.recommended` before the
 first eligible one. Reserve preview space so hover never shifts layout, render
 braced mana/tap symbols (`{W}`–`{G}`, `{T}`, `{Q}`) through `ManaText`/`Pips`
 rather than raw text, and fit primary views into one 1280×800 screen with
-floating board overlays closed by default.
+floating board overlays closed by default. Show each offer once in a panel,
+never as a list row and a button together. Ring, lift or outline a card only
+for a live offer on it. Hold the next choices until the walk has caught up to
+the position they belong to. Draw hidden cards as card backs deep enough to
+read as cards. In Play your hand stays out and no strip, chart or tray covers
+it.
 
 ## Style
 
@@ -621,6 +626,12 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
+- Each Academy e2e spec belongs to one Playwright config
+  (`academy/ui/playwright.*.config.ts` `testMatch`) with its own fixture
+  server; under another config it fails for want of fixtures. Run a spec with
+  its config: release after `npm run build`, launch and policy after
+  `ACADEMY_STATIC_BUILD=1 npm run build`. A failed launch run leaves a taken
+  run name in `test-results/launch/`; delete it before rerunning.
 
 ### Card definitions
 

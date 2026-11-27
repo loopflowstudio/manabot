@@ -8,7 +8,7 @@ import { markText } from '$lib/analysis';
 import { findBoard } from './boards';
 import { buildHistory, legacyMoveHistory } from './history';
 import {
-  analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, humanSeatAt, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, seatIdentity, sinceRevision, stripMarks, swapHistoryNotes, withLiveAnalysisPoints, type StripMark,
+  activeRibbonSeat, analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, choosingSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, humanSeatAt, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, seatIdentity, sinceRevision, stripMarks, swapHistoryNotes, withLiveAnalysisPoints, type StripMark,
 } from './replay';
 import { boardView } from './view';
 
@@ -59,10 +59,17 @@ describe('recordedFrame', () => {
 
 describe('perspective', () => {
   const positions = [position('choice', { actor: 1 }), position('consequences', { actor: 1 }), position('choice', { actor: 0 })];
-  it('keeps a Play game at the person\'s seat and follows the chooser in a bot game', () => {
+  it('keeps a Play game at the person\'s seat and a bot game at Seat 1 unless the address follows the chooser', () => {
     expect(perspectiveOf(null, { players: [{ seat: 1, kind: 'human' } as never] })).toBe(1);
-    expect(perspectiveOf(null, { players: [] })).toBe('chooser');
+    expect(perspectiveOf(null, { players: [] })).toBe(0);
+    expect(perspectiveOf('chooser', { players: [] })).toBe('chooser');
     expect(perspectiveOf('0', { players: [] })).toBe(0);
+  });
+  it('names the chooser only at its choice and keeps its hand out through the consequences', () => {
+    const steps = [...positions, position('consequences', { actor: null, automatic: true }), position('state', { actor: null })];
+    expect(steps.map((_, at) => choosingSeat(steps, at))).toEqual([1, null, 0, null, null]);
+    expect(steps.map((_, at) => activeRibbonSeat(steps, at, false))).toEqual([1, 1, 0, 0, 0]);
+    expect(activeRibbonSeat(steps, 4, true)).toBeNull();
   });
   it('holds a chooser at the bottom through its consequences', () => {
     expect([0, 1, 2].map(at => bottomSeat('chooser', positions, at))).toEqual([1, 1, 0]);

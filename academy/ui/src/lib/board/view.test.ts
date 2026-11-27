@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame, PermanentState } from '$lib/types';
-import { fitRow, footprint, handFan, handStrip, pileWidth, offerPlacements, possessive, splitHalf, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
+import { NO_RIBBON_OVERRIDES, fitRow, footprint, handFan, handStrip, pileWidth, offerPlacements, possessive, ribbonIsOut, splitHalf, toggleRibbon, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
 import { decidesBy, shortName } from '$lib/opponent-name';
 import { counterTerms, permissionTerms } from './inspect';
 
@@ -120,11 +120,28 @@ describe('where decisions land', () => {
 
   it('draws Learn: discards on hand cards, Lessons in the tray by name, declining as a button', () => {
     const view = boardView(navigation.LEARN.frame, PLAYERS);
-    expect(view.hand.filter(item => item.offers.length).length).toBe(6);
+    expect(view.you.hand.filter(item => item.offers.length).length).toBe(6);
     expect(view.tray.map(item => item.name)).toEqual(['Accumulate Wisdom', 'Firebending Lesson', "It'll Quench Ya!"]);
     expect(view.buttons.map(placed => placed.offer.label)).toEqual(['Decline Learn']);
     // A click on the Learn spell on the stack never declines.
     expect(view.stack.flatMap(item => item.offers)).toEqual([]);
+  });
+
+  it('draws a top-seat chooser\'s offers on its own hand, and unseen hand cards as backs', () => {
+    const { frame } = navigation.LEARN;
+    const { agent, opponent } = frame.projection;
+    // The same decision seen from the other seat's side of the table, hands face-up.
+    const view = boardView({ ...frame, projection: { ...frame.projection, agent: opponent, opponent: agent } }, PLAYERS);
+    expect(view.opponent.hand.filter(item => item.offers.length).length).toBe(6);
+    expect(view.opponent.hiddenHand).toBe(0);
+    expect(view.tray.map(item => item.name)).toEqual(['Accumulate Wisdom', 'Firebending Lesson', "It'll Quench Ya!"]);
+    expect([...offerPlacements(view).values()].every(count => count === 1)).toBe(true);
+    // Closed: the count stays, the cards are backs, and their offers fall back to the tray.
+    const closed = boardView({ ...frame, projection: { ...frame.projection, agent: opponent,
+      opponent: { ...agent, hand: [], hand_hidden_count: agent.hand.length, zone_counts: { ...agent.zone_counts, HAND: agent.hand.length } } } }, PLAYERS);
+    expect(closed.opponent.hand).toEqual([]);
+    expect(closed.opponent.hiddenHand).toBe(agent.hand.length);
+    expect(closed.tray.length).toBe(view.tray.length + 6);
   });
 
   it('inspects tray cards as themselves: stash counters, a condition, a controlled opponent\'s hand', () => {
@@ -474,7 +491,7 @@ describe('the spell being cast', () => {
     expect(view.stack[0].card?.id).toBe(source.display_id);
     expect(view.stack[0].entry.label).toBe(source.label);
     expect(view.stack.length).toBe((frame.projection.stack_objects ?? []).length + 1);
-    expect(view.hand.map(item => item.card.id)).not.toContain(source.display_id);
+    expect(view.you.hand.map(item => item.card.id)).not.toContain(source.display_id);
   });
 
   it('draws a spell announced from outside the hand with its card', () => {
@@ -616,5 +633,38 @@ describe('stack provenance', () => {
     expect(stackProvenance({ ...spell, from_prepared: true })).toEqual(['prepared']);
     expect(stackProvenance(spell)).toEqual([]);
     expect(stackProvenance({ ...spell, flashback: true })).toEqual(['flashback']);
+  });
+});
+
+describe('hand ribbon overrides', () => {
+  const asked = { position: true, offered: false };
+  const quiet = { position: false, offered: false };
+
+  it('shows one seat without moving the other, and keeps it out across positions', () => {
+    const shown = toggleRibbon(NO_RIBBON_OVERRIDES, 'opponent', 'a', false);
+    expect(ribbonIsOut(shown, 'opponent', 'a', quiet)).toBe(true);
+    expect(ribbonIsOut(shown, 'opponent', 'b', quiet)).toBe(true);
+    expect(ribbonIsOut(shown, 'you', 'a', quiet)).toBe(false);
+    expect(ribbonIsOut(toggleRibbon(shown, 'opponent', 'b', false), 'opponent', 'b', quiet)).toBe(false);
+  });
+
+  it('tucks the acting seat for the position it is at, then lets it out again', () => {
+    const tucked = toggleRibbon(NO_RIBBON_OVERRIDES, 'you', 'a', true);
+    expect(ribbonIsOut(tucked, 'you', 'a', asked)).toBe(false);
+    expect(ribbonIsOut(tucked, 'opponent', 'a', asked)).toBe(true);
+    expect(ribbonIsOut(tucked, 'you', 'b', asked)).toBe(true);
+    expect(ribbonIsOut(toggleRibbon(tucked, 'you', 'a', true), 'you', 'a', asked)).toBe(true);
+  });
+
+  it('tucking a pinned hand that the position also asks for unpins it', () => {
+    const pinned = toggleRibbon(NO_RIBBON_OVERRIDES, 'you', 'a', false);
+    const tucked = toggleRibbon(pinned, 'you', 'b', true);
+    expect(ribbonIsOut(tucked, 'you', 'b', asked)).toBe(false);
+    expect(ribbonIsOut(tucked, 'you', 'c', quiet)).toBe(false);
+  });
+
+  it('an offer on a hand card holds the hand out whatever was asked', () => {
+    const tucked = toggleRibbon(NO_RIBBON_OVERRIDES, 'you', 'a', true);
+    expect(ribbonIsOut(tucked, 'you', 'a', { position: true, offered: true })).toBe(true);
   });
 });

@@ -25,6 +25,8 @@ export interface GameNumbers {
   seats: [SeatNumbers, SeatNumbers];
   /** Your decisions committed with a live analysis shown (0 in numbers saved before it was counted). */
   analysis_shown?: number;
+  /** Decisions committed while seeing the bot's hand. */
+  open_hands?: number;
   /** The step a game played on from another starts at; null or absent for an ordinary game. */
   played_from?: number | null;
 }

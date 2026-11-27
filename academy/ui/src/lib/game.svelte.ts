@@ -22,6 +22,7 @@ import type {
   ConnectionState,
   DeckNames,
   Decklists,
+  OpenHand,
   ExperienceFrame,
   GameOpponent,
   StepBoardPatch,
@@ -120,6 +121,7 @@ export class GameStore {
     });
     if (named) { this.setHeroDeck(named.hero); this.setVillainDeck(named.villain); }
     this.decklists = draft.decklists === 'closed' ? 'closed' : 'open';
+    this.openHands = draft.open_hands === true;
     this.searchConfig = parseSearchConfigs([draft.mirror ?? null, null])[0];
     const stops = sanitizeStops({...((draft.stops ?? {}) as Record<string, unknown>), stop_on_stack:draft.stop_on_stack, auto_pass:draft.auto_pass});
     if (stops) this.stops = stops;
@@ -145,6 +147,8 @@ export class GameStore {
   keptBoards = $state.raw<{ matchId: string; boards: StepBoard[] } | null>(null);
   /** A policy's live reading of your decisions, while you show it; off at the start of every game. */
   liveAnalysis = $state.raw<LiveAnalysis>(LIVE_ANALYSIS_OFF);
+  /** The bot's hand, while open hands is on in the game in play; null while it is off. */
+  openHand = $state.raw<OpenHand | null>(null);
   lastCommandRejection = $state<CommandRejection | null>(null);
   observation = $state.raw<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
@@ -169,6 +173,8 @@ export class GameStore {
   selectedTargetId = $state<number | null>(null);
   opponentChoice = $state<PlayerChoice>('random');
   decklists = $state<Decklists>('open');
+  /** Setup's choice to start the next game seeing the bot's hand. */
+  openHands = $state(false);
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.
   decks = $state<DeckSelection>(loadStoredDeckSelection());
@@ -309,6 +315,7 @@ export class GameStore {
       stop_on_stack: this.stops.stop_on_stack,
       auto_pass: this.stops.auto_pass,
       decklists: this.decklists,
+      open_hands: this.openHands,
       mirror: this.searchConfig,
     };
   }
@@ -601,6 +608,7 @@ export class GameStore {
 
   private resetMatchState(): void {
     this.liveAnalysis = LIVE_ANALYSIS_OFF;
+    this.openHand = null;
     this.searchRetry = null;
     this.work = null;
     this.submissionAccepted = false;

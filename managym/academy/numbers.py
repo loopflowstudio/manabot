@@ -36,7 +36,8 @@ class GameNumbers(BaseModel):
     before game over; its counts run to where it stopped. `seats` are in
     native seat order (seat 0 is on the play). `analysis_shown` counts the
     person's decisions committed with a live analysis shown (stored on each
-    event, not re-executed; numbers saved before it existed read 0).
+    event, not re-executed; numbers saved before it existed read 0);
+    `open_hands` counts those committed while seeing the bot's hand.
     `played_from` is the step a game played on from another starts at: the
     steps before it are that game's."""
 
@@ -45,6 +46,7 @@ class GameNumbers(BaseModel):
     turns: int
     seats: tuple[SeatNumbers, SeatNumbers]
     analysis_shown: int = 0
+    open_hands: int = 0
     played_from: int | None = None
 
 
@@ -80,6 +82,7 @@ def game_numbers(attempt: RetainedAttempt) -> GameNumbers | None:
             seat_numbers(behaviour[1], totals[1]),
         ),
         analysis_shown=sum(1 for event in events if event.get("analysis_shown")),
+        open_hands=sum(1 for event in events if event.get("open_hands")),
         played_from=(trace.get("played_from") or {}).get("event"),
     )
 

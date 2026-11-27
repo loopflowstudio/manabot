@@ -29,7 +29,7 @@
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
-    analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, humanSeatAt, moveAt, moveMarks, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, seatIdentity, sinceRevision, stripMarks, swapHistoryNotes, type Perspective,
+    activeRibbonSeat, analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, choosingSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, humanSeatAt, moveAt, moveMarks, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, seatIdentity, sinceRevision, stripMarks, swapHistoryNotes, type Perspective,
   } from '$lib/board/replay';
   import { analysisStatus, byEvent, keyMoments, scoreName, type AgentLine, type Analysis, type AnalysisChoices } from '$lib/analysis';
   import { agreement, duration, estimateArc, numberRows, playOrDraw, seatColumnLabel, type GameNumbers } from '$lib/numbers';
@@ -48,6 +48,7 @@
   const presentation = createPresentationPlayer();
   let studyButton = $state<HTMLButtonElement | null>(null);
   let perspective = $state<Perspective>(0);
+  let revealBeforeStudy: boolean | null = null;
   let stripOpen = $state(false);
   let loaded = '';
   let lastHistoryKey = '';
@@ -123,6 +124,14 @@
   const studying = $derived(studyFrame !== null);
   const branched = $derived(studying || lineFrame !== null);
   const viewerSeat = $derived<0 | 1>(branched ? (frame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
+  // Who is marked as choosing, and whose hand is out, at the recorded position; Study marks nobody.
+  const gameOver = $derived(frame?.projection.game_over ?? false);
+  const seatChoosing = $derived(branched || gameOver ? null : choosingSeat(positions, replayStore.selected));
+  // On a policy's line the hand out is its own while the move shown is its own.
+  const seatActing = $derived(
+    studying ? null
+      : lineFrame !== null ? (line?.line.steps[lineAt]?.actor === 'agent' ? viewerSeat : null)
+      : activeRibbonSeat(positions, replayStore.selected, gameOver));
   // ———————————————— Analysis: a policy's reading of your decisions
 
   let analyses = $state.raw<Analysis[] | null>(null);
@@ -298,6 +307,7 @@
   const perspectiveText = $derived(!current ? ''
     : current.kind === 'choice' && current.decision
       ? `${current.revealed ? 'Both hands · spectator view' : `Acting view · seat ${current.viewer + 1}`} · chooser seat ${current.decision.viewer + 1}`
+      : current.revealed ? 'Both hands · spectator view'
       : `Recorded seat-${current.viewer + 1} view · private post-action views unavailable`);
 
   // ———————————————— Opening a recording
@@ -320,7 +330,9 @@
     const params = page.url.searchParams;
     // Review starts the game from its first position, whatever was read last.
     const review = params.has('review');
-    replayStore.reveal = (params.get('view') ?? (saved.reveal ? 'spectator' : 'acting')) === 'spectator';
+    // The address, then what was last chosen here, then the recording's default (both hands in a Watch).
+    const view = params.get('view');
+    replayStore.reveal = view !== null ? view === 'spectator' : saved.reveal ?? null;
     await replayStore.open(id, review ? undefined : params.get('position') ?? saved.key);
     if (review && replayStore.index) await replayStore.seek(0);
     const near = params.get('near') ?? (saved.near === undefined ? null : String(saved.near));
@@ -501,7 +513,8 @@
       const restored = await replayStore.api<RestoredReplayDecision>(`/api/traces/${traceId}/decisions/${encodeURIComponent(decisionRow.address)}`);
       if (replayStore.current?.key !== decisionRow.address) throw new Error('The selected choice changed while opening Study.');
       studyStore.restore(selected.study_source, decisionRow, restored);
-      // Study is the acting view; a spectator reveal never carries into it or back.
+      // Study is the acting view; the view shown before it comes back on Return.
+      revealBeforeStudy = replayStore.reveal;
       replayStore.reveal = false;
       if (replayStore.current) replayStore.current = { ...replayStore.current, observation: decisionRow.frame.projection, revealed: false };
     } catch (reason) { studyStore.setError(reason instanceof Error ? reason.message : String(reason)); }
@@ -595,6 +608,8 @@
       studyStore.returnToScore(returned);
       lastHistoryKey = '';
       restoreFocus = true;
+      if (revealBeforeStudy) { replayStore.reveal = true; await replayStore.seek(replayStore.selected); }
+      revealBeforeStudy = null;
     } catch (error) {
       studyStore.setError(error instanceof Error ? error.message : 'Return failed.');
     } finally {
@@ -729,6 +744,7 @@
             </table>
             {#if numbers && !numbers.complete}<p class="text-ink-3">{index.status === 'active' ? 'Counted to the moves so far.' : 'Counted to where the game stopped.'}</p>{/if}
             {#if numbers?.analysis_shown}<p class="text-ink-2" data-testid="analysis-shown-count">Chosen with analysis shown: {numbers.analysis_shown} {numbers.analysis_shown === 1 ? 'decision' : 'decisions'}</p>{/if}
+            {#if numbers?.open_hands}<p class="text-ink-2" data-testid="open-hands-count">Played with open hands: {numbers.open_hands} {numbers.open_hands === 1 ? 'decision' : 'decisions'}</p>{/if}
           {:else}<p class="text-ink-3">Counts need the build that recorded this game.</p>{/if}
           {#if analysis && agreed}
             <p data-testid="agreement">Decisions with a choice: {agreed.of} · chose as {analysisName} would: {agreed.same} of {agreed.of}</p>
@@ -787,6 +803,7 @@
   <Board
     {frame}
     interaction={studying && canRetry ? 'study' : 'read-only'}
+    yourHand={studying ? 'out' : 'tucked'}
     status={replayStore.busy || atLiveEdge || studying ? status : ''}
     you={{ name: nameOf(pilotAt(viewerSeat)), deck: deckOf(viewerSeat) }}
     opponent={{ name: nameOf(pilotAt(otherSeat(viewerSeat))), deck: deckOf(otherSeat(viewerSeat)), description: identity(pilotAt(otherSeat(viewerSeat))).description }}
@@ -794,7 +811,8 @@
     canPassTurn={false}
     {presentation}
     thinking={null}
-    opponentChoosing={false}
+    choosingSeat={seatChoosing}
+    ribbonSeat={seatActing}
     workStarted={null}
     interrupted={false}
     onact={offer => void retryStudyOffer(offer)}

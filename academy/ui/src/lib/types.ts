@@ -1110,6 +1110,7 @@ export type ServerMessage = (
     ))
   | { type: 'error'; message: string; game_stopped?: boolean }
   | { type: 'control_error'; code: string; message: string }
+  | { type: 'open_hands_state' }
   | import('./analysis').LiveAnalysisState
   | import('./analysis').LiveAnalysisMessage
 ) & {
@@ -1122,6 +1123,8 @@ export type ServerMessage = (
   opponent_label?: string | null;
   setup?: Record<string, unknown>;
   decision_group?: import('./decision-group').LiveDecisionGroup | null;
+  /** The bot's hand beside this reply's frame while open hands is on; null while it is off. */
+  open_hand?: OpenHand | null;
   launch?: string;
   launch_setup?: LaunchSetup;
 };
@@ -1137,6 +1140,12 @@ export interface LaunchSetup {
   deck_import?: { hero: { source: string; filename: string; name?: string }; villain: { source: string; filename: string; name?: string } };
 }
 
+/** The bot's hand as it holds it at `revision`, sent on `/ws/play` while open hands is on. Never part of a frame. */
+export interface OpenHand {
+  revision: number;
+  hand: CardState[];
+}
+
 /** What the browser sends on `/ws/play` (`managym/academy/play_protocol.py`). */
 export type ClientMessage =
   | { type: 'resume'; game: string; presentation_cursor?: number | null; take_over?: boolean }
@@ -1149,7 +1158,8 @@ export type ClientMessage =
   | { type: 'pass_turn' }
   | { type: 'retry_mirror'; match_id: string; expected_revision: number }
   | { type: 'set_stops'; stops?: Record<string, string[]> | null; stop_on_stack?: boolean | null; auto_pass?: boolean | null }
-  | { type: 'show_analysis'; shown: boolean; policy?: string | null };
+  | { type: 'show_analysis'; shown: boolean; policy?: string | null }
+  | { type: 'set_open_hands'; open: boolean };
 
 export type ConnectionState =
   | 'disconnected'

@@ -275,6 +275,12 @@
           <option value="repeat">Repeat seed</option>
         </select>
       </label>
+      {#if !setup.watchMode}
+        <label class="flex items-center gap-2" title="See the opponent's hand face-up while you play. The bot still sees only its own cards; you can turn it off in the game.">
+          <input type="checkbox" role="switch" data-testid="setup-open-hands" bind:checked={setup.openHands} {disabled} />
+          <span class="type-label text-ink-2">Open hands</span>
+        </label>
+      {/if}
       {#if setup.dealMode === 'repeat'}
         <label class="flex flex-col gap-1">
           <span class="type-label text-ink-2">Seed</span>
