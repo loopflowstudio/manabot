@@ -1,0 +1,1 @@
+MTG-501 kickoff assumed that catalog membership may be exposed as an additive `program_vocabulary` field. Existing clients use the two flat token arrays as printed-card occurrences. The compatibility evidence and acceptance check are in `scratch/plan.md`.
