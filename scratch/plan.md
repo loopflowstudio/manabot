@@ -336,6 +336,12 @@ Post-Pass 7 (`d0fe73c12c`), headless, recommended options taken, unconfirmed: **
 
 Post-Pass 9 (`eaab6dac9c`), headless, recommended options taken, unconfirmed: **1a** exact-only waterbend count roles, else sequential (passed over: 1b one Subset over every tap, restores duplicates; 1c accept rejected submissions); **2a** engine-order blocker lowering (passed over: 2b group only adjacent blockers); **3a** fix blocker label, keep `CandidateValue::Subject` on 0.2.x (passed over: 3b typed `CandidateValue::Count` across six schemas); **4a** align autotapper orders and the census flag (passed over: 4b leave); **5a** ship `list[SubjectRef]` aliases and hash v34. All into Pass 10. `ship-review` should surface 5a and 3a.
 
+Post-Pass 10 (`d542d94725`): no conceptual defects; every concept lines up at `464a9f6d24`. Headless, recommended options taken, unconfirmed: **1a** ship `list[SubjectRef]` aliases (`SEMANTIC_DECISION_VERSION` 8) and hash v34 (passed over: 1b hold to revise); **2a** keep `CandidateValue::Subject` count roles on the deprecated 0.2.x compound surface (passed over: 2b typed `CandidateValue::Count` across six schemas); **3a** keep kickoff rulings (already confirmed by Jack Heart, "3a"). No build pass remains; `ship-review` should surface 1a and 2a.
+
+## Remaining
+
+- Gate: adopt `managym/perf/baseline.json` from a green CI `Engine Budget` run (`scripts/engine_budget.py record --reason`). Deferred to gate/CI.
+
 ## Deferred findings
 
 None remaining — both `decision_surface.rs` candidate deduplication (`4b`) and `autotapper.rs` color/output tiebreak (`5b`) were pulled into Pass 9 per Jack Heart's ship-review decision (`3a 4b 5b`, `A`; `MTG-495` deleted).
