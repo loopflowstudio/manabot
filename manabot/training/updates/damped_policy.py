@@ -39,6 +39,7 @@ from manabot.training.updates.backend import (
 from manabot.training.updates.decision_weights import (
     actor_term,
     batch_weights,
+    critic_term,
     logical_weights,
 )
 from manabot.training.updates.health import (
@@ -82,6 +83,59 @@ def compute_targets(
     return DampedTargets(targets.advantages, targets.value_targets, targets.selected)
 
 
+def _teacher_targets(
+    backend: UpdateBackend,
+    learner: Learner,
+    teacher: Policy,
+    teacher_admitted: AdmittedRollout,
+    rows_host: np.ndarray,
+    valid: Array,
+    *,
+    categorical: bool,
+    policy_weight: float,
+    value_weight: float,
+) -> tuple[Array | None, Array | None]:
+    """Frozen teacher log-policy and value targets for one execution chunk."""
+    rl, float32 = backend.rl, backend.arrays.float32
+    with learner.profiler.track("Teacher forward"), backend.learner.no_grad():
+        teacher_obs, _ = teacher_admitted.rows(rows_host, learner.device)
+        teacher_valid = rl.legal_mask(teacher_admitted.legal(teacher_obs))
+        rl.require(
+            teacher_valid == valid,
+            "teacher_legal_mask_mismatch",
+            teacher_valid=teacher_valid,
+            valid=valid,
+        )
+        with learner.forward_precision():
+            raw_logits, raw_values = teacher.forward_distribution(teacher_obs)
+        raw_logits, raw_values = float32(raw_logits), float32(raw_values)
+        teacher_logs = (
+            rl.constant(rl.policy_logs(raw_logits, valid))
+            if policy_weight > 0.0
+            else None
+        )
+        teacher_value_targets = None
+        if value_weight > 0.0:
+            rl.require_finite("nonfinite_teacher_values", values=raw_values)
+            if categorical:
+                if teacher.config.value_kind != "categorical_wdl":
+                    raise ValueError(
+                        "teacher value distillation for a categorical_wdl student "
+                        "requires a categorical_wdl teacher"
+                    )
+                teacher_value_targets = rl.constant(
+                    rl.outcome_probabilities(raw_values)
+                )
+            elif teacher.config.value_kind == "categorical_wdl":
+                teacher_value_targets = rl.constant(
+                    rl.expected_outcome(rl.outcome_probabilities(raw_values))
+                )
+            else:
+                teacher_value_targets = rl.constant(raw_values.squeeze(-1))
+        del teacher_obs, raw_logits, raw_values
+        return teacher_logs, teacher_value_targets
+
+
 def update_damped_iteration(
     backend: UpdateBackend,
     learner: Learner,
@@ -90,6 +144,7 @@ def update_damped_iteration(
     iteration: int,
     *,
     bootstrap_agent: Policy | None = None,
+    teacher: Policy | None = None,
     learner_transitions: int | None = None,
     targets: BatchTargets | None = None,
 ) -> UpdateDiagnostics:
@@ -127,6 +182,15 @@ def update_damped_iteration(
     # Which rows the actor trains on, [T,E] on the host.
     actor_rows = to_host(targets.selected)
     rate, tau = learning.rates(iteration, learner_transitions=learner_transitions)
+    teacher_policy_weight = 0.0
+    teacher_value_weight = 0.0
+    if learning.kickstart is not None:
+        teacher_policy_weight, teacher_value_weight = learning.kickstart.weights(
+            iteration, learner_transitions=learner_transitions
+        )
+    teacher_active = teacher_policy_weight > 0.0 or teacher_value_weight > 0.0
+    if teacher_active and teacher is None:
+        raise ValueError("active kickstarting schedule requires a teacher policy")
     diagnostics: UpdateDiagnostics = {
         "gradient": learning.gradient,
         "value_kind": learner.agent.config.value_kind,
@@ -151,6 +215,9 @@ def update_damped_iteration(
         "advantage_abs_mean": advantage_abs_mean,
         "bootstrapped_tail_fraction": batch.bootstrapped_tail_fraction(),
     }
+    if learning.kickstart is not None:
+        diagnostics["teacher_policy_weight"] = teacher_policy_weight
+        diagnostics["teacher_value_weight"] = teacher_value_weight
     if learning.decision_schedule is not None:
         assert learner_transitions is not None
         diagnostics["schedule_progress"] = min(
@@ -211,8 +278,16 @@ def update_damped_iteration(
     normalized = batch_weights(
         batch, training_rows, actor_rows, learning.root_actor_weight
     )
+    teacher_admitted = (
+        backend.rollout.AdmittedRollout(teacher, batch)
+        if teacher_active and teacher is not None
+        else None
+    )
     with track("Minibatches"):
-        admitted.admit_rows(training_rows, min(width, learner.execution_rows or width))
+        chunk_rows = min(width, learner.execution_rows or width)
+        admitted.admit_rows(training_rows, chunk_rows)
+        if teacher_admitted is not None:
+            teacher_admitted.admit_rows(training_rows, chunk_rows)
         for start in range(0, len(actor_rows), width):
             window = trained[start : start + width]
             if not window.any():
@@ -235,6 +310,10 @@ def update_damped_iteration(
                 reference_forward_kl=0.0,
                 clip_fraction=0.0,
             )
+            if teacher_policy_weight > 0.0:
+                totals["teacher_policy_kl"] = 0.0
+            if teacher_value_weight > 0.0:
+                totals["teacher_value_loss"] = 0.0
             for offset in range(0, len(logical_rows), execution_rows):
                 rows_host = logical_rows[offset : offset + execution_rows]
                 with track("Forward and loss"):
@@ -257,8 +336,27 @@ def update_damped_iteration(
                     # Actor and critic have different denominators under actor-only filtering.
                     policy_weight = int(actor_selected.sum()) / max(1, actor_count)
                     value_weight = len(rows_host) / len(logical_rows)
+                    teacher_logs: Array | None = None
+                    teacher_value_targets: Array | None = None
+                    if teacher_admitted is not None:
+                        assert teacher is not None
+                        teacher_logs, teacher_value_targets = _teacher_targets(
+                            backend,
+                            learner,
+                            teacher,
+                            teacher_admitted,
+                            rows_host,
+                            valid,
+                            categorical=categorical,
+                            policy_weight=teacher_policy_weight,
+                            value_weight=teacher_value_weight,
+                        )
 
-                    def _objective(obs: Observations = obs) -> tuple[Array, ...]:
+                    def _objective(
+                        obs: Observations = obs,
+                        teacher_logs: Array | None = teacher_logs,
+                        teacher_value_targets: Array | None = teacher_value_targets,
+                    ) -> tuple[Array, ...]:
                         with learner.forward_precision():
                             logits, value_logits = learner.agent.forward_distribution(
                                 obs
@@ -281,6 +379,10 @@ def update_damped_iteration(
                                 collection_kl=learning.collection_kl,
                                 tau=tau,
                                 reference_forward_kl=learning.reference_forward_kl,
+                                teacher_logs=teacher_logs,
+                                teacher_policy_weight=teacher_policy_weight,
+                                teacher_value_targets=teacher_value_targets,
+                                teacher_value_weight=teacher_value_weight,
                                 policy_weight=policy_weight,
                                 value_weight=value_weight,
                                 weights=coefficients,
@@ -345,6 +447,31 @@ def update_damped_iteration(
                             coefficients,
                         )
                     )
+                    if teacher_logs is not None:
+                        totals["teacher_policy_kl"] += float(
+                            actor_term(
+                                rl,
+                                rl.forward_kl(logs, teacher_logs, valid),
+                                actor_mask,
+                                policy_weight,
+                                coefficients,
+                            )
+                        )
+                    if teacher_value_targets is not None:
+                        teacher_value_rows = (
+                            rl.categorical_value_loss(
+                                value_logits, teacher_value_targets
+                            )
+                            if categorical
+                            else rl.squared_value_loss(
+                                value_logits, teacher_value_targets
+                            )
+                        )
+                        totals["teacher_value_loss"] += float(
+                            critic_term(
+                                rl, teacher_value_rows, value_weight, coefficients
+                            )
+                        )
                     totals["clip_fraction"] += (
                         float(
                             rl.clip_fraction(
@@ -366,6 +493,8 @@ def update_damped_iteration(
                     policy_loss,
                     value_loss,
                     logs,
+                    teacher_logs,
+                    teacher_value_targets,
                     _objective,
                     _failure,
                 )

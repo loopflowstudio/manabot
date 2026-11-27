@@ -65,8 +65,21 @@ ML: tuple[MetricPanel, ...] = (
     Series(title="Policy entropy", keys=("entropy",), unit="nats"),
     Series(
         title="KL divergence",
-        keys=("collection_kl", "reference_kl", "reference_forward_kl"),
+        keys=(
+            "collection_kl",
+            "reference_kl",
+            "reference_forward_kl",
+            "teacher_policy_kl",
+        ),
         scale="log",
+    ),
+    Series(
+        title="Teacher distillation",
+        keys=(
+            "teacher_policy_weight",
+            "teacher_value_weight",
+            "teacher_value_loss",
+        ),
     ),
     Series(
         title="Gradient norm",

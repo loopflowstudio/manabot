@@ -196,6 +196,12 @@ class SelfPlay(BaseModel):
     # model must equal this one, except that a history-enabled control may
     # seed a decision-memory encoder (`pretrained_memory_branch`).
     pretrained: Path | None = None
+    # Frozen published checkpoint used as the kickstarting teacher. Independent
+    # of `model` (student width, depth and architecture may differ); admitted
+    # against this run's observation space and decks.
+    teacher: Path | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     # Stop after the update that reaches this many learner decisions; `updates`
     # stays a safety ceiling. Requires the damped decision schedule.
     learner_transitions: int | None = Field(
@@ -289,6 +295,23 @@ class SelfPlay(BaseModel):
         ):
             raise ValueError(
                 "a learner-decision target requires its damped decision schedule"
+            )
+        kickstart = (
+            self.learning.kickstart
+            if isinstance(self.learning, DampedPolicyLearning)
+            else None
+        )
+        if self.teacher is not None and kickstart is None:
+            raise ValueError(
+                "teacher checkpoint requires DampedPolicyLearning with kickstart"
+            )
+        if (
+            kickstart is not None
+            and (kickstart.policy_weight > 0 or kickstart.value_weight > 0)
+            and self.teacher is None
+        ):
+            raise ValueError(
+                "kickstarting with positive teacher weight requires a teacher checkpoint"
             )
         self.observation = self.observation.model_copy(
             update={"policy_history_version": 1 if self.model.recent_events else 0}
@@ -444,10 +467,15 @@ class Counts(BaseModel):
     snapshot_bank: SnapshotBankState | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    teacher_sha256: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     def coordinates(self) -> dict[str, int | float]:
         """Cumulative work published in policy files and update metrics."""
-        return self.model_dump(exclude={"readings", "model", "snapshot_bank"})
+        return self.model_dump(
+            exclude={"readings", "model", "snapshot_bank", "teacher_sha256"}
+        )
 
 
 def clocks(counts: Counts) -> dict[str, float]:
@@ -490,6 +518,83 @@ def pretrained_policy(
     else:
         validate_agent_setup(published, Match(root_match(settings)).to_rust())
     return published
+
+
+def teacher_policy(
+    settings: SelfPlay, space: ObservationSpace, backend: SelfPlayBackend
+) -> BackendPolicy:
+    """Load and admit the frozen published teacher checkpoint against this run.
+
+    Unlike `pretrained_policy`, the teacher's `ModelConfig` is independent of
+    the student's (width, depth, heads and architecture may differ). Only
+    observation config, deck admission and (when value distillation is active)
+    value head compatibility are required.
+    """
+    assert settings.teacher is not None
+    with backend.runtime.preserve_rng(settings.device):
+        teacher, teacher_space = backend.load_policy(
+            settings.teacher,
+            bucketed_shapes=settings.bucketed_shapes,
+            live_tokens=settings.live_tokens,
+        )
+    if teacher_space.config != space.config:
+        raise ValueError("teacher policy has another observation config")
+    if settings.deck_source is not None:
+        validate_agent_decks(teacher, settings.deck_source.players())
+    else:
+        validate_agent_setup(teacher, Match(root_match(settings)).to_rust())
+    kickstart = (
+        settings.learning.kickstart
+        if isinstance(settings.learning, DampedPolicyLearning)
+        else None
+    )
+    if (
+        kickstart is not None
+        and kickstart.value_weight > 0
+        and settings.model.value_kind == "categorical_wdl"
+        and teacher.config.value_kind != "categorical_wdl"
+    ):
+        raise ValueError(
+            "teacher value distillation for a categorical_wdl student requires "
+            "a categorical_wdl teacher"
+        )
+    return teacher.to(settings.device).eval()
+
+
+def kickstart_active(settings: SelfPlay, counts: Counts) -> bool:
+    """Whether the next update (`counts.updates + 1`) needs teacher inference."""
+    if (
+        settings.teacher is None
+        or not isinstance(settings.learning, DampedPolicyLearning)
+        or settings.learning.kickstart is None
+    ):
+        return False
+    policy_weight, value_weight = settings.learning.kickstart.weights(
+        counts.updates + 1, learner_transitions=counts.learner_transitions
+    )
+    return policy_weight > 0.0 or value_weight > 0.0
+
+
+def resume_teacher(
+    saved: str | None, teacher: Path | None, *, updates: int
+) -> str | None:
+    """Return the teacher digest to save, refusing a teacher change on resume."""
+    current = file_sha256(teacher) if teacher is not None else None
+    if updates > 0:
+        if saved is not None and current is None:
+            raise ValueError(
+                "resumed kickstarted run requires its saved teacher checkpoint"
+            )
+        if saved is None and current is not None:
+            raise ValueError(
+                "cannot add a kickstarting teacher when resuming a non-kickstarted run"
+            )
+        if saved is not None and current is not None and saved != current:
+            raise ValueError(
+                "resumed teacher checkpoint differs from the saved run "
+                f"({saved[:12]} -> {current[:12]})"
+            )
+    return current
 
 
 def parent_checkpoint(path: Path, backend: SelfPlayBackend) -> ParentCheckpoint:
@@ -718,6 +823,7 @@ def learn(
     *,
     backend: SelfPlayBackend | None = None,
     targets: BatchTargets | None = None,
+    teacher: BackendPolicy | None = None,
 ) -> UpdateDiagnostics:
     """Learn from one batch in place: the update its learning record selects, then EMA.
 
@@ -734,6 +840,7 @@ def learn(
             settings.learning,
             counts.updates + 1,
             bootstrap_agent=behavior(settings, learner, ema),
+            teacher=teacher,
             targets=targets,
             learner_transitions=counts.learner_transitions,
         )
@@ -766,6 +873,7 @@ def step(
     *,
     out: Path,
     backend: SelfPlayBackend | None = None,
+    teacher: BackendPolicy | None = None,
 ) -> dict[str, object]:
     """Collect one batch, learn from it, and return its metric row; update learner, EMA and counts in place.
 
@@ -819,6 +927,7 @@ def step(
                     rng,
                     backend=backend,
                     targets=targets,
+                    **({"teacher": teacher} if teacher is not None else {}),
                 )
                 if settings.model.decision_memory != "none":
                     metrics["decision_memory"] = learner.agent.memory_gates()
@@ -1055,6 +1164,7 @@ def resume_training(
             initial = run.out / "policies/00000000-raw.safetensors"
             saved_model = backend.metadata(initial)["hypers"]["agent_hypers"]
         resume_model(saved_model, settings.model)
+        resume_teacher(counts.teacher_sha256, settings.teacher, updates=counts.updates)
         readings = resume_readings(
             counts, learner.agent.readings, learner.agent.observation_space
         )
@@ -1073,6 +1183,9 @@ def resume_training(
     run.resume(export=unopened_export, restore=restore, extra=counts)
     counts.model = model
     counts.readings = readings
+    counts.teacher_sha256 = resume_teacher(
+        counts.teacher_sha256, settings.teacher, updates=counts.updates
+    )
     return counts, restored
 
 
@@ -1102,7 +1215,14 @@ def self_play(
         raise ValueError("updates must be positive")
     with device_settings(settings, backend=backend):
         learner, ema = create(settings, seed=run.seed, backend=backend)
+        teacher = (
+            teacher_policy(settings, ObservationSpace(settings.observation), backend)
+            if settings.teacher is not None
+            else None
+        )
         counts, restored = resume_training(settings, run, backend, learner, ema)
+        if teacher is not None and not kickstart_active(settings, counts):
+            teacher = None
         host = restored.host
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         with self_play_games(
@@ -1127,6 +1247,9 @@ def self_play(
                     curriculum=settings.matchup_curriculum,
                     parent=parent_checkpoint(settings.pretrained, backend)
                     if settings.pretrained is not None
+                    else None,
+                    teacher=parent_checkpoint(settings.teacher, backend)
+                    if settings.teacher is not None
                     else None,
                     updates=0,
                     **clocks(counts),
@@ -1160,7 +1283,10 @@ def self_play(
                     rng,
                     out=run.out,
                     backend=backend,
+                    **({"teacher": teacher} if teacher is not None else {}),
                 )
+                if teacher is not None and not kickstart_active(settings, counts):
+                    teacher = None
                 if update == first_update:
                     if restored.sampling_reseeded:
                         row["run/sampling_reseeded"] = 1
@@ -1210,10 +1336,25 @@ def fresh_iteration(
     counts = Counts()
     with device_settings(settings, backend=backend):
         learner, ema = create(settings, seed=seed, backend=backend)
+        teacher = (
+            teacher_policy(settings, ObservationSpace(settings.observation), backend)
+            if settings.teacher is not None
+            else None
+        )
+        if teacher is not None and not kickstart_active(settings, counts):
+            teacher = None
         rng = np.random.default_rng(seed + MINIBATCH_SEED)
         with self_play_games(settings, run, counts, backend=backend) as collector:
             row = step(
-                settings, learner, ema, collector, counts, rng, out=out, backend=backend
+                settings,
+                learner,
+                ema,
+                collector,
+                counts,
+                rng,
+                out=out,
+                backend=backend,
+                **({"teacher": teacher} if teacher is not None else {}),
             )
         checkpoint = write_policies(settings, run, learner, ema, counts, backend)
     return FreshIteration(learner.agent, ema, counts, row, checkpoint)

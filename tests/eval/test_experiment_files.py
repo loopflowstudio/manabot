@@ -46,6 +46,7 @@ from experiments import (
     tla_trophies,
     tla_trophies_colab,
     tla_trophies_floor,
+    tla_trophies_kickstart,
 )
 from experiments.elemental_grid import DECKS
 from experiments.elemental_long import heuristic_games, pair_design, rated_updates
@@ -89,6 +90,16 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
             "tau-x2-floor-0.002": 2,
         },
     ),
+    (
+        tla_trophies_kickstart,
+        (),
+        {
+            "w64-ks-0.2-f200": 2,
+            "w64-ks-0.5-f200": 2,
+            "w160l8-fresh": 1,
+            "w160l8-ks-0.2-f200": 1,
+        },
+    ),
     (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
 ]
 
@@ -120,6 +131,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "tla_trophies",
         "tla_trophies_colab",
         "tla_trophies_floor",
+        "tla_trophies_kickstart",
     }
     assert NOT_YET_RUNNABLE <= found
 

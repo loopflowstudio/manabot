@@ -366,6 +366,37 @@ settles at a gap of about 3.6, where the rarer offer is still sampled about 2.6%
 of the time; without the floor it settles near 9.5 (0.01%). These are balance
 points for one decision with a fixed advantage, not predictions for a run.
 
+### Kickstarting with a decaying teacher loss
+
+A fresh student of any architecture (`ModelConfig`) can train with an auxiliary
+distillation loss from a frozen published teacher checkpoint whose weight decays
+to exact zero (Schmitt et al., 2018):
+
+```python
+from pathlib import Path
+from manabot.training.learning import DampedPolicyLearning, Kickstart
+
+learning = DampedPolicyLearning(
+    gradient="damped_policy",
+    kickstart=Kickstart(policy_weight=0.2, fade_updates=200, schedule="linear"),
+)
+```
+
+Set `teacher=Path(...)` on `SelfPlay` alongside `learning.kickstart`. The
+teacher is admitted against the run's observation space and deck setup,
+independently of the student's width, depth, heads or architecture, and remains
+frozen in eval mode. On each update before the fade horizon, the learner
+computes teacher forward passes under `no_grad` on the trained rows only and
+adds `teacher_policy_weight * KL(π_teacher ‖ π_student)` to the damped policy
+loss (and, when `value_weight > 0`, `teacher_value_weight` times the critic loss
+against teacher value predictions). The schedule (`"linear"` or `"cosine"`)
+decays monotonically over `fade_updates` (1-based updates) or `fade_transitions`
+(completed learner decisions) to exact zero, after which teacher admission and
+forward passes stop completely and the teacher is released. `tau`,
+`reference_forward_kl` and behavior collection remain unchanged (pure on-policy
+student self-play). Etude saves the teacher SHA-256 on `Counts` and refuses a
+changed or missing teacher on resume.
+
 ![Constants from collection feed the policy, damping and value terms. Gradients reach only the live network, through one shared encoder.](images/gradient-flow.svg)
 
 Rewards are not backpropagated. Advantages, value targets, behavior
@@ -538,6 +569,7 @@ outputs are selected explicitly at arena registration.
 | S3.4 eq. (6), clipped surrogate | `damped_policy_loss`; both clipping branches tested | Same loss |
 | Both reverse KLs, S3.4 | Exact legal-support sums against saved behavior and magnet | Finite legal log support required; rounded zeros counted, no smoothing |
 | Forward-KL floor (not in the source) | `reference_forward_kl * KL(magnet ‖ current)` over legal offers of retained rows | Departure, default 0: the reverse KL's pull vanishes at a locked choice |
+| Kickstarting (Schmitt et al., 2018) | `Kickstart` on `DampedPolicyLearning` + `SelfPlay.teacher`: decaying `KL(π_teacher ‖ π_student)` (plus optional value distillation) on trained rows | Opt-in, default off (`None`); exact zero past fade horizon stops teacher inference |
 | Magnet, S3.4 | `reference_distribution`, action-type uniform by default; uniform-offer control | MTG action types replace piece-then-move groups |
 | Scalar advantage, S3.4 | Transition-end GAE, gamma=1, lambda=.5; detached collection values | Learner decisions replace same-player positions |
 | Outcome estimator, eq. (5) | Vector lambda=.8, terminal one-hot, paused-tail bootstrap | Loss/draw/win storage order is a permutation |

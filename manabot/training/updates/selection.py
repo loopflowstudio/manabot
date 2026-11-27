@@ -257,6 +257,10 @@ class UpdateDiagnostics(TypedDict, total=False):
     reference: str
     reference_forward_kl: float
     reference_forward_kl_coefficient: float
+    teacher_policy_weight: float
+    teacher_value_weight: float
+    teacher_policy_kl: float
+    teacher_value_loss: float
     collection_kl_coefficient: float
     retained_fraction: float
     return_mean: float

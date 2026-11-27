@@ -1,5 +1,6 @@
 """Validated learning rules and schedules shared by recipes and updates."""
 
+import math
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -92,6 +93,62 @@ class LearnerDecisionSchedule(Strict):
         return 1 + min(1.0, completed / self.transitions) * (self.reference_steps - 1)
 
 
+class Kickstart(Strict):
+    """Decaying teacher distillation toward a frozen published checkpoint.
+
+    Policy distillation adds `policy_weight * scale * KL(pi_teacher || pi_student)`
+    (Schmitt et al., 2018); optional value distillation adds `value_weight * scale`
+    times the critic loss against teacher value predictions. The scale decays
+    monotonically from 1 to exact 0 over `fade_updates` (1-based updates) or
+    `fade_transitions` (completed learner decisions). Once zero, teacher
+    inference stops completely and training continues as pure self-play.
+    """
+
+    policy_weight: float = Field(default=0.0, ge=0)
+    value_weight: float = Field(default=0.0, ge=0)
+    schedule: Literal["linear", "cosine"] = "linear"
+    fade_updates: int | None = Field(
+        default=None, ge=1, strict=True, exclude_if=lambda value: value is None
+    )
+    fade_transitions: int | None = Field(
+        default=None, ge=1, strict=True, exclude_if=lambda value: value is None
+    )
+
+    @model_validator(mode="after")
+    def valid_fade_horizon(self) -> "Kickstart":
+        if (self.fade_updates is None) == (self.fade_transitions is None):
+            raise ValueError("choose exactly one of fade_updates or fade_transitions")
+        return self
+
+    def scale(
+        self, iteration: int, *, learner_transitions: int | None = None
+    ) -> float:
+        """Decay multiplier in [0, 1] at the start of `iteration`; exact 0 once faded."""
+        if iteration < 1:
+            raise ValueError("kickstart iteration must be positive")
+        if self.fade_transitions is not None:
+            if learner_transitions is None or learner_transitions < 0:
+                raise ValueError(
+                    "kickstart fade_transitions requires nonnegative learner_transitions"
+                )
+            progress = min(1.0, learner_transitions / self.fade_transitions)
+        else:
+            assert self.fade_updates is not None
+            progress = min(1.0, (iteration - 1) / self.fade_updates)
+        if progress >= 1.0:
+            return 0.0
+        if self.schedule == "cosine":
+            return 0.5 * (1.0 + math.cos(math.pi * progress))
+        return 1.0 - progress
+
+    def weights(
+        self, iteration: int, *, learner_transitions: int | None = None
+    ) -> tuple[float, float]:
+        """Active `(policy_weight, value_weight)` at the start of `iteration`."""
+        factor = self.scale(iteration, learner_transitions=learner_transitions)
+        return (self.policy_weight * factor, self.value_weight * factor)
+
+
 class DampedPolicyLearning(Strict):
     """Unnormalized clipped policy update with reverse-KL regularization.
 
@@ -114,6 +171,9 @@ class DampedPolicyLearning(Strict):
     collection_kl: float = Field(default=0.1, ge=0)
     reference_forward_kl: float = Field(
         default=0, ge=0, exclude_if=lambda value: value == 0
+    )
+    kickstart: Kickstart | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
     learning_rate_scale: float = Field(default=0.5, gt=0)
     learning_rate_power: float = Field(default=1.1, ge=0)

@@ -199,8 +199,12 @@ values describe that minibatch alone.
 Empty actor/critic filters skip optimization and retain no loss or entropy.
 
 `policy_loss` is the clipped surrogate **plus** weighted collection/reference
-reverse KL and, when `reference_forward_kl_coefficient` is nonzero, the weighted
-forward-KL floor. The report uses the recorded policy loss because the surrogate
+reverse KL, the weighted forward-KL floor when `reference_forward_kl_coefficient`
+is nonzero, and the weighted teacher forward KL when `teacher_policy_weight` is
+nonzero. Kickstarted runs also record `teacher_policy_weight`,
+`teacher_value_weight`, unweighted `teacher_policy_kl` (nats, on updates where
+`teacher_policy_weight > 0`), and `teacher_value_loss` (when
+`teacher_value_weight > 0`). The report uses the recorded policy loss because the surrogate
 was not saved separately. The KL panels show unweighted nats. Scalar value loss
 is MSE against lambda targets. Categorical value loss is cross-entropy against
 outcome-distribution lambda targets. Neither is an independent terminal-outcome

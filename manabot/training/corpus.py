@@ -38,6 +38,7 @@ def log_corpus_setup(
     behavior: str,
     curriculum: str,
     parent: ParentCheckpoint | None = None,
+    teacher: ParentCheckpoint | None = None,
     **clocks: float,
 ) -> None:
     players = collector.uniform_roster or collector.match.to_rust()
@@ -45,24 +46,25 @@ def log_corpus_setup(
         DECK_TABLE, deck_cards((p.deck for p in players), writer_catalog()), **clocks
     )
     observation = collector.observation_space.config
-    run.log_table(
-        RUN_TABLE,
-        [
-            {
-                "max_actions": observation.max_actions,
-                "action_overflow": observation.action_overflow,
-                "policy_input_version": observation.policy_input_version,
-                "behavior": behavior,
-                "opponent_mode": collector.opponent_mode,
-                "learning_seats": collector.learning_seats,
-                "matchup_curriculum": curriculum,
-                "parent_run": parent["run"] if parent else None,
-                "parent_update": parent["update"] if parent else None,
-                "parent_sha256": parent["sha256"] if parent else None,
-            }
-        ],
-        **clocks,
-    )
+    row: dict[str, object] = {
+        "max_actions": observation.max_actions,
+        "action_overflow": observation.action_overflow,
+        "policy_input_version": observation.policy_input_version,
+        "behavior": behavior,
+        "opponent_mode": collector.opponent_mode,
+        "learning_seats": collector.learning_seats,
+        "matchup_curriculum": curriculum,
+        "parent_run": parent["run"] if parent else None,
+        "parent_update": parent["update"] if parent else None,
+        "parent_sha256": parent["sha256"] if parent else None,
+    }
+    if teacher is not None:
+        row.update(
+            teacher_run=teacher["run"],
+            teacher_update=teacher["update"],
+            teacher_sha256=teacher["sha256"],
+        )
+    run.log_table(RUN_TABLE, [row], **clocks)
 
 
 def log_corpus_outcomes(

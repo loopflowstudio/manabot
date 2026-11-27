@@ -67,10 +67,15 @@ def damped_policy_loss(
     collection_kl: float,
     tau: float,
     reference_forward_kl: float = 0.0,
+    teacher_logs: Array | None = None,
+    teacher_policy_weight: float = 0.0,
 ) -> Array:
     """The damped policy objective, equation (6), per row [B] over offers [B,A].
 
     An optional forward KL keeps a restoring gradient on rare legal offers.
+    An optional decaying kickstarting term (`teacher_policy_weight *
+    KL(pi_teacher || pi_student)`) distills from a frozen teacher policy
+    (Schmitt et al., 2018).
     Sources and departures: docs/learning.md#fidelity-to-the-sources.
 
     Ratios use the actual action likelihood at collection, even after earlier
@@ -83,7 +88,13 @@ def damped_policy_loss(
         raise ValueError("policy logits require [B,A] legal support")
     if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
         raise ValueError("actions and advantages require [B]")
-    if not 0 < clip < 1 or collection_kl < 0 or tau < 0 or reference_forward_kl < 0:
+    if (
+        not 0 < clip < 1
+        or collection_kl < 0
+        or tau < 0
+        or reference_forward_kl < 0
+        or teacher_policy_weight < 0
+    ):
         raise ValueError("invalid damping coefficients")
     rl.check_logs(behavior_logs, valid)
     rl.check_probabilities(reference, valid, positive=True)
@@ -113,6 +124,13 @@ def damped_policy_loss(
         loss = loss + reference_forward_kl * rl.float64_operand(
             rl.forward_kl(logs, magnet_logs, valid)
         )
+    if teacher_policy_weight:
+        if teacher_logs is None:
+            raise ValueError("teacher policy weight requires teacher_logs")
+        rl.check_logs(teacher_logs, valid)
+        loss = loss + teacher_policy_weight * rl.float64_operand(
+            rl.forward_kl(logs, teacher_logs, valid)
+        )
     return loss
 
 
@@ -133,6 +151,10 @@ def minibatch_objective(
     collection_kl: float,
     tau: float,
     reference_forward_kl: float = 0.0,
+    teacher_logs: Array | None = None,
+    teacher_policy_weight: float = 0.0,
+    teacher_value_targets: Array | None = None,
+    teacher_value_weight: float = 0.0,
     policy_weight: float = 1.0,
     value_weight: float = 1.0,
     weights: Array | None = None,
@@ -148,6 +170,8 @@ def minibatch_objective(
     and critic weights and their logical minibatch denominators. Gradients reach only
     `logits` and `value_logits`.
     """
+    if teacher_value_weight < 0:
+        raise ValueError("invalid teacher value weight")
     policy_loss = actor_term(
         rl,
         damped_policy_loss(
@@ -162,6 +186,8 @@ def minibatch_objective(
             collection_kl=collection_kl,
             tau=tau,
             reference_forward_kl=reference_forward_kl,
+            teacher_logs=teacher_logs,
+            teacher_policy_weight=teacher_policy_weight,
         ),
         actor_mask,
         policy_weight,
@@ -172,5 +198,15 @@ def minibatch_objective(
     else:
         # Representation ablation, not the paper's outcome objective.
         value_rows = rl.squared_value_loss(value_logits, value_targets)
+    if teacher_value_weight:
+        if teacher_value_targets is None:
+            raise ValueError("teacher value weight requires teacher_value_targets")
+        teacher_constant = rl.constant(teacher_value_targets)
+        teacher_value_rows = (
+            rl.categorical_value_loss(value_logits, teacher_constant)
+            if categorical
+            else rl.squared_value_loss(value_logits, teacher_constant)
+        )
+        value_rows = value_rows + teacher_value_weight * teacher_value_rows
     value_loss = critic_term(rl, value_rows, value_weight, weights)
     return policy_loss + rl.float64_operand(value_loss), policy_loss, value_loss
