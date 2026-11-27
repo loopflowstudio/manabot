@@ -281,6 +281,20 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   shared tensors equal the control's. A control without the log capacities is
   refused as a trunk. Test reliance by seating the same checkpoint with
   `config={"blank_decision_memory": True}` through `manabot.eval.pairing`.
+  For a tracked run at a chosen device and precision, put that `SelfPlay`
+  (with `device`, `precision` and `decision_memory` from a small pydantic
+  config) in a `.runs/` recipe and run `etude train <recipe> --experiment
+  <name> --config '{"device":"mps","precision":"bf16","updates":3}'` (about
+  25 s on MPS; this exercises semantic-card and GRU-memory packed GRUs in
+  collection and learning). Compare against the same recipe run from a
+  merge-base worktree (`PYTHONPATH=$PWD ../../.venv/bin/etude train`):
+  CPU float32 policies should be bit-identical, MPS float32 within 1e-6.
+  Read `loss`, `gradient_norm` and `numerical/gradient_zero_tensors` with
+  `read(track, exp, exp).points(m, clock="updates").y`. Deck files for
+  `manabot sim` on Gray Ogre: `8 Mountain`/`8 Gray Ogre` and
+  `8 Forest`/`8 Llanowar Elves`, each followed by an empty `Sideboard`.
+  CUDA BF16 cannot be reached on the Mac: `MANABOT_REQUIRE_CUDA=1` makes the
+  admission test fail with "CUDA admission requires a real CUDA device".
 - Portable continuation and backend switching (`out/state/save-*/` with
   `learner.safetensors`, `sampling.safetensors`, `continuation.json`):
   `etude continue` needs a launched parent (on an `etude train` run it says
