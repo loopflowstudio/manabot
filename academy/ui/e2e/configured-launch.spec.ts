@@ -139,19 +139,15 @@ test('a snapshot opens as a recorded game with optional spectator reveal', async
   const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { snapshot_replay: string };
   await page.goto(addresses.snapshot_replay);
   await expect(page.getByTestId('recording-heading')).toHaveText('Recorded game');
-  await expect(page.getByTestId('replay-perspective')).toContainText('Acting view');
+  await expect(page.getByTestId('replay-perspective')).toContainText('Both hands');
   // The record reshuffled the libraries before its first decision: a neutral note, no seed.
   const note = page.getByTestId('log-entry').filter({ hasText: 'Branch · libraries reshuffled' });
   await expect(note).toHaveCount(1);
   await expect(note).toHaveAttribute('data-actor', 'note');
-  await page.getByRole('checkbox', { name: 'Show both hands' }).check();
+  await expect(page.getByRole('checkbox', { name: 'Show both hands' })).toBeChecked();
   await expect(page.getByTestId('replay-perspective')).toContainText('Both hands');
-  // The top seat's revealed hand opens by keyboard and names its cards.
-  const hand = page.locator('[data-plate-side="opponent"]').getByTestId('shown-hand');
-  await hand.focus();
-  await page.keyboard.press('Enter');
-  const shown = page.getByRole('dialog', { name: /· Hand$/ });
-  await expect(shown).toContainText('Mountain');
-  await page.keyboard.press('Escape');
-  await expect(shown).toHaveCount(0);
+  // The top seat's revealed hand is face-up along the board's top edge.
+  const hand = page.locator('[data-testid="hand-ribbon"][data-ribbon="top"]');
+  await expect(hand.locator('[data-card-name="Mountain"]').first()).toBeVisible();
+  await expect(hand.getByTestId('card-back')).toHaveCount(0);
 });

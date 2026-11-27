@@ -7,7 +7,7 @@
    *
    * Both frames are a printed card's proportions (63:88). `portrait` (hand,
    * tray) is art over a bar with the name and type line, cost pips on the
-   * art. `field` (battlefield) puts the name bar on top, wrapping to a second
+   * art; `bar="head"` puts that bar over the art instead. `field` (battlefield) puts the name bar on top, wrapping to a second
    * line rather than cutting the name, a pile's ×N right after it, with the
    * art below and no cost (the hand and inspect show it). The name bar
    * carries the card's colours (`frameColors`): one colour's tint, or several
@@ -43,6 +43,8 @@
     /** Upright width, px; a tapped permanent's footprint is this card on its side. */
     width: number;
     shape?: 'portrait' | 'field';
+    /** A portrait card's name bar: under the art, or over it for a card tucked past the board's bottom edge. */
+    bar?: 'head' | 'foot';
     permanent?: PermanentState | null;
     card?: CardState | null;
     offers?: PlacedOffer[];
@@ -95,7 +97,7 @@
   }
 
   let {
-    connectSource = false, connectTarget = false, drop = false, name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
+    connectSource = false, connectTarget = false, drop = false, name, width, shape = 'portrait', bar = 'foot', permanent = null, card = null, offers = [], live = false, asked = false,
     toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, stopDeltas = [], planned = null, paid = null,
     count = null, piled = false, slice = null, dim = null, targeted = false, draft = null, note = null, travel = true, onactivate, onpreview,
   }: Props = $props();
@@ -205,6 +207,7 @@
     type="button"
     class="tcard"
     class:field
+    class:bar-head={bar === 'head'}
     class:turned
     class:legal={live && (offers.length > 0 || draft === 'can')}
     class:dim-hand={dim === 'hand'}
@@ -332,7 +335,7 @@
     flex: none; min-width: 0; padding: 3px 5px 4px; display: flex; flex-direction: column; gap: 1px;
     background: var(--bar, var(--card-c)); color: var(--bar-ink, var(--text));
   }
-  .field { flex-direction: column; }
+  .field, .bar-head { flex-direction: column; }
   .field .bar { padding: 2px 4px 3px; }
   .name {
     font-family: var(--font-serif); font-weight: 600; color: inherit;

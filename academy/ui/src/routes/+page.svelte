@@ -48,6 +48,7 @@
     sendPassTurn,
     sendRetrySearch,
     sendSetStops,
+    sendOpenHands,
     sendShowAnalysis,
     sendSwapSides,
     storedGame,
@@ -287,7 +288,8 @@
       villain: matchupDeckLabel(config.villain_deck_pool, villainName, gameStore.decks.villain),
     };
     untrack(() => {
-      lastMatchup = { config, opponent: opponentName, decks };
+      // Open hands belongs to the game it was turned on in: Rematch and Swap play/draw keep it, Play again starts blind.
+      lastMatchup = { config: { ...config, open_hands: false }, opponent: opponentName, decks };
       saveLastMatchup(lastMatchup);
     });
   });
@@ -437,20 +439,25 @@
   // A reading for another revision (a decision already made) is not drawn.
   const liveAnalysis = $derived(gameStore.liveAnalysis);
   // With analysis read this game, the strip carries the policy's line from
-  // your seat, on Review's fixed 0–100 axis, and opens whenever it is shown.
+  // your seat, on Review's fixed 0–100 axis.
   const liveScale = $derived.by(() => {
     const name = scoreName(liveAnalysis.points.find(point => point.semantic !== null)?.semantic ?? null);
     if (!name || !liveAnalysis.policy) return null;
     return `${shortName(liveAnalysis.policy.name)}'s ${name.toLowerCase()} (%) from your seat · ${liveAnalysis.points.length} ${liveAnalysis.points.length === 1 ? 'decision' : 'decisions'} read`;
   });
   const analysisOffered = $derived(inGame && !demoName && !gameStore.gameOver);
+  // Open hands: the bot's hand beside the frame it belongs to. A hand from
+  // another revision is not drawn; the ribbon keeps its backs until they agree.
+  const openHandsOn = $derived(gameStore.openHand !== null);
+  const openHand = $derived(gameStore.openHand && decisionFrame && gameStore.openHand.revision === decisionFrame.revision
+    ? gameStore.openHand.hand : null);
+  const canOpenHands = $derived(inGame && !demoName && !gameStore.stopped && gameStore.connection === 'connected');
   const baseMarks = $derived(trackMarks(
     presentationPlayer.events,
     index => presentationPlayer.labelsAt(index),
     { youSeat: decisionFrame?.projection.agent.player_index ?? 0, you: 'You', opponent: shortName(opponentName) },
   ));
   const liveMarks = $derived(liveScale ? withLiveAnalysisPoints(baseMarks, liveAnalysis.points) : baseMarks);
-  $effect(() => { if (liveAnalysis.shown) stripOpen = true; });
   const liveEvidence = $derived(liveAnalysis.shown && liveAnalysis.reading && decisionFrame
     && liveAnalysis.reading.revision === decisionFrame.revision && decisionFrame.offers.length
     ? analysedEvidence(decisionFrame, liveAnalysis.reading.decision, null, liveAnalysis.policy?.name ?? 'The policy') : null);
@@ -566,6 +573,11 @@
 {/snippet}
 
 {#snippet analysisSettings()}
+  <label class="setting"><span>Open hands<small>{gameStore.gameOver ? "See the cards left in the opponent's hand." : `See the opponent's hand, face-up along the top edge. ${shortName(opponentName)} still sees only its own cards. A choice you make while it is on is counted in Review.`}</small></span>
+    <!-- Controlled by the server's answer: a refused change leaves the switch where it was. -->
+    <input type="checkbox" role="switch" data-testid="open-hands" checked={openHandsOn} disabled={!canOpenHands}
+      onchange={event => { sendOpenHands(event.currentTarget.checked); event.currentTarget.checked = openHandsOn; event.currentTarget.closest('details')?.removeAttribute('open'); }} /></label>
+  {#if analysisOffered}
   <div class="live-analysis" data-testid="live-analysis">
     <label class="setting"><span>Show analysis<small>What {liveAnalysis.policy ? shortName(liveAnalysis.policy.name) : 'a policy'} would choose here, and its estimate of the game. A choice you make while it is shown is marked "analysis shown" in Review.</small></span>
       <!-- The sheet closes on the change: it covers the choices the analysis is about. -->
@@ -582,6 +594,7 @@
     {#if liveAnalysis.unavailable}<p class="type-caption text-ink-3" data-testid="live-analysis-unavailable">{liveAnalysis.unavailable} Install a policy provider (managym.bots) to analyse.</p>{/if}
     {#if liveAnalysis.stopped}<p class="type-caption text-ink-3" role="status">{liveAnalysis.stopped}</p>{/if}
   </div>
+  {/if}
 {/snippet}
 
 {#snippet gameSettings()}
@@ -612,6 +625,7 @@
     <Board
       frame={decisionFrame}
       interaction={canSubmitLive ? 'play' : 'read-only'}
+      yourHand="out"
       status={gameStore.decisionStatus}
       you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
       opponent={{ name: opponentName, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}
@@ -624,7 +638,9 @@
       {canPassTurn}
       presentation={presentationPlayer}
       {thinking}
-      {opponentChoosing}
+      choosingSeat={opponentChoosing && heroSeat !== null ? (heroSeat === 0 ? 1 : 0) : null}
+      {openHand}
+      openHands={openHandsOn}
       evidence={liveEvidence}
       workStarted={gameStore.work?.state === 'running' && gameStore.connection === 'connected' ? gameStore.work.started_at : null}
       interrupted={gameStore.stopped}
@@ -642,8 +658,11 @@
       strip={{ marks: liveMarks, selected: null, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen),
         note: gameStore.gameOver || liveScale ? null : 'Review the game once it ends to step back through these', scale: liveScale }}
       result={gameStore.gameOver ? result : undefined}
-      menu={{ play: playSettings, analysis: analysisOffered ? analysisSettings : undefined, game: gameSettings }}
-      chips={liveAnalysis.shown ? [{ key: 'analysis', label: 'Analysis on', clear: () => sendShowAnalysis(false) }] : []}
+      menu={{ play: playSettings, analysis: inGame && !demoName ? analysisSettings : undefined, game: gameSettings }}
+      chips={[
+        ...(liveAnalysis.shown ? [{ key: 'analysis', label: 'Analysis on', clear: () => sendShowAnalysis(false) }] : []),
+        ...(openHandsOn ? [{ key: 'open-hands', label: 'Open hands', clear: () => sendOpenHands(false) }] : []),
+      ]}
       {stepBoards}
       {autoTap}
       {fullControl}

@@ -29,6 +29,7 @@ def setup_draft(config: GameConfig) -> dict[str, Any]:
         "mana_floats": config.mana_floats,
         "mana_payment": config.mana_payment,
         "decklists": config.decklists,
+        "open_hands": config.open_hands,
         "stops": config.stops,
         "auto_pass": config.auto_pass,
         "stop_on_stack": config.stop_on_stack,

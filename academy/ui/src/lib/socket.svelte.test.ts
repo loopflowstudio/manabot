@@ -638,6 +638,33 @@ describe('grouped decisions in GameSocketController', () => {
   });
 });
 
+describe('open hands', () => {
+  const hand = [{ id: 7, name: 'Lightning Bolt' }] as unknown as import('./types').CardState[];
+
+  it('keeps the hand a recovery came with, though the recovery resets the match', () => {
+    gameStore.prepareForNewGame();
+    const recovery = { ...structuredClone(boltProtocolFixture.recovery), frame: frameAt(43) };
+    const controller = new GameSocketController();
+    deliver(controller, { type: 'observation', data: recovery.frame.projection, actions: [], recovery, open_hand: { revision: 43, hand } });
+    expect(gameStore.openHand).toEqual({ revision: 43, hand });
+  });
+
+  it('follows the switch, and a reply without the hand turns it off', () => {
+    gameStore.prepareForNewGame();
+    const controller = new GameSocketController();
+    deliver(controller, { type: 'open_hands_state', open_hand: { revision: 42, hand } });
+    expect(gameStore.openHand?.revision).toBe(42);
+    deliver(controller, { type: 'open_hands_state', open_hand: null });
+    expect(gameStore.openHand).toBeNull();
+  });
+
+  it('is off at the start of the next game', () => {
+    gameStore.openHand = { revision: 42, hand };
+    gameStore.prepareForNewGame();
+    expect(gameStore.openHand).toBeNull();
+  });
+});
+
 describe('live analysis across Swap sides', () => {
   const point = { event: 3, at: 1, score: 70, semantic: 'signed_outcome' };
 

@@ -64,7 +64,7 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
 
 const FAMILIES = ['CHOOSE_TARGET', 'DISCARD', 'LEARN', 'DECLARE_BLOCKER', 'PAY_OR_NOT'] as const;
 
-/** Where the board draws an offer besides its rail row: a card, a player, a prompt button or the tray. */
+/** Where the board draws an offer besides its rail row: a card, a player, the primary button or the tray; a prompt button stands in while Choices is folded. */
 function drawn(page: Page, offer: { id: number; label: string }, number: number) {
   return page.locator([
     `[data-testid=board-card][aria-label*="${offer.label} (${number})"]`,
@@ -84,9 +84,15 @@ for (const family of FAMILIES) {
     await expect(page.getByTestId('legal-choice-count')).toContainText(String(frame.offers.length));
     expect(await page.getByTestId('action-option').evaluateAll(rows => rows.map(row => Number(row.getAttribute('data-offer-id')))))
       .toEqual(frame.offers.map(offer => offer.id));
+    // The open list shows each choice once: no button repeats a row under it.
+    await expect(page.getByTestId('prompt-action')).toHaveCount(0);
+    await page.getByTestId('choices-toggle').click();
+    await expect(page.getByTestId('action-option')).toHaveCount(0);
     for (const [index, offer] of frame.offers.entries()) {
       expect(await drawn(page, offer, index + 1).count(), offer.label).toBeGreaterThanOrEqual(1);
     }
+    await page.getByTestId('choices-toggle').click();
+    await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
     // Pointing and inspecting send nothing.
     await page.getByTestId('board-card').first().hover();
     expect(commands).toEqual([]);
@@ -108,11 +114,14 @@ for (const family of FAMILIES) {
   });
 }
 
-test('Learn draws Lessons from outside the game in the tray, and declining stays a button', async ({ page }) => {
+test('Learn draws Lessons from outside the game in the tray, and declining is a row, or a button while Choices is folded', async ({ page }) => {
   const commands = await installPosition(page, 'LEARN');
   const frame = positions.LEARN.frame as ExperienceFrame;
   const lessons = frame.offers.filter(offer => offer.action_type === 'LEARN_TAKE_LESSON');
   await expect(page.getByTestId('tray').getByTestId('board-card')).toHaveCount(lessons.length);
+  await expect(page.getByTestId('action-option').filter({ hasText: 'Decline Learn' })).toHaveCount(1);
+  await expect(page.getByTestId('prompt-action')).toHaveCount(0);
+  await page.getByTestId('choices-toggle').click();
   await expect(page.getByTestId('prompt-action').filter({ hasText: 'Decline Learn' })).toBeVisible();
   // A click on the Learn spell never declines it.
   await expect(page.getByTestId('stack-entry').locator('xpath=self::*[contains(@class, "legal")]')).toHaveCount(0);

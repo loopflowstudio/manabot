@@ -10,6 +10,8 @@
  *   the recorded board with no prompt and no offers.
  * - `bottomSeat(…)`: which seat sits at the bottom. Following the chooser keeps
  *   each decision in its chooser's acting view, hand included.
+ * - `choosingSeat(…)` and `activeRibbonSeat(…)`: who is choosing at a position,
+ *   and whose hand is extended there.
  * - `offerEvidence(…)`: the recorded policy, index-aligned with `frame.offers`,
  *   keyed by offer id for the cards and rows that draw each offer.
  * - `replayLog(…)` and `stripMarks(…)`: the move list and the decision strip,
@@ -75,13 +77,12 @@ export function perspectiveLabel(seat: 0 | 1, name: string, deck: string | null,
   return deck ? `${base} · ${deck}` : base;
 }
 
-/** The address's `near` value, or the recording's natural seat: chooser when swapped or watched, else the person. */
+/** The address's `near` value, or the recording's natural seat: chooser when swapped, else the person, else Seat 1. */
 export function perspectiveOf(near: string | null, index: Pick<RecordingIndex, 'players' | 'seat_swaps'>): Perspective {
   if (near === '0' || near === '1') return Number(near) as 0 | 1;
   if (near === 'chooser') return 'chooser';
   if (index.seat_swaps?.length) return 'chooser';
-  const human = index.players.find(player => player.kind === 'human');
-  return human ? (human.seat === 1 ? 1 : 0) : 'chooser';
+  return index.players.find(player => player.kind === 'human')?.seat === 1 ? 1 : 0;
 }
 
 /** The seat drawn at the bottom at `selected`: a chooser stays at the bottom through its consequences. */
@@ -92,6 +93,26 @@ export function bottomSeat(perspective: Perspective, positions: readonly Positio
     if (positions[i].kind === 'choice' && actor !== null) return actor === 1 ? 1 : 0;
   }
   return 0;
+}
+
+/** The seat choosing at `selected`: a choice's actor, and nobody after a step or once the game is over. */
+export function choosingSeat(positions: readonly Position[], selected: number): 0 | 1 | null {
+  const position = positions[selected];
+  return position?.kind === 'choice' && position.actor !== null ? (position.actor === 1 ? 1 : 0) : null;
+}
+
+/**
+ * The seat whose hand is extended at `selected`: whoever last acted at or
+ * before it (a choice, or another seat's step in a game you played), so a hand
+ * stays out through its own consequences. Nobody's once the game is over.
+ */
+export function activeRibbonSeat(positions: readonly Position[], selected: number, gameOver: boolean): 0 | 1 | null {
+  if (gameOver) return null;
+  for (let i = Math.min(selected, positions.length - 1); i >= 0; i--) {
+    const actor = positions[i].actor;
+    if (actor !== null) return actor === 1 ? 1 : 0;
+  }
+  return null;
 }
 
 // ———————————————————————————————————————— Frames

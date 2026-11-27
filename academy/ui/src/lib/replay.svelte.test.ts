@@ -86,6 +86,27 @@ describe('ReplayStore', () => {
     expect(store.current?.observation.game_over).toBe(true);
     expect(calls.every(call => call.startsWith('GET'))).toBe(true);
   });
+  it('opens a Watch with both hands wherever the position allows, unless the acting view was chosen', async () => {
+    const reads = async (watch: boolean, reveal: boolean | null): Promise<string[]> => {
+      const calls: string[] = [];
+      vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+        calls.push(input);
+        if (input.includes('/positions/')) return Response.json(current(decodeURIComponent(input.split('/positions/')[1].split('?')[0])));
+        return Response.json({...index(), watch, positions: positions.map(position => ({...position, can_reveal: position.key !== 'latest'}))});
+      }));
+      const store = createReplayStore();
+      store.reveal = reveal;
+      await store.open('trace-1');
+      await store.next();
+      await store.next();
+      return calls.filter(call => call.includes('/positions/')).map(call => call.split('?')[1]);
+    };
+    installApi();
+    // The last position of an older record has no stored hand: the acting view there.
+    expect(await reads(true, null)).toEqual(['reveal=true', 'reveal=true', 'reveal=false']);
+    expect(await reads(true, false)).toEqual(['reveal=false', 'reveal=false', 'reveal=false']);
+    expect(await reads(false, null)).toEqual(['reveal=false', 'reveal=false', 'reveal=false']);
+  });
   it('restores a nonzero key and rejects an unavailable saved position visibly', async () => {
     installApi();
     const store = createReplayStore();

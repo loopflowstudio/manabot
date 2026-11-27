@@ -11,20 +11,55 @@ test('watch reads choices and consequences on the board, then returns from Study
   await expect(rows.first()).toBeDisabled();
   await expect(page.locator('[data-testid="action-option"][data-chosen="true"]')).toHaveCount(1);
   await expect(page.getByTestId('recorded-decision-evidence')).toBeVisible();
-  await page.getByRole('checkbox', {name: 'Show both hands'}).check();
+  // A Watch opens with Seat 1 at the bottom and both hands up, and stays so through each step.
+  const perspective = page.getByRole('combobox', {name: 'Perspective'});
+  const bothHands = page.getByRole('checkbox', {name: 'Show both hands'});
+  const topSeat = (): Promise<string | null> => page.locator('[data-plate-side="opponent"]').getAttribute('data-player-index');
+  await expect(perspective).toHaveValue('0');
+  await expect(bothHands).toBeChecked();
   await expect(page.getByTestId('replay-perspective')).toContainText('Both hands · spectator view');
+  // Both hands are ribbons on the board's edges, the top one face-up: no backs, no popup on the plate.
+  const topHand = page.locator('[data-testid="hand-ribbon"][data-ribbon="top"]');
+  const bothFaceUp = async (): Promise<void> => {
+    await expect(page.getByTestId('hand-ribbon')).toHaveCount(2);
+    await expect(topHand.getByTestId('board-card')).not.toHaveCount(0);
+    await expect(page.getByTestId('card-back')).toHaveCount(0);
+  };
+  await bothFaceUp();
+  // The seat choosing is marked on its plate, and its hand is the one out.
+  await expect(page.getByTestId('plate-choosing')).toHaveCount(1);
+  await expect(page.locator('[data-testid="hand-ribbon"][data-out="true"]')).toHaveCount(1);
+  const rowsTop = await page.locator('.half.opponent .rows').boundingBox();
+  const top = await topSeat();
   await page.getByRole('button', {name: 'Next', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
-  await expect(page.getByTestId('replay-perspective')).toContainText('Recorded seat-');
+  await expect(page.getByTestId('replay-perspective')).toHaveText('Both hands · spectator view');
+  await bothFaceUp();
+  await page.getByRole('button', {name: 'Next', exact: true}).click();
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 3 / 3');
+  await expect(bothHands).toBeChecked();
+  await bothFaceUp();
+  expect(await topSeat()).toBe(top);
+  // Stepping moved hands, never the battlefield under them.
+  expect(await page.locator('.half.opponent .rows').boundingBox()).toEqual(rowsTop);
+  // Show hand on the waiting plate brings its hand out beside the active one.
+  await page.getByTestId('hand-toggle').filter({ hasText: 'Show hand' }).click();
+  await expect(page.locator('[data-testid="hand-ribbon"][data-out="true"]')).toHaveCount(2);
+  await page.getByTestId('hand-toggle').filter({ hasText: 'Tuck hand' }).first().click();
+  await expect(page.locator('[data-testid="hand-ribbon"][data-out="true"]')).toHaveCount(1);
+  await page.getByRole('button', {name: 'Previous', exact: true}).click();
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
   await expect(rows).toHaveCount(0);
   await page.getByRole('button', {name: 'Previous', exact: true}).click();
+  await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
   await page.getByRole('button', {name: 'Try another line', exact: true}).click();
   await page.getByTestId('action-option').first().click();
   await expect(page.getByText('Your line is committed')).toBeVisible();
   await page.getByTestId('study-return').click();
   await expect(page.getByRole('button', {name: 'Try another line', exact: true})).toBeFocused();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
-  await expect(page.getByRole('checkbox', {name: 'Show both hands'})).not.toBeChecked();
+  // Study drew the acting view; the view shown before it is back.
+  await expect(bothHands).toBeChecked();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
   await page.reload();
