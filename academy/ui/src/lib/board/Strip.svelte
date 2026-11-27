@@ -21,13 +21,15 @@
     note?: string | null;
     /** With an analysis: the caption, and values are 0–1 scores on a fixed 0–100 axis. */
     scale?: string | null;
+    /** Docked under a board that keeps a hand's depth clear: a shorter chart. */
+    compact?: boolean;
     /** Close the overlay strip. */
     onclose?: () => void;
   }
 
-  let { marks, selected, onjump, note = null, scale = null, onclose }: Props = $props();
+  let { marks, selected, onjump, note = null, scale = null, compact = false, onclose }: Props = $props();
 
-  const HEIGHT = $derived(scale !== null ? 80 : 44);
+  const HEIGHT = $derived(scale === null ? 44 : compact ? 56 : 80);
   const decisions = $derived(marks.filter(mark => mark.decision));
   const values = $derived(decisions.map(mark => mark.value).filter((value): value is number => value !== null));
   // An analysis's scores sit on a fixed 0–100 axis. Recorded values keep their
@@ -140,7 +142,7 @@
 <style>
   .strip { padding: 8px 12px 6px; }
   .header { display: flex; align-items: baseline; gap: 10px; margin: 0 0 4px; }
-  .caption { display: flex; flex: 1 1 auto; min-width: 0; gap: 12px; margin: 0; }
+  .caption { display: flex; flex: 1 1 auto; min-width: 0; gap: 12px; margin: 0; white-space: nowrap; overflow: hidden; }
   .close { flex: none; margin-left: auto; padding: 0 5px; border-radius: var(--radius-sm); color: var(--text-tertiary); font-size: 14px; line-height: 20px; }
   .close:hover, .close:focus-visible { color: var(--text); background: var(--bg-field); }
   .note { margin-left: auto; }

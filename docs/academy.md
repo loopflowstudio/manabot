@@ -769,8 +769,8 @@ The rail flows from the past into the present:
   payment, with lines to the targets already chosen; the card leaves your hand.
 - **The decision** is pinned at the bottom of the rail beside your hand: who
   decides, what they are deciding ("Pay {1}{U} for Accumulate Wisdom"), the
-  complete **Choices** list (expanded by default and collapsible from its count
-  toggle; press a number key to choose one of the first nine), and the action
+  complete **Choices** list (expanded by default; press a number key to choose
+  one of the first nine), and the action
   buttons. For mana payments the hint below the prompt says how to pay. It stays
   steady as different previews appear. Mana and tap symbols in rules text, the
   prompt, the stack, buttons, menus and choices render as symbols rather than
@@ -783,8 +783,10 @@ The rail flows from the past into the present:
   long one is shortened and its full text is the button's accessible name and
   tooltip. Declining, and a combat answer that does not name another creature,
   are rows of the list, never a card, so a click on a card never declines. Each
-  choice is shown once: while **Choices** is folded, those answers are buttons
-  under the primary one instead. During a live
+  choice is shown once. When some choice is on a card, the list folds from its
+  count toggle, and while it is folded those answers are buttons under the
+  primary one instead; a decision that is answers alone (a mulligan, a mode,
+  yes or no) keeps its list and has no toggle. During a live
   grouped decision (combat or card arrangement) the raw single-step offers fold
   under a closed disclosure (see [Grouped decisions](#grouped-decisions)).
 
@@ -1715,8 +1717,8 @@ Click the chip or switch **Open hands** off to glide them back into card backs
 
 The face-up hand is out in full and lies over the middle of the opponent's back
 row. While **Open hands** is on, the **Hand** line on the opponent's plate is a
-**Tuck hand / Show hand** button: tuck the hand back to the depth of a card
-back to see the whole land row under it (hover or focus a tucked card to bring
+**Tuck hand / Show hand** button: tuck the hand back to its cards' name bars
+to see the whole land row under it (hover or focus a tucked card to bring
 that card alone out), and show it again when you want the whole cards. It stays
 tucked until you show it or turn **Open hands** off; turned on again, the hand
 comes out in full. Nothing on the battlefield moves either way.

@@ -439,7 +439,7 @@
   // A reading for another revision (a decision already made) is not drawn.
   const liveAnalysis = $derived(gameStore.liveAnalysis);
   // With analysis read this game, the strip carries the policy's line from
-  // your seat, on Review's fixed 0–100 axis, and opens whenever it is shown.
+  // your seat, on Review's fixed 0–100 axis.
   const liveScale = $derived.by(() => {
     const name = scoreName(liveAnalysis.points.find(point => point.semantic !== null)?.semantic ?? null);
     if (!name || !liveAnalysis.policy) return null;
@@ -625,7 +625,7 @@
     <Board
       frame={decisionFrame}
       interaction={canSubmitLive ? 'play' : 'read-only'}
-      handLayout="workspace"
+      yourHand="out"
       status={gameStore.decisionStatus}
       you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
       opponent={{ name: opponentName, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}

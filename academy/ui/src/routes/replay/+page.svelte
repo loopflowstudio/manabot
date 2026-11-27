@@ -803,7 +803,7 @@
   <Board
     {frame}
     interaction={studying && canRetry ? 'study' : 'read-only'}
-    handLayout={studying ? 'workspace' : 'ribbons'}
+    yourHand={studying ? 'out' : 'tucked'}
     status={replayStore.busy || atLiveEdge || studying ? status : ''}
     you={{ name: nameOf(pilotAt(viewerSeat)), deck: deckOf(viewerSeat) }}
     opponent={{ name: nameOf(pilotAt(otherSeat(viewerSeat))), deck: deckOf(otherSeat(viewerSeat)), description: identity(pilotAt(otherSeat(viewerSeat))).description }}

@@ -136,9 +136,9 @@ board, both hands as upright 1:1 ribbons on its bottom and top edges (the
 opponent's as card backs plus rules-revealed cards, or full face-up cards while
 Open hands is on) and a rail holding the stack, the decision and every legal
 offer by number. Off-board offers such as Lessons sit in a board-level tray.
-`handLayout` says how the bottom hand behaves: `"workspace"` (Play and Study)
+`yourHand` says how the bottom hand behaves: `"out"` (Play and Study)
 keeps it out all the time, in depth the battlefield reserves under your rows,
-and takes drags from it; `"ribbons"` (Watch, Review and **See its line**) tucks
+and takes drags from it; `"tucked"` (Watch, Review and **See its line**) tucks
 both hands over a fixed two-half battlefield, and the active seat's glides in
 with its offers and recorded probabilities on those cards. `boardView` places
 each offer exactly once in that list and, where it acts on one, on its card or
@@ -536,8 +536,8 @@ setting as last left; the client's saved Play again matchup drops it, and a
 game played on from another starts with it off while each prefix event keeps
 its source's `open_hands` mark. The client has no separate flag: the switch and the top-bar chip
 are on while `gameStore.openHand` is not null, and the opponent's plate then
-offers Show hand / Tuck hand over the face-up ribbon (tucked, it sits at a
-card back's depth; turning open hands on again brings it out). Each plate's
+offers Show hand / Tuck hand over the face-up ribbon (tucked, it shows its
+cards' name bars in the depth the top rows always keep clear; turning open hands on again brings it out). Each plate's
 toggle acts on its own seat (`RibbonOverrides` in `board/view.ts`); only a live
 offer on a hand card holds a ribbon out. The
 client draws `open_hand` in place of top-ribbon card backs only at now

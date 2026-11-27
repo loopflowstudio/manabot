@@ -119,8 +119,13 @@
   let expanded = $state<Set<string>>(new Set());
   let choicesOpen = $state(true);
   const hasChoicesBlock = $derived((!over && !recording) || frame.offers.length > 0);
+  /**
+   * Folding the list leaves the board's cards and the answer buttons to choose by. A live decision whose
+   * every choice is a button (a mulligan, a mode, yes or no) has nothing else to show, so its list stays.
+   */
+  const choicesFold = $derived(recording || view.list.length > view.buttons.length);
   /** The numbered list is on screen, so no other control repeats its rows. */
-  const choicesListed = $derived(hasChoicesBlock && choicesOpen && !waitingFor);
+  const choicesListed = $derived(hasChoicesBlock && (choicesOpen || !choicesFold) && !waitingFor);
   const hasCursor = $derived((cursorLineIds?.size ?? 0) > 0);
   function isLineCurrent(entry: HistoryLine, fallbackId = false): boolean {
     if (hasCursor) return cursorLineIds!.has(entry.id);
@@ -350,11 +355,18 @@
           {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed">{` · ${elapsed} s`}</span>{/if}</span>{:else}{whose}{/if}
         </p>
         {#if hasChoicesBlock && !waitingFor}
-          <button type="button" class="choices-toggle type-caption" data-testid="choices-toggle" aria-expanded={choicesOpen} onclick={() => (choicesOpen = !choicesOpen)}>
+          {#snippet choicesHeading()}
             <span data-testid="choices-heading">{evidence?.heading ?? (interrupted || (!live && evidence) ? 'Recorded choices' : 'Choices')}</span>
             <span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>
-            <span aria-hidden="true">{choicesOpen ? '▾' : '▴'}</span>
-          </button>
+          {/snippet}
+          {#if choicesFold}
+            <button type="button" class="choices-heading choices-toggle type-caption" data-testid="choices-toggle" aria-expanded={choicesOpen} onclick={() => (choicesOpen = !choicesOpen)}>
+              {@render choicesHeading()}
+              <span aria-hidden="true">{choicesOpen ? '▾' : '▴'}</span>
+            </button>
+          {:else}
+            <p class="choices-heading type-caption">{@render choicesHeading()}</p>
+          {/if}
         {:else if hasChoicesBlock && waitingFor}
           <span class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</span>
         {/if}
@@ -510,12 +522,13 @@
   .dock-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .whose { color: var(--text-secondary); }
   .whose.yours { color: var(--text); }
-  .choices-toggle {
+  .choices-heading {
     display: inline-flex; align-items: baseline; gap: 5px; padding: 1px 5px; margin: -1px -5px;
-    border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer;
+    border-radius: var(--radius-sm); color: var(--text-secondary);
   }
+  .choices-toggle { cursor: pointer; }
   .choices-toggle:hover, .choices-toggle:focus-visible { color: var(--text); background: var(--bg-muted); }
-  .choices-toggle .count { font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
+  .choices-heading .count { font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
   .detail summary, .raw summary { cursor: pointer; width: max-content; }
   .detail p { margin-top: 2px; max-height: 6em; overflow-y: auto; }
   .action-row { display: flex; align-items: stretch; gap: 6px; }
