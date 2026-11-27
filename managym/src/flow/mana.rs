@@ -3657,11 +3657,16 @@ impl Game {
     /// taps are the one exception and are still made for the player. Optional
     /// costs still offer Pay/Decline, and a deliberate priority float still
     /// chooses its output.
-    pub(crate) fn automatic_payment_action(&self, space: &ActionSpace) -> Option<Action> {
-        let player = space.player?;
-        if !self.automatic_mana_payment(player) {
-            return None;
-        }
+    pub(crate) fn automatic_payment_action(
+        &self,
+        space: &ActionSpace,
+    ) -> Result<Option<Action>, AgentError> {
+        let Some(player) = space
+            .player
+            .filter(|&player| self.automatic_mana_payment(player))
+        else {
+            return Ok(None);
+        };
         // Whether convoke, improvise or delve may pay part of this mana step.
         let helped = match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
             Some(Decision::Payment(progress)) if !progress.can_decline() => false,
@@ -3681,17 +3686,17 @@ impl Game {
                         })
                 };
                 let choices = self.mana_spend_choices(player, cost);
-                let mode = (0..choices.len()).min_by_key(|mode| order(&choices[*mode]))?;
-                return space.actions.get(mode).cloned();
+                let mode = (0..choices.len()).min_by_key(|mode| order(&choices[*mode]));
+                return Ok(mode.and_then(|mode| space.actions.get(mode)).cloned());
             }
             Some(Decision::ManaChoice {
                 choices, resume, ..
             }) if resume.is_some() || self.pending_choice.is_some() => {
                 if space.actions.len() == 1 {
-                    return space.actions.first().cloned();
+                    return Ok(space.actions.first().cloned());
                 }
                 let model = self.payment_model(player, None);
-                return space
+                return Ok(space
                     .actions
                     .iter()
                     .min_by_key(|action| {
@@ -3703,25 +3708,25 @@ impl Game {
                             .plan(pool, obligations, SourcePolicy::All)
                             .map_or(usize::MAX, |remaining| remaining.len())
                     })
-                    .cloned();
+                    .cloned());
             }
             None => match self.paying() {
                 Some((_, _, CostComponent::Mana { help, .. })) => help.keyworded(),
-                _ => return None,
+                _ => return Ok(None),
             },
-            _ => return None,
+            _ => return Ok(None),
         };
         if let Some(pay) = space
             .actions
             .iter()
             .find(|a| matches!(a, Action::PayCost { .. }))
         {
-            return Some(pay.clone());
+            return Ok(Some(pay.clone()));
         }
         // Mana alone cannot pay: which creature or artifact to tap, or card
         // to exile, is the player's pick.
         if helped {
-            return None;
+            return Ok(None);
         }
         // The witness models the ordinary and waterbend portions as separate
         // spends, but the game charges their combined remainder only once.
@@ -3731,7 +3736,7 @@ impl Game {
             .iter()
             .find(|a| matches!(a, Action::WaterbendTap { .. }))
         {
-            return Some(tap.clone());
+            return Ok(Some(tap.clone()));
         }
         let path = self
             .payment_model(player, None)
@@ -3740,7 +3745,7 @@ impl Game {
                 self.payment_obligations(player),
                 SourcePolicy::All,
             )
-            .expect("committed cost has a payment witness");
+            .ok_or_else(|| AgentError("committed cost has no payment witness".into()))?;
         let next = if self
             .paying()
             .is_some_and(|(_, payment, _)| payment.waterbends())
@@ -3750,14 +3755,15 @@ impl Game {
         } else {
             path.first()
         };
-        match next.expect("committed payment has a next step") {
+        let next = next.ok_or_else(|| AgentError("committed payment has no next step".into()))?;
+        Ok(match next {
             PaymentStep::Spend => Some(Action::PayCost { player }),
             PaymentStep::Fixed(permanent) => Some(Action::TapForMana {
                 player,
                 permanent: *permanent,
             }),
             step => step.action(player),
-        }
+        })
     }
 
     pub(crate) fn mana_float_mode(&self, player: PlayerId) -> ManaFloats {

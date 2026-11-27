@@ -127,6 +127,37 @@ fn tarnished_citadel_damage_is_prevented_under_teferis_protection() {
 }
 
 #[test]
+fn tarnished_citadel_and_heartbeat_offer_both_colors_at_negative_life() {
+    let spell = "Sokka, Bold Boomeranger";
+    let mut s = five_color_unfunded_setup(&[
+        spell,
+        "Tarnished Citadel",
+        "Airship Engine Room",
+        "Heartbeat of Spring",
+    ]);
+    let citadel = s.force_permanent_on_battlefield(0, "Tarnished Citadel");
+    s.force_permanent_on_battlefield(0, "Airship Engine Room");
+    s.force_permanent_on_battlefield(0, "Heartbeat of Spring");
+    s.game_mut().scenario_set_life(PlayerId(0), 2);
+
+    cast_owned(&mut s, spell);
+    activate(&mut s, citadel, 0);
+
+    assert_eq!(s.life(0), -1);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    let modes: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .map(|action| match action {
+            Action::ChooseMode { mode, .. } => *mode,
+            action => panic!("expected a mana color, got {action:?}"),
+        })
+        .collect();
+    assert_eq!(modes, [1, 3]); // Blue and red.
+}
+
+#[test]
 fn foundations_5e_zombify() {
     use crate::support::game::{five_color_setup, move_card};
     use crate::support::inspect::{card_of, offered_targets, permanent, permanent_of};

@@ -179,7 +179,7 @@ fn announced_payment_reserves_life_across_nested_callers() {
         candidate
             .execute_action(&crate::agent::action::Action::ChooseMode { player, mode: 0 })
             .unwrap();
-        candidate.finish_action_step();
+        candidate.finish_action_step().unwrap();
         assert!(candidate.pending_choice.is_none());
         assert!(candidate.state.suspended_decision.is_none());
         assert_eq!(candidate.state.players[0].life, 1);
@@ -794,7 +794,7 @@ fn a_payment_scan_keeps_sources_until_its_last_guard_ends() {
         339,
         true,
     );
-    game.play();
+    game.play().unwrap();
     let player = PlayerId(0);
     let kept = |game: &Game| game.payment_sources.borrow().sources[player.0].clone();
 

@@ -36,13 +36,11 @@ stack, state-based actions and triggers.
 
 ### Forced decisions
 
-A decision reaches a player only when it has at least two legal actions. With
-one legal action the engine plays it and keeps going, so a forced choice never
-costs a model a forward pass and never produces a training row. Every
-non-terminal decision must offer at least one legal action: an empty
-non-terminal action space, or an error while executing a forced or
-automatic-payment action, fails closed with `AgentError` rather than spinning
-or faking game over.
+With `skip_trivial` enabled, the engine plays singleton actions and keeps
+going, so a forced choice costs no model forward pass and produces no training
+row. Every non-terminal decision must offer at least one legal action. An empty
+non-terminal action space or a failed forced or automatic-payment action
+returns `AgentError`.
 
 From `Game::tick` in [`managym/src/flow/tick.rs`](../managym/src/flow/tick.rs):
 
@@ -55,7 +53,7 @@ if let Some(space) = action_space {
             space.kind
         )));
     }
-    if let Some(action) = self.automatic_payment_action(&space) {
+    if let Some(action) = self.automatic_payment_action(&space)? {
         self.execute_action(&action)?;
         self.skip_trivial_count += 1;
         continue;
@@ -64,9 +62,8 @@ if let Some(space) = action_space {
         self.publish_folded_action_space(space, aliases);
         return Ok(false);
     }
-    self.skip_trivial_count += 1;
     self.execute_action(&space.actions[0])?;
-    continue;
+    self.skip_trivial_count += 1;
 }
 ```
 

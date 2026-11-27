@@ -2037,7 +2037,7 @@ mod cache_tests {
             244,
             true,
         );
-        game.play();
+        game.play().unwrap();
         game
     }
 
@@ -2106,7 +2106,7 @@ mod cache_tests {
             418,
             true,
         );
-        game.play();
+        game.play().unwrap();
         let source = game
             .scenario_force_battlefield(player, "Gray Ogre", true)
             .unwrap();
@@ -2136,7 +2136,7 @@ mod cache_tests {
             244,
             true,
         );
-        game.play();
+        game.play().unwrap();
         let id = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .unwrap();
@@ -2211,7 +2211,7 @@ mod cache_tests {
             244,
             true,
         );
-        game.play();
+        game.play().unwrap();
         let id = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .unwrap();
@@ -2259,7 +2259,7 @@ mod cache_tests {
             244,
             true,
         );
-        game.play();
+        game.play().unwrap();
         let id = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .unwrap();
@@ -2417,7 +2417,7 @@ mod cache_tests {
             430,
             true,
         );
-        game.play();
+        game.play().unwrap();
         let attacker = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .unwrap();
@@ -2553,7 +2553,7 @@ mod cache_tests {
             431,
             true,
         );
-        game.play();
+        game.play().unwrap();
 
         // Populate 64 vanilla tokens alongside 1 battlefield anthem and 1 command-zone emblem.
         let mut tokens = Vec::new();
@@ -2666,7 +2666,7 @@ mod cache_tests {
             244,
             true,
         );
-        game.play();
+        game.play().unwrap();
         let player = PlayerId(0);
         game.scenario_force_battlefield(player, "Gray Ogre", true)
             .unwrap();

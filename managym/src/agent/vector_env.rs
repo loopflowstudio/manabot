@@ -1043,7 +1043,10 @@ mod tests {
             vector_env::{SlotLoad, VectorEnv},
         },
         infra::profiler::InfoValue,
-        state::player::{GameSetup, PlayerConfig},
+        state::{
+            game_object::PlayerId,
+            player::{GameSetup, PlayerConfig},
+        },
     };
 
     fn load_fresh(vector: &mut VectorEnv, slot: usize, setup: Option<GameSetup>) {
@@ -1729,6 +1732,67 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn empty_non_terminal_action_space_is_a_slot_error() {
+        use crate::flow::decision::{Decision, ManaProduction};
+
+        for skip_trivial in [false, true] {
+            let prepared_vector = || {
+                let mut vector = VectorEnv::new(2, 7, skip_trivial, [PlayerPolicy::Agent; 2]);
+                vector.reset_all(sample_player_configs()).unwrap();
+                // Advance to the second keep, which will enter the malformed mana decision.
+                vector.step(&[0, 0]).unwrap();
+                vector.envs[0]
+                    .fixture_game_mut()
+                    .suspend_rule_decision(Decision::ManaChoice {
+                        player: PlayerId(0),
+                        choices: Vec::new(),
+                        production: ManaProduction::Output {
+                            source: None,
+                            tapped: None,
+                        },
+                        resume: None,
+                    });
+                vector
+            };
+
+            let expected = "empty non-terminal action space: Modal";
+            let mut strict = prepared_vector();
+            let error = strict
+                .step_into(&[0, 0], None, |_, _, _, _, _| {
+                    panic!("strict step must return the first slot error")
+                })
+                .unwrap_err();
+            assert!(error.0.starts_with(expected), "{error}");
+            assert!(!strict.envs[0].is_game_over());
+
+            let mut isolated = prepared_vector();
+            let writes = RefCell::new(Vec::new());
+            let outcomes = isolated
+                .step_isolated_into(&[0, 0], &[true; 2], false, |slot, obs, _, done, _| {
+                    writes.borrow_mut().push(slot);
+                    assert!(!done);
+                    assert!(!obs.action_space.actions.is_empty());
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(*writes.borrow(), [1]);
+            assert_eq!(
+                outcomes[0]["game_error_class"],
+                InfoValue::String("AgentError".into())
+            );
+            assert!(matches!(
+                &outcomes[0]["game_error"],
+                InfoValue::String(message) if message.starts_with(expected)
+            ));
+            assert!(!outcomes[1].contains_key("game_error"));
+            assert_eq!(
+                isolated.slots,
+                [super::SlotState::Poisoned, super::SlotState::Playing]
+            );
         }
     }
 
