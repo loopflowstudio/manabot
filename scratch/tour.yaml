@@ -1,7 +1,7 @@
-at: a90fd7109089a09e269d6ff1b2c08d92acfd16d5
+at: fc7f2f70e7f6ab1cf9965a0aab3278c236d4e135
 first:
   - path: scratch/plan.md
-    why: Payment reproductions and proposed conservative coupling rule
+    why: Payment reproductions and the positive whitelist design
   - path: managym/src/flow/mana/tests.rs
     why: Triggered mana and damage replacement counterexamples
   - path: managym/README.md
