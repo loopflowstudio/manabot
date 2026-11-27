@@ -11,9 +11,10 @@ decisions per native stream, then finishes its current game. Complete trajectori
 are packed in one column. Snapshot continuations may also close at a decision
 horizon, with a frozen bootstrap for each contributing seat. GAE stays within
 each trajectory. No sampled action survives an update. Batch row counts may
-exceed the quota. Exact-quota closure, one seat only, pauses each stream
-at the learner-decision quota and carries the game across the update. A game that
-then fails loses only the rows not yet learned from; its stream refills to the quota.
+exceed the quota. exact-quota closure stops each stream at the surviving learner-decision quota
+(counting both seats when both learn) and carries unfinished games across the
+update, bootstrapping open seats from frozen viewer reads. A game that then
+fails loses only the rows not yet learned from; its stream refills to the quota.
 
 Self-play uses one live model for both seats. ``collect_pair`` instead returns
 one batch per learning model, with seats balanced across streams; each model's
@@ -26,7 +27,7 @@ Collection never updates model weights; the calling loop owns learning.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
@@ -921,8 +922,9 @@ class CollectorStats:
     games_by_stream: dict[int, int] = field(default_factory=dict)
     # Ordered deck identities plus learning seats; counts are realized, not quotas.
     exposure: dict[str, ExposureCounts] = field(default_factory=dict)
-    # Per slot, rows of the game in progress that earlier updates already learned
-    # from. Only exact-quota games span updates.
+    # Per stream, rows of the game in progress that earlier updates already
+    # learned from (summing both seats when both learn). Only exact-quota games
+    # span updates.
     learned_game_rows: dict[int, int] = field(default_factory=dict)
     snapshot: SnapshotStats | None = None
 
@@ -1038,6 +1040,14 @@ class Collector:
     _episodes: list[_EpisodeAssignment] = field(default_factory=list)
     capture_predicate: CapturePredicate | None = None
     snapshot_bank: SnapshotBank | None = None
+    # Diagnostic tracking for waiting-seat viewer-read cut bootstraps (two-seat
+    # exact quota): bootstrap_index -> (stream, seat, generation), carried into
+    # the next batch as (stream, seat) -> (generation, bootstrap_value).
+    _waiting_cuts: dict[int, tuple[int, int, int]] = field(default_factory=dict)
+    _pending_viewer_bootstraps: dict[tuple[int, int], tuple[int, float]] = field(
+        default_factory=dict
+    )
+    _viewer_bootstrap_gaps: list[float] = field(default_factory=list)
 
 
 class StreamRootState(BaseModel):
@@ -1263,8 +1273,9 @@ def open_collector(
     ``learning_seats="both"`` is the default for ``self`` (one shared model)
     or ``learning`` (two distinct models). ``one`` retains the learner-only
     control, including in self-play. ``batch_closure`` says separately when a
-    batch ends: after whole games, or at an exact one-seat quota that
-    bootstraps its mid-game tail from the critic. `record_attempt` persists
+    batch ends: after whole games, or at an exact per-stream quota (for one or
+    both learning seats) that bootstraps mid-game tails from the critic.
+    `record_attempt` persists
     each settled game when `game_errors` is set. `numerics` is the backend's
     collection session: it owns the device, precision and the private sampling
     RNG for learner rows and current-self opponents. The caller closes the
@@ -1348,14 +1359,25 @@ def open_collector(
         raise ValueError("learning opponents require both learning seats")
     if opponent_mode in ("frozen", "learning") and opponent_agent is None:
         raise ValueError(f"opponent_mode={opponent_mode!r} requires opponent_agent")
-    if batch_closure == "exact-quota" and (
-        learning_seats == "both"
-        or games_per_stream is not None
-        or (game_errors is not None and not game_errors.recover_capacity)
-    ):
-        raise ValueError(
-            "exact quota requires one seat, no per-game quota and capacity recovery"
-        )
+    if batch_closure == "exact-quota":
+        if games_per_stream is not None:
+            raise ValueError("exact quota does not support games_per_stream")
+        if snapshots:
+            raise ValueError("exact quota does not support snapshot collection")
+        if adaptive is not None:
+            raise ValueError("exact quota does not support adaptive collection")
+        if opponent_mode == "learning":
+            raise ValueError(
+                "exact quota does not support opponent_mode='learning' (collect_pair)"
+            )
+        if observation_space.config.policy_history_version == 1:
+            raise ValueError(
+                "exact quota does not support recent_events (policy_history_version=1)"
+            )
+        if game_errors is not None and not game_errors.recover_capacity:
+            raise ValueError(
+                "exact quota with game_errors requires recover_capacity=True"
+            )
     if game_errors is not None and (record_attempt is None or root is not None):
         raise ValueError("game error recovery needs durable receipts and native games")
 
@@ -1834,6 +1856,9 @@ def _collect(
 
     both = collector.learning_seats == "both"
     complete_games = collector.batch_closure == "complete-games"
+    two_seat_exact = both and not complete_games
+    collector._waiting_cuts.clear()
+    collector._viewer_bootstrap_gaps.clear()
     if collector.game_error_state.stop_reason:
         raise GameErrorLimit(collector.game_error_state.stop_reason)
     completed = np.zeros(num_envs, dtype=bool)
@@ -1843,13 +1868,9 @@ def _collect(
     # Update boundaries hold no pending row, so nothing live refers to the
     # previous store; returned batches keep their own reference to it.
     if all(pending is None for pending in collector._pending):
-        # The batch holds at least num_steps rows per slot (exact quota) or
-        # per stream (complete games); whole-game counts give no floor.
-        floor = (
-            0
-            if collector.games_per_stream is not None
-            else num_steps * (num_envs if complete_games else len(collector._streams))
-        )
+        # The batch holds num_steps rows per stream (exact quota) or at least
+        # that floor (complete games); whole-game counts give no floor.
+        floor = 0 if collector.games_per_stream is not None else num_steps * num_envs
         rows = max(collector._observations.rows, floor)
         collector._observations = (
             RecordedSpans(collector.observation_space)
@@ -1915,23 +1936,45 @@ def _collect(
                 if _start_episodes(collector, snapshots, games, completed, num_steps):
                     continue
             acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
-            for row in range(num_envs):
-                if completed[row] or acting[row] < 0:
-                    continue
-                slot = 2 * row + int(acting[row]) if both else row
-                if (both or acting[row] == collector.learner_seat[row]) and (
-                    collector._pending[slot] is not None
-                ):
-                    _finalize(collector, slot, reward=0.0, done=False)
-            active = (
-                ~completed
-                if complete_games
-                else np.array(
-                    [len(stream) < num_steps for stream in collector._streams]
+            if two_seat_exact:
+                active = np.array(
+                    [
+                        sum(
+                            len(collector._streams[slot])
+                            + int(collector._pending[slot] is not None)
+                            for slot in _game_slots(collector, row)
+                        )
+                        < num_steps
+                        for row in range(num_envs)
+                    ],
+                    dtype=bool,
                 )
-            )
-            if not active.any():
-                break
+                if not active.any():
+                    break
+                for row in np.flatnonzero(active):
+                    if acting[row] < 0:
+                        continue
+                    slot = 2 * int(row) + int(acting[row])
+                    if collector._pending[slot] is not None:
+                        _finalize(collector, slot, reward=0.0, done=False)
+            else:
+                for row in range(num_envs):
+                    if completed[row] or acting[row] < 0:
+                        continue
+                    slot = 2 * row + int(acting[row]) if both else row
+                    if (both or acting[row] == collector.learner_seat[row]) and (
+                        collector._pending[slot] is not None
+                    ):
+                        _finalize(collector, slot, reward=0.0, done=False)
+                active = (
+                    ~completed
+                    if complete_games
+                    else np.array(
+                        [len(stream) < num_steps for stream in collector._streams]
+                    )
+                )
+                if not active.any():
+                    break
             if collector._needs_refill:
                 refill = sorted(row for row in collector._needs_refill if active[row])
                 if refill:
@@ -2019,17 +2062,39 @@ def _collect(
                 snapshots,
             )
 
+    frozen_cuts: RecordedSpans | ObservationRows | None = None
+    if two_seat_exact:
+        cuts = [
+            row
+            for row in range(num_envs)
+            if any(
+                collector._pending[slot] is not None
+                for slot in _game_slots(collector, row)
+            )
+        ]
+        if cuts:
+            with collector.profiler.track("Cut bootstrap"):
+                frozen_cuts = _freeze_cut_bootstraps(
+                    collector,
+                    None,
+                    cuts,
+                    acting=np.asarray(env.current_agent_indices(), dtype=np.int64),
+                )
     if collector.game_errors and not complete_games:
         # A paused game's rows so far are learned from by this batch; a later
-        # failure of that game must not discard them.
-        for slot, stream in enumerate(collector._streams):
-            rows = len(stream) - collector._game_start_rows[slot]
+        # failure of that game must not discard them. Keyed by stream, summing
+        # both seats when both learn.
+        for row in range(num_envs):
+            rows = sum(
+                len(collector._streams[slot]) - collector._game_start_rows[slot]
+                for slot in _game_slots(collector, row)
+            )
             if rows:
-                collector.stats.learned_game_rows[slot] = (
-                    collector.stats.learned_game_rows.get(slot, 0) + rows
+                collector.stats.learned_game_rows[row] = (
+                    collector.stats.learned_game_rows.get(row, 0) + rows
                 )
     with collector.profiler.track("Batch assembly"):
-        if complete_games:
+        if complete_games or both:
             if collector.opponent_mode == "learning":
                 # Each owner keeps only its own seat in each stream. No row
                 # may be trained by a policy that did not generate it.
@@ -2042,12 +2107,16 @@ def _collect(
                     for row in range(num_envs)
                 ]
                 batch = (
-                    _build_complete_batch(collector, first),
-                    _build_complete_batch(collector, second),
+                    _build_packed_batch(collector, first),
+                    _build_packed_batch(collector, second),
                 )
             else:
-                batch = _build_complete_batch(
-                    collector, list(range(len(collector._streams))), snapshots
+                batch = _build_packed_batch(
+                    collector,
+                    list(range(len(collector._streams))),
+                    snapshots=snapshots,
+                    frozen=frozen_cuts,
+                    explicit_spans=snapshots is not None or two_seat_exact,
                 )
         else:
             batch = _build_rectangular_batch(collector, num_steps)
@@ -2402,19 +2471,39 @@ def _start_episodes(
     return plan is None and bool(snapshots.ready)
 
 
-def _close_horizons(
-    collector: Collector, snapshots: _SnapshotRollout, cuts: list[int]
-) -> None:
-    """Freeze all contributing viewers before releasing any stream at this boundary."""
+def _freeze_cut_bootstraps(
+    collector: Collector,
+    frozen: RecordedSpans | ObservationRows | None,
+    cuts: list[int],
+    *,
+    expected_generations: Mapping[int, int | None] | None = None,
+    expected_seeds: Mapping[int, int] | None = None,
+    acting: np.ndarray | None = None,
+    label: str = "cut bootstrap",
+) -> RecordedSpans | ObservationRows | None:
+    """Freeze viewer-safe observations for every pending slot at a cut without retiring games.
+
+    Reads at most two passes of `observations_for_players` (one per open seat),
+    validates each read against the stream's live generation, seed and revision,
+    and finalizes pending rows with their frozen bootstrap index. Never clears
+    `_game_actions` or resets `_game_started`.
+    """
+    if not cuts:
+        return frozen
     env = collector._env
     space = collector.observation_space
-    if snapshots.frozen is None:
+    if frozen is None:
         if isinstance(collector._observations, RecordedSpans):
-            snapshots.frozen = RecordedSpans(space)
+            frozen = RecordedSpans(space)
         else:
             scratch = space.allocate(collector.num_envs)
-            snapshots.frozen = ObservationRows(scratch, list(scratch), 0)
-    frozen = snapshots.frozen
+            frozen = ObservationRows(scratch, list(scratch), 0)
+    generations = (
+        expected_generations
+        if expected_generations is not None
+        else env.current_game_generations()
+    )
+    seeds = expected_seeds if expected_seeds is not None else env.current_game_seeds()
     # Native reads project one viewer per stream. One pass suffices when every
     # cut has a single contributor, even if they acted from different seats.
     viewers = {
@@ -2428,7 +2517,7 @@ def _close_horizons(
         )
         players: list[int | None] = [None] * collector.num_envs
         for row in rows:
-            players[row] = viewers[row][index]
+            players[int(row)] = viewers[int(row)][index]
         if isinstance(frozen, RecordedSpans):
             reads, batch = env.observations_for_players(players)
         else:
@@ -2439,20 +2528,17 @@ def _close_horizons(
                 action_overflow=space.config.action_overflow,
             )
         if len(reads) != len(rows):
-            raise ValueError("missing snapshot horizon read")
+            raise ValueError(f"missing {label} read")
         for row, read in zip(rows, reads, strict=True):
-            episode = collector._episodes[row]
-            assert episode.branch is not None
+            slot = int(row)
             if (
-                read.slot != row
-                or read.player != players[row]
-                or read.game_id != episode.generation
-                or read.seed != episode.branch.recipe.seed
-                or read.revision != revisions.setdefault(int(row), read.revision)
+                read.slot != slot
+                or read.player != players[slot]
+                or read.game_id != generations[slot]
+                or read.seed != seeds[slot]
+                or read.revision != revisions.setdefault(slot, read.revision)
             ):
-                raise ValueError(
-                    f"snapshot horizon read identity mismatch in slot {row}"
-                )
+                raise ValueError(f"{label} read identity mismatch in slot {slot}")
         if isinstance(frozen, RecordedSpans):
             selected = ObservationSelection(
                 space, tuple((batch, i) for i in range(batch.batch_size))
@@ -2464,13 +2550,42 @@ def _close_horizons(
                 prefixes=_capture_memory(collector, rows, frozen.buffers, players),
             )
         for offset, row in enumerate(rows):
+            slot = int(row)
+            seat = viewers[slot][index]
+            bootstrap_index = first + offset
             _finalize(
                 collector,
-                2 * int(row) + viewers[row][index],
+                2 * slot + seat,
                 reward=0.0,
                 done=False,
-                bootstrap_index=first + offset,
+                bootstrap_index=bootstrap_index,
             )
+            if acting is not None and seat != int(acting[slot]):
+                generation = generations[slot]
+                assert generation is not None
+                collector._waiting_cuts[bootstrap_index] = (slot, seat, int(generation))
+    return frozen
+
+
+def _close_horizons(
+    collector: Collector, snapshots: _SnapshotRollout, cuts: list[int]
+) -> None:
+    """Freeze all contributing viewers before releasing any stream at this boundary."""
+    expected_generations: dict[int, int | None] = {}
+    expected_seeds: dict[int, int] = {}
+    for row in cuts:
+        episode = collector._episodes[row]
+        assert episode.branch is not None
+        expected_generations[row] = episode.generation
+        expected_seeds[row] = episode.branch.recipe.seed
+    snapshots.frozen = _freeze_cut_bootstraps(
+        collector,
+        snapshots.frozen,
+        cuts,
+        expected_generations=expected_generations,
+        expected_seeds=expected_seeds,
+        label="snapshot horizon",
+    )
     if collector.game_errors:
         for row in cuts:
             collector._game_actions[row].clear()
@@ -2621,6 +2736,10 @@ def _settle_step(
             completed[row] = _stream_at_floor(collector, int(row), games, num_steps)
 
     ended = np.flatnonzero(closed | failed)
+    if collector._pending_viewer_bootstraps and len(ended):
+        for row in ended:
+            collector._pending_viewer_bootstraps.pop((int(row), 0), None)
+            collector._pending_viewer_bootstraps.pop((int(row), 1), None)
     if snapshots is not None:
         plan = snapshots.plan
         if plan is None:
@@ -2697,16 +2816,15 @@ def _settle_attempt(
     assert collector._record_attempt is not None
     completed = outcome == "completed"
     branch = collector._episodes[row].branch if collector._episodes else None
-    valid = 0
+    earlier = collector.stats.learned_game_rows.pop(row, 0)
+    valid = earlier if completed else 0
     discarded = 0
-    learned = 0
+    learned = 0 if completed else earlier
     for slot in _game_slots(collector, row):
         count = len(collector._streams[slot]) - collector._game_start_rows[slot]
-        earlier = collector.stats.learned_game_rows.pop(slot, 0)
         if completed:
-            valid += count + earlier
+            valid += count
         else:
-            learned += earlier
             discarded += count + int(collector._pending[slot] is not None)
             collector.stats.learner_transitions -= count
             if branch is not None:
@@ -2782,6 +2900,15 @@ def _sample_learning_rows(
         )
     acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
     outcomes, needs = sampled.outcomes, sampled.needs
+    if collector._pending_viewer_bootstraps:
+        generations = collector._env.current_game_generations()
+        for j, row in enumerate(rows):
+            stream = int(row)
+            entry = collector._pending_viewer_bootstraps.pop(
+                (stream, int(acting[stream])), None
+            )
+            if entry is not None and entry[0] == generations[stream]:
+                collector._viewer_bootstrap_gaps.append(float(values[j]) - entry[1])
     with collector.profiler.track("Rollout recording"):
         if isinstance(collector._observations, RecordedSpans):
             assert isinstance(observation, ObservationSelection)
@@ -2878,16 +3005,49 @@ def _build_rectangular_batch(collector: Collector, steps: int) -> RolloutBatch:
     return batch
 
 
-def _build_complete_batch(
-    collector: Collector, slots: list[int], snapshots: _SnapshotRollout | None = None
+def record_viewer_bootstraps(
+    collector: Collector, bootstrap_values: np.ndarray
+) -> None:
+    """Carry waiting-seat cut bootstrap values into the next batch for gap measurement."""
+    for bootstrap_index, (row, seat, generation) in collector._waiting_cuts.items():
+        collector._pending_viewer_bootstraps[(row, seat)] = (
+            generation,
+            float(bootstrap_values[bootstrap_index]),
+        )
+    collector._waiting_cuts.clear()
+
+
+def viewer_bootstrap_gap_metrics(collector: Collector) -> dict[str, float | int]:
+    """Summary of (next_own_value - viewer_bootstrap_value) for waiting-seat cuts."""
+    gaps = collector._viewer_bootstrap_gaps
+    if not gaps:
+        return {}
+    array = np.asarray(gaps, dtype=np.float64)
+    abs_gaps = np.abs(array)
+    return {
+        "viewer_bootstrap_gap/count": len(gaps),
+        "viewer_bootstrap_gap/mean_abs": float(abs_gaps.mean()),
+        "viewer_bootstrap_gap/mean_signed": float(array.mean()),
+        "viewer_bootstrap_gap/p90_abs": float(np.percentile(abs_gaps, 90)),
+    }
+
+
+def _build_packed_batch(
+    collector: Collector,
+    slots: list[int],
+    *,
+    snapshots: _SnapshotRollout | None = None,
+    frozen: RecordedSpans | ObservationRows | None = None,
+    explicit_spans: bool = False,
 ) -> RolloutBatch:
     rows: list[_Transition] = []
     spans: list[TrajectorySpan] = []
+    build_spans = explicit_spans or snapshots is not None
     for slot in slots:
         stream = collector._streams[slot]
         start = len(rows)
         rows.extend(stream)
-        if snapshots is not None:
+        if build_spans:
             for stop, row in enumerate(stream, start + 1):
                 if row.done or row.bootstrap_index is not None:
                     spans.append(
@@ -2898,8 +3058,16 @@ def _build_complete_batch(
         assert collector._pending[slot] is None
     if not rows:
         raise RuntimeError("learning model made no decisions in collected games")
-    assert snapshots is not None or rows[-1].done
-    batch = _build_batch(collector, rows, (len(rows), 1), snapshots, spans)
+    if not build_spans:
+        assert rows[-1].done
+    batch = _build_batch(
+        collector,
+        rows,
+        (len(rows), 1),
+        snapshots=snapshots,
+        frozen=snapshots.frozen if snapshots is not None else frozen,
+        spans=spans if build_spans else None,
+    )
     for slot in slots:
         collector._streams[slot].clear()
     return batch
@@ -2936,7 +3104,9 @@ def _build_batch(
     collector: Collector,
     rows: list[_Transition],
     shape: tuple[int, int],
+    *,
     snapshots: _SnapshotRollout | None = None,
+    frozen: RecordedSpans | ObservationRows | None = None,
     spans: list[TrajectorySpan] | None = None,
 ) -> RolloutBatch:
     """Write every field and capture reference in the same flat time-major order."""
@@ -2944,13 +3114,13 @@ def _build_batch(
     dones = np.asarray([row.done for row in rows], bool).reshape(shape)
     trajectories = None
     provenance: dict[str, np.ndarray] = {}
-    if snapshots is None:
+    if spans is None:
         next_obs = _retain_obs_rows(collector, np.arange(shape[1]), bootstrap=True)
         next_done = dones[-1].copy()
     else:
-        assert spans is not None
-        next_obs, trajectories, count = frozen_bootstraps(snapshots.frozen, spans)
+        next_obs, trajectories, count = frozen_bootstraps(frozen, spans)
         next_done = np.zeros(count, bool)
+    if snapshots is not None:
         plan = snapshots.plan
         fresh_weight = plan.config.fresh_weight if plan is not None else 1.0
         branches = [p.branch for p in pending]

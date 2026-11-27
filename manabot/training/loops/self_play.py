@@ -77,6 +77,8 @@ from manabot.training.rollout.collection import (
     collect,
     no_operation,
     open_collector,
+    record_viewer_bootstraps,
+    viewer_bootstrap_gap_metrics,
 )
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.snapshot_vector import (
@@ -117,6 +119,7 @@ from manabot.training.update_metrics import (
     complete_game_rates,
     metric_row,
     phase_seconds,
+    throughput_rates,
     time_since,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
@@ -227,13 +230,17 @@ class SelfPlay(BaseModel):
             raise ValueError("producer count cannot exceed streams")
         if self.snapshot is not None and self.learning_seats != "both":
             raise ValueError("snapshot collection requires both learning seats")
-        if self.learning_seats == "both" and (
-            self.behavior == "random" or self.batch_closure == "exact-quota"
-        ):
-            raise ValueError("both learning seats require complete-game self-play")
+        if self.learning_seats == "both" and self.behavior == "random":
+            raise ValueError("both learning seats require self-play")
         if self.batch_closure == "exact-quota":
             if self.games_per_stream is not None:
                 raise ValueError("games_per_stream requires complete games")
+            if self.snapshot is not None:
+                raise ValueError("snapshot collection requires complete games")
+            if self.model.recent_events:
+                raise ValueError(
+                    "recent_events requires complete games (exact quota cut reads carry no event history)"
+                )
             if self.game_errors is not None and not self.game_errors.recover_capacity:
                 raise ValueError("game error recovery requires complete games")
         if self.behavior == "ema-self" and self.learning.ema is None:
@@ -810,6 +817,16 @@ def step(
                     )
                     assert plan.receipt is not None
                     prepared = plan.bank.prepare_commit(plan.receipt, targets.signals)
+                elif collector._waiting_cuts:
+                    with learner.profiler.track("Targets"):
+                        targets = compute_batch_targets(
+                            backend,
+                            learner,
+                            backend.rollout.AdmittedRollout(learner.agent, batch),
+                            settings.learning,
+                            policy,
+                        )
+                    record_viewer_bootstraps(collector, targets.bootstrap_values)
                 metrics = learn(
                     settings,
                     learner,
@@ -873,16 +890,24 @@ def step(
             backend.runtime.synchronize(device)
             probe["time/combat_probe"] = perf_counter() - started
     rates: dict[str, float] = {}
-    if settings.learning_seats == "both" and settings.batch_closure == "complete-games":
-        rates = complete_game_rates(
-            games=stats.games - games,
-            fresh_rows=stats.fresh_learner_transitions - fresh_rows,
-            skips=stats.skipped_decisions - skipped,
+    if settings.learning_seats == "both":
+        completed_games = stats.games - games
+        rates = throughput_rates(
+            games=completed_games,
             rows=batch.actions.size,
             taps=stats.priority_taps - taps,
             decisions=stats.micro_steps - decisions,
             seconds=seconds,
         )
+        if settings.batch_closure == "complete-games":
+            rates.update(
+                complete_game_rates(
+                    games=completed_games,
+                    fresh_rows=stats.fresh_learner_transitions - fresh_rows,
+                    skips=stats.skipped_decisions - skipped,
+                )
+            )
+    rates.update(viewer_bootstrap_gap_metrics(collector))
     if stats.snapshot is not None:
         rates.update(
             {
