@@ -48,16 +48,129 @@ use crate::{
         Command as ExperienceCommand, CommandId, MatchId, OfferId as ExperienceOfferId, PromptId,
         Revision,
     },
-    flow::turn::{PhaseKind, PlayerTurnHistory, StepKind},
+    flow::{
+        state_edit::{GameStateEdit, PermanentDestination},
+        turn::{PhaseKind, PlayerTurnHistory, StepKind},
+    },
     python::convert::info_dict_to_pydict,
     search_state::SearchStateWitness,
     state::{
         deck::Deck,
         mana::ManaCost,
+        permanent::CounterKind,
         player::{DecklistDisclosure, PlayerConfig},
         zone::ZoneType,
     },
 };
+
+/// One counterfactual change, addressed by an observed permanent id or native seat.
+#[cfg(feature = "python")]
+#[pyclass(name = "GameStateEdit", frozen, eq, hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(super) struct PyGameStateEdit(GameStateEdit);
+
+#[cfg(feature = "python")]
+impl PyGameStateEdit {
+    pub(super) fn batch(edits: Vec<Self>) -> Arc<[GameStateEdit]> {
+        edits.into_iter().map(|edit| edit.0).collect()
+    }
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyGameStateEdit {
+    /// The constructor call that rebuilds this edit.
+    fn __repr__(&self) -> String {
+        let py_bool = |value: bool| if value { "True" } else { "False" };
+        match self.0 {
+            GameStateEdit::MovePermanent { permanent, to } => {
+                // The journal spelling of the destination is the keyword value.
+                let to = serde_json::to_value(to).expect("destination serializes");
+                format!(
+                    "GameStateEdit.move_permanent({permanent}, to='{}')",
+                    to.as_str().unwrap_or_default()
+                )
+            }
+            GameStateEdit::SetTapped { permanent, tapped } => {
+                format!("GameStateEdit.set_tapped({permanent}, {})", py_bool(tapped))
+            }
+            GameStateEdit::SetDamage { permanent, damage } => {
+                format!("GameStateEdit.set_damage({permanent}, {damage})")
+            }
+            GameStateEdit::SetCounters {
+                permanent,
+                counter,
+                count,
+            } => format!(
+                "GameStateEdit.set_counters({permanent}, '{}', {count})",
+                counter.name()
+            ),
+            GameStateEdit::SetLife { player, life } => {
+                format!("GameStateEdit.set_life({player}, {life})")
+            }
+        }
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (permanent, to="graveyard"))]
+    fn move_permanent(permanent: i32, to: &str) -> PyResult<Self> {
+        let to = PermanentDestination::deserialize(serde::de::value::StrDeserializer::<
+            serde::de::value::Error,
+        >::new(to))
+        .map_err(|err| map_agent_err(AgentError(format!("game state edits: {err}"))))?;
+        Ok(Self(GameStateEdit::MovePermanent { permanent, to }))
+    }
+
+    #[staticmethod]
+    fn set_tapped(permanent: i32, tapped: bool) -> Self {
+        Self(GameStateEdit::SetTapped { permanent, tapped })
+    }
+
+    #[staticmethod]
+    fn set_damage(permanent: i32, damage: i32) -> PyResult<Self> {
+        if damage < 0 {
+            return Err(map_agent_err(AgentError(
+                "game state edits: damage must be nonnegative".into(),
+            )));
+        }
+        Ok(Self(GameStateEdit::SetDamage { permanent, damage }))
+    }
+
+    #[staticmethod]
+    fn set_counters(permanent: i32, kind: &str, count: i32) -> PyResult<Self> {
+        if count < 0 {
+            return Err(map_agent_err(AgentError(
+                "game state edits: counter count must be nonnegative".into(),
+            )));
+        }
+        let counter = CounterKind::ALL
+            .into_iter()
+            .find(|counter| counter.name() == kind)
+            .ok_or_else(|| {
+                map_agent_err(AgentError(format!(
+                    "game state edits: unknown counter {kind:?}"
+                )))
+            })?;
+        Ok(Self(GameStateEdit::SetCounters {
+            permanent,
+            counter,
+            count,
+        }))
+    }
+
+    #[staticmethod]
+    fn set_life(player: isize, life: i32) -> PyResult<Self> {
+        if !(0..=1).contains(&player) {
+            return Err(map_agent_err(AgentError(
+                "game state edits: player must be 0 or 1".into(),
+            )));
+        }
+        Ok(Self(GameStateEdit::SetLife {
+            player: player as usize,
+            life,
+        }))
+    }
+}
 
 #[cfg(feature = "python")]
 #[pymethods]
@@ -4478,6 +4591,24 @@ impl PyEnv {
             .map_err(map_agent_err)
     }
 
+    /// Apply an atomic batch and return the refreshed live decision.
+    fn edit_game_state(
+        &self,
+        py: Python<'_>,
+        edits: Vec<PyGameStateEdit>,
+    ) -> PyResult<PyObservation> {
+        self.reject_guarded_mutation("Env.edit_game_state")?;
+        let edits = PyGameStateEdit::batch(edits);
+        py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .edit_game_state(edits)
+                .map(PyObservation::from)
+                .map_err(map_agent_err)
+        })
+    }
+
     /// Save this live boundary for independent continuations.
     fn snapshot(&self, py: Python<'_>) -> PyResult<super::snapshot_bindings::PyGameSnapshot> {
         py.allow_threads(|| {
@@ -5877,6 +6008,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDecisionCapture>()?;
     m.add_class::<PyEnv>()?;
     m.add_class::<super::snapshot_bindings::PyGameSnapshot>()?;
+    m.add_class::<PyGameStateEdit>()?;
     m.add_class::<super::snapshot_bindings::PyRestoreOptions>()?;
     m.add_class::<super::snapshot_bindings::PySnapshotMetadata>()?;
     m.add_class::<crate::python::heuristic_bindings::PyHeuristic>()?;

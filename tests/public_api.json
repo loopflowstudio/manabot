@@ -2174,6 +2174,10 @@
             "kind": "method",
             "signature": "(self, seed, perspective=...)"
           },
+          "edit_game_state": {
+            "kind": "method",
+            "signature": "(self, edits)"
+          },
           "enable_card_capture": {
             "kind": "method",
             "signature": "(self)"
@@ -2586,6 +2590,31 @@
           "to_replay_json": {
             "kind": "method",
             "signature": "(self)"
+          }
+        }
+      },
+      "GameStateEdit": {
+        "kind": "class",
+        "members": {
+          "move_permanent": {
+            "kind": "staticmethod",
+            "signature": "(permanent, to=...)"
+          },
+          "set_counters": {
+            "kind": "staticmethod",
+            "signature": "(permanent, kind, count)"
+          },
+          "set_damage": {
+            "kind": "staticmethod",
+            "signature": "(permanent, damage)"
+          },
+          "set_life": {
+            "kind": "staticmethod",
+            "signature": "(player, life)"
+          },
+          "set_tapped": {
+            "kind": "staticmethod",
+            "signature": "(permanent, tapped)"
           }
         }
       },
@@ -3501,18 +3530,18 @@
           },
           "determinize": {
             "kind": "staticmethod",
-            "signature": "(viewer, seed, *, enable_decision_memory=..., forced_first_action=...)"
+            "signature": "(viewer, seed, *, enable_decision_memory=..., forced_first_action=..., game_state_edits=...)"
           },
           "exact": {
             "kind": "staticmethod",
-            "signature": "(*, reseed=..., enable_decision_memory=..., forced_first_action=...)"
+            "signature": "(*, reseed=..., enable_decision_memory=..., forced_first_action=..., game_state_edits=...)"
           },
           "forced_first_action": {
             "kind": "property"
           },
           "shuffle_libraries": {
             "kind": "staticmethod",
-            "signature": "(seed, *, enable_decision_memory=..., forced_first_action=...)"
+            "signature": "(seed, *, enable_decision_memory=..., forced_first_action=..., game_state_edits=...)"
           }
         }
       },

@@ -161,8 +161,54 @@ class ForceAction(BoundaryIntervention):
     action: int = Field(ge=0)
 
 
+class StateEditFields(BaseModel, extra="forbid", strict=True):
+    """Strict payload fields for one native game state edit."""
+
+
+class MovePermanent(StateEditFields):
+    kind: Literal["move_permanent"]
+    permanent: int
+    to: Literal["graveyard", "exile", "library_bottom"]
+
+
+class SetTapped(StateEditFields):
+    kind: Literal["set_tapped"]
+    permanent: int
+    tapped: bool
+
+
+class SetDamage(StateEditFields):
+    kind: Literal["set_damage"]
+    permanent: int
+    damage: int = Field(ge=0)
+
+
+class SetCounters(StateEditFields):
+    kind: Literal["set_counters"]
+    permanent: int
+    counter: str
+    count: int = Field(ge=0)
+
+
+class SetLife(StateEditFields):
+    kind: Literal["set_life"]
+    player: int = Field(ge=0, le=1)
+    life: int
+
+
+GameStateEdit = Annotated[
+    MovePermanent | SetTapped | SetDamage | SetCounters | SetLife,
+    Field(discriminator="kind"),
+]
+
+
+class GameStateEdits(BoundaryIntervention):
+    op: Literal["game_state_edits"]
+    edits: list[GameStateEdit]
+
+
 Intervention = Annotated[
-    SeedIntervention | Determinize | SetDecisionMemory | ForceAction,
+    SeedIntervention | Determinize | SetDecisionMemory | ForceAction | GameStateEdits,
     Field(discriminator="op"),
 ]
 
