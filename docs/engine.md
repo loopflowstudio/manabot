@@ -918,31 +918,57 @@ seen.
 
 ### Program-token vocabulary
 
-`managym.catalog_tokens()` holds only the printed rules spans of catalog
-definitions (cards, tokens and back faces). Live observations also emit
-runtime program tokens in fact and shared-effect rows — suspended resolution
-frames, granted abilities and last-known characteristics — whose runtime-only
-symbols come from `managym.record_vocabulary()`.
+Four engine lists describe the symbolic tokens and hashed names a policy
+admits:
+
+- `managym.catalog_tokens()` holds the printed rules spans of catalog
+  definitions (cards, tokens and back faces), rows by `CardDefId`.
+- `managym.runtime_tokens()` holds every program token a runtime projection can
+  emit in fact and shared-effect rows — suspended resolution frames, granted
+  abilities, last-known characteristics and tokens aliased by record names — as
+  `(kind, name, value)` tuples, using the same `TokenKind` code and signed
+  `i32` value as `catalog_tokens()`. It may overlap printed spans and is never
+  filtered against the pack.
+- `managym.record_vocabulary()` holds only the names fact and shared-effect
+  encoders hash into id columns, as
+  `(namespace, name, value, token_kind, token_value)` across the `token`,
+  `name` and `restriction` namespaces. When `(token_kind, token_value)` is
+  present, it aliases a pair already in the program-token vocabulary (for
+  example, granted `flying` shares the row of printed `Keyword::flying`) rather
+  than introducing a new program token.
+- `managym.decision_memory_names()` holds the decision-memory names hashed in
+  the `token` namespace (such as `"DecisionMemory::Priority"`), as
+  `(name, value)` pairs with no program token.
+
+The admitted program-token vocabulary is the exact union of `catalog_tokens()`
+and `runtime_tokens()`, with no string filter and regardless of whether
+decision memory is enabled:
 
 ```python
 import managym
 
 catalog = managym.catalog_tokens()
 printed = set(zip(catalog["token_kind"], catalog["token_value"], strict=True))
-runtime = {
-    (kind, value)
-    for _space, name, _hashed, kind, value in managym.record_vocabulary()
-    if kind is not None
-    and value is not None
-    and not name.startswith("DecisionMemory::")
-}
+runtime = {(kind, value) for kind, _name, value in managym.runtime_tokens()}
 admitted_program_tokens = printed | runtime
+
+record_names = {
+    (space, value)
+    for space, _name, value, _kind, _token in managym.record_vocabulary()
+}
+memory_names = {
+    ("token", value) for _name, value in managym.decision_memory_names()
+}
+print(len(admitted_program_tokens) >= len(printed), len(record_names) > 0, len(memory_names))
+# True True 44
 ```
 
-`Integer` and `Boolean` carry their values directly. Every other token,
-including `Null` and `DefinitionRef`, needs an exact pair in
-`admitted_program_tokens`. Admission reports missing pairs as `(kind, 0x…)`.
-Policies with decision memory enabled also admit the `DecisionMemory::*` rows.
+Every aliased `(token_kind, token_value)` in `record_vocabulary()` belongs to
+`admitted_program_tokens`. `Integer` and `Boolean` carry their values directly;
+every other program token, including `Null` and `DefinitionRef`, needs an exact
+pair in `admitted_program_tokens`. Admission reports missing pairs as
+`(kind, 0x…)`. Policies append `decision_memory_names()` rows to their name
+lookup table only when decision memory is enabled.
 
 An expanded naming source can supply a chosen card name outside the installed
 catalog. Suspended entries and named exile or search programs encode it as

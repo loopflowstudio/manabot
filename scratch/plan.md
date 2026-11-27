@@ -272,9 +272,11 @@ emission guard, exact `(kind, 0x…)` diagnostics, the 44 memory names' hashes.
    vocabulary, pooled mana, `test_record_vocabulary.py:104`), the ledger
    removal test, debug Rust tests for `record_vocabulary`, `token_renames`,
    `tokens` and the effect witness (`CARGO_BUILD_JOBS=2`, `--test-threads 2`).
-3. **Docs and contract.** `docs/engine.md`, `manabot/README.md`,
-   `managym/README.md`, cards test README, `AGENTS.md` naming and retirement
-   rules, `.lf/qa/engine.md`; `scripts/public_api.py record`; PR body with the
+3. **Docs and contract.** User-facing docs drafted ahead of code:
+   `docs/engine.md`, `manabot/README.md`, `managym/README.md`,
+   `managym/cards/tests/cards/README.md` (re-check against the final
+   implementation). Update `AGENTS.md` naming and retirement rules,
+   `.lf/qa/engine.md`; run `scripts/public_api.py record`; PR body with the
    hold notice and release line.
 
 ## Concept review (a173411b48) dispositions
