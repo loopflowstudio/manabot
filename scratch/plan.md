@@ -255,20 +255,27 @@ emission guard, exact `(kind, 0x…)` diagnostics, the 44 memory names' hashes.
 ## Passes
 
 1. **Checkpoints survive the split** (221af98c25). Both pinned pilots replayed unchanged, all eight checkpoint binding tests and both memory round trips passed, and the vocabulary probe printed `0 True 44`.
-2. **Consumers and guards.** The native debug guard already uses the two-list
-   union from pass 1. Update the `observability.rs` helpers and
-   `scripts/pilot_names.rs` with `names_at`
-   detecting `runtime_tokens` in the archived crate (check `names --at
-   ab2b757d9`), Python tests (union-equality, record coverage, effect
-   vocabulary, pooled mana, `test_record_vocabulary.py:104`), the ledger
-   removal test, debug Rust tests for `record_vocabulary`, `token_renames`,
-   `tokens` and the effect witness (`CARGO_BUILD_JOBS=2`, `--test-threads 2`).
-3. **Docs and contract.** User-facing docs drafted ahead of code:
-   `docs/engine.md`, `manabot/README.md`, `managym/README.md`,
-   `managym/cards/tests/cards/README.md` (re-check against the final
-   implementation). Update `AGENTS.md` naming and retirement rules,
-   `.lf/qa/engine.md`; run `scripts/public_api.py record`; PR body with the
-   hold notice and release line.
+2. **Consumers and guards** (0b770d16be). The effect witness and frame checks
+   already delegated to the native guard. Migrated the name probe and
+   vocabulary checks, then verified missing program pairs, the exact union
+   with memory on and off, and dispositions for keys absent from the live
+   registrations.
+3. **Docs and contract** (10b956fdd5, 0b770d16be). Rechecked the user docs,
+   updated the agent and QA guides, and recorded both API additions with
+   `scripts/public_api.py record`. The API check and both targeted contract
+   tests passed.
+
+The 36 affected Python cases passed across the initial run and the corrected
+union check. All 12 focused debug Rust checks passed, including the exhaustive
+effect witness and cast-receipt projection. The API probe returned `0 True 44`
+and the prefix scan had no matches.
+
+The writer probe traced 2,553 keys at `ab2b757d9`, including both historical
+keys for `effect execution`. At `0b770d16be` it traced 1,844 name keys and
+3,230 symbolic program keys, matching the public lists for the named kinds.
+
+Delivery still needs the PR body with the 0.3.0 hold notice and release line.
+Leave merge and auto-merge off.
 
 ## Concept review (a173411b48) dispositions
 

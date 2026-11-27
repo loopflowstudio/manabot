@@ -9,3 +9,6 @@ decision-memory checkpoint test.
 Open: is there a retained decision-memory checkpoint worth pinning beside the
 v9 and v11 pilots? None was found; the retirement path has only a constructed
 test until one is named.
+
+The name tracer uses a Cargo feature declared only in its temporary writer
+archive. Historical writers keep their existing trace format.
