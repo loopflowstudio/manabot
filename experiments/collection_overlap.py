@@ -1,10 +1,7 @@
-"""Exploratory L4 throughput comparison: complete-games vs two-seat exact-quota.
+"""Exploratory L4 comparison of complete games, exact quota, and cohort overlap.
 
-Compares `batch_closure="complete-games"` against `batch_closure="exact-quota"`
-on the TLA trophy corpus at two model sizes:
-- `w160l8`: warm-started from `tla_trophies_colab_500k_v2/w160l8@40902` u2000
-  (late-training game lengths, ~186 decisions/game).
-- `w384l8`: fresh weights (no trained checkpoint of that size exists).
+Both model sizes start from fresh weights on the TLA trophy corpus. The
+`w160l8` u2000 checkpoint has a different input vocabulary.
 
 Each arm runs 5 updates on one L4 with 256 streams and 4 native workers.
 Exact-quota uses `transitions=186` (47,616 rows/update) to match complete-games'
@@ -64,13 +61,20 @@ class Arm:
     transitions: int
     rows: int
     warm_start: bool
+    collection_pipeline: bool = False
 
 
 ARMS: dict[str, Arm] = {
     "w160l8-fresh-complete": Arm("w160l8", "complete-games", 64, 512, False),
     "w160l8-fresh-exact": Arm("w160l8", "exact-quota", EXACT_TRANSITIONS, 512, False),
+    "w160l8-fresh-exact-pipe": Arm(
+        "w160l8", "exact-quota", EXACT_TRANSITIONS, 512, False, collection_pipeline=True
+    ),
     "w384l8-complete": Arm("w384l8", "complete-games", 64, 128, False),
     "w384l8-exact": Arm("w384l8", "exact-quota", EXACT_TRANSITIONS, 128, False),
+    "w384l8-exact-pipe": Arm(
+        "w384l8", "exact-quota", EXACT_TRANSITIONS, 128, False, collection_pipeline=True
+    ),
 }
 
 
@@ -79,6 +83,9 @@ class Config(trophies.Config):
     batch_closure: BatchClosure
     transitions: int = Field(ge=1)
     warm_start: bool
+    collection_pipeline: bool = Field(
+        default=False, exclude_if=lambda enabled: not enabled
+    )
     workers: Literal[1, 2, 4] = 4
 
 
@@ -98,6 +105,7 @@ def settings(config: Config) -> SelfPlay:
             "workers": config.workers,
             "transitions": config.transitions,
             "batch_closure": config.batch_closure,
+            "collection_pipeline": config.collection_pipeline,
             "model": _model_config(config.size),
             "learning": learning("w64").model_copy(
                 update={
@@ -120,6 +128,7 @@ def _recipe(name: str) -> SelfPlay:
             batch_closure=arm.batch_closure,
             transitions=arm.transitions,
             warm_start=arm.warm_start,
+            collection_pipeline=arm.collection_pipeline,
             updates=UPDATES,
             threads=2,
             workers=4,
@@ -145,6 +154,14 @@ def w384l8_complete() -> SelfPlay:
 
 def w384l8_exact() -> SelfPlay:
     return _recipe("w384l8-exact")
+
+
+def w160l8_exact_pipe() -> SelfPlay:
+    return _recipe("w160l8-fresh-exact-pipe")
+
+
+def w384l8_exact_pipe() -> SelfPlay:
+    return _recipe("w384l8-exact-pipe")
 
 
 def train(config: Config) -> None:
@@ -177,6 +194,7 @@ def training_jobs(
                     batch_closure=arm.batch_closure,
                     transitions=arm.transitions,
                     warm_start=arm.warm_start,
+                    collection_pipeline=arm.collection_pipeline,
                     updates=updates,
                     threads=threads,
                     workers=workers,
@@ -190,6 +208,7 @@ def training_jobs(
                     batch_closure=arm.batch_closure,
                     transitions=4 if arm.batch_closure == "exact-quota" else 1,
                     warm_start=arm.warm_start,
+                    collection_pipeline=arm.collection_pipeline,
                     updates=2 if arm.batch_closure == "exact-quota" else 1,
                     threads=1,
                     workers=1,

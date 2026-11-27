@@ -54,6 +54,9 @@
           "snapshot_rng": {
             "kind": "method",
             "signature": "(self)"
+          },
+          "supports_pipeline": {
+            "kind": "property"
           }
         }
       }
@@ -1065,7 +1068,7 @@
       },
       "open_collector": {
         "kind": "function",
-        "signature": "(observation_space, match, reward, *, num_envs, execution_rows=..., seed=..., opponent_mode=..., numerics, opponent_agent=..., learning_seats=..., batch_closure=..., games_per_stream=..., root=..., matchup_curriculum=..., deck_source=..., workers=..., game_errors=..., record_attempt=..., adaptive=..., snapshot_vector=..., snapshot_bank=..., snapshots=..., snapshot=..., capture_predicate=..., operation=..., games_path=..., record_fraction=...)"
+        "signature": "(observation_space, match, reward, *, num_envs, execution_rows=..., seed=..., opponent_mode=..., numerics, opponent_agent=..., learning_seats=..., batch_closure=..., collection_pipeline=..., games_per_stream=..., root=..., matchup_curriculum=..., deck_source=..., workers=..., game_errors=..., record_attempt=..., adaptive=..., snapshot_vector=..., snapshot_bank=..., snapshots=..., snapshot=..., capture_predicate=..., operation=..., games_path=..., record_fraction=...)"
       }
     },
     "manabot.training.state.game_errors": {

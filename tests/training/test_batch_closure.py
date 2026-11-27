@@ -185,6 +185,8 @@ def _two_seat_exact_collector(
     game_errors: GameErrorPolicy | None = None,
     record_attempt: Any = None,
     snapshot: CollectorSnapshot | None = None,
+    collection_pipeline: bool = False,
+    execution_rows: int | None = None,
 ) -> Collector:
     return open_collector(
         space or agent.observation_space,
@@ -193,9 +195,11 @@ def _two_seat_exact_collector(
         num_envs=num_envs,
         seed=seed,
         workers=workers,
+        execution_rows=execution_rows,
         opponent_mode="self",
         learning_seats="both",
         batch_closure="exact-quota",
+        collection_pipeline=collection_pipeline,
         game_errors=game_errors,
         record_attempt=record_attempt,
         snapshot=snapshot,
@@ -348,8 +352,10 @@ def test_two_seat_exact_quota_cross_update_failure_receipt_replays_and_keeps_lea
         close_collector(collector)
 
 
+@pytest.mark.parametrize("collection_pipeline", [False, True])
 def test_two_seat_exact_quota_mid_game_save_restore_matches_in_fresh_process(
     tmp_path: Path,
+    collection_pipeline: bool,
 ) -> None:
     agent = _agent("scalar")
     policy = GameErrorPolicy(threshold=0.5, recover_capacity=True)
@@ -358,6 +364,7 @@ def test_two_seat_exact_quota_mid_game_save_restore_matches_in_fresh_process(
         agent,
         num_envs=2,
         seed=23,
+        collection_pipeline=collection_pipeline,
         game_errors=policy,
         record_attempt=lambda state, row: append_attempt(ledger_a, state, row, {}),
     )
@@ -366,6 +373,12 @@ def test_two_seat_exact_quota_mid_game_save_restore_matches_in_fresh_process(
         snapshot = capture_collector(uninterrupted)
         assert snapshot.learning_seats == "both"
         assert snapshot.batch_closure == "exact-quota"
+        assert snapshot.cohorts == (2 if collection_pipeline else 1)
+        if collection_pipeline:
+            with pytest.raises(
+                ValueError, match="incompatible collector stream geometry"
+            ):
+                _two_seat_exact_collector(agent, num_envs=2, seed=23, snapshot=snapshot)
         assert set(snapshot.learned_game_rows) <= {0, 1}
         assert any(root.recipe.actions for root in snapshot.streams)
         rng_state = deepcopy(uninterrupted.numerics.snapshot_rng())
@@ -412,6 +425,7 @@ def test_two_seat_exact_quota_mid_game_save_restore_matches_in_fresh_process(
         "    agent.observation_space, match, Reward(RewardConfig()),\n"
         "    num_envs=2, seed=23, opponent_mode='self', learning_seats='both',\n"
         "    batch_closure='exact-quota', game_errors=policy,\n"
+        f"    collection_pipeline={collection_pipeline!r}, workers=2,\n"
         "    record_attempt=lambda s, r: append_attempt(ledger, s, r, {}),\n"
         "    snapshot=snap, numerics=session,\n"
         ")\n"
@@ -444,8 +458,10 @@ def test_two_seat_exact_quota_mid_game_save_restore_matches_in_fresh_process(
     assert {int(k): v for k, v in actual["learned"].items()} == expected_learned
 
 
+@pytest.mark.parametrize("collection_pipeline", [False, True])
 def test_self_play_step_splits_rates_and_logs_viewer_bootstrap_gap(
     tmp_path: Path,
+    collection_pipeline: bool,
 ) -> None:
     base = gray_ogre_self_play(horizon=2).model_dump()
     settings = SelfPlay.model_validate(
@@ -454,6 +470,7 @@ def test_self_play_step_splits_rates_and_logs_viewer_bootstrap_gap(
             "streams": 4,
             "transitions": 6,
             "batch_closure": "exact-quota",
+            "collection_pipeline": collection_pipeline,
             "learning_seats": "both",
             "learning": DampedPolicyLearning(
                 gradient="damped_policy", advantage_quantile=0.0, min_advantage=0.0
@@ -482,6 +499,37 @@ def test_self_play_step_splits_rates_and_logs_viewer_bootstrap_gap(
     assert row2["viewer_bootstrap_gap/count"] >= 1
     assert np.isfinite(row2["viewer_bootstrap_gap/mean_abs"])
     assert np.isfinite(row2["viewer_bootstrap_gap/mean_signed"])
+
+
+def test_two_seat_pipeline_is_deterministic_across_worker_counts() -> None:
+    agent = _agent("scalar")
+    expected = None
+    for workers in (1, 2, 4):
+        collector = _two_seat_exact_collector(
+            agent,
+            num_envs=8,
+            workers=workers,
+            collection_pipeline=True,
+            execution_rows=3,
+        )
+        try:
+            batch = collect(collector, agent, 20)
+            assert collector.stats.idle_stream_steps == 0
+            assert batch.actions.shape == (160, 1)
+            result = (
+                batch.actions.tolist(),
+                batch.rewards.tolist(),
+                batch.logprobs.tolist(),
+                batch.values.tolist(),
+                batch.trajectories,
+                capture_collector(collector).model_dump_json(),
+            )
+            if expected is None:
+                expected = result
+            else:
+                assert result == expected
+        finally:
+            close_collector(collector)
 
 
 def test_two_seat_exact_quota_handles_all_terminal_boundary_with_zero_cuts() -> None:

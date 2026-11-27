@@ -80,17 +80,37 @@ class BufferedStreams:
 
     skip_trivial = True
 
-    def __init__(self, num_envs: int, shards: list[StreamShard]) -> None:
+    def __init__(
+        self,
+        num_envs: int,
+        shards: list[StreamShard],
+        *,
+        pool: ThreadPoolExecutor | None = None,
+    ) -> None:
         self.num_envs = num_envs
         self._shards = shards
         self._shard_by_slot = [
             shard for shard in shards for _ in range(shard.start, shard.stop)
         ]
         self._closed = False
+        self._pool = pool
 
     def _run[T](self, calls: Sequence[Callable[[], T]]) -> list[T]:
         self._check()
-        return [call() for call in calls]
+        if self._pool is None:
+            return [call() for call in calls]
+        # Freeze owner coordinates before dispatch; ContextVars do not cross threads.
+        for shard in self._shards:
+            if shard.native.scope is not None and shard.native.scope.detailed:
+                shard.native.frozen_context = shard.native.scope.context().copy()
+        futures = []
+        try:
+            for call in calls:
+                futures.append(self._pool.submit(call))
+        finally:
+            # Settle every writer before propagating failure or exposing buffers.
+            wait(futures)
+        return [future.result() for future in futures]
 
     def _check(self) -> None:
         if self._closed:
@@ -528,6 +548,19 @@ class BufferedStreams:
             self._shard_by_slot.clear()
 
 
+@dataclass(frozen=True)
+class StreamCohort:
+    """A borrowed step view and its slice in the owner's outcome buffers."""
+
+    start: int
+    stop: int
+    streams: BufferedStreams
+
+    @property
+    def rows(self) -> slice:
+        return slice(self.start, self.stop)
+
+
 class ShardedVectorEnv(BufferedStreams):
     """Coarse native producers with a synchronous, globally ordered interface.
 
@@ -548,18 +581,25 @@ class ShardedVectorEnv(BufferedStreams):
         decision_memory: bool = False,
         games_path: Path | None = None,
         record_fraction: float = 1.0,
+        collection_pipeline: bool = False,
     ) -> None:
-        if workers < 2 or workers > num_envs:
+        if not (1 if collection_pipeline else 2) <= workers <= num_envs:
             raise ValueError(
                 "parallel producers require at least 2 workers and at least one stream each"
             )
         if not 0 <= seed < 2**64:
             raise ValueError("native seed must fit uint64")
         self.workers = workers
-        shards = []
-        for index in range(workers):
-            start = index * num_envs // workers
-            stop = (index + 1) * num_envs // workers
+        if collection_pipeline and (num_envs < 2 or num_envs % 2):
+            raise ValueError("collection pipeline requires an even number of streams")
+        cohorts = 2 if collection_pipeline else 1
+        width = num_envs // cohorts
+        per_cohort = min(workers, width)
+        shards: list[StreamShard] = []
+        for index in range(cohorts * per_cohort):
+            cohort, part = divmod(index, per_cohort)
+            start = cohort * width + part * width // per_cohort
+            stop = cohort * width + (part + 1) * width // per_cohort
             native = RecordedVectorEnv(
                 num_envs=stop - start,
                 seed=min(seed + start, 2**64 - 1),
@@ -581,28 +621,44 @@ class ShardedVectorEnv(BufferedStreams):
                 ),
             )
             shards.append(StreamShard(start, stop, native))
-        super().__init__(num_envs, shards)
-        self._pool = ThreadPoolExecutor(
-            max_workers=workers, thread_name_prefix="manabot-producer"
+        pool = (
+            ThreadPoolExecutor(
+                max_workers=workers, thread_name_prefix="manabot-producer"
+            )
+            if workers > 1
+            else None
+        )
+        super().__init__(num_envs, shards, pool=pool)
+        self.cohorts = tuple(
+            StreamCohort(
+                start,
+                start + width,
+                BufferedStreams(
+                    width,
+                    [
+                        StreamShard(s.start - start, s.stop - start, s.native)
+                        for s in shards
+                        if start <= s.start < start + width
+                    ],
+                    pool=pool,
+                ),
+            )
+            for start in range(0, num_envs, width)
+            if collection_pipeline
         )
 
     def _run[T](self, calls: Sequence[Callable[[], T]]) -> list[T]:
-        self._check()
         try:
-            # Freeze owner coordinates before dispatch; ContextVars do not cross threads.
-            for shard in self._shards:
-                if shard.native.scope is not None and shard.native.scope.detailed:
-                    shard.native.frozen_context = shard.native.scope.context().copy()
-            futures = [self._pool.submit(call) for call in calls]
-            # Settle every writer before propagating failure or exposing buffers.
-            wait(futures)
-            return [future.result() for future in futures]
+            return super()._run(calls)
         except BaseException:
-            self.close()
+            # A pipeline joins its policy work before the owning collector closes.
+            if not self.cohorts:
+                self.close()
             raise
 
     def close(self) -> None:
-        self._pool.shutdown(wait=True, cancel_futures=True)
+        if self._pool is not None:
+            self._pool.shutdown(wait=True, cancel_futures=True)
         super().close()
 
 
@@ -615,9 +671,10 @@ def open_native_streams(
     decision_memory_include_own: bool,
     games_path: Path | None = None,
     record_fraction: float = 1.0,
+    collection_pipeline: bool = False,
 ) -> BufferedStreams:
     """Select the collector transport while keeping fresh recording on its native slots."""
-    if workers != 1:
+    if workers != 1 or collection_pipeline:
         return ShardedVectorEnv(
             num_envs,
             seed,
@@ -626,6 +683,7 @@ def open_native_streams(
             decision_memory_include_own=decision_memory_include_own,
             games_path=games_path,
             record_fraction=record_fraction,
+            collection_pipeline=collection_pipeline,
         )
     native = RecordedVectorEnv(
         num_envs=num_envs,
