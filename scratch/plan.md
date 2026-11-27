@@ -134,19 +134,20 @@ changing. `managym/src/cards/token_renames.rs`, returned through
   `(Text, "creatures each player sacrifices", Some("permanents each player
   sacrifices"))`. Leaving them `None` while deleting the `execution/6/…` rows
   would mean-initialize both vectors on pre-rename checkpoints.
-- `LEGACY_EXECUTION_TOKENS`: 395 manually registered pre-0.3.0 runtime symbols
-  from structs, enums, fields and `EXECUTION_TEXT`, frozen as `(kind, name)`.
+- `LEGACY_EXECUTION_TOKENS`: manually registered pre-0.3.0 runtime symbols
+  from structs, enums, fields and `EXECUTION_TEXT`, the 13 synthetic keys
+  already retired before the split, and the play-grant condition label
+  `you control a Wizard permanent`, frozen as `(kind, name)`.
 - `LEGACY_DECISION_MEMORY_TOKENS`: the 44 pre-0.3.0 `DecisionMemory::*`
   names, retired as `(Variant, name, None)`, independent of later
   `RECORD_NAMES` edits.
 - Record retirements: literal `RECORDS` (now only
   `Modification::ControlChanged`) plus `("token", "execution/<kind>/<name>",
-  None)` for each `LEGACY_EXECUTION_TOKENS` entry, each pack card/set/play-grant
-  `execution/6/<name>`, and each `TOKENS` old name. The literal `execution/*`
-  `RECORDS` entries go. A superset is harmless: a retirement applies only to a
-  key a stored checkpoint has.
-- A unit test removes a runtime token and a memory name from the live lists and
-  shows their retirements remain.
+  None)` for each `LEGACY_EXECUTION_TOKENS` entry and each pack card or set
+  name. Token renames and live play-grant condition labels do not feed the
+  record ledger.
+- Tests check that retired runtime and phantom memory keys stay classified,
+  that dispositions are unique by packed key and that successors resolve.
 
 `binding.py` needs no new rule. Skipping a missing `record_name` key whose row
 a `record_token` already bound was considered and rejected: real aliased names
@@ -186,8 +187,8 @@ cut. Items 2, 4 and 5 follow the concept review's recommendations.
    `runtime_tokens()`**, with record-name tokens pure aliases. Passed over: the
    old `execution_names` body only, which leaves a three-way union and repeats
    issue 629 one layer down. Costly to change once 0.3.0 publishes it.
-5. **Legacy keys come from a frozen ledger** (manual runtime symbols and 44
-   memory names as constants, pack names and `TOKENS` old names derived).
+5. **Legacy keys come from a frozen ledger** (runtime symbols and 44
+   memory names as constants, with pack names derived).
    Passed over: the whole list including card names as one static table
    (must be regenerated if cards land before the cut); a generator over live
    lists (loses vectors when a runtime token graduates to print or a memory
@@ -266,27 +267,10 @@ emission guard, exact `(kind, 0x…)` diagnostics, the 44 memory names' hashes.
    and off, writer tracer at `ab2b757d9` (2,553 keys) and HEAD.
 3. Docs and contract (10b956fdd5, 0b770d16be): API recorded, contract tests
    pass.
-4. **Finish the frozen ledger (next).** In `managym/src/cards/token_renames.rs`:
-   - Restore `pub const RECORDS: &[(&str, &str, Option<&str>)]` beside
-     `TOKENS` (today `Modification::ControlChanged`), replacing the inline
-     `std::iter::once` in `record_renames()`.
-   - Stop chaining `TOKENS` into `execution/<kind>/<name>` retirements; add the
-     pre-0.3.0 retired execution symbols that the old `RECORDS` carried (13,
-     per the review) directly to `LEGACY_EXECUTION_TOKENS`. Check against the
-     writer trace at `ab2b757d9` which `TOKENS` names really had an
-     `execution/*` key.
-   - Keep `play_grant_conditions` prose (`condition_text`, today "you control
-     a Wizard permanent") out of `content_token_texts()`'s retirement feed;
-     freeze that string in `LEGACY_EXECUTION_TOKENS`. Pack card/set names stay
-     derived (decision 7).
-   - Extend the unit test: `record_renames()` keys `(namespace,
-     name_value(old))` are unique and every `Some(successor)` resolves in
-     `record_names()` ∪ `decision_memory_names()`.
-   Proof: debug `cargo nextest` on `token_renames` and record_vocabulary
-   tests, then `tests/model/test_pinned_pilot.py
-   tests/model/test_checkpoint_binding.py` with the rebuilt extension, both
-   pilots unchanged with no `record --reason`. Teaches whether a smaller
-   retirement set still explains every key a pre-0.3.0 checkpoint holds.
+4. Frozen ledger (5301417e8): 87 inferred dispositions dropped, all 557
+   `ab2b757d9` execution keys covered. Six focused debug Rust tests and ten
+   Python checks pass with the rebuilt extension, including both pinned pilots
+   and the constructed memory checkpoint. The optional `u1952` replay skipped.
 
 After Pass 4: PR body with the 0.3.0 hold notice and release line; merge and
 auto-merge stay off.

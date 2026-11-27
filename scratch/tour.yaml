@@ -1,4 +1,4 @@
-at: 0b770d16beb55aa32dbf12d5b9fc8df80cfe9a7e
+at: 5301417e8b94e5b77afddcea782c6e56f6805032
 first:
   - path: docs/engine.md
     why: The four vocabulary lists and how admission joins them
@@ -11,7 +11,7 @@ first:
   - path: manabot/policy/catalog.py
     why: How the policy assigns names and tokens embedding rows
   - path: managym/src/cards/token_renames.rs
-    why: Frozen dispositions for stored keys and two live renames
+    why: Frozen execution and memory keys keep their learned vectors
   - path: scripts/pinned_pilot.py
     why: Selects the probe for the archived writer's vocabulary
   - path: scripts/pilot_names.rs
