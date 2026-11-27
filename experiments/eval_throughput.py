@@ -10,6 +10,7 @@ import argparse
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
+from importlib.metadata import version
 import json
 import os
 from pathlib import Path
@@ -85,7 +86,9 @@ def trophy_deals(
 ) -> tuple[Code, dict[str, PairingSpec], list[Match]]:
     source = corpus_input()
     if file_sha256(corpus_path) != source.sha256:
-        raise ValueError(f"trophy corpus differs from the data manifest at {corpus_path}")
+        raise ValueError(
+            f"trophy corpus differs from the data manifest at {corpus_path}"
+        )
     pools = playable("held_out")
     if len(pools) < 2 * count:
         raise ValueError(f"the trophy split has fewer than {2 * count} playable pools")
@@ -238,6 +241,8 @@ def main() -> None:
         "stage_seconds": stages,
         "largest_stage": max(stages, key=stages.__getitem__),
     }
+    if args.device == "mlx":
+        summary["mlx"] = version("mlx")
     atomic_json(out / "summary.json", summary)
     print(json.dumps(summary, indent=2))
 

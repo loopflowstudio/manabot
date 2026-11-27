@@ -25,9 +25,8 @@ A backend runs the manabot policy forward and the learner step of its
 updates in one array framework. Backends share the framework-free contract in
 [`manabot.policy`](../policy/README.md): observation admission, host
 preparation, the checkpoint container and the host inference contract. Tracked training defaults to PyTorch. The local, baseline, Elemental and belief recipes
-also accept MLX. PyTorch is the default for evaluation and supplies the
-numerical parity reference; local evaluation and baseline verification also run
-on MLX in explicit CPU float32.
+also accept MLX. PyTorch supplies the numerical parity reference. Local
+evaluation and baseline verification also run on MLX in explicit CPU float32.
 
 | Backend | Status | Guide |
 | --- | --- | --- |
@@ -36,8 +35,8 @@ on MLX in explicit CPU float32.
 
 ## Which backend on Apple Silicon
 
-Keep PyTorch in production and retain MLX as an experimental Apple backend:
-MLX half's measured speed advantage still needs learning-quality validation.
+Tracked training defaults to PyTorch. MLX half's measured speed advantage
+still needs learning-quality validation.
 See the [MPS retest](../../experiments/reports/mps_retest.md) for results and limits.
 Both follow [one precision rule](../../docs/training.md#reduced-precision):
 bfloat16 forwards for models of width 256 or more on MPS and MLX, as on CUDA,
@@ -109,9 +108,10 @@ A loader calls `backend.load_policy(path)`, which returns
 the policy and its observation space. The
 policy supplies host `prepare`/`evaluate`, action sampling and guarded
 `inference_scope()` calls. Scalar sampling stays in the backend to preserve its seeded action stream.
-Managed evaluation instead uses `eval.agent_loader.load`, the composition root
-that chooses Torch and the device. Etude batches its deterministic masked-logit
-forward; the Torch-free game-side agent uses NumPy PCG64 sampling. These have
+Managed evaluation uses `eval.agent_loader.load`, the composition root that
+selects CUDA, MLX, MPS, or CPU in that order. On Apple Silicon, install the
+`mlx` extra to use MLX with Metal. Etude batches the deterministic masked-logit
+forward. The game-side agent uses NumPy PCG64 sampling. These have
 fresh registrations and tournament names. Standalone scalar game children
 resolve their backend lazily; code players and replay import no framework.
 

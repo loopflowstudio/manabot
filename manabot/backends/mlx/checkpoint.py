@@ -220,6 +220,12 @@ class MLXBackend:
     """
 
     name: Literal["mlx"] = "mlx"
+
+    @staticmethod
+    def gpu_available() -> bool:
+        """Whether MLX can run inference on Metal."""
+        return mx.metal.is_available()
+
     arrays = arrays
     rl = rl
 

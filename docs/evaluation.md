@@ -413,8 +413,13 @@ checkpoint grouping, batching, model residency, retries and performance records.
 The callback is `play(match, agents)`, with objects in seat order; it runs the
 native game and Command replay in that Etude process.
 
-`manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path`, chooses
-Torch and CPU or CUDA, and returns a deterministic forward:
+`manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path` and
+selects the first available device in order: CUDA, MLX, MPS, CPU. MLX uses
+Metal on Apple Silicon and requires `uv sync --extra evaluation --extra mlx`.
+Set `MANABOT_EVAL_DEVICE` to `cuda`, `mlx`, `mps`, or `cpu` to require a
+specific device. The default loader computes in float32 on each device.
+Declare `AGENTS_BF16` for bfloat16 on CUDA, MLX, or MPS with hardware support,
+or `AGENTS_TF32` for TF32 on CUDA. Each loader returns a deterministic forward
 `list[Prepared] -> list[masked logits]`, preserving length and order. Host
 preparation and admission happen once in the game-side sampler. The loader
 merges admitted rows, rebasing their object, frame, fact and effect routes;
@@ -423,7 +428,7 @@ checkpoint sampler without importing Torch. Each decision's recorded seed
 controls NumPy PCG64 sampling in the game process.
 
 A checkpoint with a decision-memory encoder has its log prepared by the same
-sampler, and the loader forwards each such row as its own batch. A seat whose
+sampler, and the loader batches those rows with their memory. A seat whose
 player config holds `blank_decision_memory: True` plays the same bytes with
 the log zeroed at every decision, registered as a distinct player
 ([reliance comparison](observation-and-model.md#whole-game-decision-memory));

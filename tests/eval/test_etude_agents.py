@@ -14,6 +14,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.eval import agent_loader
 from manabot.eval.admission import register_anchor
 from manabot.eval.agent_loader import load, load_bf16, load_tf32, select_device
 from manabot.eval.agents import (
@@ -267,9 +268,13 @@ def test_select_device_order_and_override(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.delenv("MANABOT_EVAL_DEVICE", raising=False)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    monkeypatch.setattr(agent_loader, "mlx_available", lambda: True)
     assert select_device() == "cuda"
 
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    assert select_device() == "mlx"
+
+    monkeypatch.setattr(agent_loader, "mlx_available", lambda: False)
     assert select_device() == "mps"
 
     monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
@@ -280,6 +285,14 @@ def test_select_device_order_and_override(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
     assert select_device() == "cpu"
 
+    monkeypatch.setenv("MANABOT_EVAL_DEVICE", "mlx")
+    monkeypatch.setattr(agent_loader, "mlx_available", lambda: True)
+    assert select_device() == "mlx"
+    monkeypatch.setattr(agent_loader, "mlx_available", lambda: False)
+    with pytest.raises(ValueError, match=r"MLX is unavailable.*uv sync --extra mlx"):
+        select_device()
+
+    monkeypatch.setattr(agent_loader, "mlx_available", lambda: True)
     monkeypatch.setenv("MANABOT_EVAL_DEVICE", "mps")
     assert select_device() == "mps"
     monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
@@ -292,8 +305,22 @@ def test_select_device_order_and_override(monkeypatch: pytest.MonkeyPatch) -> No
         select_device()
 
     monkeypatch.setenv("MANABOT_EVAL_DEVICE", "tpu")
-    with pytest.raises(ValueError, match=r"cuda, mps, cpu"):
+    with pytest.raises(ValueError, match=r"cuda, mlx, mps, cpu"):
         select_device()
+
+
+def test_missing_mlx_extra_falls_back_to_mps(monkeypatch: pytest.MonkeyPatch) -> None:
+    def missing_extra(name: str) -> None:
+        assert name == "mlx"
+        raise ImportError("mlx extra is unavailable")
+
+    monkeypatch.delenv("MANABOT_EVAL_DEVICE", raising=False)
+    monkeypatch.setattr(agent_loader.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(agent_loader.platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(agent_loader, "resolve", missing_extra)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    assert select_device() == "mps"
 
 
 def test_declared_precision_compute_classes_and_loader_guards(
@@ -457,13 +484,18 @@ def test_concatenate_joins_decision_memory_rows_and_rejects_folds(
         concatenate([rows[0], replace(rows[1], memory=None)])
 
 
-@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
+@pytest.mark.parametrize("device", ["mps", "mlx"])
 @pytest.mark.parametrize("memory", ["none", "gru"])
-def test_loader_mps_matches_cpu_logits_and_supports_bf16(
+def test_loader_apple_gpu_matches_cpu_logits_and_supports_bf16(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     memory: str,
+    device: str,
 ) -> None:
+    if device == "mlx" and not agent_loader.mlx_available():
+        pytest.skip("requires Apple Silicon and the MLX extra")
+    if device == "mps" and not torch.backends.mps.is_available():
+        pytest.skip("requires Apple MPS")
     torch.set_num_threads(1)
     torch.manual_seed(74)
     space = ObservationSpace(
@@ -530,19 +562,22 @@ def test_loader_mps_matches_cpu_logits_and_supports_bf16(
     combined = concatenate(rows)
     [cpu_logits] = cpu_forward([combined])
 
-    monkeypatch.setenv("MANABOT_EVAL_DEVICE", "mps")
-    mps_forward = load(ref)
-    [mps_logits] = mps_forward([combined])
-    assert mps_logits.shape == combined.legal.shape and mps_logits.dtype == np.float32
-    assert np.isneginf(mps_logits[~combined.legal]).all()
+    monkeypatch.setenv("MANABOT_EVAL_DEVICE", device)
+    forward = load(ref)
+    split_logits = forward(list(rows))
+    [logits] = forward([combined])
+    assert len(split_logits) == len(rows)
+    np.testing.assert_array_equal(np.concatenate(split_logits), logits)
+    assert logits.shape == combined.legal.shape and logits.dtype == np.float32
+    assert np.isneginf(logits[~combined.legal]).all()
     np.testing.assert_allclose(
-        mps_logits[combined.legal], cpu_logits[combined.legal], atol=1e-4, rtol=1e-4
+        logits[combined.legal], cpu_logits[combined.legal], atol=1e-4, rtol=1e-4
     )
 
     with pytest.raises(ValueError, match="precision tf32 requires CUDA"):
         load_tf32(ref)
 
-    if torch.backends.mps.is_macos_or_newer(14, 0):
+    if device == "mlx" or torch.backends.mps.is_macos_or_newer(14, 0):
         bf16_forward = load_bf16(ref)
         [bf16_logits] = bf16_forward([combined])
         assert (

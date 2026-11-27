@@ -1,6 +1,6 @@
-"""Etude's model-loading entry point; only this module chooses Torch and device.
+"""Etude's model-loading entry point, selecting the framework and device.
 
-Device order is cuda -> mps -> cpu, overridable by MANABOT_EVAL_DEVICE.
+Device order is cuda -> mlx -> mps -> cpu, overridable by MANABOT_EVAL_DEVICE.
 Precision is declared explicitly (`load`, `load_tf32`, `load_bf16`) because it
 alters logits and compute identity. Each returned forward accepts Prepared
 batches of any positive batch size and returns float32 masked logits of shape
@@ -10,50 +10,88 @@ and process allocation.
 
 from collections.abc import Callable
 import os
+from pathlib import Path
+import platform
 from typing import Literal, cast
 
 from etude.checkpoints import CheckpointRef
 import numpy as np
 
+from manabot.backends import resolve
 from manabot.policy.batching import concatenate
 from manabot.policy.prepare import Prepared
 from manabot.sim.registration import EvalPrecision
 
-EvalDevice = Literal["cuda", "mps", "cpu"]
-EVAL_DEVICES: tuple[EvalDevice, ...] = ("cuda", "mps", "cpu")
+EvalDevice = Literal["cuda", "mlx", "mps", "cpu"]
+EVAL_DEVICES: tuple[EvalDevice, ...] = ("cuda", "mlx", "mps", "cpu")
+Logits = Callable[[Prepared[np.ndarray]], np.ndarray]
+
+
+def mlx_available() -> bool:
+    """Check for the optional MLX extra and usable Metal on Apple Silicon."""
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        return False
+    try:
+        return resolve("mlx").gpu_available()
+    except (ImportError, RuntimeError):
+        return False
+
+
+def device_available(device: EvalDevice) -> bool:
+    if device == "cpu":
+        return True
+    if device == "mlx":
+        return mlx_available()
+
+    import torch
+
+    if device == "cuda":
+        return torch.cuda.is_available()
+    return torch.backends.mps.is_available()
 
 
 def select_device() -> EvalDevice:
-    """Choose the evaluation Torch device: MANABOT_EVAL_DEVICE, else cuda -> mps -> cpu."""
-    import torch
-
+    """Choose the available evaluation device in order, unless explicitly set."""
     override = os.environ.get("MANABOT_EVAL_DEVICE")
-    if override is not None and override != "":
+    if override:
         if override not in EVAL_DEVICES:
             accepted = ", ".join(EVAL_DEVICES)
             raise ValueError(
                 f"unknown MANABOT_EVAL_DEVICE {override!r}; expected one of: {accepted}"
             )
-        if override == "cuda" and not torch.cuda.is_available():
-            raise ValueError(
-                "MANABOT_EVAL_DEVICE='cuda' requested, but CUDA is unavailable"
+        device = cast(EvalDevice, override)
+        if not device_available(device):
+            extra = (
+                " (requires Apple Silicon and uv sync --extra mlx)"
+                if device == "mlx"
+                else ""
             )
-        if override == "mps" and not torch.backends.mps.is_available():
             raise ValueError(
-                "MANABOT_EVAL_DEVICE='mps' requested, but MPS is unavailable"
+                f"MANABOT_EVAL_DEVICE={device!r} requested, but {device.upper()} is unavailable{extra}"
             )
-        return cast(EvalDevice, override)
-    if torch.cuda.is_available():
-        return "cuda"
-    if torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
+        return device
+    return next(device for device in EVAL_DEVICES if device_available(device))
 
 
-def load_with_precision(
-    checkpoint: CheckpointRef,
+def mlx_logits(path: Path, precision: EvalPrecision) -> Logits:
+    if precision == "tf32":
+        raise ValueError("precision tf32 requires CUDA")
+    backend = resolve("mlx", precision="bfloat16" if precision == "bf16" else precision)
+    model, _ = backend.load_policy(path)
+    model.to("gpu").eval()
+    model.cache_programs()
+
+    def logits(batch: Prepared[np.ndarray]) -> np.ndarray:
+        return model.evaluate(batch)[0]
+
+    return logits
+
+
+def torch_logits(
+    path: Path,
     precision: EvalPrecision,
-) -> Callable[[list[object]], list[object]]:
+    device_name: Literal["cuda", "mps", "cpu"],
+) -> Logits:
     import torch
 
     from manabot.backends.torch.arrays import on_device
@@ -64,7 +102,7 @@ def load_with_precision(
         validate_precision,
     )
 
-    device = torch.device(select_device())
+    device = torch.device(device_name)
     validate_precision(precision, device)
     if precision == "bf16":
         if device.type == "cuda" and not torch.cuda.is_bf16_supported():
@@ -74,10 +112,32 @@ def load_with_precision(
 
     torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", "1")))
     apply_matmul_precision(precision)
-    model, _ = load_checkpoint(str(checkpoint.path))
+    model, _ = load_checkpoint(str(path))
     model.to(device).eval()
     with torch.inference_mode():
         model.cache_programs()
+
+    def logits(batch: Prepared[np.ndarray]) -> np.ndarray:
+        if device.type == "cuda":
+            apply_matmul_precision(precision)
+        with torch.inference_mode(), forward_precision(precision, device):
+            scores, _ = model(on_device(batch, device))
+        return scores.float().cpu().numpy()
+
+    return logits
+
+
+def load_with_precision(
+    checkpoint: CheckpointRef,
+    precision: EvalPrecision,
+) -> Callable[[list[object]], list[object]]:
+    device = select_device()
+    path = Path(checkpoint.path)
+    logits = (
+        mlx_logits(path, precision)
+        if device == "mlx"
+        else torch_logits(path, precision, device)
+    )
 
     def forward(inputs: list[object]) -> list[object]:
         if not inputs:
@@ -86,14 +146,8 @@ def load_with_precision(
             raise TypeError("Manabot inference takes nonempty host Prepared inputs")
         rows = cast(list[Prepared[np.ndarray]], inputs)
         batch = rows[0] if len(rows) == 1 else concatenate(rows)
-        if device.type == "cuda":
-            apply_matmul_precision(precision)
-        with torch.inference_mode(), forward_precision(precision, device):
-            logits, _ = model(on_device(batch, device))
-        values = logits.float().cpu().numpy()
+        values = logits(batch)
         values[~batch.legal] = -np.inf
-        if len(rows) == 1:
-            return [values.copy()]
         found: list[object] = []
         offset = 0
         for row in rows:

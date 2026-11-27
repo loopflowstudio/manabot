@@ -804,11 +804,12 @@ class MLXActorCritic(nn.Module):
             return table.at[mx.array(programs.rows)].add(encoded)
 
     def cache_programs(self) -> None:
-        """Encode the catalog once for inference with fixed weights (collection)."""
-        programs = self.programs()
-        if programs is not None:
-            mx.eval(programs)
-            self._static.cache["programs"] = programs
+        """Encode the catalog once on the inference device for fixed weights."""
+        with mx.stream(self.inference_device):
+            programs = self.programs()
+            if programs is not None:
+                mx.eval(programs)
+                self._static.cache["programs"] = programs
 
     def clear_cache(self) -> None:
         self._static.cache.clear()
