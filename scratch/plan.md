@@ -12,6 +12,8 @@ Pass 3 (`abfabece991`) owns the announced mana activation and its priced fee, re
 
 Pass 4's finite-resource contract (`ab008535c`) shares one mana-ability predicate, routes board-growing and counter-swapping abilities through the stack, and reserves the pending activation's counters and source presence. The 48 focused debug checks passed. Catalog parity held across printed, token and granted definitions, with suffixes on Tarnished Citadel and The Great Henge only.
 
+Pass 4a (`494fb4c5e`) retains counter and sacrifice costs before computing mana output and walks the saved frame for obligations and reservations. All 56 focused debug checks passed across the mana and retained-batch fixtures, including live and restored replacement orders, counter and sacrifice outputs, and nested cast and resolution payments.
+
 Pass 4 attempt 1 stopped at a counterexample (`0d7bb6743`, `fixed_mana_suffix_reads_life_through_damage_replacement` in `managym/src/flow/mana/tests.rs`) and changed no production code. At 4 life, Henge (+2) and Citadel (3 damage plus life gained this turn, through a constructed damage replacement) owe `{G}{G}{R}` then 2 life. Root probes certify both independent; Henge-first reaches an empty decision at 6 life (Citadel now deals 5). Citadel-first pays with 1 life left. The fourth concept review (`8182d5c876`, `scratch/concept-review.html`) widened this to a missing-read-channel finding.
 
 Pass 4 attempt 2 reproduced `mana_trigger_reads_keyword_changed_by_another_activation` in debug (`a90fd7109`, `managym/src/flow/mana/tests.rs`). A constructed Heartbeat matches lands with trample. The Mountain can either tap or remove its trample counter to add `{G}`. While paying `{G}{R}{R}`, the counter-first offer reaches an empty decision because the later tap makes only `{R}`. Tap-first commits both red units and completes. Design 4's read graph would still certify both steps independent, so the stop rule sent pass 4 back to review.
@@ -77,13 +79,6 @@ Preserve native action identities, source order, the chooser, individual Heartbe
 
 ## Remaining passes
 
-4a. **Mana activation continuation** (design 6; `flow/mana.rs`, `flow/decision.rs`, `flow/proposed_event.rs`, continuation consumers). Live checks:
-   - `da29dbbdc`: step the live `ActivateAbility(ogre, 0)` at priority; both `OrderReplacement` orders are offered, choosing each places three or four counters and adds `{G}`.
-   - Review case 3: `{T}, Sacrifice this: Add {G} for each creature you control` counts after the sacrifice; a chosen-color sacrifice source still makes its chosen color.
-   - A counter-dependent output (review case 2 without the filter) reads the committed counters.
-   - With an `OrderReplacement` suspended inside a mana activation during a cast, `reserve` and `payment_obligations_owing` still see the enclosing `ManaUpfront`, `ManaChoice` and resolution payment.
-   - Snapshot restore mid-batch reproduces the continuation; the existing pass 3 and pass 4 fixtures keep passing in debug.
-   It teaches whether the cost frame composes with the existing frame machinery without a second continuation shape, which the coupled search in 4b then reuses as its transition.
 4b. **Whitelist classifier, coupled regime and payer replacement filter** (designs 4, 1 and 7; `flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/mana/help.rs`, `flow/decision.rs`). Counter-changing transitions stay in the fork, carrying live counter reservations into each rebuild. Live checks:
    - `0d7bb6743`: only Citadel-first offered; at 1 life the damage channel deactivates and Henge hands off to the pure model.
    - `a90fd7109`: only the Mountain tap is offered first; it commits both red units before the counter is removed for green.
