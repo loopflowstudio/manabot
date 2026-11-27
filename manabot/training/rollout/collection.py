@@ -1774,8 +1774,10 @@ def collect(
 ) -> RolloutBatch:
     """Collect a batch closed at an exact quota or after complete games.
 
-    Exact quota pauses each stream at num_steps learner rows, and its game
-    continues in the next batch. Complete games treat num_steps as a floor on
+    Exact quota stops at ``num_envs * num_steps`` surviving learner rows (each
+    stream at ``num_steps`` on error-free updates; on failure, one seat refills
+    the failed stream while both seats make up rows across the pool) and carries
+    unfinished games into the next batch. Complete games treat num_steps as a floor on
     the stream's retained decisions, the total across seats when both learn;
     games_per_stream replaces the floor with that many whole games, and no
     sampled action crosses the update boundary. For a snapshot vector, consume
@@ -1934,12 +1936,12 @@ def _collect(
                     continue
             acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
             if two_seat_exact:
+                # Pick active streams before finalizing so paused streams keep
+                # their pending decisions for `_freeze_cut_bootstraps`.
                 active = _pool_quota_active(collector, num_steps)
                 if not active.any():
                     break
-                for row in np.flatnonzero(active):
-                    if acting[row] < 0:
-                        continue
+                for row in np.flatnonzero(active & (acting >= 0)):
                     slot = 2 * int(row) + int(acting[row])
                     if collector._pending[slot] is not None:
                         _finalize(collector, slot, reward=0.0, done=False)
@@ -2097,7 +2099,7 @@ def _collect(
                     list(range(len(collector._streams))),
                     snapshots=snapshots,
                     frozen=frozen_cuts,
-                    explicit_spans=snapshots is not None or two_seat_exact,
+                    explicit_spans=two_seat_exact,
                 )
         else:
             batch = _build_rectangular_batch(collector, num_steps)
@@ -2463,23 +2465,23 @@ def _pool_quota_active(collector: Collector, num_steps: int) -> np.ndarray:
     the pool keeps stepping at full width rather than one stream stepping alone.
     """
     num_envs = collector.num_envs
-    rows = np.array(
-        [
-            sum(
-                len(collector._streams[slot])
-                + int(collector._pending[slot] is not None)
-                for slot in _game_slots(collector, row)
-            )
-            for row in range(num_envs)
-        ],
-        dtype=np.int64,
+    remaining = num_envs * num_steps - (
+        sum(map(len, collector._streams))
+        + sum(p is not None for p in collector._pending)
     )
-    remaining = num_envs * num_steps - int(rows.sum())
-    active = np.zeros(num_envs, dtype=bool)
+    if remaining <= 0:
+        return np.zeros(num_envs, dtype=bool)
     if remaining >= num_envs:
-        active[:] = True
-    elif remaining > 0:
-        active[np.argsort(rows, kind="stable")[:remaining]] = True
+        return np.ones(num_envs, dtype=bool)
+    rows = [
+        sum(
+            len(collector._streams[slot]) + (collector._pending[slot] is not None)
+            for slot in _game_slots(collector, row)
+        )
+        for row in range(num_envs)
+    ]
+    active = np.zeros(num_envs, dtype=bool)
+    active[np.argsort(rows, kind="stable")[:remaining]] = True
     return active
 
 
@@ -2562,14 +2564,12 @@ def _freeze_cut_bootstraps(
             )
         for offset, row in enumerate(rows):
             slot = int(row)
-            seat = viewers[slot][index]
-            bootstrap_index = first + offset
             _finalize(
                 collector,
-                2 * slot + seat,
+                2 * slot + viewers[slot][index],
                 reward=0.0,
                 done=False,
-                bootstrap_index=bootstrap_index,
+                bootstrap_index=first + offset,
             )
     return frozen
 
@@ -3025,8 +3025,7 @@ def _build_packed_batch(
         assert collector._pending[slot] is None
     if not rows:
         raise RuntimeError("learning model made no decisions in collected games")
-    if not build_spans:
-        assert rows[-1].done
+    assert build_spans or rows[-1].done
     batch = _build_batch(
         collector,
         rows,

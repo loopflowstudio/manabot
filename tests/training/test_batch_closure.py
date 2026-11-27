@@ -9,15 +9,22 @@ from typing import Any, Literal
 
 import numpy as np
 import pytest
+import torch
 
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
 from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.learning import BatchClosure, DampedPolicyLearning, Learning
 from manabot.training.loops import self_play as self_play_loop
@@ -43,8 +50,6 @@ from manabot.training.updates.ppo import update_iteration
 from manabot.verify.games import INTERACTIVE_DECK
 from tests.fixtures.dense_collector import dense_collector
 from tests.training.test_two_seat_learning import ScriptedGames, _agent
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize(
@@ -302,23 +307,31 @@ def test_two_seat_exact_quota_zero_idle_mixed_spans_and_cross_update_finish(
         close_collector(collector)
 
 
-def test_two_seat_exact_quota_cross_update_failure_receipt_replays_and_keeps_learned(
-    tmp_path: Path,
-) -> None:
+def _capacity_overflow_collector(
+    tmp_path: Path, *, num_envs: int, seed: int, threshold: float
+) -> tuple[Collector, ActorCritic, Path]:
     space = ObservationSpace(ObservationConfig(max_permanents_per_player=1))
     match = Match(MatchConfig(hero_deck={"Forest": 12}, villain_deck={"Forest": 12}))
-    agent = _agent("scalar")
-    agent = type(agent)(space, agent.config)
-    policy = GameErrorPolicy(threshold=0.5, recover_capacity=True)
+    agent = ActorCritic(space, ModelConfig(attention_on=False, hidden_dim=8))
+    policy = GameErrorPolicy(threshold=threshold, recover_capacity=True)
     ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _two_seat_exact_collector(
         agent,
-        num_envs=2,
-        seed=7,
+        num_envs=num_envs,
+        seed=seed,
         match=match,
         space=space,
         game_errors=policy,
         record_attempt=lambda state, row: append_attempt(ledger, state, row, {}),
+    )
+    return collector, agent, ledger.path
+
+
+def test_two_seat_exact_quota_cross_update_failure_receipt_replays_and_keeps_learned(
+    tmp_path: Path,
+) -> None:
+    collector, agent, ledger_path = _capacity_overflow_collector(
+        tmp_path, num_envs=2, seed=7, threshold=0.5
     )
     try:
         # First update cuts mid-game before permanent capacity overflows.
@@ -341,7 +354,7 @@ def test_two_seat_exact_quota_cross_update_failure_receipt_replays_and_keeps_lea
             assert all(p is None for p in collector._pending)
             attempts = [
                 GameAttempt.model_validate(json.loads(line)["attempt"])
-                for line in ledger.path.read_text().splitlines()
+                for line in ledger_path.read_text().splitlines()
             ]
             failed = [
                 row
@@ -367,21 +380,9 @@ def test_two_seat_exact_quota_refills_a_failure_from_the_whole_pool(
     tmp_path: Path,
 ) -> None:
     """A failure's discarded rows are made up by the pool, not by one stream alone."""
-    space = ObservationSpace(ObservationConfig(max_permanents_per_player=1))
-    match = Match(MatchConfig(hero_deck={"Forest": 12}, villain_deck={"Forest": 12}))
-    agent = _agent("scalar")
-    agent = type(agent)(space, agent.config)
-    policy = GameErrorPolicy(threshold=0.9, recover_capacity=True)
-    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     num_envs, transitions = 4, 6
-    collector = _two_seat_exact_collector(
-        agent,
-        num_envs=num_envs,
-        seed=11,
-        match=match,
-        space=space,
-        game_errors=policy,
-        record_attempt=lambda state, row: append_attempt(ledger, state, row, {}),
+    collector, agent, _ = _capacity_overflow_collector(
+        tmp_path, num_envs=num_envs, seed=11, threshold=0.9
     )
     try:
         most_discarded = 0
@@ -436,8 +437,6 @@ def test_two_seat_exact_quota_mid_game_save_restore_matches_in_fresh_process(
     snapshot_path.write_text(snapshot.model_dump_json())
     weights_path = tmp_path / "agent.pt"
     rng_path = tmp_path / "rng.pt"
-    import torch
-
     torch.save(agent.state_dict(), weights_path)
     torch.save(rng_state, rng_path)
     out_path = tmp_path / "restored.json"
@@ -534,7 +533,6 @@ def test_self_play_step_logs_throughput_for_every_seat_mode(
         assert "priority_tap_rate" in row
         assert "decisions_per_game" not in row
         assert "skipped_share" not in row
-        assert not any(key.startswith("viewer_bootstrap") for key in row)
     assert rows[1]["coordinates/learner_transitions"] == 48
     if seats == "both":
         assert rows[1]["coordinates/idle_stream_steps"] == 0

@@ -2,8 +2,8 @@
 
 Compares `batch_closure="complete-games"` against `batch_closure="exact-quota"`
 on the TLA trophy corpus at `w160l8` and `w384l8`, both from fresh weights: the
-`tla_trophies_colab_500k_v2/w160l8@40902` u2000 checkpoint (`W160L8_U2000`) was
-written at `v0.2.4+10` and its vocabulary no longer loads strictly on HEAD.
+`tla_trophies_colab_500k_v2/w160l8@40902` u2000 checkpoint was written at
+`v0.2.4+10` and its vocabulary no longer loads strictly on HEAD.
 
 Each arm runs 5 updates on one L4 with 256 streams and 4 native workers.
 Exact-quota uses `transitions=186` (47,616 rows/update) to match complete-games'
@@ -17,9 +17,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
 
-from etude.checkpoints import CheckpointRecord
 from etude.jobs import TrainingJob
-from etude.records import ArtifactRef
 from etude.report import Report
 from etude.spec import Variable
 from etude.train.tracking import track
@@ -40,20 +38,6 @@ SEED = 40902
 UPDATES = 5
 EXACT_TRANSITIONS = 186
 
-# Late-training policy from `tla_trophies_colab_500k_v2/w160l8@40902` at update 2000.
-W160L8_U2000 = CheckpointRecord(
-    experiment="tla_trophies_colab_500k_v2",
-    run="w160l8@40902",
-    ordinal=21,
-    at={"updates": 2000},
-    file="out/policies/00002000-raw.safetensors",
-    artifact=ArtifactRef(
-        uri="r2://manabot/jobs/tla_trophies_colab_500k_v2/w160l8@40902/out/policies/00002000-raw.safetensors",
-        sha256="26ff27b76cffd9a1076d5224b81886560262ee48a575c9cde5b9026520951f37",
-        size_bytes=27_688_498,
-    ),
-)
-
 type BenchSize = Literal["w160l8", "w384l8"]
 
 
@@ -63,14 +47,13 @@ class Arm:
     batch_closure: BatchClosure
     transitions: int
     rows: int
-    warm_start: bool
 
 
 ARMS: dict[str, Arm] = {
-    "w160l8-fresh-complete": Arm("w160l8", "complete-games", 64, 512, False),
-    "w160l8-fresh-exact": Arm("w160l8", "exact-quota", EXACT_TRANSITIONS, 512, False),
-    "w384l8-complete": Arm("w384l8", "complete-games", 64, 128, False),
-    "w384l8-exact": Arm("w384l8", "exact-quota", EXACT_TRANSITIONS, 128, False),
+    "w160l8-fresh-complete": Arm("w160l8", "complete-games", 64, 512),
+    "w160l8-fresh-exact": Arm("w160l8", "exact-quota", EXACT_TRANSITIONS, 512),
+    "w384l8-complete": Arm("w384l8", "complete-games", 64, 128),
+    "w384l8-exact": Arm("w384l8", "exact-quota", EXACT_TRANSITIONS, 128),
 }
 
 
@@ -78,7 +61,6 @@ class Config(trophies.Config):
     size: BenchSize
     batch_closure: BatchClosure
     transitions: int = Field(ge=1)
-    warm_start: bool
     workers: Literal[1, 2, 4] = 4
 
 
@@ -89,6 +71,28 @@ def _model_config(size: BenchSize) -> ModelConfig:
             update={"hidden_dim": 384, "attention_layers": 8, "num_attention_heads": 8}
         )
     return base
+
+
+def _arm_config(
+    arm: Arm,
+    *,
+    updates: int = UPDATES,
+    threads: int = 2,
+    workers: Literal[1, 2, 4] = 4,
+    streams: int = 256,
+) -> Config:
+    return Config(
+        size=arm.size,
+        batch_closure=arm.batch_closure,
+        transitions=arm.transitions,
+        updates=updates,
+        threads=threads,
+        workers=workers,
+        streams=streams,
+        rows=arm.rows,
+        checkpoint_every=updates,
+        device="cuda",
+    )
 
 
 def settings(config: Config) -> SelfPlay:
@@ -113,22 +117,7 @@ def settings(config: Config) -> SelfPlay:
 
 
 def _recipe(name: str) -> SelfPlay:
-    arm = ARMS[name]
-    return settings(
-        Config(
-            size=arm.size,
-            batch_closure=arm.batch_closure,
-            transitions=arm.transitions,
-            warm_start=arm.warm_start,
-            updates=UPDATES,
-            threads=2,
-            workers=4,
-            streams=256,
-            rows=arm.rows,
-            checkpoint_every=UPDATES,
-            device="cuda",
-        )
-    )
+    return settings(_arm_config(ARMS[name]))
 
 
 def w160l8_complete() -> SelfPlay:
@@ -151,10 +140,7 @@ def train(config: Config) -> None:
     from manabot.training.loops.self_play import CLOCKS, self_play
 
     with track(clocks=CLOCKS, config=config) as run:
-        built = settings(config)
-        if config.warm_start:
-            built = built.model_copy(update={"pretrained": run.input("start")})
-        self_play(built, run, updates=config.updates)
+        self_play(settings(config), run, updates=config.updates)
 
 
 def training_jobs(
@@ -166,55 +152,45 @@ def training_jobs(
     workers: Literal[1, 2, 4] = 4,
     streams: int = 256,
 ) -> list[TrainingJob]:
-    jobs: list[TrainingJob] = []
-    for name, arm in ARMS.items():
-        jobs.append(
-            TrainingJob(
-                name=name,
-                train=train,
-                config=Config(
-                    size=arm.size,
-                    batch_closure=arm.batch_closure,
-                    transitions=arm.transitions,
-                    warm_start=arm.warm_start,
-                    updates=updates,
-                    threads=threads,
-                    workers=workers,
-                    streams=streams,
-                    rows=arm.rows,
-                    checkpoint_every=updates,
-                    device="cuda",
-                ),
-                smoke=Config(
-                    size=arm.size,
-                    batch_closure=arm.batch_closure,
-                    transitions=4 if arm.batch_closure == "exact-quota" else 1,
-                    warm_start=arm.warm_start,
-                    updates=2 if arm.batch_closure == "exact-quota" else 1,
-                    threads=1,
-                    workers=1,
-                    streams=2,
-                    rows=64,
-                    checkpoint_every=2,
-                    device="cpu",
-                ),
-                environment=tuple(
-                    Variable(name=var, value=str(threads))
-                    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS")
-                ),
-                seeds=(SEED,),
-                repo=str(trophies.ROOT),
-                revision=revision,
-                setup=machine_setup(" --extra artifacts"),
-                inputs=(trophies.corpus_input(),),
-                start=W160L8_U2000 if arm.warm_start else None,
-                extras=("artifacts",),
-                max_hours=hours,
-                max_usd=Decimal(str(usd_per_run)),
-                max_attempts=1,
-            )
+    return [
+        TrainingJob(
+            name=name,
+            train=train,
+            config=_arm_config(
+                arm,
+                updates=updates,
+                threads=threads,
+                workers=workers,
+                streams=streams,
+            ),
+            smoke=Config(
+                size=arm.size,
+                batch_closure=arm.batch_closure,
+                transitions=4 if arm.batch_closure == "exact-quota" else 1,
+                updates=2 if arm.batch_closure == "exact-quota" else 1,
+                threads=1,
+                workers=1,
+                streams=2,
+                rows=64,
+                checkpoint_every=2,
+                device="cpu",
+            ),
+            environment=tuple(
+                Variable(name=var, value=str(threads))
+                for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS")
+            ),
+            seeds=(SEED,),
+            repo=str(trophies.ROOT),
+            revision=revision,
+            setup=machine_setup(" --extra artifacts"),
+            inputs=(trophies.corpus_input(),),
+            extras=("artifacts",),
+            max_hours=hours,
+            max_usd=Decimal(str(usd_per_run)),
+            max_attempts=1,
         )
-    return jobs
+        for name, arm in ARMS.items()
+    ]
 
 
 def report() -> Report:
