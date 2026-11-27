@@ -347,3 +347,21 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   identical `policy_rows` log probabilities from jace's dense merge and
   `RolloutBatch.concatenate`, about 60x faster. A one-env worker's native rows
   pickle to about 7 KB each.
+- Two-seat exact-quota collection (`SelfPlay.batch_closure="exact-quota"`):
+  run a `.runs/` recipe subclassing `BaselineConfig` with `batch_closure`,
+  `streams=4`, `transitions=16`, `workers=1` and `2`, and confirm exact
+  `streams * transitions` rows per update, `coordinates/idle_stream_steps == 0`,
+  `time/collection/cut_bootstrap`, logged `rows_per_second`/`updates_per_hour`,
+  absent `decisions_per_game`/`skipped_share`, and bit-identical policy tensors
+  across `workers=1`/`2`, planned `--until` + `--resume`, and pty Ctrl-C (exit
+  75) + `--resume`. For cross-update game completions and replay digests, use
+  `streams=2, transitions=160, updates=3, record_games=1` and replay each line
+  in `out/games/*.jsonl` against `end["digest"]`. For real native capacity
+  recovery and pooled refill (`idle_stream_steps < streams`, `learned_samples`
+  + `discarded_samples == len(actions)`), set `max_permanents_per_player=7`
+  with `GameErrorPolicy(recover_capacity=True, threshold=0.95, window=50,
+  warmup=50)`. For the benchmark CLI, run `uv run python
+  scripts/bench_training_update.py --streams 4 --updates 2 --batch-closure
+  exact-quota --transitions 16`. Note `manabot.training.state.game_errors` CLI
+  expects `context["identities"]`, which `self_play`'s default ledger does not
+  write; verify failure receipts directly with `replay_attempt(GameAttempt.model_validate(entry["attempt"]))`.

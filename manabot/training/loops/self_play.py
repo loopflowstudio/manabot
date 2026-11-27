@@ -241,7 +241,9 @@ class SelfPlay(BaseModel):
                     "(exact quota cut reads carry no event history)"
                 )
             if self.game_errors is not None and not self.game_errors.recover_capacity:
-                raise ValueError("game error recovery requires complete games")
+                raise ValueError(
+                    "exact quota with game_errors requires recover_capacity=True"
+                )
         if self.behavior == "ema-self" and self.learning.ema is None:
             raise ValueError("ema-self behavior requires an EMA rate")
         if self.matchup_curriculum == "elemental-uniform":

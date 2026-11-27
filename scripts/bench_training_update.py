@@ -207,6 +207,11 @@ def main() -> None:
         values["pretrained"] = str(args.pretrained.resolve())
     if args.batch_closure is not None:
         values["batch_closure"] = args.batch_closure
+        if (
+            args.batch_closure == "exact-quota"
+            and values.get("game_errors") is not None
+        ):
+            values["game_errors"]["recover_capacity"] = True
     if args.transitions is not None:
         values["transitions"] = args.transitions
     if args.workers is not None:
