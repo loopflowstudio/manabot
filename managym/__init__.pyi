@@ -228,6 +228,23 @@ class PreparedPossibleWorldMaterializer:
 class DecisionCapture:
     def to_json(self) -> str: ...
 
+class GameStateEdit:
+    @staticmethod
+    def move_permanent(
+        permanent: int,
+        to: Literal["graveyard", "exile", "library_bottom"] = "graveyard",
+    ) -> GameStateEdit: ...
+    @staticmethod
+    def set_tapped(permanent: int, tapped: bool) -> GameStateEdit: ...
+    @staticmethod
+    def set_damage(permanent: int, damage: int) -> GameStateEdit: ...
+    @staticmethod
+    def set_counters(permanent: int, kind: str, count: int) -> GameStateEdit: ...
+    @staticmethod
+    def set_life(player: int, life: int) -> GameStateEdit: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
 class GameSnapshot:
     @property
     def acting_player(self) -> int | None: ...
@@ -251,6 +268,7 @@ class RestoreOptions:
         reseed: int | None = None,
         enable_decision_memory: bool | None = None,
         forced_first_action: int | None = None,
+        game_state_edits: Sequence[GameStateEdit] | None = None,
     ) -> RestoreOptions: ...
     @staticmethod
     def shuffle_libraries(
@@ -258,6 +276,7 @@ class RestoreOptions:
         *,
         enable_decision_memory: bool | None = None,
         forced_first_action: int | None = None,
+        game_state_edits: Sequence[GameStateEdit] | None = None,
     ) -> RestoreOptions: ...
     @staticmethod
     def determinize(
@@ -266,6 +285,7 @@ class RestoreOptions:
         *,
         enable_decision_memory: bool | None = None,
         forced_first_action: int | None = None,
+        game_state_edits: Sequence[GameStateEdit] | None = None,
     ) -> RestoreOptions: ...
 
 class SnapshotMetadata:
@@ -292,6 +312,7 @@ class SnapshotMetadata:
 
 class Env:
     def snapshot(self) -> GameSnapshot: ...
+    def edit_game_state(self, edits: Sequence[GameStateEdit]) -> Observation: ...
     def __init__(
         self,
         seed: int = 0,

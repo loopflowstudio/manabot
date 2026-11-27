@@ -889,13 +889,6 @@ impl Game {
         departing_lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
     ) -> EventResult {
-        // A write through `zones` advances every revision; most moves have
-        // no melded card to release, so read before writing.
-        let second = self
-            .state
-            .zones
-            .melded_card(prior_object)
-            .and_then(|_| self.state.zones.separate_melded_card(prior_object));
         let owner = self.state.entry_object(prior_object).owner;
 
         let definition = self.state.entry_object(prior_object).definition_id;
@@ -937,10 +930,7 @@ impl Game {
         };
         let entry_face_down = entry.is_face_down();
         let event_controller = departing_lki.as_ref().map_or(holder, |lki| lki.controller);
-        if let Some(mut lki) = departing_lki {
-            lki.meld_partner = second;
-            lki.copiable = default_content_pack()
-                .retain_copiable_values(self.state.entry_object(prior_object));
+        let second = departing_lki.and_then(|lki| {
             let history = &mut self.state.turn.history[lki.controller.0];
             history.permanents_left += 1;
             history.nonland_permanents_left += u32::from(!lki.was_land());
@@ -951,10 +941,8 @@ impl Game {
                     exposure.combat.deaths.insert(lki.permanent);
                 }
             }
-            self.state.object_to_permanent[prior_object.slot()] = None;
-            self.state.permanents[lki.permanent] = None;
-            self.record_object_lki(lki);
-        }
+            self.retire_permanent(lki)
+        });
         let cast = match (old_zone == Some(ZoneType::Stack))
             .then(|| self.stack_index_of(Target::StackSpell(prior_object)))
             .flatten()
@@ -1255,6 +1243,20 @@ impl Game {
         if let Some(combat) = self.state.combat.as_mut() {
             combat.remove_from_combat(permanent_id);
         }
+    }
+
+    /// Retire the battlefield row while preserving its exact identity for
+    /// abilities that still refer to it. Return the other component of a meld
+    /// so the caller can place both physical cards.
+    pub(super) fn retire_permanent(&mut self, mut lki: ObjectLki) -> Option<ObjectId> {
+        let meld_partner = self.state.zones.separate_melded_card(lki.object);
+        lki.meld_partner = meld_partner;
+        lki.copiable =
+            default_content_pack().retain_copiable_values(self.state.entry_object(lki.object));
+        self.state.object_to_permanent[lki.object.slot()] = None;
+        self.state.permanents[lki.permanent] = None;
+        self.record_object_lki(lki);
+        meld_partner
     }
 
     /// Leave-the-battlefield bookkeeping: fire delayed triggers watching the

@@ -249,6 +249,38 @@ def test_malformed_native_row_never_falls_back_to_bot_import() -> None:
         import_game({"schema": "managym-game-v1", "decisions": []})
 
 
+def test_imported_state_edit_marks_the_verified_replay_choice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
+    env = managym.Env(seed=7)
+    obs, _ = env.reset(
+        [managym.PlayerConfig(str(seat), {"Mountain": 12}) for seat in (0, 1)]
+    )
+    for _ in range(8):
+        if any(
+            action.action_type == managym.ActionEnum.PRIORITY_PLAY_LAND
+            for action in obs.action_space.actions
+        ):
+            break
+        obs, *_ = env.step(0)
+    else:
+        pytest.fail("seeded game did not reach a land play")
+    env.edit_game_state([managym.GameStateEdit.set_life(obs.agent.player_index, 13)])
+    env.step(0)
+
+    imported = import_game(json.loads(env.snapshot().to_replay_json()))
+    assert imported["stop"] == "interrupted"
+    recording, _ = server._recording_read(imported["id"])
+    marked = [
+        kinds
+        for position in recording.positions
+        if position.kind == "choice"
+        and (kinds := recording.metadata(position)["branched"])
+    ]
+    assert marked == [["game_state_edits"]]
+
+
 def test_search_outputs_open_without_private_runner_metadata(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

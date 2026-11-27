@@ -257,6 +257,7 @@ export function analysedEvidence(frame: ExperienceFrame, decision: AnalysedDecis
 const BRANCHES: Record<BranchKind, string> = {
   determinize: 'hidden cards re-dealt',
   shuffle_libraries: 'libraries reshuffled',
+  game_state_edits: 'game state edited',
   reseed: 'randomness reseeded',
 };
 const BRANCH_ENTRY = 'branch:';
