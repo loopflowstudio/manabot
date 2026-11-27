@@ -611,9 +611,12 @@ impl ClassSearch<'_, '_> {
         if pooled.usable_total(chooser.cost) > owed {
             for class in (0..position).filter(|class| self.counts[*class] > 0) {
                 if !self.budget.take()
-                    || chooser
-                        .model
-                        .is_surplus(pooled, self.classes[class].output, chooser.cost, &[])
+                    || chooser.model.is_surplus(
+                        pooled,
+                        self.classes[class].output,
+                        chooser.cost,
+                        &[],
+                    )
                 {
                     return;
                 }
@@ -806,7 +809,13 @@ impl PaymentModel<'_> {
             taps,
             budget,
         };
-        search.visit(0, pool.clone(), 0, Kinds::default(), OutputTiebreak::default());
+        search.visit(
+            0,
+            pool.clone(),
+            0,
+            Kinds::default(),
+            OutputTiebreak::default(),
+        );
         debug_assert!(
             chooser.pooled(&search.taps).can_pay(cost),
             "the chosen sources pay the cost"
@@ -1025,11 +1034,7 @@ mod tests {
             (["B", "G"], ["G", "B"], "B"),
         ] {
             let want = Mana::parse(expected_color);
-            for probe in [
-                PaymentProbe::default(),
-                hand(&[a[0], a[1]]),
-                hand(&["1"]),
-            ] {
+            for probe in [PaymentProbe::default(), hand(&[a[0], a[1]]), hand(&["1"])] {
                 for order in [a, b] {
                     let model = lands(&order);
                     let (choice, searched) = choose(&model, "1", &[], Some(probe.clone()));

@@ -255,7 +255,10 @@ fn structured_offer_candidates_are_uncapped_past_legacy_tensor_width() {
                 .as_mut()
                 .unwrap()
                 .counters
-                .change(managym::state::permanent::CounterKind::PlusOnePlusOne, count);
+                .change(
+                    managym::state::permanent::CounterKind::PlusOnePlusOne,
+                    count,
+                );
         }
     }
     scenario
@@ -268,7 +271,11 @@ fn structured_offer_candidates_are_uncapped_past_legacy_tensor_width() {
         .structured_priority_offers()
         .expect("structured priority offers");
     let (_, candidates) = select_step(cast_offer(&set));
-    assert_eq!(candidates.len(), 35, "33 distinguishable creatures plus both players");
+    assert_eq!(
+        candidates.len(),
+        35,
+        "33 distinguishable creatures plus both players"
+    );
     assert!(candidates.len() > 32);
     assert_eq!(
         candidates

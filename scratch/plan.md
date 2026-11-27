@@ -205,11 +205,11 @@ Readers:
   (`agent/experience.rs:212`), omitted when empty. The native
   `structured_offer::InteractionOffer` and `SEMANTIC_DECISION_VERSION` do not
   change, so `decision_fingerprint` and stored frame comparisons hold.
-- Compound lowering (`agent/structured_offer.rs:1554-1590`) matches each step
-  by exact `Action` equality against the next published space. After a fold,
-  an advertised `{A, C}` can meet a space offering only `B`. Lowering resolves
-  a missing action through the alias list. Compound candidate lists are not
-  themselves deduplicated in this Task.
+- Compound offers (`agent/decision_surface.rs`) deduplicate target, waterbend,
+  attacker, and blocker candidate lists using the shared equivalence classes
+  (with count-based roles where multiple identical objects can be chosen), and
+  compound lowering resolves aliases through `resolve_action_index` and the
+  shared combat normalizers.
 
 ## Affected surfaces and consumers
 
@@ -267,8 +267,7 @@ Readers:
 - Permutation aliases in multi-pick decisions (pick A then C vs C then A).
 - Blocker pairs across two different attackers; library cards; stack
   objects as fold members; trigger ordering.
-- A count or "×3" on the folded offer's label; hand grouping in the UI.
-- Deduplicating compound offer candidates.
+- A count or "×3" on the folded single-step offer's label; hand grouping in the UI.
 
 ## What goes
 
@@ -315,10 +314,7 @@ aligned:
 7. **Offer alias contract and mid-declaration describe** — done (`bf1162183e`). Switched `DecisionOffer.aliases` and `InteractionOffer.aliases` to `SubjectRef` across Rust, Python, TypeScript and all six `protocol/*.schema.json` copies (`scripts/public_api.py check` clean); changed `primary_subject` to `target → source → choice` precedence so `DeclareBlocker` `source` and `aliases` both name the folded attackers; cached one `env.decision()` per hero prompt on `DecisionContext` for `live_decision_group()` reuse and skipped it during villain autoplay/auto-pass; filtered committed `declined_attackers`/`declined_blockers` out of `CombatGroup::describe` (returning `None` when empty, preserving uncommitted symmetry) with the `MustBeBlocked` and attacker repro tests; documented live-in-zone-only aliases on both contracts and in `managym/README.md`. All focused Rust (`interchangeable`, protocol schemas, `rules_tests` `decision_group`), Python (`test_decision_group.py`, `test_interchangeable_offers.py`, protocol/academy tests), Vitest (321/321), and `svelte-check` checks pass. Engine Budget baseline adoption remains deferred to CI/gate.
 
 8. **Post-Pass 7 review fixes** — done in realign (`14c514d622`..`747d0f9d71`). `primary_subject` takes the offer's `Action`: `DeclareBlocker` names its folded attacker (`target` first), every other offer names its `source` first, so attacking a planeswalker keeps the attacker in `Offer.source` as on `origin/main` (`tests/rules/attack_targets.rs::attack_offers_name_the_attacker_as_source_whatever_the_defender`). `_auto_play_villain` builds its recorded context with `include_decision=True`, so Play records villain frames with the same aliases and `frame_hash` as Watch/Import; only unrecorded hero auto-passes skip projection (`test_server_projects_each_recorded_decision_once`). Branch-wide `cargo fmt` / `ruff format` applied. All 25 non-Engine-Budget CI jobs green on PR #627 (`747d0f9d71`).
-9. **Ship-review follow-up (`4b`, `5b`, and `bench_steps` throughput)** — next. Direction from `scratch/ship-review-notes.md` (Jack Heart, 2026-11-26): *"3a 4b 5b"* and *"A"*:
-   - **Compound/structured candidate deduplication (`4b`).** In `managym/src/agent/decision_surface.rs` (`compound_offers`, `structured_priority_offers`, `structured_attacker_offers`), deduplicate `CandidateSource` lists for identical targets, waterbend taps, attackers, and blockers using the shared object-equivalence classes / `fold_action_space` aliases (with count-based roles where identical creatures/taps can be chosen multiple times). Keep compound lowering and all `structured_offers` / `structured_attacker_offers` / `decision_surface` tests green (updating assertions that counted duplicate candidates).
-   - **Deterministic `autotapper` color/output tiebreak (`5b`).** In `managym/src/flow/mana/autotapper.rs`, tie-break equal-reluctance, equal-followup mana sources by deterministic color/output class before falling back to battlefield `PermanentId` / discovery order, so tapping one of two interchangeable basics never alters which color a later automatic payment (`PayCost` or Waterbend remainder) chooses. Update `autotapper.rs`'s tie-break tests and remove the `autotapper`-shortcut early stops in `managym/tests/interchangeable.rs` (`~1616-1695`) so the behavioral equivalence oracle runs through automatic payment shortcuts with zero divergence. (Re-record conformance evidence if any trace changes.)
-   - **Recover `bench_steps` throughput (`Engine Budget` CI job `140214682300`).** CI `search total` is already −17.9% faster (`55.714 s → 45.721 s`, `ok`) and `worst reply` −5.4% faster (`1.378 s → 1.304 s`, `ok`), but `steps throughput` landed at `35,772.6/s` vs `39,802.6/s` (−10.1%), just 1.1% below the −10% floor (`36,184.2/s`). Profile `bench_steps` in release mode and trim hot-path overhead (e.g., early-exit non-foldable `ActionSpaceKind`s before scanning `fold_action_space`, avoid redundant `board_scan()` / `ReferenceCensus` work on common priority/combat decisions, tighten `fold_candidate` / `declined_interchangeable_permanent` fast paths) so `bench_steps` sits comfortably above the −10% floor (ideally near/above reference) while keeping `bench_search` fast. Baseline adoption (`managym/perf/baseline.json`) happens from the green CI `Engine Budget` artifact at gate/CI.
+9. **Ship-review follow-up (`4b`, `5b`, and `bench_steps` throughput)** — done (`6edd324f3`, `1b4ad1db4`, `94e654bb9`, plus receipt/test alignment). Deduplicated `decision_surface.rs` candidate lists (`single_target_offer`, `structured_attacker_offers`, `structured_attack_assignments`, `structured_blocker_offers`, `structured_waterbend_offers`) via `partition_interchangeable_permanents` / `deduplicate_interchangeable_targets` with count-based roles for multi-member classes; added deterministic color/output tiebreak (`cmp_mana_output` / `OutputTiebreak`, WUBRGC + total + classed) before `PermanentId` in `autotapper.rs` and `automatic_choice_taps`, removed the `autotapper`-shortcut early stops in `managym/tests/interchangeable.rs` (oracle verifies 136 folded pairs through automatic payments with zero divergence), and refreshed conformance (`evidence-interchangeable-v1.json`, 14 cases / 3,161 commands) and authored-match receipts (`174` commands, zero parity divergence); trimmed `fold_action_space` / `ReferenceCensus` and `Observation::new` (`add_permanent`, `populate_cards`, `definition_counts`, `unseen_objects`) hot paths for a +9.8% release `bench_steps` gain (`49,101.3 → 53,892.2 steps/s`, identical digest `9897414478134187774`). Baseline adoption (`managym/perf/baseline.json`) remains deferred to CI/gate.
 
 ## Concept reviews — choices made for review
 

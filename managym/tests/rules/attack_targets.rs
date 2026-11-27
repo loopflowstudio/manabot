@@ -216,11 +216,11 @@ fn ten_attackers_choose_independently_among_six_planeswalkers() {
             clear_summoning_sickness(&mut s, attacker);
         }
     }
-    for _ in 0..6 {
+    for idx in 0..6 {
         let walker = s.force_permanent_on_battlefield(1, "Island");
         let object = card_of(&s, walker);
         s.game_mut().state[object].types = CardTypes::new([CardType::Planeswalker]);
-        set_counters(&mut s, walker, CounterKind::Loyalty, 10);
+        set_counters(&mut s, walker, CounterKind::Loyalty, 10 + idx);
     }
     let mut restricted = s.clone();
     restricted.force_permanent_on_battlefield(1, tomik);

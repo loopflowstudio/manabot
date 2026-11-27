@@ -33,10 +33,10 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-planeswalkers.json"
 )
-AUTHORITY_SHA256 = "5358f024ea626c6e46d8982dc91404779e28e63eff88ff0b684036c079055e04"
-TERMINAL_STATE = "c8746a5bfa063edda3ca2d8017cf0c91dc20b994314c91340f56b06ead1e9979"
+AUTHORITY_SHA256 = "a2eb4df25ac2651be7121644aff8d27d13ca02188308bd74c70c79d2c538441e"
+TERMINAL_STATE = "7579635e057980ae75908fc77f25300fa96cc1ed4fb45184b83ca595bd754dff"
 
-COMMAND_COUNT = 228
+COMMAND_COUNT = 174
 
 
 def _json_bytes(value: object) -> bytes:

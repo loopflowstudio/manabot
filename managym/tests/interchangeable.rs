@@ -1689,7 +1689,8 @@ fn verify_folded_pair(base: &Game, surviving_idx: usize, alias_object: ObjectId,
         // A London mulligan redraw shuffles the unordered hand into the library
         // with Fisher-Yates (uniformly distributed, but dependent on the
         // pre-shuffle hand slot index under a fixed PRNG seed).
-        if kept_branch.state.turn.turn_number == 0 && matches!(la, Action::ChooseMode { mode: 1, .. })
+        if kept_branch.state.turn.turn_number == 0
+            && matches!(la, Action::ChooseMode { mode: 1, .. })
         {
             break;
         }

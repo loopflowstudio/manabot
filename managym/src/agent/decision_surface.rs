@@ -344,14 +344,21 @@ impl DecisionSurface {
                     for role_entry in roles {
                         match role_entry {
                             AttackerRole::Subset { role, attackers } => {
-                                bindings.extend(attackers.iter().map(|(candidate_id, object_ref)| {
-                                    (*offer_id, *role, *candidate_id, *object_ref)
-                                }));
+                                bindings.extend(attackers.iter().map(
+                                    |(candidate_id, object_ref)| {
+                                        (*offer_id, *role, *candidate_id, *object_ref)
+                                    },
+                                ));
                             }
                             AttackerRole::Count { role, counts } => {
                                 for (candidate_id, objects) in counts {
                                     if let Some(object_ref) = objects.last() {
-                                        bindings.push((*offer_id, *role, *candidate_id, *object_ref));
+                                        bindings.push((
+                                            *offer_id,
+                                            *role,
+                                            *candidate_id,
+                                            *object_ref,
+                                        ));
                                     }
                                 }
                             }
@@ -487,9 +494,9 @@ impl DecisionSurface {
                             match candidates {
                                 [] => {}
                                 [candidate] => {
-                                    let objects = counts
-                                        .get(candidate)
-                                        .ok_or(DecisionSurfaceError::UnknownCandidate(*candidate))?;
+                                    let objects = counts.get(candidate).ok_or(
+                                        DecisionSurfaceError::UnknownCandidate(*candidate),
+                                    )?;
                                     selected_objects.extend(objects.iter().copied());
                                 }
                                 _ => {
@@ -1093,8 +1100,9 @@ impl Game {
                     let class_idx = attacker_class_of[&attacker];
                     if per_class_allowed[class_idx] == 0 {
                         attacker_class_seen[class_idx] += 1;
-                        per_class_allowed[class_idx] =
-                            attacker_classes[class_idx].len().min(attacker_class_seen[class_idx]);
+                        per_class_allowed[class_idx] = attacker_classes[class_idx]
+                            .len()
+                            .min(attacker_class_seen[class_idx]);
                     }
                 }
                 let mut candidates = Vec::new();
