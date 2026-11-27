@@ -1465,17 +1465,10 @@ fn counter_cost_cannot_be_replenished_by_another_counter_only_mana_ability() {
     assert!(ability.is_mana_ability());
 }
 
-#[test]
-fn mana_counter_cost_can_require_replacement_order() {
-    use crate::agent::action::Action;
-    use crate::flow::{
-        game::Game,
-        proposed_event::{
-            BatchProgress, CounterProvenance, EventBinding, EventCause, ProposedEvent,
-        },
-    };
+fn counter_replacement_mana_setup(
+    output: crate::state::ability::Effect,
+) -> (crate::Env, PermanentId) {
     use crate::state::{
-        ability::Effect,
         card::{ActivatedAbilityDefinition, ReplacementEffect},
         game_object::PlayerId,
         permanent::CounterKind,
@@ -1484,23 +1477,23 @@ fn mana_counter_cost_can_require_replacement_order() {
 
     let player = PlayerId(0);
     let caradora = "Caradora, Heart of Alacria";
-    let mut game = Game::new(
-        vec![
-            PlayerConfig::new(
-                "payer",
-                [
-                    ("Forest".into(), 37),
-                    (caradora.into(), 1),
-                    ("Doubling Season".into(), 1),
-                    ("Gray Ogre".into(), 1),
-                ]
-                .into(),
-            ),
-            PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
-        ],
-        347,
-        false,
-    );
+    let mut env = crate::Env::new(347, false, false, false);
+    env.reset(vec![
+        PlayerConfig::new(
+            "payer",
+            [
+                ("Forest".into(), 35),
+                (caradora.into(), 1),
+                ("Doubling Season".into(), 1),
+                ("Gray Ogre".into(), 2),
+                ("White Lotus Tile".into(), 1),
+            ]
+            .into(),
+        ),
+        PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+    ])
+    .unwrap();
+    let game = env.fixture_game_mut();
     game.keep_opening_hands();
     game.scenario_force_battlefield(player, caradora, true)
         .unwrap();
@@ -1508,8 +1501,8 @@ fn mana_counter_cost_can_require_replacement_order() {
         .scenario_force_battlefield(player, "Doubling Season", true)
         .unwrap();
     let season = game.permanent_object(season).unwrap();
-    // Doubling Season normally modifies effects only. Make its doubling
-    // apply to costs too, so the order changes the number of counters paid.
+    // Let Doubling Season apply to costs too, so changing the order
+    // changes the counter total.
     for effect in &mut game.state[season].replacement_effects {
         if let ReplacementEffect::ModifyCounters { effects_only, .. } = effect {
             *effects_only = false;
@@ -1519,66 +1512,381 @@ fn mana_counter_cost_can_require_replacement_order() {
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();
     let object = game.permanent_object(permanent).unwrap();
-    let kind = CounterKind::PlusOnePlusOne;
     game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
         tap_source: true,
-        add_counters: Some((kind, 1)),
-        effects: vec![Effect::add_mana(Mana::parse("G"))],
+        add_counters: Some((CounterKind::PlusOnePlusOne, 1)),
+        effects: vec![output],
         ..Default::default()
     }];
     game.mana_floats[player.0] = ManaFloats::All;
-    game.tick().unwrap();
-    let action = Action::ActivateAbility {
-        player,
-        permanent,
-        ability_index: 0,
-    };
-    assert!(game.action_space().unwrap().actions.contains(&action));
+    (env, permanent)
+}
 
-    let mut fork = game.clone();
-    assert!(fork.tap_permanent(permanent, true));
-    let mut batch = fork.event_batch(
-        EventBinding::None,
-        [ProposedEvent::CounterChange {
-            provenance: CounterProvenance::new(EventCause::Cost),
-            target: object,
-            kind,
-            delta: 1,
-            by: Some(player),
-        }],
-    );
-    let BatchProgress::Decision(order) = fork.advance_event_batch(&mut batch, Some(player)) else {
-        panic!("expected a choice between the two counter replacements");
+fn mana_action_index(
+    game: &crate::flow::game::Game,
+    action: crate::agent::action::Action,
+) -> usize {
+    let actions = &game.action_space().unwrap().actions;
+    actions
+        .iter()
+        .position(|offer| *offer == action)
+        .unwrap_or_else(|| panic!("missing {action:?} in {actions:?}"))
+}
+
+#[test]
+fn mana_counter_cost_can_require_replacement_order() {
+    use crate::agent::action::Action;
+    use crate::flow::decision::Decision;
+    use crate::state::{
+        ability::{Condition, Effect},
+        game_object::PlayerId,
+        permanent::CounterKind,
+        predicate::CardPredicate,
     };
-    let super::Decision::OrderReplacement {
-        player: chooser,
-        candidates,
-    } = *order
-    else {
-        panic!("expected OrderReplacement");
+
+    let player = PlayerId(0);
+    let fixed = Effect::add_mana(Mana::parse("G"));
+    let dynamic = Effect::If {
+        condition: Condition::ControlsAtLeast {
+            count: 1,
+            distinct_names: false,
+            predicate: CardPredicate {
+                min_power: Some(6),
+                ..CardPredicate::creature()
+            },
+        },
+        then: vec![Effect::add_mana(Mana::parse("GG"))],
+        otherwise: vec![fixed.clone()],
     };
-    assert_eq!(chooser, player);
-    assert_eq!(candidates.len(), 2);
-    // Resume each counter event with its own order. The engine must retain
-    // the activation while the payer makes this decision.
-    let mut totals = Vec::new();
-    for candidate in candidates {
-        let mut branch = fork.clone();
-        let mut batch = batch.clone();
-        branch.choose_replacement(&mut batch, &candidate);
+    for (output, depends_on_counters) in [(fixed, false), (dynamic, true)] {
+        let (mut env, permanent) = counter_replacement_mana_setup(output);
+        let game = env.fixture_game_mut();
+        game.tick().unwrap();
+        let activate = mana_action_index(
+            game,
+            Action::ActivateAbility {
+                player,
+                permanent,
+                ability_index: 0,
+            },
+        );
+        env.step(activate as i64).unwrap();
+
+        let game = env.fixture_game_mut();
         assert!(matches!(
-            branch.advance_event_batch(&mut batch, Some(player)),
-            BatchProgress::Complete { .. }
+            &game.state.suspended_decision.as_ref().unwrap().decision,
+            Decision::OrderReplacement { player: chooser, candidates }
+                if *chooser == player && candidates.len() == 2
         ));
-        totals.push(
-            branch.state.permanents[permanent]
+        assert_eq!(
+            game.action_space().unwrap().actions,
+            [
+                Action::ChooseMode { player, mode: 0 },
+                Action::ChooseMode { player, mode: 1 },
+            ]
+        );
+        assert_eq!(game.pooled_mana(player), Mana::default());
+        let pending = game.state.deterministic_hash();
+        let snapshot = env.snapshot().unwrap();
+        let mut totals = Vec::new();
+        for mode in [0, 1] {
+            let mut restored = snapshot.restore(Default::default()).unwrap();
+            let game = restored.fixture_game_mut();
+            assert_eq!(game.state.deterministic_hash(), pending);
+            let source = game.state.permanents[permanent].as_ref().unwrap();
+            assert!(source.tapped);
+            assert_eq!(source.counter_count(CounterKind::PlusOnePlusOne), 0);
+
+            restored.step(mode).unwrap();
+            let game = restored.fixture_game_mut();
+            let counters = game.state.permanents[permanent]
                 .as_ref()
                 .unwrap()
-                .counter_count(kind),
-        );
+                .counter_count(CounterKind::PlusOnePlusOne);
+            totals.push(counters);
+            let mana = if depends_on_counters && counters == 4 {
+                Mana::parse("GG")
+            } else {
+                Mana::parse("G")
+            };
+            assert!(matches!(
+                &game.state.suspended_decision.as_ref().unwrap().decision,
+                Decision::ManaChoice { choices, .. } if choices == std::slice::from_ref(&mana)
+            ));
+            assert_eq!(game.pooled_mana(player), Mana::default());
+            restored.step(0).unwrap();
+            assert_eq!(restored.fixture_game_mut().pooled_mana(player), mana);
+            if mode == 0 {
+                env.step(mode).unwrap();
+                env.step(0).unwrap();
+                assert_eq!(
+                    env.selected_witness().unwrap(),
+                    restored.selected_witness().unwrap()
+                );
+            }
+        }
+        totals.sort_unstable();
+        assert_eq!(totals, [3, 4]);
     }
-    totals.sort_unstable();
-    assert_eq!(totals, [3, 4]);
+}
+
+#[test]
+fn mana_sacrifice_cost_commits_before_counting_output() {
+    use crate::agent::action::Action;
+    use crate::flow::decision::Decision;
+    use crate::state::{
+        ability::{Effect, EffectValue},
+        card::ActivatedAbilityDefinition,
+        game_object::PlayerId,
+        mana::Color,
+        permanent::{CounterKind, EntryChoice},
+        player::{ManaFloats, PlayerConfig},
+        predicate::CardPredicate,
+    };
+
+    let player = PlayerId(0);
+    for chosen_color in [false, true] {
+        let deck = [("Forest".into(), 38), ("Gray Ogre".into(), 2)].into();
+        let mut game = crate::flow::game::Game::new(
+            vec![
+                PlayerConfig::new("payer", deck),
+                PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+            ],
+            348,
+            false,
+        );
+        game.keep_opening_hands();
+        game.mana_floats[player.0] = ManaFloats::All;
+        let permanent = game
+            .scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        game.scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        let source = game.state.permanents[permanent].as_mut().unwrap();
+        source.chosen = chosen_color.then(|| Arc::new(EntryChoice::Color(Color::Red)));
+        let object = source.object;
+        let amount = EffectValue::BattlefieldMatching {
+            predicate: CardPredicate::creature(),
+        };
+        let output = if chosen_color {
+            Effect::AddOneColorManaValue {
+                amount,
+                chosen_color: true,
+                creature_purposes: Vec::new(),
+            }
+        } else {
+            Effect::AddMana {
+                mana: Mana::parse("G"),
+                amount,
+                until_end_of_combat: false,
+            }
+        };
+        let counter = CounterKind::PlusOnePlusOne;
+        game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+            tap_source: true,
+            add_counters: Some((counter, 1)),
+            sacrifice_source: true,
+            effects: vec![output],
+            ..Default::default()
+        }];
+        game.tick().unwrap();
+        let activate = mana_action_index(
+            &game,
+            Action::ActivateAbility {
+                player,
+                permanent,
+                ability_index: 0,
+            },
+        );
+        game.step(activate).unwrap();
+        assert!(game.permanent_object(permanent).is_none());
+        assert_eq!(game.object_lki(object).unwrap().counters.get(counter), 1);
+        let mana = Mana::parse(if chosen_color { "R" } else { "G" });
+        assert!(matches!(
+            &game.state.suspended_decision.as_ref().unwrap().decision,
+            Decision::ManaChoice { choices, .. } if choices == std::slice::from_ref(&mana)
+        ));
+        let choose = mana_action_index(&game, Action::ChooseMode { player, mode: 0 });
+        game.step(choose).unwrap();
+        assert_eq!(game.pooled_mana(player), mana);
+    }
+}
+
+#[test]
+fn mana_counter_cost_preserves_enclosing_payment() {
+    use crate::agent::action::Action;
+    use crate::flow::{
+        decision::{Decision, EffectFrame},
+        payment::{CostComponent, PaymentProgress},
+        turn::StepKind,
+    };
+    use crate::state::{
+        ability::{Actor, Effect, EffectValue, PlayerSelector},
+        card::{
+            ActivatedAbilityDefinition, DamageRecipient, DamageSource, DamageTransform,
+            ReplacementEffect,
+        },
+        game_object::PlayerId,
+        permanent::CounterKind,
+        zone::ZoneType,
+    };
+
+    let player = PlayerId(0);
+    for resolving in [false, true] {
+        let (mut env, ogre) = counter_replacement_mana_setup(Effect::add_mana(Mana::parse("G")));
+        let game = env.fixture_game_mut();
+        let ogre_object = game.permanent_object(ogre).unwrap();
+        game.state[ogre_object].activated_abilities[0]
+            .effects
+            .push(Effect::DealDamageToPlayer {
+                player: PlayerSelector::You,
+                amount: EffectValue::Fixed(1),
+            });
+        game.state[ogre_object].replacement_effects =
+            [DamageTransform::Double, DamageTransform::PreventAll]
+                .into_iter()
+                .map(|transform| ReplacementEffect::ModifyDamage {
+                    source: DamageSource::this(),
+                    recipient: DamageRecipient::any(Actor::You),
+                    combat: Some(false),
+                    transform,
+                })
+                .collect();
+        let outer = game
+            .scenario_force_battlefield(player, "White Lotus Tile", true)
+            .unwrap();
+        let source = game.permanent_object(outer).unwrap();
+        let counter = CounterKind::Charge;
+        game.state.change_counters(outer, counter, 1);
+        game.state[source].activated_abilities = vec![
+            ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("G"),
+                remove_counters: Some((counter, 1)),
+                effects: vec![Effect::add_mana(Mana::parse("RRR"))],
+                ..Default::default()
+            },
+            ActivatedAbilityDefinition {
+                remove_counters: Some((counter, 1)),
+                effects: vec![Effect::add_mana(Mana::parse("B"))],
+                ..Default::default()
+            },
+            ActivatedAbilityDefinition {
+                sacrifice_source: true,
+                effects: vec![Effect::add_mana(Mana::parse("B"))],
+                ..Default::default()
+            },
+        ];
+        if resolving {
+            game.continue_resolution(
+                EffectFrame::new(player, Vec::new()),
+                Some(Decision::Payment(PaymentProgress::new(
+                    player,
+                    vec![
+                        CostComponent::mana(ManaCost::parse("2R")),
+                        CostComponent::Life(2),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ))),
+            );
+            game.tick().unwrap();
+        } else {
+            game.scenario_clear_hand(player);
+            game.scenario_force_card_in_hand(player, "Gray Ogre")
+                .unwrap();
+            let spell = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+            game.tick().unwrap();
+            for _ in 0..4 {
+                if game.state.turn.current_step_kind() == StepKind::Main {
+                    break;
+                }
+                let holder = game.action_space().unwrap().player.unwrap();
+                let pass = mana_action_index(game, Action::PassPriority { player: holder });
+                game.step(pass).unwrap();
+            }
+            assert_eq!(game.state.turn.current_step_kind(), StepKind::Main);
+            let actions = &game.action_space().unwrap().actions;
+            let cast = actions
+                .iter()
+                .position(
+                    |action| matches!(action, Action::CastSpell { object, .. } if *object == spell),
+                )
+                .expect("cast Gray Ogre with mana from the outer activation");
+            game.step(cast).unwrap();
+        }
+
+        for permanent in [outer, ogre] {
+            let activate = mana_action_index(
+                game,
+                Action::ActivateAbility {
+                    player,
+                    permanent,
+                    ability_index: 0,
+                },
+            );
+            game.step(activate).unwrap();
+        }
+        // The counter batch retains the unpaid caller. The damage suffix
+        // also retains that caller through the now-computed ManaChoice.
+        for has_output in [false, true] {
+            let suspended = game.state.suspended_decision.as_ref().unwrap();
+            assert!(matches!(
+                suspended.decision,
+                Decision::OrderReplacement { .. }
+            ));
+            assert_eq!(
+                suspended
+                    .decisions()
+                    .any(|decision| matches!(decision, Decision::ManaChoice { .. })),
+                has_output,
+            );
+            let model = game.payment_model(player, None);
+            assert!(model
+                .sources
+                .iter()
+                .find(|source| source.permanent == outer)
+                .unwrap()
+                .abilities
+                .is_empty());
+            let obligations = game.payment_obligations(player);
+            assert!(
+                matches!(&obligations[..3], [
+                    Obligation::Pay { cost: fee, .. },
+                    Obligation::Output { choices, .. },
+                    Obligation::Pay { cost: cast, .. }
+                ] if fee.cost == ManaCost::parse("G").cost
+                    && choices.as_ref() == [Mana::parse("RRR")]
+                    && cast.cost == ManaCost::parse("2R").cost
+                ),
+                "{obligations:?}"
+            );
+            assert_eq!(
+                &obligations[3..],
+                if resolving {
+                    &[Obligation::PayLife(2)][..]
+                } else {
+                    &[]
+                },
+            );
+            let choose = mana_action_index(game, Action::ChooseMode { player, mode: 0 });
+            game.step(choose).unwrap();
+        }
+
+        for _ in 0..2 {
+            let choose = mana_action_index(game, Action::ChooseMode { player, mode: 0 });
+            game.step(choose).unwrap();
+        }
+        if resolving {
+            let pay = mana_action_index(game, Action::PayCost { player });
+            game.step(pay).unwrap();
+        }
+        assert_eq!(game.pooled_mana(player), Mana::default());
+        assert_eq!(
+            game.state.players[player.0].life,
+            if resolving { 18 } else { 20 }
+        );
+        assert_eq!(game.state.stack_objects.len(), usize::from(!resolving));
+    }
 }
 
 #[test]

@@ -30,12 +30,13 @@ use crate::{
     flow::{
         decision::{
             Decision, EffectFrame, FrameCompletion, ManaProduction, ManaUpfrontActivation,
-            PendingManaBonus, SpendCompletion, SuspendedResolution, TappedForMana,
+            PendingManaBonus, PendingManaOutput, SpendCompletion, SuspendedResolution,
+            TappedForMana,
         },
         game::{ActivationSource, Game, PendingChoice},
         layers::StateReads,
         payment::{CostComponent, CostPermissionContext, Help, Operation, Payment},
-        proposed_event::{CounterProvenance, EventCause, ProposedEvent},
+        proposed_event::{CounterProvenance, EventBinding, EventCause, ProposedEvent},
         statics::Characteristics,
         turn::StepKind,
     },
@@ -52,7 +53,7 @@ use crate::{
             SpendingContext,
         },
         payment::{How, ManaOrigin, PaymentReceipt, SpentMana},
-        permanent::CounterKind,
+        permanent::{CounterKind, EntryChoice},
         zone::ZoneType,
     },
 };
@@ -3176,14 +3177,11 @@ impl Game {
     fn upfront_mana_outputs(
         &self,
         player: PlayerId,
-        permanent: PermanentId,
-        activation: &ManaUpfrontActivation,
+        effect: &Effect,
+        chosen: Option<&EntryChoice>,
     ) -> Vec<Mana> {
-        let chosen = self.state.permanents[permanent]
-            .as_ref()
-            .and_then(|source| source.chosen.as_deref());
-        let output = self.current_mana_output(&activation.output, player, chosen);
-        mana_output_choices(output.as_ref().unwrap_or(&activation.output))
+        let output = self.current_mana_output(effect, player, chosen);
+        mana_output_choices(output.as_ref().unwrap_or(effect))
             .expect("an announced mana ability has a mana output")
     }
 
@@ -3246,39 +3244,27 @@ impl Game {
             self.reserve_announced_payment(payment, &mut model);
             self.mark_help_taps(&mut model, payment.help());
         }
-        fn reserve(decision: &Decision, game: &Game, model: &mut PaymentModel) {
-            match decision {
-                Decision::ManaSpend { completion, .. } => match completion.as_ref() {
-                    SpendCompletion::Upfront(next) => reserve(next, game, model),
-                    SpendCompletion::Announced(payment) => {
-                        game.reserve_announced_payment(payment, model);
+        if let Some(suspended) = &self.state.suspended_decision {
+            for decision in suspended.decisions().rev() {
+                match decision {
+                    Decision::ManaSpend { completion, .. } => {
+                        if let SpendCompletion::Announced(payment) = completion.as_ref() {
+                            self.reserve_announced_payment(payment, &mut model);
+                        }
                     }
-                    _ => {}
-                },
-                Decision::ManaUpfront {
-                    permanent,
-                    activation,
-                    resume,
-                    ..
-                } => {
-                    model.reserve_mana_activation(
+                    Decision::ManaUpfront {
+                        permanent,
+                        activation,
+                        ..
+                    } => model.reserve_mana_activation(
                         *permanent,
                         activation.tap_source,
                         activation.sacrifice_source,
                         activation.remove_counters,
-                    );
-                    if let Some(next) = resume {
-                        reserve(next, game, model);
-                    }
+                    ),
+                    _ => {}
                 }
-                Decision::ManaChoice {
-                    resume: Some(next), ..
-                } => reserve(next, game, model),
-                _ => {}
             }
-        }
-        if let Some(suspended) = &self.state.suspended_decision {
-            reserve(&suspended.decision, self, &mut model);
         }
         model
     }
@@ -3575,18 +3561,25 @@ impl Game {
         player: PlayerId,
         owed: Option<&ManaCost>,
     ) -> Vec<Obligation> {
-        fn append(decision: &Decision, game: &Game, result: &mut Vec<Obligation>) {
+        let mut result = Vec::new();
+        let mut spending_upfront = false;
+        for decision in self
+            .state
+            .suspended_decision
+            .iter()
+            .flat_map(|suspended| suspended.decisions().rev())
+            .filter(|decision| decision.player() == player)
+        {
+            // The spend decision carries the unpaid part of its immediate
+            // caller's fee. The rest of that activation is still owed.
+            let fee_in_spend = std::mem::take(&mut spending_upfront);
             match decision {
                 Decision::ManaSpend {
                     cost, completion, ..
                 } => {
                     result.push(Obligation::mana(cost.clone()));
                     match completion.as_ref() {
-                        SpendCompletion::Upfront(next) => {
-                            let mut saved = Vec::new();
-                            append(next, game, &mut saved);
-                            result.extend(saved.into_iter().skip(1));
-                        }
+                        SpendCompletion::Upfront(_) => spending_upfront = true,
                         SpendCompletion::Announced(payment) => {
                             result.extend(Obligation::life(payment.life()))
                         }
@@ -3597,30 +3590,33 @@ impl Game {
                     }
                 }
                 Decision::ManaUpfront {
-                    player,
                     permanent,
                     activation,
                     tap_remaining,
-                    resume,
                     ..
                 } => {
-                    let mut outputs = game.upfront_mana_outputs(*player, *permanent, activation);
+                    let source = self.state.permanents[*permanent].as_ref().unwrap();
+                    let mut outputs = self.upfront_mana_outputs(
+                        player,
+                        &activation.output,
+                        source.chosen.as_deref(),
+                    );
                     if activation.tap_source {
-                        let bonuses = game.tap_bonuses(&game.mana_triggers(), *player, *permanent);
+                        let bonuses = self.tap_bonuses(&self.mana_triggers(), player, *permanent);
                         outputs = production_alternatives(outputs, &bonuses);
                     }
                     if *tap_remaining > 0 {
                         let tap = activation.tap_cost.as_ref().expect("outstanding tap cost");
                         result.push(Obligation::Tap {
-                            candidates: game.tap_candidates(*player, &tap.predicate).into(),
+                            candidates: self.tap_candidates(player, &tap.predicate).into(),
                             remaining: *tap_remaining,
                         });
                     }
-                    let life_delta = game
+                    let life_delta = self
                         .mana_activation_coupling(
-                            &game.layer_board(),
-                            *player,
-                            game.state.permanents[*permanent].as_ref().unwrap().object,
+                            &self.layer_board(),
+                            player,
+                            source.object,
                             StateReads {
                                 mana: true,
                                 tapped: activation.tap_source || *tap_remaining > 0,
@@ -3632,19 +3628,15 @@ impl Game {
                             &activation.suffix,
                         )
                         .life_delta();
-                    result.push(Obligation::mana(activation.mana_cost.clone()));
+                    if !fee_in_spend {
+                        result.push(Obligation::mana(activation.mana_cost.clone()));
+                    }
                     result.push(Obligation::Output {
                         choices: outputs.into(),
                         life_cost: activation.life_cost,
                         life_delta,
                     });
-                    if let Some(next) = resume {
-                        append(next, game, result);
-                    }
                 }
-                Decision::ManaChoice {
-                    resume: Some(next), ..
-                } => append(next, game, result),
                 Decision::Payment(progress) => {
                     if let Some(CostComponent::Mana { cost, .. }) = progress.owed.first() {
                         if !progress.can_decline() || progress.tail_life() > 0 {
@@ -3662,10 +3654,6 @@ impl Game {
                 }
                 _ => {}
             }
-        }
-        let mut result = Vec::new();
-        if let Some(suspended) = &self.state.suspended_decision {
-            append(&suspended.decision, self, &mut result);
         }
         match self.paying() {
             Some((payer, payment, CostComponent::Mana { .. })) if payer == player => {
@@ -5128,9 +5116,8 @@ impl Game {
         )
     }
 
-    /// Finish the paid activation using its owned caller. Costs commit once;
-    /// only the output decision is restored after the source's effects run.
-    fn complete_mana_upfront(&mut self, mut caller: SuspendedResolution) {
+    /// Commit the remaining activation costs before evaluating its mana output.
+    fn complete_mana_upfront(&mut self, caller: SuspendedResolution) {
         let Decision::ManaUpfront {
             player,
             permanent,
@@ -5150,6 +5137,20 @@ impl Game {
             self.tap_permanent(permanent, true);
             tapped = Some(self.tapped_for_mana(permanent));
         }
+        if activation.life_cost > 0 {
+            self.change_life(player, -(activation.life_cost as i32));
+        }
+        let source = self.state.permanents[permanent].as_ref();
+        let output = PendingManaOutput {
+            player,
+            source: source.map(|source| source.object),
+            tapped,
+            chosen: source.and_then(|source| source.chosen.clone()),
+            output: activation.output,
+            suffix: activation.suffix,
+            caller: caller.frame,
+            resume,
+        };
         let counter_costs = [
             activation
                 .remove_counters
@@ -5158,51 +5159,64 @@ impl Game {
                 .add_counters
                 .map(|(kind, count)| (kind, i32::from(count))),
         ];
-        for (kind, delta) in counter_costs.into_iter().flatten() {
-            let Some(target) = self.permanent_object(permanent) else {
-                break;
-            };
-            self.apply_immediate_event(ProposedEvent::CounterChange {
-                provenance: CounterProvenance::new(EventCause::Cost),
-                target,
-                kind,
-                delta,
-                by: Some(player),
+        let has_counter_cost = counter_costs.iter().any(Option::is_some);
+        if !has_counter_cost && !activation.sacrifice_source {
+            self.complete_mana_output(output);
+            return;
+        }
+        let mut costs = EffectFrame::new(player, Vec::new());
+        costs.bind_source(output.source, output.source);
+        if has_counter_cost {
+            let events = output.source.into_iter().flat_map(|target| {
+                counter_costs
+                    .into_iter()
+                    .flatten()
+                    .map(move |(kind, delta)| ProposedEvent::CounterChange {
+                        provenance: CounterProvenance::new(EventCause::Cost),
+                        target,
+                        kind,
+                        delta,
+                        by: Some(player),
+                    })
             });
+            costs.batch = Some(self.event_batch(EventBinding::None, events));
         }
-        if activation.life_cost > 0 {
-            self.change_life(player, -(activation.life_cost as i32));
-        }
-        // Retain the output and original payment frame before any cost
-        // effect can suspend. Resumption must not spend mana, tap or pay life
-        // again, nor expose this output before sacrifice/zone work finishes.
-        let source_ref = self.permanent_object(permanent);
-        caller.decision = Decision::ManaChoice {
-            player,
-            choices: self.upfront_mana_outputs(player, permanent, &activation),
-            production: ManaProduction::Output {
-                source: source_ref,
-                tapped,
-            },
-            resume,
-        };
-        // The sacrifice cost, then the ability's non-mana instructions, run
-        // once as the source's own child frame (CR 605.3b): damage it deals
-        // names the source and can be prevented. Resuming the choice never
-        // reaches this frame again.
-        let mut effects = activation.suffix;
         if activation.sacrifice_source {
-            effects.insert(0, Effect::sacrifice_this());
+            // The departure's last known information includes the cost counters.
+            costs.queue.push_back(Effect::sacrifice_this());
         }
-        if !effects.is_empty() {
-            let mut child = EffectFrame::new(player, effects);
-            child.bind_source(
-                self.state.permanents[permanent].as_ref().map(|p| p.object),
-                source_ref,
-            );
-            self.run_before_decision(child, caller);
-        } else {
+        costs.completion = FrameCompletion::ManaOutput(Box::new(output));
+        self.run_frame(costs);
+    }
+
+    /// Read the paid activation's output once, then finish any suffix before
+    /// publishing its mana choice. The entry choice survives a sacrifice.
+    pub(crate) fn complete_mana_output(&mut self, pending: PendingManaOutput) {
+        let PendingManaOutput {
+            player,
+            source,
+            tapped,
+            chosen,
+            output,
+            suffix,
+            caller,
+            resume,
+        } = pending;
+        let caller = SuspendedResolution {
+            frame: caller,
+            decision: Decision::ManaChoice {
+                player,
+                choices: self.upfront_mana_outputs(player, &output, chosen.as_deref()),
+                production: ManaProduction::Output { source, tapped },
+                resume,
+            },
+        };
+        if suffix.is_empty() {
             *self.state.suspended_decision_mut() = Some(caller);
+        } else {
+            let mut child = EffectFrame::new(player, suffix);
+            child.bind_source(source, source);
+            self.run_before_decision(child, caller);
         }
     }
 

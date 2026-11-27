@@ -7,7 +7,7 @@
 use crate::state::card::SpellProfile;
 #[cfg(test)]
 use crate::state::player::ManaFloats;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::Arc};
 
 use rand::seq::SliceRandom;
 
@@ -35,7 +35,7 @@ use crate::{
         knowledge::LibraryKnowledge,
         mana::ManaCost,
         payment::{How, PaymentReceipt, Toward},
-        permanent::{CounterKind, SpellEntry},
+        permanent::{CounterKind, EntryChoice, SpellEntry},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -73,6 +73,21 @@ impl ManaUpfrontActivation {
     }
 }
 
+/// The announced mana output after the fee, tap and life costs have committed.
+/// The event frame still owes counters or a sacrifice before reading the board.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PendingManaOutput {
+    pub(crate) player: PlayerId,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub(crate) source: Option<ObjectId>,
+    pub(crate) tapped: Option<TappedForMana>,
+    pub(crate) chosen: Option<Arc<EntryChoice>>,
+    pub(crate) output: Effect,
+    pub(crate) suffix: Vec<Effect>,
+    pub(crate) caller: EffectFrame,
+    pub(crate) resume: Option<Box<Decision>>,
+}
+
 /// The caller awaiting a frame's completion. A child owns exactly one return
 /// destination; unfinished effects never grant priority or expose a saved
 /// decision. Spells leave the stack as the final part of resolution (CR 608.2m).
@@ -103,6 +118,8 @@ pub enum FrameCompletion {
         ability: crate::state::stack_object::ActivatedAbilityOnStack,
         source_after_cost: Option<ObjectId>,
     },
+    /// Read the mana output after all counter and sacrifice costs commit.
+    ManaOutput(Box<PendingManaOutput>),
     /// An iteration child returns to its interrupted scope.
     Frame(Box<EffectFrame>),
     /// Announce a completed rules operation before resuming its caller.
@@ -135,6 +152,7 @@ impl FrameCompletion {
             Self::StateBased { next } => next.then(completion),
             Self::Frame(frame) | Self::Event { frame, .. } => frame.completion.then(completion),
             Self::Decision(caller) => caller.frame.completion.then(completion),
+            Self::ManaOutput(output) => output.caller.completion.then(completion),
             _ => panic!("rule continuation must return to its caller"),
         }
     }
@@ -1110,6 +1128,12 @@ impl SuspendedResolution {
                     frame_chain(&caller.frame, out);
                     decision_chain(&caller.decision, out);
                 }
+                FrameCompletion::ManaOutput(output) => {
+                    frame_chain(&output.caller, out);
+                    if let Some(resume) = &output.resume {
+                        decision_chain(resume, out);
+                    }
+                }
                 FrameCompletion::StateBased { next } => completion_chain(next, out),
                 FrameCompletion::DiscardPayment(_)
                 | FrameCompletion::Paid { .. }
@@ -1151,7 +1175,7 @@ impl SuspendedResolution {
     }
 
     /// A child's chooser does not end the retained caller's inspection rights.
-    pub(crate) fn decisions(&self) -> impl Iterator<Item = &Decision> {
+    pub(crate) fn decisions(&self) -> impl DoubleEndedIterator<Item = &Decision> {
         self.continuation()
             .into_iter()
             .filter_map(|part| match part {
@@ -1546,6 +1570,10 @@ impl Game {
                     }
                     FrameCompletion::Decision(caller) => {
                         *self.state.suspended_decision_mut() = Some(*caller);
+                        return Ok(());
+                    }
+                    FrameCompletion::ManaOutput(output) => {
+                        self.complete_mana_output(*output);
                         return Ok(());
                     }
                     FrameCompletion::StateBased { next } => {

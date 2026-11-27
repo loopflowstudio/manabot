@@ -1139,7 +1139,10 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
 An activated mana ability keeps the cost priced when the player announces it.
 Paying that fee can remove a granted ability from its source. The announced
 ability still resolves, and an output that depends on the battlefield uses
-the state after the mana fee is paid.
+the state after all activation costs are paid, including counters and
+sacrifices. If paying a cost requires ordering replacement effects, that
+choice comes before the mana output. A sacrificed source keeps its entry
+choice for abilities that produce its chosen color or use its chosen type.
 
 These choices are on by default for every consumer. They do not expose undo,
 or production at priority unless a seat
