@@ -19,130 +19,123 @@ busy because one game process steps many matches' games together and sends one
 pre-collated `Prepared` per checkpoint per round; a report states games/hour and
 rows per forward for `w160l8` and a 34M model against CPU batch-1.
 
-## Upstream state (read 2026-11-26, second realign)
+## Upstream state (read 2026-11-27, third realign)
 
-- Installed and PyPI `etude-sdk` is 0.4.7: `EvalRun` has only synchronous `play`.
-- Etude EXP-77 (`~/src/etude.exp-77-saturate-the-gpu`) now has code, unreleased:
-  commits `9b1993d` (async `play`, zero-delay barrier batching) and `fb44cae`
-  (docs) on top of v0.4.7, plus uncommitted `play_many` work in `jobs.py`,
-  `eval/run.py`, `eval/game.py`. Its `docs/evaluation.md` now states the
-  contract: `EvalJob(play=...)` xor `EvalJob(play_many=...)`; a synchronous
-  `play` is refused at declaration (so every Manabot `play` callback becomes
-  `async def`); `max_delay_seconds` is gone; game side awaits
-  `Forward(inputs, *, rows=...)` (pass `rows=` for a pre-collated batch);
-  `ForwardError` carries `.checkpoint`, and in `play_many` catching it can fail
-  one match; `await matches.take(n)` -> `(match, agents)` pairs; yield
-  `(match, tables or error)` as each finishes; an uncaught exception fails
-  every held match; `run.should_stop` means no new grants.
-- Unblocking artifact for the Etude pass: an `etude-sdk` release > 0.4.7 with
-  `play_many`. First command: `uv lock --upgrade-package etude-sdk && uv sync --extra dev --extra artifacts --extra evaluation`,
-  then read `etude.eval.run.EvalRun`, `etude.jobs.EvalJob`, `etude.eval.agents.Forward`.
+- Installed and PyPI `etude-sdk` is still `0.4.7`: `EvalRun` has only
+  synchronous `play`.
+- Etude EXP-77 (`~/src/etude.exp-77-saturate-the-gpu`) committed `play_many`
+  (`2469c00`) and merged `main` at `c5923cf` (clean tree, unreleased). Its
+  `docs/evaluation.md` states the contract: `EvalJob(play=...)` xor
+  `EvalJob(play_many=...)`; synchronous `play` is refused at declaration (so
+  every Manabot `play` callback becomes `async def`); `max_delay_seconds` is
+  gone (not used in our `Agents(...)` declarations; only frozen `EvalCompute`
+  models retain it); game side awaits `Forward(inputs, *, rows=...)` (pass
+  `rows=prepared.batch` for pre-collated inputs); `ForwardError` carries
+  `.checkpoint`, and catching it in `play_many` drops affected slots and yields
+  `(match, error)` while unrelated matches continue; `Matches` lives in
+  `etude.eval.game` with `await matches.take(n)` -> `(match, agents)` pairs;
+  yield `(match, tables | Result | Exception)` as each finishes; an uncaught
+  exception fails every held match; `run.should_stop` stops new grants.
+  Reference examples: `examples/vector_game.py` and `examples/vectorized.py`.
+- Etude `310ac1` (`~/src/etude.310ac1-enable-shared-gpu`, committed at
+  `de0c927`, unreleased) adds shared-GPU eval inference on Apple Silicon with
+  `ETUDE_EVAL_SHARED=0|1`.
+- `manabot` `origin/main` added three Academy/action-folding commits since our
+  base (`080ea64372`, `65dcf2340a`, `b611abb3d7`); none touch eval, batching,
+  or `SlotLoad`. (`57d4ea59b5` GRU bf16 fix is already in our base.)
+- **Unblocking artifact for pass 4:** an `etude-sdk` release `> 0.4.7` shipping
+  EXP-77 `play_many` and async `play`. First command once available:
+  `uv lock --upgrade-package etude-sdk && uv sync --extra dev --extra artifacts --extra evaluation`,
+  then read `etude.eval.run.EvalRun`, `etude.jobs.EvalJob`,
+  `etude.eval.game.Matches`, and `etude.eval.agents.Forward`.
 
 ## What exists
 
-- `manabot/eval/agent_loader.py::load`: `cuda` or `cpu`, float32, rejects any
-  input that is not `Prepared(batch=1)`, joins memory-free rows with
-  `policy/batching.py::concatenate`, runs memory rows one per batch.
-- `manabot/eval/agents.py::Sampler.choose` prepares one dense row and calls
-  `forward([row])`; `eval/match.py::play_cell` plays legs serially through
-  `sim/native_game.py::execute_game` on a scalar `Env` with capture journal,
-  viewer frames, digests and replay receipts.
-- Native `VectorEnv.load_slots_into_buffers([SlotLoad.fresh(slot, setup)])`
-  replaces one slot's game; `SlotLoad.fresh` takes no seed, and
-  `reset_each_into_buffers(setups, seeds=)` seeds only a whole-vector reset.
-  `RecordedVectorEnv` (`managym/recording.py:1254`) records vector games.
-- Probe findings that still hold (M4 Max, `c7d6c628d1`, seeded random weights,
-  real `play_pairing` rows): CPU 1-thread batch-1 forward 35 rows/s at w160l8,
-  24 at w384l8; MPS saturates by batch 8 (w160l8 ~410 rows/s, w384l8 ~210),
-  bf16 gives nothing on MPS; 12 processes sharing MPS reach ~478 rows/s. On an
-  L4 (MTG-328) game-side host work, 0.85 s/game against the heuristic, set the
-  rate below ~34M (21% GPU busy). bf16 on CUDA runs for memory-free policies
-  (PR #451); MTG-449 covers only the GRU memory fold. Evaluation memory rows
-  have `MemoryRows.fold is None`, so `concatenate` can rebase them.
+- **Loader & precision (`manabot/eval/agent_loader.py`, `manabot/eval/agents.py`,
+  `manabot/policy/batching.py`, `manabot/sim/registration.py`,
+  `manabot/backends/torch/learner.py`):** device order `cuda -> mps -> cpu` with
+  `MANABOT_EVAL_DEVICE` override (out of identity); `load`/`load_tf32`/`load_bf16`
+  accept any-batch `Prepared` and return `[batch, A]` float32 masked logits;
+  `concatenate` rebases `MemoryRows` (rejects `fold is not None`); `AGENTS`,
+  `AGENTS_TF32`, `AGENTS_BF16`, `agents_for(precision)`, and
+  `etude_compute_class(precision)` (float32 keeps `etude-policy-f32-auto-v1`);
+  `tf32` device guard in `validate_precision`.
+- **Native & vector runner (`managym/`, `manabot/eval/vector.py`,
+  `manabot/eval/pairing.py`, `manabot/eval/match.py`,
+  `manabot/sim/native_game.py`):** seeded `SlotLoad.fresh(..., seed=)`,
+  `RecordedVectorEnv.record_in_memory`/`slot_record`, shared per-leg setup
+  (`resolve_game_match`, `game_runtime_identities`, `arena_source_sha256`,
+  `set_execution_limits`), shared pairing admission/finalization, and Torch-free
+  async `play_pairings` stepping up to `slots` legs on v11 CSR
+  `ObservationBatch -> Prepared` with immediate backfill and per-match yield.
+  `scripts/public_api.py check` and `tests/test_package_boundaries.py` pass.
+- **Apple Silicon measurement (`experiments/eval_throughput.py`,
+  `experiments/reports/eval_throughput.md`):** 12 arms on M4 Max across 32
+  held-out TLA trophy deals (128 games/arm, exact leg-for-leg outcome and
+  128/128 replay parity). MPS vector-64 reaches 1,989 games/hr on trained
+  `w160l8` (2.66× CPU batch-1; forward 362.5→39.6 s, 17.1% of wall) and 1,882
+  games/hr on seeded `w384l8` (2.41× CPU batch-1; forward 346.8→52.0 s, 21.3%);
+  single-process `other_arena` + `replay` take ~79–83% of wall time, confirming
+  multi-process game workers sharing a GPU agent (`play_many`) are needed to
+  scale past ~2,000 games/hr. (Prior L4 reference from MTG-328: 0.85 s/game
+  host work, 21% L4 busy below ~34M.)
 
-## Design
+## Design notes (open / still shaping pass 4)
 
-### Loader (independent of Etude)
-
-- Device `cuda`, then `mps`, then `cpu`; `MANABOT_EVAL_DEVICE` names one;
-  unknown values fail with the accepted list. Device stays out of identity.
-- Inputs are `Prepared` of any `batch`; output per input is `[batch, A]`
-  float32 masked logits. So a vector driver sends one pre-collated input per
-  checkpoint, and per-row callers keep working.
-- Memory rows join in `concatenate` (rebase `detail_references`,
-  `member_references`, `member_groups`, `record_batches`; reject
-  `fold is not None`).
-- Precision (made for review, see `questions.md`; irreversible once rows are
-  stored): declared per agent set (`AGENTS`, `AGENTS_BF16`), compute class from
-  `sim/registration.py::etude_compute_class(precision)`, float32 keeps
-  `etude-policy-f32-auto-v1`; `tf32` only on CUDA, `bf16` on CUDA/MPS (fix the
-  missing `tf32` check in `backends/torch/learner.py::validate_precision`).
-  Fallback if rejected: float32 only.
-
-### Vector match runner
-
-`manabot/eval/vector.py` (name for review) owns a slot pool over one
-`RecordedVectorEnv` of S slots. Each slot holds one leg of one match; a match
-is done when all its legs are.
-
-- Load: a free slot takes the next leg (or the next match from the source),
-  dealt at the leg's exact seed through a seeded per-slot load (native
-  addition: `SlotLoad.fresh(..., seed=)`, if no existing path seeds one slot).
-- Step: rows needing a checkpoint are written as one CSR `ObservationBatch`,
-  prepared once per checkpoint into one `Prepared`, forwarded, sampled per row
-  with that decision's `policy_rng_seed` (NumPy PCG64, as now). Heuristic seats
-  act natively in the same step.
-- Finish: a finished leg frees its slot at once; a finished match is finalized
-  (shards, `rows.json`, replay receipts, card blobs, as `play_cell` writes) and
-  yielded. A native failure fails that match's leg as now; a forward failure
-  escapes.
-- The runner is an async generator over an abstract match source and awaited
-  forwards, so pass 2 tests it with a local source before Etude ships; pass 3
-  binds it to `Matches`. Torch-free (`tests/test_package_boundaries.py`).
-- Shares preparation with training collection
-  (`manabot/training/rollout/collection.py`); MTG-496 owns the overlap core, and
-  this runner reuses what exists rather than forking it.
-
-The risk that can sink this: a vector-stepped game must produce the same
-Commands and `game_trace_sha256` as `execute_game` on a scalar `Env` for the
-same deal under a row-pure forward, including viewer frames and digests the
-eval trace records. If `RecordedVectorEnv` traces differ from eval traces, the
-evidence format decides whether eval adopts vector traces (frozen tournaments
-keep theirs) or the recorder changes.
+- **Precision (made for review, see `scratch/questions.md`; irreversible once
+  rows are stored):** declared per agent set (`AGENTS`, `AGENTS_TF32`,
+  `AGENTS_BF16`), compute class from `etude_compute_class(precision)`, float32
+  keeps `etude-policy-f32-auto-v1`; seeds pinned to the float32 envelope.
+  Fallback if rejected before L4 bf16 rows are recorded: float32 only.
+- **Vector runner (`manabot/eval/vector.py`, name for review):** `play_pairings`
+  stays Torch-free and async over `MatchSource`; pass 4 binds it to Etude's
+  `Matches`, passes `rows=prepared.batch` on awaited `Forward`, and isolates
+  `ForwardError` per affected checkpoint slots rather than letting it abort
+  unrelated held matches.
 
 ## Passes
 
 1. **Loader (done, `0286257840`).** `cuda -> mps -> cpu` + `MANABOT_EVAL_DEVICE`; any-batch `Prepared` -> `[batch, A]` float32 logits; `MemoryRows` in `concatenate`; `etude_compute_class`, `AGENTS`/`AGENTS_TF32`/`AGENTS_BF16`; `tf32` guard; GRU bf16 fix.
 2. **Vector runner, locally (done, `dd11bd0a3f`).** Seeded `SlotLoad.fresh(..., seed=)`; `RecordedVectorEnv.record_in_memory`/`slot_record`; shared admission/finalization (`eval/pairing.py`, `eval/match.py`); Torch-free async `play_pairings` (`eval/vector.py`). Trace parity with `play_pairing` proved field by field and by `replay_game`/`audit`/`replay_failure` (heuristic and GRU memory); raw `game_trace_sha256` differs only through wall-clock timings and `mode="vector"`.
-3. **Local measurement and runner cleanup (done, `08a854747f` + report).** Consolidated per-leg setup (`resolve_game_match`, `game_runtime_identities`, `arena_source_sha256`, `set_execution_limits`), dropped `_` prefixes on `eval/vector.py` helpers, added `experiments/eval_throughput.py`, and measured all 12 Apple M4 Max arms in `experiments/reports/eval_throughput.md` with exact 128/128 outcome and replay parity. MPS vector-64 reaches 1,989 games/hr on trained `w160l8` (2.66× CPU batch-1; forward 362.5→39.6 s, 17.1% of wall) and 1,882 games/hr on seeded `w384l8` (2.41× CPU batch-1; forward 346.8→52.0 s, 21.3%); `other_arena` + `replay` now take ~79–83% of single-process wall time, confirming multi-process game workers sharing a GPU agent (`play_many`) are needed to scale further.
-4. **Etude binding, L4 arm, docs (blocked on `etude-sdk > 0.4.7`; PyPI still `0.4.7` as of 2026-11-27, EXP-77 committed at `c5923cf` but unreleased).** Bind
-   `play_many` over `play_pairings` (awaited `Forward(..., rows=)`, catch
-   `ForwardError` per match); convert `play_pairing`/`play_cell`/experiment
-   `play` callbacks to `async def`; remove `max_delay_seconds` from `AGENTS`
-   settings. Add the L4 float32/bf16 arms to the report (`--max-usd 5`). Then
-   `docs/evaluation.md#etude-agents`, `docs/training.md`, `docs/experiments.md`,
-   `manabot/README.md`.
+3. **Local measurement and runner cleanup (done, `08a854747f`, `7e79ad34ae`).** Consolidated per-leg setup (`resolve_game_match`, `game_runtime_identities`, `arena_source_sha256`, `set_execution_limits`), dropped `_` prefixes on `eval/vector.py` helpers, added `experiments/eval_throughput.py`, and measured all 12 Apple M4 Max arms in `experiments/reports/eval_throughput.md` (128/128 outcome and replay parity; MPS vector-64 2.41–2.66× CPU batch-1, host arena + replay now 79–83% of single-process wall).
+4. **Etude binding, L4 arm, cleanup, docs (blocked on `etude-sdk > 0.4.7`; PyPI still `0.4.7` as of 2026-11-27, EXP-77 committed at `c5923cf` and `310ac1` at `de0c927`, both unreleased).**
+   - Upgrade `etude-sdk` and bind `play_many` over `play_pairings` (pass
+     `rows=prepared.batch` to awaited `Forward`; catch `ForwardError` to drop
+     affected slots and yield `(match, error)` per match without failing
+     unrelated held matches).
+   - Convert `play_pairing` and experiment `EvalJob(play=...)` callbacks
+     (`experiments/{elemental,llm_claude,llm_qwen,mana_taps,opponent_memory,tla_frontier,tla_trophies}.py`)
+     to `async def` (or `play_many=` where appropriate).
+   - Deduplicate `manabot/eval/match.py`: collapse `play_cell`'s ~165-line copy
+     of `replay_block`/trace/stats retention onto `finalize_settled_cell`
+     (accepting an `Iterable[dict[str, Any]]` with `try/finally` trace write).
+   - Run and add the CUDA L4 float32 and bf16 arms (`--max-usd 5`) to
+     `experiments/reports/eval_throughput.md`.
+   - Write docs for what ships: `docs/evaluation.md#etude-agents`,
+     `docs/training.md`, `docs/experiments.md`, `manabot/README.md`.
 
 ## Docs
 
 `6e803136af` documented the superseded design (`AGENTS_BF16`, `play_pairing`
-`precision`, grouped deal stepping) as if built; it was reverted in this
-realign so docs describe only what exists. Pass 4 writes them for what ships.
+`precision`, grouped deal stepping) as if built; it was reverted so docs
+describe only what exists. Pass 4 writes them for what ships.
 
 ## Review record
 
 `scratch/concept-review.html` reviewed the superseded 4-leg design. F1
 (stepping boundary) and F6 (deal window) are superseded by the vector runner.
-F2 (declared precision) and F3 (memory rows in `concatenate`) carry into pass
-1. F4 (opt-in MPS) stays passed over: MPS default, opt-out by
+F2 (declared precision) and F3 (memory rows in `concatenate`) landed in pass 1.
+F4 (opt-in MPS) stays passed over: MPS default, opt-out by
 `MANABOT_EVAL_DEVICE=cpu`, revisited after pass 4. F5 (`max_batch` 32) is
-moot once EXP-77 counts pre-collated inputs.
+moot once EXP-77 counts `rows=` on pre-collated inputs.
 
 ## Deferred findings
 
-- Etude: Apple GPU detection for the shared agent process (310ac1); never
-  evicting the only loaded checkpoint in `Forwards._evict`.
-- Game-side recording cost (`questions.md`): the limit on CUDA below ~34M.
+- Etude: Apple GPU detection for the shared agent process (`310ac1`, committed
+  at `de0c927`, unreleased); never evicting the only loaded checkpoint in
+  `Forwards._evict`.
+- Game-side recording cost (`scratch/questions.md`): the limit on CUDA below
+  ~34M and on single-process MPS (~79–83% of wall time in pass 3).
 - Compacting padded joined batches in `agent_loader` if profiling shows it.
 - `torch.compile` (optional per the Task).
 

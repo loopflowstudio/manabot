@@ -9,7 +9,7 @@ Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
   pinned to the float32 envelope. Alternatives: 1b, an environment variable
   mirrored by hand into all call sites and `Environment.config`; 1c,
   float32 only in this Task. Nothing reduced-precision is recorded until pass
-  3's rental, so this can still change before then.
+  4's rental, so this can still change before then.
 - **MPS before the Etude companion.** The loader selects `mps` in Etude's
   direct mode, where every game process loads its own copy. Probe: 12 processes
   sharing MPS reached 478 rows/s at w160l8 against 323 for one. If per-process
@@ -40,8 +40,8 @@ Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
 - **Seeded per-slot load (resolved in pass 2, `dd11bd0a3f`).** Added
   optional keyword-only `seed: int | None = None` to `SlotLoad.fresh` in Rust
   and `managym/__init__.pyi` (non-breaking; recorded in `tests/public_api.json`).
-- **Sync `play` removal confirmed in EXP-77 code (`9b1993d`, unreleased).** When it ships,
-  every Manabot `play` callback converts to `async def` in pass 3.
+- **Sync `play` removal and `play_many` committed in EXP-77 (`c5923cf`, unreleased).** When `etude-sdk > 0.4.7` ships,
+  every Manabot `play` callback converts to `async def` (or `play_many=`) in pass 4.
 
 Ideas outside this Task:
 
