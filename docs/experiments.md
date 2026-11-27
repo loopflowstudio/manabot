@@ -54,9 +54,9 @@ match as before, so reports and `statsdb` queries read them unchanged. The
 run's hour and dollar limits are the sums of its jobs', and `--max-usd` admits
 it as one run. A game is `play(match, agents)`: one object per seated player,
 in seat order. Etude decides how many games play at once from the machine's
-CPUs and memory; an eval job declares no worker count. Every job uses the
-same `manabot.eval.agents.AGENTS`; Etude owns model loading, batching and
-residency. The loader only forwards Prepared rows to masked logits; each
+CPUs and memory; an eval job declares no worker count. Float32 jobs use
+`manabot.eval.agents.AGENTS` (or `AGENTS_TF32` / `AGENTS_BF16` for declared
+reduced precision); Etude owns model loading, batching and residency. The loader only forwards Prepared rows to masked logits; each
 game-side agent owns host preparation and seeded sampling. New evaluation
 seatings use one config per native game group and `games=1`, under fresh
 `agents-v1` tournament names. Retained schedules and results keep their keys.
