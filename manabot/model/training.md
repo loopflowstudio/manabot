@@ -38,8 +38,9 @@ missing final observation is unsupported. Opted-in game-error recovery instead
 quarantines the entire failed or truncated game, discards both seats'
 uncommitted rows and regathers; under `complete-games` it finishes replacement
 games, while under `exact-quota` it requires `recover_capacity=True`, keeps rows
-earlier updates learned from (`learned_samples`), and steps the stream on until
-its surviving rows reach `transitions`.
+earlier updates learned from (`learned_samples`), and regathers surviving rows
+to `streams × transitions` (refilling the failed stream for one seat, or across
+the whole pool for both seats).
 
 Collection freezes behavior within each batch. Complete games end before weights
 change; exact-quota games may span updates. Stored full legal-action probabilities,

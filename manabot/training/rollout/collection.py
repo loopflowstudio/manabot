@@ -11,10 +11,12 @@ decisions per native stream, then finishes its current game. Complete trajectori
 are packed in one column. Snapshot continuations may also close at a decision
 horizon, with a frozen bootstrap for each contributing seat. GAE stays within
 each trajectory. No sampled action survives an update. Batch row counts may
-exceed the quota. exact-quota closure stops each stream at the surviving learner-decision quota
-(counting both seats when both learn) and carries unfinished games across the
-update, bootstrapping open seats from frozen viewer reads. A game that then
-fails loses only the rows not yet learned from; its stream refills to the quota.
+exceed the quota. Exact-quota closure stops at exactly ``num_envs * decisions``
+surviving learner rows (each stream at the quota on error-free updates, counting
+both seats when both learn) and carries unfinished games across the update,
+bootstrapping open seats from frozen viewer reads. A game that then fails loses
+only the rows not yet learned from; one seat refills that stream to the quota,
+while both seats make up the rows across the pool.
 
 Self-play uses one live model for both seats. ``collect_pair`` instead returns
 one batch per learning model, with seats balanced across streams; each model's
@@ -1265,9 +1267,10 @@ def open_collector(
     ``learning_seats="both"`` is the default for ``self`` (one shared model)
     or ``learning`` (two distinct models). ``one`` retains the learner-only
     control, including in self-play. ``batch_closure`` says separately when a
-    batch ends: after whole games, or at an exact per-stream quota (for one or
-    both learning seats) that bootstraps mid-game tails from the critic.
-    `record_attempt` persists
+    batch ends: after whole games, or at an exact surviving-row quota (per
+    stream for one seat; pooled across streams for both seats, with equal
+    per-stream depth on error-free updates) that bootstraps mid-game tails from
+    the critic. `record_attempt` persists
     each settled game when `game_errors` is set. `numerics` is the backend's
     collection session: it owns the device, precision and the private sampling
     RNG for learner rows and current-self opponents. The caller closes the
