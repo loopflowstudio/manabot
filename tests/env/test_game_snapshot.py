@@ -441,8 +441,25 @@ def test_banked_branch_round_trips_through_replay_and_academy(
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "academy")
     shuffle_seed = 77665544332211
+    multi_land = managym.GameSetup(
+        [
+            managym.PlayerConfig(
+                name,
+                {
+                    "Mountain": 2,
+                    "Forest": 2,
+                    "Plains": 2,
+                    "Island": 2,
+                    "Swamp": 2,
+                    "Gray Ogre": 2,
+                },
+            )
+            for name in ("a", "b")
+        ],
+        decklists="closed",
+    )
     source = managym.Env(seed=42, decision_memory_include_own=True)
-    reset_to_first_main(source, setup())
+    reset_to_first_main(source, multi_land)
     source.step(0)
     bank = source.snapshot()
     assert bank.metadata().action_count >= 2
@@ -640,8 +657,25 @@ def test_watch_publishes_the_determinized_offers(
     from managym.academy.watch import import_game, inspect_watch
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
+    multi_land = managym.GameSetup(
+        [
+            managym.PlayerConfig(
+                name,
+                {
+                    "Mountain": 2,
+                    "Forest": 2,
+                    "Plains": 2,
+                    "Island": 2,
+                    "Swamp": 2,
+                    "Gray Ogre": 2,
+                },
+            )
+            for name in ("a", "b")
+        ],
+        decklists="open",
+    )
     env = managym.Env(seed=42)
-    seat = reset_to_first_main(env, setup("open"))
+    seat = reset_to_first_main(env, multi_land)
     original = env.observation_for_player(seat)
     branch = env.snapshot().restore(managym.RestoreOptions.determinize(1, 35))
     offers = branch.observation_for_player(0).action_space.actions
@@ -911,7 +945,12 @@ def test_etali_resumes_once_from_a_cold_charring_bite_target() -> None:
         bite = next(
             (o for o in frame.offers if o["label"] == "Cast Charring Bite"), None
         )
-        if bite and len(frame.offers) == 4:
+        if (
+            bite
+            and frame.actor == 0
+            and len(frame.offers) == 4
+            and any(o["verb"] == "decline" for o in frame.offers)
+        ):
             before = completed()
             env.execute_semantic_command_json(
                 Command("bite", frame.revision, bite["id"]).to_json()

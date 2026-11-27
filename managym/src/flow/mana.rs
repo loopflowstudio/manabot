@@ -5191,7 +5191,14 @@ impl Game {
             let tail = self.saved_obligations(player);
             let reluctance = self.source_reluctance(&model);
             let mut order: Vec<_> = (0..taps.len()).collect();
-            order.sort_unstable_by_key(|&i| std::cmp::Reverse((reluctance[taps[i].0], i)));
+            order.sort_unstable_by(|&a, &b| {
+                let oa = tap_output(&model.sources, taps[a].0, &taps[a].1);
+                let ob = tap_output(&model.sources, taps[b].0, &taps[b].1);
+                reluctance[taps[b].0]
+                    .cmp(&reluctance[taps[a].0])
+                    .then_with(|| autotapper::cmp_mana_output(ob, oa))
+                    .then_with(|| b.cmp(&a))
+            });
             let mut keep = vec![true; taps.len()];
             for i in order {
                 if produced.total() <= owed {

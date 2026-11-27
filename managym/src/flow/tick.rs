@@ -18,28 +18,28 @@ impl Game {
         if self.is_game_over() {
             return Err(AgentError("game is over".to_string()));
         }
-        let action_space = self
-            .current_action_space
+        let decision = self
+            .published_decision
             .take()
             .ok_or_else(|| AgentError("no active action space".to_string()))?;
 
-        if action >= action_space.actions.len() {
-            self.current_action_space = Some(action_space.clone());
+        if action >= decision.space.actions.len() {
+            let len = decision.space.actions.len();
+            self.published_decision = Some(decision);
             return Err(AgentError(format!(
-                "Action index {action} out of bounds: {}",
-                action_space.actions.len()
+                "Action index {action} out of bounds: {len}"
             )));
         }
 
         let pending_memory = crate::agent::decision_memory::capture(
             self,
-            &action_space,
-            &action_space.actions[action],
+            &decision.space,
+            &decision.space.actions[action],
         );
-        let exposure = self.exposure_choice(&action_space, action);
-        let selected_action = action_space.actions[action].clone();
+        let exposure = self.exposure_choice(&decision.space, action);
+        let selected_action = decision.space.actions[action].clone();
         if let Err(error) = self.execute_action(&selected_action) {
-            self.current_action_space = Some(action_space);
+            self.published_decision = Some(decision);
             return Err(error);
         }
 
@@ -63,9 +63,20 @@ impl Game {
         game_over
     }
 
-    /// Publish a newly computed external decision and invalidate commands
-    /// decoded from every previously published structured offer set.
-    pub(crate) fn publish_action_space(&mut self, mut action_space: ActionSpace) {
+    /// Fold indistinguishable object offers and publish the resulting external
+    /// decision, invalidating commands decoded from earlier offer sets.
+    pub(crate) fn publish_action_space(&mut self, action_space: ActionSpace) {
+        let (action_space, aliases) = self.fold_action_space(action_space);
+        self.publish_folded_action_space(action_space, aliases);
+    }
+
+    /// Publish an already-folded external decision with its alias pairs.
+    /// Overwrites aliases on every call and clears them at game over.
+    pub(crate) fn publish_folded_action_space(
+        &mut self,
+        mut action_space: ActionSpace,
+        aliases: crate::flow::interchangeable::ActionAliases,
+    ) {
         self.refresh_visible_library_tops();
         self.assert_library_knowledge();
         self.decision_epoch = self
@@ -78,7 +89,15 @@ impl Game {
             .map(|action| action.player())
             .map(|player| self.decision_controller(player));
         self.remember_controlled_hands();
-        self.current_action_space = Some(action_space);
+        let aliases = if action_space.kind == ActionSpaceKind::GameOver {
+            None
+        } else {
+            aliases
+        };
+        self.published_decision = Some(crate::flow::game::PublishedDecision {
+            space: action_space,
+            aliases,
+        });
     }
 
     pub fn play(&mut self) {
@@ -96,11 +115,12 @@ impl Game {
             let action_space = self.opening_actions().or_else(|| self.turn_tick());
             if self.is_game_over() {
                 self.finish_combat_capture();
-                self.publish_action_space(ActionSpace::game_over());
+                self.publish_folded_action_space(ActionSpace::game_over(), None);
                 return true;
             }
 
             if let Some(space) = action_space {
+                let (space, aliases) = self.fold_action_space(space);
                 if let Some(action) = self.automatic_payment_action(&space) {
                     self.execute_action(&action)
                         .expect("automatic payment witness executes");
@@ -112,7 +132,7 @@ impl Game {
                         // A player chooses: the chain is no longer mandatory.
                         self.state.priority_mut().clear_loop_watch();
                     }
-                    self.publish_action_space(space);
+                    self.publish_folded_action_space(space, aliases);
                     return false;
                 }
                 self.skip_trivial_count += 1;
@@ -244,6 +264,7 @@ impl Game {
                 let combat = self.state.combat.get_or_insert_default();
                 combat.already_attacking = combat.attack_targets.len();
                 combat.attackers_to_declare = eligible;
+                combat.declined_attackers.clear();
             }
             StepKind::DeclareBlockers => {
                 // CR 509.1 — Defending player declares blockers.
@@ -251,6 +272,7 @@ impl Game {
                 let eligible = self.eligible_blockers(defender);
                 let combat = self.state.combat.get_or_insert_default();
                 combat.blockers_to_declare = eligible;
+                combat.declined_blockers.clear();
             }
             _ => {}
         }
@@ -328,6 +350,7 @@ impl Game {
                 let active = self.active_player();
                 let combat = self.state.combat.get_or_insert_default();
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
+                    combat.declined_attackers.clear();
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
                     let first = std::mem::take(&mut combat.already_attacking);
@@ -377,19 +400,29 @@ impl Game {
                     return None;
                 };
                 let must_attack = self.must_attack(attacker);
-                let mut targets = self.declaration_targets(active);
-                let actions = targets
-                    .next()
-                    .map(Some)
-                    .into_iter()
-                    .chain((!must_attack).then_some(None))
-                    .chain(targets.map(Some))
-                    .map(|attack| Action::DeclareAttacker {
+                let suppress_attack =
+                    !must_attack && self.declined_interchangeable_attacker(attacker);
+                let actions = if suppress_attack {
+                    vec![Action::DeclareAttacker {
                         player: active,
                         permanent: attacker,
-                        attack,
-                    })
-                    .collect();
+                        attack: None,
+                    }]
+                } else {
+                    let mut targets = self.declaration_targets(active);
+                    targets
+                        .next()
+                        .map(Some)
+                        .into_iter()
+                        .chain((!must_attack).then_some(None))
+                        .chain(targets.map(Some))
+                        .map(|attack| Action::DeclareAttacker {
+                            player: active,
+                            permanent: attacker,
+                            attack,
+                        })
+                        .collect()
+                };
                 Some(ActionSpace {
                     player: Some(active),
                     kind: ActionSpaceKind::DeclareAttacker,
@@ -401,6 +434,7 @@ impl Game {
                 let defending = self.non_active_player();
                 let combat = self.state.combat.get_or_insert_default();
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
+                    combat.declined_blockers.clear();
                     let assignments: Vec<_> = self
                         .state
                         .combat

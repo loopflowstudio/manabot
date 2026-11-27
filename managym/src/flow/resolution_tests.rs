@@ -1070,8 +1070,15 @@ fn completed_private_capture(player: PlayerId) -> Game {
     );
     root.resolve_top_of_stack();
     root.publish_action_space(root.suspended_decision_action_space().unwrap());
-    let object = root.state.zones.zone_objects(ZoneType::Hand, player)[0];
-    checked_command(&mut root, Action::SelectCard { player, object });
+    let first_select = root
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .find(|action| matches!(action, Action::SelectCard { .. }))
+        .unwrap()
+        .clone();
+    checked_command(&mut root, first_select);
     assert!(root.state.suspended_decision.is_none());
     assert_eq!(root.state.delayed_triggers.len(), 2);
     root
@@ -1188,7 +1195,6 @@ fn hidden_selection_moved_capture_uses_its_new_zone() {
     let player = PlayerId(1);
     let viewer = PlayerId(0);
     let (mut root, _, _) = fixture(player);
-    let object_id = root.state.zones.zone_objects(ZoneType::Hand, player)[0];
     stack(
         &mut root,
         Entry::Triggered,
@@ -1216,13 +1222,15 @@ fn hidden_selection_moved_capture_uses_its_new_zone() {
     );
     root.resolve_top_of_stack();
     root.publish_action_space(root.suspended_decision_action_space().unwrap());
-    checked_command(
-        &mut root,
-        Action::SelectCard {
-            player,
-            object: object_id,
-        },
-    );
+    let first_select = root
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .find(|action| matches!(action, Action::SelectCard { .. }))
+        .unwrap()
+        .clone();
+    checked_command(&mut root, first_select);
     assert_eq!(
         root.state.delayed_triggers[0].remembered[0]
             .selection
@@ -3117,13 +3125,15 @@ fn hidden_selection_partial_discard_survives_both_samplers_and_divergent_command
             vec![Effect::discard_draw(2, 1), Effect::gain_life(3)],
         ));
         root.publish_action_space(root.suspended_decision_action_space().unwrap());
-        checked_command(
-            &mut root,
-            Action::SelectCard {
-                player,
-                object: hand[0],
-            },
-        );
+        let first_select = root
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .find(|action| matches!(action, Action::SelectCard { .. }))
+            .unwrap()
+            .clone();
+        checked_command(&mut root, first_select);
         assert_eq!(
             root.state.zones.size(ZoneType::Hand, player),
             hand.len(),
@@ -3247,13 +3257,15 @@ fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
         ],
     ));
     root.publish_action_space(root.suspended_decision_action_space().unwrap());
-    checked_command(
-        &mut root,
-        Action::SelectCard {
-            player,
-            object: hand[0],
-        },
-    );
+    let first_select = root
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .find(|action| matches!(action, Action::SelectCard { .. }))
+        .unwrap()
+        .clone();
+    checked_command(&mut root, first_select);
     // Retain the choice-bearing child beneath another scope and saved decision.
     let mut caller = root.state.suspended_decision_mut().take().unwrap();
     caller.frame.remembered = root.capture_bindings(&ObjectSelector::Selected, &caller.frame);
@@ -4803,6 +4815,8 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         game.scenario_force_battlefield(player, "Fire Lord Azula", true)
             .unwrap()
     });
+    // Distinguish the two copies so both legend-rule keep choices stay offered.
+    game.state.permanents[legends[1]].as_mut().unwrap().tapped = true;
     let spell = |game: &mut Game, name: &str| {
         let object = game
             .state
@@ -4894,12 +4908,12 @@ fn snapshot_shuffle_keeps_inspections_and_random_bottom_placements_until_a_rules
         ));
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         let inspected = game.library_top_objects(owner, 12);
-        let space = game.current_action_space.clone();
+        let space = game.action_space().cloned();
         let mut sibling = game.clone();
         game.shuffle_unseen_libraries(101);
         sibling.shuffle_unseen_libraries(101);
         assert_eq!(game.library_top_objects(owner, 12), inspected);
-        assert_eq!(game.current_action_space, space);
+        assert_eq!(game.action_space(), space.as_ref());
         checked_command(&mut game, Action::Decline { player: owner });
         checked_command(&mut sibling, Action::Decline { player: owner });
         let order = |game: &Game| {

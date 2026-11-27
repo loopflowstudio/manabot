@@ -175,7 +175,7 @@ fn teval_delve_never_exiles_the_spell_being_cast_from_the_graveyard() {
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_cast(&s, dance));
     cast_card(&mut s, dance);
-    let offered = offered_cards(&s);
+    let offered = crate::support::inspect::offered_cards_with_aliases(&s);
     assert_eq!(offered.len(), 3, "{offered:?}");
     assert!(!offered.contains(&now(&s, dance)));
     assert!(offered.contains(&now(&s, third)));

@@ -759,7 +759,7 @@ fn trigger_order_large_menu_is_complete_and_empty_singleton_are_forced() {
         .collect();
     let space = game.flush_triggers().unwrap();
     assert_eq!(space.actions.len(), 65);
-    game.current_action_space = Some(space);
+    game.set_unfolded_action_space(Some(space));
     let observation = crate::agent::observation::Observation::new(&game, std::iter::empty());
     assert_eq!(observation.action_space.actions.len(), 65);
     assert!(crate::agent::observation_encoder::encode(&observation, &Default::default()).is_err());
@@ -801,7 +801,8 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
     third.id = TriggerId(902);
     third.context = Some(Target::StackSpell(other));
     game.state.pending_triggers = vec![first, second, third];
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let observation = Observation::for_player(&game, PlayerId(0));
     let frames: Vec<_> = observation
         .action_space
@@ -819,7 +820,8 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
     for trigger in &mut game.state.trigger_placement.as_mut().unwrap().remaining {
         trigger.id.0 += 10_000;
     }
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let renumbered = Observation::for_player(&game, PlayerId(0));
     assert_eq!(
         encoded,
@@ -848,7 +850,8 @@ fn trigger_order_target_resume_and_nested_fork_preserve_round() {
     ];
     game.state.pending_triggers[0].source_identity =
         AbilitySource::new(source, game.state.live(game.state.now(source)));
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let root = witness(&game);
     let mut branch = game.clone();
     let outer = branch.clone();
@@ -937,7 +940,8 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     );
     delayed.ability_index = usize::MAX; // Inline effects do not reference a card slot.
     game.state.pending_triggers = vec![dies, enters, delayed];
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let observation = Observation::for_player(&game, PlayerId(0));
     let labels: Vec<_> = observation
         .action_space
@@ -955,7 +959,8 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
         .all(|label| !label.contains(&game.state[source].text_box)));
     for id in 0..2 {
         game.choose_trigger(PlayerId(0), TriggerId(id)).unwrap();
-        game.current_action_space = game.flush_triggers();
+        let space = game.flush_triggers();
+        game.set_unfolded_action_space(space);
     }
     let stack = Observation::for_player(&game, PlayerId(1));
     let descriptions: Vec<_> = stack
@@ -1055,13 +1060,15 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
     assert!(label.contains("Gray Ogre"));
     // Make the choice through placement, using the departed source's face.
     game.choose_trigger(PlayerId(0), trigger_id).unwrap();
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let context = game.decision_context(PlayerId(0)).unwrap();
     assert_eq!(context.stage, "trigger_mode");
     assert!(context.instruction.contains("Gray Ogre"));
     assert_eq!(game.action_space().unwrap().actions.len(), 1);
     game.choose_trigger_mode(PlayerId(0), 0).unwrap();
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let context = game.decision_context(PlayerId(0)).unwrap();
     assert_eq!(context.stage, "trigger_targets");
     assert!(context.instruction.contains("Gray Ogre"));
@@ -1413,8 +1420,7 @@ fn exude_toxin_target_threshold_uses_the_announced_x() {
 
 fn step_action(game: &mut Game, target: &crate::agent::action::Action) {
     let index = game
-        .current_action_space
-        .as_ref()
+        .action_space()
         .unwrap()
         .actions
         .iter()
@@ -1454,8 +1460,7 @@ fn chandra_with_granted_ability(
         && game.state.turn.current_step_kind() == StepKind::Main)
     {
         let pass_index = game
-            .current_action_space
-            .as_ref()
+            .action_space()
             .unwrap()
             .actions
             .iter()
@@ -1521,7 +1526,7 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
     let b3 = game
         .create_token("token.beast_4_4_g_trample", PlayerId(1))
         .unwrap();
-    game.current_action_space = None;
+    game.clear_published_decision();
     game.finish_action_step();
 
     // Priority must offer ability 3 even though x_min = 0 has no legal target budget.
@@ -1531,11 +1536,7 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
         ability_index: 3,
     };
     assert!(
-        game.current_action_space
-            .as_ref()
-            .unwrap()
-            .actions
-            .contains(&activate),
+        game.action_space().unwrap().actions.contains(&activate),
         "−X ability with min=1 and division=X must be offered at priority"
     );
 
@@ -1691,7 +1692,7 @@ fn fixed_deal_damage_in_divided_clause_does_not_redeal_divided_shares() {
             EffectDuration::EndOfTurn,
         );
     }
-    game.current_action_space = None;
+    game.clear_published_decision();
     game.finish_action_step();
 
     step_action(

@@ -261,6 +261,7 @@ fn lifelink_spell_uses_its_stack_controller_for_doubling_and_gain() {
                     transform: DamageTransform::Prevent(1),
                 });
         }
+        s.game_mut().scenario_clear_hand(PlayerId(0));
         let bolt = find_owned_card_off_battlefield(&s, 0, "Lightning Bolt");
         let bolt = move_card(&mut s, bolt, ZoneType::Hand);
         s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::parse("R").into();

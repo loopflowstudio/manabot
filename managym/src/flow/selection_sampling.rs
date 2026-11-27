@@ -131,18 +131,37 @@ fn unseen_objects(
     viewer: PlayerId,
     pinned: &[ObjectId],
 ) -> Vec<ObjectId> {
-    let pinned_library = pinned_library_objects(game, owner, pinned);
+    let pinned_library = if pinned.is_empty() {
+        Vec::new()
+    } else {
+        pinned_library_objects(game, owner, pinned)
+    };
     let zones: &[ZoneType] = if owner == viewer {
         &[ZoneType::Library]
     } else {
         &[ZoneType::Hand, ZoneType::Library]
     };
-    let mut objects: Vec<ObjectId> = zones
+    let cap: usize = zones
         .iter()
-        .flat_map(|zone| game.state.zones.zone_objects(*zone, owner).iter().copied())
-        .filter(|object| !pinned_library.contains(object))
-        .collect();
-    objects.extend(game.hidden_face_down_exile(owner, viewer));
+        .map(|&zone| game.state.zones.size(zone, owner))
+        .sum();
+    let mut objects = Vec::with_capacity(cap);
+    for &zone in zones {
+        let entries = game.state.zones.zone_objects(zone, owner);
+        if pinned_library.is_empty() {
+            objects.extend(entries.iter().copied());
+        } else {
+            objects.extend(
+                entries
+                    .iter()
+                    .copied()
+                    .filter(|object| !pinned_library.contains(object)),
+            );
+        }
+    }
+    if game.state.zones.size(ZoneType::Exile, owner) > 0 {
+        objects.extend(game.hidden_face_down_exile(owner, viewer));
+    }
     objects.extend(game.hidden_manifests(owner, viewer));
     objects
 }

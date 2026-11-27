@@ -182,13 +182,29 @@ impl Game {
         };
         let preview = self.preview(Some(&address), &choice)?;
         let declarable = declarable_from_spec(&preview.decision.spec);
+        let has_outcome = preview.outcome.is_some();
+        let (declared_attackers, declared_blocks) = match preview.outcome {
+            Some(DecisionOutcome::DeclareAttackers { attackers }) => (attackers, Vec::new()),
+            Some(DecisionOutcome::DeclareBlockers { blocks }) => (Vec::new(), blocks),
+            _ => (Vec::new(), Vec::new()),
+        };
+        let attack_source = if has_outcome {
+            declared_attackers.as_slice()
+        } else {
+            plan.attackers.as_slice()
+        };
+        let block_source = if has_outcome {
+            declared_blocks.as_slice()
+        } else {
+            plan.blocks.as_slice()
+        };
         let steps = preview
             .steps
             .into_iter()
             .map(|step| {
                 let creature = step.item.expect("combat step names a creature");
                 let planned_attack = (kind == DeclarationKind::Attackers)
-                    .then(|| plan.attackers.iter().find(|a| a.creature == creature))
+                    .then(|| attack_source.iter().find(|a| a.creature == creature))
                     .flatten();
                 DeclarationStep {
                     revision: step.revision,
@@ -199,7 +215,7 @@ impl Game {
                     defender: planned_attack.and_then(|a| a.defender),
                     blocks: (kind == DeclarationKind::Blockers)
                         .then(|| {
-                            plan.blocks
+                            block_source
                                 .iter()
                                 .find(|block| block.blocker == creature)
                                 .map(|block| block.attacker)
@@ -213,11 +229,6 @@ impl Game {
             label: refusal.label,
             reason: refusal.reason,
         });
-        let (declared_attackers, declared_blocks) = match preview.outcome {
-            Some(DecisionOutcome::DeclareAttackers { attackers }) => (attackers, Vec::new()),
-            Some(DecisionOutcome::DeclareBlockers { blocks }) => (Vec::new(), blocks),
-            _ => (Vec::new(), Vec::new()),
-        };
         Ok(CombatPreview {
             kind,
             declarable,

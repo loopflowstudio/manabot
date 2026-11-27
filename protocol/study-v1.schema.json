@@ -1116,6 +1116,13 @@
           "maximum": 255,
           "minimum": 0
         },
+        "aliases": {
+          "description": "Live in-zone copies folded into this offer, omitted when empty.\nOutside-game sideboard copies stay engine-internal for lowering.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SubjectRef"
+          }
+        },
         "choices": {
           "type": "array",
           "items": {

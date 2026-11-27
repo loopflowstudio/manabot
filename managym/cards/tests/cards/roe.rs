@@ -415,8 +415,16 @@ fn filters_require_a_real_seed_and_do_not_reuse_a_reserved_source() {
                 _ => None,
             })
             .collect();
-        assert_eq!(filters.len(), if seed { 2 } else { 0 });
+        assert_eq!(filters.len(), if seed { 1 } else { 0 });
         if seed {
+            assert_eq!(
+                s.game()
+                    .action_aliases()
+                    .iter()
+                    .filter(|&&(_, alias)| s.game().state[alias].name == "Prophetic Prism")
+                    .count(),
+                1
+            );
             choose(
                 &mut s,
                 |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == filters[0]),

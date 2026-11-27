@@ -486,6 +486,8 @@ export type ChoiceAnswer =
 // for retained readers and outside-game Learn candidate navigation.
 export interface InteractionOffer {
   subjects?: OfferSubjectView[];
+  /** Live in-zone copies folded into this offer, omitted when empty. */
+  aliases?: SubjectRef[];
   id: number;
   actor: number;
   verb: OfferVerb;

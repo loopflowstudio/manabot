@@ -216,11 +216,11 @@ fn ten_attackers_choose_independently_among_six_planeswalkers() {
             clear_summoning_sickness(&mut s, attacker);
         }
     }
-    for _ in 0..6 {
+    for idx in 0..6 {
         let walker = s.force_permanent_on_battlefield(1, "Island");
         let object = card_of(&s, walker);
         s.game_mut().state[object].types = CardTypes::new([CardType::Planeswalker]);
-        set_counters(&mut s, walker, CounterKind::Loyalty, 10);
+        set_counters(&mut s, walker, CounterKind::Loyalty, 10 + idx);
     }
     let mut restricted = s.clone();
     restricted.force_permanent_on_battlefield(1, tomik);
@@ -372,4 +372,29 @@ fn planeswalker_defender_candidate_comes_from_structured_offers_and_rejects_stal
     let combat = s.game().state.combat.as_ref().unwrap();
     assert_eq!(combat.attack_targets, vec![(ogre, None)]);
     assert_eq!(combat.defender(ogre), None);
+}
+
+#[test]
+fn attack_offers_name_the_attacker_as_source_whatever_the_defender() {
+    use managym::experience::{ObjectRenderId, SubjectRef};
+    let mut s = five_color_setup(&["Gray Ogre", JACE]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, ogre);
+    defending_planeswalker(&mut s);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let permanent = s.game().state.permanents[ogre].as_ref().unwrap();
+    let ogre_ref = SubjectRef::Object {
+        id: ObjectRenderId {
+            entity: permanent.id.0,
+            incarnation: permanent.object.generation(),
+        },
+    };
+    let decision = s
+        .game()
+        .decision(Some(PlayerId(0)))
+        .expect("attack decision");
+    assert_eq!(decision.offers.len(), 3, "player, Jace, no attack");
+    for offer in &decision.offers {
+        assert_eq!(offer.source, Some(ogre_ref), "{}", offer.label);
+    }
 }

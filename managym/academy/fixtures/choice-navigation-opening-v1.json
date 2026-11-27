@@ -4,16 +4,22 @@
     "CHOOSE_TARGET": {
       "config": {
         "hero_deck": {
-          "Island": 20,
-          "Wind Drake": 20,
-          "Man-o'-War": 20
+          "Island": 16,
+          "Man-o'-War": 7,
+          "Spectral Sailor": 6,
+          "Gran-Gran": 6,
+          "First-Time Flyer": 5,
+          "Knowledge Seeker": 5,
+          "Brineborn Cutthroat": 5,
+          "Otter-Penguin": 5,
+          "Wind Drake": 5
         },
         "villain_deck": {
           "Forest": 60
         },
         "villain_type": "passive",
         "auto_pass": false,
-        "seed": 1
+        "seed": 10
       },
       "prefix": [
         {
@@ -26,7 +32,23 @@
         },
         {
           "offer_id": 0,
+          "label": "Cast Gran-Gran"
+        },
+        {
+          "offer_id": 1,
           "label": "Play Island"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Knowledge Seeker"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Gran-Gran"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Brineborn Cutthroat"
         },
         {
           "offer_id": 0,
@@ -34,11 +56,99 @@
         },
         {
           "offer_id": 1,
-          "label": "Cast Wind Drake"
+          "label": "Pass priority"
         },
         {
-          "offer_id": 4,
-          "label": "Play Island"
+          "offer_id": 1,
+          "label": "Do not attack with Knowledge Seeker"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Gran-Gran"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast Otter-Penguin"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Brineborn Cutthroat"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Knowledge Seeker"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Gran-Gran"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Cast First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Otter-Penguin"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Brineborn Cutthroat"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Knowledge Seeker"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Gran-Gran"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 3,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Otter-Penguin"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Brineborn Cutthroat"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Knowledge Seeker"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Gran-Gran"
+        },
+        {
+          "offer_id": 3,
+          "label": "Pass priority"
         },
         {
           "offer_id": 3,
@@ -46,38 +156,26 @@
         },
         {
           "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
+          "label": "Do not attack with First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Otter-Penguin"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Brineborn Cutthroat"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Knowledge Seeker"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Gran-Gran"
         },
         {
           "offer_id": 3,
-          "label": "Cast Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 4,
-          "label": "Cast Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 5,
           "label": "Pass priority"
         },
         {
@@ -86,23 +184,35 @@
         },
         {
           "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
+          "label": "Do not attack with First-Time Flyer"
         },
         {
           "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
+          "label": "Do not attack with Otter-Penguin"
         },
         {
           "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
+          "label": "Do not attack with Brineborn Cutthroat"
         },
         {
-          "offer_id": 5,
+          "offer_id": 1,
+          "label": "Do not attack with Knowledge Seeker"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Gran-Gran"
+        },
+        {
+          "offer_id": 3,
           "label": "Pass priority"
         },
         {
-          "offer_id": 5,
-          "label": "Cast Wind Drake"
+          "offer_id": 0,
+          "label": "Cast Spectral Sailor"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
         },
         {
           "offer_id": 1,
@@ -110,440 +220,48 @@
         },
         {
           "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
+          "label": "Do not attack with First-Time Flyer"
         },
         {
           "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
+          "label": "Do not attack with Otter-Penguin"
         },
         {
           "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
+          "label": "Do not attack with Brineborn Cutthroat"
         },
         {
-          "offer_id": 5,
+          "offer_id": 1,
+          "label": "Do not attack with Knowledge Seeker"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Gran-Gran"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 3,
           "label": "Play Island"
         },
         {
-          "offer_id": 5,
-          "label": "Pass priority"
-        },
-        {
           "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 5,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 6,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 6,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 6,
-          "label": "Cast Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 7,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 7,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 7,
-          "label": "Play Island"
-        },
-        {
-          "offer_id": 7,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 7,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 8,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 8,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Discard Man-o'-War"
-        },
-        {
-          "offer_id": 8,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 8,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Discard Man-o'-War"
-        },
-        {
-          "offer_id": 8,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 8,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Discard Man-o'-War"
-        },
-        {
-          "offer_id": 8,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 8,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Discard Man-o'-War"
-        },
-        {
-          "offer_id": 7,
-          "label": "Play Island"
-        },
-        {
-          "offer_id": 7,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 7,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 8,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 8,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Discard Man-o'-War"
-        },
-        {
-          "offer_id": 7,
-          "label": "Cast Wind Drake"
-        },
-        {
-          "offer_id": 7,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Wind Drake"
-        },
-        {
-          "offer_id": 7,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 7,
-          "label": "Cast Wind Drake"
-        },
-        {
-          "offer_id": 0,
           "label": "Cast Man-o'-War"
         }
       ],
-      "digest": "2ad6fb1c304d568db71a1f628c776ea6fe37dc2a7af8bb3c6cd939e054dd1e3c",
+      "digest": "4aeb7ae485da7555f53351d09408202c081001e861bb357ba6adeaa451f491ae",
       "frame": {
         "protocol": 1,
-        "match_id": "h0SvMUJJt61HJIdp4f5ViQ",
-        "revision": 190,
-        "frame_hash": "dcddc9de6858036b67fecaffbd11b4bb3692497249fb09c87c984649a16bc42c",
+        "match_id": "AaqTYSPXyHkjOsBAVUTU4w",
+        "revision": 76,
+        "frame_hash": "67e1c980cd12b8a72fb6959a72361d991cf01ee839e5db96f118da09435195ce",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 191,
+          "id": 77,
           "actor": 0,
           "kind": "choose_target",
           "title": "Trigger targets",
@@ -558,10 +276,8 @@
           "stack_objects": [],
           "decision_context": {
             "recent_facts": [
-              "Wind Drake was cast; its announced costs are committed.",
-              "Wind Drake finished resolving.",
-              "Wind Drake was cast; its announced costs are committed.",
-              "Wind Drake finished resolving.",
+              "Spectral Sailor was cast; its announced costs are committed.",
+              "Spectral Sailor finished resolving.",
               "Man-o'-War was cast; its announced costs are committed.",
               "Man-o'-War finished resolving."
             ],
@@ -573,11 +289,11 @@
               "subject": {
                 "kind": "object",
                 "id": {
-                  "entity": 146,
+                  "entity": 141,
                   "incarnation": 3
                 }
               },
-              "display_id": 146,
+              "display_id": 141,
               "label": "Man-o'-War"
             },
             "targets": [],
@@ -1799,7 +1515,7 @@
           "game_over": false,
           "won": false,
           "turn": {
-            "turn_number": 41,
+            "turn_number": 19,
             "phase": "PRECOMBAT_MAIN",
             "step": "PRECOMBAT_MAIN_STEP",
             "active_player_id": 0,
@@ -1829,36 +1545,69 @@
             "is_agent": true,
             "life": 20,
             "zone_counts": {
-              "LIBRARY": 33,
-              "HAND": 6,
-              "BATTLEFIELD": 16,
-              "GRAVEYARD": 5,
+              "LIBRARY": 44,
+              "HAND": 4,
+              "BATTLEFIELD": 12,
+              "GRAVEYARD": 0,
               "STACK": 0,
               "EXILE": 0,
               "COMMAND": 0
             },
-            "library_count": 33,
+            "library_count": 44,
             "main_counts": {
-              "575": 20,
-              "672": 20,
-              "1178": 20
+              "145": 5,
+              "412": 5,
+              "484": 6,
+              "575": 16,
+              "615": 5,
+              "672": 7,
+              "749": 5,
+              "941": 6,
+              "1178": 5
             },
             "unseen_counts": {
-              "575": 13,
-              "672": 8,
-              "1178": 12
+              "145": 4,
+              "412": 3,
+              "484": 4,
+              "575": 12,
+              "615": 4,
+              "672": 4,
+              "749": 4,
+              "941": 5,
+              "1178": 4
             },
             "sideboard_counts": {},
             "remaining_sideboard_counts": {},
             "turn_history": {
+              "land_entered": true,
               "cards_drawn": 1,
-              "mana_spent_casting": 6
+              "mana_spent_casting": 3
             },
-            "spells_cast": 2,
+            "spells_cast": 1,
             "hand": [
               {
+                "text_box": "Whenever Gran-Gran becomes tapped, draw a card, then discard a card.\nNoncreature spells you cast cost {1} less to cast as long as there are three or more Lesson cards in your graveyard.",
+                "id": 17,
+                "registry_key": 484,
+                "name": "Gran-Gran",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 1,
+                "toughness": 2,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
                 "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 32,
+                "id": 43,
                 "registry_key": 672,
                 "name": "Man-o'-War",
                 "zone": "HAND",
@@ -1877,15 +1626,15 @@
                 }
               },
               {
-                "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 40,
-                "registry_key": 672,
-                "name": "Man-o'-War",
+                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
+                "id": 8,
+                "registry_key": 412,
+                "name": "First-Time Flyer",
                 "zone": "HAND",
                 "owner_id": 0,
-                "power": 2,
+                "power": 1,
                 "toughness": 2,
-                "mana_value": 3,
+                "mana_value": 2,
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -1898,67 +1647,7 @@
               },
               {
                 "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 25,
-                "registry_key": 672,
-                "name": "Man-o'-War",
-                "zone": "HAND",
-                "owner_id": 0,
-                "power": 2,
-                "toughness": 2,
-                "mana_value": 3,
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 34,
-                "registry_key": 672,
-                "name": "Man-o'-War",
-                "zone": "HAND",
-                "owner_id": 0,
-                "power": 2,
-                "toughness": 2,
-                "mana_value": 3,
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 39,
-                "registry_key": 672,
-                "name": "Man-o'-War",
-                "zone": "HAND",
-                "owner_id": 0,
-                "power": 2,
-                "toughness": 2,
-                "mana_value": 3,
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 38,
+                "id": 45,
                 "registry_key": 672,
                 "name": "Man-o'-War",
                 "zone": "HAND",
@@ -1977,108 +1666,7 @@
                 }
               }
             ],
-            "graveyard": [
-              {
-                "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 26,
-                "registry_key": 672,
-                "name": "Man-o'-War",
-                "zone": "GRAVEYARD",
-                "owner_id": 0,
-                "power": 2,
-                "toughness": 2,
-                "mana_value": 3,
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 35,
-                "registry_key": 672,
-                "name": "Man-o'-War",
-                "zone": "GRAVEYARD",
-                "owner_id": 0,
-                "power": 2,
-                "toughness": 2,
-                "mana_value": 3,
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 23,
-                "registry_key": 672,
-                "name": "Man-o'-War",
-                "zone": "GRAVEYARD",
-                "owner_id": 0,
-                "power": 2,
-                "toughness": 2,
-                "mana_value": 3,
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 37,
-                "registry_key": 672,
-                "name": "Man-o'-War",
-                "zone": "GRAVEYARD",
-                "owner_id": 0,
-                "power": 2,
-                "toughness": 2,
-                "mana_value": 3,
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 24,
-                "registry_key": 672,
-                "name": "Man-o'-War",
-                "zone": "GRAVEYARD",
-                "owner_id": 0,
-                "power": 2,
-                "toughness": 2,
-                "mana_value": 3,
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              }
-            ],
+            "graveyard": [],
             "exile": [],
             "stack": [],
             "battlefield": [
@@ -2108,8 +1696,8 @@
               },
               {
                 "types": {
-                  "is_creature": false,
-                  "is_land": true,
+                  "is_creature": true,
+                  "is_land": false,
                   "is_spell": false,
                   "is_artifact": false,
                   "is_enchantment": false,
@@ -2117,32 +1705,32 @@
                   "is_battle": false
                 },
                 "is_token": false,
-                "text_box": "({T}: Add {U}.)",
-                "id": 123,
-                "name": "Island",
-                "controller_id": 0,
-                "tapped": true,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 0,
-                "toughness": 0,
-                "base_power": 0,
-                "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "({T}: Add {U}.)",
+                "text_box": "Whenever Gran-Gran becomes tapped, draw a card, then discard a card.\nNoncreature spells you cast cost {1} less to cast as long as there are three or more Lesson cards in your graveyard.",
                 "id": 124,
+                "name": "Gran-Gran",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 2,
+                "base_power": 1,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": false,
+                  "is_land": true,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "({T}: Add {U}.)",
+                "id": 125,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": true,
@@ -2166,45 +1754,21 @@
                   "is_battle": false
                 },
                 "is_token": false,
-                "text_box": "Flying",
-                "id": 126,
-                "name": "Wind Drake",
-                "controller_id": 0,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 2,
-                "base_toughness": 2,
-                "plus1_counters": 0,
-                "keywords": [
-                  "flying"
-                ]
-              },
-              {
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "({T}: Add {U}.)",
+                "text_box": "Vigilance\nWhenever you draw your second card each turn, put a +1/+1 counter on this creature.\nWhen this creature dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
                 "id": 127,
-                "name": "Island",
+                "name": "Knowledge Seeker",
                 "controller_id": 0,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
-                "power": 0,
-                "toughness": 0,
-                "base_power": 0,
-                "base_toughness": 0,
-                "plus1_counters": 0
+                "power": 2,
+                "toughness": 1,
+                "base_power": 2,
+                "base_toughness": 1,
+                "plus1_counters": 0,
+                "keywords": [
+                  "vigilance"
+                ]
               },
               {
                 "keyword_grants": {},
@@ -2218,104 +1782,20 @@
                   "is_battle": false
                 },
                 "is_token": false,
-                "text_box": "Flying",
+                "text_box": "Flash (You may cast this spell any time you could cast an instant.)\nWhenever you cast a spell during an opponent's turn, put a +1/+1 counter on this creature.",
                 "id": 129,
-                "name": "Wind Drake",
+                "name": "Brineborn Cutthroat",
                 "controller_id": 0,
                 "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 2,
-                "toughness": 2,
+                "toughness": 1,
                 "base_power": 2,
-                "base_toughness": 2,
+                "base_toughness": 1,
                 "plus1_counters": 0,
                 "keywords": [
-                  "flying"
-                ]
-              },
-              {
-                "keyword_grants": {},
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "Flying",
-                "id": 131,
-                "name": "Wind Drake",
-                "controller_id": 0,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 2,
-                "base_toughness": 2,
-                "plus1_counters": 0,
-                "keywords": [
-                  "flying"
-                ]
-              },
-              {
-                "keyword_grants": {},
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "Flying",
-                "id": 133,
-                "name": "Wind Drake",
-                "controller_id": 0,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 2,
-                "base_toughness": 2,
-                "plus1_counters": 0,
-                "keywords": [
-                  "flying"
-                ]
-              },
-              {
-                "keyword_grants": {},
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "Flying",
-                "id": 135,
-                "name": "Wind Drake",
-                "controller_id": 0,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 2,
-                "base_toughness": 2,
-                "plus1_counters": 0,
-                "keywords": [
-                  "flying"
+                  "flash"
                 ]
               },
               {
@@ -2330,7 +1810,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 136,
+                "id": 130,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": true,
@@ -2340,6 +1820,30 @@
                 "toughness": 0,
                 "base_power": 0,
                 "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
+                "id": 132,
+                "name": "Otter-Penguin",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 2,
+                "toughness": 1,
+                "base_power": 2,
+                "base_toughness": 1,
                 "plus1_counters": 0
               },
               {
@@ -2354,8 +1858,36 @@
                   "is_battle": false
                 },
                 "is_token": false,
+                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
+                "id": 134,
+                "name": "First-Time Flyer",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 2,
+                "base_power": 1,
+                "base_toughness": 2,
+                "plus1_counters": 0,
+                "keywords": [
+                  "flying"
+                ]
+              },
+              {
+                "keyword_grants": {},
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
                 "text_box": "Flying",
-                "id": 138,
+                "id": 136,
                 "name": "Wind Drake",
                 "controller_id": 0,
                 "tapped": false,
@@ -2368,6 +1900,35 @@
                 "plus1_counters": 0,
                 "keywords": [
                   "flying"
+                ]
+              },
+              {
+                "keyword_grants": {},
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "Flash (You may cast this spell any time you could cast an instant.)\nFlying\n{3}{U}: Draw a card.",
+                "id": 138,
+                "name": "Spectral Sailor",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 0,
+                "keywords": [
+                  "flying",
+                  "flash"
                 ]
               },
               {
@@ -2385,30 +1946,6 @@
                 "id": 139,
                 "name": "Island",
                 "controller_id": 0,
-                "tapped": true,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 0,
-                "toughness": 0,
-                "base_power": 0,
-                "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "({T}: Add {U}.)",
-                "id": 140,
-                "name": "Island",
-                "controller_id": 0,
                 "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
@@ -2416,63 +1953,7 @@
                 "toughness": 0,
                 "base_power": 0,
                 "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "keyword_grants": {},
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "Flying",
-                "id": 142,
-                "name": "Wind Drake",
-                "controller_id": 0,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 2,
-                "base_toughness": 2,
                 "plus1_counters": 0,
-                "keywords": [
-                  "flying"
-                ]
-              },
-              {
-                "keyword_grants": {},
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "Flying",
-                "id": 144,
-                "name": "Wind Drake",
-                "controller_id": 0,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": true,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 2,
-                "base_toughness": 2,
-                "plus1_counters": 0,
-                "keywords": [
-                  "flying"
-                ],
                 "entered_this_turn": true
               },
               {
@@ -2487,7 +1968,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, return target creature to its owner's hand.",
-                "id": 146,
+                "id": 141,
                 "name": "Man-o'-War",
                 "controller_id": 0,
                 "tapped": false,
@@ -2526,20 +2007,20 @@
             "is_agent": false,
             "life": 20,
             "zone_counts": {
-              "LIBRARY": 33,
+              "LIBRARY": 44,
               "HAND": 7,
               "BATTLEFIELD": 0,
-              "GRAVEYARD": 20,
+              "GRAVEYARD": 9,
               "STACK": 0,
               "EXILE": 0,
               "COMMAND": 0
             },
-            "library_count": 33,
+            "library_count": 44,
             "main_counts": {
               "432": 60
             },
             "unseen_counts": {
-              "432": 40
+              "432": 51
             },
             "sideboard_counts": {},
             "remaining_sideboard_counts": {},
@@ -2548,7 +2029,7 @@
             "graveyard": [
               {
                 "text_box": "({T}: Add {G}.)",
-                "id": 84,
+                "id": 64,
                 "registry_key": 432,
                 "name": "Forest",
                 "zone": "GRAVEYARD",
@@ -2568,7 +2049,7 @@
               },
               {
                 "text_box": "({T}: Add {G}.)",
-                "id": 101,
+                "id": 71,
                 "registry_key": 432,
                 "name": "Forest",
                 "zone": "GRAVEYARD",
@@ -2588,7 +2069,7 @@
               },
               {
                 "text_box": "({T}: Add {G}.)",
-                "id": 89,
+                "id": 69,
                 "registry_key": 432,
                 "name": "Forest",
                 "zone": "GRAVEYARD",
@@ -2608,7 +2089,7 @@
               },
               {
                 "text_box": "({T}: Add {G}.)",
-                "id": 105,
+                "id": 83,
                 "registry_key": 432,
                 "name": "Forest",
                 "zone": "GRAVEYARD",
@@ -2628,7 +2109,7 @@
               },
               {
                 "text_box": "({T}: Add {G}.)",
-                "id": 113,
+                "id": 110,
                 "registry_key": 432,
                 "name": "Forest",
                 "zone": "GRAVEYARD",
@@ -2648,7 +2129,7 @@
               },
               {
                 "text_box": "({T}: Add {G}.)",
-                "id": 65,
+                "id": 107,
                 "registry_key": 432,
                 "name": "Forest",
                 "zone": "GRAVEYARD",
@@ -2668,27 +2149,7 @@
               },
               {
                 "text_box": "({T}: Add {G}.)",
-                "id": 80,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 100,
+                "id": 74,
                 "registry_key": 432,
                 "name": "Forest",
                 "zone": "GRAVEYARD",
@@ -2728,207 +2189,7 @@
               },
               {
                 "text_box": "({T}: Add {G}.)",
-                "id": 70,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 76,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 73,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 93,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 90,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 118,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 117,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 77,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 87,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 114,
-                "registry_key": 432,
-                "name": "Forest",
-                "zone": "GRAVEYARD",
-                "owner_id": 1,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {G}.)",
-                "id": 99,
+                "id": 105,
                 "registry_key": 432,
                 "name": "Forest",
                 "zone": "GRAVEYARD",
@@ -2958,16 +2219,16 @@
               {
                 "role": "target",
                 "object": {
-                  "entity_id": 58,
+                  "entity_id": 12,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 126,
+                      "entity": 124,
                       "incarnation": 2
                     }
                   },
-                  "display_id": 126,
-                  "label": "Wind Drake"
+                  "display_id": 124,
+                  "label": "Gran-Gran"
                 }
               }
             ],
@@ -2975,13 +2236,13 @@
             "actor": 0,
             "verb": "choose",
             "source": null,
-            "label": "Target Wind Drake",
+            "label": "Target Gran-Gran",
             "help": null,
             "choices": [],
-            "confirm_label": "Target Wind Drake",
+            "confirm_label": "Target Gran-Gran",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              126
+              124
             ]
           },
           {
@@ -2989,16 +2250,16 @@
               {
                 "role": "target",
                 "object": {
-                  "entity_id": 44,
+                  "entity_id": 33,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 129,
-                      "incarnation": 3
+                      "entity": 127,
+                      "incarnation": 2
                     }
                   },
-                  "display_id": 129,
-                  "label": "Wind Drake"
+                  "display_id": 127,
+                  "label": "Knowledge Seeker"
                 }
               }
             ],
@@ -3006,13 +2267,13 @@
             "actor": 0,
             "verb": "choose",
             "source": null,
-            "label": "Target Wind Drake",
+            "label": "Target Knowledge Seeker",
             "help": null,
             "choices": [],
-            "confirm_label": "Target Wind Drake",
+            "confirm_label": "Target Knowledge Seeker",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              129
+              127
             ]
           },
           {
@@ -3020,16 +2281,16 @@
               {
                 "role": "target",
                 "object": {
-                  "entity_id": 46,
+                  "entity_id": 0,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 131,
-                      "incarnation": 3
+                      "entity": 129,
+                      "incarnation": 2
                     }
                   },
-                  "display_id": 131,
-                  "label": "Wind Drake"
+                  "display_id": 129,
+                  "label": "Brineborn Cutthroat"
                 }
               }
             ],
@@ -3037,75 +2298,13 @@
             "actor": 0,
             "verb": "choose",
             "source": null,
-            "label": "Target Wind Drake",
+            "label": "Target Brineborn Cutthroat",
             "help": null,
             "choices": [],
-            "confirm_label": "Target Wind Drake",
+            "confirm_label": "Target Brineborn Cutthroat",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              131
-            ]
-          },
-          {
-            "subjects": [
-              {
-                "role": "target",
-                "object": {
-                  "entity_id": 59,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 133,
-                      "incarnation": 3
-                    }
-                  },
-                  "display_id": 133,
-                  "label": "Wind Drake"
-                }
-              }
-            ],
-            "id": 3,
-            "actor": 0,
-            "verb": "choose",
-            "source": null,
-            "label": "Target Wind Drake",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Target Wind Drake",
-            "action_type": "CHOOSE_TARGET",
-            "focus": [
-              133
-            ]
-          },
-          {
-            "subjects": [
-              {
-                "role": "target",
-                "object": {
-                  "entity_id": 55,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 135,
-                      "incarnation": 3
-                    }
-                  },
-                  "display_id": 135,
-                  "label": "Wind Drake"
-                }
-              }
-            ],
-            "id": 4,
-            "actor": 0,
-            "verb": "choose",
-            "source": null,
-            "label": "Target Wind Drake",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Target Wind Drake",
-            "action_type": "CHOOSE_TARGET",
-            "focus": [
-              135
+              129
             ]
           },
           {
@@ -3117,11 +2316,73 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 138,
+                      "entity": 132,
                       "incarnation": 3
                     }
                   },
-                  "display_id": 138,
+                  "display_id": 132,
+                  "label": "Otter-Penguin"
+                }
+              }
+            ],
+            "id": 3,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Otter-Penguin",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Otter-Penguin",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              132
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "target",
+                "object": {
+                  "entity_id": 8,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 134,
+                      "incarnation": 3
+                    }
+                  },
+                  "display_id": 134,
+                  "label": "First-Time Flyer"
+                }
+              }
+            ],
+            "id": 4,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target First-Time Flyer",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target First-Time Flyer",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              134
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "target",
+                "object": {
+                  "entity_id": 55,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 136,
+                      "incarnation": 3
+                    }
+                  },
+                  "display_id": 136,
                   "label": "Wind Drake"
                 }
               }
@@ -3136,7 +2397,7 @@
             "confirm_label": "Target Wind Drake",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              138
+              136
             ]
           },
           {
@@ -3144,16 +2405,16 @@
               {
                 "role": "target",
                 "object": {
-                  "entity_id": 41,
+                  "entity_id": 50,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 142,
+                      "entity": 138,
                       "incarnation": 3
                     }
                   },
-                  "display_id": 142,
-                  "label": "Wind Drake"
+                  "display_id": 138,
+                  "label": "Spectral Sailor"
                 }
               }
             ],
@@ -3161,44 +2422,13 @@
             "actor": 0,
             "verb": "choose",
             "source": null,
-            "label": "Target Wind Drake",
+            "label": "Target Spectral Sailor",
             "help": null,
             "choices": [],
-            "confirm_label": "Target Wind Drake",
+            "confirm_label": "Target Spectral Sailor",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              142
-            ]
-          },
-          {
-            "subjects": [
-              {
-                "role": "target",
-                "object": {
-                  "entity_id": 48,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 144,
-                      "incarnation": 3
-                    }
-                  },
-                  "display_id": 144,
-                  "label": "Wind Drake"
-                }
-              }
-            ],
-            "id": 7,
-            "actor": 0,
-            "verb": "choose",
-            "source": null,
-            "label": "Target Wind Drake",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Target Wind Drake",
-            "action_type": "CHOOSE_TARGET",
-            "focus": [
-              144
+              138
             ]
           },
           {
@@ -3210,16 +2440,16 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 146,
+                      "entity": 141,
                       "incarnation": 3
                     }
                   },
-                  "display_id": 146,
+                  "display_id": 141,
                   "label": "Man-o'-War"
                 }
               }
             ],
-            "id": 8,
+            "id": 7,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -3229,7 +2459,7 @@
             "confirm_label": "Target Man-o'-War",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              146
+              141
             ]
           }
         ],
@@ -3309,77 +2539,165 @@
           "label": "Pass priority"
         },
         {
-          "offer_id": 0,
-          "label": "Play Mountain"
-        },
-        {
-          "offer_id": 2,
+          "offer_id": 1,
           "label": "Pass priority"
-        },
-        {
-          "offer_id": 2,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 2,
-          "label": "Play Mountain"
-        },
-        {
-          "offer_id": 3,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 3,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 3,
-          "label": "Play Island"
-        },
-        {
-          "offer_id": 3,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 3,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 3,
-          "label": "Play Mountain"
-        },
-        {
-          "offer_id": 3,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 3,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Cast Divide by Zero"
-        },
-        {
-          "offer_id": 7,
-          "label": "Pay the cost"
         },
         {
           "offer_id": 1,
           "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 4,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 4,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 4,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast Divide by Zero"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pay the cost"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
         }
       ],
-      "digest": "30cd137eca4814e0ea4053e084b6de1e5787003c3c542b44b2cdc650a58c589e",
+      "digest": "adeb3fca20fbedd98cc4dd9f3d37577cd8f939df60107228e04632e8be5ad0aa",
       "frame": {
         "protocol": 1,
-        "match_id": "cG52f1z1guR1ajfDt9RN7A",
-        "revision": 58,
-        "frame_hash": "a78c257b968f5153634a0edff4e47c8a6dec4749903164504b63e0350dc053be",
+        "match_id": "7ByD6kzIXk_Y3zPmd0RDXQ",
+        "revision": 60,
+        "frame_hash": "410618e45be04539f8ec9cd091cb2a8b624855b9aaf62faa46687546edd472fc",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 59,
+          "id": 61,
           "actor": 0,
           "kind": "learn",
           "title": "Learn",
@@ -3394,7 +2712,7 @@
           "stack_objects": [
             {
               "mana_spent": 3,
-              "id": 100,
+              "id": 98,
               "kind": "spell",
               "controller": 0,
               "label": "Divide by Zero"
@@ -3402,11 +2720,11 @@
           ],
           "decision_context": {
             "pending": [
-              "Last known spell White Lotus Reinforcements: mana value 3, 2 color(s), 3 mana spent.",
+              "Last known South Pole Voyager: power 2, toughness 2; counters Counters([]).",
               "moved: an unrevealed object."
             ],
             "recent_facts": [
-              "White Lotus Reinforcements was cast; its announced costs are committed.",
+              "South Pole Voyager finished resolving.",
               "Divide by Zero was cast; its announced costs are committed."
             ],
             "actor": 0,
@@ -4643,10 +3961,10 @@
           "game_over": false,
           "won": false,
           "turn": {
-            "turn_number": 14,
-            "phase": "POSTCOMBAT_MAIN",
-            "step": "POSTCOMBAT_MAIN_STEP",
-            "active_player_id": 1,
+            "turn_number": 9,
+            "phase": "PRECOMBAT_MAIN",
+            "step": "PRECOMBAT_MAIN_STEP",
+            "active_player_id": 0,
             "agent_player_id": 0
           },
           "agent": {
@@ -4669,19 +3987,19 @@
             "combat_mana": 0,
             "player_index": 0,
             "id": 0,
-            "is_active": false,
+            "is_active": true,
             "is_agent": true,
-            "life": 20,
+            "life": 18,
             "zone_counts": {
-              "LIBRARY": 28,
+              "LIBRARY": 30,
               "HAND": 5,
-              "BATTLEFIELD": 7,
+              "BATTLEFIELD": 5,
               "GRAVEYARD": 0,
               "STACK": 1,
               "EXILE": 0,
               "COMMAND": 0
             },
-            "library_count": 28,
+            "library_count": 30,
             "main_counts": {
               "15": 2,
               "267": 2,
@@ -4706,9 +4024,9 @@
               "407": 3,
               "412": 2,
               "431": 1,
-              "575": 5,
+              "575": 6,
               "576": 1,
-              "718": 5,
+              "718": 6,
               "749": 2,
               "775": 2,
               "1059": 1
@@ -4747,6 +4065,8 @@
               }
             ],
             "turn_history": {
+              "land_entered": true,
+              "cards_drawn": 1,
               "mana_spent_casting": 3
             },
             "spells_cast": 1,
@@ -4937,82 +4257,34 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 91,
+                "id": 92,
                 "name": "Island",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": false,
+                  "is_land": true,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "({T}: Add {R}.)",
+                "id": 96,
+                "name": "Mountain",
                 "controller_id": 0,
                 "tapped": true,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 0,
-                "toughness": 0,
-                "base_power": 0,
-                "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "({T}: Add {R}.)",
-                "id": 92,
-                "name": "Mountain",
-                "controller_id": 0,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 0,
-                "toughness": 0,
-                "base_power": 0,
-                "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "({T}: Add {R}.)",
-                "id": 94,
-                "name": "Mountain",
-                "controller_id": 0,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 0,
-                "toughness": 0,
-                "base_power": 0,
-                "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "({T}: Add {U}.)",
-                "id": 95,
-                "name": "Island",
-                "controller_id": 0,
-                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -5043,7 +4315,8 @@
                 "toughness": 0,
                 "base_power": 0,
                 "base_toughness": 0,
-                "plus1_counters": 0
+                "plus1_counters": 0,
+                "entered_this_turn": true
               }
             ]
           },
@@ -5067,19 +4340,19 @@
             "combat_mana": 0,
             "player_index": 1,
             "id": 1,
-            "is_active": true,
+            "is_active": false,
             "is_agent": false,
-            "life": 20,
+            "life": 21,
             "zone_counts": {
-              "LIBRARY": 31,
-              "HAND": 5,
-              "BATTLEFIELD": 4,
+              "LIBRARY": 30,
+              "HAND": 8,
+              "BATTLEFIELD": 2,
               "GRAVEYARD": 0,
               "STACK": 0,
               "EXILE": 0,
               "COMMAND": 0
             },
-            "library_count": 31,
+            "library_count": 30,
             "main_counts": {
               "39": 2,
               "82": 2,
@@ -5104,7 +4377,7 @@
               "299": 2,
               "301": 2,
               "369": 2,
-              "432": 6,
+              "432": 8,
               "566": 2,
               "630": 2,
               "769": 7,
@@ -5122,13 +4395,11 @@
               "369": 1,
               "1187": 1
             },
-            "hand_hidden_count": 5,
+            "hand_hidden_count": 8,
             "turn_history": {
-              "land_entered": true,
-              "cards_drawn": 1,
-              "mana_spent_casting": 3
+              "permanents_left": 1,
+              "nonland_permanents_left": 1
             },
-            "spells_cast": 1,
             "hand": [],
             "graveyard": [],
             "exile": [],
@@ -5145,56 +4416,8 @@
                   "is_battle": false
                 },
                 "is_token": false,
-                "text_box": "({T}: Add {G}.)",
+                "text_box": "({T}: Add {W}.)",
                 "id": 89,
-                "name": "Forest",
-                "controller_id": 1,
-                "tapped": true,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 0,
-                "toughness": 0,
-                "base_power": 0,
-                "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "({T}: Add {W}.)",
-                "id": 93,
-                "name": "Plains",
-                "controller_id": 1,
-                "tapped": true,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 0,
-                "toughness": 0,
-                "base_power": 0,
-                "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "({T}: Add {W}.)",
-                "id": 96,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": false,
@@ -5217,19 +4440,18 @@
                   "is_battle": false
                 },
                 "is_token": false,
-                "text_box": "({T}: Add {G}.)",
-                "id": 98,
-                "name": "Forest",
+                "text_box": "({T}: Add {W}.)",
+                "id": 91,
+                "name": "Plains",
                 "controller_id": 1,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
                 "toughness": 0,
                 "base_power": 0,
                 "base_toughness": 0,
-                "plus1_counters": 0,
-                "entered_this_turn": true
+                "plus1_counters": 0
               }
             ]
           }
@@ -5315,6 +4537,15 @@
                 }
               }
             ],
+            "aliases": [
+              {
+                "kind": "object",
+                "id": {
+                  "entity": 17,
+                  "incarnation": 1
+                }
+              }
+            ],
             "id": 2,
             "actor": 0,
             "verb": "choose",
@@ -5360,38 +4591,7 @@
             ]
           },
           {
-            "subjects": [
-              {
-                "role": "choice",
-                "object": {
-                  "entity_id": 15,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 17,
-                      "incarnation": 1
-                    }
-                  },
-                  "display_id": 17,
-                  "label": "Igneous Inspiration"
-                }
-              }
-            ],
             "id": 4,
-            "actor": 0,
-            "verb": "choose",
-            "source": null,
-            "label": "Discard Igneous Inspiration, then draw a card",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Discard Igneous Inspiration, then draw a card",
-            "action_type": "LEARN_DISCARD",
-            "focus": [
-              17
-            ]
-          },
-          {
-            "id": 5,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -5405,7 +4605,7 @@
             ]
           },
           {
-            "id": 6,
+            "id": 5,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -5419,7 +4619,7 @@
             ]
           },
           {
-            "id": 7,
+            "id": 6,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -5450,7 +4650,7 @@
                 }
               }
             ],
-            "id": 8,
+            "id": 7,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -5494,7 +4694,7 @@
     },
     "DISCARD": {
       "config": {
-        "seed": 0,
+        "seed": 62,
         "villain_type": "passive",
         "auto_pass": false,
         "hero_deck": "ur_lessons",
@@ -5506,28 +4706,28 @@
           "label": "Keep hand"
         },
         {
-          "offer_id": 4,
+          "offer_id": 2,
           "label": "Pass priority"
         },
         {
-          "offer_id": 4,
+          "offer_id": 2,
           "label": "Pass priority"
         },
         {
-          "offer_id": 4,
+          "offer_id": 2,
           "label": "Pass priority"
         },
         {
-          "offer_id": 4,
+          "offer_id": 2,
           "label": "Pass priority"
         }
       ],
-      "digest": "0b567ce6ccb3455364f400e0fa5254cd2644aa13c408a9549f726d61f558efb8",
+      "digest": "0b9152b4aeacc915d5953a4fc36b223e2ad801f88cd8ce245036dc520923333d",
       "frame": {
         "protocol": 1,
-        "match_id": "_HLiNe8RoifDlVPTQrK2ng",
+        "match_id": "tezF9u8qfBldtC6K9F_c6A",
         "revision": 9,
-        "frame_hash": "db1643d3237b1612140b203aa1eac5d259e99b4f29c3a344e4c2008bf4b048ef",
+        "frame_hash": "5daa4f7ead100ec38c453354aafdf24c0caf536b4b71a34db59f1f76ed7280dd",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -6826,15 +6026,15 @@
               "1059": 2
             },
             "unseen_counts": {
-              "15": 2,
+              "15": 1,
               "267": 1,
               "280": 1,
-              "397": 2,
+              "397": 1,
               "407": 3,
-              "412": 2,
+              "412": 1,
               "431": 1,
-              "542": 1,
-              "575": 6,
+              "542": 2,
+              "575": 8,
               "576": 2,
               "718": 7,
               "749": 2,
@@ -6879,35 +6079,15 @@
             },
             "hand": [
               {
-                "text_box": "({T}: Add {R}.)",
-                "id": 31,
-                "registry_key": 718,
-                "name": "Mountain",
+                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
+                "id": 14,
+                "registry_key": 412,
+                "name": "First-Time Flyer",
                 "zone": "HAND",
                 "owner_id": 0,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "Vigilance\nAt the beginning of your upkeep, tap this creature.\nWhenever you draw your second card each turn, untap this creature.",
-                "id": 42,
-                "registry_key": 1059,
-                "name": "Tiger-Seal",
-                "zone": "HAND",
-                "owner_id": 0,
-                "power": 3,
-                "toughness": 3,
-                "mana_value": 1,
+                "power": 1,
+                "toughness": 2,
+                "mana_value": 2,
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -6919,30 +6099,10 @@
                 }
               },
               {
-                "text_box": "({T}: Add {U}.)",
-                "id": 20,
-                "registry_key": 575,
-                "name": "Island",
-                "zone": "HAND",
-                "owner_id": 0,
-                "power": 0,
-                "toughness": 0,
-                "mana_value": 0,
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "({T}: Add {U}.)",
-                "id": 21,
-                "registry_key": 575,
-                "name": "Island",
+                "text_box": "({T}: Add {R}.)",
+                "id": 31,
+                "registry_key": 718,
+                "name": "Mountain",
                 "zone": "HAND",
                 "owner_id": 0,
                 "power": 0,
@@ -6979,19 +6139,19 @@
                 }
               },
               {
-                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
-                "id": 9,
-                "registry_key": 407,
-                "name": "Firebending Lesson",
+                "text_box": "Vigilance\nAt the beginning of your upkeep, tap this creature.\nWhenever you draw your second card each turn, untap this creature.",
+                "id": 41,
+                "registry_key": 1059,
+                "name": "Tiger-Seal",
                 "zone": "HAND",
                 "owner_id": 0,
-                "power": 0,
-                "toughness": 0,
+                "power": 3,
+                "toughness": 3,
                 "mana_value": 1,
                 "types": {
-                  "is_creature": false,
+                  "is_creature": true,
                   "is_land": false,
-                  "is_spell": true,
+                  "is_spell": false,
                   "is_artifact": false,
                   "is_enchantment": false,
                   "is_planeswalker": false,
@@ -7000,7 +6160,7 @@
               },
               {
                 "text_box": "({T}: Add {U}.)",
-                "id": 22,
+                "id": 25,
                 "registry_key": 575,
                 "name": "Island",
                 "zone": "HAND",
@@ -7019,15 +6179,55 @@
                 }
               },
               {
-                "text_box": "Igneous Inspiration deals 3 damage to any target.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
-                "id": 16,
-                "registry_key": 542,
-                "name": "Igneous Inspiration",
+                "text_box": "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn.",
+                "id": 8,
+                "registry_key": 397,
+                "name": "Fire Nation Cadets",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 1,
+                "toughness": 2,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
+                "id": 2,
+                "registry_key": 15,
+                "name": "Accumulate Wisdom",
                 "zone": "HAND",
                 "owner_id": 0,
                 "power": 0,
                 "toughness": 0,
-                "mana_value": 3,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 10,
+                "registry_key": 407,
+                "name": "Firebending Lesson",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
                 "types": {
                   "is_creature": false,
                   "is_land": false,
@@ -7124,7 +6324,7 @@
             "graveyard": [
               {
                 "text_box": "({T}: Add {W}.)",
-                "id": 69,
+                "id": 70,
                 "registry_key": 769,
                 "name": "Plains",
                 "zone": "GRAVEYARD",
@@ -7154,6 +6354,37 @@
               {
                 "role": "choice",
                 "object": {
+                  "entity_id": 12,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 14,
+                      "incarnation": 0
+                    }
+                  },
+                  "display_id": 14,
+                  "label": "First-Time Flyer"
+                }
+              }
+            ],
+            "id": 0,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard First-Time Flyer",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard First-Time Flyer",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              14
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "choice",
+                "object": {
                   "entity_id": 29,
                   "subject": {
                     "kind": "object",
@@ -7167,7 +6398,7 @@
                 }
               }
             ],
-            "id": 0,
+            "id": 1,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -7178,99 +6409,6 @@
             "action_type": "SELECT_CARD",
             "focus": [
               31
-            ]
-          },
-          {
-            "subjects": [
-              {
-                "role": "choice",
-                "object": {
-                  "entity_id": 40,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 42,
-                      "incarnation": 0
-                    }
-                  },
-                  "display_id": 42,
-                  "label": "Tiger-Seal"
-                }
-              }
-            ],
-            "id": 1,
-            "actor": 0,
-            "verb": "choose",
-            "source": null,
-            "label": "Discard Tiger-Seal",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Discard Tiger-Seal",
-            "action_type": "SELECT_CARD",
-            "focus": [
-              42
-            ]
-          },
-          {
-            "subjects": [
-              {
-                "role": "choice",
-                "object": {
-                  "entity_id": 18,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 20,
-                      "incarnation": 0
-                    }
-                  },
-                  "display_id": 20,
-                  "label": "Island"
-                }
-              }
-            ],
-            "id": 2,
-            "actor": 0,
-            "verb": "choose",
-            "source": null,
-            "label": "Discard Island",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Discard Island",
-            "action_type": "SELECT_CARD",
-            "focus": [
-              20
-            ]
-          },
-          {
-            "subjects": [
-              {
-                "role": "choice",
-                "object": {
-                  "entity_id": 19,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 21,
-                      "incarnation": 0
-                    }
-                  },
-                  "display_id": 21,
-                  "label": "Island"
-                }
-              }
-            ],
-            "id": 3,
-            "actor": 0,
-            "verb": "choose",
-            "source": null,
-            "label": "Discard Island",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Discard Island",
-            "action_type": "SELECT_CARD",
-            "focus": [
-              21
             ]
           },
           {
@@ -7291,7 +6429,7 @@
                 }
               }
             ],
-            "id": 4,
+            "id": 2,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -7309,30 +6447,30 @@
               {
                 "role": "choice",
                 "object": {
-                  "entity_id": 7,
+                  "entity_id": 39,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 9,
+                      "entity": 41,
                       "incarnation": 0
                     }
                   },
-                  "display_id": 9,
-                  "label": "Firebending Lesson"
+                  "display_id": 41,
+                  "label": "Tiger-Seal"
                 }
               }
             ],
-            "id": 5,
+            "id": 3,
             "actor": 0,
             "verb": "choose",
             "source": null,
-            "label": "Discard Firebending Lesson",
+            "label": "Discard Tiger-Seal",
             "help": null,
             "choices": [],
-            "confirm_label": "Discard Firebending Lesson",
+            "confirm_label": "Discard Tiger-Seal",
             "action_type": "SELECT_CARD",
             "focus": [
-              9
+              41
             ]
           },
           {
@@ -7340,20 +6478,20 @@
               {
                 "role": "choice",
                 "object": {
-                  "entity_id": 20,
+                  "entity_id": 23,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 22,
+                      "entity": 25,
                       "incarnation": 0
                     }
                   },
-                  "display_id": 22,
+                  "display_id": 25,
                   "label": "Island"
                 }
               }
             ],
-            "id": 6,
+            "id": 4,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -7363,7 +6501,7 @@
             "confirm_label": "Discard Island",
             "action_type": "SELECT_CARD",
             "focus": [
-              22
+              25
             ]
           },
           {
@@ -7371,16 +6509,78 @@
               {
                 "role": "choice",
                 "object": {
-                  "entity_id": 14,
+                  "entity_id": 6,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 16,
+                      "entity": 8,
+                      "incarnation": 0
+                    }
+                  },
+                  "display_id": 8,
+                  "label": "Fire Nation Cadets"
+                }
+              }
+            ],
+            "id": 5,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Fire Nation Cadets",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Fire Nation Cadets",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              8
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "choice",
+                "object": {
+                  "entity_id": 0,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 2,
+                      "incarnation": 0
+                    }
+                  },
+                  "display_id": 2,
+                  "label": "Accumulate Wisdom"
+                }
+              }
+            ],
+            "id": 6,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Accumulate Wisdom",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Accumulate Wisdom",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              2
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "choice",
+                "object": {
+                  "entity_id": 8,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 10,
                       "incarnation": 1
                     }
                   },
-                  "display_id": 16,
-                  "label": "Igneous Inspiration"
+                  "display_id": 10,
+                  "label": "Firebending Lesson"
                 }
               }
             ],
@@ -7388,13 +6588,13 @@
             "actor": 0,
             "verb": "choose",
             "source": null,
-            "label": "Discard Igneous Inspiration",
+            "label": "Discard Firebending Lesson",
             "help": null,
             "choices": [],
-            "confirm_label": "Discard Igneous Inspiration",
+            "confirm_label": "Discard Firebending Lesson",
             "action_type": "SELECT_CARD",
             "focus": [
-              16
+              10
             ]
           }
         ],
@@ -7454,12 +6654,12 @@
           "label": "Cast Callous Inspector"
         }
       ],
-      "digest": "ec031073e0f394e40ae89a33054819c1f4558f69168d9698a2754a836ad049b9",
+      "digest": "b159b8625357f02fe6fc031308cccb021c85c67deb5db43e06fe2c9405cbcec9",
       "frame": {
         "protocol": 1,
-        "match_id": "EDORHLyajpvEVrZBpgV8pA",
+        "match_id": "c1Lek12ulp1YlWfVA3Q5pA",
         "revision": 7,
-        "frame_hash": "4288176f40bca05bcc936813b60cb5a68162e1ad2b7f94ec79a0df4a86759abc",
+        "frame_hash": "bab1f7da025a69e318e85926dc085d8e1090d05a9d351d26dc82728d2ef409b1",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -9055,7 +8255,7 @@
               {
                 "role": "target",
                 "object": {
-                  "entity_id": 64,
+                  "entity_id": 70,
                   "subject": {
                     "kind": "object",
                     "id": {
@@ -9185,15 +8385,15 @@
           "label": "Do not attack with Llanowar Elves"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 4,
+          "offer_id": 2,
           "label": "Play Forest"
         },
         {
@@ -9201,15 +8401,15 @@
           "label": "Cast Healer's Hawk"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
@@ -9221,87 +8421,87 @@
           "label": "Do not attack with Llanowar Elves"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Play Plains"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
@@ -9317,87 +8517,87 @@
           "label": "Do not attack with Llanowar Elves"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Play Plains"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
@@ -9413,79 +8613,79 @@
           "label": "Do not attack with Llanowar Elves"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Pass priority"
         },
         {
-          "offer_id": 3,
+          "offer_id": 1,
           "label": "Cast Savannah Lions"
         },
         {
@@ -9501,17 +8701,17 @@
           "label": "Target Savannah Lions"
         }
       ],
-      "digest": "ef0025fa6ac70c16e6afe85929fb35878fff4f4eb5c38050034c13c90b895be4",
+      "digest": "2a68b4a7a027c5b0de95bfbcf6a061b1cd9b90fb24a77bdd4a01fbf9e44ceed5",
       "frame": {
         "protocol": 1,
-        "match_id": "WawKd4468sjkR8pt2IZjOQ",
-        "revision": 101,
-        "frame_hash": "5c28403e6c00a28cd0969015d6e312afdfbc218d6c8f0e8cff70e33a85057b3b",
+        "match_id": "KM5sIeuWNglvZFD6bbHXKw",
+        "revision": 96,
+        "frame_hash": "f40f4b103612c0e318631b6926561ebb4a44e6a6a4762daf89760269a30139f6",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 102,
+          "id": 97,
           "actor": 0,
           "kind": "pay_or_not",
           "title": "Payment",
@@ -11317,6 +10517,15 @@
                 }
               }
             ],
+            "aliases": [
+              {
+                "kind": "object",
+                "id": {
+                  "entity": 128,
+                  "incarnation": 2
+                }
+              }
+            ],
             "id": 0,
             "actor": 0,
             "verb": "choose",
@@ -11366,37 +10575,6 @@
               {
                 "role": "choice",
                 "object": {
-                  "entity_id": 14,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 128,
-                      "incarnation": 2
-                    }
-                  },
-                  "display_id": 128,
-                  "label": "Forest"
-                }
-              }
-            ],
-            "id": 2,
-            "actor": 0,
-            "verb": "choose",
-            "source": null,
-            "label": "Tap Forest for {G}",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Tap Forest for {G}",
-            "action_type": "TAP_FOR_COST",
-            "focus": [
-              128
-            ]
-          },
-          {
-            "subjects": [
-              {
-                "role": "choice",
-                "object": {
                   "entity_id": 46,
                   "subject": {
                     "kind": "object",
@@ -11410,7 +10588,16 @@
                 }
               }
             ],
-            "id": 3,
+            "aliases": [
+              {
+                "kind": "object",
+                "id": {
+                  "entity": 132,
+                  "incarnation": 2
+                }
+              }
+            ],
+            "id": 2,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -11421,37 +10608,6 @@
             "action_type": "TAP_FOR_COST",
             "focus": [
               131
-            ]
-          },
-          {
-            "subjects": [
-              {
-                "role": "choice",
-                "object": {
-                  "entity_id": 35,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 132,
-                      "incarnation": 2
-                    }
-                  },
-                  "display_id": 132,
-                  "label": "Plains"
-                }
-              }
-            ],
-            "id": 4,
-            "actor": 0,
-            "verb": "choose",
-            "source": null,
-            "label": "Tap Plains for {W}",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Tap Plains for {W}",
-            "action_type": "TAP_FOR_COST",
-            "focus": [
-              132
             ]
           },
           {
@@ -11472,7 +10628,7 @@
                 }
               }
             ],
-            "id": 5,
+            "id": 3,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -11503,7 +10659,7 @@
                 }
               }
             ],
-            "id": 6,
+            "id": 4,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -11534,7 +10690,7 @@
                 }
               }
             ],
-            "id": 7,
+            "id": 5,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -11548,7 +10704,7 @@
             ]
           },
           {
-            "id": 8,
+            "id": 6,
             "actor": 0,
             "verb": "pay",
             "source": null,
