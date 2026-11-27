@@ -1,0 +1,18 @@
+at: 9b0dfdd01b63b07a32de4d1060d7e506ab7740fa
+first:
+  - path: docs/evaluation.md
+    why: Managed device selection and precision options
+  - path: experiments/reports/eval_throughput.md
+    why: Apple throughput, replay parity, and reproduction
+  - path: manabot/eval/agent_loader.py
+    why: Backend selection and the masked logit contract
+  - path: manabot/eval/vector.py
+    why: Batched decisions and replayable match completion
+  - path: manabot/policy/batching.py
+    why: Joining prepared rows with decision memory
+  - path: manabot/backends/mlx/checkpoint.py
+    why: Metal availability and portable checkpoint loading
+  - path: tests/eval/test_etude_agents.py
+    why: Device precedence, fallback, and numerical parity
+  - path: tests/test_package_boundaries.py
+    why: Framework imports stay out of game processes
