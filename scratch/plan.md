@@ -4,7 +4,7 @@ A manual payment must return the payer’s next legal choice, finish the cast, o
 
 Pass 1 (`1c521e300`) propagated empty, forced and automatic decision errors and applied the zero-life cost rule. The Room at −1 offers blue and red, isolated stepping poisons only the malformed slot under both skip settings, and all 23 focused debug tests passed.
 
-Pass 2 (`a9359c03b`) carries signed life through mana, checks trailing fees and records source coupling. All 78 focused debug checks passed, including the four Heartbeat positions, the announced and Ward fees, and the read-only fork. The 512-game debug step benchmark was stopped at 4m41s before it emitted a digest. The release Engine Budget comparison remains in pass 6.
+Pass 2 (`a9359c03b`) carries signed life through mana, checks trailing fees and records source coupling. All 78 focused debug checks passed, including the four Heartbeat positions, the announced and Ward fees, and the read-only fork. The 512-game debug step benchmark was stopped at 4m41s before it emitted a digest.
 
 The first pass 2 attempt found the counterexample below (`34092c814`, test `tarnished_citadel_and_the_great_henge_change_another_mana_source` in `managym/cards/tests/cards/ody.rs`) and changed no production code. The concept review (`24f1ec2f3`, `scratch/concept-review.html`) replanned around it.
 
@@ -17,6 +17,8 @@ Pass 4a (`494fb4c5e`) retains counter and sacrifice costs before computing mana 
 Pass 4b (coupled regime) stopped at five counterexamples and moves to a separate Task (eighth review 1a, below). Each is a committed debug test that records the defect at the point of failure: `0d7bb6743` and `a90fd7109`, `de9787c04` (closed by design 5), `da29dbbdc` (closed by pass 4a) and `710163f05` (fixed tap opens a bonus choice). Their full analysis and designs 1, 4 and 7 are in `7cb3655f1:scratch/plan.md`.
 
 Pass 5 (`12950aefb`) removes the provisional coupling flags, defers automatic commitment through the last mana bonus, and puts colored convoke in the shared witness. All 65 focused debug checks passed, including Canyon-first beside Angel, choosing which mana to spend after Heartbeat, and the Room into Guardian cast in manual and automatic modes.
+
+Pass 6 (`c94532b94`) verifies a pre-Citadel payment snapshot with skipping enabled in `managym/src/agent/vector_env.rs`. Both slots return and match scalar observations, rewards, termination and state digests through the blue/red choice and Sokka's cast. `managym/README.md` describes the resulting payment rules. All 89 focused debug nextest checks passed, including the acceptance demo.
 
 ## Design · made for review
 
@@ -31,9 +33,9 @@ Headless choices following each concept review's recommendation; reversible inte
 
 Preserve native action identities, source order, the chooser, individual Heartbeat bonus decisions, spend restrictions and receipts. Keep replay and action formats. The `PaymentScan` debug rebuild check must keep holding.
 
-## Remaining passes
+## CI verification
 
-6. **Collection check and acceptance.** Restore a pre-activation snapshot into one slot of a two-slot native vector with skipping on; both slots return and match scalar play. Acceptance demo, debug nextest for touched crates, release engine budget comparison, and the `managym/README.md` mana-payment section for the built design.
+Engine Budget still needs the paired release comparison against `managym/perf/baseline.json`. The branch diff selects `.github/workflows/engine-budget.yml` through CI. That workflow runs both binaries for both revisions on the same runner and compares timing and digests.
 
 ## Reproduced on a TLA Limited board
 
@@ -79,4 +81,4 @@ Reviews two through seven are designs 1–3 and the deferred findings (detail in
 ## Docs
 
 - `docs/engine.md` (`### Forced decisions`): `Game::tick` returns `Result<bool, AgentError>`; empty non-terminal spaces and failed forced/automatic actions error under both skip settings; isolated vector slots poison alone. Built in pass 1.
-- `managym/README.md` describes the signed life budget and the order of fees. Pass 6 documents the completed payment model and grouped help.
+- `managym/README.md` describes signed life, the order of fees, colored convoke and spending after triggered mana bonuses. Updated in pass 6.
