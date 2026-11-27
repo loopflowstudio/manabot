@@ -10,14 +10,9 @@ The first pass 2 attempt found the counterexample below (`34092c814`, test `tarn
 
 ## Pass 3 counterexample · an activated ability can disappear while its fee is paid
 
-Pass 3 recorded the counterexample in `7124e6444`. The focused debug proof passed.
+`7124e6444` records it: `mana_upfront_fee_can_remove_the_activated_ability` (`managym/src/flow/mana/tests.rs`) grants Gray Ogre `{1}{R}, {T}: Add {B}{B}` while its controller has unspent mana. Spending the last `{R}` of the fee removes the grant, and `complete_mana_upfront` panics on an empty ability list. The test currently asserts the state just before the invalid lookup.
 
-The constructed position `mana_upfront_fee_can_remove_the_activated_ability` in `managym/src/flow/mana/tests.rs` grants Gray Ogre `{1}{R}, {T}: Add {B}{B}` while its controller has unspent mana. Start with `{R}` and an untapped Mountain. Announce the activation and tap the Mountain. The native tap advances payment and spends `{1}{R}`. The final red unit removes the grant while the activation is in flight, so `complete_mana_upfront` panics with an empty ability list at index 0. The retained test taps and spends those same units on a fork and asserts that the activation remains pending, the live ability is gone, and the root digest is unchanged.
-
-`Decision::ManaUpfront` retains the permanent and a live ability index. The payment model uses that lookup for reservations and saved obligations. Execution and the continuation projection also use it. Rebuilding sources on an exact fork leaves the activation with no authority to read. It must retain the announced cost and chosen ability through nested payment, then evaluate any dynamic output against the board at resolution. The source index still identifies the offered action and its provenance.
-
-Realign pass 3 around an owned activation in `flow/decision.rs` before adding forked search in `flow/mana.rs`. Decide how the activation binds to snapshots and state hashes (`state/hash.rs`), since `ManaUpfront` is part of the canonical state. The acceptance check should execute the published PayCost on live and restored positions and reach the `{B}{B}` choice after the grant disappears. The forked search, colored convoke and collection checks remain pending.
-
+`Decision::ManaUpfront` holds `(permanent, ability_index)` and six readers re-index the live list: `flow/mana.rs` reservations (≈3201), obligations (≈4900/4987), upfront spending (≈5033), completion (≈5058) and `agent/continuation.rs:1108`. Third review (`f5992e81f`) adds two traps: cloning `characteristics()` bakes a dynamic output at announcement (`finalize_characteristics`, `flow/statics.rs` ≈945), and Pass 2's sacrifice coupling misses a Treasure feeding a Metalcraft-style `ControlsAtLeast` mana ability (that read lands in `reads.fields`, not `StateReads`).
 
 ## Why a frozen source list fails
 
@@ -49,9 +44,15 @@ Preserve native action identities, source order, the chooser, individual Heartbe
 
 ## Remaining passes
 
-3. **Coupled regime** (`flow/mana.rs`, `flow/layers.rs`, `flow/statics.rs`). The scan retains per-activation coupling and marks fixed taps separately. Layer and activation reads are summarized once. Keep ordinary Forest taps in the pure handoff on the Angel/Audience board. Forked search with pure-finish-first, mutator-only branching, reservation replay, memoization and shortcut deferral. Turn the Pass 2 test into the expected behavior: at 28 life only Citadel → Audience → Citadel is offered; at 22 life Henge-first is admitted; Canyon at 25 offers Audience first; the shield and sacrifice cases if a catalog card builds them (constructed positions otherwise); 10 Forests + coupled sources checking `{15}` returns quickly in debug.
-4. **Colored convoke in the model.** Regression: the Guardian of Vitu-Ghazi board from `scratch/questions.md` completes its cast.
-5. **Collection check and acceptance.** Restore a pre-activation snapshot into one slot of a two-slot native vector with skipping on; both slots return and match scalar play. Acceptance demo, debug nextest for touched crates, engine budget comparison. Rewrite the `managym/README.md` mana-payment section for the built design (the unbuilt description was removed in realign).
+3. **Owned in-flight mana activation** (`flow/decision.rs`, `flow/mana.rs`, `agent/continuation.rs`, `state/hash.rs`, `flow/payment.rs`, `flow/statics.rs`). Made for review (third review 1a, 2a, 4a):
+   - `Decision::ManaUpfront` gains `activation: Box<ManaUpfrontActivation>`: the mana cost priced at announcement (CR 601.2f), the upfront cost flags (tap, tap cost, counters, life, sacrifice), the unfinalized output `Effect` from the raw layer view and the CR 605.3b suffix. `permanent` and `ability_index` stay as provenance only. One helper evaluates the output against the live board; all six readers use the record. Passed over: boxing the whole `ActivatedAbilityDefinition` (unrelated fields in the hash, finalized/raw confusion).
+   - The activation is canonical state: serialize it and bump `MATCH_STATE_HASH_VERSION` 34 → 35 (`git grep` finds no stored fixture pinning it). Passed over: `#[serde(skip)]`, which lets two different pending activations hash alike.
+   - `payment_tapped_source` (`flow/payment.rs` ≈1592) reads the cost component, not live characteristics.
+   - Sacrifice coupling: the layer board records battlefield-predicate reads by mana abilities and statics, and a sacrifice source couples against them or when the sacrificed permanent carries statics or replacements. Plain TLA Treasure boards stay uncoupled.
+   - Tests: the Ogre test executes the published PayCost on live and restored positions and reaches the `{B}{B}` choice; a dynamic-output activation whose fee is paid by Henge (22 → 25 life, Angel 4/4) produces `{G}{G}`; a Treasure + conditional-mana board is classified coupled (constructed position if no catalog card).
+   - Teaches: whether the coupled fork can rebuild sources mid-activation with no live lookup.
+4. **Coupled regime** (`flow/mana.rs`, `flow/layers.rs`, `flow/statics.rs`). Forked search with pure-finish-first, mutator-only branching, reservation replay, memoization and shortcut deferral; ordinary Forests stay in the pure handoff. Turn the Pass 2 test into expected behavior: at 28 life only Citadel → Audience → Citadel is offered; at 22 life Henge-first is admitted; Canyon at 25 offers Audience first; shield, sacrifice and the Treasure + conditional-mana cases (constructed if needed); 10 Forests + coupled sources checking `{15}` returns quickly in debug.
+5. **Colored convoke, collection check and acceptance.** Convoke in the model; the Guardian of Vitu-Ghazi board completes its cast. Restore a pre-activation snapshot into one slot of a two-slot native vector with skipping on; both slots return and match scalar play. Acceptance demo, debug nextest for touched crates, engine budget comparison, and the `managym/README.md` mana-payment section for the built design.
 
 ## Reproduced on a TLA Limited board
 
@@ -82,11 +83,12 @@ The test exercises both branches of the Room’s blue/red choice and the legal o
 
 ## Concept review disposition
 
-Second review (`24f1ec2f3`): choices 1a, 2a, 3a, 4a adopted above as made for review. Its invariants (reservation replay on forks, shortcut deferral, `PaymentScan` debug check) are in design 1. Filtering live `Decision::OrderReplacement` modes by payment completion is a separate outcome (deferred below). The first review's dispositions are superseded.
+Second review (`24f1ec2f3`): 1a, 2a, 3a, 4a are design 1–3 above, made for review. Third review (`f5992e81f`): 1a (owned `ManaUpfrontActivation`), 2a (hash bump) and 4a (sacrifice coupling gap) are pass 3, made for review; its dynamic-output trap is a pass 3 test; 3a puts the non-mana sibling in deferred findings; its coupled-search and convoke invariants are passes 4–5 unchanged.
 
 ## Deferred findings
 
 - **Restrict live `OrderReplacement` offers during payment** when one order strands the cost (`proposed_event.rs`). No current catalog card builds it; pass 1 turns any constructed case into an error rather than a spin.
+- **Own announced non-mana activations** (third review choice 3a, made for review; 3b would fold it in here). `Operation::Activation` / `ActivatedTargeting` re-read `activated_abilities.get(ability_index)` in `prepare_activated_ability` (`flow/play.rs` ≈1871/1986) after mana is spent (`flow/payment.rs` ≈1413). A grant that ends while paying gives `AgentError("invalid ability index")` or shifts to another ability. Needs owned capture in `flow/play.rs` begin/pay, `flow/payment.rs`, and the hash; a separate Task.
 
 ## Docs
 
