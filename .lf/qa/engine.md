@@ -57,13 +57,12 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   playing randomly, and one Pay-1-life activation per turn. The choice
   is a Modal decision only with two or more cards exiled with Koh (one is
   skipped as forced). 3 of 6 games reached it (8 decisions, about 7 minutes at load ~110).
-  With a debug wheel (`maturin build` without `--release`, about 6 min,
+  With a debug wheel (`uv run --extra play maturin build` without `--release`, about 6 min,
   unzipped to `.runs/<dir>/site`, `PYTHONPATH` pointing there) the
   `TokenWriter::into_rules_tokens` guard panics natively on any unregistered
-  program token, so random play is the broad check: `python -m
-  manabot.verify.record_coverage --games 40 --seed 501` stops at the first
-  bad game (about 20 s in debug). Run `-m`/`-c` from `.runs/<dir>` with
-  `uv run --project ../..`. From the checkout root, the current directory
+  program token. From `.runs/<dir>`, run `uv run --project ../.. python -m
+  manabot.verify.record_coverage --games 40 --seed 501` to stop at the first
+  bad game (about 20 s in debug). From the checkout root, the current directory
   shadows `PYTHONPATH`, so the stale `managym/*.so` loads and the guard is
   silently absent. A sweep that catches `BaseException` per game and keeps
   going ran 200 world games (41k decisions, one decision per `prepare`) in
