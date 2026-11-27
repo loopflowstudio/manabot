@@ -16,13 +16,9 @@ Pass 4 attempt 2 reproduced `mana_trigger_reads_keyword_changed_by_another_activ
 
 The fifth concept review (`fc7f2f70e7`, `scratch/concept-review.html`) found four more channels the read graph misses (`tap_cost.predicate` `mana.rs` ≈3381; `ActivatedAbilitiesCostLess.predicate` `statics.rs` ≈990; delve graveyard growth from a non-token sacrifice `help.rs` ≈51; a summoning-sick creature removing its own haste counter `mana.rs` ≈3349) and concluded the blacklist premise is wrong. Design 4 below now holds its whitelist. Both Heartbeat of Spring (`chk.rs`) and Badgermole Cub (`tla.rs`) use a predicate with only `card_type` set, so the TLA acceptance boards stay on the whitelist.
 
-## Pass 4 stop · repeatable mana effects
+## Pass 4 attempt 3 · repeatable mana effects
 
-Pass 4 attempt 3 (`de9787c04`) adds `repeatable_mana_suffix_grows_the_board_at_a_full_pool` in `managym/src/flow/mana/tests.rs`. A constructed mana ability taps its source, adds green, creates a Clue and untaps itself. Three native activations each leave the same saturated green pool and a ready source, with one more Clue and a new match-state hash each time. The fixture takes six native steps at priority and passed its focused debug check.
-
-Design 4 would keep this ability a Mutator at every state. For a payment owing blue on this board, there is no pure finish, no handoff and no repeated board state. Dropping events and normalizing object IDs still leaves a growing Clue count. Payment terms can read that count through `Condition::ControlsAtLeast` or `EffectValue::BattlefieldMatching`. The planned fork search has no termination argument for such repeatable effects. The same mana-ability representation admits both resource-consuming and resource-restoring suffixes.
-
-Pause pass 4 before adding the fork path. The mana-payment section of `managym/README.md` already requires consumption of a finite resource, while `ActivatedAbilityDefinition::mana_suffix` and live execution accept the constructed effect. Review needs to decide where the documented invariant is enforced or how resource-restoring effects enter feasibility. Both earlier pass 4 regressions still await the solver. The colored-convoke slice and collection acceptance remain in pass 5.
+Attempt 3 (`de9787c04`, `repeatable_mana_suffix_grows_the_board_at_a_full_pool` in `managym/src/flow/mana/tests.rs`) shows that a constructed `{T}: Add {G}, create a Clue, untap this` is admitted as a mana ability. Three activations leave the same saturated pool and a ready source, add a Clue each time and change the match-state hash each time. No fork search over such effects terminates without a cap. `is_mana_suffix_effect` (`managym/state/src/card.rs:683`) accepts any untargeted effect except mana output, `Modal` and `If`. That contradicts `managym/README.md:669` ("Every registered mana ability must consume a finite resource"). The sixth review (`6f7b914a4`, `scratch/concept-review.html`) closes that contract as design 5 below.
 
 ## Why a frozen source list fails
 
@@ -56,11 +52,20 @@ The run is headless; these follow the concept review's recommendations (1a, 2a, 
    - Deletes `mana_activation_reads`, `payment_writes_couple` (`statics.rs` ≈366) and `has_triggered_mana_abilities`; `LayerBoard.reads` returns to cache invalidation only. No hash, replay or observation change (v35 stays).
    - Passed over: a single flat board boolean (2b, forks every Treasure beside Air Nomad Legacy or Badgermole); pre-baking coupling in `payment_sources()` (3b, blind to priority-time delve and reservations); every source Sensitive on any conditional static (4b, ~10× fork states on the 10-Forest board).
 
+5. **Closed monotone mana-ability contract** (sixth review 1a–4a, made for review; reversible, with no change to the hash, tokens or replay).
+   - One predicate on `ActivatedAbilityDefinition` (`mana_parts()`, `state/src/card.rs`) is used by `is_mana_ability`, `mana_choices`, `has_dynamic_mana_output`, `mana_suffix` and fixed entry mana. It requires three things. First, the costs are exactly those `ManaUpfrontActivation` pays: battlefield zone, and no loyalty, generic sacrifice, waterbend, exile/return/discard source, grantor cost, tap-power or station. Second, the ability consumes a finite resource: `sacrifice_source`, `tap_source`, a use limit, `tap_cost` > 0, or `remove_counters` > 0 with no `add_counters`. Third, every suffix is one of `GainLife`, `DrainLife`, or `LoseLife`/`DealDamageToPlayer` without a target (2a). Any other ability is an ordinary stack ability.
+   - `Decision::ManaUpfront` reserves pending `remove_counters` the same way it reserves `tap_source` and `sacrifice_source` (`payment_model::reserve`, `mana.rs` ≈3209). Without that reservation, `{1}, Remove a counter: Add {G}{G}` on a permanent with one counter can nest without bound or spend the counter twice (3a).
+   - The catalog parity test (`registered_mana_activations_consume_finite_payment_resources`, `tests.rs` ≈2439) widens to printed abilities, tokens, `GrantActivated` grants, dynamic outputs and suffixes. Any syntactic CR 605.1a mana ability the contract rejects fails CI.
+   - Termination: each activation strictly lowers the payer's unreserved (permanents, untapped, use limits, counters) lexicographically. Choice and spend steps lower the owed pips or the continuation depth, and delve shrinks the graveyard. The fork search therefore needs no cap.
+   - Passed over: runtime `AgentError` for non-monotone abilities (1b, two meanings of "mana ability" and fallible read paths); a capped fork search (1c, violates the no-truncation rule and still undecidable); a wider suffix whitelist (2b, no catalog card uses it); excluding bare `remove_counters` (3b, breaks `a90fd7109`).
+   - Unverified review claims for implement to check: the catalog has no suffix besides Citadel's damage and Henge's life gain, and every catalog mana card keeps `is_mana_ability()`.
+
 Preserve native action identities, source order, the chooser, individual Heartbeat bonus decisions, spend restrictions and receipts. Keep existing replay and action formats and version the canonical state hash when it changes. The `PaymentScan` debug rebuild check must keep holding: probes and coupled search run on forks and leave `&self` untouched.
 
 ## Remaining passes
 
-4. **Whitelist classifier and coupled regime** (`flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/mana/help.rs`, `flow/proposed_event.rs`). Build design 4 (whitelist) with design 1's fork search; keep the fork search and live offer changes together. Live checks:
+4. **Closed contract, whitelist classifier and coupled regime** (`state/src/card.rs`, `flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/mana/help.rs`, `flow/proposed_event.rs`). Build design 5 first, then design 4 with design 1's fork search; keep the fork search and live offer changes together. Live checks:
+   - `de9787c04` becomes the contract suite (4a): the Clue/untap ability is a stack ability at priority and owing `{U}` is rejected with no fork; bare `add_counters` mana and a remove/add counter-swap pair are stack abilities; a nested `ManaUpfront` cannot spend a reserved counter; catalog parity holds.
    - `0d7bb6743`: only Citadel-first offered; at 1 life the damage channel deactivates and Henge hands off to the pure model.
    - `a90fd7109`: only the Mountain tap is offered first; it commits both red units before the counter is removed for green.
    - The review's new boards: delve spell beside a non-token `{T}, Sacrifice: Add {G}`; summoning-sick creature with remove-haste-counter mana and `{T}` mana (only tap-first); a `tap_cost` predicate and an `ActivatedAbilitiesCostLess` predicate each beside a non-mana write.
@@ -101,7 +106,7 @@ The test exercises both branches of the Room’s blue/red choice and the legal o
 
 ## Concept review disposition
 
-Second review (`24f1ec2f3`): 1a, 2a, 3a, 4a are design 1–3 above, made for review. Third review (`f5992e81f`): pass 3 implements 1a, 2a and 4a for review. 3a puts the non-mana sibling in deferred findings. Fourth review (`8182d5c876`): its read graph is superseded; its non-mana ownership and `OrderReplacement` items remain deferred. Fifth review (`fc7f2f70e7`): 1a–4a are design 4 above, made for review; its convoke item stays in pass 5 and its two separate outcomes match the deferred findings. The shield board was dropped after checking that managym currently has no consumable one-shot prevention shield.
+Second review (`24f1ec2f3`): 1a, 2a, 3a, 4a are design 1–3 above, made for review. Third review (`f5992e81f`): pass 3 implements 1a, 2a and 4a for review. 3a puts the non-mana sibling in deferred findings. Fourth review (`8182d5c876`): its read graph is superseded; its non-mana ownership and `OrderReplacement` items remain deferred. Fifth review (`fc7f2f70e7`): 1a–4a are design 4 above, made for review; its convoke item stays in pass 5 and its two separate outcomes match the deferred findings. The shield board was dropped after checking that managym currently has no consumable one-shot prevention shield. Sixth review (`6f7b914a4`): 1a–4a are design 5, made for review and built in pass 4. Its convoke, non-mana ownership and `OrderReplacement` items match pass 5 and the deferred findings.
 
 ## Deferred findings
 
