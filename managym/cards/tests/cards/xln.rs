@@ -202,6 +202,94 @@ fn entry_choice_simultaneous_spyglass_and_banner() {
 }
 
 #[test]
+fn spyglass_keeps_a_fixture_only_name_in_text_but_not_policy_input() {
+    use crate::support::{
+        game::{five_color_setup, move_card},
+        inspect::{card_of, permanent_named},
+        play::{cast, choose_entry_value, resolve_top, settle},
+    };
+    use managym::{
+        agent::{
+            observation::Observation,
+            observation_encoder::{encode, FactKind, ObservationEncoderConfig},
+            observation_layout::fact,
+        },
+        cards::tokens::{name_value, TokenKind},
+        state::{
+            game_object::{PlayerId, Target},
+            permanent::EntryChoice,
+            zone::ZoneType,
+        },
+    };
+    let viewer = PlayerId(0);
+    let name = "70,000 Light-Years from Home";
+    let mut s = five_color_setup(&["Brought Back", "Sorcerous Spyglass", "Heraldic Banner"]);
+    let buried = ["Sorcerous Spyglass", "Heraldic Banner"].map(|card| {
+        let permanent = s.force_permanent_on_battlefield(0, card);
+        let object = card_of(&s, permanent);
+        move_card(&mut s, object, ZoneType::Graveyard)
+    });
+    cast(&mut s, "Brought Back");
+    for object in buried {
+        assert!(s.choose_target(Target::GraveyardCard(object)));
+    }
+    resolve_top(&mut s);
+    choose_entry_value(&mut s, "for Sorcerous Spyglass");
+    s.game_mut().scenario_naming_vocabulary().unwrap();
+    choose_entry_value(&mut s, name);
+
+    // Banner's unanswered replacement keeps Spyglass's entry in the batch.
+    assert!(s
+        .battlefield_permanents_named(0, "Sorcerous Spyglass")
+        .is_empty());
+    let capture = s.game().capture_decision(viewer, 0).unwrap();
+    let entry = [
+        (TokenKind::Text as u16, name_value("chosen on entry")),
+        (
+            TokenKind::Variant as u16,
+            name_value("EntryChoice::CardName"),
+        ),
+        (TokenKind::Null as u16, 0),
+    ];
+    let frame = capture
+        .frames
+        .iter()
+        .find(|frame| {
+            frame
+                .effect_execution
+                .windows(entry.len())
+                .any(|part| part == entry)
+        })
+        .expect("suspended entry retains the chosen-name variant with a Null payload");
+    assert!(frame
+        .effect_execution_description
+        .as_deref()
+        .unwrap()
+        .contains(&format!("chosen on entry: {name}")));
+
+    choose_entry_value(&mut s, "Red");
+    settle(&mut s);
+    let spyglass = permanent_named(&s, "Sorcerous Spyglass");
+    assert_eq!(
+        s.game().state.permanents[spyglass]
+            .as_ref()
+            .unwrap()
+            .chosen
+            .as_deref(),
+        Some(&EntryChoice::CardName(name.into()))
+    );
+    let obs = Observation::for_player(s.game(), viewer);
+    assert!(obs.agent_permanents.iter().any(|permanent| {
+        permanent.chosen.as_ref() == Some(&EntryChoice::CardName(name.into()))
+    }));
+    let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    assert!(encoded
+        .facts
+        .chunks_exact(fact::WIDTH)
+        .all(|row| { row[fact::KIND] != FactKind::ChosenName as u8 as f32 }));
+}
+
+#[test]
 fn new_horizons_grants_the_land_two_mana_of_one_color() {
     use crate::support::{
         game::five_color_setup,

@@ -948,6 +948,11 @@ belong only to policies with decision memory enabled. An unknown non-numeric
 program token fails policy admission and reports its missing `(kind, 0x…)`
 pairs.
 
+An expanded naming source can supply a chosen card name outside the installed
+catalog. Suspended entries and named exile or search programs encode it as
+`Null`, and permanent facts omit its vocabulary row. Rules state and readable
+observations keep the chosen spelling.
+
 ### Deprecated names
 
 Engine names describe what managym produces. These earlier spellings, named for

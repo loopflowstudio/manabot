@@ -54,7 +54,9 @@ CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --profil
 ```
 
 The witness check tests every effect witness in `observability.rs`, both as a
-spell program and as a runtime rules program. A missing vocabulary entry fails
+spell program and as a runtime rules program. It defers membership validation
+until it has collected missing pairs across all variants. Other witnesses use
+the emission guard. A missing vocabulary entry fails
 with the effect variant, serialization path, token kind and decimal/hex token
 value. For example, a runtime `Effect::HaveAbilitiesOf` needs its variant
 token, closing structure `/Effect::HaveAbilitiesOf` and `definition` field
@@ -90,8 +92,8 @@ uv run --extra dev pytest tests/model/test_effect_vocabulary.py tests/model/test
 These checks use the production host tables to verify that non-`DecisionMemory`
 `record_vocabulary()` tokens and TLA printed spans are admitted on both the
 dense and v11 paths, and reject each missing Koh runtime registration
-independently. Unknown non-numeric tokens remain errors; a policy admission
-failure lists the missing `(kind, 0x…)` keys, in the same kind and hex form as
-the Rust guard's report. The bounded record-coverage sweep in the development
-guide is additional integration coverage; it does not establish that every
-effect ran.
+independently. The shared-effect check admits registered modification tokens
+and rejects unknown and disabled decision-memory pairs. A policy admission
+failure lists the missing `(kind, 0x…)` keys in the same form as the Rust guard's
+report. The bounded record-coverage sweep in the development guide provides
+additional integration coverage.

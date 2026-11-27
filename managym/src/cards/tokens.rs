@@ -146,6 +146,28 @@ pub fn rules_tokens<T: Serialize>(
     Ok(writer.into_rules_tokens())
 }
 
+/// Serialize a definition for the exhaustive witness that aggregates missing pairs.
+#[doc(hidden)]
+pub fn definition_tokens_unchecked(
+    definition: &ObjectDefinition,
+    pack: &ContentPack,
+) -> Result<Vec<(u16, i32)>, ContentError> {
+    let mut writer = TokenWriter::new(pack);
+    writer.append_definition(definition)?;
+    Ok(writer.tokens)
+}
+
+/// Serialize rules for the exhaustive witness that aggregates missing pairs.
+#[doc(hidden)]
+pub fn rules_tokens_unchecked<T: Serialize>(
+    value: &T,
+    pack: &ContentPack,
+) -> Result<Vec<(u16, i32)>, ContentError> {
+    let mut writer = TokenWriter::new(pack);
+    writer.append_rules(value)?;
+    Ok(writer.tokens)
+}
+
 /// The token catalog of every definition in `pack`, rows in `CardDefId` order.
 pub fn catalog_tokens(pack: &ContentPack) -> Result<CatalogTokens, ContentError> {
     let mut out = CatalogTokens::default();
@@ -255,6 +277,11 @@ fn definition_programs_of(
 /// printed name never reaches the policy as text.
 const CARD_NAME_FIELDS: [&str; 4] = ["back_face", "partner", "fronts", "result"];
 
+enum StringField {
+    Named(&'static str),
+    ChosenCardName,
+}
+
 /// Writes tokens in their final `(kind, value)` form; no second pass converts
 /// them, and names are hashed in place without temporary strings.
 pub(crate) struct TokenWriter<'p> {
@@ -262,8 +289,8 @@ pub(crate) struct TokenWriter<'p> {
     tokens: Vec<(u16, i32)>,
     /// Positions of definition reference tokens and their target rows.
     references: Vec<(usize, i32)>,
-    /// Name of the struct field being written, for definition references.
-    field: Option<&'static str>,
+    /// Context for strings that denote definition references or chosen names.
+    field: Option<StringField>,
     /// Depth of nested structs; the top-level row (serialized as
     /// `CardDefinition`) is depth 1.
     depth: usize,
@@ -287,6 +314,17 @@ impl<'p> TokenWriter<'p> {
     /// Append to one retained-program stream without allocating a writer per field.
     pub(crate) fn append_rules<T: Serialize>(&mut self, value: &T) -> Result<(), ContentError> {
         value.serialize(self)
+    }
+
+    fn field_value<T: ?Sized + Serialize>(
+        &mut self,
+        field: StringField,
+        value: &T,
+    ) -> Result<(), ContentError> {
+        let outer = self.field.replace(field);
+        let written = value.serialize(&mut *self);
+        self.field = outer;
+        written
     }
 
     pub(crate) fn append_definition(
@@ -452,14 +490,17 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
     }
     fn serialize_str(self, value: &str) -> Result<(), ContentError> {
         let reference = match self.field {
-            Some("emblem_key") => Some(self.pack.emblem_id(value)),
-            Some("token_name") => Some(self.pack.token_id(value)),
-            Some(field) if CARD_NAME_FIELDS.contains(&field) => {
+            Some(StringField::ChosenCardName) if self.pack.catalog_name(value).is_none() => {
+                return self.serialize_none();
+            }
+            Some(StringField::Named("emblem_key")) => Some(self.pack.emblem_id(value)),
+            Some(StringField::Named("token_name")) => Some(self.pack.token_id(value)),
+            Some(StringField::Named(field)) if CARD_NAME_FIELDS.contains(&field) => {
                 Some(self.pack.definition_id(value))
             }
             // "named [name]" compares names (CR 201.2); a name that is a card
             // in the pack is that card's reference, any other name stays text.
-            Some("named") => self.pack.definition_id(value).map(Some),
+            Some(StringField::Named("named")) => self.pack.definition_id(value).map(Some),
             _ => None,
         };
         if let Some(row) = reference {
@@ -521,7 +562,11 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         value: &T,
     ) -> Result<(), ContentError> {
         self.variant(name, variant);
-        value.serialize(&mut *self)?;
+        if (name, variant) == ("EntryChoice", "CardName") {
+            self.field_value(StringField::ChosenCardName, value)?;
+        } else {
+            value.serialize(&mut *self)?;
+        }
         self.close(name, Some(variant));
         Ok(())
     }
@@ -602,10 +647,9 @@ impl<'a, 'p> Compound<'a, 'p> {
 
     fn element<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<(), ContentError> {
         // A fixed array of card names (a meld pair's `fronts`) keeps its field.
-        let field = self
-            .writer
-            .field
-            .take_if(|field| !CARD_NAME_FIELDS.contains(field));
+        let field = self.writer.field.take_if(
+            |field| !matches!(field, StringField::Named(name) if CARD_NAME_FIELDS.contains(name)),
+        );
         value.serialize(&mut *self.writer)?;
         if field.is_some() {
             self.writer.field = field;
@@ -624,10 +668,11 @@ impl<'a, 'p> Compound<'a, 'p> {
             return Ok(());
         }
         self.writer.push(TokenKind::Field, name_value(key));
-        let outer = self.writer.field.replace(key);
-        value.serialize(&mut *self.writer)?;
-        self.writer.field = outer;
-        Ok(())
+        let field = match (self.name, self.variant, key) {
+            ("Effect", Some("ExileNamed"), "name") => StringField::ChosenCardName,
+            _ => StringField::Named(key),
+        };
+        self.writer.field_value(field, value)
     }
 
     fn end_struct(self) -> Result<(), ContentError> {

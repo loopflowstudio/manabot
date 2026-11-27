@@ -62,8 +62,13 @@ use managym::{
     },
 };
 use managym::{
-    cards::content_pack::{default_content_pack, ContentPack},
-    cards::tokens::{catalog_tokens, definition_tokens, name_value, rules_tokens, TokenKind},
+    cards::{
+        content_pack::default_content_pack,
+        tokens::{
+            catalog_tokens, definition_tokens, definition_tokens_unchecked, name_value,
+            rules_tokens_unchecked, TokenKind,
+        },
+    },
     state::{
         ability::{
             Ability, Actor, AttackSize, Condition, DamageKind, DamageRecipientFilter, DelayedEvent,
@@ -89,7 +94,7 @@ use managym::{
     Game, PlayerConfig,
 };
 use std::collections::BTreeSet;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // Where each piece of state is observed.
@@ -2145,7 +2150,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::SpendAnyManaToCast(creature()),
         StaticAbility::AttachedHas(ActivatedAbilityDefinition::default()),
         StaticAbility::AttachedSetsCharacteristics(SetCharacteristics {
-            named: "Witness".into(),
+            named: "Humble Merchant".into(),
             creature_types: vec!["Citizen".into()],
             power: 1,
             toughness: 1,
@@ -2347,20 +2352,13 @@ fn changed(before: &[f32], after: &[f32]) -> Vec<usize> {
         .collect()
 }
 
-fn witness_pack() -> &'static ContentPack {
-    static PACK: OnceLock<ContentPack> = OnceLock::new();
-    // Synthetic definitions use the real reference rows. Check their tokens
-    // explicitly against production so the witness can report all omissions.
-    PACK.get_or_init(|| default_content_pack().clone())
-}
-
 fn tokens_of(definition: &ObjectDefinition) -> Vec<(TokenKind, i32)> {
-    definition_tokens(definition, witness_pack()).unwrap()
+    definition_tokens(definition, default_content_pack()).unwrap()
 }
 
 fn spell(effects: Vec<Effect>) -> ObjectDefinition {
     ObjectDefinition::face(PrintedCharacteristics {
-        name: "Witness".into(),
+        name: "Gray Ogre".into(),
         spell_effects: effects,
         ..Default::default()
     })
@@ -2377,29 +2375,25 @@ fn every_effect_variant_reaches_the_learning_tokens() {
     names.sort_unstable();
     names.dedup();
     assert_eq!(names.len(), EFFECT_VARIANTS, "one witness per variant");
+    let pack = default_content_pack();
     let known = program_vocabulary();
-    let mut missing = std::collections::BTreeSet::new();
+    // Aggregate omissions across every variant and both serialization paths.
+    let mut missing = BTreeSet::new();
     for effect in witnesses {
-        let tokens = tokens_of(&spell(vec![effect.clone()]));
+        let tokens = definition_tokens_unchecked(&spell(vec![effect.clone()]), pack).unwrap();
         let name = effect_token(&effect);
-        let expected = (TokenKind::Variant, name_value(name));
+        let expected = (TokenKind::Variant as u16, name_value(name));
         assert!(tokens.contains(&expected), "{effect:?}");
         for (path, tokens) in [
             ("spell", tokens),
-            (
-                "rules",
-                rules_tokens(&effect, witness_pack())
-                    .unwrap()
-                    .into_iter()
-                    .map(|(kind, value)| (TokenKind::of(kind), value))
-                    .collect(),
-            ),
+            ("rules", rules_tokens_unchecked(&effect, pack).unwrap()),
         ] {
             for (kind, value) in tokens {
-                if !kind.is_numeric() && !known.contains(&(kind as u16, value)) {
+                let token_kind = TokenKind::of(kind);
+                if !token_kind.is_numeric() && !known.contains(&(kind, value)) {
                     missing.insert(format!(
-                        "{name} ({path}): {kind:?} (kind {}), value {value} (0x{:08x})",
-                        kind as u16, value as u32
+                        "{name} ({path}): {token_kind:?} (kind {kind}), value {value} (0x{:08x})",
+                        value as u32
                     ));
                 }
             }
@@ -2423,7 +2417,7 @@ fn every_trigger_condition_and_ability_reaches_the_learning_tokens() {
             }],
         };
         let definition = ObjectDefinition::face(PrintedCharacteristics {
-            name: "Witness".into(),
+            name: "Gray Ogre".into(),
             abilities: vec![ability.clone()],
             ..Default::default()
         });
@@ -2456,7 +2450,7 @@ fn every_triggered_mana_output_and_actor_reaches_the_learning_tokens() {
             TriggeredManaOutput::OneProducedType,
         ] {
             let definition = ObjectDefinition::face(PrintedCharacteristics {
-                name: "Witness".into(),
+                name: "Gray Ogre".into(),
                 triggered_mana_abilities: vec![TriggeredManaAbility {
                     who,
                     predicate: CardPredicate::default(),
@@ -2545,7 +2539,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
         });
     }
     let definition = ObjectDefinition::face(PrintedCharacteristics {
-        name: "Witness".into(),
+        name: "Gray Ogre".into(),
         abilities: conditions
             .into_iter()
             .map(|condition| Ability::Triggered {
@@ -2572,7 +2566,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
     for controlled_by in [Actor::You, Actor::Opponent, Actor::AnyPlayer] {
         for another in [false, true] {
             let tokens = tokens_of(&ObjectDefinition::face(PrintedCharacteristics {
-                name: "Witness".into(),
+                name: "Gray Ogre".into(),
                 abilities: vec![Ability::Triggered {
                     intervening_if: None,
                     condition: TriggerCondition::Dies {
@@ -2620,7 +2614,7 @@ fn every_condition_reaches_the_learning_tokens() {
 #[test]
 fn an_intervening_if_reaches_the_learning_tokens() {
     let definition = ObjectDefinition::face(PrintedCharacteristics {
-        name: "Witness".into(),
+        name: "Gray Ogre".into(),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::AttackedThisTurn),
@@ -2838,7 +2832,7 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
     let (base_game, ogre) = ogre_game();
     let (base_obs, base) = observe(&base_game, 0);
     let bare = tokens_of(&ObjectDefinition::face(PrintedCharacteristics {
-        name: "Witness".into(),
+        name: "Gray Ogre".into(),
         ..Default::default()
     }));
     for keyword in Keyword::ALL {
@@ -2877,7 +2871,7 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
         }
 
         let definition = ObjectDefinition::face(PrintedCharacteristics {
-            name: "Witness".into(),
+            name: "Gray Ogre".into(),
             keywords,
             ..Default::default()
         });
@@ -2903,7 +2897,7 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
 #[test]
 fn sorcery_timing_reaches_the_activated_ability_tokens() {
     let definition = ObjectDefinition::face(PrintedCharacteristics {
-        name: "Witness".into(),
+        name: "Gray Ogre".into(),
         activated_abilities: vec![ActivatedAbilityDefinition {
             sorcery_timing: true,
             effects: vec![Effect::Surveil { count: 1 }],
@@ -3232,7 +3226,7 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
         }
         // The token also appears for a bare definition with only this ability.
         let bare = ObjectDefinition::face(PrintedCharacteristics {
-            name: "Witness".into(),
+            name: "Gray Ogre".into(),
             statics: vec![ability.clone()],
             ..Default::default()
         });

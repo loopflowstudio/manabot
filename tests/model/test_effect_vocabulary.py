@@ -18,7 +18,8 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     ObservationSpace,
 )
-from manabot.policy.admission import Catalog, fact_vocabulary
+from manabot.env.shared_effects import DETAIL_KIND_NAMES
+from manabot.policy.admission import Catalog, effect_vocabulary, fact_vocabulary
 from manabot.policy.prepare import Layout, Tables, record_key, record_word
 from manabot.policy.readings import legacy_readings
 from manabot.policy.spans import full_word
@@ -114,6 +115,46 @@ def test_facts_reject_unknown_and_disabled_memory_program_tokens(
             ValueError, match=rf"missing keys: \({kind}, 0x{value & 0xFFFFFFFF:08x}\)$"
         ):
             _admit_program(catalog, [(kind, value)], packed=packed)
+
+
+def test_effects_admit_modification_program_tokens_and_reject_unknown_pairs(
+    encoder: SemanticCardEncoder,
+) -> None:
+    catalog = _catalog(_tables(encoder))
+    modifications = np.array(
+        [
+            managym.catalog_token_value(f"Modification::{name}")
+            for name in ("AddTypes", "AddColors")
+        ]
+    )
+    closings = np.array(
+        [
+            managym.catalog_token_value(f"/Modification::{name}")
+            for name in ("AddTypes", "AddColors")
+        ]
+    )
+    definition = np.zeros(2, dtype=np.int32)
+    structure = DETAIL_KIND_NAMES["program_structure"]
+    effect_vocabulary(
+        modifications, definition, np.full(2, structure), closings, catalog
+    )
+
+    memory_word = next(
+        value
+        for _, name, _, _, value in managym.record_vocabulary()
+        if name.startswith("DecisionMemory::") and value is not None
+    )
+    with pytest.raises(
+        ValueError,
+        match=rf"missing keys: \(1, 0xffffffff\), \(3, 0x{memory_word:08x}\)$",
+    ):
+        effect_vocabulary(
+            modifications,
+            definition,
+            np.array([structure, DETAIL_KIND_NAMES["program_variant"]]),
+            np.array([-1, memory_word]),
+            catalog,
+        )
 
 
 def test_koh_runtime_tokens_have_admitted_embedding_rows(

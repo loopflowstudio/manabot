@@ -199,9 +199,12 @@ fn execution_names(out: &mut Vec<RecordName>) {
     add(TokenKind::Variant, "CostComponent::Discard");
     // Variable loyalty costs are supported before a printed ability uses one.
     add(TokenKind::Variant, "LoyaltyCost::MinusX");
-    // The variants are record names. Their list bodies also emit closing tokens.
+    // These modifications are record names. Their bodies also emit closing tokens.
     add(TokenKind::Structure, "/Modification::AddTypes");
     add(TokenKind::Structure, "/Modification::AddColors");
+    add(TokenKind::Structure, "/Modification::ModeChosen");
+    add(TokenKind::Variant, "DamageKind::Combat");
+    add(TokenKind::Variant, "DamageRecipientFilter::Any");
     // A departed permanent's last known name (a token's, or one an effect
     // set) and a play grant's condition reach fact programs as rules text.
     for (_, definition) in default_content_pack().definition_entries() {
@@ -243,6 +246,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         // printed card programs do not supply this zone's token.
         ("ZoneType", &["Stack"][..]),
         ("DamageTransform", &["Prevent", "PreventAll"][..]),
+        ("TriggerCondition", &["TappedForMana"][..]),
         // Offered only by a resolved shield record, never printed.
         (
             "ReplacementEffect",
@@ -331,6 +335,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "remaining",
         "by",
         "index",
+        "mode",
         "kind",
         "attacking",
         "kicked",
