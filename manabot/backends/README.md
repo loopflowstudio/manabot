@@ -443,13 +443,31 @@ packs live facts into one `[1,R]` route and adds unlinked rows so `R` is a
 power of two of at least 64. Captured 64-board calls had at most 1.3% of
 their fact rows live. CPU and CUDA use `[B,F]` fact routes.
 
-Every packed GRU (catalog programs, fact programs, record reducers) goes
-through `packed_gru` (`torch/packed_gru.py`). On MPS it projects all packed
-rows once and runs a hand-written backward that carries only the state
-gradient through the reverse step loop, as MLX's `gru_recurrence` does.
-On MPS, `nn.GRU` over a `PackedSequence` dispatches about twenty ops per step.
-It reads the module's `nn.GRU` weights and runs in float32 under autocast, as
-`nn.GRU` does on MPS. CPU and CUDA call `nn.GRU`.
+Every packed GRU in the torch backend (catalog programs, fact programs, record
+reducers and GRU decision memory) goes through `packed_gru`
+(`torch/packed_gru.py`); `tests/model/test_packed_gru.py` enforces that no
+other module under `manabot/backends/torch/` constructs `PackedSequence`:
+
+```python
+from manabot.backends.torch.packed_gru import packed_gru
+
+# data: [N, I] in packed descending-length order; sizes: live counts per step
+# initial: [sizes[0], H] or None; returns (outputs [N, H], final [sizes[0], H])
+# both in gru.weight_ih_l0.dtype, with gradients preserved through any cast.
+outputs, final = packed_gru(self.gru, data, sizes, initial)
+```
+
+On every device (CPU, MPS and CUDA), `packed_gru` runs with autocast disabled,
+casts `data` and any `initial` state to `gru.weight_ih_l0.dtype`, and returns
+`outputs` and `final` in that parameter dtype without detaching gradients.
+Under `bf16` autocast, recurrences therefore run in float32 alongside their
+float32 weights rather than letting CUDA's fused GRU return `float16` or
+`bfloat16` states into float32 join tables (or run unscaled `float16`
+recurrences without a gradient scaler). On MPS it projects all packed rows once
+and runs a hand-written backward that carries only the state gradient through
+the reverse step loop, as MLX's `gru_recurrence` does, avoiding MPS `nn.GRU`'s
+roughly twenty dispatched ops per step over a `PackedSequence`. CPU and CUDA
+call `nn.GRU` inside `torch.autocast(device, enabled=False)`.
 
 `Learner` and `forward_precision` accept `"float32"`, `"tf32"` and `"bf16"`,
 refusing unknown precision names and `"bf16"` on CPU with `ValueError` rather
