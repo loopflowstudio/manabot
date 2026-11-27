@@ -53,3 +53,10 @@ No remaining mismatch in this Task's scope; all three pass-1 review gaps are clo
 
 - **Untangle `record_vocabulary()` (0.3.0).** About 350 synthetic `("token", "execution/<kind>/<name>", …)` rows exist only to carry runtime program tokens into `catalog.py`'s `record_token_keys`. The 44 `DecisionMemory::*` names carry phantom `Variant` tokens. The fix: expose runtime program tokens directly; change `DecisionMemory::*` to `record(Token, …, None)`; build `record_token_keys` without the fake records; and bind legacy keys in `binding.py`/`token_renames.rs` so pre-0.3.0 checkpoints still load. This breaks checkpoint compatibility, so it belongs with the 0.3.0 removals as a separate Task.
 - **Naming of `catalog_tokens()`.** Readers, including the author of issue 629, take it for the full vocabulary, but it holds only printed spans. Docs and docstrings now state the split (pass 1); renaming is a 0.3.0 API question alongside the `record_vocabulary()` untangling. Review finding 4 (synthetic `execution/*` rows, four repeated `DecisionMemory::` prefix filters) is this same 0.3.0 outcome.
+
+## Compression checks
+
+At `660f37854`, six focused engine tests and five card regressions passed in
+debug, including the exhaustive effect witness, Koh's departed trigger, both
+Spyglass scenarios and the guard's exact missing-pair diagnostic. All 14 Python
+effect vocabulary tests passed against the extension built during pass 2.

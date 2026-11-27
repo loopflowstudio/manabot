@@ -1,23 +1,23 @@
-at: 5424678db43e28ada5593245e30cde08cd38cf85
+at: 660f37854a39fafb234d7c03d618aced260b4e00
 first:
   - path: docs/engine.md
-    why: Defines admission and describes uncatalogued chosen names
+    why: Defines which runtime tokens a policy admits
   - path: managym/src/agent/record_vocabulary.rs
-    why: Combines printed spans and registered runtime pairs
+    why: Builds the vocabulary and identifies missing pairs
   - path: managym/src/cards/tokens.rs
-    why: Projects chosen names and guards default-pack streams
+    why: Checks completed streams and encodes chosen names
   - path: managym/src/cards/content_pack.rs
-    why: Answers whether a chosen name has a catalog row
+    why: Identifies chosen names with catalog rows
   - path: managym/src/agent/effect_execution.rs
-    why: Retains spelling for suspended entry and search choices
+    why: Projects suspended entries and named searches
   - path: managym/src/agent/observation_encoder.rs
-    why: Emits permanent chosen-name facts for admitted names
-  - path: managym/cards/tests/cards/observability.rs
-    why: Checks guarded witnesses and aggregates exhaustive effect omissions
-  - path: managym/cards/tests/cards/xln.rs
-    why: Exercises Spyglass through a suspended entry and completion
+    why: Writes permanent facts for catalogued choices
   - path: managym/cards/tests/cards/tla.rs
-    why: Exercises Koh's departed once-per-turn trigger
+    why: Recreates the departed Koh trigger regression
+  - path: managym/cards/tests/cards/xln.rs
+    why: Follows an uncatalogued name through Spyglass entry
+  - path: managym/cards/tests/cards/observability.rs
+    why: Reports omissions across every effect variant
   - path: tests/model/test_effect_vocabulary.py
-    why: Verifies fact and shared-effect admission
+    why: Exercises policy admission on each transport
 hide: []
