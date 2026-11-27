@@ -276,9 +276,11 @@ memory capture, then optionally commit a first action. Restore checks that
 the action still identifies the same choice after sampling.
 
 The private snapshot replay reproduces the original setup, external actions and
-ordered interventions and verifies the resulting digest. See the
-[Python snapshot guide](engine-python.md#save-and-restore-game-positions)
-for the mode contracts, replay limits and Academy Watch import.
+ordered interventions and verifies the resulting digest. Pending mana payments
+now store the announced activation, so the match-state digest moves from v34
+to v35. Restore v34 snapshot replays with the engine revision that wrote them.
+The [Python snapshot guide](engine-python.md#save-and-restore-game-positions)
+covers the mode contracts, replay limits and Academy Watch import.
 
 ### Remembered library positions
 
