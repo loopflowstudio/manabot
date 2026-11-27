@@ -1,17 +1,17 @@
-at: c94532b94e460bf6de05dba188f70432af492f9a
+at: 21b91711bebefe834e0eee215012345e59ff25b5
 first:
   - path: scratch/plan.md
     why: Reproduction, resolved cases, and deferred coupled-payment work
   - path: docs/engine.md
     why: Forced decisions return explicit errors to engine callers
   - path: managym/README.md
-    why: Life fees, convoke, and spending after mana bonuses
+    why: Life fees, mana floats before decline, and convoke
+  - path: managym/src/flow/decision.rs
+    why: Retained costs and the boundary for triggered mana
   - path: managym/src/flow/mana.rs
-    why: Signed life, owned activations, and shared payment witness
+    why: Signed life, colored convoke, and committed payment obligations
   - path: managym/src/flow/mana/help.rs
     why: Convoke, improvise, delve, and waterbend permissions
-  - path: managym/src/flow/decision.rs
-    why: Retained activation costs and complete triggered mana production
   - path: managym/src/flow/payment.rs
     why: Announced costs reserve taps and spend produced mana
   - path: managym/state/src/card.rs
@@ -28,11 +28,11 @@ first:
   - path: managym/src/agent/vector_env.rs
     why: Slot error isolation and restored payment against scalar play
   - path: managym/cards/tests/cards/ody.rs
-    why: Citadel payment order and Heartbeat spend choice
+    why: Citadel payment, Heartbeat receipts, and generic spending choice
   - path: managym/cards/tests/cards/rav.rs
     why: Guardian casts after Airship Engine Room produces mana
   - path: managym/src/flow/mana/tests.rs
-    why: Payment witness, retained replacements, and snapshot regressions
+    why: Payment witness, committed fees, and declinable Ward
   - path: managym/cards/tests/cards/one.rs
     why: Ward payment can fund its life fee
 hide: []

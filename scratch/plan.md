@@ -20,15 +20,7 @@ Pass 5 (`12950aefb`) removes the provisional coupling flags, defers automatic co
 
 Pass 6 (`c94532b94`) verifies a pre-Citadel payment snapshot with skipping enabled in `managym/src/agent/vector_env.rs`. Both slots return and match scalar observations, rewards, termination and state digests through the blue/red choice and Sokka's cast. `managym/README.md` describes the resulting payment rules. All 89 focused debug nextest checks passed, including the acceptance demo.
 
-## Pass 7 · next (ninth review `10eb24410`)
-
-Two contract defects on HEAD (both checked against the code) and three convoke loose ends, one fix pass:
-
-1. **Production boundary across bonuses** (choice 1a). `flow/decision.rs` ≈2889 recomputes `start = pool.unit_count()` on every `ManaChoice` step, so when the last `ManaProduction::Bonus` finishes `commit_produced_mana` sees only that bonus's units. The original output is treated as previously floated mana, receipts name the wrong source and an uncontested `{U}{R}` stays at `PayCost`. Fix: add `commit_start: Option<usize>` to `ManaProduction::Bonus`, set it on `Output` when `resume.is_none()`, thread it through `resolve_mana_bonuses` and commit `start..` when `next.is_none()`. Stays inside hash v35. Test: a `{T}: Add {U}{R}` land beside Heartbeat casts Sokka directly with land receipts; `{1}{U}` keeps the spending choice; remove the `if has_action(.., PayCost)` workaround in `managym/cards/tests/cards/ody.rs` ≈316.
-2. **Declinable resolution life** (choice 2a). `payment_obligations` (`flow/mana.rs` ≈3596) treats `can_decline() && tail_life() > 0` as committed, so an optional Ward `{2}` + 2 life blocks floating mana before declining. Fix: `payment_obligations` holds only `!can_decline()` payments; `saved_obligations` (≈5500) appends `Obligation::life(tail_life())` for a declinable payment being paid. Update `flow/mana/tests.rs` ≈1825 to a committed payment and add a declinable-Ward-with-life test (float allowed before `Decline`, `PayCost` still gated on the life).
-3. **Convoke cleanup** (choice 3a). `prefix_lower_bound` (≈3069) handles `Taps::Convoke`; drop the unread `Color` / `WaterbendTap` sentinel on `PaymentStep::Convoke` (≈901/921); delete the dead `|| helped` (≈4270).
-
-Then run the focused debug nextest set from pass 6 plus the acceptance demo.
+Pass 7 (`21b91711b`) commits the original output and all triggered mana together, keeps mana floats legal before declining Ward, and accounts for colored convoke in the payment prefix bound. The pass 6 debug set plus three regressions passed (92 tests), as did the six Citadel acceptance tests.
 
 ## Design · made for review
 
