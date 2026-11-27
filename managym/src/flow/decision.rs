@@ -58,7 +58,7 @@ pub struct ManaUpfrontActivation {
 
 impl ManaUpfrontActivation {
     pub(crate) fn new(mana_cost: ManaCost, raw: &ActivatedAbilityDefinition) -> Self {
-        debug_assert!(raw.is_mana_ability());
+        let (output, suffix) = raw.mana_parts().expect("announced mana ability");
         Self {
             mana_cost,
             tap_cost: raw.tap_cost.clone(),
@@ -67,8 +67,8 @@ impl ManaUpfrontActivation {
             add_counters: raw.add_counters,
             life_cost: raw.life_cost,
             sacrifice_source: raw.sacrifice_source,
-            output: raw.effects[0].clone(),
-            suffix: raw.mana_suffix().to_vec(),
+            output: output.clone(),
+            suffix: suffix.to_vec(),
         }
     }
 }

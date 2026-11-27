@@ -423,6 +423,7 @@ pub(in crate::flow::mana) fn tapping_ability(outputs: Vec<Mana>) -> ManaActivati
         tap_candidates: Arc::new(Vec::new()),
         limited: false,
         sacrifice_source: false,
+        counter_cost: None,
         ability_index: 0,
         cost: ManaCost::default(),
         outputs: outputs.into(),
@@ -1380,16 +1381,14 @@ fn mana_trigger_reads_keyword_changed_by_another_activation() {
 }
 
 #[test]
-fn repeatable_mana_suffix_grows_the_board_at_a_full_pool() {
+fn repeatable_mana_suffix_uses_the_stack() {
     use crate::agent::action::Action;
     use crate::flow::game::Game;
     use crate::state::{
         ability::{Effect, ObjectSelector},
         card::ActivatedAbilityDefinition,
         game_object::PlayerId,
-        mana::Color,
         player::{ManaFloats, PlayerConfig},
-        zone::ZoneType,
     };
 
     let player = PlayerId(0);
@@ -1419,9 +1418,8 @@ fn repeatable_mana_suffix_grows_the_board_at_a_full_pool() {
         ],
         ..Default::default()
     }];
-    let mut full = Mana::default();
-    full.mana[Color::Green as usize] = u8::MAX;
-    *game.state.mana_pool_mut(player) = full.clone().into();
+    assert!(!game.characteristics(permanent).activated_abilities[0].is_mana_ability());
+    assert!(!game.can_pay_with_mana_abilities(player, &ManaCost::parse("U"), None));
     game.tick().unwrap();
 
     let activate = Action::ActivateAbility {
@@ -1429,29 +1427,114 @@ fn repeatable_mana_suffix_grows_the_board_at_a_full_pool() {
         permanent,
         ability_index: 0,
     };
-    let choose = Action::ChooseMode { player, mode: 0 };
-    let mut hashes = vec![game.state.deterministic_hash()];
-    for clues in 1..=3 {
-        for action in [&activate, &choose] {
-            let index = game
-                .action_space()
-                .unwrap()
-                .actions
-                .iter()
-                .position(|offer| offer == action)
-                .unwrap_or_else(|| panic!("missing {action:?}"));
-            assert!(!game.step(index).unwrap());
-        }
-        assert_eq!(game.pooled_mana(player), full);
-        assert!(!game.state.permanents[permanent].as_ref().unwrap().tapped);
-        assert_eq!(
-            game.state.zones.size(ZoneType::Battlefield, player),
-            clues + 1
-        );
-        let hash = game.state.deterministic_hash();
-        assert!(!hashes.contains(&hash));
-        hashes.push(hash);
+    let index = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|offer| *offer == activate)
+        .unwrap();
+    assert!(!game.step(index).unwrap());
+    assert_eq!(game.state.stack_objects.len(), 1);
+    assert_eq!(game.pooled_mana(player), Mana::default());
+    assert!(game.state.permanents[permanent].as_ref().unwrap().tapped);
+}
+
+#[test]
+fn counter_cost_cannot_be_replenished_by_another_counter_only_mana_ability() {
+    use crate::state::{ability::Effect, card::ActivatedAbilityDefinition, permanent::CounterKind};
+
+    let green = || vec![Effect::add_mana(Mana::parse("G"))];
+    let plus = (CounterKind::PlusOnePlusOne, 1);
+    let charge = (CounterKind::Charge, 1);
+    for (remove, add) in [(None, plus), (Some(plus), charge), (Some(charge), plus)] {
+        let ability = ActivatedAbilityDefinition {
+            remove_counters: remove,
+            add_counters: Some(add),
+            effects: green(),
+            ..Default::default()
+        };
+        assert!(!ability.is_mana_ability());
+        assert!(ability.mana_choices().is_none());
     }
+    let ability = ActivatedAbilityDefinition {
+        remove_counters: Some(plus),
+        effects: green(),
+        ..Default::default()
+    };
+    assert!(ability.is_mana_ability());
+}
+
+#[test]
+fn pending_mana_activation_reserves_its_counter() {
+    use crate::flow::{
+        decision::{Decision, EffectFrame, SuspendedResolution},
+        game::Game,
+    };
+    use crate::state::{
+        ability::Effect, card::ActivatedAbilityDefinition, game_object::PlayerId,
+        permanent::CounterKind, player::PlayerConfig,
+    };
+
+    let player = PlayerId(0);
+    let deck = [("Forest".into(), 40)].into();
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("payer", deck),
+            PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+        ],
+        346,
+        false,
+    );
+    let permanent = game
+        .scenario_force_battlefield(player, "Forest", true)
+        .unwrap();
+    let object = game.permanent_object(permanent).unwrap();
+    let kind = CounterKind::Charge;
+    let activation = ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("U"),
+        remove_counters: Some((kind, 1)),
+        effects: vec![Effect::add_mana(Mana::parse("GG"))],
+        ..Default::default()
+    };
+    game.state[object].activated_abilities = vec![
+        activation.clone(),
+        ActivatedAbilityDefinition {
+            mana_cost: ManaCost::default(),
+            remove_counters: Some((kind, 1)),
+            effects: vec![Effect::add_mana(Mana::parse("U"))],
+            ..Default::default()
+        },
+        ActivatedAbilityDefinition {
+            sacrifice_source: true,
+            effects: vec![Effect::add_mana(Mana::parse("U"))],
+            ..Default::default()
+        },
+    ];
+    game.state.change_counters(permanent, kind, 1);
+    assert!(!game.can_activate_mana_ability(player, permanent, 0));
+    *game.state.suspended_decision_mut() = Some(SuspendedResolution {
+        frame: EffectFrame::new(player, Vec::new()),
+        decision: Decision::ManaUpfront {
+            player,
+            permanent,
+            ability_index: 0,
+            tap_remaining: 0,
+            activation: Box::new(ManaUpfrontActivation::new(
+                activation.mana_cost.clone(),
+                &activation,
+            )),
+            resume: None,
+        },
+    });
+    assert!(game.payment_model(player, None).sources[0]
+        .abilities
+        .is_empty());
+    assert!(!game.can_activate_mana_ability(player, permanent, 1));
+    assert!(!game.can_activate_mana_ability(player, permanent, 2));
+    game.state.change_counters(permanent, kind, 1);
+    assert!(game.can_activate_mana_ability(player, permanent, 1));
+    assert!(!game.can_activate_mana_ability(player, permanent, 2));
 }
 
 #[test]
@@ -2437,25 +2520,54 @@ fn payment_color_bound_matches_the_search_without_it() {
 
 #[test]
 fn registered_mana_activations_consume_finite_payment_resources() {
+    use crate::state::{
+        ability::Effect,
+        card::{ActivatedAbilityDefinition, StaticAbility},
+        effect::Modification,
+    };
+
+    // Identify the CR 605.1a candidates independently of the payment engine's
+    // supported effect order, costs and suffixes.
+    fn adds_mana(effect: &Effect) -> bool {
+        match effect {
+            Effect::AddMana { .. } | Effect::AddOneColorManaValue { .. } => true,
+            Effect::If {
+                then, otherwise, ..
+            } => then.iter().chain(otherwise).any(adds_mana),
+            Effect::Modal { modes } => modes.iter().flatten().any(adds_mana),
+            _ => false,
+        }
+    }
+
+    let mut suffixes = Vec::new();
     for definition in ContentPack::default().definitions() {
-        for ability in &definition.activated_abilities {
-            if ability.mana_choices().is_some() {
-                assert!(
-                    ability.tap_source
-                        || ability.sacrifice_source
-                        || ability.is_use_limited()
-                        || ability.tap_cost.as_ref().is_some_and(|cost| cost.count > 0),
-                    "{} has no finite payment resource cost",
-                    definition.name
-                );
-                assert!(
-                    ability.sacrifice.is_none() && !ability.waterbend,
-                    "{} needs its additional upfront cost represented",
-                    definition.name
-                );
+        let mut abilities: Vec<&ActivatedAbilityDefinition> =
+            definition.activated_abilities.iter().collect();
+        for static_ability in &definition.statics {
+            match static_ability {
+                StaticAbility::AttachedHas(ability) => abilities.push(ability),
+                StaticAbility::Continuous(effect) => {
+                    abilities.extend(effect.modifications.iter().filter_map(|modification| {
+                        match modification {
+                            Modification::GrantActivated(ability) => Some(ability.as_ref()),
+                            _ => None,
+                        }
+                    }));
+                }
+                _ => {}
+            }
+        }
+        for ability in abilities {
+            let expected = ability.loyalty.is_none()
+                && ability.target_requirements().is_empty()
+                && ability.effects.iter().any(adds_mana);
+            assert_eq!(ability.is_mana_ability(), expected, "{}", definition.name);
+            if !ability.mana_suffix().is_empty() {
+                suffixes.push(definition.name.clone());
             }
         }
     }
+    assert_eq!(suffixes, ["Tarnished Citadel", "The Great Henge"]);
 }
 
 #[test]
@@ -2979,6 +3091,7 @@ fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
         tap_candidates: Arc::new(Vec::new()),
         limited: false,
         sacrifice_source: false,
+        counter_cost: None,
         ability_index: 0,
         cost: ManaCost::parse("1"),
         outputs: vec![Mana::parse("W"), Mana::parse("U")].into(),

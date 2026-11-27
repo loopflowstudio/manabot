@@ -678,15 +678,15 @@ pub enum ReplacementEffect {
     },
 }
 
-/// A mana ability's later instruction: it adds no mana and targets nothing
-/// (CR 605.1a), so the ability stays a mana ability and resolves at once.
+/// Later instructions can affect life or damage without restoring a payment
+/// resource. They must also be untargeted (CR 605.1a).
 fn is_mana_suffix_effect(effect: &Effect) -> bool {
-    !matches!(
+    matches!(
         effect,
-        Effect::AddMana { .. }
-            | Effect::AddOneColorManaValue { .. }
-            | Effect::Modal { .. }
-            | Effect::If { .. }
+        Effect::GainLife { .. }
+            | Effect::DrainLife { .. }
+            | Effect::LoseLife { .. }
+            | Effect::DealDamageToPlayer { .. }
     ) && effect.target_spec().is_none()
 }
 
@@ -840,54 +840,65 @@ impl ActivatedAbilityDefinition {
         }
     }
 
-    /// Whether this is a mana ability (CR 605.1a): an untargeted activation
-    /// whose leading effect could add mana, optionally followed by the
-    /// untargeted non-mana instructions of [`Self::mana_suffix`]. Its output
-    /// may still depend on the game ([`Self::has_dynamic_mana_output`]); a
-    /// mana ability never uses the stack.
-    pub fn is_mana_ability(&self) -> bool {
-        if self.loyalty.is_some() {
-            return false;
+    /// Output and later instructions of a mana activation supported by the
+    /// payment engine. Each activation consumes a resource even if it adds
+    /// no usable mana. A counter-only activation cannot replenish counters.
+    pub fn mana_parts(&self) -> Option<(&Effect, &[Effect])> {
+        if self.zone != ActivationZone::Battlefield
+            || self.loyalty.is_some()
+            || self.sacrifice.is_some()
+            || self.waterbend
+            || self.exile_source
+            || self.return_source
+            || self.discard_source
+            || self.discard_card
+            || self.has_grantor_cost()
+            || self.tap_power().is_some()
+            || self.station
+        {
+            return None;
         }
-        let Some((effect, suffix)) = self.effects.split_first() else {
-            return false;
-        };
-        suffix.iter().all(is_mana_suffix_effect) && is_mana_output(effect)
+        let finite = self.sacrifice_source
+            || self.tap_source
+            || self.is_use_limited()
+            || self.tap_cost.as_ref().is_some_and(|cost| cost.count > 0)
+            || self.remove_counters.is_some_and(|(_, count)| count > 0)
+                && self.add_counters.is_none();
+        let (output, suffix) = self.effects.split_first()?;
+        (finite && is_mana_output(output) && suffix.iter().all(is_mana_suffix_effect))
+            .then_some((output, suffix))
+    }
+
+    /// Whether this activation produces mana without using the stack.
+    pub fn is_mana_ability(&self) -> bool {
+        self.mana_parts().is_some()
     }
 
     /// A mana ability whose output reads the game ("Add {G} for each Elf you
     /// control", a conditional branch, X mana of one color). Characteristics
     /// finalize it to concrete [`Self::mana_choices`] when they are read.
     pub fn has_dynamic_mana_output(&self) -> bool {
-        if self.loyalty.is_some() {
-            return false;
-        }
-        let Some((effect, suffix)) = self.effects.split_first() else {
-            return false;
-        };
-        suffix.iter().all(is_mana_suffix_effect)
-            && is_mana_output(effect)
-            && !is_static_mana_output(effect)
+        self.mana_parts()
+            .is_some_and(|(output, _)| !is_static_mana_output(output))
     }
 
     /// Resolve a fixed-count `AddOneColorManaValue` mana ability from the
     /// permanent's entry choice during layer evaluation so it becomes a static
     /// output instead of requiring per-read finalization.
     pub fn resolve_fixed_entry_mana(&mut self, chosen: Option<&crate::permanent::EntryChoice>) {
-        let Some((effect, suffix)) = self.effects.split_first_mut() else {
+        let Some((
+            Effect::AddOneColorManaValue {
+                amount: EffectValue::Fixed(amount),
+                chosen_color,
+                creature_purposes,
+            },
+            _,
+        )) = self.mana_parts()
+        else {
             return;
         };
-        if let Effect::AddOneColorManaValue {
-            amount: EffectValue::Fixed(amount),
-            chosen_color,
-            creature_purposes,
-        } = effect
-        {
-            if suffix.iter().all(is_mana_suffix_effect) {
-                *effect =
-                    materialize_one_color_mana(*amount, *chosen_color, creature_purposes, chosen);
-            }
-        }
+        self.effects[0] =
+            materialize_one_color_mana(*amount, *chosen_color, creature_purposes, chosen);
     }
 
     /// The concrete outputs of a mana ability: a leading effect adding one of
@@ -895,14 +906,8 @@ impl ActivatedAbilityDefinition {
     /// ability whose output has not been finalized against the game
     /// (`Game::characteristics` finalizes every dynamic output it returns).
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
-        if self.loyalty.is_some() {
-            return None;
-        }
-        let (effect, suffix) = self.effects.split_first()?;
-        if !suffix.iter().all(is_mana_suffix_effect) {
-            return None;
-        }
-        mana_output_choices(effect)
+        let (output, _) = self.mana_parts()?;
+        mana_output_choices(output)
     }
 
     /// Tapping this permanent is the entire cost and producing mana its only effect.
@@ -975,11 +980,7 @@ impl ActivatedAbilityDefinition {
     /// resolving with it, off the stack, once per activation (CR 605.3b).
     /// Empty for an ability that is not a mana ability.
     pub fn mana_suffix(&self) -> &[Effect] {
-        if self.is_mana_ability() {
-            &self.effects[1..]
-        } else {
-            &[]
-        }
+        self.mana_parts().map_or(&[], |(_, suffix)| suffix)
     }
 
     /// The activation's targeting clauses (CR 602.2b, 601.2c), in order.

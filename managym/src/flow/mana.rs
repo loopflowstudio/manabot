@@ -52,6 +52,7 @@ use crate::{
             SpendingContext,
         },
         payment::{How, ManaOrigin, PaymentReceipt, SpentMana},
+        permanent::CounterKind,
         zone::ZoneType,
     },
 };
@@ -461,6 +462,7 @@ impl PurposeProjection {
                 || (x.tap_count != 0 && x.tap_candidates != y.tap_candidates)
                 || x.limited != y.limited
                 || x.sacrifice_source != y.sacrifice_source
+                || x.counter_cost != y.counter_cost
                 || x.life_cost != y.life_cost
                 || x.coupling != y.coupling
                 || !((x.cost.mana_value == 0 && y.cost.mana_value == 0) || x.cost == y.cost)
@@ -797,11 +799,19 @@ struct ManaActivation {
     tap_candidates: Arc<Vec<PermanentId>>,
     limited: bool,
     sacrifice_source: bool,
+    counter_cost: Option<ManaCounterCost>,
     ability_index: usize,
     cost: ManaCost,
     outputs: ManaChoices,
     life_cost: u32,
     coupling: PaymentCoupling,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ManaCounterCost {
+    kind: CounterKind,
+    amount: u16,
+    available: i32,
 }
 
 impl ManaActivation {
@@ -1687,6 +1697,45 @@ impl PaymentModel<'_> {
             !(reservation.tap && ability.tap_source
                 || reservation.sacrifice && ability.sacrifice_source)
         });
+    }
+
+    fn reserve_mana_activation(
+        &mut self,
+        permanent: PermanentId,
+        tap: bool,
+        sacrifice: bool,
+        remove_counters: Option<(CounterKind, u16)>,
+    ) {
+        let counters = remove_counters.filter(|&(_, amount)| amount > 0);
+        // A nested activation must leave the permanent and the counters it
+        // owes in place until the suspended activation commits its costs.
+        self.reserve(SourceReservation::owed(
+            permanent,
+            tap,
+            sacrifice || counters.is_some(),
+        ));
+        let Some((kind, amount)) = counters else {
+            return;
+        };
+        let matches = |cost: &ManaCounterCost| cost.kind == kind;
+        if let Some(index) = self.sources.iter().position(|source| {
+            source.permanent == permanent
+                && source
+                    .abilities
+                    .iter()
+                    .any(|ability| ability.counter_cost.as_ref().is_some_and(matches))
+        }) {
+            Arc::make_mut(&mut self.sources)[index]
+                .abilities
+                .retain_mut(|ability| {
+                    let Some(cost) = ability.counter_cost.as_mut().filter(|cost| matches(cost))
+                    else {
+                        return true;
+                    };
+                    cost.available -= i32::from(amount);
+                    i32::from(cost.amount) <= cost.available
+                });
+        }
     }
 
     /// Gross usable output and net new units. Each tap can choose one mode.
@@ -3212,11 +3261,12 @@ impl Game {
                     resume,
                     ..
                 } => {
-                    model.reserve(SourceReservation::owed(
+                    model.reserve_mana_activation(
                         *permanent,
                         activation.tap_source,
                         activation.sacrifice_source,
-                    ));
+                        activation.remove_counters,
+                    );
                     if let Some(next) = resume {
                         reserve(next, game, model);
                     }
@@ -3382,6 +3432,13 @@ impl Game {
                                 }),
                             limited: ability.is_use_limited() || ability.remove_counters.is_some(),
                             sacrifice_source: ability.sacrifice_source,
+                            counter_cost: ability.remove_counters.map(|(kind, amount)| {
+                                ManaCounterCost {
+                                    kind,
+                                    amount,
+                                    available: source.counter_count(kind),
+                                }
+                            }),
                             ability_index: index,
                             cost: ability.mana_cost.clone(),
                             outputs: outputs.into(),
@@ -3645,11 +3702,12 @@ impl Game {
             sources: base.sources.clone(),
             life: base.life,
         };
-        model.reserve(SourceReservation::owed(
+        model.reserve_mana_activation(
             permanent,
             ability.tap_source,
             ability.sacrifice_source,
-        ));
+            ability.counter_cost.map(|cost| (cost.kind, cost.amount)),
+        );
         if ability.limited {
             Arc::make_mut(&mut model.sources)[source_index]
                 .abilities

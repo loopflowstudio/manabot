@@ -1613,6 +1613,7 @@ mod tests {
                 activation: Box::new(crate::flow::decision::ManaUpfrontActivation::new(
                     ManaCost::default(),
                     &crate::state::card::ActivatedAbilityDefinition {
+                        tap_source: true,
                         effects: vec![crate::state::ability::Effect::add_mana(
                             crate::state::mana::Mana::parse("G"),
                         )],
