@@ -85,7 +85,10 @@ def _fact_encoder() -> FactEncoder:
 
 
 def test_every_record_name_reads_exactly_one_row(cards: SemanticCardEncoder) -> None:
-    names = managym.record_vocabulary()
+    names = managym.record_vocabulary() + [
+        ("token", name, value, None, None)
+        for name, value in managym.decision_memory_names()
+    ]
     rows = []
     for space, name, value, kind, token in names:
         namespace = RecordNamespace[space.upper()]
@@ -93,8 +96,13 @@ def test_every_record_name_reads_exactly_one_row(cards: SemanticCardEncoder) -> 
         index = int(torch.searchsorted(cards.record_name_keys, torch.tensor(key)))
         assert int(cards.record_name_keys[index]) == key, name
         row = int(cards.record_name_rows[index])
-        if (kind, token) in cards.token_vocabulary:
-            assert row == _card_row(cards, kind, token), name
+        if kind is not None and token is not None:
+            token_key = (kind << 32) | (token & 0xFFFFFFFF)
+            token_index = int(
+                torch.searchsorted(cards.record_token_keys, torch.tensor(token_key))
+            )
+            assert int(cards.record_token_keys[token_index]) == token_key, name
+            assert row == int(cards.record_token_rows[token_index]), name
         else:
             # Appended after the card tokens, whose rows stay unchanged.
             assert row > len(cards.token_vocabulary), name

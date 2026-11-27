@@ -47,6 +47,11 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   through `agent_cards` rows that have the same `registry_key`.
 - Policy vocabulary/admission changes (`record_vocabulary.rs`, token kinds,
   `manabot/policy/admission.py`): the consumer is training's catalog policy.
+  Check that fresh program keys equal `catalog_tokens()` ∪ `runtime_tokens()`
+  with decision memory enabled and disabled. Use `record_vocabulary()` for
+  fact and shared-effect name keys and `decision_memory_names()` for memory
+  keys. To trace a checkpoint's keys at its writer revision, run
+  `uv run python scripts/pinned_pilot.py names --at <revision>`.
   Script a directed `managym.Env` game that reaches the runtime program,
   `encode_observation(space, obs)` each decision at `ObservationConfig(policy_input_version=10)`
   and pass it through `manabot.verify.record_coverage._embed` with a tiny

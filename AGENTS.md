@@ -342,8 +342,9 @@ change already touches it; do not rewrite a module only for style. Rust in
   to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
   field or record name the token serializer hashes needs an entry in
   `managym/src/cards/token_renames.rs`; a name is never reused with a new
-  meaning. When removing a registered execution label, retire its token and
-  its `execution/<kind>/<name>` record name there. Never learn a `CardDefId`.
+  meaning. Classify each runtime token or hashed record name removed there.
+  Keep the pre-0.3.0 synthetic record and decision-memory token retirements
+  independent of current registrations. Never learn a `CardDefId`.
   Bind tables indexed by card or name by definition key or name. A change that
   alters what a stored pilot computes fails `tests/model/test_pinned_pilot.py`
   until it adds the rename or column or declares the break with
@@ -438,8 +439,11 @@ change already touches it; do not rewrite a module only for style. Rust in
   not game objects; do not use card slots or invent definitions for them.
 - Fact and shared-effect ids read the card encoder's token rows
   (`ModelConfig.record_vocabulary="catalog"`, the fresh default, omitted from
-  regimes); native `agent/record_vocabulary.rs` lists every name the encoders
-  hash, so a new hashed name must appear there or the policy rejects it.
+  regimes). Register hashed fact and shared-effect names in native
+  `agent/record_vocabulary.rs`. Program admission uses the union of
+  `catalog_tokens()` and `runtime_tokens()`, including every program token
+  aliased by a record name. Decision-memory names live in native
+  `agent/decision_memory.rs` and have their own rows when enabled.
   Schema-specific labels use an owner prefix (for example `OpponentMemory::Role`):
   the token namespace is shared, and an unprefixed label can collide with an
   existing rules field that has a different token meaning. Optional model

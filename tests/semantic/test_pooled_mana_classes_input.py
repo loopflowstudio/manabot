@@ -184,11 +184,7 @@ def test_spending_choices_share_native_vector_text_and_academy_observations() ->
     assert pools[0]["combat"] is False
     # Every selectable unit, not just the aggregate colors, reaches the
     # policy's closed runtime vocabulary through the execution program.
-    vocabulary = {
-        (kind, token)
-        for _, _, _, kind, token in managym.record_vocabulary()
-        if kind is not None
-    }
+    vocabulary = {(kind, value) for kind, _, value in managym.runtime_tokens()}
     catalog = managym.catalog_tokens()
     vocabulary.update(zip(catalog["token_kind"], catalog["token_value"], strict=True))
     for frame in obs.continuation:

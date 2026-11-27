@@ -697,12 +697,15 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use crate::{agent::record_vocabulary::PROGRAM_VOCABULARY, cards::tokens::name_value};
+    use crate::{
+        agent::record_vocabulary::{record_names, PROGRAM_VOCABULARY},
+        cards::tokens::name_value,
+    };
 
     #[test]
     fn each_historical_token_has_one_disposition_and_renames_resolve() {
         let mut classified = HashSet::new();
-        for &(kind, old, successor) in TOKENS {
+        for (kind, old, successor) in token_renames() {
             assert!(classified.insert((kind as u16, name_value(old))), "{old}");
             if let Some(new) = successor {
                 assert!(
@@ -710,6 +713,27 @@ mod tests {
                     "{old} -> {new}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn legacy_keys_are_classified_after_their_registrations_are_gone() {
+        let old = "kept creature";
+        let memory = "DecisionMemory::Priority";
+        assert!(!PROGRAM_VOCABULARY.contains(&(Text as u16, name_value(old))));
+        assert!(!PROGRAM_VOCABULARY.contains(&(Variant as u16, name_value(memory))));
+        assert!(token_renames().any(|entry| entry == (Text, old, Some("kept permanent"))));
+        assert!(token_renames().any(|entry| entry == (Variant, memory, None)));
+
+        let records = record_names();
+        let retirements = record_renames();
+        for synthetic in ["execution/6/kept creature", "execution/6/effect execution"] {
+            assert!(records.iter().all(|record| record.name != synthetic));
+            assert!(retirements
+                .iter()
+                .any(|(space, name, successor)| *space == "token"
+                    && name == synthetic
+                    && successor.is_none()));
         }
     }
 }

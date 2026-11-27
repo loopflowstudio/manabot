@@ -2376,7 +2376,7 @@ fn every_effect_variant_reaches_the_learning_tokens() {
     names.dedup();
     assert_eq!(names.len(), EFFECT_VARIANTS, "one witness per variant");
     let pack = default_content_pack();
-    // Aggregate omissions across every variant and both serialization paths.
+    // Check both serialization paths against the printed and runtime union.
     let mut missing = BTreeSet::new();
     for effect in witnesses {
         let tokens = definition_tokens_unchecked(&spell(vec![effect.clone()]), pack).unwrap();
@@ -5605,8 +5605,7 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
     }
 }
 
-/// Every execution token of `frame` is a literal, a definition's token or a
-/// registered runtime name: the policy's whole token vocabulary.
+/// Use the runtime emission guard's admission rules for the projected frame.
 fn assert_execution_tokens_registered(frame: &ContinuationFrame) {
     let missing = missing_program_tokens(&frame.effect_execution);
     assert!(
