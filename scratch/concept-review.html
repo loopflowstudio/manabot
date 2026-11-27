@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept Review: Policy-Input Vocabulary Surfaces (MTG-504)</title>
+<title>Concept Review: Policy-Input Vocabulary Split (MTG-504, Post-Implementation)</title>
 <style>
 /* Default review page theme tokens (light and dark).
  * Override per repository in `.lf/theme.css` (CSS custom properties only). */
@@ -848,32 +848,36 @@ button.lf-btn-quiet[aria-pressed="true"] {
 </head>
 <body>
 <main class="lf-page">
-<h1>Concept Review: Policy-Input Vocabulary Surfaces (MTG-504)</h1>
+<h1>Concept Review: Policy-Input Vocabulary Split (MTG-504, Post-Implementation)</h1>
 
 <p>
   <strong>Area reviewed:</strong> Policy-input vocabulary surfaces across
-  <code>managym</code> and <code>manabot</code> — how the engine publishes
-  printed definition tokens (<code>catalog_tokens</code>), hashed record names
-  (<code>record_vocabulary</code>), runtime-only program tokens
-  (<code>runtime_tokens</code>), decision-memory labels, and historical
-  renames/retirements (<code>token_renames.rs</code>), and how
-  <code>manabot</code> builds embedding tables (<code>catalog.py</code>),
-  admits live observations (<code>admission.py</code>,
-  <code>decision_memory.py</code>), binds pre-0.3.0 checkpoints
-  (<code>binding.py</code>), and traces historical writer hashes
+  <code>managym</code> and <code>manabot</code> as built at
+  <code>39cce53ab8</code> against freshly fetched <code>origin/main</code>
+  (<code>624751ae71</code>) — printed definition spans
+  (<code>catalog_tokens</code>), runtime program symbols
+  (<code>runtime_tokens</code>), hashed record names
+  (<code>record_vocabulary</code>), decision-memory labels
+  (<code>decision_memory_names</code>), historical renames and retirements
+  (<code>token_renames.rs</code>), host table construction and admission
+  (<code>catalog.py</code>, <code>admission.py</code>,
+  <code>decision_memory.py</code>), checkpoint rebinding
+  (<code>binding.py</code>), and the historical writer hash tracer
   (<code>scripts/pinned_pilot.py</code> / <code>scripts/pilot_names.rs</code>).
 </p>
 
 <p>
-  <strong>Why this area:</strong> <code>HEAD</code>
-  (<code>65d60f78b6</code>, based on <code>origin/main</code>
-  <code>6a131c4dc9</code>, awaiting PR #636 / <code>MTG-501</code>) contains
-  only the pre-implementation plan in <code>scratch/plan.md</code> and
-  <code>scratch/questions.md</code>. Splitting <code>record_vocabulary()</code>
-  touches the entire loop from native registration through policy table
-  construction, live admission, checkpoint rebinding, and historical hash
-  debugging. Reviewing the whole loop before Pass 1 catches three concrete
-  correctness traps in the plan and sharpens the public surface.
+  <strong>Why this area:</strong> This review re-examines the complete
+  implementation after Passes 1–3 landed (replacing the pre-implementation plan
+  review from <code>a173411b48</code>). The core vocabulary split is sound and
+  matches the domain well: <code>record_vocabulary()</code> has zero
+  <code>execution/*</code> or <code>DecisionMemory::*</code> rows,
+  <code>catalog_tokens() ∪ runtime_tokens()</code> is the exact two-list
+  program vocabulary, both pinned pilots replay unchanged, and the writer tracer
+  works on both sides of the 0.3.0 boundary. Two remaining conceptual mismatches
+  in <code>token_renames.rs</code> belong in this Task before the PR is parked
+  for 0.3.0; one pre-existing admission split for decision-memory names is
+  captured as a separate outcome.
 </p>
 
 <h2>Do the domain concepts and the code's concepts line up?</h2>
@@ -882,7 +886,7 @@ button.lf-btn-quiet[aria-pressed="true"] {
   <thead>
     <tr>
       <th>Domain concept</th>
-      <th>Code concept (as planned in <code>scratch/plan.md</code>)</th>
+      <th>Code concept (as built at <code>39cce53ab8</code>)</th>
       <th>Aligns?</th>
       <th>Mismatch</th>
     </tr>
@@ -890,496 +894,439 @@ button.lf-btn-quiet[aria-pressed="true"] {
   <tbody>
     <tr>
       <td><strong>Printed card-definition token spans</strong> — serialized rules of every card, token, and back face, indexed by <code>CardDefId</code>.</td>
-      <td><code>managym.catalog_tokens()</code> (<code>CatalogTokens</code>).</td>
+      <td><code>managym.catalog_tokens()</code> (<code>CatalogTokens</code>, 1,502 unique pairs).</td>
       <td><strong>Yes</strong></td>
-      <td>Per-definition table matches its name and siblings (<code>catalog_token_value</code>, <code>catalog_token_renames</code>). No rename needed.</td>
+      <td>Matches <code>CatalogTokens</code>, <code>catalog_token_value</code>, and <code>catalog_token_renames</code>; docstring states it combines with <code>runtime_tokens()</code>.</td>
     </tr>
     <tr>
-      <td><strong>Admitted program-token vocabulary</strong> — the complete set of symbolic <code>(kind, value)</code> pairs valid in any live program stream.</td>
-      <td>Three-way union of <code>catalog_tokens()</code> ∪ non-<code>None</code> token columns of <code>record_vocabulary()</code> ∪ <code>runtime_tokens()</code>.</td>
-      <td><strong>No</strong></td>
-      <td><strong>One concept split across three surfaces.</strong> Under the plan, <code>runtime_tokens()</code> omits unprinted tokens carried by <code>record_names()</code> (e.g., <code>Modification::AddTypes</code> lives only in <code>record_vocabulary()</code> while its closing token <code>/Modification::AddTypes</code> lives in <code>runtime_tokens()</code>). A caller computing <code>printed | runtime</code> silently misses tokens — repeating #629 one layer down.</td>
-    </tr>
-    <tr>
-      <td><strong>Hashed fact &amp; shared-effect record names</strong> — finite names hashed into id/detail columns (<code>token</code>, <code>name</code>, <code>restriction</code>) with an optional alias to a shared program token.</td>
-      <td><code>managym.record_vocabulary()</code> (<code>record_names()</code>).</td>
+      <td><strong>Admitted program-token vocabulary</strong> — every symbolic <code>(kind, value)</code> pair valid in printed definitions, shared effects, suspended execution frames, last-known characteristics, and decision-memory snapshots.</td>
+      <td>Exact two-list union <code>catalog_tokens() ∪ runtime_tokens()</code> (3,349 pairs: 1,502 printed + 1,847 runtime-only; 301 overlap, never filtered against the pack).</td>
       <td><strong>Yes</strong></td>
-      <td>Clean once <code>execution/*</code> and <code>DecisionMemory::*</code> leave, and once its <code>token</code> field is strictly an alias into the program-token vocabulary rather than a third token source.</td>
+      <td>Aligned across native <code>PROGRAM_VOCABULARY</code>, <code>catalog.py::_record_tables</code>, <code>docs/engine.md</code>, and <code>pilot_names.rs</code>. Minor doc drift: <code>record_vocabulary.rs</code> and <code>record_coverage.py</code> module headers still describe <code>record_vocabulary</code> as carrying <code>effect_execution</code>.</td>
     </tr>
     <tr>
-      <td><strong>Decision-memory record labels</strong> — the 44 optional <code>DecisionMemory::*</code> names in <code>RecordNamespace::Token</code>, carrying no program token.</td>
-      <td>Unspecified native PyO3 read wrapped by <code>managym.decision_memory.decision_names()</code> (outside <code>managym/__init__.pyi</code> and <code>tests/public_api.json</code>), omitting the namespace.</td>
-      <td><strong>No</strong></td>
-      <td><strong>Split surface &amp; hidden native binding.</strong> Sibling vocabularies live at top-level <code>managym.*</code> and are contract-checked in <code>managym/__init__.pyi</code>; <code>managym/__init__.py</code> runs <code>from ._managym import *</code>, so adding a native binding without declaring its home leaks an unstubbed symbol or adds a private trampoline. Also misses <code>tests/model/test_record_vocabulary.py:104</code>.</td>
-    </tr>
-    <tr>
-      <td><strong>Historical vocabulary ledger</strong> — immutable record of past names/tokens mapped to successors or retirements so older checkpoints preserve learned vectors.</td>
-      <td><code>managym/src/cards/token_renames.rs</code> dynamically generating <code>execution/*</code> retirements from <em>live</em> <code>runtime_tokens()</code> ∪ <code>TOKENS</code> and phantom-token retirements from <em>live</em> <code>decision_memory::RECORD_NAMES</code>.</td>
-      <td><strong>No</strong></td>
-      <td><strong>Biggest mismatch: live mutable lists masquerading as historical ledger.</strong> Breaks on three concrete paths: (1) silently loses two real <code>TOKENS</code> renames (<code>kept creature</code>, <code>creatures each player sacrifices</code>); (2) breaks all 0.2.x checkpoints the day a runtime token graduates into a printed card; (3) couples future edits of <code>RECORD_NAMES</code> to pre-0.3.0 checkpoint loading.</td>
-    </tr>
-    <tr>
-      <td><strong>Historical writer hash tracer</strong> — trace every <code>record_name</code> and <code>record_token</code> key emitted by any past or current commit to diagnose unexplained keys.</td>
-      <td><code>scripts/pinned_pilot.py names --at &lt;rev&gt;</code> compiling <code>HEAD</code>'s <code>scripts/pilot_names.rs</code> inside an archived writer's <code>managym</code> crate.</td>
-      <td><strong>No</strong></td>
-      <td><strong>Recovery tool breaks on all pre-0.3.0 commits.</strong> Plan Pass 2 edits <code>scripts/pilot_names.rs</code> to call <code>runtime_tokens()</code>, which does not exist in pre-0.3.0 archives, breaking the exact revisions that need key lookup.</td>
-    </tr>
-    <tr>
-      <td><strong>Patch-clean 0.2.x main vs. 0.3.0 release cut</strong> — semantic breaking changes to published functions wait for the minor cut.</td>
-      <td>Hold PR unmerged until 0.3.0 cut (like PR #612); no 0.2.x shim for <code>record_vocabulary()</code>.</td>
+      <td><strong>Hashed fact &amp; shared-effect record names</strong> — finite names hashed into id columns (<code>token</code>, <code>name</code>, <code>restriction</code>), optionally aliasing an existing program-token row.</td>
+      <td><code>managym.record_vocabulary()</code> (<code>record_names()</code>, 1,800 rows: 538 aliased, 1,262 independent; 0 <code>execution/*</code>, 0 <code>DecisionMemory::*</code>).</td>
       <td><strong>Yes</strong></td>
-      <td>Avoids a second rename of <code>record_vocabulary()</code> (renamed in 0.2.3). Note that <code>scripts/public_api.py</code> checks signatures, not return-value contents, so the manual hold is required.</td>
+      <td>In <code>catalog.py:60–65</code>, non-<code>None</code> token columns strictly index <code>tokens[kind, token]</code> and never append new program tokens.</td>
+    </tr>
+    <tr>
+      <td><strong>Historical vocabulary ledger</strong> — immutable record of past tokens and record names mapped to successors or retirements so pre-0.3.0 checkpoints keep their learned vectors across future engine edits.</td>
+      <td><code>managym/src/cards/token_renames.rs</code>: static <code>TOKENS</code> (74), <code>LEGACY_EXECUTION_TOKENS</code> (395), <code>LEGACY_DECISION_MEMORY_TOKENS</code> (44), plus <code>record_renames()</code> dynamically chaining live <code>content_token_texts()</code> and all of <code>TOKENS</code> while dropping the named <code>RECORDS</code> constant and skipping tests on <code>record_renames()</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Biggest mismatch (this work).</strong> Three unfinished spots on the ledger this Task changed: (1) <code>content_token_texts()</code> leaks live generated prose (<code>condition_text</code> for <code>play_grant_conditions</code>) into historical retirements; (2) chaining all of <code>TOKENS</code> fabricates bogus <code>execution/*</code> retirements for 61 printed-only tokens and every future post-0.3.0 token retirement; (3) real record-name history lost its named <code>RECORDS</code> constant and has no Rust test checking uniqueness or live-successor resolution.</td>
+    </tr>
+    <tr>
+      <td><strong>Decision-memory record labels</strong> — the 44 optional <code>DecisionMemory::*</code> names in <code>RecordNamespace::Token</code>, carrying no program token, admitted against the loaded model's vocabulary.</td>
+      <td>Top-level <code>managym.decision_memory_names()</code> (44 <code>(name, value)</code> pairs, stubbed in <code>__init__.pyi</code> and <code>tests/public_api.json</code>) + two divergent Python admission checks in <code>decision_memory.py</code> vs <code>admission.py</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Pre-existing split admission authority (separate outcome).</strong> The <code>managym</code> surface is clean, but dense/retained admission (<code>decision_memory.py:498–504</code>) checks only the running engine's <code>decision_name_values()</code> (ignoring the checkpoint's <code>record_name_keys</code>), whereas v11 admission (<code>admission.py:394–398</code>) checks only <code>record_name_keys</code> (accepting any <code>TOKEN</code>-namespace name like <code>"flying"</code> and skipping control models with <code>decision_memory="none"</code>).</td>
+    </tr>
+    <tr>
+      <td><strong>Historical writer hash tracer</strong> — trace every <code>record_name</code> and <code>record_token</code> key emitted by any past or current commit to classify unexplained checkpoint keys.</td>
+      <td><code>scripts/pinned_pilot.py names --at &lt;rev&gt;</code> injecting temporary feature <code>pilot-runtime-tokens</code> when archived <code>record_vocabulary.rs</code> defines <code>pub fn runtime_tokens(</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Works across both pre-0.3.0 (<code>ab2b757d9</code>) and post-0.3.0 writers without leaking a feature flag into <code>managym/Cargo.toml</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Patch-clean 0.2.x <code>main</code> vs 0.3.0 cut</strong> — semantic change to a published function waits for the minor release.</td>
+      <td>Held PR targeting 0.3.0 with no 0.2.x shim; new functions recorded in <code>managym/__init__.pyi</code> and <code>tests/public_api.json</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Matches PR #612's hold policy and avoids renaming <code>record_vocabulary()</code> a second time.</td>
     </tr>
   </tbody>
 </table>
 
-<h2>Biggest mismatch: generating historical retirements from live mutable vocabularies</h2>
+<h2>Biggest mismatch: <code>record_renames()</code> still couples historical retirements to live generators and leaves record history untested</h2>
 
 <p>
-  Walk one concrete lifecycle through <code>token_renames.rs</code> and
-  <code>manabot/policy/binding.py::bind_catalog</code>: a checkpoint saved on
-  <code>0.2.6</code> is loaded on <code>0.3.0</code>, and then loaded again on
-  <code>0.3.1</code> after a newly authored card prints a previously runtime-only
-  symbol.
-</p>
-
-<p>
-  First, check what already sits in <code>managym/src/cards/token_renames.rs</code>
-  today. Before PR #636, <code>token_renames.rs</code>'s unit test checked
-  <code>TOKENS</code> successors only against printed
-  <code>catalog_tokens()</code>, so the author of the <code>kept permanent</code>
-  rename put <code>None</code> in <code>TOKENS</code> and carried the actual
-  rename on the synthetic <code>RECORDS</code> row:
-</p>
-
-<div class="lf-codeblock" data-path="managym/src/cards/token_renames.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/cards/token_renames.rs:178-195</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="178"><td class="lf-ln lf-ln-single">178</td><td>    (</td></tr>
-<tr class="lf-code-row" data-line="179"><td class="lf-ln lf-ln-single">179</td><td>        Variant,</td></tr>
-<tr class="lf-code-row" data-line="180"><td class="lf-ln lf-ln-single">180</td><td>        &quot;Effect::EachPlayerSacrificesCreatures&quot;,</td></tr>
-<tr class="lf-code-row" data-line="181"><td class="lf-ln lf-ln-single">181</td><td>        Some(&quot;Effect::EachPlayerSacrifices&quot;),</td></tr>
-<tr class="lf-code-row" data-line="182"><td class="lf-ln lf-ln-single">182</td><td>    ),</td></tr>
-<tr class="lf-code-row" data-line="183"><td class="lf-ln lf-ln-single">183</td><td>    (Text, &quot;creatures each player sacrifices&quot;, None),</td></tr>
-<tr class="lf-code-row" data-line="184"><td class="lf-ln lf-ln-single">184</td><td>    (Text, &quot;kept creature&quot;, None),</td></tr>
-<tr class="lf-code-row" data-line="185"><td class="lf-ln lf-ln-single">185</td><td>    (</td></tr>
-<tr class="lf-code-row" data-line="186"><td class="lf-ln lf-ln-single">186</td><td>        Structure,</td></tr>
-<tr class="lf-code-row" data-line="187"><td class="lf-ln lf-ln-single">187</td><td>        &quot;/Effect::EachPlayerSacrificesCreatures&quot;,</td></tr>
-<tr class="lf-code-row" data-line="188"><td class="lf-ln lf-ln-single">188</td><td>        Some(&quot;/Effect::EachPlayerSacrifices&quot;),</td></tr>
-<tr class="lf-code-row" data-line="189"><td class="lf-ln lf-ln-single">189</td><td>    ),</td></tr>
-<tr class="lf-code-row" data-line="190"><td class="lf-ln lf-ln-single">190</td><td>    (Text, &quot;attached at activation&quot;, None),</td></tr>
-<tr class="lf-code-row" data-line="191"><td class="lf-ln lf-ln-single">191</td><td>    (Text, &quot;land choices remaining&quot;, None),</td></tr>
-<tr class="lf-code-row" data-line="192"><td class="lf-ln lf-ln-single">192</td><td>    (Text, &quot;selected lands&quot;, None),</td></tr>
-<tr class="lf-code-row" data-line="193"><td class="lf-ln lf-ln-single">193</td><td>    // Split into `contribution` facts naming how and toward what each paid.</td></tr>
-<tr class="lf-code-row" data-line="194"><td class="lf-ln lf-ln-single">194</td><td>    (Text, &quot;waterbend contributions&quot;, None),</td></tr>
-<tr class="lf-code-row" data-line="195"><td class="lf-ln lf-ln-single">195</td><td>    // GrantPlay replaces ExileTopCardsToPlay and GrantGraveyardCastThisTurn;</td></tr>
-</tbody></table></div></div>
-<div class="lf-codeblock" data-path="managym/src/cards/token_renames.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/cards/token_renames.rs:216-229</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="216"><td class="lf-ln lf-ln-single">216</td><td>pub const RECORDS: &amp;[(&amp;str, &amp;str, Option&lt;&amp;str&gt;)] = &amp;[</td></tr>
-<tr class="lf-code-row" data-line="217"><td class="lf-ln lf-ln-single">217</td><td>    (&quot;token&quot;, &quot;execution/2/combat&quot;, None),</td></tr>
-<tr class="lf-code-row" data-line="218"><td class="lf-ln lf-ln-single">218</td><td>    (</td></tr>
-<tr class="lf-code-row" data-line="219"><td class="lf-ln lf-ln-single">219</td><td>        &quot;token&quot;,</td></tr>
-<tr class="lf-code-row" data-line="220"><td class="lf-ln lf-ln-single">220</td><td>        &quot;execution/6/kept creature&quot;,</td></tr>
-<tr class="lf-code-row" data-line="221"><td class="lf-ln lf-ln-single">221</td><td>        Some(&quot;execution/6/kept permanent&quot;),</td></tr>
-<tr class="lf-code-row" data-line="222"><td class="lf-ln lf-ln-single">222</td><td>    ),</td></tr>
-<tr class="lf-code-row" data-line="223"><td class="lf-ln lf-ln-single">223</td><td>    (</td></tr>
-<tr class="lf-code-row" data-line="224"><td class="lf-ln lf-ln-single">224</td><td>        &quot;token&quot;,</td></tr>
-<tr class="lf-code-row" data-line="225"><td class="lf-ln lf-ln-single">225</td><td>        &quot;execution/6/creatures each player sacrifices&quot;,</td></tr>
-<tr class="lf-code-row" data-line="226"><td class="lf-ln lf-ln-single">226</td><td>        Some(&quot;execution/6/permanents each player sacrifices&quot;),</td></tr>
-<tr class="lf-code-row" data-line="227"><td class="lf-ln lf-ln-single">227</td><td>    ),</td></tr>
-<tr class="lf-code-row" data-line="228"><td class="lf-ln lf-ln-single">228</td><td>    (</td></tr>
-<tr class="lf-code-row" data-line="229"><td class="lf-ln lf-ln-single">229</td><td>        &quot;token&quot;,</td></tr>
-</tbody></table></div></div>
-
-<p>
-  Now trace the three counterexamples that break the plan's generator:
+  Walk two concrete future changes through <code>managym/src/cards/token_renames.rs</code>
+  and <code>manabot/policy/binding.py</code>:
 </p>
 
 <ol>
   <li>
-    <strong>Silent vector loss on pre-rename checkpoints.</strong> Deleting
-    <code>RECORDS</code>'s two <code>Some("execution/6/…")</code> entries and
-    retiring them while leaving <code>TOKENS</code> at
-    <code>(Text, "kept creature", None)</code> and
-    <code>(Text, "creatures each player sacrifices", None)</code> drops the
-    rename from <em>both</em> families. On checkpoints predating that rename,
-    <code>kept permanent</code> and
-    <code>permanents each player sacrifices</code> silently become
-    <code>unseen</code> (mean-initialized) instead of inheriting the trained
-    vectors. PR #636 already switched the <code>token_renames.rs</code> unit
-    test to <code>PROGRAM_VOCABULARY</code>, so both successors can now move
-    directly onto <code>TOKENS</code> where they belong.
-  </li>
-  <li>
-    <strong>Graduating a runtime token into a printed card breaks every 0.2.x
-    checkpoint.</strong> Look at <code>record_vocabulary.rs</code> lines
-    212–222 (and PR #636's <code>LoyaltyCost::MinusX</code> and
-    <code>TriggerCondition::TappedForMana</code>): those symbols live in
-    <code>execution_names</code> only because no printed card uses them yet.
-    When a future card prints <code>TargetSpec::Ability</code> or
-    <code>LoyaltyCost::MinusX</code>, an author removing it from
-    <code>runtime_tokens()</code> will <em>not</em> add it to
-    <code>TOKENS</code> (the token is still live in
-    <code>catalog_tokens()</code>). Because <code>CatalogTokens</code> stores
-    32-bit hashes, not name strings, nothing can re-hash
-    <code>"execution/3/TargetSpec::Ability"</code> once it leaves
-    <code>runtime_tokens()</code>. Every 0.2.x checkpoint immediately fails
+    <strong>Failure path 1 — a <code>condition_text</code> wording tweak breaks every pre-0.3.0 checkpoint.</strong>
+    <code>record_vocabulary.rs</code> exports a private side-channel
+    <code>content_token_texts()</code> exclusively for <code>token_renames.rs</code>.
+    Alongside pack card names and <code>set_names</code>, it inserts live prose
+    from <code>play_grant_conditions</code> via
+    <code>condition_text("permanent", &amp;condition)</code> (currently
+    <code>"you control a Wizard permanent"</code>). That string is absent from
+    <code>LEGACY_EXECUTION_TOKENS</code>: it reaches <code>record_renames()</code>
+    only through live <code>content_token_texts()</code>. If a later PR rewords
+    <code>condition_text</code> — the exact kind of change that renamed
+    <code>"kept creature"</code> to <code>"kept permanent"</code> —
+    <code>"execution/6/you control a Wizard permanent"</code> silently drops out
+    of <code>record_renames()</code>, and every pre-0.3.0 checkpoint fails
     <code>bind_catalog</code> with
     <code>ValueError: unexplained record_name key</code>.
   </li>
   <li>
-    <strong>Editing <code>decision_memory::RECORD_NAMES</code> corrupts
-    historical retirements.</strong> Generating
-    <code>(Variant, "DecisionMemory::&lt;name&gt;", None)</code> from live
-    <code>RECORD_NAMES</code> invents bogus retirements for future 0.4.0 labels
-    and silently drops pre-0.3.0 retirements if any of the 44 existing labels
-    (roughly 16 of which are unused field/context names like <code>Life</code>
-    or <code>BoardCounts</code>) are ever cleaned up.
+    <strong>Failure path 2 — <code>TOKENS</code> fabricates phantom <code>execution/*</code> retirements forever.</strong>
+    <code>record_renames()</code> chains every entry of <code>TOKENS</code>
+    into <code>"execution/&lt;kind&gt;/&lt;name&gt;"</code>. Only 13 entries in
+    pre-MTG-504 <code>RECORDS</code> were retired <code>execution/*</code> rows;
+    the other 61 entries in <code>TOKENS</code> were printed-only symbols (such
+    as <code>StaticAbility::PtBuff</code> and
+    <code>TriggerCondition::YouCastSpell</code>) that never had an
+    <code>execution/*</code> record key. Worse, every post-0.3.0 token retired
+    in <code>TOKENS</code> will also synthesize a phantom
+    <code>execution/*</code> retirement even though synthetic
+    <code>execution/*</code> rows ceased to exist in 0.3.0.
+  </li>
+  <li>
+    <strong>Failure path 3 — real record-name history has no table and no test.</strong>
+    Replacing <code>pub const RECORDS</code> with an inline
+    <code>std::iter::once(("token", "Modification::ControlChanged".to_owned(), None))</code>
+    removes the place future authors add real record-name renames/retirements
+    (despite <code>AGENTS.md</code> telling them to classify removed hashed
+    record names there). Meanwhile,
+    <code>each_historical_token_has_one_disposition_and_renames_resolve</code>
+    tests only <code>token_renames()</code>, never <code>record_renames()</code>.
+    A duplicate hash in <code>record_renames()</code> would be silently
+    overwritten by the dict comprehension in <code>binding.py:59–64</code>, and
+    a misspelled <code>Some(successor)</code> on a future record-name rename
+    would pass <code>cargo test</code> and fail only at checkpoint load time.
   </li>
 </ol>
 
-<div class="lf-codeblock" data-path="managym/src/agent/record_vocabulary.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/agent/record_vocabulary.rs:205-225</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="205"><td class="lf-ln lf-ln-single">205</td><td>    for (owner, variants) in [</td></tr>
-<tr class="lf-code-row" data-line="206"><td class="lf-ln lf-ln-single">206</td><td>        (</td></tr>
-<tr class="lf-code-row" data-line="207"><td class="lf-ln lf-ln-single">207</td><td>            &quot;GameEvent&quot;,</td></tr>
-<tr class="lf-code-row" data-line="208"><td class="lf-ln lf-ln-single">208</td><td>            &amp;[&quot;Scried&quot;, &quot;Surveilled&quot;, &quot;LibrarySearched&quot;][..],</td></tr>
-<tr class="lf-code-row" data-line="209"><td class="lf-ln lf-ln-single">209</td><td>        ),</td></tr>
-<tr class="lf-code-row" data-line="210"><td class="lf-ln lf-ln-single">210</td><td>        (&quot;SpellProfile&quot;, &amp;[&quot;Omen&quot;, &quot;BackFace&quot;][..]),</td></tr>
-<tr class="lf-code-row" data-line="211"><td class="lf-ln lf-ln-single">211</td><td>        (&quot;LibraryEnd&quot;, &amp;[&quot;Top&quot;, &quot;Bottom&quot;][..]),</td></tr>
-<tr class="lf-code-row" data-line="212"><td class="lf-ln lf-ln-single">212</td><td>        // Supported stack-ability targeting has no printed card program yet.</td></tr>
-<tr class="lf-code-row" data-line="213"><td class="lf-ln lf-ln-single">213</td><td>        (&quot;TargetSpec&quot;, &amp;[&quot;Ability&quot;][..]),</td></tr>
-<tr class="lf-code-row" data-line="214"><td class="lf-ln lf-ln-single">214</td><td>        // Retained execution can refer to a spell already on the stack;</td></tr>
-<tr class="lf-code-row" data-line="215"><td class="lf-ln lf-ln-single">215</td><td>        // printed card programs do not supply this zone&#39;s token.</td></tr>
-<tr class="lf-code-row" data-line="216"><td class="lf-ln lf-ln-single">216</td><td>        (&quot;ZoneType&quot;, &amp;[&quot;Stack&quot;][..]),</td></tr>
-<tr class="lf-code-row" data-line="217"><td class="lf-ln lf-ln-single">217</td><td>        (&quot;DamageTransform&quot;, &amp;[&quot;Prevent&quot;, &quot;PreventAll&quot;][..]),</td></tr>
-<tr class="lf-code-row" data-line="218"><td class="lf-ln lf-ln-single">218</td><td>        // Offered only by a resolved shield record, never printed.</td></tr>
-<tr class="lf-code-row" data-line="219"><td class="lf-ln lf-ln-single">219</td><td>        (</td></tr>
-<tr class="lf-code-row" data-line="220"><td class="lf-ln lf-ln-single">220</td><td>            &quot;ReplacementEffect&quot;,</td></tr>
-<tr class="lf-code-row" data-line="221"><td class="lf-ln lf-ln-single">221</td><td>            &amp;[&quot;PreventCombatDamage&quot;, &quot;AdventureExile&quot;][..],</td></tr>
-<tr class="lf-code-row" data-line="222"><td class="lf-ln lf-ln-single">222</td><td>        ),</td></tr>
-<tr class="lf-code-row" data-line="223"><td class="lf-ln lf-ln-single">223</td><td>        (&quot;EventCause&quot;, &amp;[&quot;Effect&quot;, &quot;Cost&quot;, &quot;TurnAction&quot;][..]),</td></tr>
-<tr class="lf-code-row" data-line="224"><td class="lf-ln lf-ln-single">224</td><td>        (</td></tr>
-<tr class="lf-code-row" data-line="225"><td class="lf-ln lf-ln-single">225</td><td>            &quot;EventBinding&quot;,</td></tr>
-</tbody></table></div></div>
-<div class="lf-codeblock" data-path="manabot/policy/binding.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/policy/binding.py:123-152</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="123"><td class="lf-ln lf-ln-single">123</td><td>    retired = renamed = 0</td></tr>
-<tr class="lf-code-row" data-line="124"><td class="lf-ln lf-ln-single">124</td><td>    renames = successors()</td></tr>
-<tr class="lf-code-row" data-line="125"><td class="lf-ln lf-ln-single">125</td><td>    for family, changes in renames.items():</td></tr>
-<tr class="lf-code-row" data-line="126"><td class="lf-ln lf-ln-single">126</td><td>        keys, rows = family + &quot;_keys&quot;, family + &quot;_rows&quot;</td></tr>
-<tr class="lf-code-row" data-line="127"><td class="lf-ln lf-ln-single">127</td><td>        runtime = dict(zip(buffers[keys].tolist(), buffers[rows].tolist(), strict=True))</td></tr>
-<tr class="lf-code-row" data-line="128"><td class="lf-ln lf-ln-single">128</td><td>        for key, row in zip(old[keys].tolist(), old[rows].tolist(), strict=True):</td></tr>
-<tr class="lf-code-row" data-line="129"><td class="lf-ln lf-ln-single">129</td><td>            kind, value = divmod(key, 1 &lt;&lt; 32)</td></tr>
-<tr class="lf-code-row" data-line="130"><td class="lf-ln lf-ln-single">130</td><td>            if family == &quot;record_token&quot; and kind == TOKEN_KINDS[&quot;definition_ref&quot;]:</td></tr>
-<tr class="lf-code-row" data-line="131"><td class="lf-ln lf-ln-single">131</td><td>                if value &gt;= len(definitions) or definitions[value] not in now:</td></tr>
-<tr class="lf-code-row" data-line="132"><td class="lf-ln lf-ln-single">132</td><td>                    raise ValueError(</td></tr>
-<tr class="lf-code-row" data-line="133"><td class="lf-ln lf-ln-single">133</td><td>                        f&quot;missing referenced definition for writer row {value}&quot;</td></tr>
-<tr class="lf-code-row" data-line="134"><td class="lf-ln lf-ln-single">134</td><td>                    )</td></tr>
-<tr class="lf-code-row" data-line="135"><td class="lf-ln lf-ln-single">135</td><td>                key = packed(kind, now[definitions[value]])</td></tr>
-<tr class="lf-code-row" data-line="136"><td class="lf-ln lf-ln-single">136</td><td>                if key not in runtime:</td></tr>
-<tr class="lf-code-row" data-line="137"><td class="lf-ln lf-ln-single">137</td><td>                    # The definition still exists but no running card references it.</td></tr>
-<tr class="lf-code-row" data-line="138"><td class="lf-ln lf-ln-single">138</td><td>                    continue</td></tr>
-<tr class="lf-code-row" data-line="139"><td class="lf-ln lf-ln-single">139</td><td>            if key not in runtime:</td></tr>
-<tr class="lf-code-row" data-line="140"><td class="lf-ln lf-ln-single">140</td><td>                if key not in changes:</td></tr>
-<tr class="lf-code-row" data-line="141"><td class="lf-ln lf-ln-single">141</td><td>                    raise ValueError(</td></tr>
-<tr class="lf-code-row" data-line="142"><td class="lf-ln lf-ln-single">142</td><td>                        f&quot;unexplained {family} key {key}; classify it in managym/src/cards/token_renames.rs&quot;</td></tr>
-<tr class="lf-code-row" data-line="143"><td class="lf-ln lf-ln-single">143</td><td>                    )</td></tr>
-<tr class="lf-code-row" data-line="144"><td class="lf-ln lf-ln-single">144</td><td>                key = changes[key]</td></tr>
-<tr class="lf-code-row" data-line="145"><td class="lf-ln lf-ln-single">145</td><td>                if key is None:</td></tr>
-<tr class="lf-code-row" data-line="146"><td class="lf-ln lf-ln-single">146</td><td>                    retired += 1</td></tr>
-<tr class="lf-code-row" data-line="147"><td class="lf-ln lf-ln-single">147</td><td>                    continue</td></tr>
-<tr class="lf-code-row" data-line="148"><td class="lf-ln lf-ln-single">148</td><td>                renamed += 1</td></tr>
-<tr class="lf-code-row" data-line="149"><td class="lf-ln lf-ln-single">149</td><td>                if key not in runtime:</td></tr>
-<tr class="lf-code-row" data-line="150"><td class="lf-ln lf-ln-single">150</td><td>                    raise ValueError(f&quot;missing successor {family} key {key}&quot;)</td></tr>
-<tr class="lf-code-row" data-line="151"><td class="lf-ln lf-ln-single">151</td><td>            assign(runtime[key], row)</td></tr>
-<tr class="lf-code-row" data-line="152"><td class="lf-ln lf-ln-single">152</td><td>    for source, target in zip(</td></tr>
+<div class="lf-codeblock" data-path="managym/src/cards/token_renames.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/cards/token_renames.rs:667-739</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -211,68 +215,497 @@ pub const TOKENS: &amp;[(TokenKind, &amp;str, Option&lt;&amp;str&gt;)] = &amp;[</td></tr>
+<tr class="lf-add lf-code-row" data-line="667"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">667</td><td class="lf-sign">+</td><td>pub fn token_renames() -&gt; impl Iterator&lt;Item = (TokenKind, &amp;&#39;static str, Option&lt;&amp;&#39;static str&gt;)&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="668"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">668</td><td class="lf-sign">+</td><td>    TOKENS.iter().copied().chain(</td></tr>
+<tr class="lf-add lf-code-row" data-line="669"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">669</td><td class="lf-sign">+</td><td>        LEGACY_DECISION_MEMORY_TOKENS</td></tr>
+<tr class="lf-add lf-code-row" data-line="670"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">670</td><td class="lf-sign">+</td><td>            .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="671"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">671</td><td class="lf-sign">+</td><td>            .map(|name| (Variant, *name, None)),</td></tr>
+<tr class="lf-add lf-code-row" data-line="672"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">672</td><td class="lf-sign">+</td><td>    )</td></tr>
+<tr class="lf-add lf-code-row" data-line="673"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">673</td><td class="lf-sign">+</td><td>}</td></tr>
+<tr class="lf-add lf-code-row" data-line="674"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">674</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="675"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">675</td><td class="lf-sign">+</td><td>pub fn record_renames() -&gt; Vec&lt;(&amp;&#39;static str, String, Option&lt;&amp;&#39;static str&gt;)&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="676"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">676</td><td class="lf-sign">+</td><td>    use crate::agent::record_vocabulary::content_token_texts;</td></tr>
+<tr class="lf-add lf-code-row" data-line="677"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">677</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="678"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">678</td><td class="lf-sign">+</td><td>    let synthetic = LEGACY_EXECUTION_TOKENS</td></tr>
+<tr class="lf-add lf-code-row" data-line="679"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">679</td><td class="lf-sign">+</td><td>        .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="680"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">680</td><td class="lf-sign">+</td><td>        .copied()</td></tr>
+<tr class="lf-add lf-code-row" data-line="681"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">681</td><td class="lf-sign">+</td><td>        .chain(TOKENS.iter().map(|&amp;(kind, name, _)| (kind, name)))</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Chains all 74 entries of TOKENS (61 printed-only) plus every future post-0.3.0 token retirement into bogus execution/* rows.</td></tr>
+<tr class="lf-add lf-code-row" data-line="682"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">682</td><td class="lf-sign">+</td><td>        .chain(</td></tr>
+<tr class="lf-add lf-code-row" data-line="683"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">683</td><td class="lf-sign">+</td><td>            content_token_texts()</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Pulls live condition_text("permanent", &amp;condition) from record_vocabulary::content_token_texts() into historical retirements.</td></tr>
+<tr class="lf-add lf-code-row" data-line="684"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">684</td><td class="lf-sign">+</td><td>                .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="685"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">685</td><td class="lf-sign">+</td><td>                .map(|name| (Text, name.as_str())),</td></tr>
+<tr class="lf-add lf-code-row" data-line="686"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">686</td><td class="lf-sign">+</td><td>        );</td></tr>
+<tr class="lf-add lf-code-row" data-line="687"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">687</td><td class="lf-sign">+</td><td>    let names: std::collections::BTreeSet&lt;_&gt; = synthetic</td></tr>
+<tr class="lf-add lf-code-row" data-line="688"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">688</td><td class="lf-sign">+</td><td>        .map(|(kind, name)| format!(&quot;execution/{}/{name}&quot;, kind as u16))</td></tr>
+<tr class="lf-add lf-code-row" data-line="689"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">689</td><td class="lf-sign">+</td><td>        .collect();</td></tr>
+<tr class="lf-add lf-code-row" data-line="690"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">690</td><td class="lf-sign">+</td><td>    std::iter::once((&quot;token&quot;, &quot;Modification::ControlChanged&quot;.to_owned(), None))</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Genuine record-name history is reduced to std::iter::once(...) instead of a named RECORDS table beside TOKENS.</td></tr>
+<tr class="lf-add lf-code-row" data-line="691"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">691</td><td class="lf-sign">+</td><td>        .chain(names.into_iter().map(|name| (&quot;token&quot;, name, None)))</td></tr>
+<tr class="lf-add lf-code-row" data-line="692"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">692</td><td class="lf-sign">+</td><td>        .collect()</td></tr>
+<tr class="lf-add lf-code-row" data-line="693"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">693</td><td class="lf-sign">+</td><td>}</td></tr>
+<tr class="lf-add lf-code-row" data-line="694"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">694</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="265" data-line="695"><td class="lf-ln lf-ln-old">265</td><td class="lf-ln lf-ln-new">695</td><td class="lf-sign"> </td><td>#[cfg(test)]</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="266" data-line="696"><td class="lf-ln lf-ln-old">266</td><td class="lf-ln lf-ln-new">696</td><td class="lf-sign"> </td><td>mod tests {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="267" data-line="697"><td class="lf-ln lf-ln-old">267</td><td class="lf-ln lf-ln-new">697</td><td class="lf-sign"> </td><td>    use std::collections::HashSet;</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="268" data-line="698"><td class="lf-ln lf-ln-old">268</td><td class="lf-ln lf-ln-new">698</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="269" data-line="699"><td class="lf-ln lf-ln-old">269</td><td class="lf-ln lf-ln-new">699</td><td class="lf-sign"> </td><td>    use super::*;</td></tr>
+<tr class="lf-add lf-code-row" data-line="700"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">700</td><td class="lf-sign">+</td><td>    use crate::{</td></tr>
+<tr class="lf-add lf-code-row" data-line="701"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">701</td><td class="lf-sign">+</td><td>        agent::record_vocabulary::{record_names, PROGRAM_VOCABULARY},</td></tr>
+<tr class="lf-add lf-code-row" data-line="702"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">702</td><td class="lf-sign">+</td><td>        cards::tokens::name_value,</td></tr>
+<tr class="lf-add lf-code-row" data-line="703"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">703</td><td class="lf-sign">+</td><td>    };</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="271" data-line="704"><td class="lf-ln lf-ln-old">271</td><td class="lf-ln lf-ln-new">704</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="272" data-line="705"><td class="lf-ln lf-ln-old">272</td><td class="lf-ln lf-ln-new">705</td><td class="lf-sign"> </td><td>    #[test]</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="273" data-line="706"><td class="lf-ln lf-ln-old">273</td><td class="lf-ln lf-ln-new">706</td><td class="lf-sign"> </td><td>    fn each_historical_token_has_one_disposition_and_renames_resolve() {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="274" data-line="707"><td class="lf-ln lf-ln-old">274</td><td class="lf-ln lf-ln-new">707</td><td class="lf-sign"> </td><td>        let mut classified = HashSet::new();</td></tr>
+<tr class="lf-add lf-code-row" data-line="708"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">708</td><td class="lf-sign">+</td><td>        for (kind, old, successor) in token_renames() {</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Only token_renames() is checked for hash uniqueness and live-successor resolution; record_renames() has no invariant test.</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="276" data-line="709"><td class="lf-ln lf-ln-old">276</td><td class="lf-ln lf-ln-new">709</td><td class="lf-sign"> </td><td>            assert!(classified.insert((kind as u16, name_value(old))), &quot;{old}&quot;);</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="277" data-line="710"><td class="lf-ln lf-ln-old">277</td><td class="lf-ln lf-ln-new">710</td><td class="lf-sign"> </td><td>            if let Some(new) = successor {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="278" data-line="711"><td class="lf-ln lf-ln-old">278</td><td class="lf-ln lf-ln-new">711</td><td class="lf-sign"> </td><td>                assert!(</td></tr>
+<tr class="lf-hunk"><td colspan="4">@@ -282,4 +715,25 @@ mod tests {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="282" data-line="715"><td class="lf-ln lf-ln-old">282</td><td class="lf-ln lf-ln-new">715</td><td class="lf-sign"> </td><td>            }</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="283" data-line="716"><td class="lf-ln lf-ln-old">283</td><td class="lf-ln lf-ln-new">716</td><td class="lf-sign"> </td><td>        }</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="284" data-line="717"><td class="lf-ln lf-ln-old">284</td><td class="lf-ln lf-ln-new">717</td><td class="lf-sign"> </td><td>    }</td></tr>
+<tr class="lf-add lf-code-row" data-line="718"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">718</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="719"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">719</td><td class="lf-sign">+</td><td>    #[test]</td></tr>
+<tr class="lf-add lf-code-row" data-line="720"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">720</td><td class="lf-sign">+</td><td>    fn legacy_keys_are_classified_after_their_registrations_are_gone() {</td></tr>
+<tr class="lf-add lf-code-row" data-line="721"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">721</td><td class="lf-sign">+</td><td>        let old = &quot;kept creature&quot;;</td></tr>
+<tr class="lf-add lf-code-row" data-line="722"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">722</td><td class="lf-sign">+</td><td>        let memory = &quot;DecisionMemory::Priority&quot;;</td></tr>
+<tr class="lf-add lf-code-row" data-line="723"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">723</td><td class="lf-sign">+</td><td>        assert!(!PROGRAM_VOCABULARY.contains(&amp;(Text as u16, name_value(old))));</td></tr>
+<tr class="lf-add lf-code-row" data-line="724"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">724</td><td class="lf-sign">+</td><td>        assert!(!PROGRAM_VOCABULARY.contains(&amp;(Variant as u16, name_value(memory))));</td></tr>
+<tr class="lf-add lf-code-row" data-line="725"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">725</td><td class="lf-sign">+</td><td>        assert!(token_renames().any(|entry| entry == (Text, old, Some(&quot;kept permanent&quot;))));</td></tr>
+<tr class="lf-add lf-code-row" data-line="726"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">726</td><td class="lf-sign">+</td><td>        assert!(token_renames().any(|entry| entry == (Variant, memory, None)));</td></tr>
+<tr class="lf-add lf-code-row" data-line="727"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">727</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="728"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">728</td><td class="lf-sign">+</td><td>        let records = record_names();</td></tr>
+<tr class="lf-add lf-code-row" data-line="729"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">729</td><td class="lf-sign">+</td><td>        let retirements = record_renames();</td></tr>
+<tr class="lf-add lf-code-row" data-line="730"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">730</td><td class="lf-sign">+</td><td>        for synthetic in [&quot;execution/6/kept creature&quot;, &quot;execution/6/effect execution&quot;] {</td></tr>
+<tr class="lf-add lf-code-row" data-line="731"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">731</td><td class="lf-sign">+</td><td>            assert!(records.iter().all(|record| record.name != synthetic));</td></tr>
+<tr class="lf-add lf-code-row" data-line="732"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">732</td><td class="lf-sign">+</td><td>            assert!(retirements</td></tr>
+<tr class="lf-add lf-code-row" data-line="733"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">733</td><td class="lf-sign">+</td><td>                .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="734"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">734</td><td class="lf-sign">+</td><td>                .any(|(space, name, successor)| *space == &quot;token&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="735"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">735</td><td class="lf-sign">+</td><td>                    &amp;&amp; name == synthetic</td></tr>
+<tr class="lf-add lf-code-row" data-line="736"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">736</td><td class="lf-sign">+</td><td>                    &amp;&amp; successor.is_none()));</td></tr>
+<tr class="lf-add lf-code-row" data-line="737"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">737</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="738"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">738</td><td class="lf-sign">+</td><td>    }</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="285" data-line="739"><td class="lf-ln lf-ln-old">285</td><td class="lf-ln lf-ln-new">739</td><td class="lf-sign"> </td><td>}</td></tr>
 </tbody></table></div></div>
 
-<p>
-  <strong>Counterexample tested and rejected for <code>binding.py</code>:</strong>
-  could <code>bind_catalog</code> skip missing <code>record_name</code> keys
-  whenever their old embedding row was already bound by a
-  <code>record_token</code>? <strong>No.</strong> Real aliased record names
-  (like <code>flying</code> ↔ <code>Keyword::flying</code>) share a row with
-  their token too; skipping them would silently swallow an accidental deletion
-  of a live record name instead of failing loudly. Explicit hash classification
-  in <code>token_renames.rs</code> is the right mechanism — it just must be fed
-  by a <strong>frozen pre-0.3.0 snapshot</strong>, not live mutable lists.
-</p>
+<div class="lf-codeblock" data-path="managym/src/agent/record_vocabulary.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/agent/record_vocabulary.rs:172-206</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -119,47 +150,63 @@ pub fn record_names() -&gt; Vec&lt;RecordName&gt; {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="141" data-line="172"><td class="lf-ln lf-ln-old">141</td><td class="lf-ln lf-ln-new">172</td><td class="lf-sign"> </td><td>    let pack = default_content_pack();</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="142" data-line="173"><td class="lf-ln lf-ln-old">142</td><td class="lf-ln lf-ln-new">173</td><td class="lf-sign"> </td><td>    for candidate in pack.name_candidates().iter() {</td></tr>
+<tr class="lf-add lf-code-row" data-line="174"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">174</td><td class="lf-sign">+</td><td>        out.record(Name, &amp;candidate.name, None);</td></tr>
+<tr class="lf-add lf-code-row" data-line="175"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">175</td><td class="lf-sign">+</td><td>        out.content_texts.insert(candidate.name.clone());</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="144" data-line="176"><td class="lf-ln lf-ln-old">144</td><td class="lf-ln lf-ln-new">176</td><td class="lf-sign"> </td><td>    }</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="145" data-line="177"><td class="lf-ln lf-ln-old">145</td><td class="lf-ln lf-ln-new">177</td><td class="lf-sign"> </td><td>    for (_, definition) in pack.definition_entries() {</td></tr>
+<tr class="lf-add lf-code-row" data-line="178"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">178</td><td class="lf-sign">+</td><td>        out.record(Name, &amp;definition.name, None);</td></tr>
+<tr class="lf-add lf-code-row" data-line="179"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">179</td><td class="lf-sign">+</td><td>        out.content_texts.insert(definition.name.clone());</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="147" data-line="180"><td class="lf-ln lf-ln-old">147</td><td class="lf-ln lf-ln-new">180</td><td class="lf-sign"> </td><td>        let json = serde_json::to_value(definition).expect(&quot;serializable definition&quot;);</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="148" data-line="181"><td class="lf-ln lf-ln-old">148</td><td class="lf-ln lf-ln-new">181</td><td class="lf-sign"> </td><td>        for name in set_names(&amp;json) {</td></tr>
+<tr class="lf-add lf-code-row" data-line="182"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">182</td><td class="lf-sign">+</td><td>            out.record(Name, &amp;name, None);</td></tr>
+<tr class="lf-add lf-code-row" data-line="183"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">183</td><td class="lf-sign">+</td><td>            out.content_texts.insert(name);</td></tr>
+<tr class="lf-add lf-code-row" data-line="184"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">184</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="185"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">185</td><td class="lf-sign">+</td><td>        for condition in play_grant_conditions(&amp;json) {</td></tr>
+<tr class="lf-add lf-code-row" data-line="186"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">186</td><td class="lf-sign">+</td><td>            out.content_texts</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">play_grant_conditions prose ("you control a Wizard permanent") enters content_texts and feeds token_renames::record_renames() live.</td></tr>
+<tr class="lf-add lf-code-row" data-line="187"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">187</td><td class="lf-sign">+</td><td>                .insert(condition_text(&quot;permanent&quot;, &amp;condition));</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="150" data-line="188"><td class="lf-ln lf-ln-old">150</td><td class="lf-ln lf-ln-new">188</td><td class="lf-sign"> </td><td>        }</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="151" data-line="189"><td class="lf-ln lf-ln-old">151</td><td class="lf-ln lf-ln-new">189</td><td class="lf-sign"> </td><td>        for predicate in combat_restrictions(&amp;json) {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="152" data-line="190"><td class="lf-ln lf-ln-old">152</td><td class="lf-ln lf-ln-new">190</td><td class="lf-sign"> </td><td>            let description = predicate_description(&amp;predicate, &quot;creatures&quot;);</td></tr>
+<tr class="lf-add lf-code-row" data-line="191"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">191</td><td class="lf-sign">+</td><td>            out.record(Restriction, &amp;description, None);</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="154" data-line="192"><td class="lf-ln lf-ln-old">154</td><td class="lf-ln lf-ln-new">192</td><td class="lf-sign"> </td><td>        }</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="155" data-line="193"><td class="lf-ln lf-ln-old">155</td><td class="lf-ln lf-ln-new">193</td><td class="lf-sign"> </td><td>    }</td></tr>
+<tr class="lf-add lf-code-row" data-line="194"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">194</td><td class="lf-sign">+</td><td>    out.runtime.extend(</td></tr>
+<tr class="lf-add lf-code-row" data-line="195"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">195</td><td class="lf-sign">+</td><td>        out.content_texts</td></tr>
+<tr class="lf-add lf-code-row" data-line="196"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">196</td><td class="lf-sign">+</td><td>            .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="197"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">197</td><td class="lf-sign">+</td><td>            .map(|name| runtime_token(TokenKind::Text, name)),</td></tr>
+<tr class="lf-add lf-code-row" data-line="198"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">198</td><td class="lf-sign">+</td><td>    );</td></tr>
+<tr class="lf-add lf-code-row" data-line="199"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">199</td><td class="lf-sign">+</td><td>    register_runtime_tokens(&amp;mut out.runtime);</td></tr>
+<tr class="lf-add lf-code-row" data-line="200"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">200</td><td class="lf-sign">+</td><td>    out.records</td></tr>
+<tr class="lf-add lf-code-row" data-line="201"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">201</td><td class="lf-sign">+</td><td>        .sort_by(|a, b| (a.namespace, &amp;a.name).cmp(&amp;(b.namespace, &amp;b.name)));</td></tr>
+<tr class="lf-add lf-code-row" data-line="202"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">202</td><td class="lf-sign">+</td><td>    out.records.dedup();</td></tr>
+<tr class="lf-add lf-code-row" data-line="203"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">203</td><td class="lf-sign">+</td><td>    out.runtime</td></tr>
+<tr class="lf-add lf-code-row" data-line="204"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">204</td><td class="lf-sign">+</td><td>        .sort_by(|a, b| (a.kind as u16, &amp;a.name).cmp(&amp;(b.kind as u16, &amp;b.name)));</td></tr>
+<tr class="lf-add lf-code-row" data-line="205"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">205</td><td class="lf-sign">+</td><td>    out.runtime.dedup();</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="159" data-line="206"><td class="lf-ln lf-ln-old">159</td><td class="lf-ln lf-ln-new">206</td><td class="lf-sign"> </td><td>    out</td></tr>
+<tr class="lf-hunk"><td colspan="4">@@ -167,10 +214,10 @@ pub(crate) static PROGRAM_VOCABULARY: LazyLock&lt;HashSet&lt;(u16, i32)&gt;&gt; = LazyLock::</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="172"><td class="lf-ln lf-ln-old">172</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                .filter(|entry| !entry.name.starts_with(&quot;DecisionMemory::&quot;))</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="173"><td class="lf-ln lf-ln-old">173</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                .filter_map(|entry| entry.token),</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="174" data-line="221"><td class="lf-ln lf-ln-old">174</td><td class="lf-ln lf-ln-new">221</td><td class="lf-sign"> </td><td>        )</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="175" data-line="222"><td class="lf-ln lf-ln-old">175</td><td class="lf-ln lf-ln-new">222</td><td class="lf-sign"> </td><td>        .collect()</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="176" data-line="223"><td class="lf-ln lf-ln-old">176</td><td class="lf-ln lf-ln-new">223</td><td class="lf-sign"> </td><td>});</td></tr>
+<tr class="lf-hunk"><td colspan="4">@@ -188,20 +235,8 @@ pub fn missing_program_tokens(tokens: &amp;[(u16, i32)]) -&gt; BTreeSet&lt;(u16, i32)&gt; {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="188" data-line="235"><td class="lf-ln lf-ln-old">188</td><td class="lf-ln lf-ln-new">235</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="189" data-line="236"><td class="lf-ln lf-ln-old">189</td><td class="lf-ln lf-ln-new">236</td><td class="lf-sign"> </td><td>/// Runtime-only programs have no printed card span from which to discover</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="190" data-line="237"><td class="lf-ln lf-ln-old">190</td><td class="lf-ln lf-ln-new">237</td><td class="lf-sign"> </td><td>/// their vocabulary. Register their serde names and projection labels explicitly.</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="191"><td class="lf-ln lf-ln-old">191</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>fn execution_names(out: &amp;mut Vec&lt;RecordName&gt;) {</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="192"><td class="lf-ln lf-ln-old">192</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>    let mut add = |kind: TokenKind, name: &amp;str| {</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="193"><td class="lf-ln lf-ln-old">193</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>        let token = (kind as u16, name_value(name));</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="194"><td class="lf-ln lf-ln-old">194</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>        if !out.iter().any(|entry| entry.token == Some(token)) {</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="195"><td class="lf-ln lf-ln-old">195</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>            out.push(record(</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="196"><td class="lf-ln lf-ln-old">196</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                RecordNamespace::Token,</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="197"><td class="lf-ln lf-ln-old">197</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                &amp;format!(&quot;execution/{}/{name}&quot;, kind as u16),</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="198"><td class="lf-ln lf-ln-old">198</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                Some((kind, name)),</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="199"><td class="lf-ln lf-ln-old">199</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>            ));</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="200"><td class="lf-ln lf-ln-old">200</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>        }</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="201"><td class="lf-ln lf-ln-old">201</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>    };</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="202"><td class="lf-ln lf-ln-old">202</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>    for candidate in default_content_pack().name_candidates().iter() {</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="203"><td class="lf-ln lf-ln-old">203</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>        add(TokenKind::Text, &amp;candidate.name);</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="204"><td class="lf-ln lf-ln-old">204</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>    }</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="205" data-line="240"><td class="lf-ln lf-ln-old">205</td><td class="lf-ln lf-ln-new">240</td><td class="lf-sign"> </td><td>    for name in EXECUTION_TEXT {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="206" data-line="241"><td class="lf-ln lf-ln-old">206</td><td class="lf-ln lf-ln-new">241</td><td class="lf-sign"> </td><td>        add(TokenKind::Text, name);</td></tr>
+</tbody></table></div></div>
 
 <div class="lf-before-after">
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">Before</div>
     
-    <h4>Planned: live lists synthesize historical retirements</h4>
+    <h4>Built at <code>39cce53ab8</code></h4>
     <ul>
-      <li><code>RECORDS</code> retirements generated from live <code>runtime_tokens()</code> ∪ <code>TOKENS</code>.</li>
-      <li><code>TOKENS</code> phantom retirements generated from live <code>decision_memory::RECORD_NAMES</code>.</li>
-      <li><code>kept creature</code> &amp; <code>creatures each player sacrifices</code> left as <code>None</code> in <code>TOKENS</code> while their <code>Some(…)</code> renames are deleted from <code>RECORDS</code>.</li>
-      <li>Deleting <code>TargetSpec::Ability</code> from <code>runtime_tokens()</code> after a card prints it breaks every 0.2.x checkpoint.</li>
+      <li><code>record_renames()</code> chains <code>LEGACY_EXECUTION_TOKENS</code> (395) + all of <code>TOKENS</code> (74, growing forever) + <code>content_token_texts()</code> (pack names + live <code>condition_text</code> prose).</li>
+      <li>Real record-name history is inline <code>std::iter::once(("token", "Modification::ControlChanged", None))</code>.</li>
+      <li>Unit test checks uniqueness and successor resolution only on <code>token_renames()</code>; <code>record_renames()</code> is unchecked.</li>
     </ul>
   
   </div>
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">After</div>
     
-    <h4>Recommended: frozen pre-0.3.0 ledger in <code>token_renames.rs</code></h4>
+    <h4>Recommended (finish the frozen-ledger rule in this Task)</h4>
     <ul>
-      <li>Move <code>Some("kept permanent")</code> and <code>Some("permanents each player sacrifices")</code> onto <code>TOKENS</code> so pre-rename vectors stay preserved.</li>
-      <li>Freeze the 44 pre-0.3.0 <code>DecisionMemory::*</code> names in <code>const LEGACY_DECISION_MEMORY_TOKENS</code> inside <code>token_renames.rs</code> (append-only history, independent of future <code>RECORD_NAMES</code> edits).</li>
-      <li>Freeze the ~130 manual pre-0.3.0 runtime symbols (structs, enums, fields, <code>EXECUTION_TEXT</code> at the 0.3.0 cut) in <code>const LEGACY_EXECUTION_TOKENS</code>; expand <code>execution/6/&lt;name&gt;</code> dynamically only from the append-only content pack (card/set/play-grant names) plus <code>TOKENS</code> old names.</li>
-      <li>Graduating a symbol from <code>runtime_tokens()</code> to a printed card never invalidates a 0.2.x checkpoint.</li>
+      <li>Add the 13 pre-0.3.0 retired execution tokens (previously in <code>RECORDS</code>) and <code>(Text, "you control a Wizard permanent")</code> directly to <code>LEGACY_EXECUTION_TOKENS</code> (14 lines). Drop the <code>TOKENS</code> chain and keep <code>play_grant_conditions</code> out of <code>content_token_texts()</code> (leaving only pack card/set names, or freeze card/set names at the 0.3.0 cut).</li>
+      <li>Restore <code>pub const RECORDS: &amp;[(&amp;str, &amp;str, Option&lt;&amp;str&gt;)] = &amp;[("token", "Modification::ControlChanged", None)];</code> beside <code>TOKENS</code>.</li>
+      <li>Extend the unit test to verify <code>record_renames()</code> has unique <code>(namespace, name_value(old))</code> keys and that every <code>Some(successor)</code> resolves in <code>record_names() ∪ decision_memory_names()</code>.</li>
     </ul>
   
   </div>
 </div>
 
 
-<h2>Second mismatch: three lists to compute one program-token vocabulary</h2>
+<h2>What works well in the built code</h2>
 
 <p>
-  Issue #629 happened because callers saw <code>managym.catalog_tokens()</code>
-  and assumed it was the complete program-token vocabulary. Under
-  <code>scratch/plan.md</code>, a caller sees two token functions —
-  <code>catalog_tokens()</code> and <code>runtime_tokens()</code> — and still
-  gets the wrong answer if they compute <code>printed | runtime</code>, because
-  <code>record_vocabulary()</code> secretly owns a third slice of unprinted
-  program tokens (every <code>Modification::*</code> variant, plus any unprinted
-  <code>Keyword::*</code>, <code>CounterKind::*</code>,
-  <code>SourceQuality::*</code>, or subtype):
+  <code>manabot/policy/catalog.py::_record_tables</code> now expresses the exact
+  vocabulary model in 14 lines: runtime tokens append after printed card tokens,
+  record names either strictly alias an existing program-token row (never
+  secretly appending) or append a name row, and decision-memory names append
+  only when enabled, with zero prefix filters:
 </p>
 
-<div class="lf-codeblock" data-path="manabot/policy/catalog.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/policy/catalog.py:34-63</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="34"><td class="lf-ln lf-ln-single">34</td><td>def _record_tables(</td></tr>
-<tr class="lf-code-row" data-line="35"><td class="lf-ln lf-ln-single">35</td><td>    vocabulary: dict[tuple[int, int], int], *, decision_memory: bool</td></tr>
-<tr class="lf-code-row" data-line="36"><td class="lf-ln lf-ln-single">36</td><td>) -&gt; _RecordTables:</td></tr>
-<tr class="lf-code-row" data-line="37"><td class="lf-ln lf-ln-single">37</td><td>    &quot;&quot;&quot;A name whose card token exists reads that token&#39;s row, so a granted</td></tr>
-<tr class="lf-code-row" data-line="38"><td class="lf-ln lf-ln-single">38</td><td>    keyword and the printed keyword share one embedding; every other name,</td></tr>
-<tr class="lf-code-row" data-line="39"><td class="lf-ln lf-ln-single">39</td><td>    token and numeric kind gets a row appended after the card tokens.&quot;&quot;&quot;</td></tr>
-<tr class="lf-code-row" data-line="40"><td class="lf-ln lf-ln-single">40</td><td>    tokens = dict(vocabulary)</td></tr>
-<tr class="lf-code-row" data-line="41"><td class="lf-ln lf-ln-single">41</td><td>    names: dict[tuple[int, int], int] = {}</td></tr>
-<tr class="lf-code-row" data-line="42"><td class="lf-ln lf-ln-single">42</td><td>    size = len(vocabulary) + 1</td></tr>
-<tr class="lf-code-row" data-line="43"><td class="lf-ln lf-ln-single">43</td><td></td></tr>
-<tr class="lf-code-row" data-line="44"><td class="lf-ln lf-ln-single">44</td><td>    def append() -&gt; int:</td></tr>
-<tr class="lf-code-row" data-line="45"><td class="lf-ln lf-ln-single">45</td><td>        nonlocal size</td></tr>
-<tr class="lf-code-row" data-line="46"><td class="lf-ln lf-ln-single">46</td><td>        size += 1</td></tr>
-<tr class="lf-code-row" data-line="47"><td class="lf-ln lf-ln-single">47</td><td>        return size - 1</td></tr>
-<tr class="lf-code-row" data-line="48"><td class="lf-ln lf-ln-single">48</td><td></td></tr>
-<tr class="lf-code-row" data-line="49"><td class="lf-ln lf-ln-single">49</td><td>    for space, name, value, kind, token in managym.record_vocabulary():</td></tr>
-<tr class="lf-code-row" data-line="50"><td class="lf-ln lf-ln-single">50</td><td>        if name.startswith(&quot;DecisionMemory::&quot;) and not decision_memory:</td></tr>
-<tr class="lf-code-row" data-line="51"><td class="lf-ln lf-ln-single">51</td><td>            continue</td></tr>
-<tr class="lf-code-row" data-line="52"><td class="lf-ln lf-ln-single">52</td><td>        key = (int(RecordNamespace[space.upper()]), value)</td></tr>
-<tr class="lf-code-row" data-line="53"><td class="lf-ln lf-ln-single">53</td><td>        if key in names:</td></tr>
-<tr class="lf-code-row" data-line="54"><td class="lf-ln lf-ln-single">54</td><td>            raise ValueError(f&quot;record name {name!r} shares an id with another&quot;)</td></tr>
-<tr class="lf-code-row" data-line="55"><td class="lf-ln lf-ln-single">55</td><td>        if kind is None or token is None:</td></tr>
-<tr class="lf-code-row" data-line="56"><td class="lf-ln lf-ln-single">56</td><td>            names[key] = append()</td></tr>
-<tr class="lf-code-row" data-line="57"><td class="lf-ln lf-ln-single">57</td><td>        else:</td></tr>
-<tr class="lf-code-row" data-line="58"><td class="lf-ln lf-ln-single">58</td><td>            if (kind, token) not in tokens:</td></tr>
-<tr class="lf-code-row" data-line="59"><td class="lf-ln lf-ln-single">59</td><td>                tokens[(kind, token)] = append()</td></tr>
-<tr class="lf-code-row" data-line="60"><td class="lf-ln lf-ln-single">60</td><td>            names[key] = tokens[(kind, token)]</td></tr>
-<tr class="lf-code-row" data-line="61"><td class="lf-ln lf-ln-single">61</td><td>    numbers = {kind: append() for kind in NUMBER_TOKEN_KINDS}</td></tr>
-<tr class="lf-code-row" data-line="62"><td class="lf-ln lf-ln-single">62</td><td>    return _RecordTables(names, tokens, numbers, size)</td></tr>
-<tr class="lf-code-row" data-line="63"><td class="lf-ln lf-ln-single">63</td><td></td></tr>
+<div class="lf-codeblock" data-path="manabot/policy/catalog.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/policy/catalog.py:51-71</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -46,18 +48,24 @@ def _record_tables(</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="51"><td class="lf-ln lf-ln-old">51</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>            continue</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="52"><td class="lf-ln lf-ln-old">52</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>        key = (int(RecordNamespace[space.upper()]), value)</td></tr>
+<tr class="lf-add lf-code-row" data-line="51"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">51</td><td class="lf-sign">+</td><td>    def add_name(namespace: RecordNamespace, name: str, value: int, row: int) -&gt; None:</td></tr>
+<tr class="lf-add lf-code-row" data-line="52"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">52</td><td class="lf-sign">+</td><td>        key = (int(namespace), value)</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="53" data-line="53"><td class="lf-ln lf-ln-old">53</td><td class="lf-ln lf-ln-new">53</td><td class="lf-sign"> </td><td>        if key in names:</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="54" data-line="54"><td class="lf-ln lf-ln-old">54</td><td class="lf-ln lf-ln-new">54</td><td class="lf-sign"> </td><td>            raise ValueError(f&quot;record name {name!r} shares an id with another&quot;)</td></tr>
+<tr class="lf-add lf-code-row" data-line="55"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">55</td><td class="lf-sign">+</td><td>        names[key] = row</td></tr>
+<tr class="lf-add lf-code-row" data-line="56"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">56</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="57"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">57</td><td class="lf-sign">+</td><td>    for kind, _, value in managym.runtime_tokens():</td></tr>
+<tr class="lf-add lf-code-row" data-line="58"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">58</td><td class="lf-sign">+</td><td>        if (kind, value) not in tokens:</td></tr>
+<tr class="lf-add lf-code-row" data-line="59"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">59</td><td class="lf-sign">+</td><td>            tokens[kind, value] = append()</td></tr>
+<tr class="lf-add lf-code-row" data-line="60"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">60</td><td class="lf-sign">+</td><td>    for space, name, value, kind, token in managym.record_vocabulary():</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="55" data-line="61"><td class="lf-ln lf-ln-old">55</td><td class="lf-ln lf-ln-new">61</td><td class="lf-sign"> </td><td>        if kind is None or token is None:</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="56"><td class="lf-ln lf-ln-old">56</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>            names[key] = append()</td></tr>
+<tr class="lf-add lf-code-row" data-line="62"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">62</td><td class="lf-sign">+</td><td>            row = append()</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="57" data-line="63"><td class="lf-ln lf-ln-old">57</td><td class="lf-ln lf-ln-new">63</td><td class="lf-sign"> </td><td>        else:</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="58"><td class="lf-ln lf-ln-old">58</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>            if (kind, token) not in tokens:</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="59"><td class="lf-ln lf-ln-old">59</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                tokens[(kind, token)] = append()</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="60"><td class="lf-ln lf-ln-old">60</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>            names[key] = tokens[(kind, token)]</td></tr>
+<tr class="lf-add lf-code-row" data-line="64"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">64</td><td class="lf-sign">+</td><td>            row = tokens[kind, token]</td></tr>
+<tr class="lf-add lf-code-row" data-line="65"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">65</td><td class="lf-sign">+</td><td>        add_name(RecordNamespace[space.upper()], name, value, row)</td></tr>
+<tr class="lf-add lf-code-row" data-line="66"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">66</td><td class="lf-sign">+</td><td>    if decision_memory:</td></tr>
+<tr class="lf-add lf-code-row" data-line="67"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">67</td><td class="lf-sign">+</td><td>        for name, value in managym.decision_memory_names():</td></tr>
+<tr class="lf-add lf-code-row" data-line="68"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">68</td><td class="lf-sign">+</td><td>            add_name(RecordNamespace.TOKEN, name, value, append())</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="61" data-line="69"><td class="lf-ln lf-ln-old">61</td><td class="lf-ln lf-ln-new">69</td><td class="lf-sign"> </td><td>    numbers = {kind: append() for kind in NUMBER_TOKEN_KINDS}</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="62" data-line="70"><td class="lf-ln lf-ln-old">62</td><td class="lf-ln lf-ln-new">70</td><td class="lf-sign"> </td><td>    return _RecordTables(names, tokens, numbers, size)</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="63" data-line="71"><td class="lf-ln lf-ln-old">63</td><td class="lf-ln lf-ln-new">71</td><td class="lf-sign"> </td><td></td></tr>
+</tbody></table></div></div>
+
+<h2>Secondary mismatch (separate outcome): divergent decision-memory name admission</h2>
+
+<p>
+  Walking a live observation through both Python admission paths reveals a
+  pre-existing contract split that is more visible now that
+  <code>decision_memory_names()</code> is a first-class surface:
+</p>
+
+<div class="lf-codeblock" data-path="manabot/policy/decision_memory.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/policy/decision_memory.py:495-513</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="495"><td class="lf-ln lf-ln-single">495</td><td>            or not programs[int(definition) - 1].eligible</td></tr>
+<tr class="lf-code-row" data-line="496"><td class="lf-ln lf-ln-single">496</td><td>        ):</td></tr>
+<tr class="lf-code-row" data-line="497"><td class="lf-ln lf-ln-single">497</td><td>            raise ValueError(&quot;ineligible decision-memory definition shortcut&quot;)</td></tr>
+<tr class="lf-code-row" data-line="498"><td class="lf-ln lf-ln-single">498</td><td>    if not np.isin(record_word(headers, _RECORD_KIND), decision_name_values()).all():</td></tr>
+<tr class="lf-code-row" data-line="499"><td class="lf-ln lf-ln-single">499</td><td>        raise ValueError(&quot;unadmitted decision-memory kind&quot;)</td></tr>
+<tr class="lf-code-row" data-line="500"><td class="lf-ln lf-ln-single">500</td><td>    chosen = headers[:, _RECORD_CHOICE_PRESENT] == 1</td></tr>
+<tr class="lf-code-row" data-line="501"><td class="lf-ln lf-ln-single">501</td><td>    if not np.isin(</td></tr>
+<tr class="lf-code-row" data-line="502"><td class="lf-ln lf-ln-single">502</td><td>        record_word(headers[chosen, _RECORD_CHOICE_KIND], 0), decision_name_values()</td></tr>
+<tr class="lf-code-row" data-line="503"><td class="lf-ln lf-ln-single">503</td><td>    ).all():</td></tr>
+<tr class="lf-code-row" data-line="504"><td class="lf-ln lf-ln-single">504</td><td>        raise ValueError(&quot;unadmitted decision-memory choice&quot;)</td></tr>
+<tr class="lf-code-row" data-line="505"><td class="lf-ln lf-ln-single">505</td><td>    program = details[:, _DETAIL_FIELD] == 0</td></tr>
+<tr class="lf-code-row" data-line="506"><td class="lf-ln lf-ln-single">506</td><td>    tables.tokens(</td></tr>
+<tr class="lf-code-row" data-line="507"><td class="lf-ln lf-ln-single">507</td><td>        details[program, _DETAIL_TOKEN_KIND].astype(np.int64),</td></tr>
+<tr class="lf-code-row" data-line="508"><td class="lf-ln lf-ln-single">508</td><td>        record_word(details[program, _DETAIL_VALUE], 0),</td></tr>
+<tr class="lf-code-row" data-line="509"><td class="lf-ln lf-ln-single">509</td><td>    )</td></tr>
+<tr class="lf-code-row" data-line="510"><td class="lf-ln lf-ln-single">510</td><td>    named = record_word(headers, _RECORD_NAME)</td></tr>
+<tr class="lf-code-row" data-line="511"><td class="lf-ln lf-ln-single">511</td><td>    if (named &lt; 0).any() or (named &gt;= len(tables.name_definitions)).any():</td></tr>
+<tr class="lf-code-row" data-line="512"><td class="lf-ln lf-ln-single">512</td><td>        raise ValueError(&quot;invalid decision-memory name row&quot;)</td></tr>
+<tr class="lf-code-row" data-line="513"><td class="lf-ln lf-ln-single">513</td><td></td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="manabot/policy/admission.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/policy/admission.py:391-404</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="391"><td class="lf-ln lf-ln-single">391</td><td>        catalog = Catalog(</td></tr>
+<tr class="lf-code-row" data-line="392"><td class="lf-ln lf-ln-single">392</td><td>            lookup, spec.tables.record_name_keys, spec.tables.record_token_keys</td></tr>
+<tr class="lf-code-row" data-line="393"><td class="lf-ln lf-ln-single">393</td><td>        )</td></tr>
+<tr class="lf-code-row" data-line="394"><td class="lf-ln lf-ln-single">394</td><td>        if &quot;decision_records&quot; in data and spec.model.decision_memory != &quot;none&quot;:</td></tr>
+<tr class="lf-code-row" data-line="395"><td class="lf-ln lf-ln-single">395</td><td>            headers = data[&quot;decision_records&quot;].records</td></tr>
+<tr class="lf-code-row" data-line="396"><td class="lf-ln lf-ln-single">396</td><td>            chosen = headers[&quot;choice_kind_present&quot;].astype(bool)</td></tr>
+<tr class="lf-code-row" data-line="397"><td class="lf-ln lf-ln-single">397</td><td>            for words in (headers[&quot;kind&quot;], headers[&quot;choice_kind&quot;][chosen]):</td></tr>
+<tr class="lf-code-row" data-line="398"><td class="lf-ln lf-ln-single">398</td><td>                catalog.require_names(RecordNamespace.TOKEN, words)</td></tr>
+<tr class="lf-code-row" data-line="399"><td class="lf-ln lf-ln-single">399</td><td>            details = data[&quot;decision_reference_details&quot;].records</td></tr>
+<tr class="lf-code-row" data-line="400"><td class="lf-ln lf-ln-single">400</td><td>            program = details[&quot;field&quot;] == 0</td></tr>
+<tr class="lf-code-row" data-line="401"><td class="lf-ln lf-ln-single">401</td><td>            catalog.require_tokens(</td></tr>
+<tr class="lf-code-row" data-line="402"><td class="lf-ln lf-ln-single">402</td><td>                details[&quot;token_kind&quot;][program], details[&quot;value&quot;][program]</td></tr>
+<tr class="lf-code-row" data-line="403"><td class="lf-ln lf-ln-single">403</td><td>            )</td></tr>
+<tr class="lf-code-row" data-line="404"><td class="lf-ln lf-ln-single">404</td><td>        live = data[&quot;facts&quot;].integers</td></tr>
 </tbody></table></div></div>
 
 <p>
-  In PR #636, <code>Modification::AddTypes</code> is registered only as a
-  <code>RecordName</code> token in <code>record_names()</code> while its closing
-  token <code>/Modification::AddTypes</code> is registered in
-  <code>execution_names()</code>. Keeping that split forces
-  <code>docs/engine.md</code>, <code>PROGRAM_VOCABULARY</code>,
-  <code>test_effect_vocabulary.py</code>, and
-  <code>test_pooled_mana_classes_input.py</code> to maintain a 3-way union of
-  three different return shapes.
+  Dense and retained-prefix admission (<code>decision_memory.py:498–504</code>)
+  checks <code>kind</code> and <code>choice_kind</code> only against the running
+  engine's <code>decision_name_values()</code>, never checking the loaded
+  checkpoint's <code>tables.record_name_keys</code> — so an older or incomplete
+  table missing a memory label passes admission and mis-indexes in
+  <code>_prepare_memory_rows</code>. Conversely, v11 native admission
+  (<code>admission.py:394–398</code>) checks only
+  <code>tables.record_name_keys</code> (accepting any <code>TOKEN</code>-namespace
+  name such as <code>"flying"</code>, and skipping the check for control models
+  where <code>decision_memory == "none"</code>). Unifying both paths on one
+  helper (membership in <code>decision_name_values()</code> plus
+  <code>tables.record_name_keys</code> when memory rows are read) belongs in its
+  own follow-up Task rather than growing MTG-504.
 </p>
 
-<div class="lf-before-after">
-  <div class="lf-before-after-pane">
-    <div class="lf-before-after-label">Before</div>
-    
-    <h4>Planned: 3-way union; <code>record_vocabulary()</code> still appends tokens</h4>
-    <pre><code>printed = set(zip(cat["token_kind"], cat["token_value"]))
-rec_tok = {(k, v) for _, _, _, k, v in managym.record_vocabulary() if k is not None}
-runtime = {(k, v) for k, _, v in managym.runtime_tokens()}
-admitted = printed | rec_tok | runtime</code></pre>
-    <p><code>Modification::AddTypes</code> is in <code>rec_tok</code>; <code>/Modification::AddTypes</code> is in <code>runtime</code>.</p>
-  
-  </div>
-  <div class="lf-before-after-pane">
-    <div class="lf-before-after-label">After</div>
-    
-    <h4>Recommended: 2-way union; <code>record_vocabulary()</code> tokens are pure aliases</h4>
-    <pre><code>printed = set(zip(cat["token_kind"], cat["token_value"]))
-runtime = {(k, v) for k, _, v in managym.runtime_tokens()}
-admitted = printed | runtime</code></pre>
-    <p><code>runtime_tokens()</code> includes every non-printed (or runtime-registered) program token, including record-aliased ones. In <code>catalog.py</code>, <code>runtime_tokens()</code> appends rows first; then every non-<code>None</code> token in <code>record_vocabulary()</code> strictly aliases an existing entry in <code>tokens</code> (asserted, never secretly appended).</p>
-  
-  </div>
-</div>
-
-
-<h2>Third mismatch: <code>scripts/pilot_names.rs</code> breaks historical key lookup</h2>
+<h2>Minor doc drift left in touched area</h2>
 
 <p>
-  <code>scripts/pinned_pilot.py names --at &lt;rev&gt;</code> extracts an
-  <strong>archived historical commit</strong> of <code>managym</code>, copies
-  <code>HEAD</code>'s <code>scripts/pilot_names.rs</code> into it, and compiles
-  it against that old crate:
+  Two module docstrings in the vocabulary path still describe the pre-split
+  world where <code>record_vocabulary</code> carried <code>effect_execution</code>
+  labels:
 </p>
 
-<div class="lf-codeblock" data-path="scripts/pinned_pilot.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">scripts/pinned_pilot.py:240-259</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="240"><td class="lf-ln lf-ln-single">240</td><td>            source_text = source_text.replace(signature, signature + probe)</td></tr>
-<tr class="lf-code-row" data-line="241"><td class="lf-ln lf-ln-single">241</td><td>        serializer.write_text(source_text)</td></tr>
-<tr class="lf-code-row" data-line="242"><td class="lf-ln lf-ln-single">242</td><td>        shutil.copyfile(</td></tr>
-<tr class="lf-code-row" data-line="243"><td class="lf-ln lf-ln-single">243</td><td>            Path(__file__).with_name(&quot;pilot_names.rs&quot;),</td></tr>
-<tr class="lf-code-row" data-line="244"><td class="lf-ln lf-ln-single">244</td><td>            crate / &quot;examples/pilot_names.rs&quot;,</td></tr>
-<tr class="lf-code-row" data-line="245"><td class="lf-ln lf-ln-single">245</td><td>        )</td></tr>
-<tr class="lf-code-row" data-line="246"><td class="lf-ln lf-ln-single">246</td><td>        subprocess.run(</td></tr>
-<tr class="lf-code-row" data-line="247"><td class="lf-ln lf-ln-single">247</td><td>            [</td></tr>
-<tr class="lf-code-row" data-line="248"><td class="lf-ln lf-ln-single">248</td><td>                &quot;cargo&quot;,</td></tr>
-<tr class="lf-code-row" data-line="249"><td class="lf-ln lf-ln-single">249</td><td>                &quot;run&quot;,</td></tr>
-<tr class="lf-code-row" data-line="250"><td class="lf-ln lf-ln-single">250</td><td>                &quot;--locked&quot;,</td></tr>
-<tr class="lf-code-row" data-line="251"><td class="lf-ln lf-ln-single">251</td><td>                &quot;--quiet&quot;,</td></tr>
-<tr class="lf-code-row" data-line="252"><td class="lf-ln lf-ln-single">252</td><td>                &quot;--jobs&quot;,</td></tr>
-<tr class="lf-code-row" data-line="253"><td class="lf-ln lf-ln-single">253</td><td>                &quot;2&quot;,</td></tr>
-<tr class="lf-code-row" data-line="254"><td class="lf-ln lf-ln-single">254</td><td>                &quot;--example&quot;,</td></tr>
-<tr class="lf-code-row" data-line="255"><td class="lf-ln lf-ln-single">255</td><td>                &quot;pilot_names&quot;,</td></tr>
-<tr class="lf-code-row" data-line="256"><td class="lf-ln lf-ln-single">256</td><td>            ],</td></tr>
-<tr class="lf-code-row" data-line="257"><td class="lf-ln lf-ln-single">257</td><td>            cwd=crate,</td></tr>
-<tr class="lf-code-row" data-line="258"><td class="lf-ln lf-ln-single">258</td><td>            check=True,</td></tr>
-<tr class="lf-code-row" data-line="259"><td class="lf-ln lf-ln-single">259</td><td>        )</td></tr>
+<div class="lf-codeblock" data-path="managym/src/agent/record_vocabulary.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/agent/record_vocabulary.rs:1-18</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="1"><td class="lf-ln lf-ln-single">1</td><td>//! Every name the fact and shared-effect encoders hash into an id column.</td></tr>
+<tr class="lf-code-row" data-line="2"><td class="lf-ln lf-ln-single">2</td><td>//!</td></tr>
+<tr class="lf-code-row" data-line="3"><td class="lf-ln lf-ln-single">3</td><td>//! Fact rows (`observation_encoder::facts`) and shared-effect records</td></tr>
+<tr class="lf-code-row" data-line="4"><td class="lf-ln lf-ln-single">4</td><td>//! (`shared_effects`) and retained execution programs (`effect_execution`)</td></tr>
+<tr class="lf-code-row" data-line="5"><td class="lf-ln lf-ln-single">5</td><td>//! carry open-vocabulary names as `name_value` hashes:</td></tr>
+<tr class="lf-code-row" data-line="6"><td class="lf-ln lf-ln-single">6</td><td>//! counter kinds, colors, subtypes, keywords, modifications, set names and</td></tr>
+<tr class="lf-code-row" data-line="7"><td class="lf-ln lf-ln-single">7</td><td>//! combat restrictions, projection labels and runtime-only rules payloads. The hash keeps the transport exact, but a model needs</td></tr>
+<tr class="lf-code-row" data-line="8"><td class="lf-ln lf-ln-single">8</td><td>//! the finite set of names to embed each one as its own row. This module</td></tr>
+<tr class="lf-code-row" data-line="9"><td class="lf-ln lf-ln-single">9</td><td>//! lists that set, each name with the learning token card text uses for the</td></tr>
+<tr class="lf-code-row" data-line="10"><td class="lf-ln lf-ln-single">10</td><td>//! same concept when there is one (a granted `flying` and a printed</td></tr>
+<tr class="lf-code-row" data-line="11"><td class="lf-ln lf-ln-single">11</td><td>//! `Keyword::flying`), so the policy can share one embedding between them.</td></tr>
+<tr class="lf-code-row" data-line="12"><td class="lf-ln lf-ln-single">12</td><td>//!</td></tr>
+<tr class="lf-code-row" data-line="13"><td class="lf-ln lf-ln-single">13</td><td>//! Names fall in three namespaces, because the same string may mean different</td></tr>
+<tr class="lf-code-row" data-line="14"><td class="lf-ln lf-ln-single">14</td><td>//! things in different columns: `token` (rules vocabulary), `name` (a set card</td></tr>
+<tr class="lf-code-row" data-line="15"><td class="lf-ln lf-ln-single">15</td><td>//! name) and `restriction` (a combat restriction&#39;s predicate description).</td></tr>
+<tr class="lf-code-row" data-line="16"><td class="lf-ln lf-ln-single">16</td><td>//!</td></tr>
+<tr class="lf-code-row" data-line="17"><td class="lf-ln lf-ln-single">17</td><td>//! Entry points: [`record_names`] and [`runtime_tokens`].</td></tr>
+<tr class="lf-code-row" data-line="18"><td class="lf-ln lf-ln-single">18</td><td></td></tr>
 </tbody></table></div></div>
-<div class="lf-codeblock" data-path="scripts/pilot_names.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">scripts/pilot_names.rs:1-39</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="1"><td class="lf-ln lf-ln-single">1</td><td>// Built against the selected writer&#39;s engine by pinned_pilot.py.</td></tr>
-<tr class="lf-code-row" data-line="2"><td class="lf-ln lf-ln-single">2</td><td>use managym::{</td></tr>
-<tr class="lf-code-row" data-line="3"><td class="lf-ln lf-ln-single">3</td><td>    agent::record_vocabulary::{record_names, RecordNamespace},</td></tr>
-<tr class="lf-code-row" data-line="4"><td class="lf-ln lf-ln-single">4</td><td>    cards::{</td></tr>
-<tr class="lf-code-row" data-line="5"><td class="lf-ln lf-ln-single">5</td><td>        content_pack::default_content_pack,</td></tr>
-<tr class="lf-code-row" data-line="6"><td class="lf-ln lf-ln-single">6</td><td>        tokens::{definition_tokens, writer_names},</td></tr>
-<tr class="lf-code-row" data-line="7"><td class="lf-ln lf-ln-single">7</td><td>    },</td></tr>
-<tr class="lf-code-row" data-line="8"><td class="lf-ln lf-ln-single">8</td><td>};</td></tr>
-<tr class="lf-code-row" data-line="9"><td class="lf-ln lf-ln-single">9</td><td>use std::collections::BTreeSet;</td></tr>
-<tr class="lf-code-row" data-line="10"><td class="lf-ln lf-ln-single">10</td><td></td></tr>
-<tr class="lf-code-row" data-line="11"><td class="lf-ln lf-ln-single">11</td><td>fn main() {</td></tr>
-<tr class="lf-code-row" data-line="12"><td class="lf-ln lf-ln-single">12</td><td>    let pack = default_content_pack();</td></tr>
-<tr class="lf-code-row" data-line="13"><td class="lf-ln lf-ln-single">13</td><td>    let mut tokens = BTreeSet::new();</td></tr>
-<tr class="lf-code-row" data-line="14"><td class="lf-ln lf-ln-single">14</td><td>    for (_, definition) in pack.definition_entries() {</td></tr>
-<tr class="lf-code-row" data-line="15"><td class="lf-ln lf-ln-single">15</td><td>        tokens.extend(</td></tr>
-<tr class="lf-code-row" data-line="16"><td class="lf-ln lf-ln-single">16</td><td>            definition_tokens(definition, pack)</td></tr>
-<tr class="lf-code-row" data-line="17"><td class="lf-ln lf-ln-single">17</td><td>                .unwrap()</td></tr>
-<tr class="lf-code-row" data-line="18"><td class="lf-ln lf-ln-single">18</td><td>                .into_iter()</td></tr>
-<tr class="lf-code-row" data-line="19"><td class="lf-ln lf-ln-single">19</td><td>                .map(|(kind, value)| (kind as u16, value)),</td></tr>
-<tr class="lf-code-row" data-line="20"><td class="lf-ln lf-ln-single">20</td><td>        );</td></tr>
-<tr class="lf-code-row" data-line="21"><td class="lf-ln lf-ln-single">21</td><td>    }</td></tr>
-<tr class="lf-code-row" data-line="22"><td class="lf-ln lf-ln-single">22</td><td>    for record in record_names() {</td></tr>
-<tr class="lf-code-row" data-line="23"><td class="lf-ln lf-ln-single">23</td><td>        let namespace: u64 = match record.namespace {</td></tr>
-<tr class="lf-code-row" data-line="24"><td class="lf-ln lf-ln-single">24</td><td>            RecordNamespace::Token =&gt; 1,</td></tr>
-<tr class="lf-code-row" data-line="25"><td class="lf-ln lf-ln-single">25</td><td>            RecordNamespace::Name =&gt; 2,</td></tr>
-<tr class="lf-code-row" data-line="26"><td class="lf-ln lf-ln-single">26</td><td>            RecordNamespace::Restriction =&gt; 3,</td></tr>
-<tr class="lf-code-row" data-line="27"><td class="lf-ln lf-ln-single">27</td><td>        };</td></tr>
-<tr class="lf-code-row" data-line="28"><td class="lf-ln lf-ln-single">28</td><td>        let key = (namespace &lt;&lt; 32) | u64::from(record.value as u32);</td></tr>
-<tr class="lf-code-row" data-line="29"><td class="lf-ln lf-ln-single">29</td><td>        println!(&quot;record_name {key} {}&quot;, record.name);</td></tr>
-<tr class="lf-code-row" data-line="30"><td class="lf-ln lf-ln-single">30</td><td>        tokens.extend(record.token);</td></tr>
-<tr class="lf-code-row" data-line="31"><td class="lf-ln lf-ln-single">31</td><td>    }</td></tr>
-<tr class="lf-code-row" data-line="32"><td class="lf-ln lf-ln-single">32</td><td>    let names = writer_names();</td></tr>
-<tr class="lf-code-row" data-line="33"><td class="lf-ln lf-ln-single">33</td><td>    for (kind, value) in tokens {</td></tr>
-<tr class="lf-code-row" data-line="34"><td class="lf-ln lf-ln-single">34</td><td>        if matches!(kind, 1 | 2 | 3 | 6) {</td></tr>
-<tr class="lf-code-row" data-line="35"><td class="lf-ln lf-ln-single">35</td><td>            let key = (u64::from(kind) &lt;&lt; 32) | u64::from(value as u32);</td></tr>
-<tr class="lf-code-row" data-line="36"><td class="lf-ln lf-ln-single">36</td><td>            println!(&quot;record_token {key} {}&quot;, names[&amp;value]);</td></tr>
-<tr class="lf-code-row" data-line="37"><td class="lf-ln lf-ln-single">37</td><td>        }</td></tr>
-<tr class="lf-code-row" data-line="38"><td class="lf-ln lf-ln-single">38</td><td>    }</td></tr>
-<tr class="lf-code-row" data-line="39"><td class="lf-ln lf-ln-single">39</td><td>}</td></tr>
+<div class="lf-codeblock" data-path="manabot/verify/record_coverage.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/verify/record_coverage.py:1-10</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="1"><td class="lf-ln lf-ln-single">1</td><td>&quot;&quot;&quot;Check that every fact and shared-effect id real games emit has a catalog row.</td></tr>
+<tr class="lf-code-row" data-line="2"><td class="lf-ln lf-ln-single">2</td><td></td></tr>
+<tr class="lf-code-row" data-line="3"><td class="lf-ln lf-ln-single">3</td><td>Catalog models (`ModelConfig.record_vocabulary=&quot;catalog&quot;`) embed fact and</td></tr>
+<tr class="lf-code-row" data-line="4"><td class="lf-ln lf-ln-single">4</td><td>effect ids through the card encoder&#39;s exact vocabulary and reject an id outside</td></tr>
+<tr class="lf-code-row" data-line="5"><td class="lf-ln lf-ln-single">5</td><td>it. That vocabulary is native `record_vocabulary`, a list maintained beside</td></tr>
+<tr class="lf-code-row" data-line="6"><td class="lf-ln lf-ln-single">6</td><td>the encoders, so an encoder that starts hashing a new name without listing it</td></tr>
+<tr class="lf-code-row" data-line="7"><td class="lf-ln lf-ln-single">7</td><td>would stop training mid-run. This sweep plays seeded random games whose decks</td></tr>
+<tr class="lf-code-row" data-line="8"><td class="lf-ln lf-ln-single">8</td><td>together hold every eligible world card, encodes each decision at policy input</td></tr>
+<tr class="lf-code-row" data-line="9"><td class="lf-ln lf-ln-single">9</td><td>v11 and runs a tiny catalog policy over the batch, so a missing name fails here</td></tr>
+<tr class="lf-code-row" data-line="10"><td class="lf-ln lf-ln-single">10</td><td>with the game that produced it. `--decks elemental` instead exercises the curated</td></tr>
 </tbody></table></div></div>
-
-<p>
-  Plan Pass 2 updates <code>scripts/pilot_names.rs</code> to call
-  <code>runtime_tokens()</code> and decision-memory names. Doing so
-  unconditionally will fail to compile against every pre-0.3.0 commit (such as
-  <code>ab2b757d9</code> in <code>docs/observation-and-model.md</code>),
-  breaking the exact debugging tool used to classify unexplained keys from older
-  checkpoints. Instead, <code>scripts/pinned_pilot.py::names_at</code> should
-  detect whether the archived <code>record_vocabulary.rs</code> defines
-  <code>pub fn runtime_tokens</code> (mirroring its existing inspection of
-  <code>tokens.rs</code>) and emit the matching probe for pre-0.3.0 vs.
-  post-0.3.0 writers.
-</p>
-
-<h2>Fourth mismatch: decision-memory vocabulary placement and missed test</h2>
-
-<p>
-  Every other engine vocabulary lives at the top level of <code>managym</code>
-  and is tracked in <code>managym/__init__.pyi</code> and
-  <code>tests/public_api.json</code>. The plan places decision-memory names at
-  <code>managym.decision_memory.decision_names()</code> "from a native read"
-  without naming the PyO3 binding, even though <code>managym/__init__.py</code>
-  re-exports every non-underscored symbol from <code>_managym</code> via
-  <code>from ._managym import *</code>. Meanwhile,
-  <code>tests/model/test_record_vocabulary.py:104</code> asserts that
-  <code>record_name_keys</code> length equals
-  <code>len(managym.record_vocabulary())</code> with
-  <code>decision_memory=True</code> and is missing from the plan's consumer list:
-</p>
-
-<div class="lf-codeblock" data-path="managym/decision_memory.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/decision_memory.py:143-151</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="143"><td class="lf-ln lf-ln-single">143</td><td>@cache</td></tr>
-<tr class="lf-code-row" data-line="144"><td class="lf-ln lf-ln-single">144</td><td>def decision_name_values() -&gt; tuple[int, ...]:</td></tr>
-<tr class="lf-code-row" data-line="145"><td class="lf-ln lf-ln-single">145</td><td>    &quot;&quot;&quot;Native memory labels for host admission, without optional model rows.&quot;&quot;&quot;</td></tr>
-<tr class="lf-code-row" data-line="146"><td class="lf-ln lf-ln-single">146</td><td></td></tr>
-<tr class="lf-code-row" data-line="147"><td class="lf-ln lf-ln-single">147</td><td>    return tuple(</td></tr>
-<tr class="lf-code-row" data-line="148"><td class="lf-ln lf-ln-single">148</td><td>        value</td></tr>
-<tr class="lf-code-row" data-line="149"><td class="lf-ln lf-ln-single">149</td><td>        for _, name, value, _, _ in managym.record_vocabulary()</td></tr>
-<tr class="lf-code-row" data-line="150"><td class="lf-ln lf-ln-single">150</td><td>        if name.startswith(&quot;DecisionMemory::&quot;)</td></tr>
-<tr class="lf-code-row" data-line="151"><td class="lf-ln lf-ln-single">151</td><td>    )</td></tr>
-</tbody></table></div></div>
-<div class="lf-codeblock" data-path="tests/model/test_record_vocabulary.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">tests/model/test_record_vocabulary.py:87-105</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="87"><td class="lf-ln lf-ln-single">87</td><td>def test_every_record_name_reads_exactly_one_row(cards: SemanticCardEncoder) -&gt; None:</td></tr>
-<tr class="lf-code-row" data-line="88"><td class="lf-ln lf-ln-single">88</td><td>    names = managym.record_vocabulary()</td></tr>
-<tr class="lf-code-row" data-line="89"><td class="lf-ln lf-ln-single">89</td><td>    rows = []</td></tr>
-<tr class="lf-code-row" data-line="90"><td class="lf-ln lf-ln-single">90</td><td>    for space, name, value, kind, token in names:</td></tr>
-<tr class="lf-code-row" data-line="91"><td class="lf-ln lf-ln-single">91</td><td>        namespace = RecordNamespace[space.upper()]</td></tr>
-<tr class="lf-code-row" data-line="92"><td class="lf-ln lf-ln-single">92</td><td>        key = (int(namespace) &lt;&lt; 32) | (value &amp; 0xFFFFFFFF)</td></tr>
-<tr class="lf-code-row" data-line="93"><td class="lf-ln lf-ln-single">93</td><td>        index = int(torch.searchsorted(cards.record_name_keys, torch.tensor(key)))</td></tr>
-<tr class="lf-code-row" data-line="94"><td class="lf-ln lf-ln-single">94</td><td>        assert int(cards.record_name_keys[index]) == key, name</td></tr>
-<tr class="lf-code-row" data-line="95"><td class="lf-ln lf-ln-single">95</td><td>        row = int(cards.record_name_rows[index])</td></tr>
-<tr class="lf-code-row" data-line="96"><td class="lf-ln lf-ln-single">96</td><td>        if (kind, token) in cards.token_vocabulary:</td></tr>
-<tr class="lf-code-row" data-line="97"><td class="lf-ln lf-ln-single">97</td><td>            assert row == _card_row(cards, kind, token), name</td></tr>
-<tr class="lf-code-row" data-line="98"><td class="lf-ln lf-ln-single">98</td><td>        else:</td></tr>
-<tr class="lf-code-row" data-line="99"><td class="lf-ln lf-ln-single">99</td><td>            # Appended after the card tokens, whose rows stay unchanged.</td></tr>
-<tr class="lf-code-row" data-line="100"><td class="lf-ln lf-ln-single">100</td><td>            assert row &gt; len(cards.token_vocabulary), name</td></tr>
-<tr class="lf-code-row" data-line="101"><td class="lf-ln lf-ln-single">101</td><td>        rows.append(row)</td></tr>
-<tr class="lf-code-row" data-line="102"><td class="lf-ln lf-ln-single">102</td><td>    assert len(set(rows)) == len(names)</td></tr>
-<tr class="lf-code-row" data-line="103"><td class="lf-ln lf-ln-single">103</td><td>    assert max(rows) &lt; cards.token_embedding.num_embeddings</td></tr>
-<tr class="lf-code-row" data-line="104"><td class="lf-ln lf-ln-single">104</td><td>    assert len(cards.record_name_keys) == len(names)</td></tr>
-<tr class="lf-code-row" data-line="105"><td class="lf-ln lf-ln-single">105</td><td></td></tr>
-</tbody></table></div></div>
-
-<p>
-  Exposing one top-level native function (e.g.
-  <code>managym.decision_memory_names()</code> or
-  <code>managym.decision_memory_vocabulary()</code>) in
-  <code>managym/__init__.pyi</code> keeps all engine vocabularies on one
-  contract-checked surface and lets
-  <code>managym.decision_memory.decision_name_values()</code> derive directly
-  from it without a hidden <code>_managym</code> trampoline.
-</p>
 
 <h2>Findings</h2>
 
 <div class="lf-decision" data-decision-id="f1">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">Preserve kept creature / creatures each player sacrifices renames in TOKENS</span>
+    <span class="lf-decision-title">Remove TOKENS and live condition_text coupling from record_renames()</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
   <p>
-    <strong>This work (Pass 1).</strong> Move the two live renames from
-    <code>token_renames::RECORDS</code> onto <code>token_renames::TOKENS</code>
-    (<code>(Text, "kept creature", Some("kept permanent"))</code> and
-    <code>(Text, "creatures each player sacrifices", Some("permanents each player sacrifices"))</code>),
-    which PR #636's <code>PROGRAM_VOCABULARY</code> check now accepts. Without
-    this, removing the <code>execution/6/…</code> rename rows silently turns
-    both into retirements and mean-initializes both vectors on pre-rename
-    checkpoints.
+    <strong>This work.</strong> Move the 13 pre-0.3.0 retired
+    <code>execution/*</code> symbols (from the old <code>RECORDS</code> table)
+    and <code>(Text, "you control a Wizard permanent")</code> into
+    <code>LEGACY_EXECUTION_TOKENS</code>. Remove
+    <code>.chain(TOKENS.iter()...)</code> from <code>record_renames()</code>
+    and stop putting <code>play_grant_conditions</code> into
+    <code>content_token_texts()</code>. That finishes the frozen-ledger rule so
+    neither a <code>condition_text</code> wording change nor a post-0.3.0
+    <code>TOKENS</code> retirement corrupts <code>record_renames()</code>.
   </p>
 </div>
-  <div data-choice="f1" data-label="Preserve kept creature / creatures each player sacrifices renames in TOKENS">
+  <div data-choice="f1" data-label="Remove TOKENS and live condition_text coupling from record_renames()">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1389,25 +1336,21 @@ admitted = printed | runtime</code></pre>
 
 <div class="lf-decision" data-decision-id="f2">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">Freeze pre-0.3.0 legacy execution and decision-memory retirements in token_renames.rs</span>
+    <span class="lf-decision-title">Restore pub const RECORDS and add uniqueness/successor invariant tests for record_renames()</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
   <p>
-    <strong>This work (Pass 1).</strong> Do not generate historical retirements
-    from live mutable <code>runtime_tokens()</code> or
-    <code>decision_memory::RECORD_NAMES</code>. Freeze the ~130 manual
-    pre-0.3.0 runtime symbols and the 44 pre-0.3.0
-    <code>DecisionMemory::*</code> names as static historical constants in
-    <code>token_renames.rs</code>, expanding only pack-derived card/set/grant
-    <code>execution/6/&lt;name&gt;</code> entries (plus <code>TOKENS</code> old
-    names) dynamically. Add a unit test verifying that removing a runtime token
-    or memory label does not drop its historical retirement, plus a constructed
-    pre-0.3.0 decision-memory checkpoint binding test in
-    <code>tests/model/test_checkpoint_binding.py</code>.
+    <strong>This work.</strong> Replace the inline
+    <code>std::iter::once(...)</code> in <code>record_renames()</code> with
+    <code>pub const RECORDS: &amp;[(&amp;str, &amp;str, Option&lt;&amp;str&gt;)]</code>
+    beside <code>TOKENS</code>, and extend <code>token_renames::tests</code> so
+    both <code>token_renames()</code> and <code>record_renames()</code> are
+    checked for unique hashed keys and valid live successors
+    (<code>record_names() ∪ decision_memory_names()</code>).
   </p>
 </div>
-  <div data-choice="f2" data-label="Freeze pre-0.3.0 legacy execution and decision-memory retirements in token_renames.rs">
+  <div data-choice="f2" data-label="Restore pub const RECORDS and add uniqueness/successor invariant tests for record_renames()">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1417,23 +1360,21 @@ admitted = printed | runtime</code></pre>
 
 <div class="lf-decision" data-decision-id="f3">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">Make runtime_tokens() complete so admitted program tokens = printed | runtime</span>
+    <span class="lf-decision-title">Update stale module headers in record_vocabulary.rs and record_coverage.py</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
   <p>
-    <strong>This work (Pass 1 &amp; Pass 2).</strong> Include all non-printed
-    program tokens (including tokens aliased by <code>record_names()</code> such
-    as <code>Modification::*</code> and unprinted
-    <code>Keyword::*</code>/<code>CounterKind::*</code>/<code>SourceQuality::*</code>/subtypes)
-    in <code>runtime_tokens()</code>. Then
-    <code>catalog_tokens() ∪ runtime_tokens()</code> is the exact admitted
-    program-token vocabulary (2 lists, not 3), and
-    <code>record_vocabulary()</code>'s token column is strictly an alias into
-    that vocabulary (asserted in <code>catalog.py</code>).
+    <strong>This work (small cleanup).</strong> Update the opening doc comments
+    in <code>managym/src/agent/record_vocabulary.rs:1–17</code> (still names
+    <code>effect_execution</code> and "runtime-only rules payloads" as part of
+    <code>record_names</code>) and
+    <code>manabot/verify/record_coverage.py:1–7</code> (still says only
+    <code>record_vocabulary</code> covers the sweep, though its own test now
+    exercises <code>runtime_tokens()</code>).
   </p>
 </div>
-  <div data-choice="f3" data-label="Make runtime_tokens() complete so admitted program tokens = printed | runtime">
+  <div data-choice="f3" data-label="Update stale module headers in record_vocabulary.rs and record_coverage.py">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1443,70 +1384,22 @@ admitted = printed | runtime</code></pre>
 
 <div class="lf-decision" data-decision-id="f4">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">Keep scripts/pinned_pilot.py names --at compatible with pre-0.3.0 and post-0.3.0 commits</span>
-    <span class="lf-decision-rec">Recommended: Fix here</span>
+    <span class="lf-decision-title">Unify decision-memory label admission between dense/retained and v11 native paths</span>
+    <span class="lf-decision-rec">Recommended: File Task</span>
   </div>
   <div class="lf-decision-body">
   <p>
-    <strong>This work (Pass 2).</strong> Do not add post-0.3.0 imports
-    unconditionally to <code>scripts/pilot_names.rs</code>. Have
-    <code>scripts/pinned_pilot.py::names_at</code> detect whether the archived
-    crate defines <code>runtime_tokens</code> (and memory names) and compile the
-    matching probe so historical key debugging works across the 0.3.0 boundary.
+    <strong>Separate outcome.</strong> Pre-existing split outside MTG-504's
+    scope: make <code>manabot/policy/decision_memory.py::memory_vocabulary</code>
+    and <code>manabot/policy/admission.py::admit_native</code> enforce the same
+    rule on decision-memory <code>kind</code> and <code>choice_kind</code>
+    (admitted by <code>decision_name_values()</code> and present in
+    <code>tables.record_name_keys</code> when the model reads them), with a
+    regression test covering both an incomplete checkpoint table on retained
+    prefixes and a non-memory <code>TOKEN</code> name on v11 batches.
   </p>
 </div>
-  <div data-choice="f4" data-label="Keep scripts/pinned_pilot.py names --at compatible with pre-0.3.0 and post-0.3.0 commits">
-    <button type="button" data-value="Fix here">Fix here</button>
-    <button type="button" data-value="File Task">File Task</button>
-    <button type="button" data-value="Drop">Drop</button>
-  </div>
-</div>
-
-
-<div class="lf-decision" data-decision-id="f5">
-  <div class="lf-decision-head">
-    <span class="lf-decision-title">Put decision-memory vocabulary on the same contract-checked managym surface and update test_record_vocabulary.py</span>
-    <span class="lf-decision-rec">Recommended: Fix here</span>
-  </div>
-  <div class="lf-decision-body">
-  <p>
-    <strong>This work (Pass 1 &amp; Pass 2).</strong> Publish the native
-    decision-memory label list directly in <code>managym/__init__.pyi</code> and
-    <code>tests/public_api.json</code> alongside <code>record_vocabulary()</code>
-    and <code>runtime_tokens()</code> (returning
-    <code>(namespace, name, value)</code> or <code>(name, value)</code>), and
-    derive <code>managym.decision_memory.decision_name_values()</code> from it.
-    Update <code>tests/model/test_record_vocabulary.py:104</code> (missed in the
-    plan) to account for the 44 memory rows when
-    <code>decision_memory=True</code>, and replace magic namespace literal
-    <code>1</code> in <code>manabot/policy/decision_memory.py</code> with
-    <code>RecordNamespace.TOKEN</code>.
-  </p>
-</div>
-  <div data-choice="f5" data-label="Put decision-memory vocabulary on the same contract-checked managym surface and update test_record_vocabulary.py">
-    <button type="button" data-value="Fix here">Fix here</button>
-    <button type="button" data-value="File Task">File Task</button>
-    <button type="button" data-value="Drop">Drop</button>
-  </div>
-</div>
-
-
-<div class="lf-decision" data-decision-id="f6">
-  <div class="lf-decision-head">
-    <span class="lf-decision-title">Share definition JSON traversal between record_names() and runtime_tokens()</span>
-    <span class="lf-decision-rec">Recommended: Fix here</span>
-  </div>
-  <div class="lf-decision-body">
-  <p>
-    <strong>This work (Pass 1, small cleanup).</strong> Both
-    <code>record_names()</code> and <code>execution_names()</code> currently
-    serialize every <code>ObjectDefinition</code> in the pack with
-    <code>serde_json::to_value(definition)</code>. Keeping a shared pack walk
-    (or avoiding redundant serialization) avoids doubling startup work when
-    <code>catalog.py</code> calls both functions.
-  </p>
-</div>
-  <div data-choice="f6" data-label="Share definition JSON traversal between record_names() and runtime_tokens()">
+  <div data-choice="f4" data-label="Unify decision-memory label admission between dense/retained and v11 native paths">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1516,58 +1409,38 @@ admitted = printed | runtime</code></pre>
 
 <h2>Questions</h2>
 
-<div data-choice="q1" data-label="1. Program-token union (2 lists vs. 3 lists)">
+<div data-choice="q1" data-label="1. Scope of pack-name freeze in record_renames()">
   <p>
-    <strong>1. Should <code>managym.runtime_tokens()</code> include record-aliased
-    tokens (like <code>Modification::AddTypes</code>) so the admitted program
-    vocabulary is <code>catalog_tokens() ∪ runtime_tokens()</code> (2 lists),
-    or stay strictly the old <code>execution_names</code> body (3-way union with
-    <code>record_vocabulary()</code>)?</strong>
-    (Note: shipping <code>runtime_tokens()</code> as a published 0.3.0 API makes
-    this contract costly to change afterward.)
+    <strong>1. After moving the 13 retired execution symbols and
+    <code>"you control a Wizard permanent"</code> into
+    <code>LEGACY_EXECUTION_TOKENS</code>, how should the ~1,255 pre-0.3.0 pack
+    card/set <code>execution/6/&lt;name&gt;</code> retirements stay represented
+    in <code>token_renames.rs</code>?</strong>
   </p>
-  <button data-value="1a">1a. (Recommended) Complete 2-list union: <code>runtime_tokens()</code> covers every non-printed program token (including record-aliased ones); <code>record_vocabulary()</code> tokens are pure aliases.</button>
-  <button data-value="1b">1b. Keep 3-way union as planned: <code>runtime_tokens()</code> holds only unaliased runtime symbols, and callers union <code>catalog_tokens() ∪ record_vocabulary() ∪ runtime_tokens()</code>.</button>
+  <button data-value="1a">1a. (Recommended) Keep deriving card/set names from the append-only content pack until the 0.3.0 cut (so new cards landing before 0.3.0 need no ledger regen), while removing <code>TOKENS</code> and <code>condition_text</code> from <code>record_renames()</code>.</button>
+  <button data-value="1b">1b. Freeze the entire pre-0.3.0 card/set name list as a static table now and delete <code>content_token_texts()</code> from <code>record_vocabulary.rs</code>.</button>
 </div>
 
-<div data-choice="q2" data-label="2. Decision-memory vocabulary surface">
+<div data-choice="q2" data-label="2. Confirm 0.3.0 hold and constructed memory checkpoint coverage">
   <p>
-    <strong>2. Where should the native decision-memory label list live in the
-    Python API?</strong> (Published API shape for 0.3.0; harder to move once
-    shipped.)
+    <strong>2. Confirm keeping the PR held unmerged for 0.3.0 (matching #612)
+    with decision-memory retirement covered by the constructed pre-0.3.0
+    checkpoint test in <code>tests/model/test_checkpoint_binding.py</code>, or
+    name a retained decision-memory checkpoint to pin.</strong>
+    (Published API names <code>managym.runtime_tokens()</code> and
+    <code>managym.decision_memory_names()</code> are irreversible once 0.3.0
+    ships.)
   </p>
-  <button data-value="2a">2a. (Recommended) Top-level <code>managym.decision_memory_vocabulary()</code> (or <code>decision_memory_names()</code>) in <code>managym/__init__.pyi</code> and <code>tests/public_api.json</code>, with <code>managym.decision_memory.decision_name_values()</code> reading it.</button>
-  <button data-value="2b">2b. Submodule-only <code>managym.decision_memory.decision_names()</code> backed by a private <code>_managym._decision_memory_names()</code> binding.</button>
-  <button data-value="2c">2c. Keep <code>DecisionMemory::*</code> in <code>managym.record_vocabulary()</code> with <code>token=None</code> (keeps prefix filters in <code>catalog.py</code> and <code>decision_name_values()</code>).</button>
+  <button data-value="2a">2a. (Recommended) Hold for 0.3.0 with the constructed decision-memory checkpoint test and the current top-level API names (<code>runtime_tokens</code>, <code>decision_memory_names</code>).</button>
+  <button data-value="2b">2b. Pin a real retained decision-memory checkpoint before cutting 0.3.0 (provide path or Etude run ID below).</button>
 </div>
 
-<div data-choice="q3" data-label="3. Legacy retirement source in token_renames.rs">
-  <p>
-    <strong>3. How should pre-0.3.0 <code>execution/*</code> and phantom
-    <code>DecisionMemory::*</code> retirements be represented in
-    <code>managym/src/cards/token_renames.rs</code>?</strong>
-  </p>
-  <button data-value="3a">3a. (Recommended) Freeze the ~130 manual pre-0.3.0 runtime symbols and 44 pre-0.3.0 memory names as static constants in <code>token_renames.rs</code>; derive only pack card/set/grant <code>execution/6/&lt;name&gt;</code> entries + <code>TOKENS</code> old names dynamically; fix the two <code>TOKENS</code> renames.</button>
-  <button data-value="3b">3b. Freeze the entire pre-0.3.0 list (including current pack card names) as one static table in <code>token_renames.rs</code>.</button>
-  <button data-value="3c">3c. Keep the plan's live generator (accepting the risk that removing a graduated runtime token or unused memory name breaks pre-0.3.0 checkpoints).</button>
-</div>
-
-<div data-choice="q4" data-label="4. 0.3.0 hold and pinned decision-memory checkpoint">
-  <p>
-    <strong>4. Confirm the 0.3.0 hold strategy and whether a retained
-    decision-memory checkpoint exists to pin alongside the v9/v11 pilots.</strong>
-  </p>
-  <button data-value="4a">4a. (Recommended) Hold PR unmerged for 0.3.0 (like #612) and cover pre-0.3.0 decision-memory phantom-token retirement with a constructed checkpoint test in <code>test_checkpoint_binding.py</code>.</button>
-  <button data-value="4b">4b. Hold PR unmerged for 0.3.0 and pin a real retained decision-memory checkpoint (supply path/run ID below).</button>
-  <button data-value="4c">4c. Ship on 0.2.x behind a deprecated composite shim instead of holding for 0.3.0.</button>
-</div>
-
-<div data-question="q5" data-label="5. Retained decision-memory checkpoint or other notes">
-  <p>Optional: path/run ID for a retained decision-memory checkpoint, or preferred name for the decision-memory vocabulary function.</p>
+<div data-question="q3" data-label="3. Notes or retained decision-memory checkpoint">
+  <p>Optional: path/run ID for a retained decision-memory checkpoint, or feedback on findings f1–f4.</p>
   <textarea></textarea>
 </div>
 </main>
-<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-504"},"directory":"/Users/jack/src/manabot.mtg-504-untangle-synthetic-execution","base":"6a131c4dc92410fae2652e29f397317653a394e3","head":"65d60f78b6","path":"scratch/concept-review.html","build_id":"796ec337d90ee255","protocol":{"revision":11,"min_revision":10}}</script>
+<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-504"},"directory":"/Users/jack/src/manabot.mtg-504-untangle-synthetic-execution","base":"origin/main","head":"39cce53ab8","path":"scratch/concept-review.html","build_id":"14fd8709bf9bb828","protocol":{"revision":11,"min_revision":10}}</script>
 <script>
 (function () {
   "use strict";
