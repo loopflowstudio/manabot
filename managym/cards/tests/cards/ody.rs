@@ -5,6 +5,7 @@ use crate::support::{
     inspect::{has_action, library_card, offered_cards, zone_of},
     play::{
         activate, cast, cast_card, cast_owned, castable, choose, choose_mode, select_card, settle,
+        spend_named,
     },
 };
 use managym::{
@@ -257,6 +258,69 @@ fn tarnished_citadel_can_gain_life_before_paying_canyon() {
         assert_eq!(s.life(0), if protected { 1 } else { 0 });
         assert_eq!(s.game().state.stack_objects.len(), 1);
     }
+}
+
+#[test]
+fn tarnished_citadel_still_costs_three_life_beside_angel_of_vitality() {
+    let spell = "Sokka, Bold Boomeranger";
+    let mut s = five_color_unfunded_setup(&[
+        spell,
+        "Tarnished Citadel",
+        "Sunbaked Canyon",
+        "Angel of Vitality",
+    ]);
+    s.game_mut().skip_trivial = false;
+    let citadel = s.force_permanent_on_battlefield(0, "Tarnished Citadel");
+    let canyon = s.force_permanent_on_battlefield(0, "Sunbaked Canyon");
+    s.force_permanent_on_battlefield(0, "Angel of Vitality");
+    s.game_mut().scenario_set_life(PlayerId(0), 3);
+
+    cast_owned(&mut s, spell);
+    assert_eq!(
+        s.action_space().actions,
+        [Action::ActivateAbility {
+            player: PlayerId(0),
+            permanent: canyon,
+            ability_index: 0,
+        }]
+    );
+    activate(&mut s, canyon, 0);
+    choose_mode(&mut s, 0); // Red.
+    activate(&mut s, citadel, 0);
+    choose_mode(&mut s, 1); // Blue.
+    assert_eq!(s.life(0), -1);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    assert!(s.game().state.loss(0).is_some_and(|loss| loss.life_total));
+}
+
+#[test]
+fn heartbeat_bonus_keeps_the_generic_spend_choice() {
+    let spell = "Sokka, Bold Boomeranger";
+    let mut s = five_color_unfunded_setup(&[spell, "Tarnished Citadel", "Heartbeat of Spring"]);
+    s.game_mut().skip_trivial = false;
+    let citadel = s.force_permanent_on_battlefield(0, "Tarnished Citadel");
+    s.force_permanent_on_battlefield(0, "Heartbeat of Spring");
+    let source = s.game().state.permanents[citadel].as_ref().unwrap().object;
+    s.game_mut().state[source].activated_abilities = vec![ActivatedAbilityDefinition {
+        tap_source: true,
+        effects: vec![Effect::mana_choice(["UR", "UG"].map(Mana::parse))],
+        ..Default::default()
+    }];
+    let object = move_to_hand(&mut s, spell);
+    s.game_mut().state[object].mana_cost = Some(ManaCost::parse("1U"));
+
+    cast_card(&mut s, object);
+    activate(&mut s, citadel, 0);
+    choose_mode(&mut s, 0); // Produce {U}{R}.
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("UR"));
+    assert_eq!(mana_modes(&s), [0, 1]);
+    choose_mode(&mut s, 0); // Heartbeat adds {U}.
+    if has_action(&s, |action| matches!(action, Action::PayCost { .. })) {
+        choose(&mut s, |action| matches!(action, Action::PayCost { .. }));
+    }
+    spend_named(&mut s, |label| label.contains("{U}"));
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("R"));
 }
 
 #[test]

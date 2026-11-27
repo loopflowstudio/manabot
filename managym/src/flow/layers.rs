@@ -456,7 +456,6 @@ pub(super) struct SourceSeed {
     nodes_layers: u16,
     nodes_reads: ReadSet,
     pub(super) has_dynamic_activations: bool,
-    pub(super) mana_activation_reads: ReadSet,
     pub(super) has_board_statics: bool,
     pub(super) has_triggered_mana_abilities: bool,
 }
@@ -467,41 +466,12 @@ pub(super) struct SourceSeed {
 pub(super) struct ReadSet {
     fields: u16,
     pub(super) state: StateReads,
-    /// Counts and selectors that can change when a permanent leaves play.
-    pub(super) battlefield: bool,
 }
 
 impl ReadSet {
-    pub(super) fn mana_activations(abilities: &[ActivatedAbilityDefinition]) -> Self {
-        let mut reads = Self::default();
-        for ability in abilities {
-            if ability.has_dynamic_mana_output() {
-                reads.mana_output(&ability.effects[0]);
-            }
-            if ability.condition.is_none() && ability.cost_reduction_per.is_none() {
-                continue;
-            }
-            if ability.is_mana_ability() {
-                if let Some(condition) = &ability.condition {
-                    reads.condition(condition);
-                }
-                if let Some(predicate) = &ability.cost_reduction_per {
-                    reads.battlefield_predicate(predicate);
-                }
-            }
-        }
-        reads
-    }
-
     pub(super) fn merge(&mut self, other: Self) {
         self.fields |= other.fields;
         self.state.merge(other.state);
-        self.battlefield |= other.battlefield;
-    }
-
-    fn battlefield_predicate(&mut self, predicate: &CardPredicate) {
-        self.battlefield = true;
-        self.predicate(predicate);
     }
 
     fn predicate(&mut self, p: &CardPredicate) {
@@ -546,7 +516,7 @@ impl ReadSet {
             ..
         } = of
         {
-            self.battlefield_predicate(predicate);
+            self.predicate(predicate);
             if let Some(Except::Matching {
                 predicate: excluded,
                 ..
@@ -570,20 +540,18 @@ impl ReadSet {
             }
             EffectValue::SourcePower => self.fields |= POWER,
             EffectValue::GreatestSharedCreatureType => {
-                self.battlefield = true;
                 self.fields |= CARD_TYPES | SUBTYPES;
             }
             EffectValue::CreaturesWithCounters => {
-                self.battlefield = true;
                 self.fields |= CARD_TYPES;
                 self.state.counters = true;
             }
             EffectValue::GreatestPowerYouControl { predicate } => {
                 self.fields |= CARD_TYPES | POWER;
-                self.battlefield_predicate(predicate);
+                self.predicate(predicate);
             }
             EffectValue::BattlefieldMatching { predicate }
-            | EffectValue::AttackingMatching { predicate } => self.battlefield_predicate(predicate),
+            | EffectValue::AttackingMatching { predicate } => self.predicate(predicate),
             EffectValue::Property { of, property, .. } => {
                 match property {
                     ObjectProperty::Power | ObjectProperty::Toughness => self.fields |= POWER,
@@ -612,40 +580,20 @@ impl ReadSet {
         if let LayerValue::Count(count) = value {
             match count.as_ref() {
                 LayerCount::CreatureTypes { .. } => {
-                    self.battlefield = true;
                     self.fields |= SUBTYPES;
                 }
                 LayerCount::ColorsAmong(p) => {
                     self.fields |= COLORS;
-                    self.battlefield_predicate(p);
+                    self.predicate(p);
                 }
                 LayerCount::Graveyard { predicate, .. } => self.predicate(predicate),
-                LayerCount::YouControl(predicate) => self.battlefield_predicate(predicate),
+                LayerCount::YouControl(predicate) => self.predicate(predicate),
                 LayerCount::CountersOn { predicate, .. } => {
-                    self.battlefield_predicate(predicate);
+                    self.predicate(predicate);
                     self.state.counters = true;
                 }
                 LayerCount::SourceCounters(_) => self.state.counters = true,
             }
-        }
-    }
-
-    fn mana_output(&mut self, effect: &Effect) {
-        match effect {
-            Effect::AddMana { amount, .. } | Effect::AddOneColorManaValue { amount, .. } => {
-                self.value(amount);
-            }
-            Effect::If {
-                condition,
-                then,
-                otherwise,
-            } => {
-                self.condition(condition);
-                for effect in then.iter().chain(otherwise) {
-                    self.mana_output(effect);
-                }
-            }
-            _ => {}
         }
     }
 
@@ -660,19 +608,15 @@ impl ReadSet {
                 distinct_names,
                 ..
             } => {
-                self.battlefield_predicate(predicate);
+                self.predicate(predicate);
                 if *distinct_names {
                     self.fields |= NAME;
                 }
             }
             Condition::OpponentControlsMoreCreatures => {
-                self.battlefield = true;
                 self.fields |= CARD_TYPES;
             }
-            Condition::BattlefieldAtLeast { predicate, .. } => {
-                self.battlefield_predicate(predicate)
-            }
-            Condition::ControlsUnownedAtLeast { .. } => self.battlefield = true,
+            Condition::BattlefieldAtLeast { predicate, .. } => self.predicate(predicate),
             Condition::SourceMatches(predicate) => self.predicate(predicate),
             Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
                 for condition in conditions {
@@ -1548,7 +1492,6 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         nodes_reads.merge(node.plan.reads);
     }
     let has_dynamic_activations = view.has_dynamic_activations();
-    let mana_activation_reads = ReadSet::mana_activations(&view.activated_abilities);
     let has_board_statics = has_board_statics(&view.static_abilities);
     let has_triggered_mana_abilities = !view.triggered_mana_abilities.is_empty();
     SourceSeed {
@@ -1563,7 +1506,6 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         nodes_layers,
         nodes_reads,
         has_dynamic_activations,
-        mana_activation_reads,
         has_board_statics,
         has_triggered_mana_abilities,
     }

@@ -2923,9 +2923,6 @@ impl Game {
                     let produced = self.state.players[player.0].mana_pool.total() - before;
                     self.mana_capture(player).unwrap().float(produced);
                 }
-                if let Some(start) = start {
-                    self.commit_produced_mana(player, start);
-                }
                 if let Some(next) = next {
                     suspended.decision = *next;
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2936,6 +2933,11 @@ impl Game {
                     // An activated mana ability retains its payer's priority;
                     // its empty rule frame is not a resolving stack object.
                     self.state.priority_mut().on_non_pass_action(player);
+                    // A pending bonus can supply an alternative unit for
+                    // the same pip. Commit only when production finishes.
+                    if let Some(start) = start {
+                        self.commit_produced_mana(player, start);
+                    }
                     // The announced payment its output paid toward advances
                     // as a fixed tap's does.
                     if start.is_some()

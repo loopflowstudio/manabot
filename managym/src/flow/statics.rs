@@ -326,7 +326,6 @@ pub(super) struct LayerBoard {
     pub(super) static_sources: StaticSources,
     pub(super) land_type_overwrites: Vec<CardPredicate>,
     reads: ReadSet,
-    mana_activation_reads: ReadSet,
     /// Finalization can inspect state beyond the raw layer view. Ordinary
     /// fixed activations retain their finalized entry across state writes
     /// that leave the board unchanged.
@@ -361,22 +360,6 @@ impl LayerBoard {
             .get(id.0)
             .and_then(Clone::clone)
             .unwrap_or_else(|| Arc::clone(default_characteristics_slot()))
-    }
-
-    pub(super) fn payment_writes_couple(
-        &self,
-        player: PlayerId,
-        writes: StateReads,
-        sacrifice: bool,
-    ) -> bool {
-        self.reads.state.overlaps(writes)
-            || self.mana_activation_reads.state.overlaps(writes)
-            || self.has_activated_cost_reduction[player.0] && (writes.tapped || writes.counters)
-            || sacrifice
-                && (self.reads.battlefield
-                    || self.mana_activation_reads.battlefield
-                    || self.needs_finalization_for(player)
-                    || self.has_triggered_mana_abilities)
     }
 
     #[inline]
@@ -471,7 +454,6 @@ impl Game {
             let mut land_plays_each_player = 0;
             let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
             let mut dynamic_activations = false;
-            let mut mana_activation_reads = ReadSet::default();
             let mut has_activated_cost_reduction = [false; 2];
             let mut has_triggered_mana_abilities = false;
             let apply_play_static =
@@ -524,14 +506,11 @@ impl Game {
                 }
                 let scan_statics = if use_seed_summaries && entry.shares_seed_details {
                     dynamic_activations |= entry.seed.has_dynamic_activations;
-                    mana_activation_reads.merge(entry.seed.mana_activation_reads);
                     has_triggered_mana_abilities |= entry.seed.has_triggered_mana_abilities;
                     entry.seed.has_board_statics
                 } else {
                     dynamic_activations =
                         dynamic_activations || entry.view.has_dynamic_activations();
-                    mana_activation_reads
-                        .merge(ReadSet::mana_activations(&entry.view.activated_abilities));
                     has_triggered_mana_abilities = has_triggered_mana_abilities
                         || !entry.view.triggered_mana_abilities.is_empty();
                     !entry.view.static_abilities.is_empty()
@@ -612,7 +591,6 @@ impl Game {
                 player_modifications,
                 control_changes,
                 reads: evaluated.reads,
-                mana_activation_reads,
                 dynamic_activations,
                 has_activated_cost_reduction,
                 has_triggered_mana_abilities,

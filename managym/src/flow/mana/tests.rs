@@ -1,11 +1,11 @@
 use super::{
-    tap_obligations, ManaActivation, ManaSource, ManaUpfrontActivation, Obligation, PaymentModel,
-    PaymentSearch, PaymentSearchState, PaymentStep, SourcePolicy, Taps,
+    tap_obligations, LifeDelta, ManaActivation, ManaSource, ManaUpfrontActivation, Obligation,
+    PaymentModel, PaymentSearch, PaymentSearchState, PaymentStep, SourcePolicy, Taps,
 };
 use crate::cards::content_pack::ContentPack;
 use crate::state::{
     game_object::{ObjectId, PermanentId},
-    mana::{Mana, ManaCost, ManaRestriction, SpendEffect, SpendingContext},
+    mana::{Mana, ManaCost, ManaRestriction, ManaTypeSet, SpendEffect, SpendingContext},
     payment::How,
 };
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use std::sync::Arc;
 /// `cost` with `split` of its generic that any artifact or creature may tap
 /// to pay.
 fn waterbend(cost: &ManaCost, split: u8) -> Vec<Obligation> {
-    tap_obligations(cost, 0, split)
+    tap_obligations(cost, 0, split, false)
 }
 
 #[test]
@@ -428,7 +428,7 @@ pub(in crate::flow::mana) fn tapping_ability(outputs: Vec<Mana>) -> ManaActivati
         cost: ManaCost::default(),
         outputs: outputs.into(),
         life_cost: 0,
-        coupling: Default::default(),
+        life_delta: LifeDelta(0),
     }
 }
 
@@ -451,9 +451,9 @@ pub(in crate::flow::mana) fn source(
         object: payment_object(index),
         untapped: true,
         fixed: fixed.map(Mana::parse),
-        tap_coupled: false,
         abilities,
         keyword: false,
+        convoke_colors: ManaTypeSet::EMPTY,
         waterbend: false,
     }
 }
@@ -687,9 +687,9 @@ fn direct_payment_matches_the_search_on_fixed_sources() {
                             object: payment_object(index),
                             untapped,
                             fixed: outputs.choose(&mut rng).unwrap().clone(),
-                            tap_coupled: false,
                             abilities: Vec::new(),
                             keyword: false,
+                            convoke_colors: ManaTypeSet::EMPTY,
                             waterbend: untapped && rng.gen_bool(0.4),
                         }
                     })
@@ -857,65 +857,6 @@ fn a_payment_scan_keeps_sources_until_its_last_guard_ends() {
     assert_eq!(fork.payment_cache.borrow().entries.len(), 2);
     assert_eq!(game.payment_cache.borrow().entries.len(), 1);
     assert_eq!(crate::search_state::witness(&game), binding);
-}
-
-#[test]
-fn payment_scan_marks_life_coupling_without_coupling_basic_taps() {
-    use crate::flow::game::Game;
-    use crate::state::{game_object::PlayerId, player::PlayerConfig};
-
-    let player = PlayerId(0);
-    let deck = std::collections::BTreeMap::from([
-        ("Forest".into(), 40),
-        ("Sunbaked Canyon".into(), 1),
-        ("The Great Henge".into(), 1),
-        ("Raucous Audience".into(), 1),
-        ("Angel of Vitality".into(), 1),
-    ]);
-    let mut game = Game::new(
-        vec![
-            PlayerConfig::new("payer", deck.clone()),
-            PlayerConfig::new("opponent", deck),
-        ],
-        339,
-        false,
-    );
-    game.keep_opening_hands();
-    let forest = game
-        .scenario_force_battlefield(player, "Forest", true)
-        .unwrap();
-    let canyon = game
-        .scenario_force_battlefield(player, "Sunbaked Canyon", true)
-        .unwrap();
-    let henge = game
-        .scenario_force_battlefield(player, "The Great Henge", true)
-        .unwrap();
-    game.scenario_force_battlefield(player, "Raucous Audience", true)
-        .unwrap();
-    game.scenario_set_life(player, 25);
-
-    let uncoupled = game.payment_model(player, None).sources;
-    let find = |sources: &[ManaSource], id| sources.iter().position(|s| s.permanent == id).unwrap();
-    assert_eq!(
-        uncoupled[find(&uncoupled, canyon)].abilities[0].coupling,
-        super::PaymentCoupling::Independent(super::LifeDelta(0)),
-    );
-    assert_eq!(
-        uncoupled[find(&uncoupled, henge)].abilities[0].coupling,
-        super::PaymentCoupling::Independent(super::LifeDelta(2)),
-    );
-
-    game.scenario_force_battlefield(player, "Angel of Vitality", true)
-        .unwrap();
-    let _scan = game.payment_scan();
-    let coupled = game.payment_model(player, None).sources;
-    assert!(!coupled[find(&coupled, forest)].tap_coupled);
-    for source in [canyon, henge] {
-        assert_eq!(
-            coupled[find(&coupled, source)].abilities[0].coupling,
-            super::PaymentCoupling::Coupled,
-        );
-    }
 }
 
 #[test]
@@ -1205,25 +1146,19 @@ fn fixed_mana_suffix_reads_life_through_damage_replacement() {
         player,
         payment: Box::new(payment),
     });
-    let coupling = |game: &Game, permanent| {
+    let delta = |game: &Game, permanent| {
         game.payment_model(player, None)
             .sources
             .iter()
             .find(|source| source.permanent == permanent)
             .unwrap()
             .abilities[0]
-            .coupling
+            .life_delta
     };
     // Both root probes write only life. The replacement reads life gained
     // this turn through the event path, outside the layer board's reads.
-    assert_eq!(
-        coupling(&game, citadel),
-        super::PaymentCoupling::Independent(super::LifeDelta(-3))
-    );
-    assert_eq!(
-        coupling(&game, henge),
-        super::PaymentCoupling::Independent(super::LifeDelta(2))
-    );
+    assert_eq!(delta(&game, citadel), LifeDelta(-3));
+    assert_eq!(delta(&game, henge), LifeDelta(2));
     let step = |game: &mut Game, action: Action| {
         let actions = &game.action_space().unwrap().actions;
         let index = actions
@@ -1244,10 +1179,7 @@ fn fixed_mana_suffix_reads_life_through_damage_replacement() {
     let error = step(&mut henge_first, activate(henge)).unwrap_err();
     assert!(error.0.contains("empty non-terminal action space"));
     assert_eq!(henge_first.state.players[0].life, 6);
-    assert_eq!(
-        coupling(&henge_first, citadel),
-        super::PaymentCoupling::Independent(super::LifeDelta(-5))
-    );
+    assert_eq!(delta(&henge_first, citadel), LifeDelta(-5));
 
     // The same costs complete if Citadel deals 3 before Henge gains 2.
     step(&mut game, activate(citadel)).unwrap();
@@ -2073,7 +2005,7 @@ fn pending_mana_activation_reserves_its_counter() {
 }
 
 #[test]
-fn sacrificing_treasure_couples_to_battlefield_mana_conditions() {
+fn sacrificing_treasure_changes_battlefield_mana_conditions() {
     use crate::flow::game::Game;
     use crate::state::{
         ability::{Condition, Effect},
@@ -2101,17 +2033,6 @@ fn sacrificing_treasure_couples_to_battlefield_mana_conditions() {
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();
     let object = game.permanent_object(source).unwrap();
-    let coupling = |game: &Game| {
-        let _scan = game.payment_scan();
-        game.payment_model(player, None)
-            .sources
-            .iter()
-            .find(|s| s.permanent == treasure)
-            .unwrap()
-            .abilities[0]
-            .coupling
-    };
-    assert_eq!(coupling(&game), super::PaymentCoupling::default());
     game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
         condition: Some(Condition::ControlsAtLeast {
             count: 1,
@@ -2122,7 +2043,13 @@ fn sacrificing_treasure_couples_to_battlefield_mana_conditions() {
         effects: vec![Effect::add_mana(Mana::parse("G"))],
         ..Default::default()
     }];
-    assert_eq!(coupling(&game), super::PaymentCoupling::Coupled);
+    let offers_mana = |game: &Game| {
+        let _scan = game.payment_scan();
+        game.can_activate_mana_ability(player, source, 0)
+    };
+    assert!(offers_mana(&game));
+    game.activate_mana_ability(player, treasure, 0).unwrap();
+    assert!(!offers_mana(&game));
 }
 
 #[test]
@@ -2215,8 +2142,8 @@ fn payment_search_bounds_modal_and_restricted_bottlenecks() {
             object: payment_object(count),
             untapped: true,
             fixed: None,
-            tap_coupled: false,
             keyword: false,
+            convoke_colors: ManaTypeSet::EMPTY,
             waterbend: true,
             abilities: vec![tapping_ability(vec![
                 Mana::parse("U"),
@@ -2408,7 +2335,6 @@ fn payment_bound_does_not_search_subsets_of_alternative_taps() {
             object: payment_object(index),
             untapped: true,
             fixed: Some(Mana::parse("G")),
-            tap_coupled: false,
             abilities: vec![
                 tapping_ability(vec![Mana::parse("U"), Mana::parse("R")]),
                 tapping_ability(vec![Mana::restricted_to(
@@ -2417,6 +2343,7 @@ fn payment_bound_does_not_search_subsets_of_alternative_taps() {
                 )]),
             ],
             keyword: false,
+            convoke_colors: ManaTypeSet::EMPTY,
             waterbend: true,
         })
         .collect();
@@ -2475,9 +2402,9 @@ fn payment_bound_keeps_non_tapping_production_after_a_tap() {
             object: payment_object(0),
             untapped: true,
             fixed: Some(Mana::parse("G")),
-            tap_coupled: false,
             abilities: vec![sacrifice],
             keyword: false,
+            convoke_colors: ManaTypeSet::EMPTY,
             waterbend: true,
         }]),
         life: life_budget(20),
@@ -3631,7 +3558,7 @@ fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
         cost: ManaCost::parse("1"),
         outputs: vec![Mana::parse("W"), Mana::parse("U")].into(),
         life_cost: 0,
-        coupling: Default::default(),
+        life_delta: LifeDelta(0),
     };
     let model = PaymentModel {
         cache: None,
