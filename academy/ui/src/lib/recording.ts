@@ -51,7 +51,7 @@ export interface Position {
   analysis_shown?: boolean;
 }
 /** A record intervention that branches the position from the game it came from. */
-export type BranchKind = 'determinize' | 'shuffle_libraries' | 'reseed';
+export type BranchKind = 'determinize' | 'shuffle_libraries' | 'reseed' | 'game_state_edits';
 /** One mid-game seat swap recorded at trace event index `event` on `turn`. */
 export interface SeatSwap { event: number; turn: number | null }
 export interface RecordingIndex {

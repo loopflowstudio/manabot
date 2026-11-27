@@ -154,11 +154,11 @@ describe('the move list and strip read the index', () => {
   it('notes where an imported record branched, without seeds, and jumps to that choice', () => {
     const branched = replayLog([
       position('choice', { key: 'd1', actor: 1, label: 'Play Island', revision: 3 }),
-      position('choice', { key: 'd2', actor: 0, label: 'Pass priority', revision: 4, branched: ['determinize', 'shuffle_libraries'] }),
+      position('choice', { key: 'd2', actor: 0, label: 'Pass priority', revision: 4, branched: ['game_state_edits', 'determinize', 'shuffle_libraries'] }),
     ], 0, seat => (seat === 0 ? 'Seat 1' : 'Seat 2'));
     expect(branched.map(entry => [entry.id, entry.actor, entry.text])).toEqual([
       ['d1', 'villain', 'Play Island'],
-      ['branch:d2', 'system', 'Branch · hidden cards re-dealt, libraries reshuffled'],
+      ['branch:d2', 'system', 'Branch · game state edited, hidden cards re-dealt, libraries reshuffled'],
       ['d2', 'hero', 'Pass priority'],
     ]);
     expect(entryPosition('branch:d2')).toBe('d2');

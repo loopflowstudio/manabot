@@ -453,7 +453,7 @@ recording sinks. Use `snapshot.restore()` for exact continuation, or pass
 | `RestoreOptions.shuffle_libraries(seed, ...)` | Permutes only exchangeable slots in each player's library using a local seeded RNG, on open or closed decks. Preserves both hands, face-down exile, future rules RNG, and every inspected, revealed, or positioned library card until a genuine rules shuffle. Reusing `seed` across sibling branches gives Common Random Numbers. |
 | `RestoreOptions.determinize(viewer, seed, ...)` | Redraws hidden opponent cards consistently with what the chosen seat can see. The constructor requires `viewer` to be 0 or 1. Restore requires an open opponent decklist. |
 
-Each constructor also accepts three keyword arguments.
+The three named constructors also accept these keyword arguments.
 
 - `enable_decision_memory` defaults to the live capture setting. Set it to
   `False` to freeze the existing logs or `True` to append from this boundary.
