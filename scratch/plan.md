@@ -113,17 +113,8 @@ keep theirs) or the recorder changes.
 ## Passes
 
 1. **Loader (done, `0286257840`).** `cuda -> mps -> cpu` + `MANABOT_EVAL_DEVICE`; any-batch `Prepared` inputs returning `[batch, A]` float32 masked logits (no `concatenate` on single pre-collated inputs); `MemoryRows` joined in `concatenate` (rejecting `fold is not None`); `etude_compute_class`, `AGENTS`/`AGENTS_TF32`/`AGENTS_BF16` (1-arg top-level loaders required by Etude `Agents`), `validate_precision` `tf32` guard, GRU `summaries.new_zeros` bf16 fix; verified on CPU + Apple MPS (float32 parity and bf16).
-2. **Vector runner, locally.** Slot pool, seeded per-slot load (native if
-   needed), per-checkpoint pre-collated forward, backfill, per-match
-   finalization and yield, against a local match source. Acceptance: a fixed
-   set of paired deals played through the runner and through `play_pairing`
-   give equal `game_trace_sha256`, scores and Commands; every game replays; a
-   native crash on one leg leaves the others valid; no slot is idle while legs
-   are pending; forward inputs carry more than one row. This is the pass that
-   can prove the plan wrong (trace parity).
-3. **Etude binding** (blocked on the EXP-77 release above). `play_many` over
-   the runner; existing `play` callbacks to `async def` if sync `play` is
-   removed; experiment files and `AGENTS` settings (no `max_delay_seconds`).
+2. **Vector runner, locally (done, `dd11bd0a3f`).** Added native `SlotLoad.fresh(slot, player_configs=None, *, seed=None)` (`managym/src/agent/vector_env/slots.rs`, `vector_env_bindings.rs`, `managym/__init__.pyi`), step-event retention on `VectorEnv.decision_observations`, and `record_in_memory`/`slot_record` on `RecordedVectorEnv` (`managym/recording.py`); shared pairing admission/finalization in `manabot/eval/pairing.py` and `manabot/eval/match.py`; built Torch-free async `play_pairings` in `manabot/eval/vector.py` with per-checkpoint pre-collated CSR `ObservationBatch -> Prepared` forwards, immediate slot backfill, isolated native crashes, and per-match finalization/yield. Trace parity proved: same `managym-game-v1` schema (`mode="vector"`), bit-for-bit identical Commands, `frame_sha256`, `chosen_offer`, `actions`, `digests`, scores, `plays`/`behaviour`/`cards`/`card_counts` tables, and passing `replay_game`/`audit`/`replay_failure` (both vs heuristic and GRU decision memory + blanking); `game_trace_sha256 == GameRecord.sha256` hashes wall-clock timings and `mode`, so no two runs share raw bytes.
+3. **Etude binding (blocked on EXP-77 release).** Unblocking artifact: an `etude-sdk` release (> `0.4.7`) shipping `EvalJob(play_many=...)` / async `Matches`. First command: `uv lock --upgrade-package etude-sdk && uv sync --extra dev --extra artifacts --extra evaluation`, then read `etude.eval.run.EvalRun` and `etude.jobs.EvalJob`. Bind `play_many` over `manabot.eval.vector.play_pairings`; convert existing `play` callbacks to `async def` if sync `play` is removed; update experiment files and `AGENTS` settings (no `max_delay_seconds`).
 4. **Measure.** `experiments/eval_throughput.py` +
    `experiments/reports/eval_throughput.md`: 32 held-out trophy deals per arm
    against the heuristic, trained w160l8 and seeded w384l8; arms CPU batch-1

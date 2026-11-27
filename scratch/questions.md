@@ -26,13 +26,20 @@ Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
 - **Apple arms run on Apple hardware outside CI** (the mini if reachable, else
   the laptop), 128 games per arm. This is the real workload, not induced load.
 
-- **Runner trace parity (realign, 2026-11-26).** Assumed eval keeps its
-  current trace format and the vector runner must reproduce it; if
-  `RecordedVectorEnv` cannot, the choice is new trace bytes for new
-  tournaments versus changing the recorder. Decide in pass 2 from the diff.
-- **Seeded per-slot load.** `SlotLoad.fresh` takes no seed; assumed a native
-  `seed=` addition is acceptable if no existing path deals one slot at a
-  chosen seed.
+- **Runner trace parity (resolved in pass 2, `dd11bd0a3f`).** Eval keeps
+  its existing `managym-game-v1` `GameRecord` format with zero changes to
+  replay/audit/card consumers. `RecordedVectorEnv` writes `mode="vector"`,
+  `player_policies=("agent", "agent")`, `seed_stride=num_envs`, `stream=slot`,
+  while reproducing every deterministic decision field (`frame_sha256`,
+  `command`, `command_sha256`, `chosen_offer`, `actions`, `digests`, `winner`,
+  `score_a`, `plays`/`behaviour`/`cards`/`card_counts` tables) identically to
+  `play_pairing`. Note that `game_trace_sha256 == GameRecord.sha256` hashes
+  wall-clock timings (`seconds`, `execution_seconds`, `latency_seconds`,
+  `worker_performance`) and `mode`, so even two scalar runs differ in raw
+  `game_trace_sha256`.
+- **Seeded per-slot load (resolved in pass 2, `dd11bd0a3f`).** Added
+  optional keyword-only `seed: int | None = None` to `SlotLoad.fresh` in Rust
+  and `managym/__init__.pyi` (non-breaking; recorded in `tests/public_api.json`).
 - **Sync `play` removal is EXP-77's reading, not confirmed.** If it lands,
   every Manabot `play` callback converts to `async def` in pass 3.
 
