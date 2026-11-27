@@ -68,29 +68,38 @@ def metric_row(diagnostic: Mapping[str, object]) -> MetricRow:
     return row
 
 
-def complete_game_rates(
+def throughput_rates(
     *,
     games: int,
-    fresh_rows: int,
-    skips: int,
     rows: int,
     taps: int,
     decisions: int,
     seconds: float,
 ) -> dict[str, float]:
-    """Fresh game lengths and skip rates alongside throughput for all collected work."""
+    """Throughput and priority-tap rates for all two-seat closures."""
     rates = {
         "priority_tap_rate": taps / decisions,
         "rows_per_second": rows / seconds,
         "updates_per_hour": 3600 / seconds,
     }
     if games:
-        rates.update(
-            decisions_per_game=fresh_rows / games,
-            skipped_share=skips / (skips + fresh_rows),
-            games_per_hour=games * 3600 / seconds,
-        )
+        rates["games_per_hour"] = games * 3600 / seconds
     return rates
+
+
+def complete_game_rates(
+    *,
+    games: int,
+    fresh_rows: int,
+    skips: int,
+) -> dict[str, float]:
+    """Fresh game lengths and skip shares; valid only when fresh rows belong to finished games."""
+    if not games:
+        return {}
+    return {
+        "decisions_per_game": fresh_rows / games,
+        "skipped_share": skips / (skips + fresh_rows),
+    }
 
 
 def phase_seconds(collection: Profiler, learning: Profiler) -> dict[str, float]:

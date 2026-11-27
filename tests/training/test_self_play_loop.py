@@ -47,7 +47,6 @@ def _settings(learning: Learning | DampedPolicyLearning) -> SelfPlay:
         ({"precision": "tf32"}, "precision tf32 requires CUDA"),
         ({"precision": "bf16"}, "precision bf16 requires CUDA or MPS"),
         ({"behavior": "random"}, "both learning seats"),
-        ({"batch_closure": "exact-quota"}, "both learning seats"),
         (
             {
                 "learning_seats": "one",
@@ -55,6 +54,25 @@ def _settings(learning: Learning | DampedPolicyLearning) -> SelfPlay:
                 "games_per_stream": 2,
             },
             "requires complete games",
+        ),
+        (
+            {
+                "learning_seats": "both",
+                "batch_closure": "exact-quota",
+                "games_per_stream": 2,
+            },
+            "requires complete games",
+        ),
+        (
+            {
+                "learning_seats": "both",
+                "batch_closure": "exact-quota",
+                "model": {
+                    "world": "elemental-world-v2",
+                    "recent_events": True,
+                },
+            },
+            "recent_events requires complete games",
         ),
     ],
 )
