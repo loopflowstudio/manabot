@@ -326,3 +326,84 @@ fn game_state_edits_keep_the_focal_blocker_and_only_prompt_new_declarers() {
         matches!(action, Action::DeclareBlocker { blocker, .. } if *blocker == tapped)
     }));
 }
+
+#[test]
+fn game_state_edits_clear_pre_edit_decline_suppression_without_reprompting() {
+    let mut env = game(false);
+    let game = env.game.as_mut().unwrap();
+    game.keep_opening_hands();
+    while game.state.turn.current_step_kind() != StepKind::DeclareBlockers {
+        game.state.turn.advance_step();
+    }
+    game.state.set_step_initialized(true);
+    let active = game.active_player();
+    let defender = game.non_active_player();
+    let attacker = game
+        .scenario_force_battlefield(active, "Hill Giant", true)
+        .unwrap();
+    let declined = game
+        .scenario_force_battlefield(defender, "Gray Ogre", true)
+        .unwrap();
+    let remaining_ogre = game
+        .scenario_force_battlefield(defender, "Gray Ogre", true)
+        .unwrap();
+    let focal = game
+        .scenario_force_battlefield(defender, "Hill Giant", true)
+        .unwrap();
+    game.state.permanents[attacker].as_mut().unwrap().attacking = true;
+    game.state.combat = Some(Box::new(CombatState {
+        attack_targets: vec![(attacker, Some(AttackTarget::Player(defender)))],
+        blockers_to_declare: vec![remaining_ogre],
+        declined_blockers: vec![declined],
+        ..Default::default()
+    }));
+    game.publish_action_space(ActionSpace {
+        player: Some(defender),
+        kind: ActionSpaceKind::DeclareBlocker,
+        actions: game.block_actions(defender, focal),
+        focus: Vec::new(),
+    });
+    env.edit_game_state([GameStateEdit::SetLife {
+        player: defender.0,
+        life: 3,
+    }])
+    .unwrap();
+    let combat = env.game.as_ref().unwrap().state.combat.as_ref().unwrap();
+    assert!(combat.declined_blockers.is_empty());
+    assert!(combat.detached_declarers.contains(&declined));
+    assert_eq!(combat.blockers_to_declare, vec![remaining_ogre]);
+    // Decline focal so remaining_ogre becomes the next prompt.
+    let decline_focal = env
+        .game
+        .as_ref()
+        .unwrap()
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|action| {
+            matches!(
+                action,
+                Action::DeclareBlocker {
+                    blocker,
+                    attacker: None,
+                    ..
+                } if *blocker == focal
+            )
+        })
+        .unwrap();
+    env.step(decline_focal as i64).unwrap();
+    let space = env.game.as_ref().unwrap().action_space().unwrap();
+    assert_eq!(space.kind, ActionSpaceKind::DeclareBlocker);
+    // remaining_ogre must still be allowed to chump-block at 3 life, and declined is never reprompted.
+    assert!(space.actions.iter().any(|action| {
+        matches!(
+            action,
+            Action::DeclareBlocker {
+                blocker,
+                attacker: Some(target),
+                ..
+            } if *blocker == remaining_ogre && *target == attacker
+        )
+    }));
+}

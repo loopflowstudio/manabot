@@ -268,7 +268,7 @@ to peek and inspect it, or use **Show hand / Tuck hand** on that seat's plate).
 Unchecking **Show both hands** switches to the acting view, which draws the
 non-acting seat's hidden cards as backs while keeping any rules-revealed cards
 face-up. Where the record
-changed or re-dealt the position before a decision, the move list shows a neutral note
+changed or re-dealt the position before a recorded choice, the move list shows a neutral note
 in its place, such as **Branch · libraries reshuffled**, **Branch · hidden
 cards re-dealt** or **Branch · game state edited**, which jumps to that decision. Branch seeds stay private in
 either view.

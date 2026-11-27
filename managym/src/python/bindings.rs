@@ -127,12 +127,22 @@ impl PyGameStateEdit {
     }
 
     #[staticmethod]
-    fn set_damage(permanent: i32, damage: i32) -> Self {
-        Self(GameStateEdit::SetDamage { permanent, damage })
+    fn set_damage(permanent: i32, damage: i32) -> PyResult<Self> {
+        if damage < 0 {
+            return Err(map_agent_err(AgentError(
+                "game state edits: damage must be nonnegative".into(),
+            )));
+        }
+        Ok(Self(GameStateEdit::SetDamage { permanent, damage }))
     }
 
     #[staticmethod]
     fn set_counters(permanent: i32, kind: &str, count: i32) -> PyResult<Self> {
+        if count < 0 {
+            return Err(map_agent_err(AgentError(
+                "game state edits: counter count must be nonnegative".into(),
+            )));
+        }
         let counter = CounterKind::ALL
             .into_iter()
             .find(|counter| counter.name() == kind)

@@ -215,7 +215,7 @@ def test_edit_errors_leave_the_boundary_and_journal_intact(
     life = edit.set_life(obs.agent.player_index, 7)
     assert env.edit_game_state([]).toJSON() == obs.toJSON()
     for bad, message in (
-        (edit.set_damage(focal, -1), "negative"),
+        (edit.set_damage(999_999, 1), "unknown permanent"),
         (edit.set_tapped(focal, True), "current declarer ineligible"),
     ):
         with pytest.raises(managym.AgentError, match=message):
@@ -225,6 +225,10 @@ def test_edit_errors_leave_the_boundary_and_journal_intact(
         root.restore(
             managym.RestoreOptions.exact(forced_first_action=0, game_state_edits=[life])
         )
+    with pytest.raises(managym.AgentError, match="nonnegative"):
+        edit.set_damage(focal, -1)
+    with pytest.raises(managym.AgentError, match="nonnegative"):
+        edit.set_counters(focal, "stun", -1)
     with pytest.raises(managym.AgentError, match="unknown counter"):
         edit.set_counters(focal, "missing", 2)
     with pytest.raises(managym.AgentError, match="unknown variant"):

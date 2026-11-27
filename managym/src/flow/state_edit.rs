@@ -127,6 +127,13 @@ impl Game {
             .retain(|id| !completed.contains(id) && self.permanent_object(*id).is_some());
         let combat = self.state.combat.as_mut().expect("declaration has combat");
         combat.detached_declarers.extend(completed_before);
+        // An edit invalidates earlier interchangeability assumptions: keep
+        // declined creatures answered without suppressing remaining copies.
+        let declined = match role {
+            DeclarationKind::Attackers => &mut combat.declined_attackers,
+            DeclarationKind::Blockers => &mut combat.declined_blockers,
+        };
+        combat.detached_declarers.extend(declined.drain(..));
         eligible.retain(|id| {
             *id != focal && !completed.contains(id) && !combat.detached_declarers.contains(id)
         });

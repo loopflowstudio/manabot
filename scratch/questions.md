@@ -51,6 +51,7 @@ Headless realign took the review's recommendations; each binds replay digests, s
 
 Verbatim from ship-review (`scratch/ship-review.html`):
 
-- Jack Heart: *"ok lets land this and add the followup task to add those two"* (referring to `create_token` and `add_to_battlefield` on `GameStateEdit`).
+- Jack Heart: *"ok lets land this and add the followup task to add those two"* (referring to `create_token` and `add_to_battlefield` on `GameStateEdit`, filed as MTG-505).
+- Jack Heart: *"did we fix f1-f3 already"* → *"1 yes"* (pause land run, fix F1 + F2 here, then re-land; F3 not filed).
 
-Outcome: proceed to delivery (`reflect` → `land`) on PR #637 as built; file a standalone follow-up Task for `GameStateEdit.create_token` and `GameStateEdit.add_to_battlefield`. Unresolved findings from `scratch/ship-review.html` (F1 `declined_*` symmetry suppression on mid-declaration edits, F2 eager negative validation / doc clarifications, F3 `manabot.belief` carry-over & library-entry bug) remain noted here without separate Tasks unless requested.
+Outcome: fixed F1 (`refresh_declaration` drains `declined_*` into `detached_declarers` + regression test) and F2 (eager negative `damage`/`count` checks in `PyGameStateEdit` + `ScalarCapture` & Academy Replay doc clarifications), then resumed delivery (`land --wait-and-fix`) on PR #637. F3 (`manabot.belief` carry-over & pre-existing `tracker.py:362` bug) remains noted here without a separate Task.

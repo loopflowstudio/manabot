@@ -644,8 +644,12 @@ already moved in the batch, and an unknown destination or counter kind.
 Snapshot restore applies edits before reseeding, shuffling or determinizing.
 `SlotLoad.snapshot` accepts the same options for a vector slot. A non-empty
 batch excludes `forced_first_action` because the action indices can change.
-Cold replay and `walk` reapply journaled edits. Academy Replay labels the
-decision **Branch · game state edited**.
+For recorded counterfactuals, export via `snapshot().to_replay_json()` or load
+into `RecordedVectorEnv` with `SlotLoad.snapshot` rather than calling
+`env.edit_game_state` directly on a `ScalarCapture`-tracked `Env`, which does
+not record mid-game branch interventions. Cold replay and `walk` reapply
+journaled edits. Academy Replay labels the choice recorded after the edit
+**Branch · game state edited**.
 
 ## Ask questions of recorded games
 
