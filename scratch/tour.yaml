@@ -1,9 +1,9 @@
-at: 0d7bb67437103525629e1b2adb21db649fa021e6
+at: a90fd7109089a09e269d6ff1b2c08d92acfd16d5
 first:
   - path: scratch/plan.md
-    why: Payment reproductions and the fork search blocker
+    why: Payment reproductions and proposed conservative coupling rule
   - path: managym/src/flow/mana/tests.rs
-    why: Damage replacement, activation ownership, and payment regressions
+    why: Triggered mana and damage replacement counterexamples
   - path: managym/README.md
     why: Announced fees and live mana outputs
   - path: managym/src/flow/decision.rs

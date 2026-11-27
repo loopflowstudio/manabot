@@ -12,6 +12,12 @@ Pass 3 (`abfabece991`) owns the announced mana activation and its priced fee, re
 
 Pass 4 attempt 1 stopped at a counterexample (`0d7bb6743`, `fixed_mana_suffix_reads_life_through_damage_replacement` in `managym/src/flow/mana/tests.rs`) and changed no production code. At 4 life, Henge (+2) and Citadel (3 damage plus life gained this turn, through a constructed damage replacement) owe `{G}{G}{R}` then 2 life. Root probes certify both independent; Henge-first reaches an empty decision at 6 life (Citadel now deals 5). Citadel-first pays with 1 life left. The fourth concept review (`8182d5c876`, `scratch/concept-review.html`) widened this to a missing-read-channel finding; its choices are design 4 below.
 
+Pass 4 attempt 2 reproduced `mana_trigger_reads_keyword_changed_by_another_activation` in debug (`a90fd7109`, `managym/src/flow/mana/tests.rs`). A constructed Heartbeat matches lands with trample. The Mountain can either tap or remove its trample counter to add `{G}`. While paying `{G}{R}{R}`, the counter-first offer reaches an empty decision because the later tap makes only `{R}`. Tap-first commits both red units and completes.
+
+`tap_bonuses` prices triggered mana using the current predicate result, and `tapped_for_mana` matches the predicate again on the live board at the tap. `SourceSeed` and `LayerBoard` summarize the presence of triggered mana abilities, and the existing coupling check uses that flag for departures. Design 4 adds keyword writes for the removed counter, but its read sets cover layers, activated mana, replacements and saved output. On this board the only keyword reader is the triggered mana predicate, so the proposed graph would still treat both steps as independent.
+
+The stop rule sends pass 4 back to review. The proposed conservative rule is to treat any non-mana state write as a Mutator and any state-reading source as Sensitive on boards with replacements, conditional statics or state-dependent triggered mana. Establish the arithmetic path with a short list of verified rule shapes, including testing whether plain land-only Heartbeat stays on that path. Use exact native transitions for the other boards and for pending continuations that read the changing state. Carry the two pass 4 reproductions into that review. Pass 5 depends on the resulting feasibility authority.
+
 ## Why a frozen source list fails
 
 Angel of Vitality is 4/4 at 25 life or more; Raucous Audience makes `{G}{G}` while its controller has a power-4 creature, else `{G}`. Casting Solemn Simulacrum (`{4}`):
@@ -37,7 +43,7 @@ The run is headless; these follow the concept review's recommendations (1a, 2a, 
 2. **Exact life.** Signed `LifeBudget { life: i32, cant_change: bool }`; activation `life_cost` checked against the running budget; post-mana life (announced `payment.life()`, cast `life_alternative`, resolution tail life) is a trailing `Obligation::PayLife(u32)` at completion (CR 601.2h).
 3. **Colored convoke in the model.** `ManaSource.convoke_colors: ManaTypeSet`; the witness reduces an owed colored pip by tapping such a source; delete `while_paying`/`convoke_search`. Fallback if this exceeds a pass: one wrapper routing all eight surfaces through `while_paying`. Never defer it: with pass 1, an unfixed Guardian play is an `AgentError`.
 
-4. **Complete read/write graph, three roles** (fourth review 1a–4a, made for review). Passed over: coupling every suffix whenever any damage/life replacement exists (1b), merging replacement reads into `LayerBoard.reads` (2b, spurious board rebuilds on life change), binary roles (3b, loses pure-finish-first or branches on every Forest), reading only `LayerBoard` for continuations (4b).
+4. **Read/write graph, three roles** (fourth review 1a–4a, superseded by the pass 4 stop rule). The review passed over coupling every suffix whenever any damage/life replacement exists (1b), merging replacement reads into `LayerBoard.reads` (2b, spurious board rebuilds on life change), binary roles (3b, loses pure-finish-first or branches on every Forest), and reading only `LayerBoard` for continuations (4b).
    - `LayerBoard.replacement_reads: ReplacementReads { damage, counters, departure: ReadSet, has_* }`, cached per `SourceSeed`, including replacement-only command emblems (`functioning_command_objects`). A channel is active only while a remaining source or pending `ManaUpfront` proposes that event kind, so Fated Firepower without a damage source stays pure.
    - `PaymentWrites { state, fields, sacrifice, removes_board_rules, events }` replaces `StateReads`-as-writes. ±1/±1 counters write `POWER`, keyword counters `KEYWORDS` (mirroring `game.rs` ≈902). Sacrificing a permanent with statics, triggered mana or replacements removes board rules.
    - Complete `ReadSet::condition`/`value`: turn-history and graveyard conditions (`SacrificedThisTurnAtLeast`, `PermanentLeftThisTurn`, `CreatureDiedThisTurn`, `GraveyardAtLeast`, `AnyGraveyardAtLeast`, `PermanentsSacrificedThisTurn`, `GraveyardMatching`), `AttachedCreaturePower`, `reduce_by_source_power`.
@@ -48,8 +54,9 @@ Preserve native action identities, source order, the chooser, individual Heartbe
 
 ## Remaining passes
 
-4. **Coupled regime** (`flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/proposed_event.rs`). Build design 4, then the forked search of design 1 over it, together: roles alone change no offer. Delivers and tests, each as a live offer list:
+4. **Coupled regime** (`flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/proposed_event.rs`). Review the conservative rule before resuming production work. Keep the fork search and live offer changes together. The revised search still needs these live checks:
    - `0d7bb6743` board: only Citadel-first offered; it finishes at 1 life, then hands off to the pure model.
+   - Trample-dependent Heartbeat: only the Mountain tap is offered first; it commits both red units before the counter is removed for green.
    - Reader before mutator: at 3 life a PreventAll permanent with `{T}, Sacrifice: Add {G}` beside Citadel, owing `{G}{R}` + 2 life; Citadel-first is offered.
    - Remove-a-+1/+1-counter mana beside Raucous Audience paying 3: only Audience-first.
    - Treasure beside a `SacrificedThisTurnAtLeast`/graveyard-conditional mana output.
@@ -88,7 +95,7 @@ The test exercises both branches of the Room’s blue/red choice and the legal o
 
 ## Concept review disposition
 
-Second review (`24f1ec2f3`): 1a, 2a, 3a, 4a are design 1–3 above, made for review. Third review (`f5992e81f`): pass 3 implements 1a, 2a and 4a for review. 3a puts the non-mana sibling in deferred findings. Fourth review (`8182d5c876`): 1a–4a are design 4, made for review, built in pass 4; its non-mana ownership and `OrderReplacement` items are the existing deferred findings. Its note that managym has no consumable one-shot prevention shield checks out (no such variant in `managym/state/src` or `proposed_event.rs`); the shield board is dropped from pass 4, and a future shield writes effects, which the suffix probe's revision diff reports as a Mutator.
+Second review (`24f1ec2f3`): 1a, 2a, 3a, 4a are design 1–3 above, made for review. Third review (`f5992e81f`): pass 3 implements 1a, 2a and 4a for review. 3a puts the non-mana sibling in deferred findings. Fourth review (`8182d5c876`): 1a–4a informed design 4. Its non-mana ownership and `OrderReplacement` items remain deferred. The shield board was dropped after checking that managym currently has no consumable one-shot prevention shield.
 
 ## Deferred findings
 
