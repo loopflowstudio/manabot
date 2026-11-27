@@ -22,6 +22,8 @@ Pass 6 (`c94532b94`) verifies a pre-Citadel payment snapshot with skipping enabl
 
 Pass 7 (`21b91711b`) commits the original output and all triggered mana together, keeps mana floats legal before declining Ward, and accounts for colored convoke in the payment prefix bound. The pass 6 debug set plus three regressions passed (92 tests), as did the six Citadel acceptance tests.
 
+Compression (`5d73c506d`) removed unused board-wide field tracking and unified the trailing life and colored convoke checks. The live payment fixtures now share setup and action selection in `managym/src/flow/mana/tests/manual_payment.rs`. All 101 focused debug checks passed, including layer-cache invalidation, card acceptance and restored vector stepping.
+
 ## Design · made for review
 
 Headless choices following each concept review's recommendation; reversible internal engine work, approved by nobody.
