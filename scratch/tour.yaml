@@ -1,15 +1,15 @@
-at: 494fb4c5e86564b0d0a095b6dc154f14a7b966a2
+at: 710163f05ad6c247d0a0000a1184aa238e57e1c6
 first:
   - path: scratch/plan.md
-    why: Payment reproductions and remaining coupled search work
+    why: Fixed-tap panic and the planned scope split
   - path: managym/README.md
     why: Costs and replacement choices precede the mana output
+  - path: managym/src/flow/mana/tests.rs
+    why: Fixed-tap bonus choice, replacement orders, and snapshot restore
   - path: managym/src/flow/decision.rs
     why: Retained cost frames return to the owned activation
   - path: managym/src/flow/mana.rs
-    why: Costs commit before output and callers retain obligations
-  - path: managym/src/flow/mana/tests.rs
-    why: Replacement orders, snapshot restore, and nested payments
+    why: Activation continuations and the fixed-tap bonus assertion
   - path: managym/src/agent/effect_execution.rs
     why: The viewer sees the retained mana output
   - path: managym/src/flow/interchangeable.rs

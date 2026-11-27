@@ -28,6 +28,12 @@ Pass 4 attempt 4 (`da29dbbdc`, `mana_counter_cost_can_require_replacement_order`
 
 The seventh review (`4d5644302`, `scratch/concept-review.html`) traced the panic to two cost-execution models: non-mana activations retain counter and sacrifice costs in an `EffectFrame.batch` with `FrameCompletion::Activated` (`payment.rs` ≈1506), while `complete_mana_upfront` (`mana.rs` ≈5133) sends counters to `apply_immediate_event` (`proposed_event.rs` ≈1531), evaluates `upfront_mana_outputs` before `sacrifice_this` runs, and parks sacrifice and suffix behind `FrameCompletion::Decision(ManaChoice)`. It found three more defects on HEAD: dynamic sacrifice outputs count the source still on the battlefield; `payment_model::reserve` (≈3280) and `payment_obligations_owing` (≈3667) read only `suspended.decision`, so a suspended `OrderReplacement` hides every enclosing reservation and obligation; and live `OrderReplacement` offers every order during payment, so once the fork search certifies one order, the payer can still pick a stranding one (review case 2: Season → Caradora gives 3 counters, a 5/5 and only `{G}`).
 
+## Pass 4b stopped · fixed taps can suspend
+
+`fixed_mana_tap_can_open_a_bonus_choice` (`710163f05`) casts Sokka from an empty pool with a constructed Mountain that produces `{U}{R}` and Heartbeat restricted to tapped lands. `fixed_source_mana` previews no bonus and the live cast offers `TapForMana`. Executing that offer in debug panics in `perform_automatic_tap` with `an automatic tap's bonuses need no choice`. Tapping makes the Mountain match Heartbeat. `resolve_mana_bonuses` returns a payer `ManaChoice` between `{U}` and `{R}`, and the fixed-tap caller has no continuation to hold it. The committed debug test passes by verifying the offer, the preview and the resolver's two choices at the point of the assertion.
+
+Classifying the tap as coupled sends the search into the same native assertion. The coupled work must first let a fixed tap retain a bonus decision, then resume the same payment with the right mana origins and receipts. `TapForMana` and the automatic prefix share `perform_automatic_tap` in `flow/mana.rs`. The existing `ManaProduction::Bonus` and its resume logic are in `flow/decision.rs`. Keep the deterministic automatic tap available when exact production needs no choice. Carry the fixed-tap continuation, coupled search and payer replacement filtering into the separate Task called for below.
+
 ## Why a frozen source list fails
 
 Angel of Vitality is 4/4 at 25 life or more; Raucous Audience makes `{G}{G}` while its controller has a power-4 creature, else `{G}`. Casting Solemn Simulacrum (`{4}`):
@@ -79,7 +85,7 @@ Preserve native action identities, source order, the chooser, individual Heartbe
 
 ## Remaining passes
 
-4b. **Whitelist classifier, coupled regime and payer replacement filter** (designs 4, 1 and 7; `flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/mana/help.rs`, `flow/decision.rs`). Counter-changing transitions stay in the fork, carrying live counter reservations into each rebuild. Live checks:
+4b. **Whitelist classifier, coupled regime and payer replacement filter** (review for a separate Task with the fixed-tap continuation; designs 4, 1 and 7; `flow/layers.rs`, `flow/statics.rs`, `flow/mana.rs`, `flow/mana/help.rs`, `flow/decision.rs`). Counter-changing transitions stay in the fork, carrying live counter reservations into each rebuild. Live checks:
    - `0d7bb6743`: only Citadel-first offered; at 1 life the damage channel deactivates and Henge hands off to the pure model.
    - `a90fd7109`: only the Mountain tap is offered first; it commits both red units before the counter is removed for green.
    - Review case 2 while casting `{G}{G}`: only Caradora → Season is offered; at priority both orders remain.
@@ -92,7 +98,7 @@ Preserve native action identities, source order, the chooser, individual Heartbe
    - If a board outside the whitelist still strands, the fault is in the fork search, not a missing channel; fix it there.
 5. **Colored convoke, collection check and acceptance.** Convoke in the model; the Guardian of Vitu-Ghazi board completes its cast. Restore a pre-activation snapshot into one slot of a two-slot native vector with skipping on; both slots return and match scalar play. Acceptance demo, debug nextest for touched crates, engine budget comparison, and the `managym/README.md` mana-payment section for the built design.
 
-Pass 4 has stopped at a counterexample four times. If 4b stops again, split the coupled regime (4b) into its own Task and ship passes 1–4a with pass 5 (see `scratch/questions.md`).
+The fixed-tap counterexample triggers the planned split. Review and realign 4b into a separate Task, then ship passes 1–4a with pass 5 (see `scratch/questions.md`).
 
 ## Reproduced on a TLA Limited board
 
