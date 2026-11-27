@@ -140,6 +140,11 @@ impl ContentPack {
         }))
     }
 
+    /// Whether a chosen name has a policy row in this catalog.
+    pub(crate) fn catalog_name<'a>(&self, name: &'a str) -> Option<&'a str> {
+        self.name_candidates().contains(name).then_some(name)
+    }
+
     /// Representation-neutral fingerprint of the immutable card definitions.
     ///
     /// Sorting by card name keeps benchmark snapshots stable across storage
