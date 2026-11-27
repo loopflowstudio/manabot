@@ -300,3 +300,18 @@ def test_game_state_edits_record_rejects_untyped_payloads() -> None:
                 "edits": [{"kind": "set_tapped", "permanent": 42, "tapped": 1}],
             }
         )
+
+
+def test_edits_read_as_their_constructor_calls() -> None:
+    edits = [
+        managym.GameStateEdit.move_permanent(42, to="library_bottom"),
+        managym.GameStateEdit.set_tapped(7, True),
+        managym.GameStateEdit.set_damage(7, 3),
+        managym.GameStateEdit.set_counters(7, "plus_one_plus_one", 2),
+        managym.GameStateEdit.set_life(1, 5),
+    ]
+    namespace = {"GameStateEdit": managym.GameStateEdit}
+    for edit in edits:
+        assert eval(repr(edit), namespace) == edit
+    assert managym.GameStateEdit.set_life(1, 5) != managym.GameStateEdit.set_life(0, 5)
+    assert len(set(edits + edits)) == len(edits)

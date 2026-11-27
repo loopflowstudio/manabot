@@ -65,8 +65,8 @@ use crate::{
 
 /// One counterfactual change, addressed by an observed permanent id or native seat.
 #[cfg(feature = "python")]
-#[pyclass(name = "GameStateEdit", frozen)]
-#[derive(Clone)]
+#[pyclass(name = "GameStateEdit", frozen, eq, hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub(super) struct PyGameStateEdit(GameStateEdit);
 
 #[cfg(feature = "python")]
@@ -79,6 +79,38 @@ impl PyGameStateEdit {
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyGameStateEdit {
+    /// The constructor call that rebuilds this edit.
+    fn __repr__(&self) -> String {
+        let py_bool = |value: bool| if value { "True" } else { "False" };
+        match self.0 {
+            GameStateEdit::MovePermanent { permanent, to } => {
+                // The journal spelling of the destination is the keyword value.
+                let to = serde_json::to_value(to).expect("destination serializes");
+                format!(
+                    "GameStateEdit.move_permanent({permanent}, to='{}')",
+                    to.as_str().unwrap_or_default()
+                )
+            }
+            GameStateEdit::SetTapped { permanent, tapped } => {
+                format!("GameStateEdit.set_tapped({permanent}, {})", py_bool(tapped))
+            }
+            GameStateEdit::SetDamage { permanent, damage } => {
+                format!("GameStateEdit.set_damage({permanent}, {damage})")
+            }
+            GameStateEdit::SetCounters {
+                permanent,
+                counter,
+                count,
+            } => format!(
+                "GameStateEdit.set_counters({permanent}, '{}', {count})",
+                counter.name()
+            ),
+            GameStateEdit::SetLife { player, life } => {
+                format!("GameStateEdit.set_life({player}, {life})")
+            }
+        }
+    }
+
     #[staticmethod]
     #[pyo3(signature = (permanent, to="graveyard"))]
     fn move_permanent(permanent: i32, to: &str) -> PyResult<Self> {

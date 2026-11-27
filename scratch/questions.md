@@ -41,3 +41,8 @@ Headless realign took the review's recommendations; each binds replay digests, s
 - **Pre-existing bug found during exploration (outside MTG-502):** `BeliefTracker.observe` raises `"unexplained hand exit"` when any public card enters the opponent's library, an ordinary rules move included (`manabot/belief/tracker.py:362`). Not filed yet.
 - **Legacy `scenario_force_battlefield` return value:** returns storage index while `GameStateEdit` takes observed `Permanent.id`. Left untouched since legacy `scenario_*` is kept separate.
 - **Future `GameStateEdit` variants:** hand/graveyard/exile/battlefield placement, mana pool, summoning sickness, control, opt-in `settle_sbas`, and suspended-decision boundaries (`ChooseTarget`, `Modal`, `PayOrNot`).
+
+## From QA (2026-11-27)
+
+- An edit can leave the current declaration with one legal action (moving the only attacker leaves a lone "no block" offer). `edit_game_state` returns it rather than skipping it, so a caller can be handed a forced decision. Left as is: auto-advancing would move the game past the decision the caller asked about.
+- A snapshot replay that ends at the edited decision shows the edited board in Academy without a branch note, since the note attaches to the next recorded choice. Same for determinize and reshuffle branches already.
