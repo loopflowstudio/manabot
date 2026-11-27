@@ -1,25 +1,29 @@
-at: bb911a15019f6db9d4ebc6e6aa9018f375d1b479
+at: 3531b83533b0c6db69f84f33ec3f47588ba4c415
 first:
   - path: docs/evaluation.md
-    why: Managed callbacks, runtime targets and per-slot budgets
+    why: Scalar and streaming callbacks, devices and game budgets
   - path: experiments/reports/eval_throughput.md
-    why: Throughput and replay receipts across CUDA and Apple Silicon
+    why: Measured throughput and replay parity on each accelerator
   - path: experiments/tla_trophies.py
-    why: One precision declaration for agents, environment and deals
+    why: Trophy deals and precision shared with the benchmark
+  - path: manabot/eval/pairing.py
+    why: Common deal specification, admission and result tables
   - path: manabot/eval/agents.py
-    why: Verified metadata, async sampling and the scalar adapter
+    why: Checkpoint metadata, host preparation and seeded sampling
+  - path: manabot/eval/agent_loader.py
+    why: Device selection and batched inference
+  - path: manabot/sim/native_game.py
+    why: Viewer frames and sampling evidence shared across runners
   - path: manabot/eval/vector.py
-    why: Checkpoint batching, round charges and slot backfill
+    why: One decision round, slot backfill and failure isolation
   - path: managym/recording.py
-    why: Detaching settled games before slot reuse
+    why: Detaching game records before a slot is reused
   - path: managym/src/agent/vector_env/slots.rs
     why: Explicit deals preserve the automatic seed sequence
-  - path: manabot/eval/evaluation.py
-    why: Attempt retention shared by scalar and vector play
-  - path: manabot/eval/agent_loader.py
-    why: Framework selection and fixed-weight inference
+  - path: manabot/eval/match.py
+    why: Replaying and retaining each completed deal
   - path: tests/eval/test_vector_eval.py
-    why: Replay parity, checkpoint grouping, budgets and queue bounds
+    why: Scalar trace parity, live budgets and backfill
 hide:
   - path: tests/public_api.json
-    why: Generated snapshot of the optional vector constructor argument
+    why: Generated snapshot of optional native arguments
