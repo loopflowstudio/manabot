@@ -8,13 +8,26 @@ ordinary game. Constructed scenarios and retained traces keep their reader.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
 from manabot.infra.identity import canonical_sha256
 
 if TYPE_CHECKING:
+    from manabot.sim.registration import PlayerRegistration
     from managym.recording import GameRecord
+
+
+def set_execution_limits(
+    game: dict[str, Any],
+    registrations: Sequence[PlayerRegistration],
+    max_commands: int,
+    game_seconds: float,
+) -> None:
+    """Record a leg's execution budget and players on the game being settled."""
+    game["execution_limits"] = {"commands": max_commands, "seconds": game_seconds}
+    game["registrations"] = [r.model_dump(mode="json") for r in registrations]
 
 
 def is_record(data: dict[str, Any]) -> bool:

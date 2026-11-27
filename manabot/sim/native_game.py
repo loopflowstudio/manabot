@@ -11,7 +11,7 @@ recreate their root.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
 from multiprocessing.connection import Connection
 from pathlib import Path
@@ -107,6 +107,50 @@ class _InChildPlayers:
         self._backend.seed(seed)
 
 
+def resolve_game_match(
+    game: dict[str, Any],
+    match: MatchConfig,
+    registrations: Sequence[PlayerRegistration],
+    spaces: Mapping[str, ObservationSpace | None],
+) -> MatchConfig:
+    """Record and return the leg's seat-specific native mana settings."""
+    defaults = ObservationConfig()
+    checkpoint_ids = {
+        registration.player_id
+        for registration in registrations
+        if registration.player_spec["kind"] in {"checkpoint", "etude_checkpoint"}
+    }
+    seats = [
+        space.config if player_id in checkpoint_ids and space is not None else defaults
+        for player_id in game["seat_players"]
+        for space in (spaces[player_id],)
+    ]
+    resolved = match.model_copy(
+        update={
+            "mana_payment": tuple(seat.mana_payment for seat in seats),
+            "mana_floats": tuple(seat.mana_floats for seat in seats),
+        }
+    )
+    # Include both seats' settings even when they match the defaults.
+    game["match_hypers"] = resolved.model_dump(mode="json") | {
+        "mana_payment": list(resolved.mana_payment),
+        "mana_floats": list(resolved.mana_floats),
+    }
+    return resolved
+
+
+def arena_source_sha256() -> str:
+    return source_bundle_sha256(Path(__file__).resolve().parents[1].rglob("*.py"))
+
+
+def game_runtime_identities(
+    seed: int, match: MatchConfig | None, space: ObservationSpace, arena_source: str
+) -> dict[str, Any]:
+    return runtime_fingerprints(seed, match_config=match, observation_space=space) | {
+        "arena_source_sha256": arena_source,
+    }
+
+
 def execute_game(
     game: dict[str, Any],
     registrations: list[PlayerRegistration],
@@ -134,9 +178,6 @@ def execute_game(
     )
     try:
         built = {}
-        # A checkpoint plays with the decision settings it trained under;
-        # every other player keeps manual payment and no floats.
-        trained: dict[str, ObservationConfig] = {}
         in_child = _InChildPlayers(backend_factory)
         match = (
             MatchConfig.model_validate(game["match_hypers"])
@@ -160,12 +201,6 @@ def execute_game(
                         seed=game["player_seeds"][responsible],
                         checkpoint_path=checkpoint_paths.get(responsible),
                     )
-            player_space = built[responsible][1]
-            if (
-                registration.player_spec["kind"] in {"checkpoint", "etude_checkpoint"}
-                and player_space is not None
-            ):
-                trained[responsible] = player_space.config
         responsible = None
         send(("phase", None))
         spaces = [space for _, space in built.values() if space is not None]
@@ -173,30 +208,19 @@ def execute_game(
             raise ValueError("players have different observation ABIs")
         space = spaces[0] if spaces else ObservationSpace()
         if match is not None:
-            seats = [trained.get(p, ObservationConfig()) for p in game["seat_players"]]
-            match = match.model_copy(
-                update={
-                    "mana_payment": tuple(seat.mana_payment for seat in seats),
-                    "mana_floats": tuple(seat.mana_floats for seat in seats),
-                }
+            previous = game["match_hypers"]
+            match = resolve_game_match(
+                game,
+                match,
+                registrations,
+                {name: item[1] for name, item in built.items()},
             )
-            # Record both seats' settings, defaults included.
-            resolved = match.model_dump(mode="json") | {
-                "mana_payment": list(match.mana_payment),
-                "mana_floats": list(match.mana_floats),
-            }
-            if resolved != game["match_hypers"]:
-                game["match_hypers"] = resolved
-                send(("match", resolved))
+            if game["match_hypers"] != previous:
+                send(("match", game["match_hypers"]))
         game["observation_hypers"] = space.config.model_dump()
         send(("observation", game["observation_hypers"]))
-        game["runtime_identities"] = runtime_fingerprints(
-            game["deal_seed"],
-            match_config=match,
-            observation_space=space,
-        )
-        game["runtime_identities"]["arena_source_sha256"] = source_bundle_sha256(
-            sorted(Path(__file__).resolve().parents[1].rglob("*.py"))
+        game["runtime_identities"] = game_runtime_identities(
+            game["deal_seed"], match, space, arena_source_sha256()
         )
         send(("identities", game["runtime_identities"]))
         with perf.span("native_reset_and_encoding"):

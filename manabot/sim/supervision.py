@@ -32,6 +32,7 @@ from manabot.sim.evaluation_records import (
     audit_view,
     bind_record,
     finalize_game,
+    set_execution_limits,
     stored_game,
 )
 from manabot.sim.performance import EvalPerformance
@@ -137,10 +138,7 @@ def supervise_game(
         if journal is not None:
             journal.append([kind, value])
 
-    game["execution_limits"] = {"commands": max_commands, "seconds": game_seconds}
-    game["registrations"] = [
-        registration.model_dump(mode="json") for registration in registrations
-    ]
+    set_execution_limits(game, registrations, max_commands, game_seconds)
     # The caller has already clamped the game's allowance to its attempt deadline.
     seconds = game_seconds
     deadline = started + seconds

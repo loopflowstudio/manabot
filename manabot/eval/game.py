@@ -17,6 +17,7 @@ from typing import Any
 
 from manabot.sim.agent import GamePlayer
 from manabot.sim.card_evidence import EvidenceRef
+from manabot.sim.evaluation_records import set_execution_limits
 from manabot.sim.native_game import execute_game
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import ReplayReceipt
@@ -41,8 +42,7 @@ def play_game(
 ) -> dict[str, Any]:
     started = time.monotonic()
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
-    game["execution_limits"] = {"commands": max_commands, "seconds": game_seconds}
-    game["registrations"] = [r.model_dump(mode="json") for r in registrations]
+    set_execution_limits(game, registrations, max_commands, game_seconds)
     if "scenario_root" not in game:
         if evidence_path.exists():
             raise FileExistsError(evidence_path)

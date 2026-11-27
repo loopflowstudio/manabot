@@ -21,7 +21,7 @@ from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.policy.protocol import BackendName
 from manabot.sim.agent import GamePlayer
-from manabot.sim.evaluation_records import finalize_game
+from manabot.sim.evaluation_records import finalize_game, set_execution_limits
 from manabot.sim.match import play_game
 from manabot.sim.matchup import (
     SELECTED_SUITE,
@@ -577,11 +577,7 @@ def play_cell(
             else min(game_seconds, deadline - time.time())
         )
         if allowance <= 0:
-            game["execution_limits"] = {
-                "commands": max_commands,
-                "seconds": game_seconds,
-            }
-            game["registrations"] = [p.model_dump(mode="json") for p in registrations]
+            set_execution_limits(game, registrations, max_commands, game_seconds)
             game["execution_seconds"] = 0.0
             failure_record(game, "timeout", "game wall-clock budget exhausted", None)
             evidence.parent.mkdir(parents=True, exist_ok=True)

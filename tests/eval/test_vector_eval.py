@@ -131,6 +131,11 @@ def _canonical_game_summary(game: dict[str, Any]) -> dict[str, Any]:
         "leg": game["leg"],
         "seat_players": game["seat_players"],
         "seat_decks": game.get("seat_decks"),
+        "match_hypers": game["match_hypers"],
+        "observation_hypers": game["observation_hypers"],
+        "registrations": game["registrations"],
+        "execution_limits": game["execution_limits"],
+        "runtime_identities": game["runtime_identities"],
         "winner": game["winner"],
         "terminated": game["terminated"],
         "truncated": game["truncated"],
@@ -217,7 +222,9 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
     cpu_eval: None,
 ) -> None:
     matchup = _allies_lessons_matchup()
-    space = ObservationSpace(ObservationConfig())
+    space = ObservationSpace(
+        ObservationConfig(mana_payment="auto", mana_floats="usable")
+    )
     ref = _fixture_checkpoint(tmp_path, 19, space)
     candidate = checkpoint_player(ref)
     heuristic = Code(
@@ -365,6 +372,12 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         assert len(vector_games) == len(serial_games) == 4
         for s_game, v_game in zip(serial_games, vector_games, strict=True):
             assert _canonical_game_summary(v_game) == _canonical_game_summary(s_game)
+            if v_game["seat_players"][0] == "candidate":
+                assert v_game["match_hypers"]["mana_payment"] == ["auto", "manual"]
+                assert v_game["match_hypers"]["mana_floats"] == ["usable", "off"]
+            else:
+                assert v_game["match_hypers"]["mana_payment"] == ["manual", "auto"]
+                assert v_game["match_hypers"]["mana_floats"] == ["off", "usable"]
             receipt, _ = replay_game(v_game)
             assert receipt.passed
 
