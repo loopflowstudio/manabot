@@ -138,20 +138,45 @@ def _decode(
     return batch, submission.to_json()
 
 
+_FRONTIER_CREATURES = (
+    "Gray Ogre",
+    "Wind Drake",
+    "Boggart Brute",
+    "Llanowar Elves",
+    "Water Tribe Rallier",
+    "Invasion Reinforcements",
+    "Compassionate Healer",
+    "Earth Kingdom Jailer",
+    "White Lotus Reinforcements",
+    "Earth King's Lieutenant",
+    "Kyoshi Warriors",
+    "Badgermole Cub",
+    "South Pole Voyager",
+    "Tiger-Seal",
+    "Otter-Penguin",
+    "Fire Nation Cadets",
+    "First-Time Flyer",
+)
+
+
 def _bolt_root() -> managym.Env:
+    target_deck: dict[str, int] = {"Mountain": 6}
+    for name in _FRONTIER_CREATURES:
+        target_deck[name] = 2
     env = managym.Env(seed=18_901)
     env.reset(
         [
             managym.PlayerConfig("caster", {"Lightning Bolt": 4, "Mountain": 36}),
-            managym.PlayerConfig("target", {"Gray Ogre": 36, "Mountain": 4}),
+            managym.PlayerConfig("target", target_deck),
         ]
     )
     env.scenario_clear_hand(0)
     env.scenario_clear_hand(1)
     env.scenario_force_card_in_hand(0, "Lightning Bolt")
     env.scenario_force_battlefield(0, "Mountain")
-    for _ in range(33):
-        env.scenario_force_battlefield(1, "Gray Ogre")
+    for idx in range(33):
+        name = _FRONTIER_CREATURES[idx // 2]
+        env.scenario_force_battlefield(1, name, ready=(idx % 2 == 0))
     env.scenario_refresh()
     return env
 
@@ -168,16 +193,20 @@ def _pass_root() -> managym.Env:
 
 
 def _attacker_root() -> managym.Env:
+    attacker_names = _FRONTIER_CREATURES[:6]
+    attacker_deck: dict[str, int] = {"Mountain": 28}
+    for name in attacker_names:
+        attacker_deck[name] = 2
     env = managym.Env(seed=18_903)
     observation, _ = env.reset(
         [
-            managym.PlayerConfig("active", {"Gray Ogre": 36, "Mountain": 4}),
+            managym.PlayerConfig("active", attacker_deck),
             managym.PlayerConfig("other", {"Gray Ogre": 36, "Mountain": 4}),
         ]
     )
     env.scenario_clear_hand(0)
-    for _ in range(6):
-        env.scenario_force_battlefield(0, "Gray Ogre", ready=True)
+    for name in attacker_names:
+        env.scenario_force_battlefield(0, name, ready=True)
     observation = env.scenario_refresh()
     for _ in range(100):
         if (

@@ -120,6 +120,9 @@ impl Game {
                     "creature attacks each combat if able".to_string(),
                 ));
             }
+            if let Some(combat) = self.state.combat.as_mut() {
+                combat.declined_attackers.push(permanent_id);
+            }
             return Ok(());
         };
 
@@ -176,6 +179,8 @@ impl Game {
                     exposure.combat.blocks.push((blocker, attacker_id));
                 }
             }
+        } else if let Some(combat) = self.state.combat.as_mut() {
+            combat.declined_blockers.push(blocker);
         }
         Ok(())
     }

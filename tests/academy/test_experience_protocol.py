@@ -243,6 +243,9 @@ def test_optional_fields_may_be_absent_or_round_trip_when_present():
             "auto_passed": 2,
         }
     )
+    frame["offers"][0]["aliases"] = [
+        {"kind": "object", "id": {"entity": 99, "incarnation": 0}}
+    ]
 
     RUST_VALIDATOR.validate(enriched)
     bundle = ProtocolV1ConformanceBundle.model_validate(enriched)

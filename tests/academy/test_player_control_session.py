@@ -190,7 +190,8 @@ def test_resume_preserves_private_opening_bottom_offers(
             )
             pending = settled_message(socket)["update"]["frame"]
             bottom = ExperienceFrame.model_validate(pending)
-            assert len(bottom.offers) == 7
+            assert sum(1 + len(offer.aliases) for offer in bottom.offers) == 7
+            assert len(bottom.offers) >= 2
             assert all("deepest first" in offer.label for offer in bottom.offers)
             assert not bottom.projection.opponent.hand
         with client.websocket_connect("/ws/play") as resumed:
@@ -204,7 +205,7 @@ def test_resume_preserves_private_opening_bottom_offers(
             assert recovery["frame_hash"] == pending["frame_hash"]
             assert recovery["offers"] == pending["offers"]
             resumed.send_json(
-                {"type": "command", "command": _command(bottom, bottom.offers[2], 1)}
+                {"type": "command", "command": _command(bottom, bottom.offers[-1], 1)}
             )
             result = settled_message(resumed)
             assert result["status"] == "accepted"

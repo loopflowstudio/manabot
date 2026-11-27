@@ -1031,6 +1031,39 @@ pub enum CombatDamagePass {
     Normal,
 }
 
+/// The currently published external decision together with any objects folded
+/// into its surviving actions. Pairing them behind one `Option` ensures aliases
+/// can never outlive or drift from their action space.
+#[derive(Clone, Debug)]
+pub(crate) struct PublishedDecision {
+    pub(crate) space: ActionSpace,
+    pub(crate) aliases: crate::flow::interchangeable::ActionAliases,
+}
+
+impl Game {
+    /// Clear the published external decision and its folded-object aliases.
+    pub fn clear_published_decision(&mut self) {
+        self.published_decision = None;
+    }
+
+    /// Mutable access to the published action space for test forging. Clears
+    /// folded aliases so edited actions never carry stale alias pairs.
+    #[doc(hidden)]
+    pub fn action_space_mut(&mut self) -> Option<&mut ActionSpace> {
+        let decision = self.published_decision.as_mut()?;
+        decision.aliases = None;
+        Some(&mut decision.space)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_unfolded_action_space(&mut self, space: Option<ActionSpace>) {
+        self.published_decision = space.map(|space| PublishedDecision {
+            space,
+            aliases: None,
+        });
+    }
+}
+
 #[derive(Debug)]
 pub struct Game {
     /// Optional private counters and facts. Search clones omit them; rollback
@@ -1062,7 +1095,9 @@ pub struct Game {
     pub skip_trivial: bool,
     pub mana_floats: [ManaFloats; 2],
     pub mana_payment: [ManaPayment; 2],
-    pub current_action_space: Option<ActionSpace>,
+    /// Published external decision and its folded-object aliases. Aliases stay
+    /// outside the rules-state witness and cannot outlive their action space.
+    pub(crate) published_decision: Option<PublishedDecision>,
     /// Monotonic identity for the currently published external decision.
     ///
     /// This is deliberately narrower than the Game protocol's match revision
@@ -1114,7 +1149,7 @@ impl Clone for Game {
             skip_trivial: self.skip_trivial,
             mana_floats: self.mana_floats,
             mana_payment: self.mana_payment,
-            current_action_space: self.current_action_space.clone(),
+            published_decision: self.published_decision.clone(),
             decision_epoch: self.decision_epoch,
             semantic_object_candidates: self.semantic_object_candidates.clone(),
             pending_choice: self.pending_choice.clone(),

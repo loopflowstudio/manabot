@@ -329,27 +329,6 @@ pub struct Payment {
 }
 
 impl Payment {
-    pub(super) fn names_mana_source(&self, id: PermanentId, object: ObjectId) -> bool {
-        let targets = match &self.operation {
-            Operation::Spell(spell) => {
-                if matches!(spell.cast.route, Some(PlayRoute::GraveyardType { source, .. }) if source == object)
-                {
-                    return true;
-                }
-                &spell.targets
-            }
-            Operation::Activation {
-                source, targets, ..
-            } => {
-                if *source == ActivationSource::Permanent(id) {
-                    return true;
-                }
-                targets
-            }
-        };
-        targets.contains(&Target::Permanent(id)) || self.receipt.names_object(object)
-    }
-
     fn mana_component(&self) -> (&ManaCost, Help) {
         self.owed
             .iter()

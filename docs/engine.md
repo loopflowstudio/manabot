@@ -61,6 +61,11 @@ if let Some(space) = action_space {
 - `skip_trivial` is on everywhere by default: training, evaluation, Academy and
   benchmarks. Turning it off is for explicit debugging and the constructed-position
   diagnostic fixtures only.
+- Before the single-action check, actions that differ only in which of several
+  game-indistinguishable objects they name fold into one offer, so a choice
+  among identical copies — such as discarding one card from two identical
+  unpinned cards in hand — collapses to one action and is skipped as forced
+  ([indistinguishable objects](../managym/README.md#indistinguishable-objects)).
 - Every decision count in these docs excludes forced choices. Decisions per
   game and learner decisions both mean real choices.
 - The readable conformance path surfaces every singleton action so the
@@ -227,7 +232,9 @@ permanents never repeats a fingerprint, so it is never drawn; 10,000
 resolutions draw a loop that grows something without bound.
 Version 32 includes the last copiable face and casting choices of a departed
 spell when a trigger still refers to it. A suspended repeated instruction
-records the remaining count in its resolution frame.
+records the remaining count in its resolution frame. Version 34 adds
+`CombatState.declined_attackers` and `declined_blockers` (for combat symmetry
+breaking across indistinguishable creatures) and `TurnState.graveyard_arrivals`.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.

@@ -12,16 +12,16 @@ from conformance.authored_match_parity import ParityDivergence, verify_receipt
 def test_checked_authored_match_parity_receipt() -> None:
     receipt = verify_receipt()
     assert receipt["summary"] == {
-        "commands_per_surface": 170,
-        "checkpoints_per_surface": 171,
-        "ordered_transition_groups_per_surface": 170,
-        "viewer_projection_checks": 1026,
+        "commands_per_surface": 174,
+        "checkpoints_per_surface": 175,
+        "ordered_transition_groups_per_surface": 174,
+        "viewer_projection_checks": 1050,
         "canonical_player_projections": 2,
         "spectator_admitted": False,
         "first_divergence": None,
     }
     stale = receipt["stale_object_proof"]
-    assert stale["captured_render_ref"] == {"entity": 96, "incarnation": 3}
+    assert stale["captured_render_ref"] == {"entity": 94, "incarnation": 1}
     assert stale["current_rejection"] == {
         "code": "stale_object",
         "state_witness_unchanged": True,
@@ -34,12 +34,12 @@ def test_checked_authored_match_parity_receipt() -> None:
     }
     assert receipt["surfaces"]["live"]["presentation"] == {
         "0": {
-            "events": 286,
-            "sha256": "e15f77ca60aa25c8ef37ec4522327eab747c530a983415a11d6b2ea1dceda997",
+            "events": 308,
+            "sha256": "c517a81a2416b885e6b70307ca076ff3ba0e9a895cb9fd226b79d19fa4cd862c",
         },
         "1": {
-            "events": 286,
-            "sha256": "2cab68c21468ec45bdcf72a8dcae6801b58cc807b6b96434d1cae4660ac48710",
+            "events": 308,
+            "sha256": "9b37dc60ce5428a264f81cf3aa6cac85ccd7c62bfd6df0e93208e3360dc8bccf",
         },
     }
 

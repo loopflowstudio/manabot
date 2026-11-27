@@ -174,7 +174,11 @@ skipping keep their recorded forced **Auto** steps. Training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
 `decision_context_json` summarizes already-observed choices and the current
 continuation; `decision_offer_subjects_json` binds the exact rule entity,
-incarnation and board display ID; `permanent_details_json` attaches effective
+incarnation and board display ID; `Env.decision` carries any viewer-visible
+folded copies on `Offer.aliases` (copied to `InteractionOffer.aliases` on the
+experience wire) so every copy on the board or in hand stays interactive and
+sends the canonical Command;
+`permanent_details_json` attaches effective
 battlefield details (Layer 6 keyword abilities, overridden Defender and active
 combat/untap restrictions) by public permanent ID. Each keyword ability
 instance has a label and an optional `granted` flag, so a creature can carry

@@ -32,7 +32,9 @@ use crate::state::zone::ZoneType;
 mod combat;
 mod library;
 
-pub(crate) use combat::CombatGroup;
+pub(crate) use combat::{
+    AttackPlanNormalizer, BlockPlanNormalizer, CombatGroup, PlannedAttackEntry, PlannedBlockEntry,
+};
 use library::{OrderLibraryGroup, PartitionPilesGroup, ScryGroup, SurveilGroup};
 
 /// Which end of a library receives ordered cards (`snake_case` wire spelling).
@@ -120,6 +122,11 @@ pub struct DecisionOffer {
     pub verb: DecisionVerb,
     pub label: String,
     pub source: Option<SubjectRef>,
+    /// Live in-zone copies folded into this offer, omitted when empty.
+    /// Outside-game sideboard copies (`LearnTakeLesson`) stay in
+    /// `Game::action_aliases` for lowering.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<SubjectRef>,
 }
 
 /// The active decision a viewer faces now, carrying its bound address, raw
@@ -541,10 +548,18 @@ fn drive_preview<K: DecisionGroupKind>(
     })
 }
 
-fn primary_subject(subjects: &[OfferSubjectView]) -> Option<SubjectRef> {
-    subjects
-        .iter()
-        .find(|view| view.role == "source")
+/// The object an offer acts on. A blocker offer folds over the attackers it
+/// may block, so its subject is the attacker (`target`), the same class as its
+/// aliases; every other offer, including an attack on a planeswalker, names
+/// its `source` first.
+fn primary_subject(action: Option<&Action>, subjects: &[OfferSubjectView]) -> Option<SubjectRef> {
+    let order = match action {
+        Some(Action::DeclareBlocker { .. }) => ["target", "source", "choice"],
+        _ => ["source", "target", "choice"],
+    };
+    order
+        .into_iter()
+        .find_map(|role| subjects.iter().find(|view| view.role == role))
         .or_else(|| subjects.first())
         .map(|view| view.object.subject)
 }
@@ -651,6 +666,7 @@ fn project_offers(
     frame: &crate::decision::DecisionFrame,
 ) -> Vec<DecisionOffer> {
     let subjects = game.decision_offer_subjects(actor);
+    let mut aliases = game.decision_offer_aliases(actor);
     let space = game.action_space();
     frame
         .offers
@@ -658,7 +674,11 @@ fn project_offers(
         .enumerate()
         .map(|(index, offer)| {
             let offer_subjects = subjects.get(index).map(Vec::as_slice).unwrap_or(&[]);
-            let source = primary_subject(offer_subjects);
+            let source = primary_subject(space.and_then(|s| s.actions.get(index)), offer_subjects);
+            let offer_aliases = aliases
+                .get_mut(index)
+                .map(std::mem::take)
+                .unwrap_or_default();
             let label = space
                 .and_then(|s| {
                     s.actions.get(index).map(|action| {
@@ -673,6 +693,7 @@ fn project_offers(
                 verb: offer.verb,
                 label,
                 source,
+                aliases: offer_aliases,
             }
         })
         .collect()

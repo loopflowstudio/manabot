@@ -110,7 +110,7 @@ def test_scalar_and_vector_reset_offer_both_seats_the_same_opening_choices() -> 
     for seat, labels, choice in (
         (0, ["Keep hand", "Mulligan"], 1),
         (1, ["Keep hand", "Mulligan"], 0),
-        (0, None, 3),
+        (0, None, 1),
         (0, ["Keep hand", "Mulligan"], 0),
     ):
         assert observation.toJSON() == batch_observation.toJSON()
@@ -118,7 +118,10 @@ def test_scalar_and_vector_reset_offer_both_seats_the_same_opening_choices() -> 
         assert observation.turn.turn_number == 0
         offers = [action.description for action in observation.action_space.actions]
         if labels is None:
-            assert len(offers) == 7
+            decision = scalar.decision(seat)
+            assert decision is not None
+            assert len(offers) == 2
+            assert sum(1 + len(offer.aliases) for offer in decision.offers) == 7
             assert all(label and "deepest first" in label for label in offers)
         else:
             assert offers == labels
@@ -142,7 +145,12 @@ def test_other_seat_cannot_distinguish_private_bottom_choices(
         env.step(1)  # Mulligan again, then commit the deepest card.
         env.step(0)
     choices = env.observation_for_player(0).action_space.actions
-    assert len(choices) == (6 if second_bottom else 7)
+    decision = env.decision(0)
+    assert decision is not None
+    assert len(choices) == 2
+    assert sum(1 + len(offer.aliases) for offer in decision.offers) == (
+        6 if second_bottom else 7
+    )
     other_index = next(
         i for i, a in enumerate(choices) if a.description != choices[0].description
     )
