@@ -1129,6 +1129,137 @@ fn mana_upfront_dynamic_output_reads_the_board_after_the_fee() {
 }
 
 #[test]
+fn fixed_mana_suffix_reads_life_through_damage_replacement() {
+    use crate::agent::action::Action;
+    use crate::flow::{
+        game::{ActivationSource, Game, PendingChoice},
+        payment::{Operation, Payment},
+    };
+    use crate::state::{
+        ability::{Actor, Effect, EffectValue, PlayerSelector},
+        card::{
+            ActivatedAbilityDefinition, DamageRecipient, DamageSource, DamageTransform,
+            ReplacementEffect,
+        },
+        game_object::PlayerId,
+        player::PlayerConfig,
+    };
+
+    let player = PlayerId(0);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new(
+                "payer",
+                [
+                    ("Forest".into(), 37),
+                    ("Tarnished Citadel".into(), 1),
+                    ("The Great Henge".into(), 1),
+                    ("Gray Ogre".into(), 1),
+                ]
+                .into(),
+            ),
+            PlayerConfig::new("opponent", [("Forest".into(), 40)].into()),
+        ],
+        343,
+        false,
+    );
+    game.keep_opening_hands();
+    game.scenario_set_life(player, 4);
+    let citadel = game
+        .scenario_force_battlefield(player, "Tarnished Citadel", true)
+        .unwrap();
+    let henge = game
+        .scenario_force_battlefield(player, "The Great Henge", true)
+        .unwrap();
+    let source = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let object = game.permanent_object(source).unwrap();
+    game.state[object].replacement_effects = vec![ReplacementEffect::ModifyDamage {
+        source: DamageSource::any(Actor::You),
+        recipient: DamageRecipient::any(Actor::You),
+        combat: Some(false),
+        transform: DamageTransform::add(EffectValue::LifeGainedThisTurn(PlayerSelector::You)),
+    }];
+    game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("GGR"),
+        life_cost: 2,
+        effects: vec![Effect::gain_life(1)],
+        ..Default::default()
+    }];
+    let operation = Operation::Activation {
+        source: ActivationSource::Permanent(source),
+        ability_index: 0,
+        targets: vec![],
+        target_req_indices: vec![],
+        target_divisions: vec![],
+        x: 0,
+    };
+    let payment = Payment {
+        owed: game.cost_components(player, &operation),
+        operation,
+        receipt: Default::default(),
+    };
+    game.pending_choice = Some(PendingChoice::Pay {
+        player,
+        payment: Box::new(payment),
+    });
+    let coupling = |game: &Game, permanent| {
+        game.payment_model(player, None)
+            .sources
+            .iter()
+            .find(|source| source.permanent == permanent)
+            .unwrap()
+            .abilities[0]
+            .coupling
+    };
+    // Both root probes write only life. The replacement reads life gained
+    // this turn through the event path, outside the layer board's reads.
+    assert_eq!(
+        coupling(&game, citadel),
+        super::PaymentCoupling::Independent(super::LifeDelta(-3))
+    );
+    assert_eq!(
+        coupling(&game, henge),
+        super::PaymentCoupling::Independent(super::LifeDelta(2))
+    );
+    let step = |game: &mut Game, action: Action| {
+        let actions = &game.action_space().unwrap().actions;
+        let index = actions
+            .iter()
+            .position(|offer| *offer == action)
+            .unwrap_or_else(|| panic!("missing {action:?} in {actions:?}"));
+        game.step(index)
+    };
+    let activate = |permanent| Action::ActivateAbility {
+        player,
+        permanent,
+        ability_index: 0,
+    };
+    game.tick().unwrap();
+    let mut henge_first = game.clone();
+    // The frozen estimate admits Henge first. That gain changes the
+    // Citadel's damage from 3 to 5, leaving only 1 life for the owed fee.
+    let error = step(&mut henge_first, activate(henge)).unwrap_err();
+    assert!(error.0.contains("empty non-terminal action space"));
+    assert_eq!(henge_first.state.players[0].life, 6);
+    assert_eq!(
+        coupling(&henge_first, citadel),
+        super::PaymentCoupling::Independent(super::LifeDelta(-5))
+    );
+
+    // The same costs complete if Citadel deals 3 before Henge gains 2.
+    step(&mut game, activate(citadel)).unwrap();
+    assert_eq!(game.state.players[0].life, 1);
+    step(&mut game, Action::ChooseMode { player, mode: 3 }).unwrap();
+    step(&mut game, activate(henge)).unwrap();
+    step(&mut game, Action::ChooseMode { player, mode: 0 }).unwrap();
+    assert_eq!(game.state.players[0].life, 1);
+    assert!(game.pending_choice.is_none());
+    assert_eq!(game.state.stack_objects.len(), 1);
+}
+
+#[test]
 fn sacrificing_treasure_couples_to_battlefield_mana_conditions() {
     use crate::flow::game::Game;
     use crate::state::{
