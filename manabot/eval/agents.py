@@ -14,7 +14,7 @@ import time
 from typing import Any, Literal, cast
 
 from etude.checkpoints import CheckpointRef
-from etude.eval.agents import Forward, ModelForward
+from etude.eval.agents import Forward, ForwardError, ModelForward
 from etude.eval.records import CheckpointPlayer, Code, Match as EtudeMatch, Player
 from etude.jobs import Agents
 import numpy as np
@@ -148,7 +148,11 @@ class Sampler:
         started = time.perf_counter()
         outputs = await self.forward([batch], rows=batch.batch)
         elapsed = time.perf_counter() - started
-        return checked_logits(outputs, batch), elapsed
+        try:
+            logits = checked_logits(outputs, batch)
+        except (TypeError, ValueError) as exc:
+            raise ForwardError(self.checkpoint_key, str(exc)) from exc
+        return logits, elapsed
 
     def sample(self, logits: np.ndarray, legal: np.ndarray, seed: int) -> int:
         slots = np.flatnonzero(legal)

@@ -690,6 +690,32 @@ def test_vector_runner_isolates_admission_and_checkpoint_failures(
     assert outcomes[failed_match.key] is error
     assert isinstance(outcomes[good_match.key], Result)
 
+    async def malformed_logits(
+        inputs: list[object], *, rows: int | None = None
+    ) -> list[object]:
+        assert rows is not None
+        return [np.full((rows, space.config.max_actions), np.nan)]
+
+    outcomes = {
+        match.key: outcome
+        for match, outcome in play_local(
+            LocalMatches(
+                [
+                    (failed_match, [malformed_logits, opponent]),
+                    (good_match, [forward, opponent]),
+                ]
+            ),
+            spec_for,
+            slots=5,
+            output_dir=tmp_path / "malformed-logits",
+        )
+    }
+    malformed = outcomes[failed_match.key]
+    assert isinstance(malformed, ForwardError)
+    assert malformed.checkpoint == failed_ref.key
+    assert str(malformed) == "forward returned malformed legal logits"
+    assert isinstance(outcomes[good_match.key], Result)
+
     # An unexpected forward exception still escapes the generator.
     async def exploding_forward(
         inputs: list[object], *, rows: int | None = None
