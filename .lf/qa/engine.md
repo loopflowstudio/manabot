@@ -117,3 +117,19 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   `scripts` and `experiments` for `skip_trivial=false`/`False`, comments
   included. Describe lockstep or debug paths in prose ("with and without
   `skip_trivial`") rather than writing the assignment in a doc comment.
+- Folded offers and the decision APIs without a browser: play seeded games
+  between token-heavy decks (`22 Mountain / 30 Raging Goblin / 8 Burst
+  Lightning`; `12 Mountain / 10 Island / 14 Dragon Fodder / 8 Geyser Leaper /
+  8 Lightning Bolt`) through `Env.decision` / `Env.preview` / `Env.submit`,
+  drafting attacks from the *last* declarable copies so plans name creatures
+  the engine is not asking. An attacker with empty `can_attack` attacks the
+  single default defender (`defender=None`); `PlannedAttack` needs
+  `incarnation`. For the deprecated compound surface, use
+  `env.compound_offers()` (`structured_offers()` only covers priority and
+  raises elsewhere) with `RaggedPolicyDecoder` + `SeededSemanticScorer` and
+  `step_structured`. 32 games take about a second. Repeated candidate labels
+  are usually real distinctions the observation hides: haste masks differing
+  summoning sickness (control since the turn began, CR 302.6), the creature
+  activating a waterbend ability is named by the payment, and a spell on the
+  stack names its target. To explain one, cast Bolt on an `env.clone_env()` at
+  each step and watch when the copy stops sharing a target offer's aliases.

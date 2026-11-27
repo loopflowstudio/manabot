@@ -22,68 +22,65 @@
 </style>
 <body><main>
 <h1>MTG-487 QA</h1>
-<p class="sub">Second pass, after Passes 6–8 (decision_group alignment, <code>SubjectRef</code> aliases, action-aware <code>Offer.source</code>, recorded villain frames). Real Academy launches (<code>managym academy play / watch / replay</code>) on the release extension rebuilt from <code>8e4e2df37a</code> and a fresh static SPA, driven with Playwright at 1440×900. Clicks went only to board cards and offer rows.</p>
+<p class="sub">Third pass, at <code>4c85b7f320</code>. It covers Passes 9–10 and the compress pass: count roles in <code>decision_surface.rs</code>, the autotapper colour tiebreak, and the unified equivalence pass. The release extension and the static SPA were rebuilt from this commit. Academy ran as configured launches (<code>managym academy play / watch</code>) driven with Playwright at 1440×900. The library APIs ran as whole seeded games. No fixes were needed.</p>
 <table>
 <tr><th>Scenario</th><th>Result</th></tr>
 <tr><td>Two Plains in hand → one “Play Plains”; click the alias copy</td><td class="ok">works</td></tr>
-<tr><td>Four Youthful Knights → one cast; click the fourth copy</td><td class="ok">works</td></tr>
-<tr><td>Manual payment, Kyoshi Village + 3 Plains at {1}{W}</td><td class="ok">3 offers, as planned</td></tr>
-<tr><td>Tap an alias Plains, reload mid-payment, tap the remaining alias</td><td class="ok">works, Knight resolves</td></tr>
-<tr><td>Attack drafts of 1, 2, 0, 3 identical goblins on copies the engine wasn't asking</td><td class="ok">exact counts, one grouped command each</td></tr>
-<tr><td>Block dragged onto an alias attacker</td><td class="ok">works</td></tr>
-<tr><td>Burst Lightning on an alias goblin</td><td class="ok">works</td></tr>
-<tr><td>Review a finished Play game</td><td class="ok">115/115, final board = recorded</td></tr>
-<tr><td>Recorded frames for the bot seat carry aliases (Pass 8)</td><td class="ok">Play and Watch</td></tr>
-<tr><td>Cleanup discard from eight identical Plains (not reached last pass)</td><td class="ok">no prompt</td></tr>
-<tr><td>Elemental self-play recorded game in Academy replay</td><td class="ok">721/721</td></tr>
+<tr><td>Five Youthful Knights → one cast; click the fifth copy</td><td class="ok">works</td></tr>
+<tr><td>Manual payment, Kyoshi Village + 3 Plains at {1}{W}; tap alias, reload, tap alias</td><td class="ok">3 offers; Knight resolves</td></tr>
+<tr><td>Attack drafts of 1, 2, 0, 3 identical goblins naming copies the engine wasn’t asking</td><td class="ok">exactly 1, 2, 0, 3 attackers</td></tr>
+<tr><td>Block dragged onto an alias attacker</td><td class="ok">engine blocks the canonical copy</td></tr>
+<tr><td>Burst Lightning clicked on an alias goblin</td><td class="ok">canonical copy dies</td></tr>
+<tr><td>Cleanup discard from eight identical Plains</td><td class="ok">no prompt</td></tr>
+<tr><td>Watch: heuristic v heuristic, goblin mirror</td><td class="ok">65 decisions, 23 aliased offers, both seats</td></tr>
+<tr><td><code>Env.decision / preview / submit</code>: 32 games, 546 attack and 193 block drafts</td><td class="ok">0 errors</td></tr>
+<tr><td>Deprecated compound surface: 3,977 decisions incl. 469 attack, 169 block, 335 waterbend</td><td class="ok">0 rejected submissions</td></tr>
+<tr><td>Repeated candidate labels on the compound surface (367)</td><td class="ok">all real distinctions</td></tr>
 </table>
 
-<h2>1 · Hand copies <span class="tag ok">works</span></h2>
-<p><code>14 Kyoshi Village / 10 Plains / 16 Youthful Knight</code> against <code>40 Plains</code>, passive, seed 11. Turn 1 offers <code>[Play Kyoshi Village, Play Plains, Pass priority]</code>, Plains on copy 58 with alias 65 (now a <code>SubjectRef</code>, <code>{kind: object, id: {entity: 65}}</code>). Clicking 65 sent offer 1; a Plains entered. Later, four Knights in hand were one <code>Cast Youthful Knight</code> (aliases 69, 80, 75); clicking copy 75 sent offer 0.</p>
-
-<h2>2 · Manual payment <span class="tag ok">works</span></h2>
-<p>Auto-tap off. The cast stopped at <code>Tap Kyoshi Village for {G}/{W}</code>, <code>Tap Plains for {W}</code> (subject 82, aliases 84, 85), <code>Pay the cost</code>. Clicking 85 sent offer 1 and the engine tapped 82. After a page reload the Plains offer was on 84 with alias 85; clicking 85 tapped 84 and the Knight resolved. No rejections.</p>
-<figure><img src="qa-img/a-payment-stop.jpg"><figcaption>Payment stop: three rows. Each of the three Plains can be clicked.</figcaption></figure>
+<h2>1 · Hand copies and manual payment <span class="tag ok">works</span></h2>
+<p><code>14 Kyoshi Village / 10 Plains / 16 Youthful Knight</code> against <code>40 Plains</code>, passive, seed 11, Auto-tap off. Turn 1 offered <code>[Play Plains, Play Kyoshi Village, Pass priority]</code>, with Plains on copy 16 and aliases 21 and 19. Clicking 19 sent offer 0, and a Plains entered. Later, five Knights in hand were one <code>Cast Youthful Knight</code> (aliases 41, 33, 34, 27); clicking 27 sent offer 0.</p>
+<p>The payment stopped at <code>Tap Kyoshi Village for {G}/{W}</code>, <code>Tap Plains for {W}</code> (subject 82, aliases 84, 85) and <code>Pay the cost</code>. Clicking 85 tapped 82. After a page reload the Plains offer moved to 84 with alias 85; clicking 85 tapped 84 and the Knight resolved. Nothing was rejected.</p>
+<figure><img src="qa-img/a-payment-stop.jpg"><figcaption>Payment stop: three rows, and all three Plains can be clicked.</figcaption></figure>
 <figure><img src="qa-img/a-after-alias-tap.jpg"><figcaption>After clicking the rightmost Plains, the canonical copy is tapped.</figcaption></figure>
 
-<h2>3 · Attack drafts <span class="tag ok">works</span></h2>
-<p><code>22 Mountain / 30 Raging Goblin / 8 Burst Lightning</code> against <code>60 Plains</code>, passive, seed 5. Each draft clicked copies other than the one being asked, then confirmed. Confirms now travel as one <code>decision_group_command</code> (zero plain commands). Read from <code>canonical_replay.decisions</code>:</p>
-<pre>draft 1 (clicked 127)          129 attack · 127 no · 124 no                       → 1 attacker
-draft 2 (clicked 134,132)      136 attack · 134 attack · 132 no · 129 no          → 2
-draft 0                        136 no   (the rest pruned)
-draft 3 (clicked 136,134,132)  140 no · 136 · 134 · 132 attack · 129 no           → 3</pre>
-<p>Opponent life went 20 → 19 → 17 before the third attack, as drafted. The goblin cast that turn (140) remains a separate class and gets its own prompt.</p>
-<figure><img src="qa-img/b-draft-3.jpg"><figcaption>“Attack with 3 · not with Raging Goblin ×4”.</figcaption></figure>
+<h2>2 · Attack drafts <span class="tag ok">works</span></h2>
+<p><code>22 Mountain / 30 Raging Goblin / 8 Burst Lightning</code> against <code>60 Plains</code>, passive, seed 5, Auto-tap on. Each draft clicked copies other than the one being asked, then confirmed with one <code>decision_group_command</code>. From the recorded <code>canonical_replay.decisions</code>:</p>
+<pre>draft 1 (clicked 127)          129 attack · 127 no · 124 no                 → 1 attacker
+draft 2 (clicked 127,124)      129 attack · 127 attack · 124 no             → 2
+draft 0                        133 no · 129 no  (rest pruned)               → 0
+draft 3 (clicked 129,127,124)  133 · 129 · 127 attack · 124 no              → 3</pre>
+<p>The opponent’s life went 20 → 19 → 17.</p>
+<figure><img src="qa-img/b-draft-3.jpg"><figcaption>“Attack with 3 · not with Raging Goblin”.</figcaption></figure>
 
-<h2>4 · Blocks and targets <span class="tag ok">works</span></h2>
-<p>Goblins mirrored against <code>heuristic</code>, seed 5. The block stop offered <code>Block … (choice 127, target 132, aliases [130])</code>, <code>Block … (target 124)</code>, <code>do not block</code>. After Pass 7, block subjects are <code>choice:blocker, target:attacker</code> and aliases name attackers. Dragging blocker 127 onto alias 130 drafted “Raging Goblin on Raging Goblin”. The grouped plan named attacker 130, the engine accepted it, and nothing was rejected.</p>
-<figure><img src="qa-img/c-block-draft.jpg"><figcaption>Block drafted onto the alias attacker.</figcaption></figure>
-<p>Later, Burst Lightning offered <code>Target Raging Goblin</code> on 124 (aliases 130, 148), on 157 (its own class), and on the hero's five goblins. Clicking 148 sent offer 2 and killed 124, the copy the engine names.</p>
-<figure><img src="qa-img/c-target-stop.jpg"><figcaption>Their goblins form two rows, “tapped #1” and “#2”: one row for three identical goblins and one for a goblin that entered on a different turn.</figcaption></figure>
+<h2>3 · Blocks and targets <span class="tag ok">works</span></h2>
+<p>Goblins mirrored against <code>heuristic</code>, <code>--order draw</code>, seed 5. The block stop offered <code>Block … (choice 127, target 132, aliases [130])</code>, <code>Block … (target 124)</code> and <code>do not block</code>. Dragging blocker 127 onto alias 130 drafted “Raging Goblin on Raging Goblin”, and the plan named attacker 130. The engine’s <code>blocked</code> event names 132, the canonical copy, and both goblins died.</p>
+<p>The block line ends on the leftmost attacker. That is the drafted one: <code>alignCombatRows</code> moves a blocked attacker’s pile to the front of its row.</p>
+<figure><img src="qa-img/c-block-draft.jpg"><figcaption>Block drafted onto the alias attacker (moved to the front of the row).</figcaption></figure>
+<p>Burst Lightning: the target offer on 124 listed aliases 130 and 148. Clicking 148 sent that offer. 124 left the battlefield, and 130 and 148 remain.</p>
+<figure><img src="qa-img/c-target-stop.jpg"><figcaption>Target stop with folded goblin targets.</figcaption></figure>
 
-<h2>5 · Records <span class="tag ok">works</span></h2>
-<p>The block game ran to game over. “Review this game” replayed it to position 115/115, ending on the same game-over board.</p>
-<figure><img src="qa-img/c-review-end.jpg"><figcaption>Review at the last position.</figcaption></figure>
-<p>Pass 8: in that Play trace, 8 of the heuristic seat's 43 recorded frames carry <code>aliases</code>. A <code>managym academy watch --player heuristic --player heuristic</code> game on the same decks ran to game over, with aliases on 10 of seat 0's frames and 9 of seat 1's.</p>
-<figure><img src="qa-img/w-end.jpg"><figcaption>Watch opens paused at 1/1; pressing Play starts it. This is how Watch works now, not a defect.</figcaption></figure>
-<p><code>etude train manabot/recipes/elemental.py --config '{"updates": 2, "streams": 4, "record_games": 1, "statistics": true}'</code> finished (<code>outcome.json</code> state finished, 0 dropped) and recorded 12 games. <code>managym academy replay … --game 3</code> walked 721/721 positions (360 decisions) with no divergence.</p>
+<h2>4 · Discard and Watch <span class="tag ok">works</span></h2>
+<p><code>60 Plains</code> against <code>60 Plains</code>, passive, seed 3, passing every priority. On turn 2 the hand went from eight cards to seven and the graveyard from zero to one, with no discard prompt.</p>
+<p><code>managym academy watch --player heuristic --player heuristic</code> with the goblin mirror, seed 5, played to “Game over · Heuristic (seat 2) wins” with no divergence text. Its recording holds 65 decisions from both seats, and 23 of their frames carry offers with aliases.</p>
+<figure><img src="qa-img/w-end.jpg"><figcaption>Watch at game over.</figcaption></figure>
 
-<h2>6 · Discard from identical cards <span class="tag ok">works</span></h2>
-<p><code>60 Plains</code> against <code>60 Plains</code>, passive, seed 3, passing every priority. The hand reached 8 Plains and cleanup put one in the graveyard without a prompt. Every priority stop showed one <code>Play Plains</code>.</p>
-
-<h2>Carried over, not rerun</h2>
-<p>A record from before this change stops at decision 0 with a digest mismatch. That was shown last pass against hash v32; the change is now v34 and the cause is the same. The fix that wraps the reason text is still in <code>replay/+page.svelte</code>.</p>
-<figure><img src="qa-img/f-old-record.jpg"><figcaption>From the previous pass.</figcaption></figure>
+<h2>5 · Library decision APIs <span class="tag ok">works</span></h2>
+<p>Seeded games between token-heavy decks, eight seeds each: goblins v goblins, Dragon Fodder/Geyser Leaper/Bolt v goblins, the same deck mirrored, and Kyoshi v Plains.</p>
+<ul>
+<li><b><code>Env.decision</code> / <code>preview</code> / <code>submit</code></b>: random single choices. Attack drafts took the <em>last</em> declarable copies so plans named creatures the engine was not asking, and block drafts used a random subset of blockers. Result: 32 games, 4,836 decisions, 546 attack drafts (735 attackers planned), 193 block drafts and 2,507 offers with aliases. Every preview and submit was accepted.</li>
+<li><b>Compound surface</b> (<code>compound_offers</code> → <code>RaggedPolicyDecoder</code> → <code>step_structured</code>, deprecated for 0.3.0): 32 games, 3,977 decisions, including 469 attacker, 169 blocker and 335 waterbend count-role decisions. No submission was rejected.</li>
+</ul>
+<p>The compound surface showed 367 candidate rows whose labels repeat. Each sampled kind is a real distinction, not a missed fold:</p>
+<ul>
+<li><b>Haste goblins</b>: one had been under its controller since an earlier turn and the others had not. They differ in summoning sickness (CR 302.6), which haste hides from the observation. The sequential target prompt splits them the same way.</li>
+<li><b>Geyser Leapers in a waterbend payment</b>: one is the creature activating the ability, and the payment names it.</li>
+<li><b>Goblin tokens in a later waterbend</b>: one was the target of a Lightning Bolt on the stack.</li>
+</ul>
 
 <h2>Not reached</h2>
 <ul>
-<li>Attacking a planeswalker (<code>Offer.source</code> names the attacker): none of these decks has a planeswalker. The Rust test <code>attack_offers_name_the_attacker_as_source_whatever_the_defender</code> covers it.</li>
-<li>Convoke/waterbend taps and cost-component picks (sacrifice, crew, delve): none of these games reached them.</li>
-</ul>
-
-<h2>Harness notes (no product change)</h2>
-<ul>
-<li>The table now keeps a hidden Rematch inside the closed Settings menu, so the old <code>button:has-text("Rematch")</code> end check fired at once. Use <code>:visible</code>. Written into <code>.lf/qa/academy.md</code>.</li>
-<li>Aliases are <code>SubjectRef</code>. <code>alias.id.entity</code> is the board's <code>data-object-id</code>.</li>
+<li>The autotapper colour/output tiebreak has no visible Academy surface beyond Auto pay, which every scenario above used. The plan’s oracle covers its rules equivalence.</li>
+<li>Engine Budget adoption is still a gate/CI step, as the plan says.</li>
 </ul>
 </main></body></html>

@@ -386,7 +386,9 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   frame may still show the last decision; detect the end by the visible "Rematch"
   button. Attack and block drafts confirm as one `decision_group_command`
   (no `command` messages); its `plan` may name an alias, which the engine
-  resolves. `60 Plains` against `60 Plains` passive, seed 3, passing every
+  resolves. A drafted block moves its attacker's pile to the front of the
+  row (`alignCombatRows`), so read card boxes after the draft before judging
+  where a block line ends. `60 Plains` against `60 Plains` passive, seed 3, passing every
   priority, reaches a cleanup discard from eight identical Plains on turn 2:
   there is no prompt, the graveyard simply gains one. `managym academy watch
   --player heuristic --player heuristic` opens paused at position 1/1: press
