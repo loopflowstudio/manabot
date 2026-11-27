@@ -114,20 +114,8 @@ keep theirs) or the recorder changes.
 
 1. **Loader (done, `0286257840`).** `cuda -> mps -> cpu` + `MANABOT_EVAL_DEVICE`; any-batch `Prepared` -> `[batch, A]` float32 logits; `MemoryRows` in `concatenate`; `etude_compute_class`, `AGENTS`/`AGENTS_TF32`/`AGENTS_BF16`; `tf32` guard; GRU bf16 fix.
 2. **Vector runner, locally (done, `dd11bd0a3f`).** Seeded `SlotLoad.fresh(..., seed=)`; `RecordedVectorEnv.record_in_memory`/`slot_record`; shared admission/finalization (`eval/pairing.py`, `eval/match.py`); Torch-free async `play_pairings` (`eval/vector.py`). Trace parity with `play_pairing` proved field by field and by `replay_game`/`audit`/`replay_failure` (heuristic and GRU memory); raw `game_trace_sha256` differs only through wall-clock timings and `mode="vector"`.
-3. **Local measurement and runner cleanup (next, unblocked).**
-   - Cleanup: per-leg game setup in `eval/vector.py::_admit_active_match`
-     (mana payment/floats resolution, `match_hypers` dump, `runtime_identities`
-     with `arena_source_sha256`) repeats `sim/native_game.py::execute_game`
-     (~lines 170-200) and `eval/match.py` (~580); give it one owner both call.
-     Drop underscore prefixes on `vector.py` helpers (repository style).
-   - `experiments/eval_throughput.py` (standalone benchmark CLI driving
-     `play_pairings` through `LocalMatches` with the real loader as forward) +
-     `experiments/reports/eval_throughput.md`: Apple/CPU arms now — CPU batch-1
-     (`play_pairing`), CPU vector, MPS vector at slots 16/64/256, trained
-     w160l8 and seeded w384l8, 32 held-out trophy deals against the heuristic;
-     games/hour, rows per forward, limiting stage. Teaches whether vector
-     stepping moves games/hour on Apple before any rental. Exploratory.
-4. **Etude binding, L4 arm, docs (blocked on etude-sdk > 0.4.7).** Bind
+3. **Local measurement and runner cleanup (done, `08a854747f` + report).** Consolidated per-leg setup (`resolve_game_match`, `game_runtime_identities`, `arena_source_sha256`, `set_execution_limits`), dropped `_` prefixes on `eval/vector.py` helpers, added `experiments/eval_throughput.py`, and measured all 12 Apple M4 Max arms in `experiments/reports/eval_throughput.md` with exact 128/128 outcome and replay parity. MPS vector-64 reaches 1,989 games/hr on trained `w160l8` (2.66× CPU batch-1; forward 362.5→39.6 s, 17.1% of wall) and 1,882 games/hr on seeded `w384l8` (2.41× CPU batch-1; forward 346.8→52.0 s, 21.3%); `other_arena` + `replay` now take ~79–83% of single-process wall time, confirming multi-process game workers sharing a GPU agent (`play_many`) are needed to scale further.
+4. **Etude binding, L4 arm, docs (blocked on `etude-sdk > 0.4.7`; PyPI still `0.4.7` as of 2026-11-27, EXP-77 committed at `c5923cf` but unreleased).** Bind
    `play_many` over `play_pairings` (awaited `Forward(..., rows=)`, catch
    `ForwardError` per match); convert `play_pairing`/`play_cell`/experiment
    `play` callbacks to `async def`; remove `max_delay_seconds` from `AGENTS`
