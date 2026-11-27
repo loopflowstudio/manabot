@@ -1,4 +1,4 @@
-"""Semantic program joins: float32 parity and mandatory rented-CUDA admission.
+"""Semantic program and GRU decision-memory joins: float32 parity and CUDA admission.
 
 MANABOT_REQUIRE_CUDA=1 makes missing CUDA a failure, never a successful skip.
 The admission command prints actual recurrent output dtypes for the run log.
@@ -15,7 +15,9 @@ import numpy as np
 import pytest
 import torch
 from torch import nn
+from torch.nn.utils.rnn import PackedSequence
 
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
@@ -23,6 +25,7 @@ from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.match import Match, Reward
+from manabot.env.memory_store import PrefixObservation
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
@@ -30,15 +33,65 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.policy.prepare import CatalogPrograms
 from manabot.training.rollout import collection
 from manabot.training.rollout.collection import (
     close_collector,
     open_collector,
 )
 from tests.model.prepared_routes import device_input, program_input
+from tests.model.test_decision_memory import policy
+from tests.model.test_packed_gru import cast_gru_output
+from tests.training.test_memory_learner_fold import memory_fold_observation
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def exercise_gru_memory(
+    model: ActorCritic,
+    retained: PrefixObservation,
+    precision: Literal["float32", "bf16"] = "float32",
+) -> None:
+    """Exercise cold/warm serving folds, learner fold, and stateless GRU memory."""
+    assert model.decision_memory is not None and model.decision_memory.gru is not None
+    device = device_of(model)
+    with (
+        PolicyInference(model) as scope,
+        torch.no_grad(),
+        forward_precision(precision, device),
+    ):
+        cold = scope.prepare(retained)
+        assert cold.memory is not None and cold.memory.fold is not None
+        assert any(level.record_nodes is not None for level in cold.memory.fold.levels)
+        assert cold.memory.fold.retain is not None
+        assert cold.memory.fold.root_states is None
+        cold_logits, cold_values = model.forward_distribution(cold)
+        assert torch.isfinite(cold_logits).all() and torch.isfinite(cold_values).all()
+
+        warm = scope.prepare(retained)
+        assert warm.memory is not None and warm.memory.fold is not None
+        assert warm.memory.fold.root_states is not None
+        assert warm.memory.fold.root_references is not None
+        warm_logits, warm_values = model.forward_distribution(warm)
+        assert torch.isfinite(warm_logits).all() and torch.isfinite(warm_values).all()
+
+    for batch, expect_fold in (
+        (on_device(model.prepare(retained), device), True),
+        (on_device(model.prepare(retained.materialize()), device), False),
+    ):
+        assert batch.memory is not None
+        assert (batch.memory.fold is not None) is expect_fold
+        model.zero_grad(set_to_none=True)
+        with forward_precision(precision, device):
+            logits, values = model.forward_distribution(batch)
+        assert torch.isfinite(logits).all() and torch.isfinite(values).all()
+        loss = logits.float().square().mean() + values.float().square().mean()
+        assert torch.isfinite(loss)
+        loss.backward()
+        gru_grads = [
+            p.grad for p in model.decision_memory.gru.parameters() if p.grad is not None
+        ]
+        assert gru_grads and all(torch.isfinite(g).all() for g in gru_grads)
+        assert sum(float(g.abs().sum()) for g in gru_grads) > 0
 
 
 def test_definition_join_preserves_float32_outputs_and_gradients() -> None:
@@ -59,25 +112,33 @@ def test_definition_join_preserves_float32_outputs_and_gradients() -> None:
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
-def test_definition_join_accepts_recurrent_output_dtype(
-    dtype: torch.dtype, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Inject the observed CUDA boundary on CPU; this is not CUDA admission."""
+def test_definition_join_accepts_recurrent_output_dtype(dtype: torch.dtype) -> None:
+    """Inject the observed CUDA boundary at `nn.GRU` on CPU; not CUDA admission."""
     encoder = SemanticCardEncoder("ur-lessons-vs-gw-allies", 8)
-    original = encoder._encode_programs
-
-    def reduced(rows: CatalogPrograms[torch.Tensor]) -> torch.Tensor:
-        return original(rows).to(dtype)
-
-    monkeypatch.setattr(encoder, "_encode_programs", reduced)
+    encoder.encoder.register_forward_hook(cast_gru_output(dtype))
     table = encoder.definitions(program_input(encoder, torch.tensor([1, 2])))
     assert table.dtype == torch.float32
+    assert torch.isfinite(table).all()
     table.sum().backward()
     assert encoder.token_embedding.weight.grad is not None
+    assert torch.isfinite(encoder.token_embedding.weight.grad).all()
+    assert encoder.token_embedding.weight.grad.abs().sum() > 0
     empty = encoder.definitions(
         program_input(encoder, torch.empty(0, dtype=torch.long))
     )
     assert empty.dtype == table.dtype and not empty.any()
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_decision_memory_joins_accept_recurrent_output_dtype(
+    dtype: torch.dtype,
+) -> None:
+    """Inject reduced `nn.GRU` outputs across serving, learner and stateless memory."""
+    space, retained = memory_fold_observation()
+    model = policy(space, "gru", 4, live=True, bucketed=True)
+    assert model.decision_memory is not None and model.decision_memory.gru is not None
+    model.decision_memory.gru.register_forward_hook(cast_gru_output(dtype))
+    exercise_gru_memory(model, retained)
 
 
 @pytest.mark.parametrize("declared", ["float32", "bf16"])
@@ -101,6 +162,12 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
     agent = ActorCritic(space, model).cuda().train()
     cards = agent.semantic_cards
     assert cards is not None
+    mem_space, retained = memory_fold_observation()
+    mem_agent = policy(mem_space, "gru", 4, live=True, bucketed=True).cuda().train()
+    assert (
+        mem_agent.decision_memory is not None
+        and mem_agent.decision_memory.gru is not None
+    )
     dtypes: set[str] = set()
 
     def record_dtype(
@@ -108,8 +175,14 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
     ) -> None:
         assert isinstance(result, tuple) and isinstance(result[1], torch.Tensor)
         dtypes.add(str(result[1].dtype))
+        if isinstance(result[0], PackedSequence):
+            dtypes.add(str(result[0].data.dtype))
 
-    hook = cards.encoder.register_forward_hook(record_dtype)
+    hooks = [
+        cards.encoder.register_forward_hook(record_dtype),
+        mem_agent.semantic_cards.encoder.register_forward_hook(record_dtype),
+        mem_agent.decision_memory.gru.register_forward_hook(record_dtype),
+    ]
     collector = open_collector(
         space,
         Match(MatchConfig.model_validate(record["match"])),
@@ -176,6 +249,8 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
                 strict=True,
             ):
                 torch.testing.assert_close(a, b, atol=0, rtol=0)
+        exercise_gru_memory(mem_agent, retained, declared)
+        assert dtypes == {"torch.float32"}
         print(
             json.dumps(
                 {
@@ -191,5 +266,6 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
             )
         )
     finally:
-        hook.remove()
+        for hook in hooks:
+            hook.remove()
         close_collector(collector)
