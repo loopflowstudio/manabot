@@ -112,11 +112,7 @@ keep theirs) or the recorder changes.
 
 ## Passes
 
-1. **Loader.** Device order and override; any-batch `Prepared` inputs; memory
-   rows in `concatenate` (joined output equals per-row, memory and
-   memory-free); declared precision and compute classes with the `tf32` guard;
-   MPS-against-CPU logits on Apple hardware (skipped elsewhere). Teaches
-   nothing about the runner; it is what every later pass forwards through.
+1. **Loader (done, `0286257840`).** `cuda -> mps -> cpu` + `MANABOT_EVAL_DEVICE`; any-batch `Prepared` inputs returning `[batch, A]` float32 masked logits (no `concatenate` on single pre-collated inputs); `MemoryRows` joined in `concatenate` (rejecting `fold is not None`); `etude_compute_class`, `AGENTS`/`AGENTS_TF32`/`AGENTS_BF16` (1-arg top-level loaders required by Etude `Agents`), `validate_precision` `tf32` guard, GRU `summaries.new_zeros` bf16 fix; verified on CPU + Apple MPS (float32 parity and bf16).
 2. **Vector runner, locally.** Slot pool, seeded per-slot load (native if
    needed), per-checkpoint pre-collated forward, backfill, per-match
    finalization and yield, against a local match source. Acceptance: a fixed
