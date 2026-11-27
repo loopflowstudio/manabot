@@ -213,6 +213,9 @@ fn execution_names(out: &mut Vec<RecordName>) {
     add(TokenKind::Structure, "/Modification::AddColors");
     add(TokenKind::Structure, "/Modification::ModeChosen");
     add(TokenKind::Variant, "DamageKind::Combat");
+    // A changeling's last known characteristics (CR 702.73a) derive every
+    // creature type, which no printed definition serializes.
+    add(TokenKind::Text, "all");
     add(TokenKind::Variant, "DamageRecipientFilter::Any");
     // A departed permanent's last known name (a token's, or one an effect
     // set) and a play grant's condition reach fact programs as rules text.
@@ -546,6 +549,7 @@ mod tests {
         }
         check(&[LibraryEnd::Top, LibraryEnd::Bottom]);
         check(&CostComponent::Discard);
+        check(&crate::state::subtype::CreatureTypes::All);
     }
 
     #[test]

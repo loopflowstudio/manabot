@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MTG-501 QA · runtime program-token vocabulary</title>
+<style>
+  :root {
+    --font-serif: 'Spectral', Georgia, 'Times New Roman', serif;
+    --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+    --bg: #ffffff; --bg-surface: #fafaf9; --bg-muted: #f2f2f0;
+    --border: #dadad6; --text: #1c1c1e; --text-secondary: #55555b;
+    --forest: #5ca46a; --mountain: #d9603f; --plains: #b08a22;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121213; --bg-surface: #1f1f22; --bg-muted: #18181a;
+      --border: #323236; --text: #ececee; --text-secondary: #a9a9b0;
+      --forest: #8cc79a; --mountain: #f6a18e; --plains: #e2c874; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans);
+    font-size: 14px; line-height: 1.55; font-variant-numeric: tabular-nums; }
+  header { border-bottom: 1px solid var(--border); padding: 18px 32px 14px;
+    background: linear-gradient(90deg,#c8a23c,#5593d1,#9689b8,#f2846c,#5ca46a) bottom/100% 3px no-repeat, var(--bg-surface); }
+  h1, h2 { font-family: var(--font-serif); font-weight: 600; }
+  h1 { margin: 0; font-size: 22px; }
+  h2 { font-size: 17px; margin: 28px 0 8px; }
+  main { max-width: 920px; padding: 8px 32px 48px; }
+  .scenario { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-surface);
+    padding: 12px 16px; margin: 12px 0; }
+  .tag { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid; }
+  .pass { color: var(--forest); } .fixed { color: var(--plains); } .open { color: var(--mountain); }
+  pre { font-family: var(--font-mono); font-size: 12px; background: var(--bg-muted);
+    border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: pre-wrap; }
+  code { font-family: var(--font-mono); font-size: 12.5px; }
+  p.meta { color: var(--text-secondary); margin: 4px 0 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MTG-501 QA · runtime program tokens reach a catalog policy</h1>
+  <p class="meta">The consumer is training's catalog policy (<code>decision_memory=False</code>). Every scenario plays real
+  <code>managym.Env</code> games and embeds each decision through a tiny catalog <code>ActorCritic</code>, using a debug
+  extension so the native <code>TokenWriter::into_rules_tokens</code> guard is live.</p>
+</header>
+<main>
+
+<h2>Found and fixed</h2>
+<div class="scenario">
+  <span class="tag fixed">fixed</span> <strong>A departed changeling's last known characteristics emitted the unregistered Text <code>"all"</code></strong>
+  <p>Running <code>manabot.verify.record_coverage --games 40 --seed 501</code> stopped at game 38. Its decks include Three Tree Mascot
+  (changeling). With the guard live, the same game panics natively:</p>
+<pre>runtime program tokens outside the policy vocabulary: (6, 0x43dc8b2f)
+  into_rules_tokens ← Projection::finish ← project_stack_object ← Game::stack_frame
+  ← continuation_frames ← Observation::for_player_with_events ← Env::step</pre>
+  <p>The pair <code>(6, 0x43dc8b2f)</code> hashes the string <code>"all"</code>. That is how <code>CreatureTypes::All</code> serializes
+  (<code>managym/state/src/subtype.rs</code>). A stacked object that retains a departed changeling's LKI serializes its derived
+  creature types, and no printed definition carries that field. In training, Python admission would have rejected that decision
+  with <code>missing keys: (6, 0x43dc8b2f)</code>, which is the same failure class as issue 629.</p>
+  <p><strong>Fix:</strong> <code>record_vocabulary.rs</code> registers Text <code>"all"</code> beside the other runtime-only names (new
+  record <code>execution/6/all</code>), and <code>runtime_only_programs_have_catalog_tokens</code> now checks
+  <code>CreatureTypes::All</code>. That test fails if the registration is removed. Both record-vocabulary tests pass in debug.</p>
+  <p><strong>After the fix:</strong> the same 40 games give <code>every id has a catalog row</code>.</p>
+</div>
+
+<h2>Scenarios</h2>
+<div class="scenario">
+  <span class="tag pass">pass</span> <strong>Broad random play under the native guard (shipped CLI)</strong>
+<pre>world seed 501   40 games   7,386 decisions                    every id has a catalog row
+world seed 1    200 games  36,124 decisions  597,545 facts  32,406 effects  1122/1122 cards dealt
+world seed 2    200 games  39,699 decisions  645,819 facts  50,977 effects  1122/1122 cards dealt
+world seed 3    200 games  39,563 decisions  617,580 facts  82,751 effects  1122/1122 cards dealt
+elemental seed 7 60 games  13,671 decisions  187,179 facts  19,189 effects</pre>
+  <p>Before the fix, a 200-game world sweep (seed 501, continuing past failures, 41,173 decisions) had one failure: game 38 above.</p>
+</div>
+<div class="scenario">
+  <span class="tag pass">pass</span> <strong>Koh, the incident's card, in directed games (v10 and v11)</strong>
+  <p>Koh (Swamps) against Giant Spider and against Suki, Courageous Rescuer (once-per-turn trigger). Koh is always cast and targets with
+  its ETB, with one Pay-1-life activation per turn. 12 games per input version: 45 modal choices and 325 decisions carrying
+  continuation programs, all admitted, with no native panic.</p>
+</div>
+<div class="scenario">
+  <span class="tag pass">pass</span> <strong>An unknown pair is rejected by name</strong>
+  <p>A live encoded observation's first symbolic continuation-program word, overwritten with <code>0x7abc1234</code>:</p>
+<pre>policy received a program token outside the vocabulary; missing keys: (6, 0x7abc1234)</pre>
+</div>
+<div class="scenario" id="python">
+  <span class="tag pass">pass</span> <strong>Python tests on the rebuilt release extension</strong>
+  <p id="python-result"><code>tests/model/test_effect_vocabulary.py</code> + <code>test_pinned_pilot.py</code>: 16 passed, 1 skipped. <code>scripts/public_api.py check</code>: public API matches.</p>
+</div>
+
+<h2>Not reached</h2>
+<div class="scenario">
+  <p>The exact 0.2.6 incident state (a departed Koh holding an acquired once-per-turn trigger, read by a suspended frame) did not arise in
+  random or directed play. The Rust regression <code>koh_departed_once_each_turn_trigger_stays_in_program_vocabulary</code> constructs it.
+  No training run was launched. The CLI and directed games embed through the same <code>prepare</code> path that training admission uses.</p>
+</div>
+</main>
+</body>
+</html>

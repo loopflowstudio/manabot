@@ -60,3 +60,7 @@ At `660f37854`, six focused engine tests and five card regressions passed in
 debug, including the exhaustive effect witness, Koh's departed trigger, both
 Spyglass scenarios and the guard's exact missing-pair diagnostic. All 14 Python
 effect vocabulary tests passed against the extension built during pass 2.
+
+## QA
+
+With the debug guard live, `record_coverage` at world seed 501 found one gap in game 38: Text `"all"` (`CreatureTypes::All`), emitted through `project_stack_object` from a departed changeling's last-known characteristics. The fix registers it in `execution_names` and checks it in `runtime_only_programs_have_catalog_tokens`. After the fix, 640 world games and 60 Elemental games in `record_coverage` admit every id, as do 24 directed Koh games (v10/v11). An unknown pair is rejected by name. Details: `scratch/qa.html`.
