@@ -89,7 +89,7 @@ pub struct RuntimeToken {
 struct Vocabulary {
     records: Vec<RecordName>,
     runtime: Vec<RuntimeToken>,
-    content_texts: BTreeSet<String>,
+    content_names: BTreeSet<String>,
 }
 
 impl Vocabulary {
@@ -132,8 +132,9 @@ pub fn runtime_tokens() -> Vec<RuntimeToken> {
     VOCABULARY.runtime.clone()
 }
 
-pub(crate) fn content_token_texts() -> &'static BTreeSet<String> {
-    &VOCABULARY.content_texts
+/// Pack card and set names that also had synthetic record keys before 0.3.0.
+pub(crate) fn content_names() -> &'static BTreeSet<String> {
+    &VOCABULARY.content_names
 }
 
 static VOCABULARY: LazyLock<Vocabulary> = LazyLock::new(|| {
@@ -178,19 +179,21 @@ static VOCABULARY: LazyLock<Vocabulary> = LazyLock::new(|| {
     let pack = default_content_pack();
     for candidate in pack.name_candidates().iter() {
         out.record(Name, &candidate.name, None);
-        out.content_texts.insert(candidate.name.clone());
+        out.content_names.insert(candidate.name.clone());
     }
     for (_, definition) in pack.definition_entries() {
         out.record(Name, &definition.name, None);
-        out.content_texts.insert(definition.name.clone());
+        out.content_names.insert(definition.name.clone());
         let json = serde_json::to_value(definition).expect("serializable definition");
         for name in set_names(&json) {
             out.record(Name, &name, None);
-            out.content_texts.insert(name);
+            out.content_names.insert(name);
         }
         for condition in play_grant_conditions(&json) {
-            out.content_texts
-                .insert(condition_text("permanent", &condition));
+            out.runtime.push(runtime_token(
+                TokenKind::Text,
+                &condition_text("permanent", &condition),
+            ));
         }
         for predicate in combat_restrictions(&json) {
             let description = predicate_description(&predicate, "creatures");
@@ -198,7 +201,7 @@ static VOCABULARY: LazyLock<Vocabulary> = LazyLock::new(|| {
         }
     }
     out.runtime.extend(
-        out.content_texts
+        out.content_names
             .iter()
             .map(|name| runtime_token(TokenKind::Text, name)),
     );

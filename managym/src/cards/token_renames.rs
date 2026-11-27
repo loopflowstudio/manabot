@@ -2,7 +2,10 @@
 //! successor means the old meaning was removed or split across several tokens.
 //! Stored programs can still read the learned vector of a retired name.
 
+use std::collections::BTreeSet;
+
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
+use crate::agent::record_vocabulary::content_names;
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (
@@ -215,6 +218,9 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Field, "combat", None),
 ];
 
+pub const RECORDS: &[(&str, &str, Option<&str>)] =
+    &[("token", "Modification::ControlChanged", None)];
+
 // MTG-504, pre-0.3.0. These symbols also had synthetic record-name keys.
 // Keep this ledger independent of the live runtime projection's registrations.
 const LEGACY_EXECUTION_TOKENS: &[(TokenKind, &str)] = &[
@@ -224,6 +230,7 @@ const LEGACY_EXECUTION_TOKENS: &[(TokenKind, &str)] = &[
     (Field, "attacking"),
     (Field, "by"),
     (Field, "cause"),
+    (Field, "combat"),
     (Field, "condition"),
     (Field, "copies"),
     (Field, "cost"),
@@ -322,7 +329,10 @@ const LEGACY_EXECUTION_TOKENS: &[(TokenKind, &str)] = &[
     (Structure, "/PlayGrantExtension"),
     (Structure, "/PlayerId"),
     (Structure, "/ReplacementEffect::AdventureExile"),
+    (Structure, "/ReplacementEffect::DoubleDamageToController"),
+    (Structure, "/ReplacementEffect::ExileInsteadOfGraveyard"),
     (Structure, "/ReplacementEffect::PreventCombatDamage"),
+    (Structure, "/ReplacementEffect::PreventDamageToController"),
     (Structure, "/SpellProfile::BackFace"),
     (Structure, "/SpellProfile::Omen"),
     (Structure, "/SpendPredicate::ActivateCreatureSubtype"),
@@ -362,6 +372,7 @@ const LEGACY_EXECUTION_TOKENS: &[(TokenKind, &str)] = &[
     (Text, "applied replacements"),
     (Text, "assigned combat damage"),
     (Text, "attach to"),
+    (Text, "attached at activation"),
     (Text, "attacked defender"),
     (Text, "batch"),
     (Text, "bind moved"),
@@ -398,6 +409,7 @@ const LEGACY_EXECUTION_TOKENS: &[(TokenKind, &str)] = &[
     (Text, "create tokens"),
     (Text, "created"),
     (Text, "creature type choice"),
+    (Text, "creatures each player sacrifices"),
     (Text, "current characteristics"),
     (Text, "damage"),
     (Text, "damage source"),
@@ -447,8 +459,10 @@ const LEGACY_EXECUTION_TOKENS: &[(TokenKind, &str)] = &[
     (Text, "inspected"),
     (Text, "instructions"),
     (Text, "iteration instructions"),
+    (Text, "kept creature"),
     (Text, "kept on top"),
     (Text, "kept permanent"),
+    (Text, "land choices remaining"),
     (Text, "last blocker"),
     (Text, "last known attachment"),
     (Text, "last known attacking"),
@@ -517,6 +531,7 @@ const LEGACY_EXECUTION_TOKENS: &[(TokenKind, &str)] = &[
     (Text, "selected"),
     (Text, "selected distinct names"),
     (Text, "selected for graveyard"),
+    (Text, "selected lands"),
     (Text, "selected so far"),
     (Text, "selection"),
     (Text, "selection domain"),
@@ -538,6 +553,8 @@ const LEGACY_EXECUTION_TOKENS: &[(TokenKind, &str)] = &[
     (Text, "triggering player"),
     (Text, "turn action"),
     (Text, "turn face up"),
+    (Text, "waterbend contributions"),
+    (Text, "you control a Wizard permanent"),
     (Text, "zone move"),
     (Variant, "Bending::Air"),
     (Variant, "Bending::Earth"),
@@ -594,7 +611,10 @@ const LEGACY_EXECUTION_TOKENS: &[(TokenKind, &str)] = &[
     (Variant, "ManaExpiry::EndOfTurn"),
     (Variant, "ManaExpiry::Step"),
     (Variant, "ReplacementEffect::AdventureExile"),
+    (Variant, "ReplacementEffect::DoubleDamageToController"),
+    (Variant, "ReplacementEffect::ExileInsteadOfGraveyard"),
     (Variant, "ReplacementEffect::PreventCombatDamage"),
+    (Variant, "ReplacementEffect::PreventDamageToController"),
     (Variant, "SpellProfile::BackFace"),
     (Variant, "SpellProfile::Omen"),
     (Variant, "SpendPredicate::ActivateCreatureSubtype"),
@@ -673,21 +693,15 @@ pub fn token_renames() -> impl Iterator<Item = (TokenKind, &'static str, Option<
 }
 
 pub fn record_renames() -> Vec<(&'static str, String, Option<&'static str>)> {
-    use crate::agent::record_vocabulary::content_token_texts;
-
-    let synthetic = LEGACY_EXECUTION_TOKENS
+    let names: BTreeSet<_> = LEGACY_EXECUTION_TOKENS
         .iter()
         .copied()
-        .chain(TOKENS.iter().map(|&(kind, name, _)| (kind, name)))
-        .chain(
-            content_token_texts()
-                .iter()
-                .map(|name| (Text, name.as_str())),
-        );
-    let names: std::collections::BTreeSet<_> = synthetic
+        .chain(content_names().iter().map(|name| (Text, name.as_str())))
         .map(|(kind, name)| format!("execution/{}/{name}", kind as u16))
         .collect();
-    std::iter::once(("token", "Modification::ControlChanged".to_owned(), None))
+    RECORDS
+        .iter()
+        .map(|&(namespace, old, successor)| (namespace, old.to_owned(), successor))
         .chain(names.into_iter().map(|name| ("token", name, None)))
         .collect()
 }
@@ -698,7 +712,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        agent::record_vocabulary::{record_names, PROGRAM_VOCABULARY},
+        agent::{
+            decision_memory::decision_memory_names,
+            record_vocabulary::{record_names, RecordNamespace, PROGRAM_VOCABULARY},
+        },
         cards::tokens::name_value,
     };
 
@@ -717,6 +734,29 @@ mod tests {
     }
 
     #[test]
+    fn each_historical_record_has_one_disposition_and_renames_resolve() {
+        let records: HashSet<_> = record_names()
+            .into_iter()
+            .map(|record| (record.namespace.as_str(), record.value))
+            .chain(
+                decision_memory_names()
+                    .into_iter()
+                    .map(|(_, value)| (RecordNamespace::Token.as_str(), value)),
+            )
+            .collect();
+        let mut classified = HashSet::new();
+        for (namespace, old, successor) in record_renames() {
+            assert!(classified.insert((namespace, name_value(&old))), "{old}");
+            if let Some(new) = successor {
+                assert!(
+                    records.contains(&(namespace, name_value(new))),
+                    "{old} -> {new}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn legacy_keys_are_classified_after_their_registrations_are_gone() {
         let old = "kept creature";
         let memory = "DecisionMemory::Priority";
@@ -727,7 +767,11 @@ mod tests {
 
         let records = record_names();
         let retirements = record_renames();
-        for synthetic in ["execution/6/kept creature", "execution/6/effect execution"] {
+        for synthetic in [
+            "execution/6/kept creature",
+            "execution/6/effect execution",
+            "execution/6/you control a Wizard permanent",
+        ] {
             assert!(records.iter().all(|record| record.name != synthetic));
             assert!(retirements
                 .iter()
