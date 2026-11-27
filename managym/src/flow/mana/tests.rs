@@ -911,6 +911,84 @@ fn payment_scan_marks_life_coupling_without_coupling_basic_taps() {
 }
 
 #[test]
+fn mana_upfront_fee_can_remove_the_activated_ability() {
+    use crate::flow::{decision::Decision, game::Game};
+    use crate::state::{
+        ability::{Condition, Effect},
+        card::{ActivatedAbilityDefinition, StaticAbility, StaticScope},
+        effect::{EffectDuration, Modification},
+        game_object::PlayerId,
+        player::{ManaFloats, PlayerConfig},
+    };
+
+    let player = PlayerId(0);
+    let deck = [("Mountain".into(), 39), ("Gray Ogre".into(), 1)].into();
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("payer", deck),
+            PlayerConfig::new("opponent", [("Mountain".into(), 40)].into()),
+        ],
+        340,
+        false,
+    );
+    game.keep_opening_hands();
+    game.mana_floats[player.0] = ManaFloats::All;
+    let source = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let mountain = game
+        .scenario_force_battlefield(player, "Mountain", true)
+        .unwrap();
+    let cost = ManaCost::parse("{1}{R}");
+    let grant = StaticAbility::continuous(
+        StaticScope::This,
+        Some(Condition::UnspentManaAtLeast { count: 1 }),
+        vec![Modification::GrantActivated(Box::new(
+            ActivatedAbilityDefinition {
+                mana_cost: cost.clone(),
+                tap_source: true,
+                effects: vec![Effect::add_mana(Mana::parse("BB"))],
+                ..Default::default()
+            },
+        ))],
+    );
+    game.apply_continuous(
+        None,
+        player,
+        [game.affected_permanent(source).unwrap()],
+        Modification::GrantStatic(Box::new(grant)),
+        EffectDuration::Indefinite,
+    );
+    *game.state.mana_pool_mut(player) = Mana::parse("R").into();
+    game.activate_mana_ability(player, source, 0).unwrap();
+    assert!(matches!(
+        game.state.suspended_decision.as_ref().unwrap().decision,
+        Decision::ManaUpfront { permanent, ability_index: 0, .. } if permanent == source
+    ));
+    assert!(game.can_pay_mana_upfront(player));
+    let before = game.state.deterministic_hash();
+    let mut fork = game.clone();
+    fork.tap_fixed_mana_source(player, mountain);
+    let mut remaining = fork.characteristics(source).activated_abilities[0]
+        .mana_cost
+        .clone();
+    while remaining.mana_value > 0 {
+        let choices = fork.pooled_mana(player).spending_choices(&remaining);
+        let [choice] = choices.as_slice() else {
+            panic!("the red pool pays the fee in one order");
+        };
+        fork.spend_mana_unit(player, &choice.unit, &remaining);
+        remaining = choice.remaining.clone();
+    }
+    // The pending activation is still the same one. Its live index has
+    // disappeared before complete_mana_upfront can read it.
+    assert_eq!(fork.pooled_mana(player).total(), 0);
+    assert!(fork.characteristics(source).activated_abilities.is_empty());
+    assert_eq!(fork.state.suspended_decision, game.state.suspended_decision);
+    assert_eq!(game.state.deterministic_hash(), before);
+}
+
+#[test]
 fn direct_payment_taps_in_source_order_and_keeps_waterbend_taps_it_needs() {
     // Source order, not usefulness: the Forest ahead of the Islands is tapped.
     let model = PaymentModel {
