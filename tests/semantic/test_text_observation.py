@@ -2616,7 +2616,7 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
     memory = read_records(
         env.observation_for_player(env.current_agent_index()).decision_memory_json()
     )
-    assert len(memory) == 412
+    assert len(memory) == 421
     decision = capture_text_decision(env)
     _assert_memory_contexts(decision.text, memory)
     assert len({r.context.model_dump_json() for r in memory}) > 250

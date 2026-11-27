@@ -340,7 +340,7 @@ Post-Pass 10 (`d542d94725`): no conceptual defects; every concept lines up at `4
 
 ## Remaining
 
-- Gate: adopt `managym/perf/baseline.json` from a green CI `Engine Budget` run (`scripts/engine_budget.py record --reason`). Deferred to gate/CI.
+None — `managym/perf/baseline.json` adopted from CI `Engine Budget` run `45927645401` (`4c85b7f320`): search total `71.261s -> 63.715s` (−10.6%), worst reply `1.780s -> 1.700s` (−4.5%), steps `31,166.3 -> 32,175.9/s` (+3.2%).
 
 ## Deferred findings
 
