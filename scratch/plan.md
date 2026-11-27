@@ -16,6 +16,14 @@ Pass 4 attempt 2 reproduced `mana_trigger_reads_keyword_changed_by_another_activ
 
 The fifth concept review (`fc7f2f70e7`, `scratch/concept-review.html`) found four more channels the read graph misses (`tap_cost.predicate` `mana.rs` ≈3381; `ActivatedAbilitiesCostLess.predicate` `statics.rs` ≈990; delve graveyard growth from a non-token sacrifice `help.rs` ≈51; a summoning-sick creature removing its own haste counter `mana.rs` ≈3349) and concluded the blacklist premise is wrong. Design 4 below now holds its whitelist. Both Heartbeat of Spring (`chk.rs`) and Badgermole Cub (`tla.rs`) use a predicate with only `card_type` set, so the TLA acceptance boards stay on the whitelist.
 
+## Pass 4 stop · repeatable mana effects
+
+Pass 4 attempt 3 (`de9787c04`) adds `repeatable_mana_suffix_grows_the_board_at_a_full_pool` in `managym/src/flow/mana/tests.rs`. A constructed mana ability taps its source, adds green, creates a Clue and untaps itself. Three native activations each leave the same saturated green pool and a ready source, with one more Clue and a new match-state hash each time. The fixture takes six native steps at priority and passed its focused debug check.
+
+Design 4 would keep this ability a Mutator at every state. For a payment owing blue on this board, there is no pure finish, no handoff and no repeated board state. Dropping events and normalizing object IDs still leaves a growing Clue count. Payment terms can read that count through `Condition::ControlsAtLeast` or `EffectValue::BattlefieldMatching`. The planned fork search has no termination argument for such repeatable effects. The same mana-ability representation admits both resource-consuming and resource-restoring suffixes.
+
+Pause pass 4 before adding the fork path. The mana-payment section of `managym/README.md` already requires consumption of a finite resource, while `ActivatedAbilityDefinition::mana_suffix` and live execution accept the constructed effect. Review needs to decide where the documented invariant is enforced or how resource-restoring effects enter feasibility. Both earlier pass 4 regressions still await the solver. The colored-convoke slice and collection acceptance remain in pass 5.
+
 ## Why a frozen source list fails
 
 Angel of Vitality is 4/4 at 25 life or more; Raucous Audience makes `{G}{G}` while its controller has a power-4 creature, else `{G}`. Casting Solemn Simulacrum (`{4}`):
