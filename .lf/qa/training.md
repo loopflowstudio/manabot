@@ -357,8 +357,9 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   75) + `--resume`. For cross-update game completions and replay digests, use
   `streams=2, transitions=160, updates=3, record_games=1` and replay each line
   in `out/games/*.jsonl` against `end["digest"]`. For real native capacity
-  recovery and pooled refill (`idle_stream_steps < streams`, `learned_samples`
-  + `discarded_samples == len(actions)`), set `max_permanents_per_player=7`
+  recovery and pooled refill (`idle_stream_steps <= failures * (streams - 1)`,
+  `< streams` for a single failure, `learned_samples` + `discarded_samples ==
+  len(actions)`), set `max_permanents_per_player=7`
   with `GameErrorPolicy(recover_capacity=True, threshold=0.95, window=50,
   warmup=50)`. For the benchmark CLI, run `uv run python
   scripts/bench_training_update.py --streams 4 --updates 2 --batch-closure

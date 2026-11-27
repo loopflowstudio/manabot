@@ -386,21 +386,32 @@ def test_two_seat_exact_quota_refills_a_failure_from_the_whole_pool(
     )
     try:
         most_discarded = 0
+        total_discarded = 0
+        total_idle = 0
         for _ in range(12):
             idle = collector.stats.idle_stream_steps
             decisions = collector.stats.micro_steps
+            crashed = collector.game_error_state.crashed
             batch = collect(collector, agent, transitions)
             assert batch.actions.shape == (num_envs * transitions, 1)
             assert all(p is None for p in collector._pending)
             # Every decision of a self-play stream is a learner row, so the
             # surplus over the batch is what this update's failures discarded.
             discarded = collector.stats.micro_steps - decisions - batch.actions.size
-            # Only the final partial round is narrower than the pool.
-            assert collector.stats.idle_stream_steps - idle < num_envs
+            idle_delta = collector.stats.idle_stream_steps - idle
+            crashed_delta = collector.game_error_state.crashed - crashed
+            # Full rounds have zero idle steps; a partial round only occurs
+            # after a failure, and a second partial round only if a failure
+            # occurs inside one, bounding idle steps by one partial round per
+            # failure (0 when error-free, < num_envs on a single failure).
+            assert idle_delta <= crashed_delta * (num_envs - 1)
             most_discarded = max(most_discarded, discarded)
-        # A per-stream quota would idle the other streams for at least this many
-        # steps while the failed stream made up its rows alone.
-        assert most_discarded >= 2
+            total_discarded += discarded
+            total_idle += idle_delta
+        # A per-stream quota would idle peer streams for every row the failed
+        # stream had to catch up alone; pool refill keeps idle far below discard.
+        assert most_discarded >= 2 * num_envs
+        assert total_idle < total_discarded
     finally:
         close_collector(collector)
 
