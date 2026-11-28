@@ -36,31 +36,19 @@ stack, state-based actions and triggers.
 
 ### Forced decisions
 
-A decision reaches a player only when it has at least two legal actions. With
-one legal action the engine plays it and keeps going, so a forced choice never
-costs a model a forward pass and never produces a training row.
-
-From `Game::tick` in [`managym/src/flow/tick.rs`](../managym/src/flow/tick.rs):
-
-```rust
-if let Some(space) = action_space {
-    if !self.skip_trivial || space.actions.len() > 1 {
-        self.publish_action_space(space);
-        return false;
-    }
-    self.skip_trivial_count += 1;
-    if let Some(action) = space.actions.first() {
-        if self.execute_action(action).is_err() {
-            return true;
-        }
-    }
-    continue;
-}
-```
+With `skip_trivial` enabled, the engine plays singleton actions and keeps
+going. A forced choice costs no model forward pass and produces no training
+row. [`Game::tick`](../managym/src/flow/tick.rs) also executes automatic mana
+payments before publishing the next decision.
 
 - `skip_trivial` is on everywhere by default: training, evaluation, Academy and
   benchmarks. Turning it off is for explicit debugging and the constructed-position
   diagnostic fixtures only.
+- Under both `skip_trivial` settings, an empty non-terminal action space or a
+  failed forced/automatic action returns `Err(AgentError)` (raising
+  `managym.AgentError` from `Env.step`). In isolated vector stepping
+  (`step_isolated_into_buffers`), only the failing slot is poisoned while
+  sibling slots finish and return normally.
 - Before the single-action check, actions that differ only in which of several
   game-indistinguishable objects they name fold into one offer, so a choice
   among identical copies — such as discarding one card from two identical
@@ -288,9 +276,11 @@ memory capture, then optionally commit a first action. Restore checks that
 the action still identifies the same choice after sampling.
 
 The private snapshot replay reproduces the original setup, external actions and
-ordered interventions and verifies the resulting digest. See the
-[Python snapshot guide](engine-python.md#save-and-restore-game-positions)
-for the mode contracts, replay limits and Academy Watch import.
+ordered interventions and verifies the resulting digest. Pending mana payments
+now store the announced activation, so the match-state digest moves from v34
+to v35. Restore v34 snapshot replays with the engine revision that wrote them.
+The [Python snapshot guide](engine-python.md#save-and-restore-game-positions)
+covers the mode contracts, replay limits and Academy Watch import.
 
 ### Remembered library positions
 

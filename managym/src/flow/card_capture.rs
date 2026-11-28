@@ -605,7 +605,8 @@ mod tests {
             true,
             Some(CaptureMode::Exposure),
             false,
-        );
+        )
+        .unwrap();
         game.keep_opening_hands();
         game.scenario_force_battlefield(payer, "Izzet Guildgate", true)
             .unwrap();
@@ -653,7 +654,8 @@ mod tests {
             true,
             Some(CaptureMode::Exposure),
             false,
-        );
+        )
+        .unwrap();
         game.keep_opening_hands();
         game.state.turn.current_phase = PhaseKind::Combat as usize;
         game.state.turn.current_step = 3; // combat damage
@@ -701,7 +703,7 @@ mod tests {
         let last = game.create_token("token.ally", defender).unwrap();
         game.declare_blocker(last, Some(extra)).unwrap();
         *game.state.life_mut(defender).unwrap() = 1;
-        assert!(game.tick());
+        assert!(game.tick().unwrap());
         assert!(game.state.permanents[last].is_some());
         let facts = game.exposure_mut().unwrap();
         assert_eq!(facts.attackers_lost_for_nothing, [1, 0]);

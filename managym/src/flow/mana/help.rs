@@ -8,43 +8,67 @@
 // A cost's help splits its generic mana into tiers (`help_obligations`):
 // convoke and improvise taps may pay any of it, any artifact's or creature's
 // tap the announced waterbend part, and mana all of it. A convoking
-// creature paying a colored pip is tried by `convoke_search`.
+// creature may also tap to pay an owed pip of one of its colors.
 
 use super::*;
 use crate::flow::payment::TapPayment;
 use crate::state::payment::Toward;
 
 impl Game {
-    /// Mark the sources whose tap `help`'s convoke or improvise lets pay any
-    /// generic mana (`ManaSource::keyword`). Every untapped artifact and
-    /// creature may still pay the waterbend part.
+    /// Mark what each untapped creature or artifact may pay by tapping
+    /// under this cost's convoke or improvise permissions.
     pub(super) fn mark_help_taps(&self, model: &mut PaymentModel, help: Help) {
-        let keyword = |source: &ManaSource| {
-            source.waterbend && {
-                let view = self.characteristics(source.permanent);
-                help.convoke && view.is_creature() || help.improvise && view.types.is_artifact()
+        let tap_permissions = |source: &ManaSource| {
+            let mut colors = ManaTypeSet::EMPTY;
+            if !source.waterbend || !(help.convoke || help.improvise) {
+                return (false, colors);
             }
+            let view = self.characteristics(source.permanent);
+            let convoke = help.convoke && view.is_creature();
+            if convoke {
+                for &color in &view.colors {
+                    colors.insert(ManaTypeSet::of(color));
+                }
+            }
+            (
+                convoke || help.improvise && view.types.is_artifact(),
+                colors,
+            )
         };
         if model
             .sources
             .iter()
-            .all(|source| source.keyword == keyword(source))
+            .all(|source| (source.keyword, source.convoke_colors) == tap_permissions(source))
         {
             return;
         }
         for source in Arc::make_mut(&mut model.sources) {
-            source.keyword = keyword(source);
+            (source.keyword, source.convoke_colors) = tap_permissions(source);
         }
+    }
+
+    pub(super) fn announced_obligations(
+        &self,
+        player: PlayerId,
+        payment: &Payment,
+    ) -> Vec<Obligation> {
+        self.help_obligations(
+            player,
+            payment.mana().0,
+            payment.mana_permissions(),
+            payment.life(),
+        )
     }
 
     /// `cost` as the payment model's obligations under `permissions`: delve
     /// pays as much generic as the graveyard holds, convoke and improvise taps
     /// may pay the rest of the generic, and mana pays everything.
-    pub(super) fn help_obligations(
+    fn help_obligations(
         &self,
         player: PlayerId,
         cost: &ManaCost,
         permissions: CostPermissionContext,
+        life: u32,
     ) -> Vec<Obligation> {
         let cost = match permissions.help.delve {
             Some(spell) => {
@@ -59,52 +83,9 @@ impl Game {
         } else {
             0
         };
-        tap_obligations(&cost, keyword, waterbend)
-    }
-
-    /// The creatures that may pay colored pips under `help` and `model`,
-    /// each with its 6-bit color mask: none unless the cost has convoke.
-    fn convokers(&self, model: &PaymentModel, help: Help) -> Vec<(PermanentId, ManaTypeSet)> {
-        if !help.convoke {
-            return Vec::new();
-        }
-        model
-            .sources
-            .iter()
-            .filter(|source| source.keyword)
-            .filter_map(|source| {
-                let view = self.characteristics(source.permanent);
-                view.is_creature().then(|| {
-                    let mut mask = ManaTypeSet::EMPTY;
-                    for &color in &view.colors {
-                        mask.insert(ManaTypeSet::of(color));
-                    }
-                    (source.permanent, mask)
-                })
-            })
-            .collect()
-    }
-
-    /// Can `cost` be paid from `model` with mana and `permissions`?
-    fn helped_payable(
-        &self,
-        player: PlayerId,
-        pool: &Mana,
-        model: &mut PaymentModel,
-        convokers: &[(PermanentId, ManaTypeSet)],
-        cost: &ManaCost,
-        permissions: CostPermissionContext,
-    ) -> bool {
-        self.convoke_search(model, cost, convokers, &mut |model, cost| {
-            model
-                .payable(
-                    pool.clone(),
-                    self.help_obligations(player, cost, permissions),
-                    SourcePolicy::All,
-                )
-                .then_some(())
-        })
-        .is_some()
+        let mut obligations = tap_obligations(&cost, keyword, waterbend, permissions.help.convoke);
+        obligations.extend(Obligation::life(life));
+        obligations
     }
 
     /// Can `player` pay `cost` with mana and `permissions`, `pool` in their pool?
@@ -115,13 +96,33 @@ impl Game {
         cost: &ManaCost,
         permissions: CostPermissionContext,
     ) -> bool {
+        self.payable_with_help_and_life(
+            player,
+            pool,
+            cost,
+            permissions,
+            self.payment_life_owed(player),
+        )
+    }
+
+    pub(in crate::flow) fn payable_with_help_and_life(
+        &self,
+        player: PlayerId,
+        pool: &Mana,
+        cost: &ManaCost,
+        permissions: CostPermissionContext,
+        life: u32,
+    ) -> bool {
         let mut model = self.payment_model(player, None);
         if let Some(permanent) = permissions.reserved_tap {
             model.reserve(SourceReservation::tap(permanent));
         }
         self.mark_help_taps(&mut model, permissions.help);
-        let convokers = self.convokers(&model, permissions.help);
-        self.helped_payable(player, pool, &mut model, &convokers, cost, permissions)
+        model.payable(
+            pool.clone(),
+            self.help_obligations(player, cost, permissions, life),
+            SourcePolicy::All,
+        )
     }
 
     /// What tapping `tapped` may pay of `cost` under `permissions`, before
@@ -181,22 +182,24 @@ impl Game {
                 model.reserve(SourceReservation::tap(permanent));
             }
             self.mark_help_taps(&mut model, permissions.help);
-            let convokers = self.convokers(&model, permissions.help);
-            (model, convokers)
+            model
         };
-        let (mut model, convokers) = model_for(None);
+        let mut model = model_for(None);
         let pool = self.pooled_mana(player);
+        let life = self.payment_life_owed(player);
         // The payments of `asked` that leave the rest payable from `model`.
-        let keeping_payable = |model: &mut PaymentModel,
-                               convokers: &[(PermanentId, ManaTypeSet)],
-                               asked: &[TapPayment]| {
+        let keeping_payable = |model: &PaymentModel, asked: &[TapPayment]| {
             asked
                 .iter()
                 .copied()
                 .filter(|payment| {
                     let next_permissions = permissions.after_tap(*payment);
                     let rest = cost.less_pip(payment.color);
-                    self.helped_payable(player, &pool, model, convokers, &rest, next_permissions)
+                    model.payable(
+                        pool.clone(),
+                        self.help_obligations(player, &rest, next_permissions, life),
+                        SourcePolicy::All,
+                    )
                 })
                 .collect::<Vec<_>>()
         };
@@ -209,80 +212,13 @@ impl Game {
                 }
                 // Tapped, the permanent is no longer a source of the model,
                 // so it pays its own pip and not a second one.
-                let options =
-                    model.with_tapped(tapped, |model| keeping_payable(model, &convokers, &asked));
+                let options = model.with_tapped(tapped, |model| keeping_payable(model, &asked));
                 debug_assert_eq!(options, {
-                    let (mut alone, convokers) = model_for(Some(tapped));
-                    keeping_payable(&mut alone, &convokers, &asked)
+                    keeping_payable(&model_for(Some(tapped)), &asked)
                 });
                 (!options.is_empty()).then_some((tapped, options))
             })
             .collect()
-    }
-
-    /// `attempt` against the obligations `player` has pending. A convoke
-    /// payment in progress is asked as it stands and then with each set of
-    /// creatures paying colored pips of it, since the payment model itself
-    /// only taps for generic mana.
-    pub(super) fn while_paying<T>(
-        &self,
-        player: PlayerId,
-        model: &mut PaymentModel,
-        attempt: &mut dyn FnMut(&PaymentModel, Vec<Obligation>) -> Option<T>,
-    ) -> Option<T> {
-        match self.paying() {
-            Some((payer, payment, CostComponent::Mana { .. }))
-                if payer == player && payment.help().convoke =>
-            {
-                let convokers = self.convokers(model, payment.help());
-                let owed = payment.mana().0.clone();
-                self.convoke_search(model, &owed, &convokers, &mut |model, owed| {
-                    attempt(model, self.payment_obligations_owing(player, Some(owed)))
-                })
-            }
-            _ => attempt(model, self.payment_obligations(player)),
-        }
-    }
-
-    /// `attempt` to pay `cost`, then `cost` less each set of colored pips
-    /// that `convokers` can pay, those creatures tapped. A convoker the
-    /// model already has tapped pays nothing. The search is exhaustive over
-    /// those assignments, so it grows with the number of colored creatures
-    /// when no attempt succeeds. Creatures are tried in one order, so each
-    /// set of taps is visited once.
-    fn convoke_search<T>(
-        &self,
-        model: &mut PaymentModel,
-        cost: &ManaCost,
-        convokers: &[(PermanentId, ManaTypeSet)],
-        attempt: &mut dyn FnMut(&PaymentModel, &ManaCost) -> Option<T>,
-    ) -> Option<T> {
-        if let Some(found) = attempt(model, cost) {
-            return Some(found);
-        }
-        for (position, (permanent, colors)) in convokers.iter().enumerate() {
-            if !model
-                .sources
-                .iter()
-                .any(|source| source.permanent == *permanent && source.keyword)
-            {
-                continue;
-            }
-            for color in colors.iter().filter(|&slot| cost.cost[slot] > 0) {
-                let found = model.with_tapped(*permanent, |model| {
-                    self.convoke_search(
-                        model,
-                        &cost.less_pip(Color::from_index(color as u8)),
-                        &convokers[position + 1..],
-                        attempt,
-                    )
-                });
-                if found.is_some() {
-                    return found;
-                }
-            }
-        }
-        None
     }
 }
 

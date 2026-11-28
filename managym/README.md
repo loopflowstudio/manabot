@@ -514,11 +514,12 @@ and the choice focuses the permanent just tapped. The payment model splits
 a cost's generic mana into what those taps may pay (`help_obligations`), so
 castability, offers and execution agree. `AdditionalCost::{Convoke, Improvise, Delve}` give a
 spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
-Offers and affordability ask the payment model with the help included
-(`payable_with_help`, `while_paying`), so a spell castable only with help is
-offered and a tap that would strand the cost is not; the automatic payer never
-takes help, so when mana alone cannot pay the taps and exiles are the player's
-picks.
+The same witness reserves a creature tapped for a colored pip, including
+while a nested mana ability is being paid. For example, Airship Engine Room
+can supply generic mana while a white creature remains available to convoke
+a white pip for Guardian of Vitu-Ghazi. The player chooses convoke, improvise
+and delve contributions even with automatic mana payment.
+
 Costs chosen while casting use the kicker choice: bargain
 (`AdditionalCost::Bargain`) adds a `Sacrifice` component toward `Bargain` and
 marks the spell kicked, and a conditional alternative
@@ -619,11 +620,13 @@ create stack objects. The initial fixed-source witness keeps source order;
 [automatic source preference](#automatic-source-preference) selects the taps.
 A nested automatic prefix considers concrete pool remainders and the parent's
 completion.
-The announced activation's own tap, sacrifice and unpaid life fee remain
-reserved throughout waterbend and nested mana decisions, including a saved
-spending caller. A nested mana ability cannot consume those resources and
-leave the announcement without a complete payment. Its own upfront life fee
-is counted once, on that ability's output obligation.
+An announced mana ability keeps its priced cost and rules text even if its
+source loses the ability during payment. It reserves the source’s owed tap,
+counters and sacrifice through nested decisions. Its unpaid life fee
+follows its mana, including when a spending decision holds the announcement.
+Mana output reads the board after all activation costs and their replacements
+resolve. A sacrificed source keeps its entry choice for output that depends
+on its chosen color or type.
 
 Most payment questions never reach the search. With four untapped Islands and
 an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
@@ -1132,6 +1135,21 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   choice, both fixed and simple choice taps are offered alongside pay (and
   non-simple mana abilities such as Treasure remain explicit).
 
+Cast, activation and resolution payments use the same feasibility check for
+mana, life and help. Mana abilities can change the payer's life during payment.
+The check carries signed life through those steps and accounts for fixed
+self-damage and life gain when their replacements resolve without a further
+choice or other rules-state change. Paying zero life is always legal. Positive
+fees require a life total that can change and covers the fee (CR 119.4, 119.8).
+A life fee on the announced cost follows mana production, so life gained along
+the way can fund it. State-based loss for zero or less life is
+checked after the payment completes. An empty non-terminal choice returns a
+step error under either skipping setting.
+
+While a resolution payment such as ward can still be declined, the payer may
+float mana before declining. Paying still requires enough life for the full
+cost when the player commits to it.
+
 These choices are on by default for every consumer. They do not expose undo,
 or production at priority unless a seat
 [asks for it](#mana-taps-at-priority-and-during-payment).
@@ -1178,16 +1196,16 @@ or phase, as any floating mana does. There is no undo.
   actions dropped.
 - **Manual payments.** During cast, activation and resolution payments,
   extra fixed-source taps follow the ordinary payment choices. A tap must
-  leave reserved resources available and the committed cost payable. Mana
-  made while a cast or activation is being paid pays toward it at once: the
-  cost owed shrinks and the receipt names the unit's source, as a convoke tap
-  does. Mana that was floating before, a source's surplus and mana that can
-  pay nothing still owed stay in the pool for the spend choice, and so does
-  new mana when pooled mana of another class (a rider, a restriction) or
-  another color could pay the same pip. A payment ends as soon as no mana
-  is owed, whatever is still untapped: surplus waits for the priority that
-  follows, and a cost whose mana is {0} from the start never opens its mana
-  step.
+  leave reserved resources available and the committed cost payable. During a
+  cast or activation payment, mana from a source joins the pool while any
+  triggered mana bonuses resolve. Once production is complete, uncontested
+  units from that production pay toward the cost and the receipt names each
+  unit's source. Previously floated mana stays pooled for spending, and any
+  choice between colors or mana classes (such as riders or restrictions)
+  remains available. For example, with Heartbeat of Spring, {U}{R} from a land
+  and a bonus {U} can pay {1}{U} by spending two blue and floating red. Surplus
+  stays in the pool for the priority that follows. A cost whose mana is {0}
+  from the start never opens its mana step.
 - **Automatic payments.** Once the player accepts a cost, the engine selects
   the sources, their outputs, any waterbend contributions and the units to
   spend. The player still chooses X, optional costs and spell targets.

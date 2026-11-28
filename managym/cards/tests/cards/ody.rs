@@ -1,16 +1,21 @@
 //! Tests for cards filed in `src/ody.rs`, in card order.
 
 use crate::support::{
-    game::{five_color_setup, five_color_unfunded_setup, move_to_hand},
-    inspect::{has_action, library_card, offered_cards, zone_of},
-    play::{activate, cast, cast_card, cast_owned, choose, choose_mode, select_card, settle},
+    game::{clear_summoning_sickness, five_color_setup, five_color_unfunded_setup, move_to_hand},
+    inspect::{card_of, has_action, library_card, now, offered_cards, top_spell, zone_of},
+    play::{
+        activate, cast, cast_card, cast_owned, castable, choose, choose_mode, select_card, settle,
+        spend_named,
+    },
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
     state::{
+        ability::Effect,
+        card::ActivatedAbilityDefinition,
         effect::{Affected, EffectDuration, Modification},
-        game_object::PlayerId,
-        mana::Mana,
+        game_object::{PermanentId, PlayerId},
+        mana::{Color, Mana, ManaCost},
         zone::ZoneType,
     },
 };
@@ -124,6 +129,310 @@ fn tarnished_citadel_damage_is_prevented_under_teferis_protection() {
     choose_mode(&mut s, 0);
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("W"));
     assert_eq!(s.life(0), 20);
+}
+
+fn mana_modes(s: &crate::support::game::Scenario) -> Vec<usize> {
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    s.action_space()
+        .actions
+        .iter()
+        .map(|action| match action {
+            Action::ChooseMode { mode, .. } => *mode,
+            action => panic!("expected a mana color, got {action:?}"),
+        })
+        .collect()
+}
+
+#[test]
+fn tarnished_citadel_and_heartbeat_complete_manual_payment() {
+    let spell = "Sokka, Bold Boomeranger";
+    for (second, life, citadel_first, citadel_color, second_color) in [
+        ("Airship Engine Room", 2, true, 1, 1),
+        ("Airship Engine Room", 2, true, 3, 0),
+        ("Airship Engine Room", 3, true, 1, 1),
+        ("Sunbaked Canyon", 3, false, 1, 0),
+        ("Sunbaked Canyon", 5, true, 1, 0),
+        ("Sunbaked Canyon", 5, false, 1, 0),
+    ] {
+        let room = second == "Airship Engine Room";
+        let mut s =
+            five_color_unfunded_setup(&[spell, "Tarnished Citadel", second, "Heartbeat of Spring"]);
+        s.game_mut().skip_trivial = false;
+        let citadel = s.force_permanent_on_battlefield(0, "Tarnished Citadel");
+        let other = s.force_permanent_on_battlefield(0, second);
+        let other_ability = usize::from(room);
+        s.force_permanent_on_battlefield(0, "Heartbeat of Spring");
+        s.game_mut().scenario_set_life(PlayerId(0), life);
+
+        cast_owned(&mut s, spell);
+        let offered = |permanent, index| {
+            has_action(&s, |action| {
+                matches!(action, Action::ActivateAbility { permanent: p, ability_index, .. }
+                if *p == permanent && *ability_index == index)
+            })
+        };
+        assert_eq!(offered(citadel, 0), room || life > 3);
+        assert!(offered(other, other_ability));
+        if citadel_first {
+            activate(&mut s, citadel, 0);
+            assert_eq!(s.life(0), life - 3);
+            assert_eq!(mana_modes(&s), if room { vec![1, 3] } else { vec![1] });
+            choose_mode(&mut s, citadel_color);
+            activate(&mut s, other, other_ability);
+            assert_eq!(mana_modes(&s), [second_color]);
+            choose_mode(&mut s, second_color);
+        } else {
+            activate(&mut s, other, other_ability);
+            assert_eq!(s.life(0), life - 1);
+            assert_eq!(mana_modes(&s), [second_color]);
+            choose_mode(&mut s, second_color);
+            activate(&mut s, citadel, 0);
+            assert_eq!(mana_modes(&s), [citadel_color]);
+            choose_mode(&mut s, citadel_color);
+        }
+        let ending_life = life - 3 - i32::from(!room);
+        assert_eq!(s.life(0), ending_life);
+        for land in [citadel, other] {
+            assert!(s.game().state.permanents[land].as_ref().unwrap().tapped);
+        }
+        assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("UR"));
+        assert_eq!(s.game().state.stack_objects.len(), 1);
+        assert_eq!(
+            s.game().state.loss(0).is_some_and(|loss| loss.life_total),
+            ending_life <= 0
+        );
+    }
+}
+
+#[test]
+fn tarnished_citadel_can_gain_life_before_paying_canyon() {
+    // A colorless Citadel tap cannot pay one of these three colored pips.
+    for protected in [false, true] {
+        let spell = "Sokka, Bold Boomeranger";
+        let mut s = five_color_unfunded_setup(&[
+            spell,
+            "Tarnished Citadel",
+            "The Great Henge",
+            "Sunbaked Canyon",
+        ]);
+        s.game_mut().skip_trivial = false;
+        let citadel = s.force_permanent_on_battlefield(0, "Tarnished Citadel");
+        let henge = (!protected).then(|| s.force_permanent_on_battlefield(0, "The Great Henge"));
+        let canyon = s.force_permanent_on_battlefield(0, "Sunbaked Canyon");
+        s.game_mut().scenario_set_life(PlayerId(0), 2);
+        if protected {
+            s.game_mut().apply_continuous(
+                None,
+                PlayerId(0),
+                [Affected::Player(PlayerId(0))],
+                Modification::ProtectionFromEverything,
+                EffectDuration::UntilYourNextTurn,
+            );
+        }
+        let object = move_to_hand(&mut s, spell);
+        if !protected {
+            s.game_mut().state[object].mana_cost = Some(ManaCost::parse("UGGR"));
+        }
+        let mut fork = s.clone();
+        let before = s.game().state.deterministic_hash();
+        assert!(castable(&mut s, object));
+        assert_eq!(s.game().state.deterministic_hash(), before);
+        cast_card(&mut fork, object);
+        assert_eq!(s.game().state.deterministic_hash(), before);
+        assert_eq!(s.life(0), 2);
+        assert!(!s.game().state.permanents[citadel].as_ref().unwrap().tapped);
+
+        cast_card(&mut s, object);
+        activate(&mut s, citadel, 0);
+        assert_eq!(s.life(0), if protected { 2 } else { -1 });
+        assert_eq!(mana_modes(&s), [1]);
+        choose_mode(&mut s, 1);
+        if let Some(henge) = henge {
+            activate(&mut s, henge, 0);
+            assert_eq!(mana_modes(&s), [0]);
+            choose_mode(&mut s, 0);
+            assert_eq!(s.life(0), 1);
+        }
+        activate(&mut s, canyon, 0);
+        choose_mode(&mut s, 0);
+        assert_eq!(s.life(0), if protected { 1 } else { 0 });
+        assert_eq!(s.game().state.stack_objects.len(), 1);
+    }
+}
+
+#[test]
+fn tarnished_citadel_still_costs_three_life_beside_angel_of_vitality() {
+    let spell = "Sokka, Bold Boomeranger";
+    let mut s = five_color_unfunded_setup(&[
+        spell,
+        "Tarnished Citadel",
+        "Sunbaked Canyon",
+        "Angel of Vitality",
+    ]);
+    s.game_mut().skip_trivial = false;
+    let citadel = s.force_permanent_on_battlefield(0, "Tarnished Citadel");
+    let canyon = s.force_permanent_on_battlefield(0, "Sunbaked Canyon");
+    s.force_permanent_on_battlefield(0, "Angel of Vitality");
+    s.game_mut().scenario_set_life(PlayerId(0), 3);
+
+    cast_owned(&mut s, spell);
+    assert_eq!(
+        s.action_space().actions,
+        [Action::ActivateAbility {
+            player: PlayerId(0),
+            permanent: canyon,
+            ability_index: 0,
+        }]
+    );
+    activate(&mut s, canyon, 0);
+    choose_mode(&mut s, 0); // Red.
+    activate(&mut s, citadel, 0);
+    choose_mode(&mut s, 1); // Blue.
+    assert_eq!(s.life(0), -1);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    assert!(s.game().state.loss(0).is_some_and(|loss| loss.life_total));
+}
+
+fn heartbeat_modal_land() -> (crate::support::game::Scenario, PermanentId) {
+    let mut s = five_color_unfunded_setup(&[
+        "Sokka, Bold Boomeranger",
+        "Tarnished Citadel",
+        "Heartbeat of Spring",
+    ]);
+    s.game_mut().skip_trivial = false;
+    let citadel = s.force_permanent_on_battlefield(0, "Tarnished Citadel");
+    s.force_permanent_on_battlefield(0, "Heartbeat of Spring");
+    let source = card_of(&s, citadel);
+    s.game_mut().state[source].activated_abilities = vec![ActivatedAbilityDefinition {
+        tap_source: true,
+        effects: vec![Effect::mana_choice(["UR", "UG"].map(Mana::parse))],
+        ..Default::default()
+    }];
+    (s, citadel)
+}
+
+#[test]
+fn heartbeat_bonuses_commit_the_original_output_with_its_source() {
+    let (mut s, citadel) = heartbeat_modal_land();
+    s.force_permanent_on_battlefield(0, "Heartbeat of Spring");
+    s.set_player_mana_pool(0, "U");
+    let source = card_of(&s, citadel);
+    let spell = move_to_hand(&mut s, "Sokka, Bold Boomeranger");
+
+    cast_card(&mut s, spell);
+    activate(&mut s, citadel, 0);
+    choose_mode(&mut s, 0); // Produce {U}{R}.
+    choose_mode(&mut s, 1); // First Heartbeat adds {R}.
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("UURR"));
+    assert!(s.game().state.stack_objects.is_empty());
+    assert_eq!(mana_modes(&s), [0, 1]);
+    choose_mode(&mut s, 0); // Second Heartbeat adds {U}.
+
+    let cast = top_spell(&s);
+    assert_eq!(cast.object, now(&s, spell));
+    let spent = cast.spent.mana();
+    assert_eq!(
+        spent.iter().map(|unit| unit.color).collect::<Vec<_>>(),
+        [Color::Blue as u8, Color::Red as u8]
+    );
+    assert!(spent
+        .iter()
+        .all(|unit| unit.source.is_some_and(|origin| origin.object == source)));
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("UUR"));
+}
+
+#[test]
+fn heartbeat_bonus_keeps_the_generic_spend_choice() {
+    let (mut s, citadel) = heartbeat_modal_land();
+    let object = move_to_hand(&mut s, "Sokka, Bold Boomeranger");
+    s.game_mut().state[object].mana_cost = Some(ManaCost::parse("1U"));
+
+    cast_card(&mut s, object);
+    activate(&mut s, citadel, 0);
+    choose_mode(&mut s, 0); // Produce {U}{R}.
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("UR"));
+    assert_eq!(mana_modes(&s), [0, 1]);
+    choose_mode(&mut s, 0); // Heartbeat adds {U}.
+    spend_named(&mut s, |label| label.contains("{U}"));
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("R"));
+}
+
+#[test]
+fn the_great_henge_funds_an_announced_life_fee_after_canyon() {
+    let mut s = five_color_unfunded_setup(&["Gray Ogre", "Sunbaked Canyon", "The Great Henge"]);
+    let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let canyon = s.force_permanent_on_battlefield(0, "Sunbaked Canyon");
+    let henge = s.force_permanent_on_battlefield(0, "The Great Henge");
+    let object = s.game().state.permanents[source].as_ref().unwrap().object;
+    s.game_mut().state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("GGR"),
+        life_cost: 2,
+        effects: vec![Effect::gain_life(1)],
+        ..Default::default()
+    }];
+    s.game_mut().skip_trivial = false;
+    s.game_mut().scenario_set_life(PlayerId(0), 2);
+
+    activate(&mut s, source, 0);
+    activate(&mut s, canyon, 0);
+    assert_eq!(s.life(0), 1);
+    assert_eq!(mana_modes(&s), [0]);
+    choose_mode(&mut s, 0);
+    activate(&mut s, henge, 0);
+    assert_eq!(s.life(0), 3);
+    choose_mode(&mut s, 0);
+    assert_eq!(s.life(0), 1);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+}
+
+#[test]
+fn tarnished_citadel_and_the_great_henge_change_another_mana_source() {
+    for (name, life, count, mode, before, produced) in [
+        ("Tarnished Citadel", 28, 2, 1, "GG", "UUG"),
+        ("The Great Henge", 22, 1, 0, "G", "GGGG"),
+    ] {
+        let mut s = five_color_unfunded_setup(&[
+            name,
+            "Angel of Vitality",
+            "Raucous Audience",
+            "Solemn Simulacrum",
+        ]);
+        let sources: Vec<_> = (0..count)
+            .map(|_| s.force_permanent_on_battlefield(0, name))
+            .collect();
+        let audience = s.force_permanent_on_battlefield(0, "Raucous Audience");
+        clear_summoning_sickness(&mut s, audience);
+        s.force_permanent_on_battlefield(0, "Angel of Vitality");
+        s.game_mut().scenario_set_life(PlayerId(0), life);
+        s.allow_priority_floats();
+        let spell = move_to_hand(&mut s, "Solemn Simulacrum");
+        if count == 2 {
+            assert!(castable(&mut s, spell));
+        }
+
+        let audience_output = |game: &managym::flow::game::Game| {
+            game.characteristics(audience).activated_abilities[0]
+                .mana_choices()
+                .unwrap()
+        };
+        let root = s.game().clone();
+        assert_eq!(audience_output(&root), [Mana::parse(before)]);
+        // At 28, either Citadel alone leaves Audience producing {G}{G}.
+        // Once the first damage lands, the second activation changes it.
+        for (index, source) in sources.into_iter().enumerate() {
+            activate(&mut s, source, 0);
+            let (life, output) = if index == 0 { (25, "GG") } else { (22, "G") };
+            assert_eq!(s.life(0), life);
+            assert_eq!(audience_output(s.game()), [Mana::parse(output)]);
+            choose_mode(&mut s, mode);
+        }
+        activate(&mut s, audience, 0);
+        choose_mode(&mut s, 0);
+        assert_eq!(s.game().state.players[0].mana_pool, Mana::parse(produced));
+        assert_eq!(audience_output(&root), [Mana::parse(before)]);
+        assert_eq!(castable(&mut s, spell), count == 1);
+    }
 }
 
 #[test]
