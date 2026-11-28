@@ -566,12 +566,16 @@ def replay(
     device = torch.device(device_name)
     sync = device_sync(device)
     digest = file_sha256(checkpoint)
-    out.mkdir(parents=True, exist_ok=False)
 
     def inputs(policy: ActorCritic) -> Iterator[HostBatch]:
         return bound_inputs(batches, policy, digest, grid_rows, limit, skip_rows)
 
+    # Admit the precision and the capture before creating the receipt
+    # directory, so a refused replay can be rerun with the same arguments.
     policy = load_torch_policy(checkpoint, precision, device)
+    if next(inputs(policy), None) is None:
+        raise ValueError("no captured calls fit the requested replay")
+    out.mkdir(parents=True, exist_ok=False)
     if variant == "bf16-linear-once":
         linear_weights_bf16(policy)
     if device.type == "cuda":
@@ -604,8 +608,6 @@ def replay(
                     selected = rng.randrange(index + 1)
                     if selected < profile_calls:
                         sample[selected] = index, batch
-            if not calls:
-                raise ValueError("no captured calls fit the requested replay")
             passes.append(calls)
     peak = torch.cuda.max_memory_allocated(device) if device.type == "cuda" else None
     first, *timed = passes

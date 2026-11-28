@@ -160,8 +160,12 @@ def check_profile(tmp_path: Path) -> None:
     experiment.random_checkpoint(alternate, 32, 4, template=checkpoint)
     digest = file_sha256(alternate)
     widened = load_torch_policy(alternate, "float32", device)
+    refused = tmp_path / "refused"
     with pytest.raises(ValueError, match="exact bytes"):
-        next(experiment.bound_inputs(batches, widened, digest, None, 1, 0))
+        experiment.replay(
+            alternate, batches, refused, device_name="cpu", variant="float32"
+        )
+    assert not refused.exists()
     (batch,) = experiment.bound_inputs(batches, widened, digest, 4, 1, 0)
     assert batch.batch == 4
     assert experiment.run_call(widened, batch, "float32", device, sync)[0].shape[0] == 4

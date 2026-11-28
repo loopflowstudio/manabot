@@ -105,3 +105,18 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
   match and all four new legs to replay. A third pass reports
   `nothing to play`. Use a temporary track directory and retain each run's
   arena output separately.
+- Precision profiling (`experiments/eval_precision_profile.py`) without a
+  GPU: a fresh checkout needs `uv venv --python 3.13`, then `uv sync --extra
+  evaluation --extra artifacts --extra dev --no-install-package managym` and a
+  `managym.pth` holding the checkout path in `.venv/lib/python3.13/site-packages`
+  (the in-tree `.so` serves when the Rust is unchanged since it was built).
+  Newer Etude checkouts drop `etude.eval.game.Matches` and fail the import, so
+  install the report's pinned revision from an archive, leaving the Etude
+  checkout alone: `git -C <etude> archive d876a7b1 | tar -x -C .runs/etude-d876a7b1`
+  then `uv pip install --no-deps -e .runs/etude-d876a7b1`. `etude fetch` and
+  `manabot.data fetch` need `doppler run -p manabot -c prd --`. On CPU a
+  one-deal `capture` took about 20 s (315 calls); `replay --device mps` runs
+  every variant, CPU only float32/tf32. `render_report --receipts
+  .runs/eval-precision-profile/l4-a468879a7a` must reproduce that directory's
+  `l4-tables.md` byte for byte. A refused replay (bf16 on CPU, another
+  checkpoint's arena batches, an empty grid) must leave no `--output-dir`.

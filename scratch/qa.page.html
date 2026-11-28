@@ -1,0 +1,48 @@
+<h1>MTG-507 QA: the precision-profile CLI as a reader reproducing it</h1>
+
+<p>Driven on the M4 Max (no CUDA; load 30–40 from other work, so no timing here is evidence) from a fresh <code>.venv</code> in this checkout, following the report's Reproduce section. CUDA paths were not re-run: the L4 receipts under <code>.runs/eval-precision-profile/l4-a468879a7a/</code> stand for them.</p>
+
+<h2>1. First visit: install and fetch</h2>
+<p>Fresh venv, locked sync without the engine, in-tree extension (current: the only Rust commit since its build is a <code>rustfmt</code> change). <code>manabot.data fetch</code> and <code>etude fetch</code> under Doppler returned the trained checkpoint, sha256 <code data-no-check>26ff27b7…</code>, equal to the L4 input copy.</p>
+<p><strong>Snag:</strong> the newest local Etude checkout fails every subcommand, including <code>--help</code>:</p>
+<pre>ImportError: cannot import name 'Matches' from 'etude.eval.game'</pre>
+<p>The report already pins Etude revision <code data-no-check>d876a7b1</code>; installing that revision from <code>git archive</code> fixed it. Not a code defect; the working recipe is now in <code>.lf/qa/evaluation.md</code>.</p>
+
+<h2>2. Main job: capture, replay, render</h2>
+<pre>$ … capture --checkpoint …/00002000-raw.safetensors --device cpu --deals 1 \
+    --batches .runs/qa507/trained.batches --output-dir .runs/qa507/capture-trained
+Captured 315 calls from 4 games in .runs/qa507/trained.batches     (18.6 s)</pre>
+<p>CPU float32 replay wrote <code>calls.jsonl</code>, <code>summary.json</code> and <code>profile.json</code>; the seven estimated buckets sum to the 50.9 ms sampled mean, <code>cuda_buckets_seconds</code> is <code>null</code> (absent, not zero), and 32 native MHA dispatches are listed. On MPS, float32, bf16 and bf16-linear-once all ran on the same 40 calls: bf16-linear-once logits equal shipped bf16 exactly, and the MPS math SDPA kernel is named. Grid replay of the trained singles on the seeded <code>w384l8</code> control (<code>--grid-rows 16</code>) worked; the fresh-reading <code>arena-wide</code> checkpoint is refused with "different policy input contract", as designed.</p>
+
+<h2>3. Returning user: the recorded L4 receipts</h2>
+<pre>$ … render_report --receipts .runs/eval-precision-profile/l4-a468879a7a --output .runs/qa507/l4-tables.md
+$ diff .runs/qa507/l4-tables.md .runs/eval-precision-profile/l4-a468879a7a/l4-tables.md
+(no output)</pre>
+<p>All 84 replay profiles, the admission arms, the removed cached-autocast receipts and the arena repeats render byte-identically (about 1 s).</p>
+
+<h2>4. Arena runner</h2>
+<p><code>experiments.eval_throughput</code>, vector-64 on MPS, two deals: 8 games, 367 forwards; <code>forwards.jsonl</code> rows (734) and seconds (4.61) equal the derived <code>summary.json</code>. bf16 on MPS also ran (352 calls). bf16 on CPU refuses before writing anything.</p>
+
+<h2>5. Wrong input</h2>
+<table>
+<tr><th>Attempt</th><th>Result</th></tr>
+<tr><td><code>--output-dir</code> that exists</td><td>argparse error</td></tr>
+<tr><td>missing <code>--batches</code></td><td>"is not a capture file"</td></tr>
+<tr><td>another checkpoint on arena batches</td><td>"arena batches require the capturing checkpoint's exact bytes"</td></tr>
+<tr><td><code>--grid-rows 64 --skip-rows 99999</code></td><td>"no captured calls fit the requested replay"</td></tr>
+<tr><td><code>--variant bf16 --device cpu</code></td><td>"precision bf16 requires CUDA or MPS" (as a traceback)</td></tr>
+<tr><td>a non-gzip file as <code>--batches</code></td><td><code>BadGzipFile</code> traceback</td></tr>
+</table>
+
+<h2>Fixed</h2>
+<p>Every refused replay left an empty <code>--output-dir</code> behind, so rerunning the corrected command failed with "exists". Replay now loads the policy and admits the first captured call before creating the directory; the empty-replay check moved there with it.</p>
+<lf-diff path="experiments/eval_precision_profile.py"></lf-diff>
+<p>The smoke test now calls <code>replay</code> with the wrong checkpoint and asserts no directory remains. It fails without the fix and passes with it.</p>
+<lf-diff path="tests/eval/test_eval_precision_profile.py"></lf-diff>
+
+<h2>What works, what wasn't reached, what's still rough</h2>
+<ul>
+<li><strong>Works:</strong> capture, replay (CPU, MPS, every variant MPS allows), grid cross-width binding, report rendering of fresh and recorded receipts, the arena runner's forward records.</li>
+<li><strong>Not reached:</strong> CUDA replay, peak-memory and kernel attribution, and tf32. Those need an L4 rental, and the recorded L4 receipts already cover them.</li>
+<li><strong>Still rough (minor, left):</strong> bf16-on-CPU and corrupt capture files end in tracebacks rather than argparse errors; <code>capture --help</code> lists <code>--deals</code> as 32 separate choices. The bf16 arm reports <code>exact_bf16_logits: true</code> against itself, which is accurate but empty information.</li>
+</ul>
