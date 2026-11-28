@@ -111,6 +111,29 @@ def checkpoint_reader(capacity: int) -> CheckpointReader:
     return inputs
 
 
+def prepare_batch(
+    batch: ObservationBuffers | ObservationSelection, spec: Spec
+) -> Prepared[np.ndarray]:
+    """Admit and prepare the batch after its callers apply seat-level ablations."""
+    if isinstance(batch, ObservationSelection):
+        admitted = admit_native(batch, spec, bucketed=False)
+    else:
+        check(batch, spec, legal_mask(batch["actions_valid"]))
+        admitted = batch
+    model = spec.model
+    return replace(
+        prepare(
+            admitted,
+            spec.tables,
+            binding=spec.binding,
+            memory_summaries=model.decision_memory_summaries
+            if model.decision_memory != "none"
+            else 0,
+        ),
+        programs=None,
+    )
+
+
 @dataclass(frozen=True)
 class Sampler:
     checkpoint_key: str
@@ -119,30 +142,6 @@ class Sampler:
     allow_deck_repetition: bool = False
     # Memory ablation: the policy sees the live board with an empty decision log.
     blank_decision_memory: bool = False
-
-    def prepare(
-        self, batch: ObservationBuffers | ObservationSelection, spec: Spec
-    ) -> Prepared[np.ndarray]:
-        if isinstance(batch, ObservationSelection):
-            admitted = admit_native(batch, spec, bucketed=False)
-        else:
-            if self.blank_decision_memory:
-                batch = blank_memory(batch)
-            check(batch, spec, legal_mask(batch["actions_valid"]))
-            admitted = batch
-        model = spec.model
-        return replace(
-            prepare(
-                admitted,
-                spec.tables,
-                binding=spec.binding,
-                memory_summaries=model.decision_memory_summaries
-                if model.decision_memory != "none"
-                else 0,
-                memory_fold=model.decision_memory == "gru",
-            ),
-            programs=None,
-        )
 
     async def logits(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, float]:
         started = time.perf_counter()
@@ -191,7 +190,9 @@ class ScalarSampler:
         )
 
     def choose(self, env: Env, obs: ObservationBuffers, seed: int) -> int:
-        batch = self.sampler.prepare(
+        if self.sampler.blank_decision_memory:
+            obs = blank_memory(obs)
+        batch = prepare_batch(
             {key: value[None] for key, value in obs.items()}, self.inputs.spec
         )
         return self.sampler.sample(self.logits(batch)[0], batch.legal[0], seed)
