@@ -25,11 +25,20 @@ Choices taken headless (planning and the realign after concept review,
 - **Replay uses two worker threads** with the GIL released in `PyEnv`.
 - **Scalar records keep live frames.**
 - **L4 arms run on one rental under `--max-usd 5`.**
-- **L4 arms run on one rental under `--max-usd 5`.**
 - **Opening failures use opt-in isolation.** The coordinator asks for
   `isolated=True` on reset and slot loads. The engine reports the actual
   failing seat. An opening failure has an empty commitment prefix and its
   diagnostic replay runs the retained native policies.
+
+- **Post-build review Q1 (1a, for review).** The built-in heuristic refuses a
+  declaration without `version: native-v3`. Maintained experiments with stored
+  tournaments (`tla_trophies*`, `opponent_memory`, `mana_taps`,
+  `tla_frontier`) are left unversioned, so they refuse rather than mix.
+  Open: which of them get a new `native-v3` tournament name, and which
+  baselines rerun. Irreversible once scored.
+- **Post-build review Q2 (2a, for review).** Any failed reset record walks
+  the deal under `("agent", "agent")` and stops at index 0; failure replay
+  reruns the recorded policies.
 
 Ideas outside this Task:
 
