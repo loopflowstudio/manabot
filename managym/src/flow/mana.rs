@@ -3355,7 +3355,9 @@ impl Game {
         self.payment_model_with_help(
             player,
             sacrifice,
-            payment.map_or_else(Help::default, Payment::help),
+            payment.map_or_else(Help::default, |payment| {
+                payment.help().for_remaining_cost(payment.mana().0)
+            }),
         )
     }
 

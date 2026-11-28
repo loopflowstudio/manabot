@@ -144,7 +144,8 @@ impl Game {
         permissions: CostPermissionContext,
         life: u32,
     ) -> bool {
-        let mut model = self.payment_model_with_help(player, None, permissions.help);
+        let help = permissions.help.for_remaining_cost(cost);
+        let mut model = self.payment_model_with_help(player, None, help);
         if let Some(permanent) = permissions.reserved_tap {
             model.reserve(SourceReservation::tap(permanent));
         }
@@ -242,8 +243,9 @@ impl Game {
         candidates: &[PermanentId],
     ) -> Vec<(PermanentId, Vec<TapPayment>)> {
         let _scan = self.board_scan();
+        let help = permissions.help.for_remaining_cost(cost);
         let model_for = |tapped: Option<PermanentId>| {
-            let mut model = self.payment_model_with_help(player, None, permissions.help);
+            let mut model = self.payment_model_with_help(player, None, help);
             for permanent in permissions.reserved_tap.into_iter().chain(tapped) {
                 model.reserve(SourceReservation::tap(permanent));
             }

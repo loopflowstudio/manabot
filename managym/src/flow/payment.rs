@@ -258,6 +258,14 @@ pub struct Help {
 }
 
 impl Help {
+    /// Delve can affect feasibility only while a generic pip remains.
+    pub(super) fn for_remaining_cost(mut self, cost: &ManaCost) -> Self {
+        if cost.generic() == 0 {
+            self.delve = None;
+        }
+        self
+    }
+
     /// Whether any tap or exile may pay beside waterbend's.
     pub fn keyworded(self) -> bool {
         self.convoke || self.improvise || self.delve.is_some()
