@@ -62,17 +62,9 @@ Drafted in place before implementation (read these when building and reviewing):
 
 `0f32a515a1` classifies each payment model once, handles stateful taps and fee discounts, retains completing choice taps during resolution, shares the upfront guard, and checks native Delve exiles for both offers and execution. 45 focused tests passed, including the `{15}` rejection at 207 fork states.
 
-## Pass 6 · One helped cost in the coupled search (next)
+## Pass 6 · One helped cost in the coupled search
 
-`CoupledSearch` (`managym/src/flow/mana/coupled.rs`) represents a helped cost twice: the pure solver's flattened `tap_obligations` tiers (`mana.rs` ≈6481) plus a Delve-only `DelveCost` recovered by suffix matching (`coupled.rs` ≈175, flags ≈765–861). Three legal casts are pruned:
-
-1. Improvise / Waterbend / off-color Convoke tap needed before a `tapped`-reading source (`{T}: Add {G}` if you control a tapped artifact, else `{C}`; cast `{1}{G}` Improvise or Waterbend 1): `try_help_taps` reads only `obligations.first()` (`Pay {G}, Taps::None`) and returns `None`.
-2. Convoke-then-sacrifice + Delve where `stateful_delve()` is false (empty graveyard, Mountain, red `Sacrifice: Add {R}` creature, `{2}{R}{R}` Delve + Convoke): `next_delve` is gated on `stateful_delve()`, so Delve is dropped after the convoke tap.
-3. Spending the colored tier first on a `stateful_delve()` board (`{2}{G}{G}` Delve + Improvise, one graveyard card): `saved_delve = None` strips Delve from the generic tail.
-
-Build: rename `DelveCost` → `HelpedCost { cost, permissions, life }`, attached whenever `help != Help::default() || waterbend > 0` on a coupled model and ignored under `SourcePolicy::FixedOnly`. `help_obligations` builds tiers only for the pure handoff. Native steps try every legal Convoke (colored or generic), Improvise and Waterbend tap and every `DelveExile` (when the fork's profile is `stateful_delve()`) against the unsplit cost via `after_pip`, never dropping Delve; spending pays the whole remaining cost (less graveyard cards when not `stateful_delve()`), then `PayLife`. Delete `paying_delve_cost`, `saved_delve` and the suffix match. `CoupledMemoKey` hashes `(cost, permissions.waterbend)`.
-
-Tests: the three positions above as fixtures in `managym/src/flow/mana/tests/manual_payment/coupled_boards.rs` (castable, only completing first steps offered, completes), plus the existing acceptance filter and the `{15}` 207-state bound unchanged. Teaches whether one cost record suffices for every help kind on coupled boards.
+`d6ba79690` carries one `HelpedCost` in the ordered obligations, rechecks help taps and Delve on each fork, and spends the full remainder. All 48 focused debug tests passed, including the three regression fixtures and the `{15}` rejection at 207 fork states.
 
 ## Delivery (after Pass 6)
 

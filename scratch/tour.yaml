@@ -1,4 +1,4 @@
-at: 0f32a515a14b2e26264e1d270d05603935a6d304
+at: d6ba796903547ff04ce5979cc2903d68c686ff09
 first:
   - path: managym/README.md
     why: Rules and offers the player will see
@@ -15,15 +15,15 @@ first:
   - path: managym/src/flow/layers.rs
     why: State read by mana ability cost reductions
   - path: managym/src/flow/mana.rs
-    why: Feasibility entry points, model construction and native production
+    why: Payment model, ordered obligations and native production
   - path: managym/src/flow/mana/coupled.rs
-    why: Native steps, guarded upfront fees and memoization
+    why: Native steps through one remaining helped cost
   - path: managym/src/flow/mana/help.rs
-    why: Candidate checks for direct taps and Delve exiles
+    why: Shared tap and Delve eligibility and pure tiers
   - path: managym/src/flow/decision.rs
     why: Replacement offers and execution share the payment check
   - path: managym/src/flow/mana/tests/manual_payment/coupled_boards.rs
-    why: Native payment regressions through offers and execution
+    why: Completing action offers and mixed help regressions
   - path: managym/src/flow/mana/tests/manual_payment.rs
     why: Live grant loss and payment regressions
   - path: managym/src/agent/env/snapshot.rs
