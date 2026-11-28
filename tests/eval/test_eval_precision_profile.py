@@ -62,7 +62,7 @@ def test_capture_replays_arena_logits_and_builds_grid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def deal_fixture(
-        ref: CheckpointRef, count: int, _corpus: Path, precision: EvalPrecision
+        ref: CheckpointRef, count: int, precision: EvalPrecision
     ) -> tuple[Code, dict[str, PairingSpec], list[Match]]:
         assert count == 1
         roles = ("ur_lessons", "gw_allies")

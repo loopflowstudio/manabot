@@ -10,66 +10,52 @@ pre{background:var(--surface);border:1px solid var(--border);padding:.6rem;overf
 .ok{color:var(--g);font-weight:600}.bad{color:var(--r);font-weight:600}.warn{color:#a0700e;font-weight:600}
 code{font-size:.88em;background:var(--muted);padding:0 .2em}
 </style></head><body>
-<h1>QA: vector trophy evaluation (MTG-497)</h1>
-<p class="sub">M4 Max, branch at <code>4f73e588fd</code> plus the QA fixes, editable Etude 6db832 checkout, trained <code>w160l8</code> (<code>26ff27b7…</code>) fetched with <code>etude fetch</code>. 2026-11-27.</p>
+<h1>QA: vector trophy evaluation after compression (MTG-497)</h1>
+<p class="sub">M4 Max, 2026-11-27, branch at <code>85a3a5fb48</code> (after the two compress commits <code>3b12be84e5</code> and <code>85a3a5fb48</code>, which rewrote leg selection in <code>play_pairings</code>, the trophy pairing helper and lookup-array preparation) with editable Etude 6db832 and trained <code>w160l8</code> (<code>26ff27b7…</code>). Python changes only, so the existing debug extension was used.</p>
 
 <h2>What works now</h2>
 <ul>
-<li>The throughput CLI runs on CPU scalar, MPS vector and MLX vector. Every float32 arm gives the same games leg for leg.</li>
-<li>Managed <code>play_many</code> runs through <code>evaluating(...).play_many</code> on CPU, MPS, MLX (the default pick) and MPS bf16. Every game replays.</li>
-<li>Returning experiments: <code>tla_trophies_colab</code>, <code>tla_trophies_floor</code> and <code>tla_frontier_snapshots</code> plan against their stored R2 runs with nothing to replay. Before the fixes, two of them raised <code>tournament_conflict</code>.</li>
+<li>The throughput CLI gives identical games leg for leg on CPU scalar, CPU vector with 3 slots (backfill) and MLX vector-64. Every game replays with zero mismatches.</li>
+<li>The current scalar games equal the pass 8 smoke receipts for deal 40900 (4/4 legs).</li>
+<li>Managed <code>play_many</code> through Etude shared Metal inference plays 2 deals in about 16 s at float32 and bf16. Every game replays. bf16 records <code>etude-policy-bf16-auto-v1</code> with the same player seeds as float32.</li>
+<li>Stored R2 experiments <code>tla_trophies_colab_500k_v2</code> (129 tournaments), <code>tla_trophies_floor</code> (39) and <code>tla_frontier_snapshots</code> (7) plan 0 new matches with no <code>tournament_conflict</code>.</li>
+<li>50 vector-eval and package-boundary tests pass. <code>scripts/public_api.py check</code> matches.</li>
 </ul>
 
-<h2>Scenario 1: throughput CLI, 4 deals (16 games)</h2>
-<table><tr><th>Arm</th><th>Games/hr</th><th>Wall (s)</th><th>Forwards</th><th>Rows/forward (mean/max)</th><th>Legs identical to CPU scalar</th></tr>
-<tr><td>CPU scalar</td><td>1,034</td><td>55.7</td><td>1,414</td><td>1.0 / 1</td><td>reference</td></tr>
-<tr><td>MPS vector-64</td><td>4,661</td><td>12.4</td><td>400</td><td>3.5 / 11</td><td class="ok">16/16</td></tr>
-<tr><td>MLX vector-64</td><td>5,940</td><td>9.7</td><td>400</td><td>3.5 / 11</td><td class="ok">16/16</td></tr>
-<tr><td>MPS vector, 3 slots (backfill)</td><td>–</td><td>–</td><td>–</td><td>–</td><td class="ok">16/16</td></tr>
-<tr><td>MPS vector bf16</td><td>–</td><td>–</td><td>–</td><td>–</td><td>14/16 (bf16 numerics; compute class <code>etude-policy-bf16-auto-v1</code>, same player seeds)</td></tr>
-<tr><td>MLX vector bf16, 2 deals</td><td>–</td><td>–</td><td>–</td><td>–</td><td>completes; compute class bf16</td></tr>
+<h2>Scenario 1: throughput CLI</h2>
+<table><tr><th>Arm</th><th>Deals</th><th>Games/hr</th><th>Rows/forward (mean)</th><th>Legs identical to CPU scalar</th><th>Replay</th></tr>
+<tr><td>CPU scalar</td><td>2</td><td>698</td><td>1.0</td><td>reference</td><td class="ok">8/8 pass</td></tr>
+<tr><td>CPU vector, 3 slots</td><td>2</td><td>737</td><td>1.47</td><td class="ok">8/8</td><td class="ok">8/8 pass</td></tr>
+<tr><td>MLX vector-64</td><td>4</td><td>2,001</td><td>3.5</td><td class="ok">8/8 shared legs</td><td class="ok">16/16 pass</td></tr>
 </table>
-<p>Legs were compared on <code>games[].actions</code>, <code>digests</code> and <code>end</code>, keyed by <code>(deal_seed, leg)</code>.</p>
+<p>Legs were compared on <code>games[].actions</code>, <code>digests</code> and <code>end</code>, keyed by <code>(deal_seed, leg)</code> (<code>.runs/qa-pass9/compare.py</code>). Throughput at 1–4 deals mostly measures startup and replay, not the forward path.</p>
+<p class="warn">The older 32-deal receipts in <code>.runs/eval-throughput/w160-mlx-64</code> differ from today's games on every leg (for example 184 against 257 actions). They predate the 120-second game budget and the merge of <code>main</code> at <code>659dd138fe</code>. Today's games match the pass 8 smoke, so this is not a compression regression. The 32-deal report numbers come from those older games.</p>
 
-<h3>Wrong input (fixed)</h3>
-<p>A missing checkpoint or an unavailable device failed with a traceback after the output directory had been created, so the corrected rerun then failed with <code>FileExistsError</code>. The CLI now checks these before it creates anything:</p>
-<pre>eval_throughput.py: error: --output-dir …/.runs/qa/w160-mps-3 exists; each arm needs a fresh directory
-eval_throughput.py: error: --checkpoint /nope is not a file
-eval_throughput.py: error: --device cuda is unavailable on this host</pre>
-<p><code>MANABOT_EVAL_DEVICE=gpu</code> reports the accepted values. bf16 on CPU says "requires CUDA or MPS". That message comes from the Torch path, so it is accurate even though MLX also supports bf16.</p>
-
-<h2>Scenario 2: managed Etude <code>play_many</code>, 2 deals (8 games)</h2>
-<table><tr><th>Device</th><th>Wall (s)</th><th>Rows</th><th>Replay</th><th>Legs vs managed CPU</th></tr>
-<tr><td>CPU (<code>MANABOT_EVAL_DEVICE=cpu</code>)</td><td>18.2</td><td>8</td><td class="ok">all passed</td><td>reference</td></tr>
-<tr><td>MPS</td><td>11.3</td><td>8</td><td class="ok">all passed</td><td class="ok">8/8</td></tr>
-<tr><td>default (selects MLX)</td><td>8.9</td><td>8</td><td class="ok">all passed</td><td class="ok">8/8</td></tr>
-<tr><td>MPS, <code>agents_for("bf16")</code></td><td>12.3</td><td>8</td><td class="ok">all passed</td><td>compute class bf16</td></tr>
+<h2>Scenario 2: managed Etude <code>play_many</code></h2>
+<pre>etude: agents: shared inference for b00a31154abb5abc (metal); 2 game processes, slots requested by play_many; 14 inference threads
+etude: b00a31154abb5abc: 2/2 matches played, 16s elapsed
+etude: agents: stopped; 1 checkpoints loaded, 875 rows in 614 batches</pre>
+<table><tr><th>Precision</th><th>Seconds</th><th>Legs</th><th>Compute class</th><th>Replay</th></tr>
+<tr><td>float32</td><td>15.8</td><td>8</td><td><code>etude-policy-f32-auto-v1</code></td><td class="ok">all pass</td></tr>
+<tr><td>bf16</td><td>15.5</td><td>8</td><td><code>etude-policy-bf16-auto-v1</code></td><td class="ok">all pass; 7/8 legs have the same decision count as float32</td></tr>
 </table>
-<p><b>Interrupted runs:</b> I sent SIGINT to a 16-deal run at 20 s and again at 38 s (8 of 16 matches done). Each stopped within a second with <code>KeyboardInterrupt</code> and left no live process. The rerun in the same directory finished all 16 deals (64 rows, every replay passed). Explicit-match runs never resume, so the rerun replayed everything under a new tournament name. That comes from Etude's contract, not from this change.</p>
 
 <h2>Scenario 3: returning experiments against stored R2 runs</h2>
-<p>I stubbed <code>etude.controller.advance._play_here</code> so that <code>etude eval FILE --source r2://…</code> only planned and played nothing.</p>
-<table><tr><th>Experiment</th><th>Branch before QA</th><th>After the fixes</th></tr>
-<tr><td><code>tla_trophies_colab</code> (126 stored tournaments)</td><td class="bad">tournament_conflict</td><td class="ok">nothing to play (129 tournaments)</td></tr>
-<tr><td><code>tla_trophies_floor</code> (217 eval runs)</td><td class="bad">tournament_conflict</td><td class="ok">nothing to play (39 tournaments)</td></tr>
-<tr><td><code>tla_frontier_snapshots</code></td><td class="ok">nothing to play</td><td class="ok">nothing to play</td></tr>
-<tr><td><code>tla_trophies</code></td><td class="bad">tournament_conflict</td><td class="warn">tournament_conflict, which also happens on main (see below)</td></tr>
-</table>
-<p>There were two causes, and both are fixed:</p>
-<ol>
-<li><code>tla_trophies_floor.final_environment()</code> hashed the live <code>tla_trophies.py</code> and <code>pairing.py</code>, and this branch edits both. Its identity moved from <code>34d75d…</code> (the stored value, which main matches) to <code>ca6424…</code>. It now names the stored file digest <code>a6a2f68b…</code>, the same way <code>tla_trophies.ENVIRONMENT_FILES</code> already does.</li>
-<li><code>held_out_jobs</code> wrote <code>"precision": "float32"</code> into the Environment config. Etude treats a same-named Benchmark with a new environment as a conflict, not as a new tournament. Float32 now leaves the key out, as the float32 <code>Deal</code> already did. bf16 keeps it.</li>
-</ol>
-<p>New tests pin both: the float32 config has no precision key, and <code>final_environment().identity == 34d75d…</code>.</p>
-<p>The live resume check ran <code>etude eval</code> on a one-deal trophy Benchmark named <code>stored-trophy-deal</code> with an isolated local track store and the production <code>play_many</code> callback. The first launch played one deal with the trained <code>w160l8</code> checkpoint. After publishing a new seeded <code>w384l8</code> checkpoint into that store, the second launch loaded only the new checkpoint and played one deal. The first run's stored <code>plays.parquet</code> retained its SHA256. All eight games replayed, and a third launch reported <code>nothing to play</code>. Receipts and the experiment declaration are in <code>.runs/qa/named-trophy-resume/</code>.</p>
+<pre>tla_trophies_colab_500k_v2: 122 × "nothing to play"; new 0 tournaments 129
+tla_trophies_floor:         12 × "nothing to play" (the rest failed earlier); new 0 tournaments 39
+tla_frontier_snapshots:     7 × "nothing to play"; new 0 tournaments 7</pre>
+<p>On the first try I planned <code>tla_trophies_colab</code> under the file's own name. It has no stored eval runs, so it planned 64 new matches. The QA note now gives the stored experiment name.</p>
 
-<h2>Also fixed</h2>
-<p><code>test_floor_seed_plays_128_more_deals_on_fresh_pools</code> still asserted <code>tla_trophies.play</code>, which this branch removed. CI never noticed because the test needs the fetched corpus. It now asserts <code>play_many</code>. All 34 tests in <code>tests/eval/test_experiment_files.py</code> pass.</p>
+<h2>Wrong input</h2>
+<p>Fixed: <code>--deals 99</code> printed all 32 accepted values. It now says:</p>
+<pre>eval_throughput.py: error: --deals must be between 1 and 32</pre>
+<p><code>--slots 0</code> already said <code>--slots must be positive</code>.</p>
 
 <h2>Still wrong or unchecked</h2>
-<ol>
-<li><span class="warn">Already on main:</span> <code>experiments/tla_trophies.py</code> conflicts with its stored <code>tla-trophies-held-out-32</code> runs. Stored files are <code>54cef888…</code> and <code>ENVIRONMENT_FILES</code> is <code>d7dab787…</code>. I left this alone.</li>
-<li>CUDA was not reachable from this Mac. The CLI refuses <code>--device cuda</code> cleanly, and the L4 arms in the report cover CUDA.</li>
-<li>A plain <code>uv run</code> swaps the editable Etude back to PyPI 0.4.7, so use <code>--no-sync</code> until <code>etude-sdk 0.5.0</code> ships. This is now in the QA notes.</li>
-</ol>
+<ul>
+<li>Release is still blocked on <code>etude-sdk 0.5.0</code>. Everything above ran on the editable 6db832 checkout, because the locked 0.4.7 has no <code>play_many</code>.</li>
+<li>CUDA was not rerun after compression; no rental was used. Leg selection is shared Python, so the CPU and MLX parity covers its logic.</li>
+<li>The paths for <code>ForwardError</code> isolation and mixed layouts are covered only by <code>tests/eval/test_vector_eval.py</code>, which passed. No real run can trigger them.</li>
+<li>The 32-deal report numbers predate the merge and the game budget (see Scenario 1). Rerun them if the report must describe this exact revision.</li>
+</ul>
 </body></html>

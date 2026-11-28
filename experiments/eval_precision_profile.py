@@ -36,7 +36,6 @@ from experiments.eval_throughput import (
     checkpoint_ref,
     random_checkpoint,
     run_vector,
-    trophy_corpus_path,
     trophy_deals,
 )
 from manabot.backends.torch.arrays import on_device
@@ -116,9 +115,7 @@ def capture(
     slots: int,
 ) -> None:
     ref = checkpoint_ref(checkpoint, ARENA)
-    heuristic, specs, matches = trophy_deals(
-        ref, deals, trophy_corpus_path(), "float32"
-    )
+    heuristic, specs, matches = trophy_deals(ref, deals, "float32")
     out.mkdir(parents=True, exist_ok=False)
     batches.parent.mkdir(parents=True, exist_ok=True)
     os.environ["MANABOT_EVAL_DEVICE"] = device

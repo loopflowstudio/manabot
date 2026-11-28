@@ -26,11 +26,10 @@ import torch
 from experiments.mana_taps import OBSERVATION
 from experiments.tla_frontier import HEURISTIC, model
 from experiments.tla_trophies import (
-    POOLS,
-    ROOT,
     corpus_input,
+    corpus_path,
     held_out_deal,
-    held_out_matchup,
+    held_out_pairing,
     playable,
 )
 from manabot.backends.torch.checkpoint import save_checkpoint
@@ -54,7 +53,6 @@ from manabot.sim.registration import EvalPrecision
 ARENA = "eval-throughput"
 DEALS = 32
 RANDOM_SEED = 1
-GAME_SECONDS = 600.0
 
 
 @dataclass
@@ -121,19 +119,13 @@ def checkpoint_ref(path: Path, experiment: str) -> CheckpointRef:
     )
 
 
-def trophy_corpus_path() -> Path:
-    inputs = os.environ.get("ETUDE_INPUTS_DIR")
-    return Path(inputs) / "pools.json" if inputs else ROOT / POOLS
-
-
 def trophy_deals(
-    ref: CheckpointRef, count: int, corpus_path: Path, precision: EvalPrecision
+    ref: CheckpointRef, count: int, precision: EvalPrecision
 ) -> tuple[Code, dict[str, PairingSpec], list[Match]]:
     source = corpus_input()
-    if file_sha256(corpus_path) != source.sha256:
-        raise ValueError(
-            f"trophy corpus differs from the data manifest at {corpus_path}"
-        )
+    path = corpus_path()
+    if file_sha256(path) != source.sha256:
+        raise ValueError(f"trophy corpus differs from the data manifest at {path}")
     pools = playable("held_out")
     if len(pools) < 2 * count:
         raise ValueError(f"the trophy split has fewer than {2 * count} playable pools")
@@ -144,17 +136,14 @@ def trophy_deals(
     specs: dict[str, PairingSpec] = {}
     matches: list[Match] = []
     for i in range(count):
-        deal = held_out_deal(i)
-        match = Match(players=(candidate, heuristic), config=deal.model_dump())
-        matches.append(match)
-        specs[match.key] = PairingSpec(
-            matchup=held_out_matchup(deal, pools, source.sha256),
-            deal=deal.seed,
-            matchup_mode="cross",
-            game_seconds=GAME_SECONDS,
-            arena=ARENA,
-            precision=precision,
+        deal = held_out_deal(i, precision)
+        # The throughput arms share the same match keys across precisions.
+        match = Match(
+            players=(candidate, heuristic),
+            config=deal.model_dump(exclude={"precision"}),
         )
+        matches.append(match)
+        specs[match.key] = held_out_pairing(deal, pools, source.sha256, arena=ARENA)
     return heuristic, specs, matches
 
 
@@ -197,13 +186,15 @@ def main() -> None:
     parser.add_argument("--runner", choices=("scalar", "vector"), required=True)
     parser.add_argument("--precision", choices=("float32", "bf16"), default="float32")
     parser.add_argument("--slots", type=int, default=64, help="vector slots")
-    parser.add_argument("--deals", type=int, default=DEALS, choices=range(1, DEALS + 1))
+    parser.add_argument("--deals", type=int, default=DEALS, help=f"1 to {DEALS}")
     policy = parser.add_mutually_exclusive_group()
     policy.add_argument("--checkpoint", type=Path, help="local v11 policy")
     policy.add_argument("--random-width", type=int, choices=(160, 384), default=384)
     args = parser.parse_args()
     if args.slots < 1:
         parser.error("--slots must be positive")
+    if not 1 <= args.deals <= DEALS:
+        parser.error(f"--deals must be between 1 and {DEALS}")
     if not device_available(args.device):
         parser.error(f"--device {args.device} is unavailable on this host")
     if args.checkpoint is not None and not args.checkpoint.is_file():
@@ -230,9 +221,7 @@ def main() -> None:
     parameters = sum(int(value.size) for value in checkpoint.parameters.values())
     del checkpoint
 
-    heuristic, specs, matches = trophy_deals(
-        ref, args.deals, trophy_corpus_path(), args.precision
-    )
+    heuristic, specs, matches = trophy_deals(ref, args.deals, args.precision)
     timing = ForwardTiming()
     forward = timed_forward(load_with_precision(ref, args.precision), timing)
     agents = (forward, build(heuristic, {}))

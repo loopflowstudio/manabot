@@ -19,6 +19,7 @@ from etude.checkpoints import CheckpointRecord
 from etude.controller.declarations import asked, read_experiment, read_training_jobs
 from etude.errors import EtudeError
 from etude.eval.records import Match, Tournament
+from etude.eval.tournament import evaluating
 from etude.experiment_file import defined_functions
 from etude.jobs import (
     Checkpoints,
@@ -350,15 +351,31 @@ def test_trophy_job_uses_one_precision_for_agents_environment_and_deals(
     tmp_path: Path,
 ) -> None:
     raw = _finished_run(tmp_path, [100], name="raw", job=tla_trophies.RAW_JOB)
-    (job,) = tla_trophies.held_out_jobs([raw], precision="bf16")
-    assert job.agents == AGENTS_BF16
-    assert job.tournament.environment.config["precision"] == "bf16"
-    assert all(
-        tla_trophies.Deal.model_validate(seating.config).precision == "bf16"
-        for seating in job.tournament.seatings
-    )
     (float32,) = tla_trophies.held_out_jobs([raw])
+    (bf16,) = tla_trophies.held_out_jobs([raw], precision="bf16")
+    assert float32.name == "tla-trophies-held-out-32"
+    assert bf16.name == "tla-trophies-held-out-32-bf16"
     assert "precision" not in float32.tournament.environment.config
+    assert bf16.agents == AGENTS_BF16
+    assert bf16.tournament.environment.config["precision"] == "bf16"
+    assert tla_trophies.report(precision="bf16").evals[0].matches == Matches(
+        tournament=bf16.name
+    )
+
+    # Open both jobs in the same store so Etude sees the float32 definition
+    # when scheduling bf16. The deals keep the same pool indices and seeds.
+    directory = tmp_path / "tournaments"
+    for job, precision in ((float32, "float32"), (bf16, "bf16")):
+        with evaluating(
+            job.tournament,
+            checkpoints=job.recorded().checkpoints,
+            experiment="fixture",
+            directory=directory,
+        ) as active:
+            deals = [tla_trophies.Deal.model_validate(m.config) for m in active.matches]
+            assert sorted(deals, key=lambda deal: deal.seed) == [
+                tla_trophies.held_out_deal(i, precision) for i in range(32)
+            ]
 
 
 def test_trophy_final_environment_keeps_the_stored_identity() -> None:
