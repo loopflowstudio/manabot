@@ -189,3 +189,9 @@ The first trained MPS timing began before formatting was applied. The report
 uses the 32-deal rerun whose source fingerprint matches the other nine arms.
 Both timings and both 16-deal profiles are under
 `.runs/eval-throughput/mtg506/`.
+
+MTG-506 Pass 5 uses the failed game's own operation and frame when projecting
+it from a vector journal. The latest batch boundary can describe a subsequent
+step by a healthy slot, so a single-game projection leaves that boundary on
+the full journal record. The slot-1 step regression advances slot 0 to
+exercise this case.

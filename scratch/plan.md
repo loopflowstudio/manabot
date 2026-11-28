@@ -280,39 +280,14 @@ fingerprinting from 1.782 to 0.027 seconds across 80 calls and preserved the
 
 4. **Post-build review fixes** (`5ddf49e6c`, after MTG-500 sync `793880c852`) enforced the heuristic version, retained isolated openings, isolated registered code failures, exposed per-slot policies, and kept the idle vector while replay was full.
 
-5. **One per-game failure record and honest player crashes** (next; from the
-   Pass 4 review at `e94731acd8`, `scratch/concept-review.html`).
-   - Replace `GameEnd.opening_failure` / `OpeningFailure` with one optional
-     `GameEnd.failure` (`operation: Literal["reset", "step"]`, `error_class`,
-     `traceback`). **(for review; review Q1, 1a)** Passed over 1b (keep it
-     reset-only and patch the readers), which leaves `_step` dropping class
-     and traceback and keeps `take_slot_record`'s `operation != "reset"` split.
-   - `RecordedVectorEnv._step` (`managym/recording.py:2110`) writes it on an
-     isolated step failure, sets `game.end` whether or not the slot is
-     selected, and keeps `game_error_class` / `game_error_trace` in
-     `games_path`, `snapshot()` and the journal. `_record_roots` writes the
-     `reset` form. `take_slot_record` reads the slot's own ending and drops
-     its `info=` error branch.
-   - `GameRecord.for_game()` hoists the failure to the top-level fields and
-     strips it from `games[0].end`, as it does `player_policies`.
-     `needs_reproduction` is true when any game carries a failure.
-   - `managym/replay.py:main` (line 778) chooses reproduction when the whole
-     record needs it, not when stream 0 does.
-   - `manabot/eval/vector.py:818`: a `CodeSeat` decision error is a player
-     crash, as in scalar `execute_game`
-     (`tests/eval/test_evaluation_match.py:620-633`): evaluation metadata
-     records the crash and failure attributed to the acting seat's player;
-     the leg ends `GameEnd(status="interrupted", reason="crash", digest=...)`
-     with no native error fields, `execution_outcome` stays
-     `last_command_succeeded` and `needs_reproduction` is false.
-   - Tests: an isolated opening failure and an isolated step failure in slot 1
-     of a two-slot journaled vector, through `snapshot().needs_reproduction`,
-     `take_slot_record` and `python -m managym.replay`; a vector `CodeSeat`
-     crash record matching the scalar assertions above. Update
-     `managym/__init__.pyi` / public API snapshot if `OpeningFailure` is
-     exported, and `docs/engine-python.md#record-games`.
-   - Teaches: whether the failure record is now one concept across scalar,
-     vector, snapshot and journal readers. Then ship review.
+5. **Per-game failure records and player crashes** (`708ce8e777`, review Q1 1a) unified isolated reset and step evidence, routed replay from the whole record and kept CodeSeat crashes in evaluation metadata.
+
+Pass 5 passed 25 focused tests and the public API check. Slot 1's opening
+failure used an injected native receipt. Its step failure used a real native
+rejection that the bounded replay CLI matched after slot 0 took another step.
+The shared editable Etude checkout acquired merge conflicts during verification.
+The 13 eval and training checks passed with a clean archive of `d2dd820a`.
+Ship review is next.
 
 Pass 4 passed 32 debug Rust vector tests, 16 focused Python tests,
 42 package-boundary tests and the public API check. The four historical
@@ -326,8 +301,6 @@ with the released SDK. The broad Rust suite remains with CI.
 
 ## Review of Pass 4 (`e94731acd8`)
 
-- Split failure record and stream-0 replay routing: Pass 5.
-- `CodeSeat` crash recorded as a native root failure: Pass 5.
 - Heuristic tournament rollout (review Q2, 2a, for review): stored
   experiments stay unversioned and refuse; new `native-v3` tournament names
   and baseline reruns wait for the next evaluation campaign. Irreversible

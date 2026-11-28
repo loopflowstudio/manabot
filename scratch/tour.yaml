@@ -1,11 +1,11 @@
-at: 5ddf49e6cc316b0c5663246fd4427113f9c7f5af
+at: 708ce8e777a47d63575b9c85e8882bcc85149c57
 first:
   - path: experiments/reports/eval_throughput.md
     why: Apple and L4 throughput, replay parity and profiling
   - path: docs/evaluation.md
     why: Heuristic versions, compact traces and background replay
   - path: docs/engine-python.md
-    why: Seat policies, failed openings and verified replay
+    why: Seat policies, per-slot failures and verified replay
   - path: managym/__init__.pyi
     why: Vector seating and inspection API
   - path: managym/src/agent/player_policy.rs
@@ -17,13 +17,15 @@ first:
   - path: managym/src/agent/env.rs
     why: Admitted deal inputs outlive failed construction
   - path: managym/recording.py
-    why: Stream-local reset evidence and isolated failure frames
+    why: Shared reset and step evidence for each slot
+  - path: managym/replay.py
+    why: Verified prefixes and whole-record diagnostic replay
   - path: manabot/eval/agents.py
     why: Heuristic version and code player lifecycle
   - path: manabot/eval/pairing.py
     why: Version checks at paired-deal admission
   - path: manabot/eval/vector.py
-    why: Match-owned queues, sampling and replay workers
+    why: Batched play, crash attribution and replay workers
   - path: manabot/sim/evaluation_records.py
     why: Shared decision identity and derived audit commands
   - path: manabot/sim/replay.py
@@ -34,8 +36,6 @@ first:
     why: Scalar capture context at setup and close
   - path: manabot/sim/card_evidence.py
     why: Card evidence reads setup and ending directly
-  - path: managym/replay.py
-    why: Verified prefixes and diagnostic reset replay
   - path: managym/src/python/bindings.rs
     why: Scalar native calls release the GIL
   - path: experiments/eval_throughput.py
@@ -45,7 +45,7 @@ first:
   - path: tests/eval/test_evaluation_match.py
     why: Fingerprint reuse, durable capture and replay projection
   - path: tests/env/test_record_reducers.py
-    why: Failed reset records and verified card exposure
+    why: Later-slot failures and verified card exposure
 hide:
   - path: tests/public_api.json
     why: Generated additive signatures
