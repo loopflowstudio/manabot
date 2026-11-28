@@ -1,3 +1,23 @@
+# MTG-507 assumptions (headless kickoff, 2026-11-27)
+
+Each is reversible.
+
+- **Profile by replaying captured batches**, not by instrumenting the live
+  arena; arena behavior comes from three repeats per arm.
+- **One L4 rental under `--max-usd 5`**, no CPU baseline arms.
+- **A fix that changes bf16 logits is not taken**: it would be a new compute
+  class beside `etude-policy-bf16-auto-v1`. The report documents the
+  threshold instead.
+- **float32 stays the default** whatever the profile shows.
+- Local MPS timings on 2026-11-27 were taken at load 30-40 and are not
+  evidence; only the op counts are used.
+
+Ideas outside this Task:
+
+- Evaluation loads the padded forward (`bucketed_shapes` and `live_tokens`
+  off). Training measured bucketed shapes 2.4-2.6x faster on CUDA; should the
+  eval loader use them?
+
 # MTG-497 open questions and assumptions
 
 Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
