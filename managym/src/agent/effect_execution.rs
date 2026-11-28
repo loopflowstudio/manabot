@@ -515,6 +515,19 @@ impl<'a> Projection<'a> {
             }
             FrameCompletion::Frame(_) => self.field("return", &"caller frame"),
             FrameCompletion::Decision(_) => self.field("return", &"saved decision"),
+            FrameCompletion::ManaOutput(output) => {
+                self.summary(|| "Produce the mana after the remaining costs.".into());
+                self.field("return", &"paid activation");
+                self.field("payer", &output.player);
+                if let Some(source) = output.source {
+                    self.object_id("activation source", source);
+                }
+                if let Some(chosen) = &output.chosen {
+                    self.field("entry choice", chosen.as_ref());
+                }
+                self.effects("captured activation", std::slice::from_ref(&output.output));
+                self.effects("remaining instructions", &output.suffix);
+            }
             FrameCompletion::Event { event, .. } => {
                 self.summary(|| {
                     format!("Complete the {:?} event after these choices.", event.kind())

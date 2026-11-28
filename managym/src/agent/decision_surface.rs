@@ -1018,7 +1018,7 @@ impl Game {
         {
             return Ok(None);
         }
-        let legal_taps = self.help_tap_candidates(player, &payment.operation);
+        let legal_taps = self.help_tap_candidates(player, payment);
         if legal_taps.iter().any(|id| {
             self.state.permanents[*id]
                 .as_ref()
@@ -2027,7 +2027,8 @@ impl Game {
         if let Some(choice) = exposure {
             self.commit_capture_choice(choice);
         }
-        Ok(self.finish_action_step())
+        self.finish_action_step()
+            .map_err(|error| DecisionSurfaceError::Invariant(error.0))
     }
 
     fn apply_atomic_command_inner(
