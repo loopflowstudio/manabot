@@ -82,6 +82,18 @@ Hash v36 changes the live Academy and conformance digests. The refreshed
 semantic cases keep their 3,161 Commands and the authored replay matches
 across live, headless and replay surfaces for all 174 Commands.
 
+Both debug crates passed all 2,459 tests that ran (three skipped), and 32
+Academy and authored parity tests passed. To see the fixed-tap Heartbeat
+choice, run the constructed Rust fixture:
+
+```sh
+cargo nextest run --manifest-path managym/Cargo.toml -p managym \
+  -E 'test(fixed_mana_tap_can_open_a_bonus_choice)'
+```
+
+An Academy game with a stock Mountain and Heartbeat produces red mana
+twice without a choice. The fixture modifies Mountain to produce two colors.
+
 [Engine Budget run 46112437968](https://github.com/loopflowstudio/manabot/actions/runs/46112437968)
 passed on `d5ba06de36`. All benchmark digests matched, so the current reference
 still applies. The publication fix affects Delve and the benchmark decks have

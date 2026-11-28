@@ -1161,12 +1161,14 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   boards, completing choice taps stay available alongside Pay.
 
 Cast, activation and resolution payments use the same feasibility check.
-Each offered payment step leaves a way to finish. For example, tapping a
-Mountain that makes `{U}{R}` beside a Heartbeat of Spring matching tapped
-lands opens the blue/red bonus choice before committing the new mana. The
-automatic payer also completes through that choice. A Delve exile that would
-weaken a needed mana source becomes available after the source produces its
-mana or another source can cover the cost.
+Each offered payment step leaves a way to finish.
+The `fixed_mana_tap_can_open_a_bonus_choice` regression gives a Mountain
+`{U}{R}` production in a constructed position. Tapping it beside Heartbeat of
+Spring opens the blue/red bonus choice before committing the new mana. The
+automatic payer also completes through that choice. In an ordinary Academy
+game, Mountain makes `{R}`, and Heartbeat adds `{R}` without asking.
+A Delve exile that would weaken a needed mana source becomes available after
+the source produces its mana or another source can cover the cost.
 
 The check carries signed life through production, self-damage, life gain and
 their replacements. Paying zero life is always legal. Positive
