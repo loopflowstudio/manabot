@@ -82,7 +82,14 @@ Stop rule, as in MTG-500: a counterexample that strands on a board the classifie
 - `Operation::Activation` is hashed both through `PendingChoice` (`agent/env/snapshot.rs` ≈342) and inside `GameState.suspended_decision` (`SpendCompletion::Announced`, `FrameCompletion::{DiscardPayment, Paid}`). `MATCH_STATE_HASH_VERSION` 35 → 36.
 - Regression: an activation granted by a static that depends on a mana source's state; paying its mana ends the grant; the announced ability reaches the stack with its targets; with a second ability on the source the right one resolves; same for an X activation. Checked live and through cold snapshot restore of a recorded object-bound Command.
 
-Then: `managym/README.md` mana-payment section (coupled regime, fixed-tap choice, owned activations, v36 restore note beside v35), `uv run --extra dev python scripts/refresh_academy_fixtures.py`, conformance fixtures, Engine Budget (`scripts/engine_budget.py record --reason` only if the digest moves for the version bump alone).
+Then: verify the drafted docs (`managym/README.md`, `docs/engine.md`) against the final implementation, `uv run --extra dev python scripts/refresh_academy_fixtures.py`, conformance fixtures, Engine Budget (`scripts/engine_budget.py record --reason` only if the digest moves for the version bump alone).
+
+## Docs
+
+Drafted in place before implementation (read these when building and reviewing):
+
+- `managym/README.md` — owned non-mana activations, coupled `PaymentModel` fork search and `OrderReplacement` filtering, fixed-tap bonus choices in manual/automatic payment, and `needs_choice` on hovered fixed taps that open a bonus choice.
+- `docs/engine.md` — `MATCH_STATE_HASH_VERSION` v35 → v36 and snapshot restore compatibility.
 
 ## Next
 

@@ -626,7 +626,11 @@ counters and sacrifice through nested decisions. Its unpaid life fee
 follows its mana, including when a spending decision holds the announcement.
 Mana output reads the board after all activation costs and their replacements
 resolve. A sacrificed source keeps its entry choice for output that depends
-on its chosen color or type.
+on its chosen color or type. An announced non-mana activated ability likewise
+keeps its finalized definition through X selection, targeting and payment: if
+paying its mana cost ends a static effect that granted it or shifts ability
+indices on the permanent, the announced ability still goes on the stack (card
+activations still verify the card remains in its activation zone).
 
 Most payment questions never reach the search. With four untapped Islands and
 an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
@@ -706,6 +710,28 @@ caller obligations, source policy and the selected counted tap. Forks own
 independent FIFOs but share immutable entries, source lists, output alternatives
 and tap-candidate lists. Reservations detach source lists on writes. The cache
 stays outside hashes and observations; debug builds recompute every hit.
+
+When a mana source can change rules state that another source, cost or
+replacement reads — life totals, counters, sacrifices (including delve
+graveyards and sacrifice-count outputs), keywords, static grants or
+replacement-effect choices — `PaymentModel` answers through a coupled fork
+search instead of the pure path and bypasses `PaymentCache`. For example, at 4
+life with Tarnished Citadel, The Great Henge and a damage replacement that adds
+life gained this turn, only Citadel-first is offered and the payment completes
+at 1 life; with Angel of Vitality, Raucous Audience and Tarnished Citadels (or
+The Great Henge), a spell is castable exactly when some order of sources pays
+it, and only completing first steps are offered. A cached board profile
+classifies each source from a closed whitelist of pure rules facts; boards with
+no mutating source stay on the uncoupled direct and search paths with no fork
+overhead. Coupled searches step candidate activations, taps, mana choices and
+replacement orders natively on game forks using the fork's real mana pool, and
+memoize on a structural payment-state key (omitting event logs, priority and
+`id_gen`). While a player is paying a cost, `Decision::OrderReplacement` offers
+and admits only orders that still allow the payment to complete (for example,
+applying Caradora before Doubling Season during a `{G}{G}` payment; a sole
+completing order is taken under `skip_trivial`). An opponent's replacement order
+is never filtered: the payment is offered only when every legal opponent order
+still completes it. Outside a payment, all replacement orders remain offered.
 
 Automatic-prefix searches start at the fewest taps whose largest fixed outputs
 or waterbend contributions could cover the pool shortfall, conservatively
@@ -1105,7 +1131,8 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
 - **What always stops.** Non-simple mana abilities (sacrifices such as
   Treasure, life payments such as pain lands, mana fees such as filter lands,
   counted taps, once-per-turn limits, non-mana side effects, or triggered mana
-  bonuses that alter a choice ability's output), extra taps under
+  bonuses that open a color choice on either a choice ability or a fixed-output
+  tap), extra taps under
   `mana_floats="usable"` or `"all"`, and costs needing help taps keep the
   payment open.
 - **Actions and wording.** When a payment stops, each class of
@@ -1136,10 +1163,18 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   non-simple mana abilities such as Treasure remain explicit).
 
 Cast, activation and resolution payments use the same feasibility check for
-mana, life and help. Mana abilities can change the payer's life during payment.
-The check carries signed life through those steps and accounts for fixed
-self-damage and life gain when their replacements resolve without a further
-choice or other rules-state change. Paying zero life is always legal. Positive
+mana, life, help and coupled board changes. Mana abilities can change the
+payer's life, counters, sacrifices, keywords or static grants during payment, or
+open a replacement-effect order choice: every offered cast, activation, tap,
+color choice or payer replacement order leads to a completed payment, and orders
+that would strand the cost are omitted. For example, tapping a Mountain making
+`{U}{R}` beside a Heartbeat of Spring matching tapped lands pauses on the
+blue/red bonus choice before committing its mana, then completes the cast (and
+automatic payment completes through that choice as well); tapping a
+trample-counter Mountain beside a trample-reading Heartbeat offers tapping first
+and omits spending the counter into a dead end. The check carries signed life
+through payment steps, accounting for self-damage, life gain and their
+replacements. Paying zero life is always legal. Positive
 fees require a life total that can change and covers the fee (CR 119.4, 119.8).
 A life fee on the announced cost follows mana production, so life gained along
 the way can fund it. State-based loss for zero or less life is
@@ -1257,7 +1292,7 @@ from another offer set raises `managym.AgentError` and returns no plan.
 | `state` | Meaning |
 | --- | --- |
 | `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. |
-| `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost, or mana alone cannot pay a cost that taps or exiled cards may help pay. `explanation` names the choice; there are no sources. |
+| `needs_choice` | X, an optional, alternative or additional cost, an open target, or a triggered bonus mana choice on the hovered tap can still change the cost or output, or mana alone cannot pay a cost that taps or exiled cards may help pay. `explanation` names the choice; there are no sources. |
 | `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
 | `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability (whether it has a color choice or its own fee). |
 
@@ -1278,8 +1313,10 @@ exile.") until the payer's own taps and exiles leave a remainder mana covers.
 
 A cast offer, or the target that completes it, previews the spell's cost; a
 non-mana activated ability previews its fee; `PayCost` previews the pending
-payment. A fixed source-tap offer previews tapping that source and then paying automatically,
-with the chosen source first. Each source carries its object reference, name
+payment. A fixed source-tap offer previews tapping that source and then paying
+automatically, with the chosen source first; if tapping that source triggers a
+bonus mana choice, the preview reports `needs_choice`. Each source carries its
+object reference, name
 and output; pools carry the six amounts and the restriction, spend-effect and
 combat-expiry classes of the mana in them.
 
