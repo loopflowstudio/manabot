@@ -1,39 +1,34 @@
 <h1>Concept Review: MTG-506 — Vectorized Eval Host, Replay, and Heuristic Stepping</h1>
 
-<p><strong>Area reviewed:</strong> Whole-area post-build review at <code>e9e5440e8a</code> against
+<p><strong>Area reviewed:</strong> Whole-area post-build review at <code>6920b1e012</code> against
 freshly fetched <code>origin/main</code> (<code>606e79e90a</code>, also the checkout merge-base;
-MTG-497 stack parent at <code>0f885b1f43</code>), superseding the Pass 4 review at
-<code>e94731acd8</code> after Pass 5 (<code>708ce8e777</code>) replaced reset-only
-<code>OpeningFailure</code> with <code>GameFailure(operation, error_class, traceback)</code>,
-routed <code>managym.replay</code> over whole snapshots, and moved <code>CodeSeat</code> crashes
-to evaluation metadata. Covers evaluation execution, per-seat native policies, isolated
-opening/step/player failure recording, verification/diagnostic replay, and heuristic tournament
-identity across <code>managym</code> (<code>PlayerPolicy</code>, <code>Env</code>,
-<code>VectorEnv</code>/<code>SlotLoad</code>, <code>RecordedVectorEnv</code>,
-<code>GameRecord</code>/<code>GameEnd</code>/<code>GameFailure</code>,
-<code>RecordWalker</code>, <code>replay_failure_inputs</code>, <code>managym.replay</code> CLI,
-<code>academy/watch</code>), <code>manabot</code> (<code>eval/agents</code>,
-<code>eval/admission</code>, <code>eval/pairing</code>, <code>eval/vector</code>,
-<code>sim/heuristic</code>, <code>sim/native_game</code>, <code>sim/evaluation_records</code>,
-<code>sim/replay</code>, <code>infra/provenance</code>), and maintained experiment declarations
-(<code>experiments/eval_throughput.py</code>, <code>experiments/tla_trophies*.py</code>,
-<code>experiments/opponent_memory.py</code>, <code>experiments/mana_taps.py</code>,
-<code>experiments/tla_frontier.py</code>).</p>
+MTG-497 stack parent at <code>aa124b0953</code>), superseding the Pass 5 review at
+<code>d49a901555</code> after Pass 6 (<code>71240dc7c6</code>), compression
+(<code>f9fc0ee7f4</code>), idle-vector reuse (<code>5dadfbe929</code>), ship-review steer
+decisions (<code>1a</code> frozen <code>native-v2</code> experiments, <code>2a</code> compact
+vector annotations, <code>3b</code> Academy Watch native-seat import inside MTG-506,
+<code>4a</code> drop pre-existing <code>ScalarCapture</code> seat-policy gap), and Pass 7
+(<code>b97d43c7c3</code>) adding native-seat record import to Academy Replay. Covers vectorized
+evaluation execution, per-seat native policies, isolated failure recording and diagnostic replay,
+and Academy Replay/Watch import of native-seat records across <code>managym</code>
+(<code>PlayerPolicy</code>, <code>Env</code>, <code>VectorEnv</code>/<code>SlotLoad</code>,
+<code>RecordedVectorEnv</code>, <code>GameRecord</code>/<code>GameEnd</code>/<code>GameFailure</code>,
+<code>RecordWalker</code>, <code>card_capture</code>, <code>replay_failure_inputs</code>,
+<code>academy/watch</code>, <code>academy/server</code>, <code>academy/launch</code>) and
+<code>manabot</code> (<code>eval/agents</code>, <code>eval/pairing</code>,
+<code>eval/vector</code>, <code>sim/heuristic</code>, <code>sim/native_game</code>,
+<code>sim/evaluation_records</code>, <code>sim/replay</code>, <code>infra/provenance</code>).</p>
 
-<p><strong>What Pass 5 resolved from the previous review:</strong> (1) <code>GameEnd.failure</code>
-(<code>GameFailure(operation, error_class, traceback)</code>) is now recorded uniformly by
-<code>RecordedVectorEnv._record_game_failure</code> for both isolated resets and isolated steps
-(even outside <code>record_fraction</code>), preserved across subsequent steps in
-<code>_GameJournal</code> alongside <code>game.frame</code>, checked by
-<code>GameRecord.needs_reproduction</code>, and hoisted-and-stripped by
-<code>GameRecord.for_game()</code>; (2) <code>managym/replay.py:main</code> now iterates
-<code>_read_snapshots(args.path)</code> so isolated failures in slot 1+ (or later rows of a
-multi-record file) route to reproduction rather than walking; (3) <code>CodeSeat</code> native
-errors in <code>manabot/eval/vector.py</code> now record a player crash in evaluation metadata
-with <code>GameEnd(status="interrupted", reason="crash")</code> and
-<code>execution_outcome="last_command_succeeded"</code>, matching scalar <code>execute_game</code>.
-One remaining conceptual gap stays in <code>managym/replay.py</code>'s failure-reproduction
-agreement reporting, plus two human-review choices carried forward.</p>
+<p><strong>What changed since <code>d49a901555</code>:</strong> (1) Pass 6
+(<code>71240dc7c6</code>) finished unified <code>GameFailure</code> replay agreement in
+<code>managym/replay.py</code> (isolated reset and step failures both report
+<code>original_outcome: "failed"</code>; healthy and detached sibling streams on boundaryless
+snapshots match the journaled path); (2) <code>5dadfbe929</code> fixed idle-vector reuse after a
+backfilled opening failure; (3) Pass 7 (<code>b97d43c7c3</code>) replaced Watch's native-seat
+refusal with native-seat Replay import in <code>managym/academy/watch.py</code> and
+<code>managym/academy/server.py</code>. The core evaluation, failure-record, and replay-agreement
+surfaces now align; Pass 7's new Academy Replay surface has three concrete conceptual mismatches
+that break on interventions and divergence reporting.</p>
 
 <h2>Do domain concepts and code concepts line up?</h2>
 
@@ -41,213 +36,202 @@ agreement reporting, plus two human-review choices carried forward.</p>
   <thead>
     <tr>
       <th>Domain concept</th>
-      <th>Code concept (at <code>e9e5440e8a</code>)</th>
+      <th>Code concept (at <code>6920b1e012</code>)</th>
       <th>Aligned?</th>
       <th>Mismatch</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>Per-slot isolated native failure &amp; diagnostic replay agreement</strong><br>An isolated vector failure (whether <code>reset</code> or <code>step</code>) proves that exact stream failed natively, while healthy or detached sibling slots in the same vector snapshot never failed. Diagnostic replay reports the same agreement semantics regardless of whether the failure occurred at reset or step, and regardless of whether a journal boundary is attached.</td>
-      <td>Capture/storage is unified via <code>GameFailure(operation, error_class, traceback)</code> on <code>GameEnd.failure</code>, hoisted by <code>GameRecord.for_game()</code>, checked by <code>needs_reproduction</code>, and routed by <code>managym.replay:main</code>. However, <code>_replay_game_inputs</code> (<code>managym/replay.py:579-583</code>) still branches on <code>evidence.mode == "vector" and not failed_opening</code>, and <code>replay_failure_inputs</code> (<code>managym/replay.py:468-473</code>) still sends every stream of a <code>boundary is None</code> snapshot straight to <code>_replay_game_inputs</code>.</td>
+      <td><strong>Committed-choice transcript for expanding native-seat Replay</strong><br>Importing a native-seat record (<code>("agent", "heuristic:64")</code>, <code>("random", "heuristic")</code>, etc.) expands every committed choice <code>(actor, selected)</code> in order, including games with recorded counterfactual interventions (<code>determinize</code>, <code>game_state_edits</code>, <code>shuffle_libraries</code>, <code>reseed</code>, <code>force_action</code>) that Academy already imports for <code>("agent", "agent")</code> records.</td>
+      <td><code>import_record</code> (<code>managym/academy/watch.py:490</code>) passes <code>capture_cards=native_seats</code> to <code>walk()</code>, and <code>project_native_record</code> (<code>watch.py:651</code>) reads <code>replay.cards().capture.exposure.choices</code> via <code>CapturedCards.model_validate_json(env.card_capture_json())</code>.</td>
       <td><strong>No</strong></td>
-      <td>Unfinished Pass 5 rule on two replay surfaces. First, replaying an isolated vector <strong>step</strong> failure (from a journal, <code>vector.snapshot()</code>, <code>games_path</code>, <code>take_slot_record()</code>, or <code>manabot.sim.replay</code>) reports <code>original_outcome: "execution_outcome_unknown"</code> while an isolated vector <strong>reset</strong> failure from the exact same <code>GameFailure</code> schema reports <code>"failed"</code>. Second, on a boundaryless <code>vector.snapshot()</code> with a per-slot <code>GameFailure</code> in slot 1, healthy sibling slot 0 reports <code>at_retained_failure: True</code> (contradicting the journaled path's <code>False</code>), and a detached empty sibling slot (<code>players == []</code> after <code>take_slot_record(0)</code>) raises <code>ValueError</code> in <code>game.setup()</code> instead of returning <code>status: "setup_unavailable"</code>.</td>
+      <td>One concept overloaded for an unrelated role. <code>CapturedCards</code> (<code>managym/card_capture.py:134-183</code>) is a strict physical-card conservation validator and card-exposure telemetry ledger for unmodified games, not a replay decision transcript. Counterfactual interventions legitimately break physical-card movement conservation: <code>determinize</code> and <code>GameStateEdit.move_permanent</code> both import cleanly on <code>("agent", "agent")</code> records, but crash <code>import_game</code> with <code>pydantic.ValidationError</code> on any native-seat record. Every native-seat import also pays full <code>CardSnapshot</code>, <code>CardMove</code>, <code>ExposureOption</code>, and <code>ExposureResolution</code> JSON serialization and validation just to read two integers per choice.</td>
     </tr>
     <tr>
-      <td><strong>Player-choice crash vs. native root-engine failure</strong><br>A native error inside a custom <code>CodeSeat</code> decision isolates to that leg, attributes the crash to the acting player in evaluation metadata, and leaves the root <code>GameRecord</code> honest that the root <code>Env</code> did not fail.</td>
-      <td><code>step_round</code> catches <code>is_game_error</code> into <code>PlayedRound.code_errors</code>; <code>play_pairings</code> records <code>error_class</code>/<code>failure_trace</code>/<code>failure_record</code> in evaluation metadata and calls <code>complete_leg(..., end=GameEnd(status="interrupted", reason="crash", digest=...))</code> with <code>execution_outcome="last_command_succeeded"</code> and <code>needs_reproduction=False</code>.</td>
-      <td><strong>Yes</strong></td>
-      <td>Aligned (matches scalar <code>execute_game</code>).</td>
+      <td><strong>Divergence stop position in Academy Replay</strong><br>When a replayed record diverges partway through, Academy Replay's banner ("Stopped at decision N · saved recording only") names the position in <em>this Replay</em> where verification stopped.</td>
+      <td><code>import_record</code> (<code>managym/academy/watch.py:563-565</code>) stores <code>replay.stop</code> verbatim in <code>RecordingImport(stop, replay.build_differs)</code>; <code>academy/ui/src/routes/replay/+page.svelte:301</code> renders <code>index.record_stop.index</code> directly as the Replay decision number.</td>
+      <td><strong>No</strong></td>
+      <td>Two coordinate spaces under one field name. <code>replay.stop.index</code> is the source record's <em>external-action</em> offset, not the Replay's projected decision count. On a diverged <code>("heuristic:64", "agent")</code> record, Replay imports 3 verified decisions (ordinals 0–2) while <code>record_stop.index</code> reports <code>1</code> (and 37 decisions while reporting <code>21</code> when <code>end.winner</code> disagrees; 3 vs. <code>2</code> with <code>ForceAction</code>).</td>
     </tr>
     <tr>
-      <td><strong>Built-in heuristic identity &amp; version boundary</strong><br>Stateful <code>native-v3</code> changes 16/7,155 decisions and derives a new seed cohort; Etude tournaments bind one declared heuristic version and never silently mix <code>native-v2</code> and <code>native-v3</code>.</td>
-      <td><code>HEURISTIC_VERSION = "native-v3"</code>; <code>require_heuristic_version</code> enforced in <code>agents.py:build</code> and <code>pairing.py:admit_pairing</code>; <code>player_policy.rs</code> included in <code>heuristic_source_paths()</code>; <code>eval_throughput.py</code> declares <code>version</code>; maintained experiments remain unversioned so they refuse loudly rather than mix.</td>
-      <td><strong>Yes</strong> (open rollout choice)</td>
-      <td>Enforcement boundary is sound. Open decision: maintained experiments (including <code>tla_trophies.py</code>'s unscored <code>bf16</code>/<code>tf32</code> precision branches) remain unversioned until a human chooses which tournaments move to <code>native-v3</code> names (Q1, irreversible once scored).</td>
+      <td><strong>Branching-intervention markers across <code>ForceAction</code></strong><br>When a branching intervention (<code>reseed</code>, <code>determinize</code>, <code>shuffle_libraries</code>, <code>game_state_edits</code>) precedes a choice, Replay marks that next choice as <code>branched</code>.</td>
+      <td><code>project_recorded_choice</code> (<code>watch.py:626-634</code>) reads <code>decision.interventions</code>, while <code>project_native_record</code>'s <code>restore()</code> (<code>watch.py:682-691</code>) executes <code>ForceAction</code> via <code>apply_choice(forced=...)</code> with <code>decision=None</code>.</td>
+      <td><strong>No</strong></td>
+      <td>Action has no single owner across forced and external choices. When a boundary carries <code>[Reseed, ForceAction]</code> (or <code>[Determinize, ForceAction]</code>) before a later action, <code>branched</code> skips the forced choice and attaches to the later external decision; when <code>ForceAction</code> is at <code>stop.index</code> with no subsequent decision, <code>branched</code> is silently dropped.</td>
     </tr>
     <tr>
-      <td><strong>Per-slot <code>player_policies</code> &amp; opening isolation</strong><br>Each slot owns its policy pair (<code>agent</code>, <code>random</code>, <code>heuristic</code>, <code>heuristic:N</code>); invalid decks reject strictly while construction and opening-settlement failures poison only their slot and retain setup/seed/policies.</td>
-      <td><code>PlayerPolicy::Heuristic { max_actions }</code>; <code>SlotLoad.fresh</code> / <code>reset_each_into_buffers</code>; <code>VectorEnv.current_player_policies()</code> delegated in <code>RecordedVectorEnv._VECTOR_READS</code> and <code>BufferedStreams</code>; <code>Env::prepare_root</code> + isolated <code>construct_root</code>/<code>settle_opening</code>.</td>
-      <td><strong>Yes</strong></td>
-      <td>Aligned.</td>
-    </tr>
-    <tr>
-      <td><strong>Compact vector evidence, single-digest replay, &amp; background workers</strong><br>Engine owns inputs/digests; vector annotations carry only runner facts; integer-only replay checks each transition once off the stepping loop without tearing down an idle vector at replay capacity.</td>
-      <td>Shared <code>DecisionIdentity</code>; <code>RecordedVectorEnv._step</code> skips live frames when isolated without journal/probabilities; <code>RecordWalker.run</code> direct path with cold prefix rebuild on divergence and empty-prefix handling for failed openings; GIL released in <code>PyEnv</code>; 2-worker <code>ThreadPoolExecutor</code>; idle vector retained at <code>len(replays) &gt;= slots</code>.</td>
+      <td><strong>Native random RNG alignment &amp; Study root preservation</strong><br>Re-executing a native <code>random</code> seat keeps the rules RNG aligned with the verified game while preserving pre-draw Study roots and skipping RNG draws on <code>ForceAction</code> overrides.</td>
+      <td><code>GameSession._step_and_record</code> (<code>managym/academy/server.py:2356-2399</code>) clones <code>retained_root</code> before calling <code>self.env.random_action_index()</code> when <code>native_random=True</code>, and <code>project_native_record</code> sets <code>native_random=False</code> for explicit <code>ForceAction</code> overrides.</td>
       <td><strong>Yes</strong></td>
       <td>Aligned.</td>
     </tr>
     <tr>
-      <td><strong>Process provenance &amp; scalar capture context</strong><br>Process-invariant fingerprints compute once; static per-game metadata is frozen during scalar play and refreshed before cutoff/close diagnostics.</td>
-      <td><code>@cache</code> on <code>process_fingerprints()</code> and <code>arena_source_sha256()</code>; <code>capture.frozen_context</code> set after setup and cleared on exception and before cutoff/close.</td>
+      <td><strong>Per-slot isolated native failures &amp; replay agreement</strong><br>Isolated vector failures (reset or step) prove that stream failed; strict batch exceptions leave per-stream outcome unknown; healthy and detached sibling slots behave identically with or without a journal.</td>
+      <td><code>GameFailure(operation, error_class, traceback)</code> hoisted by <code>GameRecord.for_game()</code>; Pass 6 (<code>71240dc7c6</code>) updated <code>replay_failure_inputs</code> and <code>_replay_game_inputs</code> to check <code>observed_failure</code> and treat boundaryless healthy/detached siblings like the journaled path.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned (Pass 5 finding resolved in Pass 6).</td>
+    </tr>
+    <tr>
+      <td><strong>Player-choice crash vs. native root-engine failure</strong><br>A native error inside a custom <code>CodeSeat</code> isolates to that leg, attributes the crash in evaluation metadata, and leaves the root <code>GameRecord</code> honest that the root <code>Env</code> did not fail.</td>
+      <td><code>PlayedRound.code_errors</code> → evaluation metadata crash fields + <code>GameEnd(status="interrupted", reason="crash")</code> with <code>execution_outcome="last_command_succeeded"</code> and <code>needs_reproduction=False</code>.</td>
       <td><strong>Yes</strong></td>
       <td>Aligned.</td>
     </tr>
     <tr>
-      <td><strong>Inspecting native-seat records in Academy Watch</strong><br>Stored evaluation records open in Watch for visual inspection.</td>
-      <td><code>managym/academy/watch.py:486-492</code> raises <code>ValueError</code> whenever <code>policies_for(games[0]) != ("agent", "agent")</code>.</td>
-      <td><strong>No</strong> (deferred)</td>
-      <td>New vector heuristic evaluation records remain unviewable in Watch until a separate Academy Task adds native-seat import (F2, Q2).</td>
+      <td><strong>Built-in heuristic identity, per-slot <code>player_policies</code>, compact evidence, background replay, &amp; process provenance</strong><br>Each slot owns its policy pair; <code>native-v3</code> never mixes with stored <code>native-v2</code> tournaments; vector annotations hold runner facts only; single-digest replay runs off the stepping loop; idle vectors survive replay backpressure; process identity caches once.</td>
+      <td><code>PlayerPolicy::Heuristic { max_actions }</code>; <code>SlotLoad.fresh</code> / <code>reset_each_into_buffers</code>; <code>require_heuristic_version</code> (ship-review choice <code>1a</code>); compact annotations (<code>2a</code>); <code>RecordWalker.run</code> direct path + 2-worker pool + idle-vector retention (<code>5dadfbe929</code>); cached <code>process_fingerprints()</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned (ship-review steer settled <code>1a</code>, <code>2a</code>, and <code>4a</code>).</td>
     </tr>
   </tbody>
 </table>
 
-<h2>The biggest mismatch: <code>managym/replay.py</code> still treats isolated vector step failures like strict batch exceptions</h2>
+<h2>The biggest mismatch: Academy Replay overloads <code>CapturedCards</code> (card-conservation telemetry) as its native-seat choice tape</h2>
 
-<p>Pass 5 unified isolated reset and step failures under one per-game
-<code>GameFailure(operation, error_class, traceback)</code> record so that
-<code>RecordedVectorEnv</code>, <code>_GameJournal</code>, <code>GameRecord.for_game()</code>,
-and <code>managym.replay:main</code> all know which exact slot failed natively and why. Walk two
-concrete counterexamples reproduced directly on <code>HEAD</code> (<code>e9e5440e8a</code>):</p>
+<p>To expand built-in choices when importing a native-seat record, <code>import_record</code>
+enables card-exposure capture on the verifier (<code>walk(record, capture_cards=native_seats)</code>)
+and reads <code>replay.cards().capture.exposure.choices</code>. That conflates two unrelated
+concepts: <em>recording which <code>(actor, action_index)</code> pairs a verified replay
+committed</em> vs. <em>proving physical-card conservation and building card-exposure statistics for
+unmodified games</em>. Two concrete counterexamples reproduced directly on <code>HEAD</code>
+(<code>6920b1e012</code>):</p>
 
 <ol>
-  <li><strong>Counterexample 1 — detached or journaled isolated step failure reports
-    <code>original_outcome: "execution_outcome_unknown"</code>:</strong>
-    A 2-slot <code>RecordedVectorEnv</code> runs
-    <code>step_isolated_into_buffers([0, 999_999])</code>. Slot 1 fails natively and records
-    <code>GameEnd(status="failed", failure=GameFailure(operation="step", ...))</code>. Detaching
-    slot 1 with <code>detached = vector.take_slot_record(1)</code> produces a single-game record
-    with <code>detached.execution_outcome == "failed"</code> and
-    <code>detached.games[0].end.status == "failed"</code>. Yet calling
-    <code>replay_failure_inputs(detached)</code> (or replaying the journaled slot 1, or calling
-    <code>manabot.sim.replay</code> on the retained evaluation record) executes
-    <code>managym/replay.py:579-583</code>:
-    <ul>
-      <li><code>evidence.mode == "vector"</code> is <code>True</code> and
-        <code>failed_opening</code> is <code>False</code> (because
-        <code>operation == "step"</code>, not <code>"reset"</code>).</li>
-      <li>So <code>ReplayAgreement</code> overwrites <code>evidence.execution_outcome</code>
-        (<code>"failed"</code>) with <strong><code>"execution_outcome_unknown"</code></strong>!</li>
-      <li>An isolated <code>reset</code> failure from the exact same <code>GameFailure</code>
-        path reports <strong><code>"failed"</code></strong>. The comment on line 577 explicitly
-        scopes <code>"execution_outcome_unknown"</code> to a <em>strict vector exception</em>
-        (where <code>game.end</code> is <code>None</code> and no slot outcome was observed); an
-        isolated step failure carries <code>game.end.status == "failed"</code> and proved that
-        exact stream failed.</li>
-    </ul>
-  </li>
-  <li><strong>Counterexample 2 — boundaryless <code>vector.snapshot()</code> marks healthy
-    sibling slots as <code>at_retained_failure: True</code> (and fails on detached empty
-    slots):</strong>
-    On the same 2-slot <code>RecordedVectorEnv</code> with no <code>journal_path</code>
-    (<code>snapshot.boundary is None</code>), calling <code>replay_failure_inputs(vector.snapshot())</code>
-    hits lines 469–473 and dispatches both slot 0 (healthy, <code>committed == 1 == len(actions)</code>,
-    <code>game.failure is None</code>) and slot 1 (failed) directly to
-    <code>_replay_game_inputs</code>:
-    <ul>
-      <li>Healthy slot 0 returns
-        <code>{"stream": 0, "status": "advanced", "actions": 1, "at_retained_failure": True, "original_outcome": "execution_outcome_unknown"}</code>
-        — falsely claiming slot 0 reached a retained failure, whereas with a journal attached
-        (<code>boundary.phase == "ready"</code>) the exact same healthy slot returns
-        <code>at_retained_failure: False</code>.</li>
-      <li>If slot 0 was already detached via <code>vector.take_slot_record(0)</code> (leaving
-        <code>games[0].players == []</code>) while slot 1 still holds its <code>GameFailure</code>,
-        <code>replay_failure_inputs(vector.snapshot())</code> calls <code>game.setup()</code> on
-        empty slot 0 and reports <code>status: "failed", error_class: "ValueError"</code> instead of
-        <code>status: "setup_unavailable"</code> (which the <code>boundary is not None</code> branch
-        already handles on lines 509–513).</li>
-    </ul>
-  </li>
+  <li><strong>Counterexample 1 — <code>determinize</code> on any native-seat record crashes import:</strong>
+    Replaying a snapshot after <code>env.determinize(99, 0)</code> succeeds on
+    <code>("agent", "agent")</code> (<code>stop="interrupted", count=2</code>), because
+    <code>capture_cards</code> is <code>False</code>. The exact same sequence on
+    <code>("agent", "heuristic:64")</code> or <code>("random", "heuristic")</code> crashes
+    <code>import_game</code> inside <code>project_native_record</code> →
+    <code>replay.cards()</code> → <code>CapturedCards.model_validate_json()</code> with:
+    <pre><code>pydantic_core._pydantic_core.ValidationError: 1 validation error for CapturedCards
+  Value error, card movement does not continue its physical copy</code></pre>
+    <code>determinize</code> rearranges unseen hand/library copies in place, which is legal for
+    replay (<code>BRANCHING_INTERVENTIONS</code>) and verified cleanly by <code>RecordWalker</code>,
+    but intentionally violates <code>CapturedCards.complete()</code>'s physical-copy movement
+    invariant (<code>managym/card_capture.py:163-172</code>).</li>
+  <li><strong>Counterexample 2 — <code>GameStateEdit.move_permanent</code> on a native-seat record crashes import:</strong>
+    Editing a battlefield land to the graveyard via
+    <code>env.edit_game_state([GameStateEdit.move_permanent(perm_id, "graveyard")])</code> imports
+    cleanly on <code>("agent", "agent")</code> (<code>stop="interrupted", count=5</code>), but on
+    <code>("agent", "heuristic:64")</code> crashes <code>import_game</code> with:
+    <pre><code>pydantic_core._pydantic_core.ValidationError: 1 validation error for CapturedCards
+  Value error, capture omitted a committed movement</code></pre>
+    Even when no intervention is present, <code>capture_cards=True</code> builds
+    <code>CardSnapshot</code>s for every focus object of every legal option at every decision,
+    records all <code>CardMove</code>s and <code>ExposureResolution</code>s, serializes the whole
+    ledger to JSON, and validates every move in Pydantic just to read <code>(actor, selected)</code>.</li>
+  <li><strong>Counterexample 3 (related Pass 7 boundary) — diverged <code>record_stop.index</code> disagrees with Replay's decision list:</strong>
+    Corrupting <code>record.games[0].digests[2]</code> on a <code>("heuristic:64", "agent")</code>
+    record produces a Replay with <code>count=3</code> verified decisions (ordinals 0, 1, 2), yet
+    <code>recording_import.stop.index</code> is <code>1</code> (the external-action offset), so
+    <code>replay/+page.svelte:301</code> displays
+    <code>"Stopped at decision 1 · saved recording only"</code>. Corrupting <code>end.winner</code>
+    produces <code>count=37</code> while <code>stop.index</code> reports <code>21</code>.</li>
 </ol>
 
 <lf-component name="before-after">
   <div slot="before">
-    <h4>Built at <code>e9e5440e8a</code> (Pass 4's reset-only assumption remains in replay agreement)</h4>
+    <h4>Built at <code>6920b1e012</code> (Pass 7)</h4>
     <ul>
-      <li><code>_replay_game_inputs</code> keeps <code>if evidence.mode == "vector" and not failed_opening</code>, demoting every isolated vector <code>step</code> failure to <code>original_outcome: "execution_outcome_unknown"</code> while isolated <code>reset</code> failures report <code>"failed"</code>.</li>
-      <li><code>replay_failure_inputs</code> treats every <code>boundary is None</code> record as a strict batch failure, setting <code>at_retained_failure: True</code> on healthy sibling slots and raising <code>ValueError</code> on detached empty slots instead of <code>"setup_unavailable"</code>.</li>
+      <li><code>import_record</code> passes <code>capture_cards=native_seats</code> and <code>project_native_record</code> reads <code>replay.cards().capture.exposure.choices</code>, pulling in <code>CapturedCards</code>' physical-card conservation validator and full exposure JSON serialization.</li>
+      <li><code>determinize</code> and <code>GameStateEdit.move_permanent</code> work on <code>("agent", "agent")</code> imports but crash native-seat imports with <code>ValidationError</code>.</li>
+      <li><code>RecordingImport(stop, ...)</code> stores external-action <code>replay.stop.index</code>, which disagrees with Academy Replay's expanded decision count on divergence.</li>
+      <li><code>project_recorded_choice</code> reads <code>decision.interventions</code> only, shifting or dropping <code>branched</code> when a boundary combines branching ops with <code>ForceAction</code>.</li>
     </ul>
   </div>
   <div slot="after">
-    <h4>Recommended contract (finish Pass 5's unified <code>GameFailure</code> rule in <code>managym/replay.py</code>)</h4>
+    <h4>Recommended contract</h4>
     <ul>
-      <li>In <code>_replay_game_inputs</code>, recognize any per-stream observed native failure (<code>game.end is not None and game.end.status == "failed"</code> after <code>for_game()</code>, covering both isolated <code>reset</code> and isolated <code>step</code>) so both report <code>original_outcome == evidence.execution_outcome</code> (<code>"failed"</code>), while strict vector batch exceptions (<code>game.end is None</code>) keep <code>"execution_outcome_unknown"</code>.</li>
-      <li>In <code>replay_failure_inputs</code> when <code>boundary is None</code> and the batch itself has no top-level failure/search (<code>evidence.error is None and evidence.error_class is None and evidence.execution_outcome != "failed" and evidence.mode != "search"</code>), route only streams with <code>game.failure is not None</code> or an uncommitted pending <code>frame</code> as failure targets; reconstruct healthy siblings with <code>at_retained_failure=False</code> (and <code>status="setup_unavailable"</code> when <code>not game.players</code>), matching the journaled <code>ready</code> path.</li>
+      <li>Separate committed-choice recording from card-statistics capture: add a lightweight opt-in committed-choice log <code>(actor, selected)</code> on <code>Env</code>/<code>RecordWalker</code> (no <code>CardSnapshot</code>s, no <code>CardMove</code>s, no <code>CapturedCards</code> validation, rebuilt automatically on <code>RecordWalker</code>'s cold-prefix divergence path). <code>import_record</code> reads committed choices directly with <code>capture_cards=False</code>.</li>
+      <li>Store <code>replace(stop, index=len(session.canonical_decisions))</code> in <code>RecordingImport</code> so Replay's divergence banner always names the Replay decision boundary (unchanged for <code>("agent", "agent")</code> records without <code>ForceAction</code>).</li>
+      <li>Carry pending <code>BRANCHING_INTERVENTIONS</code> across <code>restore()</code> and attach/clear them on the first projected choice that follows (forced, settled, or external).</li>
     </ul>
   </div>
 </lf-component>
 
 <h3>Code evidence</h3>
 
-<p><strong>1. Capture and <code>for_game()</code> unify isolated reset and step failures, but
-<code>replay_failure_inputs</code> and <code>_replay_game_inputs</code> still apply the rule only
-to <code>failed_opening</code> and journaled batches:</strong></p>
+<p><strong>1. <code>import_record</code> enables <code>capture_cards=native_seats</code>, copies external <code>replay.stop</code> verbatim into <code>RecordingImport</code>, and reads <code>replay.cards().capture.exposure</code> in <code>project_native_record</code>:</strong></p>
 
-<lf-diff path="managym/recording.py" lines="129-146"></lf-diff>
-<lf-diff path="managym/recording.py" lines="409-444"></lf-diff>
-<lf-file path="managym/replay.py" lines="464-491"></lf-file>
-<lf-diff path="managym/replay.py" lines="570-590"></lf-diff>
+<lf-diff path="managym/academy/watch.py" lines="481-575"></lf-diff>
+<lf-diff path="managym/academy/watch.py" lines="620-711"></lf-diff>
 
-<p><strong>2. Pass 5's clean <code>CodeSeat</code> crash separation in
-<code>manabot/eval/vector.py</code>, plus carried rollout and Watch surfaces:</strong></p>
+<p><strong>2. <code>CapturedCards.complete()</code> enforces physical-copy movement conservation (which counterfactual replay interventions legitimately break), and Replay's UI displays <code>record_stop.index</code> as a Replay decision index:</strong></p>
 
-<lf-diff path="manabot/eval/vector.py" lines="815-839"></lf-diff>
-<lf-file path="experiments/tla_trophies.py" lines="254-277"></lf-file>
-<lf-diff path="managym/academy/watch.py" lines="484-493"></lf-diff>
+<lf-file path="managym/card_capture.py" lines="153-187"></lf-file>
+<lf-file path="academy/ui/src/routes/replay/+page.svelte" lines="299-307"></lf-file>
+
+<p><strong>3. Clean RNG alignment in <code>GameSession._step_and_record</code> (Study root cloned before drawing <code>random_action_index</code>):</strong></p>
+
+<lf-diff path="managym/academy/server.py" lines="2390-2403"></lf-diff>
 
 <h2>Findings</h2>
 
-<lf-component name="decision" id="f1" title="Finish unified GameFailure semantics in managym/replay.py (original_outcome and boundaryless healthy siblings)" recommendation="Fix here">
-  <p><strong>What breaks:</strong></p>
-  <ul>
-    <li>In <code>managym/replay.py:579-583</code>, <code>_replay_game_inputs</code> checks
-      <code>evidence.mode == "vector" and not failed_opening</code>. Replaying an isolated vector
-      step failure — via <code>replay_failure_inputs</code> on <code>vector.snapshot()</code>,
-      <code>take_slot_record()</code>, <code>games_path</code>, a journal, or
-      <code>manabot.sim.replay</code> — reports
-      <code>original_outcome: "execution_outcome_unknown"</code> even though
-      <code>game.end.status == "failed"</code> and <code>evidence.execution_outcome == "failed"</code>
-      proved that exact stream failed (whereas an isolated reset failure reports
-      <code>"failed"</code>).</li>
-    <li>In <code>managym/replay.py:468-473</code>, <code>replay_failure_inputs</code> sends every
-      stream of a <code>boundary is None</code> snapshot straight to
-      <code>_replay_game_inputs</code>. When a boundaryless <code>vector.snapshot()</code> carries a
-      per-slot <code>GameFailure</code>, healthy sibling slots report
-      <code>at_retained_failure: True</code> (contradicting the journaled <code>ready</code> path's
-      <code>False</code>), and a detached empty sibling slot (<code>players == []</code> after
-      <code>take_slot_record</code>) raises <code>ValueError</code> in <code>game.setup()</code>
-      instead of returning <code>status: "setup_unavailable"</code>.</li>
-  </ul>
-  <p><strong>Fix:</strong> In <code>_replay_game_inputs</code>, treat any stream with an observed
-  isolated failure (<code>game.end is not None and game.end.status == "failed"</code>) like scalar
-  and failed-opening records so <code>original_outcome</code> preserves
-  <code>evidence.execution_outcome</code> (<code>"failed"</code>) while strict vector batch
-  exceptions (<code>game.end is None</code>) keep <code>"execution_outcome_unknown"</code>. In
-  <code>replay_failure_inputs</code>, handle non-failing sibling streams of a boundaryless
-  per-slot-failure snapshot consistently with the <code>boundary.phase == "ready"</code> branch
-  (<code>at_retained_failure=False</code>, <code>matches_binding=None</code>,
-  <code>matches_error=None</code>, and <code>status="setup_unavailable"</code> when
-  <code>not game.players</code>). Assert both <code>original_outcome == "failed"</code> for
-  isolated step failures and <code>not healthy["at_retained_failure"]</code> for boundaryless
-  snapshots in <code>tests/env/test_record_reducers.py</code> and
-  <code>tests/eval/test_vector_eval.py</code>.</p>
+<lf-component name="decision" id="f1" title="Separate Replay's committed-choice transcript from CapturedCards card-conservation telemetry" recommendation="Fix here">
+  <p><strong>What breaks:</strong> <code>managym/academy/watch.py:490</code> and <code>:651</code>
+  reuse <code>walk(record, capture_cards=True)</code> and
+  <code>replay.cards().capture.exposure.choices</code> to extract <code>(actor, selected)</code>
+  for native seats. Because <code>CapturedCards</code> validates unmodified physical-card movement
+  conservation, importing a native-seat record containing <code>determinize</code> or
+  <code>GameStateEdit.move_permanent</code> crashes with <code>ValidationError</code>, whereas the
+  exact same interventions import cleanly on <code>("agent", "agent")</code> records. Every
+  native-seat import also serializes and validates full card-snapshot, card-move, and exposure
+  telemetry just to read two integers per choice.</p>
+  <p><strong>Fix:</strong> Record committed <code>(actor, selected)</code> choices via a dedicated,
+  lightweight opt-in choice log on <code>Env</code> / <code>RecordWalker</code> (recording only
+  <code>(actor, selected)</code> when a nontrivial choice commits in <code>Game::step</code> /
+  <code>execute_semantic_command</code>, with no <code>CardSnapshot</code>, <code>CardMove</code>,
+  or <code>CapturedCards</code> validation, and preserved across <code>RecordWalker</code>'s
+  cold-prefix rebuild on divergence). Have <code>import_record</code> read those committed choices
+  with <code>capture_cards=False</code>. Add regression tests in
+  <code>tests/academy/test_game_records.py</code> importing native-seat records with
+  <code>determinize</code> and <code>GameStateEdit.move_permanent</code>.</p>
+  <p><strong>Passed over:</strong> Parsing raw <code>json.loads(replay.env.card_capture_json())</code>
+  without <code>CapturedCards</code> validation. That avoids the <code>ValidationError</code> with
+  no Rust change, but keeps Academy Replay coupled to card-exposure telemetry and retains full
+  focus-card/move serialization overhead on every native-seat import (Q1).</p>
 </lf-component>
 
-<lf-component name="decision" id="f2" title="Support native-seat GameRecords in Academy Watch" recommendation="File Task">
-  <p><strong>Carried from prior reviews:</strong> Because vector heuristic evaluations record
-  <code>("agent", "heuristic:64")</code> / <code>("heuristic:64", "agent")</code>,
-  <code>managym/academy/watch.py:486-492</code> refuses every new vector heuristic record.
-  Reconstructing or surfacing native-seat turns on import belongs in a separate Academy Task filed
-  when MTG-506 lands.</p>
+<lf-component name="decision" id="f2" title="Project RecordingImport.stop.index into Academy Replay decision coordinates" recommendation="Fix here">
+  <p><strong>What breaks:</strong> <code>managym/academy/watch.py:563-565</code> persists
+  <code>replay.stop</code> directly into <code>RecordingImport</code>. When a native-seat record
+  (or a record with <code>ForceAction</code>) diverges, <code>replay.stop.index</code> is the
+  external-action offset, not <code>len(session.canonical_decisions)</code>. Academy Replay's UI
+  (<code>academy/ui/src/routes/replay/+page.svelte:301</code>) displays
+  <code>"Stopped at decision {index}"</code>, reporting e.g. decision 1 on a 3-decision Replay or
+  decision 21 on a 37-decision Replay.</p>
+  <p><strong>Fix:</strong> Keep external-action coordinates on <code>RecordWalker.stop</code>, and
+  store <code>replace(stop, index=len(session.canonical_decisions))</code> in
+  <code>RecordingImport</code> in <code>managym/academy/watch.py:563-565</code>. Assert
+  <code>recording_import["stop"]["index"] == imported["count"]</code> on diverged native-seat
+  imports in <code>tests/academy/test_game_records.py</code>.</p>
+</lf-component>
+
+<lf-component name="decision" id="f3" title="Attach branching-intervention markers to the next projected choice across ForceAction boundaries" recommendation="Fix here">
+  <p><strong>What breaks:</strong> In <code>managym/academy/watch.py:626-634</code> and
+  <code>:682-706</code>, <code>project_recorded_choice</code> reads <code>decision.interventions</code>
+  only, while <code>project_native_record</code>'s <code>restore()</code> executes
+  <code>ForceAction</code> with <code>decision=None</code>. When a boundary combines a branching
+  intervention (e.g. <code>reseed</code> or <code>determinize</code>) with <code>ForceAction</code>,
+  the <code>branched</code> marker skips the forced choice and lands on a later external decision,
+  or disappears entirely when <code>ForceAction</code> occurs at <code>stop.index</code> with no
+  following external decision.</p>
+  <p><strong>Fix:</strong> Pass explicit <code>branched: Sequence[str] = ()</code> into
+  <code>project_recorded_choice</code>. On the <code>("agent", "agent")</code> path, derive it from
+  <code>decision.interventions</code> as today; in <code>project_native_record</code>, accumulate
+  branching intervention ops in <code>restore()</code> and attach/clear them on the next
+  <code>apply_choice(...)</code> call (whether forced, settled, or external). Add a regression test
+  combining <code>reseed</code>/<code>determinize</code> with <code>ForceAction</code>.</p>
 </lf-component>
 
 <h2>Questions for review</h2>
 
-<div data-choice="q1" data-label="Maintained experiment migration to native-v3">
-  <p><strong>1. Built-in heuristic declarations without <code>version: native-v3</code> are
-  refused so stored <code>native-v2</code> tournaments cannot silently mix with
-  <code>native-v3</code>. Which maintained experiments should move to new <code>native-v3</code>
-  tournament names now (including <code>tla_trophies.py</code>'s unscored <code>bf16</code>/<code>tf32</code>
-  benchmarks), and which stay frozen?</strong> (<strong>Irreversible once scored to shared Etude
-  tournaments.</strong>)</p>
-  <button data-value="1a">1a. (Recommended) Keep all existing stored <code>native-v2</code> experiment files frozen as on HEAD in MTG-506; adopt new <code>native-v3</code> tournament names only when starting the next evaluation campaign (or add <code>version: native-v3</code> exclusively to never-scored <code>bf16</code>/<code>tf32</code> precision branches in <code>tla_trophies.py</code>).</button>
-  <button data-value="1b">1b. Add new <code>-v3</code> tournament names with <code>version: native-v3</code> to <code>tla_trophies.py</code> (and <code>tla_trophies_colab.py</code> / <code>tla_trophies_floor.py</code>) in this Task and rerun their baselines.</button>
-  <button data-value="1c">1c. Keep existing tournament names by adding explicit <code>version="native-v2"</code> stateless dispatch in Manabot alongside <code>native-v3</code>.</button>
-</div>
-
-<div data-choice="q2" data-label="Academy Watch native-seat import">
-  <p><strong>2. Confirm deferring Academy Watch support for native-seat records
-  (<code>("agent", "heuristic:64")</code>) to a separate Academy Task (F2)?</strong></p>
-  <button data-value="2a">2a. (Recommended) Yes — keep the refusal in <code>watch.py</code> and file a separate Academy Task when MTG-506 lands.</button>
-  <button data-value="2b">2b. No — implement native-seat import in Academy Watch inside MTG-506.</button>
+<div data-choice="q1" data-label="How Academy Replay obtains committed choices for native seats (F1)">
+  <p><strong>1. How should <code>RecordWalker</code> / Academy Replay obtain the committed
+  <code>(actor, selected)</code> choices of a native-seat record (F1)?</strong> (Reversible — internal
+  capture mechanism; public <code>GameRecord</code> and Replay schemas do not change.)</p>
+  <button data-value="1a">1a. (Recommended) Add a dedicated lightweight opt-in committed-choice log on <code>Env</code> / <code>RecordWalker</code> (recording only <code>(actor, selected)</code> per nontrivial step, no card snapshots/moves or <code>CapturedCards</code> validation) and remove <code>capture_cards=native_seats</code> from <code>watch.py</code>.</button>
+  <button data-value="1b">1b. Keep <code>enable_exposure_capture()</code> in Rust unchanged, and read only <code>exposure.choices</code> from <code>env.card_capture_json()</code> in <code>watch.py</code> without running <code>CapturedCards</code> validation (zero Rust changes, but retains full card-exposure serialization overhead per import).</button>
 </div>
