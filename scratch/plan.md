@@ -282,6 +282,15 @@ fingerprinting from 1.782 to 0.027 seconds across 80 calls and preserved the
 
 5. **Per-game failure records and player crashes** (`708ce8e777`, review Q1 1a) unified isolated reset and step evidence, routed replay from the whole record and kept CodeSeat crashes in evaluation metadata.
 
+6. **Replay agreement for isolated failures** (realign after the Pass 5
+   review, `d49a901555`): `_replay_game_inputs` reports `original_outcome:
+   failed` for any stream whose ending is `failed` (isolated reset or step);
+   strict batch exceptions stay `execution_outcome_unknown`. A boundaryless
+   snapshot with a per-slot failure replays healthy siblings with
+   `at_retained_failure: False` and detached slots as `setup_unavailable`.
+   Both new assertions fail at `e9e5440e8a`; 165 replay, journal and vector
+   eval tests pass.
+
 Pass 5 passed 25 focused tests and the public API check. Slot 1's opening
 failure used an injected native receipt. Its step failure used a real native
 rejection that the bounded replay CLI matched after slot 0 took another step.
@@ -299,13 +308,14 @@ that lands, run `lf sync` and repeat
 `uv run --no-sync python -m pytest tests/eval/test_experiment_files.py -k 'trophy or frontier_eval_jobs or opponent_memory_evaluation'`
 with the released SDK. The broad Rust suite remains with CI.
 
-## Review of Pass 4 (`e94731acd8`)
+## Review of Pass 5 (`d49a901555`)
 
-- Heuristic tournament rollout (review Q2, 2a, for review): stored
-  experiments stay unversioned and refuse; new `native-v3` tournament names
-  and baseline reruns wait for the next evaluation campaign. Irreversible
-  once scored; ship review surfaces it.
-- Watch native-seat import (Q3, 3a): deferred below.
+- Replay agreement for isolated failures: fixed in Pass 6.
+- Heuristic tournament rollout (Q1, 1a, for review): stored experiments
+  stay unversioned and refuse; new `native-v3` tournament names and baseline
+  reruns wait for the next evaluation campaign. Irreversible once scored;
+  ship review surfaces it.
+- Watch native-seat import (Q2, 2a): deferred below.
 
 ## Deferred findings
 

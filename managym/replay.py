@@ -467,10 +467,33 @@ def replay_failure_inputs(
     """Replay only retained inputs. The CLI supplies the process wall-time bound."""
     boundary = evidence.boundary
     if boundary is None:
-        return [
-            _replay_game_inputs(evidence, game, statistics=statistics)
-            for game in evidence.games
-        ]
+        if all(game.failure is None for game in evidence.games):
+            return [
+                _replay_game_inputs(evidence, game, statistics=statistics)
+                for game in evidence.games
+            ]
+        # A boundaryless vector snapshot with isolated failures: only the
+        # failed slots attempted a native call; siblings are current prefixes.
+        results = []
+        for game in evidence.games:
+            if game.failure is not None:
+                results.append(
+                    _replay_game_inputs(evidence, game, statistics=statistics)
+                )
+                continue
+            if not game.players:
+                results.append({"stream": game.stream, "status": "setup_unavailable"})
+                continue
+            sibling = game.model_copy(update={"frame": None})
+            result = _replay_game_inputs(evidence, sibling, statistics=statistics)
+            result.update(
+                at_retained_failure=False,
+                matches_binding=None,
+                matches_error=None,
+                diagnostic="Reconstructed the current known prefix; no native call was pending",
+            )
+            results.append(result)
+        return results
     retained = evidence.model_copy(deep=True)
     # Journal reset inputs describe the prior game, not the proposed new root.
     # Only an active step row with its exact pre-action frame binds an attempt.
@@ -576,9 +599,11 @@ def _replay_game_inputs(
     failed_opening = evidence.failed_opening(game)
     # A strict vector exception records the batch outcome, without proving
     # which individual streams advanced. Replay cannot fill in that history.
+    # An isolated failure, at reset or step, ends its own stream as failed.
+    observed_failure = game.end is not None and game.end.status == "failed"
     agreement = ReplayAgreement(
         "execution_outcome_unknown"
-        if evidence.mode == "vector" and not failed_opening
+        if evidence.mode == "vector" and not (failed_opening or observed_failure)
         else evidence.execution_outcome
     )
     # A reset/search failure has a different boundary from a rejected game

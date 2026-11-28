@@ -223,6 +223,7 @@ def test_isolated_step_failure_retains_slot_evidence(
             [reproduced] = replay_failure_inputs(record)
             assert reproduced["at_retained_failure"] and reproduced["matches_error"]
             assert reproduced["matches_binding"]
+            assert reproduced["original_outcome"] == "failed"
     finally:
         vector.close()
 
@@ -239,6 +240,31 @@ def test_isolated_step_failure_retains_slot_evidence(
     assert failed["stream"] == 1 and failed["status"] == "failed"
     assert failed["action_index"] == 1 and failed["at_retained_failure"]
     assert failed["matches_binding"] and failed["matches_error"]
+
+
+def test_boundaryless_snapshot_replays_isolated_failure_beside_siblings() -> None:
+    vector = RecordedVectorEnv(num_envs=3, seed=7, record_in_memory=True)
+    vector.set_observation_layout(step_buffers(3), layout=ObservationSpace().layout)
+    setup = managym.GameSetup(
+        [
+            managym.PlayerConfig(name=str(seat), decklist={"Mountain": 12})
+            for seat in (0, 1)
+        ]
+    )
+    try:
+        vector.reset_each_into_buffers([setup, setup, setup])
+        vector.step_isolated_into_buffers([0, 0, 0])
+        vector.step_isolated_into_buffers([0, 999_999, 0])
+        vector.take_slot_record(2)
+        evidence = vector.snapshot()
+        assert evidence.boundary is None
+        healthy, failed, detached = replay_failure_inputs(evidence)
+    finally:
+        vector.close()
+    assert healthy["status"] == "advanced" and not healthy["at_retained_failure"]
+    assert failed["status"] == "failed" and failed["at_retained_failure"]
+    assert failed["matches_error"] and failed["original_outcome"] == "failed"
+    assert detached == {"stream": 2, "status": "setup_unavailable"}
 
 
 def test_failed_scalar_reset_walks_an_empty_prefix(tmp_path: Path) -> None:
