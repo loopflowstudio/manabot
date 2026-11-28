@@ -39,6 +39,13 @@ fn activate(permanent: PermanentId, ability_index: usize) -> Action {
     }
 }
 
+fn tap(permanent: PermanentId) -> Action {
+    Action::TapForMana {
+        player: PAYER,
+        permanent,
+    }
+}
+
 fn offer(game: &Game, action: &Action) -> bool {
     game.action_space().unwrap().actions.contains(action)
 }
@@ -400,6 +407,12 @@ fn coupled_counted_tap_reads_counters_removed_by_mana() {
 
 #[test]
 fn coupled_fee_discount_reads_counters_removed_by_another_activation() {
+    for (tap_source, life_cost) in [(true, 0), (false, 0), (false, 1)] {
+        check_counter_discount(tap_source, life_cost);
+    }
+}
+
+fn check_counter_discount(tap_source: bool, life_cost: u32) {
     let mut game = payment_game(
         356,
         [
@@ -430,7 +443,9 @@ fn coupled_fee_discount_reads_counters_removed_by_another_activation() {
     game.state[source_object].activated_abilities = vec![
         ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("1R"),
-            tap_source: true,
+            tap_source,
+            once_only: !tap_source,
+            life_cost,
             effects: vec![Effect::add_mana(Mana::parse("GG"))],
             ..Default::default()
         },
@@ -451,6 +466,260 @@ fn coupled_fee_discount_reads_counters_removed_by_another_activation() {
     step_action(&mut game, activate(source, 1)).unwrap();
     choose_mana(&mut game, "B");
     finish_payment(&mut game);
+    assert_eq!(game.state.players[PAYER.0].life, 20 - life_cost as i32);
+}
+
+#[test]
+fn coupled_per_permanent_fee_discount_reads_tapped_lands() {
+    let mut game = payment_game(361, [("Forest", 38), ("Gray Ogre", 2)]);
+    game.keep_opening_hands();
+    let forest = put(&mut game, "Forest");
+    let source = put(&mut game, "Gray Ogre");
+    let object = game.permanent_object(source).unwrap();
+    game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("2"),
+        once_only: true,
+        cost_reduction_per: Some(CardPredicate {
+            named: Some("Forest".into()),
+            tapped: true,
+            ..Default::default()
+        }),
+        effects: vec![Effect::add_mana(Mana::parse("GG"))],
+        ..Default::default()
+    }];
+    let spell = only_card_in_main(&mut game, PAYER, "Gray Ogre");
+    game.state[spell].mana_cost = Some(ManaCost::parse("GG"));
+    game.scenario_refresh_priority().unwrap();
+    game.step(cast_offer(&game, spell).unwrap()).unwrap();
+
+    assert!(!offer(&game, &activate(source, 0)));
+    step_action(&mut game, tap(forest)).unwrap();
+    step_action(&mut game, activate(source, 0)).unwrap();
+    choose_mana(&mut game, "GG");
+    finish_payment(&mut game);
+    assert_eq!(game.state.stack_objects.len(), 1);
+}
+
+#[test]
+fn coupled_counted_tap_checks_the_post_tap_board() {
+    let mut game = payment_game(
+        362,
+        [
+            ("Forest", 37),
+            ("Island", 1),
+            ("Gray Ogre", 1),
+            ("Mountain", 1),
+        ],
+    );
+    game.keep_opening_hands();
+    let forest = put(&mut game, "Forest");
+    let source = put(&mut game, "Gray Ogre");
+    put(&mut game, "Mountain");
+    let forest_object = game.permanent_object(forest).unwrap();
+    let source_object = game.permanent_object(source).unwrap();
+    let named = |name: &str| CardPredicate {
+        named: Some(name.into()),
+        ..Default::default()
+    };
+    game.state[forest_object].statics = vec![StaticAbility::continuous(
+        StaticScope::All(named("Mountain")),
+        Some(Condition::SourceTapped),
+        vec![Modification::LoseAllAbilities],
+    )];
+    game.state[source_object].activated_abilities = vec![ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("R"),
+        tap_cost: Some(TapCost {
+            predicate: CardPredicate {
+                any_of: vec![named("Forest"), named("Island")],
+                ..Default::default()
+            },
+            count: 1,
+        }),
+        effects: vec![Effect::gain_life(1)],
+        ..Default::default()
+    }];
+    only_card_in_main(&mut game, PAYER, "Forest");
+    game.scenario_refresh_priority().unwrap();
+    assert!(!offer(&game, &activate(source, 0)));
+
+    let island = put(&mut game, "Island");
+    let island_object = game.permanent_object(island).unwrap();
+    game.scenario_refresh_priority().unwrap();
+    step_action(&mut game, activate(source, 0)).unwrap();
+    assert!(offer(
+        &game,
+        &Action::SelectCard {
+            player: PAYER,
+            object: island_object
+        }
+    ));
+    assert!(!offer(
+        &game,
+        &Action::SelectCard {
+            player: PAYER,
+            object: forest_object
+        }
+    ));
+    step_action(
+        &mut game,
+        Action::SelectCard {
+            player: PAYER,
+            object: island_object,
+        },
+    )
+    .unwrap();
+    finish_payment(&mut game);
+    assert_eq!(game.state.stack_objects.len(), 1);
+}
+
+#[test]
+fn coupled_resolution_payment_keeps_choice_taps_beside_pay() {
+    let mut game = payment_game(363, [("Forest", 38), ("Mountain", 1), ("Gray Ogre", 1)]);
+    game.keep_opening_hands();
+    put(&mut game, "Forest");
+    let choice = put(&mut game, "Mountain");
+    let choice_object = game.permanent_object(choice).unwrap();
+    game.state[choice_object].mana_abilities.clear();
+    game.state[choice_object].activated_abilities = vec![ActivatedAbilityDefinition {
+        tap_source: true,
+        effects: vec![Effect::Modal {
+            modes: ["G", "R"]
+                .map(|mana| vec![Effect::add_mana(Mana::parse(mana))])
+                .into(),
+        }],
+        ..Default::default()
+    }];
+    // A source with no native writes needs no coupled payment or reservations.
+    assert!(game.payment_model(PAYER, Some(choice)).coupled.is_none());
+    let mutator = put(&mut game, "Gray Ogre");
+    let mutator_object = game.permanent_object(mutator).unwrap();
+    game.state[mutator_object].activated_abilities = vec![ActivatedAbilityDefinition {
+        tap_source: true,
+        add_counters: Some((CounterKind::PlusOnePlusOne, 1)),
+        effects: vec![Effect::add_mana(Mana::parse("R"))],
+        ..Default::default()
+    }];
+    pay_during_resolution(&mut game, "G", 0);
+    game.mana_floats[PAYER.0] = ManaFloats::Off;
+    assert!(offer(&game, &Action::PayCost { player: PAYER }));
+    step_action(&mut game, activate(choice, 0)).unwrap();
+    choose_mana(&mut game, "G");
+    finish_payment(&mut game);
+    assert!(game.state.permanents[choice].as_ref().unwrap().tapped);
+}
+
+#[test]
+fn coupled_upfront_spending_checks_life_and_source_presence() {
+    let mut game = payment_game(364, [("Forest", 39), ("Gray Ogre", 1)]);
+    game.keep_opening_hands();
+    let source = put(&mut game, "Gray Ogre");
+    let object = game.permanent_object(source).unwrap();
+    game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("1"),
+        tap_source: true,
+        life_cost: 2,
+        add_counters: Some((CounterKind::PlusOnePlusOne, 1)),
+        effects: vec![Effect::add_mana(Mana::parse("B"))],
+        ..Default::default()
+    }];
+    game.scenario_set_life(PAYER, 2);
+    game.state
+        .mana_pool_mut(PAYER)
+        .add(&Mana::parse("RG"), None);
+    game.activate_mana_ability(PAYER, source, 0).unwrap();
+    game.tick().unwrap();
+    let Decision::ManaSpend { cost, .. } =
+        &game.state.suspended_decision.as_ref().unwrap().decision
+    else {
+        panic!("expected a mana spending decision");
+    };
+    let cost = cost.clone();
+    assert_eq!(game.mana_spend_choices(PAYER, &cost).len(), 2);
+
+    let mut missing = game.clone();
+    missing.move_object(object, ZoneType::Graveyard);
+    assert!(missing.mana_spend_choices(PAYER, &cost).is_empty());
+
+    let mut short = game.clone();
+    short.scenario_set_life(PAYER, 1);
+    assert!(short.mana_spend_choices(PAYER, &cost).is_empty());
+
+    step_action(
+        &mut game,
+        Action::ChooseMode {
+            player: PAYER,
+            mode: 0,
+        },
+    )
+    .unwrap();
+    choose_mana(&mut game, "B");
+    assert_eq!(game.state.players[PAYER.0].life, 0);
+}
+
+#[test]
+fn coupled_delve_waits_for_graveyard_reading_mana() {
+    for needs_exile in [false, true] {
+        let mut game = payment_game(365, [("Forest", 37), ("Mountain", 1), ("Gray Ogre", 2)]);
+        game.keep_opening_hands();
+        game.mana_floats[PAYER.0] = ManaFloats::All;
+        let forest = put(&mut game, "Forest");
+        let mountain = (!needs_exile).then(|| put(&mut game, "Mountain"));
+        let source = put(&mut game, "Gray Ogre");
+        let object = game.permanent_object(source).unwrap();
+        game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+            tap_source: true,
+            effects: vec![Effect::If {
+                condition: Condition::GraveyardAtLeast {
+                    count: 1,
+                    predicate: CardPredicate::default(),
+                },
+                then: vec![Effect::add_mana(Mana::parse("GG"))],
+                otherwise: vec![Effect::add_mana(Mana::parse("G"))],
+            }],
+            ..Default::default()
+        }];
+        let spell = only_card_in_main(&mut game, PAYER, "Gray Ogre");
+        game.scenario_force_card_in_hand(PAYER, "Forest").unwrap();
+        let extra = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Hand, PAYER)
+            .iter()
+            .copied()
+            .find(|card| *card != spell)
+            .unwrap();
+        let graveyard = game.move_object(extra, ZoneType::Graveyard);
+        game.state[spell].mana_cost = Some(ManaCost::parse("1GGG"));
+        game.state[spell]
+            .additional_costs
+            .push(AdditionalCost::Delve);
+        game.scenario_refresh_priority().unwrap();
+        game.step(cast_offer(&game, spell).unwrap()).unwrap();
+        let exile = Action::SelectCard {
+            player: PAYER,
+            object: graveyard,
+        };
+        assert!(!offer(&game, &exile));
+        let before = game.state.deterministic_hash();
+        assert!(game.pay_with_object(PAYER, graveyard).is_err());
+        assert_eq!(game.state.deterministic_hash(), before);
+
+        step_action(&mut game, activate(source, 0)).unwrap();
+        choose_mana(&mut game, "GG");
+        assert!(offer(&game, &exile));
+        step_action(&mut game, tap(forest)).unwrap();
+        if let Some(mountain) = mountain {
+            step_action(&mut game, tap(mountain)).unwrap();
+        } else {
+            step_action(&mut game, exile).unwrap();
+        }
+        finish_payment(&mut game);
+        assert_eq!(game.state.stack_objects.len(), 1);
+        assert_eq!(
+            game.state.zones.size(ZoneType::Exile, PAYER),
+            usize::from(needs_exile)
+        );
+    }
 }
 
 #[test]

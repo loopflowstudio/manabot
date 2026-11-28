@@ -1245,12 +1245,11 @@ impl Game {
             CostComponent::RemoveCounters { .. } => {
                 return Err(AgentError("choose which counter to remove".into()));
             }
-            CostComponent::Mana { cost, help } => {
+            CostComponent::Mana { .. } => {
                 // Delve: a card exiled from the payer's graveyard pays {1}.
-                if !(cost.generic() > 0
-                    && help.delve.is_some_and(|spell| {
-                        self.graveyard_payers(player, spell).contains(&object)
-                    }))
+                if self
+                    .delve_payment_objects(player, &payment, Some(object))
+                    .is_empty()
                 {
                     return Err(AgentError("no object pays this cost".into()));
                 }
@@ -1672,9 +1671,9 @@ impl Game {
             .into_iter()
             .map(|(permanent, _)| Action::WaterbendTap { player, permanent })
             .collect();
-        if let Some(spell) = help.delve.filter(|_| cost.generic() > 0) {
+        if help.delve.is_some() {
             actions.extend(
-                self.graveyard_payers(player, spell)
+                self.delve_payment_objects(player, payment, None)
                     .into_iter()
                     .map(|object| Action::SelectCard { player, object }),
             );

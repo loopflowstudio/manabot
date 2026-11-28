@@ -723,11 +723,12 @@ The Great Henge), a spell is castable exactly when some order of sources pays
 it, and only completing first steps are offered. A cached board profile
 classifies each source from a closed whitelist of pure rules facts; boards with
 no mutating source stay on the uncoupled direct and search paths with no fork
-overhead. Coupled searches step candidate activations, taps, mana choices and
-replacement orders natively on game forks using the fork's real mana pool, and
-memoize on a structural payment-state key (omitting event logs, priority and
-`id_gen`). While a player is paying a cost, `Decision::OrderReplacement` offers
-and admits only orders that still allow the payment to complete (for example,
+overhead. Coupled searches step candidate activations, taps, mana choices,
+Delve exiles and replacement orders natively on game forks using the fork's
+real mana pool. Their memo key represents the payment state and omits event
+logs, priority and `id_gen`. While a player is paying a cost,
+`Decision::OrderReplacement` offers and admits only orders that still allow
+the payment to complete (for example,
 applying Caradora before Doubling Season during a `{G}{G}` payment; a sole
 completing order is taken under `skip_trivial`). An opponent's replacement order
 is never filtered: the payment is offered only when every legal opponent order
@@ -1160,7 +1161,8 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   sources: when only one outcome exists, turning a creature face up pays
   immediately and ward offers only pay or decline; when there is a real source
   choice, both fixed and simple choice taps are offered alongside pay (and
-  non-simple mana abilities such as Treasure remain explicit).
+  non-simple mana abilities such as Treasure remain explicit). On coupled
+  boards, completing choice taps stay available alongside Pay.
 
 Cast, activation and resolution payments use the same feasibility check for
 mana, life, help and coupled board changes. Mana abilities can change the
@@ -1172,8 +1174,10 @@ that would strand the cost are omitted. For example, tapping a Mountain making
 blue/red bonus choice before committing its mana, then completes the cast (and
 automatic payment completes through that choice as well); tapping a
 trample-counter Mountain beside a trample-reading Heartbeat offers tapping first
-and omits spending the counter into a dead end. The check carries signed life
-through payment steps, accounting for self-damage, life gain and their
+and omits spending the counter into a dead end. A Delve exile that would weaken
+a mana source needed to finish paying appears once the payer has enough other
+mana or has produced the needed mana from that source. The check carries signed
+life through payment steps, accounting for self-damage, life gain and their
 replacements. Paying zero life is always legal. Positive
 fees require a life total that can change and covers the fee (CR 119.4, 119.8).
 A life fee on the announced cost follows mana production, so life gained along

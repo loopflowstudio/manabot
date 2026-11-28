@@ -665,6 +665,9 @@ pub(super) fn mana_ability_reads(ability: &ActivatedAbilityDefinition) -> StateR
         if let Some(tap) = &ability.tap_cost {
             reads.predicate(&tap.predicate);
         }
+        if let Some(reduction) = &ability.cost_reduction_per {
+            reads.predicate(reduction);
+        }
         output_reads(&mut reads, output);
     }
     reads.state

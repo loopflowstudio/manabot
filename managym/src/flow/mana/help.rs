@@ -18,12 +18,12 @@ impl Game {
     /// Mark what each untapped creature or artifact may pay by tapping
     /// under this cost's convoke or improvise permissions.
     pub(super) fn mark_help_taps(&self, model: &mut PaymentModel, help: Help) {
-        if let Some(coupled) = &mut model.coupled {
-            coupled.help = help;
+        if !help.convoke && !help.improvise {
+            return;
         }
         let tap_permissions = |source: &ManaSource| {
             let mut colors = ManaTypeSet::EMPTY;
-            if !source.waterbend || !(help.convoke || help.improvise) {
+            if !source.waterbend {
                 return (false, colors);
             }
             let view = self.characteristics(source.permanent);
@@ -116,17 +116,52 @@ impl Game {
         permissions: CostPermissionContext,
         life: u32,
     ) -> bool {
-        let mut model = self.payment_model(player, None);
+        let mut model = self.payment_model_with_help(player, None, permissions.help);
         if let Some(permanent) = permissions.reserved_tap {
             model.reserve(SourceReservation::tap(permanent));
         }
-        self.mark_help_taps(&mut model, permissions.help);
         model.track_delve(cost, permissions, life);
         model.payable(
             pool.clone(),
             self.help_obligations(player, cost, permissions, life),
             SourcePolicy::All,
         )
+    }
+
+    /// Graveyard cards whose exile leaves a payable announced cost.
+    pub(in crate::flow) fn delve_payment_objects(
+        &self,
+        player: PlayerId,
+        payment: &Payment,
+        selected: Option<ObjectId>,
+    ) -> Vec<ObjectId> {
+        let cost = payment.mana().0;
+        let Some(spell) = payment.help().delve.filter(|_| cost.generic() > 0) else {
+            return Vec::new();
+        };
+        let mut candidates = self.graveyard_payers(player, spell);
+        if let Some(selected) = selected {
+            candidates.retain(|&object| object == selected);
+        }
+        if candidates.is_empty() {
+            return candidates;
+        }
+        let model = self.payment_model(player, None);
+        if let Some(coupled) = model.coupled() {
+            let pool = self.pooled_mana(player);
+            let obligations = self.payment_obligations(player);
+            candidates.retain(|&object| {
+                coupled
+                    .plan(
+                        pool.clone(),
+                        obligations.clone(),
+                        SourcePolicy::All,
+                        Some(PaymentCandidate::DelveExile(object)),
+                    )
+                    .is_some()
+            });
+        }
+        candidates
     }
 
     /// What tapping `tapped` may pay of `cost` under `permissions`, before
@@ -181,11 +216,10 @@ impl Game {
     ) -> Vec<(PermanentId, Vec<TapPayment>)> {
         let _scan = self.board_scan();
         let model_for = |tapped: Option<PermanentId>| {
-            let mut model = self.payment_model(player, None);
+            let mut model = self.payment_model_with_help(player, None, permissions.help);
             for permanent in permissions.reserved_tap.into_iter().chain(tapped) {
                 model.reserve(SourceReservation::tap(permanent));
             }
-            self.mark_help_taps(&mut model, permissions.help);
             model
         };
         let mut model = model_for(None);

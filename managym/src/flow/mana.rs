@@ -940,6 +940,7 @@ enum PaymentStep {
     Waterbend(PermanentId),
     Convoke(PermanentId),
     Tap(ObjectId),
+    DelveExile(ObjectId),
 }
 
 impl PaymentStep {
@@ -954,7 +955,7 @@ impl PaymentStep {
                 permanent: *permanent,
                 ability_index: *ability_index,
             }),
-            Self::Tap(object) => Some(Action::SelectCard {
+            Self::Tap(object) | Self::DelveExile(object) => Some(Action::SelectCard {
                 player,
                 object: *object,
             }),
@@ -3361,10 +3362,27 @@ impl Game {
     }
 
     fn payment_model(&self, player: PlayerId, sacrifice: Option<PermanentId>) -> PaymentModel<'_> {
+        let payment = match &self.pending_choice {
+            Some(PendingChoice::Pay { payment, .. }) => Some(payment.as_ref()),
+            _ => None,
+        };
+        self.payment_model_with_help(
+            player,
+            sacrifice,
+            payment.map_or_else(Help::default, Payment::help),
+        )
+    }
+
+    fn payment_model_with_help(
+        &self,
+        player: PlayerId,
+        sacrifice: Option<PermanentId>,
+        help: Help,
+    ) -> PaymentModel<'_> {
         let _scan = self.board_scan();
         let mut model = self.pure_payment_model(player);
         let profile = self.with_layer_board(|board| board.arithmetic);
-        model.coupled = Some(CoupledPayment::new(self, player, profile));
+        model.coupled = CoupledPayment::new(self, player, profile, help, &model.sources);
         if let Some(source) = sacrifice {
             model.reserve(SourceReservation::owed(source, false, true));
         }
@@ -3372,12 +3390,12 @@ impl Game {
         // its resources are owed in every phase, not only mana spending.
         if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
             self.reserve_announced_payment(payment, &mut model);
-            self.mark_help_taps(&mut model, payment.help());
-            if payment.paying_mana() {
+            if payment.paying_mana() && payment.help().delve == help.delve {
                 model.track_delve(payment.mana().0, payment.mana_permissions(), payment.life());
             }
         }
         self.reserve_mana_callers(&mut model);
+        self.mark_help_taps(&mut model, help);
         model
     }
 
@@ -3716,13 +3734,15 @@ impl Game {
                     tap_remaining,
                     ..
                 } => {
-                    let source = self.state.permanents[*permanent].as_ref().unwrap();
-                    let mut outputs = self.upfront_mana_outputs(
-                        player,
-                        &activation.output,
-                        source.chosen.as_deref(),
-                    );
-                    if activation.tap_source {
+                    let source = self.state.permanents[*permanent].as_ref();
+                    let mut outputs = source.map_or_else(Vec::new, |source| {
+                        self.upfront_mana_outputs(
+                            player,
+                            &activation.output,
+                            source.chosen.as_deref(),
+                        )
+                    });
+                    if source.is_some() && activation.tap_source {
                         let bonuses = self.tap_bonuses(&self.mana_triggers(), player, *permanent);
                         outputs = production_alternatives(outputs, &bonuses);
                     }
@@ -3733,8 +3753,10 @@ impl Game {
                             remaining: *tap_remaining,
                         });
                     }
-                    let life_delta = self
-                        .mana_suffix_life_delta(player, source.object, &activation.suffix)
+                    let life_delta = source
+                        .and_then(|source| {
+                            self.mana_suffix_life_delta(player, source.object, &activation.suffix)
+                        })
                         .unwrap_or(0);
                     if !fee_in_spend {
                         result.push(Obligation::mana(activation.mana_cost.clone()));
@@ -4209,7 +4231,7 @@ impl Game {
         let (fixed_payable, auto_can_pay) = self.automatic_payability(&model, &pool, player, cost);
         let can_pay = tail_payable && auto_can_pay;
         let extra = self.offers_extra_payment_taps(player);
-        let explicit = !can_pay || payment.waterbends() || extra;
+        let explicit = !can_pay || payment.waterbends() || extra || model.coupled().is_some();
         let mut actions = self.mana_ability_actions_with(&model, player, explicit);
         let help_actions: Vec<Action> =
             if tail_payable && (permissions.help != Help::default() || permissions.waterbend > 0) {
@@ -4745,9 +4767,8 @@ impl Game {
         }
         let model = self.payment_model(player, None);
         model
-            .coupled
-            .as_ref()
-            .expect("live payment model")
+            .coupled()
+            .expect("replacement order payment requires a native transition")
             .plan(
                 self.pooled_mana(player),
                 obligations,

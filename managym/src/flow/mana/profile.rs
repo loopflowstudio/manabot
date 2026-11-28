@@ -7,9 +7,9 @@ use crate::state::{effect::Modification, predicate::CardPredicate};
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(in crate::flow) struct BoardArithmeticProfile {
     pub(super) triggers: bool,
-    stateful_triggers: bool,
+    pub(super) stateful_triggers: bool,
     stateful_statics: bool,
-    writes_non_pt: bool,
+    pub(super) writes_non_pt: bool,
     stateful_abilities: bool,
     damage_replacements: bool,
     life_replacements: bool,
@@ -150,6 +150,10 @@ impl BoardArithmeticProfile {
 
     pub(super) fn sensitive_tap(self) -> bool {
         self.stateful_triggers || self.writes_non_pt
+    }
+
+    pub(super) fn stateful_delve(self) -> bool {
+        self.stateful_abilities || self.stateful_statics || self.stateful_triggers
     }
 
     pub(super) fn activation_mutates(self, facts: ActivationFacts, help: Help) -> bool {
