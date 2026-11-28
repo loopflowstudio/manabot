@@ -6,3 +6,4 @@
 - Designs 1, 4 and 7 are inherited from MTG-500's concept reviews, where each was adopted headless "for review". They have had no human sign-off.
 - Pass 1 treats a trigger predicate's `tapped` requirement as met for the planner. Boards whose layers read tap state are left to pass 2's Mutator role; if a pass 1 board needs more than the predicate field, it moves to pass 2.
 - Pass 1 keeps the existing exact batch API synchronous. Its guard returns an error if a live tap changes the board enough to open an unplanned bonus choice. Pass 2 needs to keep these taps on the native candidate path before a batch starts.
+- Pass 2 proved synchronous batches on tap-sensitive boards with a native fixed-only witness. A choice-opening tap stays on the individual decision path, and an exact batch executes its witness in order.

@@ -36,30 +36,7 @@ All five questions were answered headless with the review's recommended option, 
 
 ## Pass 2 · Coupled payment authority and fork search
 
-The pass that could prove the plan wrong.
-
-Pass 1 projects the tapped status into predicates, including alternatives, while using the current layered characteristics. Treat taps that can change a layer's output or trigger set as native candidate steps. If such a change opens an unexpected choice in the exact batch today, that path returns an error after tapping.
-
-**Classifier (design 4).** `BoardArithmeticProfile`, cached per source seed and merged in `LayerBoard` (`flow/statics.rs` ≈316, `flow/layers.rs` ≈1488): a closed positive whitelist; anything unrecognised is stateful. Flags as in `7cb3655f1:scratch/plan.md` design 4, `ReplacementEffect` matched exhaustively (no `_` arm), and resolved `EffectRecords` in `state.effects` carrying `Modification::{ExileIfWouldDie, ExileIfWouldLeave}` (`state/src/effect.rs:110,117`) included. Per question each activation is `PaymentCoupling::{Invariant, Sensitive, Mutator}`. Subsumes `has_triggered_mana_abilities`. A question with no Mutator answers through today's pure path, untouched.
-
-**Query.** `PaymentModel` keeps the pure answer and gains the context the coupled path needs: applied `SourceReservation`s and counter reservations, `Help` (convoke, improvise, `delve: Option<ObjectId>`, which `help_obligations` today pre-subtracts at the root and discards, `mana/help.rs:73`), and pending upfront activations (`CoupledObligation::CompleteUpfront { permanent, activation: Box<ManaUpfrontActivation> }`, plus any in-flight `OrderReplacement` frame). Candidate-step entry points (activate, tap-for-mana, tap-for-cost, mana choice, replacement order) replace the frozen edits listed in review answer 1: uncoupled, they delegate to today's pure methods; coupled, they step the candidate natively on the fork, then search. When coupled, also bypass `PaymentCache` (its key omits game state, ≈2609), `direct`, `fixed_sufficient` (≈2694), `determined_source_counts` (`mana/interchangeable.rs:55`), `automatic_units_within` (≈4141), `equivalent_mana_choices` (≈4560), `fixed_total`, `choice_tap_witness`, `useful_payment_taps` dedup and `SourceClassCache`.
-
-**Search (design 1).**
-
-- State: a `Game` fork whose real `players[p].mana_pool` is the search's pool (`mana_pool_mut` invalidates `LayerBoard` only when `reads.mana` is set), plus obligations, reservations and help. Enclosing decisions are cleared only after any pending `CompleteUpfront` or in-flight `OrderReplacement` has finished natively (`complete_mana_upfront` ≈4964; `choose_replacement` + `run_payment_frame`), so a grant that ended still completes from the owned activation. With them cleared, `payment_obligations` is empty and the `ChooseMode` validation (`decision.rs` ≈2533) cannot re-enter the search.
-- At each state, with no pending upfront or order, ask the pure model with Mutators removed; if it pays, done. Otherwise branch on every Mutator and every Sensitive source; Invariant sources only to fund a pending Mutator's or Sensitive source's mana cost, one representative per `PurposeProjection::sources_equivalent` class (`mana.rs:432`, with `tap_candidate_sets`), never `same_payment_profile` (≈748, ignores tap-candidate membership).
-- A step is native: `Decision::ManaUpfront` from `ManaUpfrontActivation::new`, `complete_mana_upfront`, suspensions on `ManaChoice` / bonus choice (payer OR) and `OrderReplacement` (payer OR, opponent AND). Produced mana is the pool's units past `unit_count()` at the step's start.
-- After a step: `fork.payment_sources(player)`, re-apply reservations (sacrifice-reserved permanents stay until CR 601.2h), recompute delve payers from the fork's graveyard, reclassify, recurse.
-- Memo: `CoupledMemoKey` hashed with `FastHasher`: per permanent (present, tapped, counters, activations used), life totals, turn histories (life gained/lost, permanents sacrificed/left, nonlands left, graveyard arrivals, damage pairs), graveyard and exile card sets, pool, obligations, reservations. Never events, priority or `id_gen`.
-- No cap; termination is MTG-500's finite-resource contract (`mana_parts()`).
-- Witness recorded as `PaymentStep`s so offers keep source order and action identity.
-- `mana_suffix_life_delta`'s probe (≈3352) stays as the verified `LifeDelta` of Invariant and Sensitive steps.
-
-`PaymentCache` gains test-visible counts of coupled searches, fork states and memo hits. Tests assert on counts, never time.
-
-Shows: `0d7bb6743`, `a90fd7109` and `34092c814` flip from asserting the failure to stepping the completion and asserting the stranding first step is absent; two Citadels in either order hit the memo. Citadel/Room/Canyon + plain Heartbeat, Badgermole Cub or Air Nomad Legacy + Treasures, and Raucous Audience beside plain lands report zero coupled searches.
-
-Stop rule, as in MTG-500: a counterexample that strands on a board the classifier calls uncoupled is committed as a fixture and widens "stateful"; one that strands inside the search is a search bug fixed there.
+`6064af631` classifies the board, searches native payment transitions with structural memoization, preserves deterministic automatic tap orders, and verifies the three coupled fixtures, memo hits, and ordinary boards that stay on the pure solver.
 
 ## Pass 3 · Payer replacement order, remaining boards, bounds
 
@@ -87,7 +64,7 @@ Drafted in place before implementation (read these when building and reviewing):
 
 ## Next
 
-Pass 2 is next. Add the board profile in `flow/statics.rs` and `flow/layers.rs`, wire the structured candidate queries into `flow/mana.rs`, and flip the damage-replacement, keyword-counter and Citadel/Henge/Canyon counterexamples to assert which offers complete.
+Pass 3 is next. Use the replacement-order candidate in `flow/mana/coupled.rs` to filter payer orders in `flow/decision.rs`. Exercise the remaining boards and pin the fork-state count for the `{15}` fixture. The native search already requires every opponent order to complete. The seven focused checks passed with debug assertions enabled and optimization disabled. The full debug suites, Engine Budget, and cold replay verification remain for CI and review.
 
 ## Acceptance check
 

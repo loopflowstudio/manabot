@@ -1,17 +1,17 @@
-at: 034865aec16c47500ba0323bc2a1284b01f01bec
+at: 6064af631c29266bf2236c57bac96eb0cc57bd14
 first:
   - path: managym/README.md
-    why: How players encounter mana choices and inspect payments
-  - path: scratch/plan.md
-    why: Verified work and the coupled-search cases still open
+    why: Rules and offers the player will see
+  - path: managym/src/flow/mana/profile.rs
+    why: Board facts that make source order matter
   - path: managym/src/flow/mana.rs
-    why: Fixed tap classification, offer, and saved payment
-  - path: managym/src/flow/layers.rs
-    why: Trigger predicates read the expected tapped status
-  - path: managym/src/flow/mana/preview.rs
-    why: Hover identifies taps that open bonus choices
+    why: Feasibility entry points and native production
+  - path: managym/src/flow/mana/coupled.rs
+    why: Native steps, retained costs, and structural memoization
+  - path: managym/src/flow/decision.rs
+    why: Shared execution of choices and replacement effects
   - path: managym/src/flow/mana/tests/manual_payment.rs
-    why: Both colors, receipts, automatic casting, and nested payment
-hide:
-  - path: scratch/concept-review.page.html
-    why: Compiled copy of the concept review
+    why: Regression positions and memoization checks
+  - path: managym/cards/tests/cards/ody.rs
+    why: Casts with life-dependent sources and offers
+hide: []
