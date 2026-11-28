@@ -165,9 +165,10 @@ confirm the pod is gone.
 
 2026-11-27 availability check. `l4-etude` quoted USD 0.69/hour against its
 USD 0.60 ceiling. Existing `mtg324-l4-step` quoted the same price under its
-USD 0.70 ceiling, with zero of one in use. Recheck that profile before renting.
-Inject RunPod from Doppler `etude/prd` and R2 from `manabot/prd` through nested
-`doppler run` for Etude launcher commands. No rental was created.
+USD 0.70 ceiling, with zero of one in use. The replay and arena used that
+profile after rechecking availability. The report records the launcher cost
+and confirmed deletion. Inject RunPod from Doppler `etude/prd` and R2 from
+`manabot/prd` through nested `doppler run` for Etude launcher commands.
 
 ## Acceptance check
 
@@ -191,20 +192,8 @@ parts, and that the buckets cover the forward.
 ## Passes
 
 1. **Harness.** `f3863261e` added the capture, replay, report and arena receipts, with CPU and MPS smoke checks.
-2. **L4 diagnosis.** Use `experiments/reports/eval_precision_profile.md` to
-   stage the trained checkpoint and held-out corpus, generate matched-input
-   seeded controls, and run the real-batch and head-width comparisons on
-   one L4. Start with the same-call float32/bf16 arms for trained `w160l8`
-   and seeded `w384l8`, then the six-model grid and arena repeats. Verify
-   CUDA trace correlation and bucket coverage on the first replay before
-   expanding the sweep. Local MPS evidence covers execution only.
-3. **Fix or rule.** If `bf16-linear-once` removes the penalty with logits
-   bit-identical to shipped bf16, change `torch_logits`, rerun the two bf16
-   arena arms on the same rental and report before/after. Otherwise the
-   report states the L4 rule in `head_dim` and width/rows-per-call terms
-   (for example `head_dim % 8 == 0` and width at least N). Update
-   `docs/evaluation.md#etude-agents` and add one line to
-   `experiments/reports/eval_throughput.md` pointing at the new report.
+2. **L4 diagnosis.** `75ae6a1d4` corrected CUDA trace admission. `e86b798d1` records 84 replay profiles, the even-head alignment control and three arena repeats per arm.
+3. **L4 guidance.** `e86b798d1` documents the head-width and batch-size crossovers after cast-once preserved the logits and left the narrow slowdown intact.
 
 ## Absent and error states
 
