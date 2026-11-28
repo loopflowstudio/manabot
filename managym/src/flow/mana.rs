@@ -22,7 +22,7 @@ mod help;
 mod interchangeable;
 mod preview;
 mod profile;
-use coupled::{CoupledPayment, DelveCost, PaymentCandidate};
+use coupled::{CoupledPayment, HelpedCost, PaymentCandidate};
 pub use preview::PaymentPreview;
 use profile::ActivationFacts;
 pub(super) use profile::BoardArithmeticProfile;
@@ -291,10 +291,13 @@ impl PurposeProjection {
             push(purpose);
         }
         for obligation in obligations {
-            if let Obligation::Pay { cost, .. } = obligation {
-                if cost.mana_value > 0 {
-                    push(&cost.purpose);
-                }
+            let cost = match obligation {
+                Obligation::Pay { cost, .. } => cost,
+                Obligation::Helped(helped) => &helped.cost,
+                _ => continue,
+            };
+            if cost.mana_value > 0 {
+                push(&cost.purpose);
             }
         }
         for source in model.sources.iter() {
@@ -637,6 +640,8 @@ enum Obligation<C = ManaChoices> {
         cost: ManaCost,
         taps: Taps,
     },
+    /// Native help steps can change each other's eligibility and output.
+    Helped(Box<HelpedCost>),
     Output {
         // Alternatives and candidate sets are immutable query payloads. Branches
         // and memo keys share them while keeping their own progress and pool.
@@ -685,6 +690,7 @@ impl<C> Obligation<C> {
                 cost: cost.clone(),
                 taps: *taps,
             },
+            Self::Helped(_) => unreachable!("pure search receives lowered help tiers"),
             Self::Output {
                 choices,
                 life_cost,
@@ -1707,20 +1713,6 @@ impl Drop for PaymentScan<'_> {
 }
 
 impl PaymentModel<'_> {
-    fn track_delve(&mut self, cost: &ManaCost, permissions: CostPermissionContext, life: u32) {
-        if let Some(coupled) = self
-            .coupled
-            .as_mut()
-            .filter(|_| permissions.help.delve.is_some())
-        {
-            coupled.delve = Some(DelveCost {
-                cost: cost.clone(),
-                permissions,
-                life,
-            });
-        }
-    }
-
     fn reserve(&mut self, reservation: SourceReservation) {
         if let Some(coupled) = &mut self.coupled {
             coupled.reservations.push(reservation);
@@ -2128,6 +2120,7 @@ impl PaymentModel<'_> {
         crate::benchmark_payments::state();
         match &state.obligations[0] {
             Obligation::PayLife(_) => unreachable!("advanced before branching"),
+            Obligation::Helped(_) => unreachable!("pure search receives lowered help tiers"),
             Obligation::Tap {
                 candidates,
                 remaining,
@@ -3390,9 +3383,6 @@ impl Game {
         // its resources are owed in every phase, not only mana spending.
         if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
             self.reserve_announced_payment(payment, &mut model);
-            if payment.paying_mana() && payment.help().delve == help.delve {
-                model.track_delve(payment.mana().0, payment.mana_permissions(), payment.life());
-            }
         }
         self.reserve_mana_callers(&mut model);
         self.mark_help_taps(&mut model, help);
@@ -3689,14 +3679,27 @@ impl Game {
     }
 
     fn payment_obligations(&self, player: PlayerId) -> Vec<Obligation> {
-        self.payment_obligations_up_to(player, false)
+        self.payment_obligations_up_to(player, false, false)
+    }
+
+    fn payment_obligations_for(
+        &self,
+        player: PlayerId,
+        model: &PaymentModel<'_>,
+    ) -> Vec<Obligation> {
+        self.payment_obligations_up_to(player, false, model.coupled().is_some())
     }
 
     fn native_mana_obligations(&self, player: PlayerId) -> Vec<Obligation> {
-        self.payment_obligations_up_to(player, true)
+        self.payment_obligations_up_to(player, true, false)
     }
 
-    fn payment_obligations_up_to(&self, player: PlayerId, native_only: bool) -> Vec<Obligation> {
+    fn payment_obligations_up_to(
+        &self,
+        player: PlayerId,
+        native_only: bool,
+        coupled: bool,
+    ) -> Vec<Obligation> {
         let mut result = Vec::new();
         let mut spending_upfront = false;
         for decision in self
@@ -3769,16 +3772,28 @@ impl Game {
                 }
                 Decision::Payment(_) if native_only => break,
                 Decision::Payment(progress) if !progress.can_decline() => {
-                    if let Some(CostComponent::Mana { cost, .. }) = progress.owed.first() {
-                        result.push(Obligation::Pay {
-                            cost: cost.clone(),
-                            taps: if progress.waterbends() {
-                                Taps::Any
-                            } else {
-                                Taps::None
-                            },
-                        });
-                        result.extend(Obligation::life(progress.tail_life()));
+                    if let Some(CostComponent::Mana { cost, help }) = progress.owed.first() {
+                        if coupled {
+                            let permissions =
+                                CostPermissionContext::for_receipt(*help, cost, &progress.receipt);
+                            result.extend(self.cost_obligations(
+                                player,
+                                cost,
+                                permissions,
+                                progress.tail_life(),
+                                coupled,
+                            ));
+                        } else {
+                            result.push(Obligation::Pay {
+                                cost: cost.clone(),
+                                taps: if progress.waterbends() {
+                                    Taps::Any
+                                } else {
+                                    Taps::None
+                                },
+                            });
+                            result.extend(Obligation::life(progress.tail_life()));
+                        }
                     }
                 }
                 _ => {}
@@ -3787,7 +3802,7 @@ impl Game {
         if !native_only {
             if let Some((payer, payment, CostComponent::Mana { .. })) = self.paying() {
                 if payer == player {
-                    result.extend(self.announced_obligations(player, payment));
+                    result.extend(self.announced_obligations(player, payment, coupled));
                 }
             }
         }
@@ -3819,7 +3834,7 @@ impl Game {
             source_index,
             ability_pos,
             &self.pooled_mana(player),
-            &self.payment_obligations(player),
+            &self.payment_obligations_for(player, &base),
         )
     }
 
@@ -3848,7 +3863,7 @@ impl Game {
             return Vec::new();
         }
         let dedup = base.coupled().is_none() && active_sources.next().is_some();
-        let pending_obligations = self.payment_obligations(player);
+        let pending_obligations = self.payment_obligations_for(player, base);
         let pool = self.pooled_mana(player);
         let check_ability = |source_index, pos| {
             base.activation_payable(source_index, pos, &pool, &pending_obligations)
@@ -3941,8 +3956,8 @@ impl Game {
     }
 
     fn append_fixed_mana_actions(&self, player: PlayerId, actions: &mut Vec<Action>) {
-        let obligations = self.payment_obligations(player);
         let model = self.payment_model(player, None);
+        let obligations = self.payment_obligations_for(player, &model);
         let ordinary_len = actions.len();
         for (index, source) in model.sources.iter().enumerate().filter(|(_, s)| s.untapped) {
             let fixed_choice = source
@@ -4078,9 +4093,7 @@ impl Game {
         if helped {
             return Ok(None);
         }
-        // The witness models the ordinary and waterbend portions as separate
-        // spends, but the game charges their combined remainder only once.
-        // Every offered waterbend tap preserves a witness for that remainder.
+        // Every offered waterbend tap preserves a witness for the full remainder.
         if let Some(tap) = space
             .actions
             .iter()
@@ -4088,11 +4101,11 @@ impl Game {
         {
             return Ok(Some(tap.clone()));
         }
-        let path = self
-            .payment_model(player, None)
+        let model = self.payment_model(player, None);
+        let path = model
             .plan(
                 self.pooled_mana(player),
-                self.payment_obligations(player),
+                self.payment_obligations_for(player, &model),
                 SourcePolicy::All,
             )
             .ok_or_else(|| AgentError("committed cost has no payment witness".into()))?;
@@ -4298,7 +4311,7 @@ impl Game {
             let mut obligations = vec![Obligation::mana(cost.clone())];
             obligations.extend(self.saved_obligations(player));
             if help.keyworded() {
-                obligations = self.payment_obligations(player);
+                obligations = self.payment_obligations_for(player, model);
             }
             let actions = model
                 .sources
@@ -4691,7 +4704,7 @@ impl Game {
                 .into(),
             remaining: tap.count,
         }];
-        obligations.extend(self.announced_obligations(player, payment));
+        obligations.extend(self.announced_obligations(player, payment, model.coupled().is_some()));
         let pool = self.pooled_mana(player);
         match selected {
             Some(permanent) => model.plan_after_tap(pool, obligations, permanent).is_some(),
@@ -4722,7 +4735,7 @@ impl Game {
             operation,
             receipt: Default::default(),
         };
-        let obligations = self.announced_obligations(player, &payment);
+        let obligations = self.announced_obligations(player, &payment, model.coupled().is_some());
         model.payable(self.pooled_mana(player), obligations, SourcePolicy::All)
     }
 
@@ -4761,11 +4774,11 @@ impl Game {
     /// An already-open replacement order needs a native transition even if
     /// the activation that opened it has spent its source.
     pub(super) fn replacement_order_payable(&self, player: PlayerId, mode: usize) -> bool {
-        let obligations = self.payment_obligations(player);
+        let model = self.payment_model(player, None);
+        let obligations = self.payment_obligations_for(player, &model);
         if obligations.is_empty() {
             return true;
         }
-        let model = self.payment_model(player, None);
         model
             .coupled()
             .expect("replacement order payment requires a native transition")
@@ -4807,7 +4820,7 @@ impl Game {
         if let Some(coupled) = model.coupled() {
             return coupled.plan(
                 self.pooled_mana(player),
-                self.payment_obligations(player),
+                self.payment_obligations_for(player, model),
                 SourcePolicy::All,
                 Some(PaymentCandidate::Mode(mode)),
             );
@@ -5147,11 +5160,11 @@ impl Game {
 
     /// Keep only selections that leave a complete witness for every caller.
     pub(crate) fn mana_tap_cost_actions(&self, player: PlayerId) -> Vec<Action> {
-        let obligations = self.payment_obligations(player);
+        let model = self.payment_model(player, None);
+        let obligations = self.payment_obligations_for(player, &model);
         let Some(Obligation::Tap { candidates, .. }) = obligations.first() else {
             return Vec::new();
         };
-        let model = self.payment_model(player, None);
         let pool = self.pooled_mana(player);
         let mut actions = Vec::new();
         for permanent in candidates.iter() {
@@ -5240,7 +5253,7 @@ impl Game {
     fn automatic_upfront_path(&self, player: PlayerId) -> Option<Vec<PaymentStep>> {
         let model = self.payment_model(player, None);
         let pool = self.pooled_mana(player);
-        let obligations = self.payment_obligations(player);
+        let obligations = self.payment_obligations_for(player, &model);
         let path = model.plan(pool, obligations, SourcePolicy::AutomaticPrefix)?;
         path.iter()
             .take_while(|step| !matches!(step, PaymentStep::Spend))
@@ -6106,11 +6119,10 @@ impl Game {
                 };
                 if let Some(coupled) = model.coupled() {
                     if self.state.suspended_decision.is_some() {
-                        let owed = if spending_upfront {
-                            obligations.clone()
-                        } else {
-                            tail.to_vec()
-                        };
+                        let mut owed = self.payment_obligations_for(player, model);
+                        if !spending_upfront {
+                            owed.remove(0);
+                        }
                         return coupled
                             .plan(
                                 pool.clone(),

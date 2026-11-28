@@ -1,6 +1,8 @@
 //! Exact payment transitions when an activation changes what another step reads.
 
 use super::*;
+use crate::flow::payment::TapPayment;
+use crate::state::payment::Toward;
 
 #[derive(Clone)]
 pub(super) struct CoupledPayment<'a> {
@@ -10,26 +12,27 @@ pub(super) struct CoupledPayment<'a> {
     mutating_caller: bool,
     pub(super) reservations: Vec<SourceReservation>,
     help: Help,
-    pub(super) delve: Option<DelveCost>,
 }
 
-#[derive(Clone, PartialEq, Eq)]
-pub(super) struct DelveCost {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct HelpedCost {
     pub(super) cost: ManaCost,
     pub(super) permissions: CostPermissionContext,
     pub(super) life: u32,
 }
 
-impl DelveCost {
-    fn after_pip(&self, color: Color, waterbend: bool) -> Self {
-        let mut rest = self.clone();
-        rest.cost = rest.cost.less_pip(color);
-        rest.permissions.waterbend = rest
-            .permissions
-            .waterbend
-            .saturating_sub(u8::from(waterbend))
-            .min(rest.cost.generic());
-        rest
+impl HelpedCost {
+    fn pay_pip(&mut self, color: Color) {
+        self.cost = self.cost.less_pip(color);
+        self.permissions.waterbend = self.permissions.waterbend.min(self.cost.generic());
+    }
+}
+
+impl std::hash::Hash for HelpedCost {
+    fn hash<H: std::hash::Hasher>(&self, hash: &mut H) {
+        self.cost.hash(hash);
+        self.permissions.waterbend.hash(hash);
+        self.life.hash(hash);
     }
 }
 
@@ -37,7 +40,7 @@ impl DelveCost {
 pub(super) enum PaymentCandidate {
     Produce(PaymentStep),
     CountedTap(PermanentId),
-    HelpTap(PermanentId),
+    HelpTap(PermanentId, TapPayment),
     DelveExile(ObjectId),
     Mode(usize),
     Spend(ManaSpendChoice),
@@ -147,7 +150,6 @@ impl<'a> CoupledPayment<'a> {
             mutating_caller,
             reservations: Vec::new(),
             help,
-            delve: None,
         })
     }
 
@@ -172,16 +174,21 @@ impl<'a> CoupledPayment<'a> {
         if obligations.starts_with(&native) {
             obligations.drain(..native.len());
         }
-        let delve = self.delve.as_ref().filter(|delve| {
-            let modeled =
-                self.game
-                    .help_obligations(self.player, &delve.cost, delve.permissions, delve.life);
-            if !obligations.ends_with(&modeled) {
-                return false;
-            }
-            obligations.truncate(obligations.len() - modeled.len());
-            true
-        });
+        if policy == SourcePolicy::FixedOnly
+            && obligations
+                .iter()
+                .any(|obligation| matches!(obligation, Obligation::Helped(_)))
+        {
+            obligations = obligations
+                .into_iter()
+                .flat_map(|obligation| match obligation {
+                    Obligation::Helped(helped) => {
+                        Obligation::mana_and_life(&helped.cost, helped.life)
+                    }
+                    other => vec![other],
+                })
+                .collect();
+        }
         if !matches!(
             fork.state.suspended_decision.as_ref().map(|s| &s.decision),
             Some(
@@ -215,10 +222,10 @@ impl<'a> CoupledPayment<'a> {
             let taps = fork.iter_battlefield_permanents(self.player).count();
             return (0..=taps).find_map(|budget| {
                 search.prefix_taps = Some(budget);
-                search.run(fork.clone(), obligations.clone(), delve, None)
+                search.run(fork.clone(), obligations.clone(), None)
             });
         }
-        search.run(fork, obligations, delve, candidate)
+        search.run(fork, obligations, candidate)
     }
 }
 
@@ -279,7 +286,6 @@ struct CoupledMemoKey {
     pool: Mana,
     obligations: Vec<Obligation>,
     continuation: Option<Box<SuspendedResolution>>,
-    delve: Option<DelveCost>,
     prefix_taps: Option<usize>,
 }
 
@@ -288,7 +294,6 @@ impl CoupledMemoKey {
         game: &Game,
         player: PlayerId,
         obligations: &[Obligation],
-        delve: Option<&DelveCost>,
         prefix_taps: Option<usize>,
     ) -> Self {
         let state = &game.state;
@@ -322,7 +327,6 @@ impl CoupledMemoKey {
             pool: game.pooled_mana(player),
             obligations: obligations.to_vec(),
             continuation: state.suspended_decision.clone().map(Box::new),
-            delve: delve.cloned(),
             prefix_taps,
         }
     }
@@ -349,7 +353,6 @@ impl std::hash::Hash for CoupledMemoKey {
         self.zones.hash(hash);
         self.pool.hash(hash);
         self.obligations.hash(hash);
-        self.delve.as_ref().map(|delve| &delve.cost).hash(hash);
         self.prefix_taps.hash(hash);
     }
 }
@@ -368,7 +371,6 @@ impl CoupledSearch<'_, '_> {
         &mut self,
         mut game: Game,
         mut obligations: Vec<Obligation>,
-        delve: Option<&DelveCost>,
         candidate: Option<PaymentCandidate>,
     ) -> Option<Vec<PaymentStep>> {
         if game.is_game_over() {
@@ -408,20 +410,23 @@ impl CoupledSearch<'_, '_> {
                         game.tap_permanent(permanent, false);
                     }
                 }
-                PaymentCandidate::HelpTap(permanent) => {
+                PaymentCandidate::HelpTap(permanent, payment) => {
+                    let Some(Obligation::Helped(helped)) = obligations.first_mut() else {
+                        return None;
+                    };
                     game.tap_permanent(permanent, false);
+                    helped.permissions = helped.permissions.after_tap(payment);
+                    helped.pay_pip(payment.color);
                 }
                 PaymentCandidate::DelveExile(object) => {
-                    let delve = delve?;
-                    if delve.cost.generic() == 0 {
+                    let Some(Obligation::Helped(helped)) = obligations.first_mut() else {
+                        return None;
+                    };
+                    if helped.cost.generic() == 0 {
                         return None;
                     }
                     game.move_object(object, ZoneType::Exile);
-                    return self.visit(
-                        game,
-                        obligations,
-                        Some(&delve.after_pip(Color::Generic, false)),
-                    );
+                    helped.pay_pip(Color::Generic);
                 }
                 PaymentCandidate::Mode(mode) => {
                     let caller = game.state.suspended_decision_mut().take()?;
@@ -454,20 +459,15 @@ impl CoupledSearch<'_, '_> {
                                 },
                             )?;
                         }
-                        search.visit(game, obligations.clone(), delve)
+                        search.visit(game, obligations.clone())
                     });
                 }
             }
         }
-        self.visit(game, obligations, delve)
+        self.visit(game, obligations)
     }
 
-    fn visit(
-        &mut self,
-        mut game: Game,
-        obligations: Vec<Obligation>,
-        delve: Option<&DelveCost>,
-    ) -> Option<Vec<PaymentStep>> {
+    fn visit(&mut self, mut game: Game, obligations: Vec<Obligation>) -> Option<Vec<PaymentStep>> {
         if game.is_game_over() {
             return None;
         }
@@ -477,13 +477,7 @@ impl CoupledSearch<'_, '_> {
         ) {
             *game.state.suspended_decision_mut() = None;
         }
-        let key = CoupledMemoKey::new(
-            &game,
-            self.payment.player,
-            &obligations,
-            delve,
-            self.prefix_taps,
-        );
+        let key = CoupledMemoKey::new(&game, self.payment.player, &obligations, self.prefix_taps);
         if self.failed.contains(&key) {
             #[cfg(test)]
             {
@@ -499,19 +493,14 @@ impl CoupledSearch<'_, '_> {
         {
             self.payment.game.payment_cache.borrow_mut().coupled_states += 1;
         }
-        let result = self.expand(game, obligations, delve);
+        let result = self.expand(game, obligations);
         if result.is_none() {
             self.failed.insert(key);
         }
         result
     }
 
-    fn expand(
-        &mut self,
-        mut game: Game,
-        mut obligations: Vec<Obligation>,
-        delve: Option<&DelveCost>,
-    ) -> Option<Vec<PaymentStep>> {
+    fn expand(&mut self, mut game: Game, obligations: Vec<Obligation>) -> Option<Vec<PaymentStep>> {
         let player = self.payment.player;
         let mut model = game.pure_payment_model(player);
         model.cache = None;
@@ -545,7 +534,6 @@ impl CoupledSearch<'_, '_> {
                         self.run(
                             game.clone(),
                             obligations.clone(),
-                            delve,
                             Some(PaymentCandidate::Mode(mode)),
                         )
                         .map(|path| prepend(PaymentStep::Output(mode), path))
@@ -559,7 +547,6 @@ impl CoupledSearch<'_, '_> {
                         self.run(
                             game.clone(),
                             obligations.clone(),
-                            delve,
                             Some(PaymentCandidate::Mode(mode)),
                         )
                     });
@@ -587,19 +574,15 @@ impl CoupledSearch<'_, '_> {
                                 self.run(
                                     game.clone(),
                                     obligations.clone(),
-                                    delve,
                                     Some(PaymentCandidate::CountedTap(candidate)),
                                 )
                                 .map(|path| prepend(PaymentStep::Tap(source.object), path))
                             });
                     }
                     if pool.can_pay(&activation.mana_cost) {
-                        if let Some(path) = self.fund_upfront(
-                            game.clone(),
-                            suspended.clone(),
-                            obligations.clone(),
-                            delve,
-                        ) {
+                        if let Some(path) =
+                            self.fund_upfront(game.clone(), suspended.clone(), obligations.clone())
+                        {
                             return Some(path);
                         }
                     }
@@ -640,15 +623,24 @@ impl CoupledSearch<'_, '_> {
                 (fixed, abilities)
             })
             .collect();
-        let mut concrete = obligations.clone();
-        if let Some(delve) = delve {
-            let mut permissions = delve.permissions;
-            if self.payment.profile.stateful_delve() {
-                permissions.help.delve = None;
-            }
-            concrete.extend(game.help_obligations(player, &delve.cost, permissions, delve.life));
-        }
         if !funding && !profile.reads_mana {
+            let mut concrete = Vec::new();
+            for obligation in &obligations {
+                if let Obligation::Helped(helped) = obligation {
+                    let mut permissions = helped.permissions;
+                    if profile.stateful_delve() {
+                        permissions.help.delve = None;
+                    }
+                    concrete.extend(game.help_obligations(
+                        player,
+                        &helped.cost,
+                        permissions,
+                        helped.life,
+                    ));
+                } else {
+                    concrete.push(obligation.clone());
+                }
+            }
             for (source, (fixed, roles)) in Arc::make_mut(&mut pure.sources).iter_mut().zip(&roles)
             {
                 if *fixed == PaymentCoupling::Mutator {
@@ -663,12 +655,11 @@ impl CoupledSearch<'_, '_> {
                     .abilities
                     .retain(|_| *roles.next().unwrap() != PaymentCoupling::Mutator);
             }
-            if let Some(path) = pure.cached_plan(pool.clone(), concrete.clone(), self.policy, None)
-            {
+            if let Some(path) = pure.cached_plan(pool.clone(), concrete, self.policy, None) {
                 return Some(path);
             }
         }
-        if !funding && obligations.is_empty() && delve.is_none() {
+        if !funding && obligations.is_empty() {
             return Some(Vec::new());
         }
 
@@ -676,13 +667,16 @@ impl CoupledSearch<'_, '_> {
         // native activation. Else the pure finish accounts for its supply.
         let mut purposes = None;
         let tap_sets =
-            model.tap_candidate_sets(concrete.iter().filter_map(Obligation::tap_candidates));
+            model.tap_candidate_sets(obligations.iter().filter_map(Obligation::tap_candidates));
         let mut invariant_tried = Vec::new();
         let prefix_taps = self.prefix_taps;
         let all_sources = self.policy == SourcePolicy::All && prefix_taps.is_none();
         let production_allowed = funding
-            || matches!(concrete.first(), Some(Obligation::Pay { cost, .. }) if cost.mana_value > 0)
-            || obligations.is_empty() && delve.is_some_and(|delve| delve.cost.mana_value > 0);
+            || match obligations.first() {
+                Some(Obligation::Pay { cost, .. }) => cost.mana_value > 0,
+                Some(Obligation::Helped(helped)) => helped.cost.mana_value > 0,
+                _ => false,
+            };
         for (index, (source, (fixed, roles))) in model
             .sources
             .iter()
@@ -697,7 +691,7 @@ impl CoupledSearch<'_, '_> {
                     PurposeProjection::sources_equivalent(
                         || {
                             Some(purposes.get_or_insert_with(|| {
-                                PurposeProjection::for_model(&model, &concrete, fee_purpose)
+                                PurposeProjection::for_model(&model, &obligations, fee_purpose)
                             }))
                         },
                         &model.sources[previous],
@@ -730,7 +724,6 @@ impl CoupledSearch<'_, '_> {
                 let path = self.run(
                     game.clone(),
                     obligations.clone(),
-                    delve,
                     Some(PaymentCandidate::Produce(step.clone())),
                 );
                 self.prefix_taps = prefix_taps;
@@ -743,53 +736,29 @@ impl CoupledSearch<'_, '_> {
             return None;
         }
 
-        if obligations.is_empty()
-            && self.policy == SourcePolicy::All
-            && self.payment.profile.stateful_delve()
-        {
-            if let Some(delve) = delve.filter(|delve| delve.cost.generic() > 0) {
-                let spell = delve.permissions.help.delve.expect("tracked delve cost");
-                for object in game.graveyard_payers(player, spell) {
-                    if let Some(path) = self.run(
-                        game.clone(),
-                        Vec::new(),
-                        Some(delve),
-                        Some(PaymentCandidate::DelveExile(object)),
-                    ) {
-                        return Some(prepend(PaymentStep::DelveExile(object), path));
-                    }
-                }
-            }
-        }
-
-        let paying_delve_cost = obligations.is_empty();
-        if paying_delve_cost {
-            // Spending the entire last cost commits it before anything else
-            // can change how many cards are available for delve.
-            obligations = concrete;
-        }
-        let saved_delve = if paying_delve_cost { None } else { delve };
         let first = obligations.first()?.clone();
         let tail = obligations[1..].to_vec();
         match first {
-            Obligation::Pay { cost, .. } => {
-                if pool.can_pay(&cost) {
-                    if let Some(path) =
-                        self.spend(game.clone(), cost.clone(), &mut |search, game| {
-                            search.visit(game, tail.clone(), saved_delve)
-                        })
-                    {
-                        return Some(prepend(PaymentStep::Spend, path));
-                    }
+            Obligation::Helped(helped) => self.pay_helped(&game, &model, profile, &helped, &tail),
+            Obligation::Pay {
+                cost,
+                taps: Taps::None,
+            } => {
+                if !pool.can_pay(&cost) {
+                    return None;
                 }
-                self.try_help_taps(&game, &model, obligations, delve, paying_delve_cost)
+                self.spend(game, cost, &mut |search, game| {
+                    search.visit(game, tail.clone())
+                })
+                .map(|path| prepend(PaymentStep::Spend, path))
             }
+            Obligation::Pay { .. } => unreachable!("native search receives unsplit help"),
             Obligation::Tap {
                 candidates,
                 remaining,
             } => {
                 if remaining == 0 {
-                    return self.visit(game, tail, saved_delve);
+                    return self.visit(game, tail);
                 }
                 model
                     .tap_candidates(&model.resources(), &candidates)
@@ -798,7 +767,6 @@ impl CoupledSearch<'_, '_> {
                         self.run(
                             game.clone(),
                             obligations.clone(),
-                            saved_delve,
                             Some(PaymentCandidate::CountedTap(source.permanent)),
                         )
                         .map(|path| prepend(PaymentStep::Tap(source.object), path))
@@ -807,63 +775,68 @@ impl CoupledSearch<'_, '_> {
             Obligation::PayLife(amount) => {
                 game.life_budget(player).pay(amount)?;
                 game.change_life(player, -(amount as i32));
-                self.visit(game, tail, saved_delve)
+                self.visit(game, tail)
             }
             Obligation::Output { .. } => unreachable!("the native activation owns its output"),
         }
     }
 
-    fn try_help_taps(
+    fn pay_helped(
         &mut self,
         game: &Game,
         model: &PaymentModel<'_>,
-        obligations: Vec<Obligation>,
-        delve: Option<&DelveCost>,
-        paying_delve_cost: bool,
+        profile: BoardArithmeticProfile,
+        helped: &HelpedCost,
+        tail: &[Obligation],
     ) -> Option<Vec<PaymentStep>> {
-        let Some(Obligation::Pay { cost, taps }) = obligations.first() else {
-            return None;
+        let player = self.payment.player;
+        let remaining = || {
+            let mut obligations = vec![Obligation::Helped(Box::new(helped.clone()))];
+            obligations.extend_from_slice(tail);
+            obligations
         };
-        let taps = *taps;
-        if self.policy != SourcePolicy::All || taps == Taps::None {
-            return None;
+        if profile.stateful_delve() && helped.cost.generic() > 0 {
+            if let Some(spell) = helped.permissions.help.delve {
+                for object in game.graveyard_payers(player, spell) {
+                    if let Some(path) = self.run(
+                        game.clone(),
+                        remaining(),
+                        Some(PaymentCandidate::DelveExile(object)),
+                    ) {
+                        return Some(prepend(PaymentStep::DelveExile(object), path));
+                    }
+                }
+            }
         }
-        for source in model.sources.iter().filter(|source| source.untapped) {
-            let colors = match taps {
-                Taps::Convoke => source
-                    .convoke_colors
-                    .iter()
-                    .filter(|&color| cost.cost[color] > 0)
-                    .map(|color| Color::COLORS[color])
-                    .collect::<Vec<_>>(),
-                Taps::Keyword if source.keyword && cost.generic() > 0 => vec![Color::Generic],
-                Taps::Any if source.waterbend && cost.generic() > 0 => vec![Color::Generic],
-                _ => continue,
-            };
-            for color in colors {
-                let step = if taps == Taps::Any {
+        let cost = if profile.stateful_delve() {
+            helped.cost.clone()
+        } else {
+            game.cost_after_delve(player, &helped.cost, helped.permissions.help)
+        };
+        if game.pooled_mana(player).can_pay(&cost) {
+            let mut after_spend: Vec<_> = Obligation::life(helped.life).into_iter().collect();
+            after_spend.extend_from_slice(tail);
+            if let Some(path) = self.spend(game.clone(), cost, &mut |search, game| {
+                search.visit(game, after_spend.clone())
+            }) {
+                return Some(prepend(PaymentStep::Spend, path));
+            }
+        }
+        for source in model
+            .sources
+            .iter()
+            .filter(|source| source.untapped && source.waterbend)
+        {
+            for payment in game.tap_payments(&helped.cost, helped.permissions, source.permanent) {
+                let step = if payment.toward == Toward::Waterbend {
                     PaymentStep::Waterbend(source.permanent)
                 } else {
                     PaymentStep::Convoke(source.permanent)
                 };
-                let next_delve = delve
-                    .filter(|_| paying_delve_cost && self.payment.profile.stateful_delve())
-                    .map(|tracked| tracked.after_pip(color, taps == Taps::Any));
-                let (rest, delve) = if let Some(tracked) = &next_delve {
-                    (Vec::new(), Some(tracked))
-                } else {
-                    let mut rest = obligations.clone();
-                    rest[0] = Obligation::Pay {
-                        cost: cost.less_pip(color),
-                        taps,
-                    };
-                    (rest, if paying_delve_cost { None } else { delve })
-                };
                 if let Some(path) = self.run(
                     game.clone(),
-                    rest,
-                    delve,
-                    Some(PaymentCandidate::HelpTap(source.permanent)),
+                    remaining(),
+                    Some(PaymentCandidate::HelpTap(source.permanent, payment)),
                 ) {
                     return Some(prepend(step, path));
                 }
@@ -877,7 +850,6 @@ impl CoupledSearch<'_, '_> {
         game: Game,
         caller: SuspendedResolution,
         obligations: Vec<Obligation>,
-        delve: Option<&DelveCost>,
     ) -> Option<Vec<PaymentStep>> {
         let Decision::ManaUpfront { activation, .. } = &caller.decision else {
             return None;
@@ -890,7 +862,7 @@ impl CoupledSearch<'_, '_> {
             activation.mana_cost.clone(),
             &mut |search, mut game| {
                 complete_upfront(&mut game, caller.clone())?;
-                search.visit(game, obligations.clone(), delve)
+                search.visit(game, obligations.clone())
             },
         );
         self.prefix_taps = prefix_taps;

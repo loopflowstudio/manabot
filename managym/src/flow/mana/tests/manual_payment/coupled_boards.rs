@@ -6,18 +6,19 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame},
         game::Game,
-        payment::{CostComponent, PaymentProgress},
+        payment::{CostComponent, PaymentProgress, TapPayment},
     },
     state::{
         ability::{Actor, Condition, Effect, EffectValue, PlayerSelector},
         card::{
-            ActivatedAbilityDefinition, AdditionalCost, DamageRecipient, DamageSource,
+            ActivatedAbilityDefinition, AdditionalCost, CardType, DamageRecipient, DamageSource,
             DamageTransform, Keyword, Keywords, ReplacementEffect, StaticAbility,
             StaticKeywordGrant, StaticScope, TapCost,
         },
         effect::{EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId},
-        mana::{Mana, ManaCost},
+        mana::{Color, Mana, ManaCost},
+        payment::Toward,
         permanent::CounterKind,
         player::ManaFloats,
         predicate::CardPredicate,
@@ -720,6 +721,182 @@ fn coupled_delve_waits_for_graveyard_reading_mana() {
             usize::from(needs_exile)
         );
     }
+}
+
+#[test]
+fn coupled_help_tap_enables_the_mana_for_a_colored_pip() {
+    for (help, helper_name, printed) in [
+        (AdditionalCost::Improvise, "White Lotus Tile", "1G"),
+        (
+            AdditionalCost::RequiredWaterbend(ManaCost::parse("1")),
+            "White Lotus Tile",
+            "G",
+        ),
+        (AdditionalCost::Convoke, "Gray Ogre", "1G"),
+    ] {
+        let mut game = payment_game(
+            366,
+            [
+                ("Forest", 36),
+                ("Mountain", 1),
+                ("Gray Ogre", 2),
+                ("White Lotus Tile", 1),
+            ],
+        );
+        game.keep_opening_hands();
+        game.mana_floats[PAYER.0] = ManaFloats::All;
+        let helper = put(&mut game, helper_name);
+        let source = put(&mut game, "Mountain");
+        let helper_object = game.permanent_object(helper).unwrap();
+        game.state[helper_object].activated_abilities.clear();
+        let source_object = game.permanent_object(source).unwrap();
+        game.state[source_object].mana_abilities.clear();
+        game.state[source_object].activated_abilities = vec![ActivatedAbilityDefinition {
+            tap_source: true,
+            effects: vec![Effect::If {
+                condition: Condition::ControlsAtLeast {
+                    count: 1,
+                    distinct_names: false,
+                    predicate: CardPredicate {
+                        named: Some(helper_name.into()),
+                        tapped: true,
+                        ..Default::default()
+                    },
+                },
+                then: vec![Effect::add_mana(Mana::parse("G"))],
+                otherwise: vec![Effect::add_mana(Mana::parse("C"))],
+            }],
+            ..Default::default()
+        }];
+        let spell = only_card_in_main(&mut game, PAYER, "Gray Ogre");
+        game.state[spell].mana_cost = Some(ManaCost::parse(printed));
+        game.state[spell].additional_costs = vec![help];
+        game.scenario_refresh_priority().unwrap();
+        game.step(cast_offer(&game, spell).unwrap()).unwrap();
+
+        let help_tap = Action::WaterbendTap {
+            player: PAYER,
+            permanent: helper,
+        };
+        assert_eq!(game.action_space().unwrap().actions, vec![help_tap.clone()]);
+        step_action(&mut game, help_tap).unwrap();
+        step_action(&mut game, activate(source, 0)).unwrap();
+        choose_mana(&mut game, "G");
+        finish_payment(&mut game);
+        assert_eq!(game.state.stack_objects.len(), 1);
+    }
+}
+
+#[test]
+fn coupled_convoke_keeps_delve_for_a_later_sacrifice() {
+    let mut game = payment_game(367, [("Forest", 37), ("Mountain", 1), ("Gray Ogre", 2)]);
+    game.keep_opening_hands();
+    game.mana_floats[PAYER.0] = ManaFloats::All;
+    let creature = put(&mut game, "Gray Ogre");
+    let mountain = put(&mut game, "Mountain");
+    let object = game.permanent_object(creature).unwrap();
+    game.state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        sacrifice_source: true,
+        effects: vec![Effect::add_mana(Mana::parse("R"))],
+        ..Default::default()
+    }];
+    let spell = only_card_in_main(&mut game, PAYER, "Gray Ogre");
+    game.state[spell].mana_cost = Some(ManaCost::parse("2RR"));
+    game.state[spell].additional_costs = vec![AdditionalCost::Convoke, AdditionalCost::Delve];
+    game.scenario_refresh_priority().unwrap();
+    assert_eq!(game.state.zones.size(ZoneType::Graveyard, PAYER), 0);
+    game.step(cast_offer(&game, spell).unwrap()).unwrap();
+
+    let convoke = Action::WaterbendTap {
+        player: PAYER,
+        permanent: creature,
+    };
+    assert!(offer(&game, &tap(mountain)));
+    assert!(!offer(&game, &activate(creature, 0)));
+    assert!(!offer(&game, &Action::PayCost { player: PAYER }));
+    step_action(&mut game, convoke).unwrap();
+    step_action(
+        &mut game,
+        Action::ChooseMode {
+            player: PAYER,
+            mode: TapPayment {
+                toward: Toward::Convoke,
+                color: Color::Red,
+            }
+            .mode(),
+        },
+    )
+    .unwrap();
+    step_action(&mut game, activate(creature, 0)).unwrap();
+    choose_mana(&mut game, "R");
+    let graveyard = game.state.zones.zone_objects(ZoneType::Graveyard, PAYER)[0];
+    step_action(
+        &mut game,
+        Action::SelectCard {
+            player: PAYER,
+            object: graveyard,
+        },
+    )
+    .unwrap();
+    step_action(&mut game, tap(mountain)).unwrap();
+    finish_payment(&mut game);
+    assert_eq!(game.state.stack_objects.len(), 1);
+    assert_eq!(game.state.zones.size(ZoneType::Exile, PAYER), 1);
+}
+
+#[test]
+fn coupled_improvise_must_tap_before_delve_removes_the_artifact_type() {
+    let mut game = payment_game(368, [("Forest", 38), ("Mountain", 1), ("Gray Ogre", 1)]);
+    game.keep_opening_hands();
+    game.mana_floats[PAYER.0] = ManaFloats::All;
+    let helper = put(&mut game, "Mountain");
+    let object = game.permanent_object(helper).unwrap();
+    game.state[object].mana_abilities.clear();
+    game.state[object].statics = vec![StaticAbility::continuous(
+        StaticScope::This,
+        Some(Condition::GraveyardAtLeast {
+            count: 1,
+            predicate: CardPredicate::default(),
+        }),
+        vec![Modification::AddTypes(vec![CardType::Artifact])],
+    )];
+    let spell = only_card_in_main(&mut game, PAYER, "Gray Ogre");
+    game.scenario_force_card_in_hand(PAYER, "Forest").unwrap();
+    let extra = game
+        .state
+        .zones
+        .zone_objects(ZoneType::Hand, PAYER)
+        .iter()
+        .copied()
+        .find(|card| *card != spell)
+        .unwrap();
+    let graveyard = game.move_object(extra, ZoneType::Graveyard);
+    game.state[spell].mana_cost = Some(ManaCost::parse("2GG"));
+    game.state[spell].additional_costs = vec![AdditionalCost::Delve, AdditionalCost::Improvise];
+    game.state
+        .mana_pool_mut(PAYER)
+        .add(&Mana::parse("GG"), None);
+    game.scenario_refresh_priority().unwrap();
+    game.step(cast_offer(&game, spell).unwrap()).unwrap();
+
+    let improvise = Action::WaterbendTap {
+        player: PAYER,
+        permanent: helper,
+    };
+    let exile = Action::SelectCard {
+        player: PAYER,
+        object: graveyard,
+    };
+    assert_eq!(
+        game.action_space().unwrap().actions,
+        vec![improvise.clone()]
+    );
+    step_action(&mut game, improvise).unwrap();
+    assert_eq!(game.action_space().unwrap().actions, vec![exile.clone()]);
+    step_action(&mut game, exile).unwrap();
+    finish_payment(&mut game);
+    assert_eq!(game.state.stack_objects.len(), 1);
+    assert_eq!(game.state.zones.size(ZoneType::Exile, PAYER), 1);
 }
 
 #[test]

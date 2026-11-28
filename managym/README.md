@@ -510,10 +510,13 @@ waterbend {1}; the receipt's `Toward` keeps which. That choice's mode names
 the payment, the same in every decision (`TapPayment::mode`): 0-4 one
 {W}/{U}/{B}/{R}/{G} pip by convoke, 5 {1} by convoke, 6 {1} by improvise and 7
 {1} of the waterbend part. Only payable modes are offered, so they are sparse,
-and the choice focuses the permanent just tapped. The payment model splits
-a cost's generic mana into what those taps may pay (`help_obligations`), so
-castability, offers and execution agree. `AdditionalCost::{Convoke, Improvise, Delve}` give a
-spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
+and the choice focuses the permanent just tapped. The pure solver splits a
+cost's generic mana into what those taps may pay (`help_obligations`).
+Coupled payments keep the whole remaining cost and recalculate legal taps
+and Delve exiles after each step. An Improvise tap can enable a source to make
+the color a spell needs, and a creature can Convoke before being sacrificed
+for mana and exiled for Delve. `AdditionalCost::{Convoke, Improvise, Delve}` give
+a spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
 The same witness reserves a creature tapped for a colored pip, including
 while a nested mana ability is being paid. For example, Airship Engine Room
 can supply generic mana while a white creature remains available to convoke
