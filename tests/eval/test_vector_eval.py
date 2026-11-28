@@ -110,6 +110,14 @@ def observed_forward(
     return forward
 
 
+async def uniform_logits(
+    inputs: list[object], *, rows: int | None = None
+) -> list[object]:
+    [batch] = inputs
+    assert isinstance(batch, Prepared) and rows == batch.batch
+    return [np.zeros(batch.legal.shape, dtype=np.float32)]
+
+
 def play_local(
     source: LocalMatches,
     spec_for: Callable[[Match], PairingSpec],
@@ -749,11 +757,6 @@ def test_vector_runner_bounds_deferred_layouts_before_play(
         for deal, ref in enumerate([checkpoint, *([different_layout] * 6)])
     ]
 
-    async def forward(inputs: list[object], *, rows: int | None = None) -> list[object]:
-        [batch] = inputs
-        assert isinstance(batch, Prepared) and rows == batch.batch
-        return [np.zeros(batch.legal.shape, dtype=np.float32)]
-
     class CountingMatches(LocalMatches):
         granted = 0
 
@@ -763,7 +766,7 @@ def test_vector_runner_bounds_deferred_layouts_before_play(
             return granted
 
     source = CountingMatches(
-        [(match, [forward, build(heuristic, {})]) for match in matches]
+        [(match, [uniform_logits, build(heuristic, {})]) for match in matches]
     )
     matchup = _allies_lessons_matchup()
 
@@ -813,11 +816,6 @@ def test_vector_runner_layout_covers_shared_settings_and_allows_seat_mana(
         players=(first_legal_player, manual_player), games=4, config={"deal": 3}
     )
 
-    async def forward(inputs: list[object], *, rows: int | None = None) -> list[object]:
-        [batch] = inputs
-        assert isinstance(batch, Prepared) and rows == batch.batch
-        return [np.zeros(batch.legal.shape, dtype=np.float32)]
-
     open_vector = vector_runner.open_vector
     opened: list[ObservationSpace] = []
 
@@ -834,9 +832,9 @@ def test_vector_runner_layout_covers_shared_settings_and_allows_seat_mana(
         for match, outcome in play_local(
             LocalMatches(
                 [
-                    (first, [forward, build(heuristic, {})]),
-                    (compatible, [forward, forward]),
-                    (incompatible, [forward, forward]),
+                    (first, [uniform_logits, build(heuristic, {})]),
+                    (compatible, [uniform_logits, uniform_logits]),
+                    (incompatible, [uniform_logits, uniform_logits]),
                 ]
             ),
             lambda match: PairingSpec(
@@ -885,22 +883,14 @@ def test_vector_runner_drains_checkpoint_failures_before_backfill(
     opponent = build(heuristic, {})
     error = ForwardError(broken_ref.key, "checkpoint unavailable")
     broken_calls = 0
-    healthy_calls = 0
 
     async def broken(inputs: list[object], *, rows: int | None = None) -> list[object]:
         nonlocal broken_calls
         broken_calls += 1
         raise error
 
-    async def healthy(inputs: list[object], *, rows: int | None = None) -> list[object]:
-        nonlocal healthy_calls
-        [batch] = inputs
-        assert isinstance(batch, Prepared) and rows == batch.batch
-        healthy_calls += 1
-        return [np.zeros(batch.legal.shape, dtype=np.float32)]
-
-    # Eight failing legs leave room for one live healthy leg. A backlog of
-    # unrelated layouts leaves one more grant available when the forward fails.
+    # The second broken deal has one seated leg and three queued. The
+    # unrelated layout leaves one more grant available when the forward fails.
     live_failures = [
         Match(players=(failed_player, heuristic), games=4, config={"deal": deal})
         for deal in range(2)
@@ -926,9 +916,13 @@ def test_vector_runner_drains_checkpoint_failures_before_backfill(
             return granted
 
     source = ObservedMatches(
-        [(match, [broken, opponent]) for match in live_failures]
-        + [(match, [healthy, opponent]) for match in deferred_matches]
-        + [(match, [healthy, opponent]) for match in (healthy_match, replacement)]
+        [(live_failures[0], [broken, opponent])]
+        + [(match, [uniform_logits, opponent]) for match in deferred_matches]
+        + [
+            (healthy_match, [uniform_logits, opponent]),
+            (live_failures[1], [broken, opponent]),
+            (replacement, [uniform_logits, opponent]),
+        ]
     )
     matchup = _allies_lessons_matchup()
 
@@ -954,7 +948,7 @@ def test_vector_runner_drains_checkpoint_failures_before_backfill(
         return outcomes
 
     settled = asyncio.run(run())
-    assert broken_calls == 1 and healthy_calls > 0
+    assert broken_calls == 1
     assert delivered_errors == failed_keys
     healthy_keys = {
         match.key for match in [*deferred_matches, healthy_match, replacement]

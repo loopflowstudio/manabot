@@ -23,7 +23,7 @@ import math
 from pathlib import Path
 import time
 from time import monotonic
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, NamedTuple, Protocol
 from uuid import uuid4
 
 from etude.eval.agents import ForwardError
@@ -33,7 +33,7 @@ import numpy as np
 
 from manabot.env.failures import PolicyActionCutoffs
 from manabot.env.match import Match as EnvMatch
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.eval.agents import (
     CheckpointInputs,
     CheckpointReader,
@@ -145,12 +145,18 @@ class SlotState:
         return sum(self.decision_counts.values())
 
 
-def vector_layout_key(
-    space: ObservationSpace,
-) -> tuple[dict[str, tuple[int, ...]], Literal["error", "first-legal"], bool, bool]:
+class VectorLayout(NamedTuple):
     """The native layout and settings bound once for all slots."""
+
+    shapes: dict[str, tuple[int, ...]]
+    action_overflow: Literal["error", "first-legal"]
+    decision_memory: bool
+    include_own: bool
+
+
+def vector_layout_key(space: ObservationSpace) -> VectorLayout:
     config = space.config
-    return (
+    return VectorLayout(
         space.shapes,
         config.action_overflow,
         config.max_decision_records > 0,
@@ -166,7 +172,7 @@ def admit_active_match(
     arena_source: str,
     output_dir: Path | None,
     read: CheckpointReader,
-) -> tuple[ActiveMatch, list[PendingLeg]]:
+) -> tuple[ActiveMatch, deque[PendingLeg]]:
     """Admit players, resolve per-seat decision settings and construct leg work."""
     admitted = admit_pairing(
         match,
@@ -185,10 +191,9 @@ def admit_active_match(
     }
     # Pairing admission requires a checkpoint in the candidate seat.
     space = inputs["candidate"].space
-    layout_key = vector_layout_key(space)
-    if any(
-        vector_layout_key(checkpoint.space) != layout_key
-        for checkpoint in inputs.values()
+    opponent = inputs.get("opponent")
+    if opponent is not None and vector_layout_key(opponent.space) != vector_layout_key(
+        space
     ):
         raise ValueError("players have different vector observation layouts")
     if not space.one_token:
@@ -213,7 +218,7 @@ def admit_active_match(
         inputs=inputs,
         started=time.perf_counter(),
     )
-    legs: list[PendingLeg] = []
+    legs: deque[PendingLeg] = deque()
     for item in plan.work:
         game = item.game
         registrations = item.registrations
@@ -322,27 +327,23 @@ def finalize_match(active_match: ActiveMatch) -> Result:
 def open_vector(
     num_envs: int, space: ObservationSpace
 ) -> tuple[RecordedVectorEnv, dict[str, np.ndarray]]:
-    _, action_overflow, decision_memory, include_own = vector_layout_key(space)
+    layout = vector_layout_key(space)
     vector = RecordedVectorEnv(
         num_envs=num_envs,
         seed=0,
         skip_trivial=True,
         player_policies=("agent", "agent"),
-        decision_memory=decision_memory,
-        decision_memory_include_own=include_own,
+        decision_memory=layout.decision_memory,
+        decision_memory_include_own=layout.include_own,
         record_fraction=1.0,
         record_in_memory=True,
         decision_events=True,
         context={"source_kind": "evaluation"},
     )
-    state_buffers = {
-        "rewards": np.zeros(num_envs, dtype=np.float64),
-        "terminated": np.zeros(num_envs, dtype=np.uint8),
-        "truncated": np.zeros(num_envs, dtype=np.uint8),
-    }
+    state_buffers = step_buffers(num_envs)
     vector.set_observation_layout(
         state_buffers,
-        action_overflow,
+        layout.action_overflow,
         layout=space.layout,
     )
     return vector, state_buffers
@@ -492,10 +493,9 @@ async def play_pairings(
 
     arena_source = arena_source_sha256()
     read = checkpoint_reader(2 * slots)
-    pending_legs: deque[PendingLeg] = deque()
-    deferred_matches: deque[tuple[ActiveMatch, list[PendingLeg]]] = deque()
+    # A held deal owns its unseated legs until its last slot finishes or fails.
+    held: dict[ActiveMatch, deque[PendingLeg]] = {}
     ready_errors: deque[tuple[Match, Exception]] = deque()
-    active_matches: set[ActiveMatch] = set()
     completed_matches: deque[ActiveMatch] = deque()
     current_space: ObservationSpace | None = None
     source_exhausted = False
@@ -508,14 +508,35 @@ async def play_pairings(
     state_buffers: dict[str, np.ndarray] | None = None
     slot_states: list[SlotState | None] = []
 
-    async def fetch_legs(needed_legs: int, *, fill_layout: bool) -> None:
-        nonlocal current_space, source_exhausted, legs_per_match_hint
-        while not source_exhausted and len(pending_legs) < needed_legs:
-            capacity = slots - max(len(deferred_matches), len(ready_errors))
-            if capacity <= 0:
+    async def take_legs(limit: int, space: ObservationSpace | None) -> list[PendingLeg]:
+        """Fill a new vector from the oldest layout, or backfill an existing one."""
+        nonlocal source_exhausted, legs_per_match_hint
+        layout = vector_layout_key(space) if space is not None else None
+        selected: list[PendingLeg] = []
+        deferred = 0
+
+        def select(match: ActiveMatch, queue: deque[PendingLeg]) -> None:
+            nonlocal layout, deferred
+            if not queue:
+                return
+            key = vector_layout_key(match.space)
+            if layout is None:
+                layout = key
+            if key != layout:
+                deferred += 1
+                return
+            while queue and len(selected) < limit:
+                selected.append(queue.popleft())
+
+        for active_match, queue in held.items():
+            select(active_match, queue)
+        while len(selected) < limit and not source_exhausted and not ready_errors:
+            if deferred >= slots:
                 break
-            missing = needed_legs - len(pending_legs)
-            request_count = min(capacity, math.ceil(missing / legs_per_match_hint))
+            missing = limit - len(selected)
+            request_count = min(
+                slots - deferred, math.ceil(missing / legs_per_match_hint)
+            )
             batch = await matches.take(request_count)
             if not batch:
                 source_exhausted = True
@@ -535,19 +556,11 @@ async def play_pairings(
                     ready_errors.append((match, exc))
                     continue
                 legs_per_match_hint = len(legs)
-                active_matches.add(active_match)
-                if current_space is None:
-                    current_space = active_match.space
-                if vector_layout_key(active_match.space) == vector_layout_key(
-                    current_space
-                ):
-                    pending_legs.extend(legs)
-                else:
-                    deferred_matches.append((active_match, legs))
-            if not fill_layout:
+                held[active_match] = legs
+                select(active_match, legs)
+            if space is not None or len(batch) < request_count:
                 break
-            if len(batch) < request_count and (pending_legs or deferred_matches):
-                break
+        return selected
 
     def complete_leg(
         slot_state: SlotState,
@@ -565,15 +578,12 @@ async def play_pairings(
         active_match.finished_games += 1
         slot_states[slot] = None
         if active_match.finished_games == len(active_match.plan.work):
-            active_matches.remove(active_match)
+            del held[active_match]
             completed_matches.append(active_match)
 
-    def seat_legs(free: Sequence[int]) -> list[SlotState]:
+    def seat_legs(free: Sequence[int], legs: list[PendingLeg]) -> list[SlotState]:
         seated = []
-        for slot in free:
-            if not pending_legs:
-                break
-            leg = pending_legs.popleft()
+        for slot, leg in zip(free, legs):
             state = SlotState(
                 slot,
                 leg,
@@ -614,10 +624,9 @@ async def play_pairings(
         return True
 
     async def backfill_free_slots() -> None:
-        assert vector is not None
+        assert vector is not None and current_space is not None
         while free := [i for i, state in enumerate(slot_states) if state is None]:
-            await fetch_legs(len(free), fill_layout=False)
-            seated = seat_legs(free)
+            seated = seat_legs(free, await take_legs(len(free), current_space))
             if not seated:
                 break
             vector.load_slots_into_buffers(
@@ -628,7 +637,7 @@ async def play_pairings(
                     for state in seated
                 ]
             )
-            if not settle_openings(seated):
+            if not settle_openings(seated) or ready_errors or completed_matches:
                 break
 
     try:
@@ -645,29 +654,17 @@ async def play_pairings(
                 yield ready_errors.popleft()
 
             if vector is None:
-                if pending_legs:
-                    current_space = pending_legs[0].active_match.space
-                elif deferred_matches:
-                    current_space = deferred_matches[0][0].space
-                    layout_key = vector_layout_key(current_space)
-                    for _ in range(len(deferred_matches)):
-                        match, legs = deferred_matches.popleft()
-                        if vector_layout_key(match.space) == layout_key:
-                            pending_legs.extend(legs)
-                        else:
-                            deferred_matches.append((match, legs))
-
-                await fetch_legs(slots, fill_layout=True)
-                if not pending_legs:
-                    if source_exhausted and not (deferred_matches or ready_errors):
+                legs = await take_legs(slots, None)
+                if not legs:
+                    if source_exhausted and not ready_errors:
                         break
                     continue
 
-                assert current_space is not None
-                num_envs = min(slots, len(pending_legs)) if source_exhausted else slots
+                current_space = legs[0].active_match.space
+                num_envs = len(legs) if source_exhausted else slots
                 vector, state_buffers = open_vector(num_envs, current_space)
                 slot_states = [None] * num_envs
-                seated = seat_legs(range(num_envs))
+                seated = seat_legs(range(num_envs), legs)
                 # Native reset needs a setup for each slot, including idle ones.
                 idle = num_envs - len(seated)
                 vector.reset_each_into_buffers(
@@ -677,6 +674,8 @@ async def play_pairings(
                     + [0] * idle,
                 )
                 settle_openings(seated)
+                # Slot state now owns the legs. Release the opening deals on backfill.
+                del legs, seated
                 continue
 
             assert state_buffers is not None and current_space is not None
@@ -726,25 +725,13 @@ async def play_pairings(
             round_result = await step_round(vector, slot_states, current_space)
             gameplay_seconds += round_result.seconds_per_slot
             if round_result.errors:
-                failed = {
-                    match: error
-                    for match in active_matches
-                    if (error := match.forward_error(round_result.errors)) is not None
-                }
-                pending_legs = deque(
-                    leg for leg in pending_legs if leg.active_match not in failed
-                )
-                deferred_matches = deque(
-                    (match, legs)
-                    for match, legs in deferred_matches
-                    if match not in failed
-                )
+                for match in list(held):
+                    if (error := match.forward_error(round_result.errors)) is not None:
+                        del held[match]
+                        ready_errors.append((match.match, error))
                 for slot, state in enumerate(slot_states):
-                    if state is not None and state.leg.active_match in failed:
+                    if state is not None and state.leg.active_match not in held:
                         slot_states[slot] = None
-                for match, error in failed.items():
-                    active_matches.remove(match)
-                    ready_errors.append((match.match, error))
                 if not round_result.players:
                     continue
 

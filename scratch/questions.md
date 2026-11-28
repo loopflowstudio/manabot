@@ -107,3 +107,8 @@ Pass 8 uses a keyword-only precision on the trophy report. Etude's default
 report call selects float32. The mixed-layout backlog fixture now queues an
 unrelated layout: a checkpoint's admitted vector layout is the same in every
 deal that uses it, and a difference in seat mana settings shares that layout.
+
+During compression I kept admitted deals in grant order. When a vector drains,
+the oldest waiting deal chooses the next layout. The standalone throughput
+arms keep the same Match key across precisions and use the trophy pairing's
+game budget.
