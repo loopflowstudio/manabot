@@ -5,6 +5,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
+    agent::action::AgentError,
     cards::{content_pack::default_content_pack, deck_admission::admit_submitted},
     flow::{
         card_capture::{snapshots, CaptureMode, CardCapture},
@@ -30,6 +31,7 @@ impl Game {
     /// admission; [`crate::agent::env::Env::reset`] checks that first.
     pub fn new(player_configs: impl Into<GameSetup>, seed: u64, skip_trivial: bool) -> Self {
         Self::construct(&player_configs.into(), seed, skip_trivial, None, false)
+            .expect("game setup produces an opening decision")
     }
 
     #[cfg(test)]
@@ -45,6 +47,7 @@ impl Game {
             Some(CaptureMode::Cards),
             false,
         )
+        .unwrap()
     }
 
     pub(crate) fn construct(
@@ -53,7 +56,7 @@ impl Game {
         skip_trivial: bool,
         capture: Option<CaptureMode>,
         statistics: bool,
-    ) -> Self {
+    ) -> Result<Self, AgentError> {
         #[cfg(test)]
         CONSTRUCTIONS.set(CONSTRUCTIONS.get() + 1);
         let disclosure = player_configs.decklists.resolve(seed);
@@ -204,7 +207,7 @@ impl Game {
             game.card_capture = capture.map(|mode| CardCapture::new(&game, initial.clone(), mode));
             game.capture_originals = initial.into_iter().map(|card| (card.copy, card)).collect();
         }
-        let _ = game.tick();
-        game
+        game.tick()?;
+        Ok(game)
     }
 }

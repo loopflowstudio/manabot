@@ -125,6 +125,11 @@ impl ManaTypeSet {
     }
 
     #[inline]
+    pub const fn intersection(self, other: Self) -> Self {
+        Self(self.0 & other.0)
+    }
+
+    #[inline]
     pub const fn is_subset_of(self, other: Self) -> bool {
         self.0 & !other.0 == 0
     }

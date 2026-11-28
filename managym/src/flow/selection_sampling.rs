@@ -1131,6 +1131,12 @@ impl Game {
             | FrameCompletion::DiscardDuringResolution(parent) => {
                 self.rebind_suspended_selection(parent, rebinding)
             }
+            FrameCompletion::ManaOutput(output) => {
+                self.rebind_frame_selection(&mut output.caller, rebinding);
+                if let Some(resume) = &mut output.resume {
+                    self.rebind_decision_selection(resume, rebinding);
+                }
+            }
             FrameCompletion::StateBased { next } => {
                 self.rebind_completion_selection(next, rebinding)
             }
