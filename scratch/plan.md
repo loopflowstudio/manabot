@@ -89,71 +89,110 @@ are under the profiler, so read them as shares.
 
 ## Design
 
-Choices marked **(for review)** were made with nobody present.
+Choices marked **(for review)** were made with nobody present. The concept
+review (`scratch/concept-review.html`, at `2ee58b5d2d`) reshaped items 1–5;
+its recommended answers to its four questions are adopted here, each for
+review.
 
-1. **Built-in heuristic seats step natively. (for review)** A seat whose Etude
-   `Code` player is the built-in heuristic (no `registration`) becomes a
-   native policy seat for its leg; the vector loop surfaces only checkpoint
-   decisions. `SlotLoad.fresh` and `reset_each_into_buffers` take a per-slot
-   policy pair. The policy spelling gains an optional cap, `heuristic` or
-   `heuristic:64`, parsed into `PlayerPolicy::Heuristic { max_actions }`, so a
-   record's existing `player_policies` strings replay it with no new field.
-   `take_slot_record` writes the slot's pair. A `Code` player carrying a
-   `registration`, and any other custom opponent, stays a Python seat with
-   both seats `agent`, as today.
-   - Consequence: the record of such a leg holds the checkpoint's actions,
-     digests and annotations only. Heuristic choices are recomputed at replay
-     and bound by the next surfaced digest and the final digest.
-     `decisions` counts, per-player latency and the Command cap
-     (`max_commands`) then count checkpoint decisions.
-   - Passed over: keeping the heuristic in Python behind a faster path. It
-     leaves 56% of rounds without a row for that slot, which is the fill
-     ceiling the Task names.
-2. **The heuristic keeps its turn state for a game in both runners.
-   (for review)** The scalar `Heuristic` seat builds one player per game seat
-   instead of one per decision, so scalar and vector play the same games.
-   This changes heuristic play in about one game in six relative to stored
-   results. The edit lands in `manabot/sim/heuristic.py`, which
-   `heuristic_source_paths` hashes, so the heuristic's Etude identity changes
-   with its behavior and stored matches keep their old player. Frozen
-   experiments that pin heuristic source digests keep their literals; build
-   checks `tla_trophies*.py` still read their stored tournaments.
-   - Passed over: a native policy that resets per decision to preserve
-     today's bytes. It would make the lost state permanent and still differ
-     from training's opponent.
-3. **Vector records carry compact decision evidence; viewer frames are
-   reconstructed from the record on demand. (for review; this is the Task's
-   open trace choice, 1a)** A surfaced decision's annotation keeps actor,
-   action-space kind, the chosen offer (built from `describe_actions`),
-   player id, seeds, ordinal and latency, and omits `frame_sha256`. Replay of
-   a record without `frame_sha256` builds no viewer frame; it checks actor,
-   offer and action-space kind from the walked observation. A frame for any
-   decision remains a pure function of the verified state, so nothing is lost
-   from stored evidence. Scalar records keep live frames and their hash.
-   - Consequence: the vector runner's `private_exposures` counter is no longer
-     computed per decision; nothing in that runner receives the frame.
-   - Passed over: 1b, live frames with byte-identical traces (the frame is
-     52% of live host work and 37% of replay), and a Rust port of the
-     projection (byte-equality with the Python projection is as hard as the
-     problem).
-4. **Replay runs once per transition and off the stepping loop.** The walker
-   verifies a plain integer action on the owning env when no consumer needs
-   the clone-first guarantee (Academy's apply callback and semantic Commands
-   keep it), so a decision costs one digest. `finalize_match` runs in a
-   bounded pool of two worker threads; the loop keeps stepping and yields each
-   `(match, Result)` as its replay finishes, holding at most `slots` settled
-   matches before it stops seating new legs. Admission and replay errors
-   still yield `(match, exc)` for that match alone.
-   - Why threads: after 1 and 3, replay is about 1.9 s for the 64 profiled
-     games (5,300 surfaced decisions at the measured 0.335 ms), against 32 s
-     of forward waits in which the loop is idle. Passed over: a pool of
-     replay child processes, which costs an import per worker and a pickled
-     `ActiveMatch`; it is the fallback if the measurement shows the loop
-     starved.
-5. **Per-run identity work is computed once.** `runtime_fingerprints` and
-   `game_runtime_identities` are cached per match configuration and space for
-   the run; replay calls `audit_view` once per game. The scalar capture stops
-   deep-copying `evaluation_metadata` at every snapshot with unchanged bytes.
+1. **Built-in heuristic seats step natively; each game owns its policy pair.
+   (for review)** A seat whose Etude `Code` player is the built-in heuristic
+   (no `registration`) becomes a native policy seat for its leg; the vector
+   loop surfaces only checkpoint decisions.
+   - `PlayerPolicy::Heuristic { max_actions: Option<u32> }` with hand-written
+     string `Serialize`/`Deserialize`/`Display`/`FromStr` (`agent`, `random`,
+     `heuristic`, `heuristic:64`), so `GameProvenance`, snapshot replay and
+     record strings keep their encoding. `PlayerPolicy::is_heuristic()`
+     replaces the `contains(&PlayerPolicy::Heuristic)` checks in `env.rs`.
+     The native seat honours the cap (`select_action(obs, max_actions)`).
+   - `SlotLoad.fresh(..., player_policies=None)` and
+     `reset_each_into_buffers(..., player_policies=None)` take a per-slot pair;
+     an omitted pair is the `VectorEnv`'s default, never the slot's previous
+     occupant (`previous.replacement_root()` must not carry it over).
+     `SlotLoad::Snapshot` restores its own pair.
+   - `GameInputs` gains optional `player_policies` (omitted when equal to
+     `GameRecord.player_policies`), so multi-slot snapshots, journals and
+     `replay_failure_inputs` keep swapped seats. Single-game records keep
+     `GameRecord.player_policies`; `take_slot_record` writes the slot's pair.
+   - Python: split `manabot/eval/agents.py:Heuristic` into
+     `NativeHeuristic(max_actions)` (the vector runner seats it natively, the
+     scalar runner drives a `HeuristicPlayer`) and `CodeSeat(factory)` for
+     registered/custom code players, which stay Python seats with both seats
+     `agent`. Only custom seats call `vector.decision_observations`.
+   - Consequence: such a record holds only the checkpoint's actions, digests
+     and annotations; heuristic choices are recomputed at replay, bound by the
+     next surfaced digest and the final digest. `decisions`, per-player
+     latency and `max_commands` count checkpoint decisions.
+   - Consequence (review Q3, 3a adopted for review): Academy Watch
+     (`managym/academy/watch.py:486`) refuses non-`("agent", "agent")`
+     records, so new vector heuristic records are unviewable there. Deferred.
+   - Passed over: keeping the heuristic in Python behind a faster path (leaves
+     56% of rounds rowless for that slot).
+2. **Code players keep their state for a game in both runners. (for review;
+   review Q2, 2a)** State is lost because `GamePlayer` has no per-game
+   lifecycle and `agents.py` calls `factory(seed)` inside `choose`;
+   `HeuristicPlayer` is already stateful. Give `GamePlayer` a per-game open
+   (`open_game(seed)` returning the game's player) used by both runners, for
+   every code player. `heuristic_source_paths()` adds
+   `managym/src/agent/player_policy.rs` (the native seat's code) and the
+   anchor version moves to `native-v3`, so the corrected heuristic gets a new
+   Etude identity. **Irreversible once published to shared tournaments:** the
+   source digest feeds the `Code` player key and
+   `EvaluationKey.anchor_cohort_sha256`, hence `derive_seed` for every game
+   against it. Build checks how `tla_trophies*.py` read their stored
+   tournaments with the new opponent and records the answer; frozen literals
+   stay. Passed over: 2b (keep identity, mix changed play into stored
+   benchmarks), 2c (reset per decision; permanently differs from training's
+   opponent).
+3. **Compact vector annotations carry only runner-owned facts. (for review;
+   review Q1, 1a)** A surfaced vector decision records actor, revision,
+   `player_id`, `player_seed`, `player_decision_ordinal`, `policy_rng_seed`
+   and `latency_seconds`; no `frame_sha256`, `chosen_offer` or
+   `action_space_kind` (`GameInputs.digests[i]` binds the action space,
+   `actions[i]` the choice). No live `describe_actions` or observation clone
+   for checkpoint or native seats.
+   - Readers: `audit_view` takes the offer id from `inputs["actions"][index]`
+     when `chosen_offer` is absent (semantic Command strings keep
+     `chosen_offer["id"]`); `_replay_record` checks `frame_sha256`,
+     `chosen_offer` and `action_space_kind` when present and always actor and
+     `player_id`. Absence is never a mismatch.
+   - `RecordedVectorEnv._step` skips `semantic_decision_frames_json(active)`
+     when isolated, with no journal and no annotation probabilities; on an
+     isolated game error it takes `game.frame` from `info["game_error_frame"]`
+     so failure replay still binds.
+   - The vector runner's `private_exposures` counter goes. Scalar records keep
+     live frames and their hash.
+   - Passed over: 1b (keep offer and kind: still clones 64 observations and
+     runs `describe_actions` per round, read by no consumer), 1c (live frames).
+4. **Native failures isolate per leg and name the acting seat. (for review;
+   review Q4, 4a)** Isolated step receipts carry `game_error_seat`, captured
+   from the chooser in `step_once` or `settle_players`; `vector.py` attributes
+   the crash to `leg.game["seat_players"][seat]`, not
+   `round_result.players[slot]`. Opening settlement (a seat-0 heuristic's
+   first turns inside `reset_each_into_buffers` / `load_slots_into_buffers`)
+   is isolated per slot into a poisoned slot and receipt, so one bad leg does
+   not abort the batch.
+5. **Replay checks each transition once, off the stepping loop.** Fast path
+   in `RecordWalker.run` (no `apply`, integer action, no next-boundary
+   intervention): step `self.env` directly and digest once (`digests[0]` once
+   after reset). On divergence with card capture on, rebuild `self.env`
+   through the verified prefix before stopping, so `cards()` keeps excluding
+   the diverged step (`tests/env/test_record_reducers.py:105-113`).
+   `PyEnv::reset`, `step` and `state_digest` release the GIL
+   (`py.allow_threads`, `managym/src/python/bindings.rs`) so replay threads
+   run beside the loop. `finalize_match` runs on two worker threads; the loop
+   keeps stepping, yields each `(match, Result)` as it finishes, and stops
+   seating legs while `slots` settled matches are held. Errors still yield
+   `(match, exc)` for that match alone; closing waits for running replays.
+   `experiments/eval_throughput.py:237` stops subtracting `replay_seconds`
+   from wall time: main-loop stages and background replay time are reported
+   separately. Fallback if the loop starves: replay child processes.
+6. **Process-constant identity is computed once where it is produced.**
+   `manabot/infra/provenance.py` caches its engine/source/content fingerprints
+   per process (like `managym/recording.py:runtime_identities`), so scalar
+   play, admission and registration gain too; replay calls `audit_view` once
+   per game. `execute_game` sets `capture.frozen_context` once setup completes
+   (refreshed only on integrity or failure changes) instead of deep-copying
+   `evaluation_metadata` at each snapshot (`manabot/sim/native_game.py:292`).
 
 ## Source of truth
 
@@ -169,8 +208,9 @@ evidence, `Play` counts and any viewer frame derive from walking it.
   `record`. Snapshot and record strings `agent`/`random`/`heuristic` keep
   their meaning. A changed step path may move the `Engine Budget` digest.
 - `manabot/eval/vector.py`, `agents.py`, `match.py`;
-  `manabot/sim/native_game.py`, `replay.py`, `evaluation_records.py`,
-  `heuristic.py`.
+  `manabot/sim/agent.py` (`GamePlayer`), `native_game.py`, `replay.py`,
+  `evaluation_records.py`, `heuristic.py` (source paths only),
+  `manabot/infra/provenance.py`; `managym/src/python/bindings.rs` (GIL).
 - Readers of decision evidence that must accept both shapes:
   `audit_view`, `_replay_record`, `manabot/eval/match.py` game rows,
   `manabot/reports/evaluation.py`, card evidence, `experiments/eval_throughput.py`.
@@ -178,10 +218,11 @@ evidence, `Play` counts and any viewer frame derive from walking it.
 
 ## Absent and error states
 
-- A record without `frame_sha256` is a compact record; one with it is checked
-  as today. A reader never treats absence as a mismatch.
-- A native heuristic failure (`AgentError`, panic) arrives in the isolated
-  step receipt and fails that leg as a crash attributed to the opponent.
+- A record without `frame_sha256`, `chosen_offer` or `action_space_kind` is
+  compact; fields present are checked as today. A reader never treats absence as a mismatch.
+- A native heuristic failure (`AgentError`, panic), in a step or in opening
+  settlement, arrives in an isolated receipt with `game_error_seat` and fails
+  that leg as a crash attributed to the seat that was acting.
 - A leg whose checkpoint never acts before the game ends settles from the
   opening state (`settle_openings`), now also after any step.
 - A replay worker's exception yields `(match, exc)`; closing the generator
@@ -199,8 +240,13 @@ evidence, `Play` counts and any viewer frame derive from walking it.
 
 - `choose_code_action`'s per-decision `factory(seed)` and the scalar
   `Heuristic.choose` rebuild.
-- Live `build_viewer_frame` and `offer_evidence`'s frame hash in the vector
-  runner; `ArenaDecision.frame` there.
+- The per-call `runtime_fingerprints` rehash and the per-snapshot metadata
+  deep copy.
+- Live `build_viewer_frame`, `describe_actions`, `decision_observations` (for
+  non-custom seats) and `offer_evidence` in the vector runner;
+  `ArenaDecision.frame` there; the duplicate `semantic_decision_frames_json`
+  per isolated step.
+- `agents.py:Heuristic` (replaced by `NativeHeuristic` and `CodeSeat`).
 - The synchronous `finalize_match` drain at the top of `play_pairings`' loop.
 - The single vector-wide policy pair as the only way to seat a native policy.
 - Must survive: stored records and their replay, scalar trace bytes other
@@ -209,24 +255,36 @@ evidence, `Play` counts and any viewer frame derive from walking it.
 
 ## Passes
 
-1. **Native heuristic seats (could prove the plan wrong).** Rust per-slot
-   policies and the capped heuristic spelling, one heuristic per game seat in
-   the scalar runner, per-slot `player_policies` in records, vector seating
-   and settlement. Shows: on four trophy deals, vector and scalar runs agree
-   leg for leg on the checkpoint's actions, winner, score and final state
-   digest; every vector record replays; rows per forward against MTG-497's
-   15.8. If replay of natively stepped records is not deterministic, or
-   scalar and vector disagree, the plan stops here.
-2. **Compact evidence and background replay.** Annotations without live
-   frames, frame-free replay for them, single-digest walk, the bounded replay
-   pool. Shows: a test that reconstructs a vector record's frames and matches
-   the scalar record's `frame_sha256` at each checkpoint decision; stepping
-   continues while a deal replays.
-3. **Leftovers and measurement.** Identity and `audit_view` caching, the
-   scalar metadata copy, a re-profile to confirm what remains, then the
-   panel: Apple arms (CPU scalar, MPS-64, MLX-64) for both checkpoints on the
-   M4 Max, and CUDA-64 float32 and bf16 on one L4 rental under `--max-usd 5`.
-   Report and docs updated.
+0. **Sync with `origin/main` first.** `23212c88f5` (MTG-502, `GameStateEdit`)
+   edited `vector_env/slots.rs`, `vector_env_bindings.rs`,
+   `managym/recording.py`, `managym/__init__.pyi`, `tests/public_api.json`
+   and made `RestoreOptions` `Clone`. Take it (via the stack parent or
+   `lf sync`) before Pass 1 touches those files.
+1. **Native heuristic seats (could prove the plan wrong).** Design 1, 2 and 4:
+   string-encoded capped `PlayerPolicy`, per-slot pairs on `SlotLoad`,
+   `reset_each_into_buffers` and `GameInputs`, `NativeHeuristic`/`CodeSeat`
+   and `GamePlayer.open_game`, identity change, `game_error_seat` and
+   isolated opening settlement. Shows: on four trophy deals vector and scalar
+   agree leg for leg on checkpoint actions, winner, score and final digest;
+   every vector record replays; a swapped-seat multi-slot failure snapshot
+   replays; a seat-0 heuristic error fails one leg; rows per forward against
+   MTG-497's 15.8. Stops the plan if replay of natively stepped records is not
+   deterministic or the runners disagree.
+2. **Compact evidence and background replay.** Design 3 and 5. Shows: a test
+   reconstructing a vector record's frames matches the scalar record's
+   `frame_sha256` at each checkpoint decision; `cards()` invariant holds on
+   divergence; stepping continues while a deal replays.
+3. **Leftovers and measurement.** Design 6, a re-profile, then the panel:
+   Apple arms (CPU scalar, MPS-64, MLX-64) for both checkpoints on the M4 Max,
+   CUDA-64 float32 and bf16 on one L4 rental under `--max-usd 5`. Report and
+   docs updated.
+
+## Deferred findings
+
+- **Academy Watch native-seat import** (review F6): Watch rejects records
+  whose policies are not `("agent", "agent")`. Needs Watch to walk such a
+  record and surface (or recompute) the heuristic's turns. Separate Academy
+  Task; file it when this lands.
 
 ## Acceptance check
 

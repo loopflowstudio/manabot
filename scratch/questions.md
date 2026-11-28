@@ -1,24 +1,25 @@
 # MTG-506 open questions and assumptions
 
-Choices taken during planning (headless, 2026-11-27). Each is reversible and
-marked for review in `scratch/plan.md`.
+Choices taken headless (planning and the realign after concept review,
+2026-11-27). Each is marked for review in `scratch/plan.md`.
 
-- **The built-in heuristic steps natively and its decisions leave the
-  record.** Replay recomputes them. Is losing per-decision heuristic evidence
-  (latency, chosen offer) acceptable for managed evaluation?
-- **The heuristic keeps its turn state for a game.** Today both runners, and
-  `main`, rebuild it at every decision, which changes 16 of 7,155 choices in
-  10 of 64 profiled games. Fixing it changes heuristic results relative to
-  stored tournaments and gives the heuristic a new Etude identity. Should
-  stored heuristic baselines (TLA trophies) be replayed against the corrected
-  opponent?
-- **Vector records drop `frame_sha256` and the per-decision private-hand
-  check** (the MTG-497 open choice 1a). Frames are rebuilt from the record
-  when wanted.
-- **Replay uses two worker threads**, not child processes.
-- **Scalar records keep live frames**; only the metadata deep copy is cut
-  there.
-- **L4 arms run on one rental under `--max-usd 5`**, as MTG-497's did.
+- **Heuristic identity (irreversible once published; review Q2, 2a taken).**
+  Fixing per-game turn state changes 16 of 7,155 heuristic choices in 10 of
+  64 profiled games. The plan adds `player_policy.rs` to
+  `heuristic_source_paths()` and bumps the anchor to `native-v3`, which
+  changes the `Code` player key and `anchor_cohort_sha256`, hence every seed
+  against the heuristic. Should stored heuristic baselines (TLA trophies) be
+  replayed against the corrected opponent? Confirm before the PR merges.
+- **Native heuristic decisions leave the record.** Replay recomputes them; no
+  per-decision heuristic latency or chosen offer is stored.
+- **Compact vector annotations (review Q1, 1a)** drop `frame_sha256`,
+  `chosen_offer`, `action_space_kind` and the per-decision private-hand check.
+- **Academy Watch cannot open new vector heuristic records (review Q3, 3a)**
+  until a separate Task adds native-seat import.
+- **Opening-settlement isolation is in this Task (review Q4, 4a).**
+- **Replay uses two worker threads** with the GIL released in `PyEnv`.
+- **Scalar records keep live frames.**
+- **L4 arms run on one rental under `--max-usd 5`.**
 
 Ideas outside this Task:
 
