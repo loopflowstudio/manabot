@@ -61,6 +61,7 @@ eval_throughput.py: error: --device cuda is unavailable on this host</pre>
 <li><code>held_out_jobs</code> wrote <code>"precision": "float32"</code> into the Environment config. Etude treats a same-named Benchmark with a new environment as a conflict, not as a new tournament. Float32 now leaves the key out, as the float32 <code>Deal</code> already did. bf16 keeps it.</li>
 </ol>
 <p>New tests pin both: the float32 config has no precision key, and <code>final_environment().identity == 34d75d…</code>.</p>
+<p>The live resume check ran <code>etude eval</code> on a one-deal trophy Benchmark named <code>stored-trophy-deal</code> with an isolated local track store and the production <code>play_many</code> callback. The first launch played one deal with the trained <code>w160l8</code> checkpoint. After publishing a new seeded <code>w384l8</code> checkpoint into that store, the second launch loaded only the new checkpoint and played one deal. The first run's stored <code>plays.parquet</code> retained its SHA256. All eight games replayed, and a third launch reported <code>nothing to play</code>. Receipts and the experiment declaration are in <code>.runs/qa/named-trophy-resume/</code>.</p>
 
 <h2>Also fixed</h2>
 <p><code>test_floor_seed_plays_128_more_deals_on_fresh_pools</code> still asserted <code>tla_trophies.play</code>, which this branch removed. CI never noticed because the test needs the fetched corpus. It now asserts <code>play_many</code>. All 34 tests in <code>tests/eval/test_experiment_files.py</code> pass.</p>
@@ -69,7 +70,6 @@ eval_throughput.py: error: --device cuda is unavailable on this host</pre>
 <ol>
 <li><span class="warn">Already on main:</span> <code>experiments/tla_trophies.py</code> conflicts with its stored <code>tla-trophies-held-out-32</code> runs. Stored files are <code>54cef888…</code> and <code>ENVIRONMENT_FILES</code> is <code>d7dab787…</code>. I left this alone.</li>
 <li>CUDA was not reachable from this Mac. The CLI refuses <code>--device cuda</code> cleanly, and the L4 arms in the report cover CUDA.</li>
-<li>Resuming a stored Benchmark through <code>etude eval</code> on a real launch was checked only as a plan, not by playing new checkpoints.</li>
 <li>A plain <code>uv run</code> swaps the editable Etude back to PyPI 0.4.7, so use <code>--no-sync</code> until <code>etude-sdk 0.5.0</code> ships. This is now in the QA notes.</li>
 </ol>
 </body></html>

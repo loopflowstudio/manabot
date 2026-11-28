@@ -47,11 +47,6 @@ Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
 
 Ideas outside this Task:
 
-- **Zero-copy transport for policy inputs.** Gate 1's 6db832 bus passed zero
-  arrays by pointer. Its array discovery sees containers and NumPy arrays,
-  while `Prepared` arrives as a dataclass and is pickled in-band. The report
-  measures the direct bus with the production input shape. What interface
-  should expose those buffers without duplicating `Prepared`?
 - **Game-side recording cost.** Host work is 0.85 s per game against the
   heuristic and 1.5 s in self-play, the limit on CUDA below about 34M (MTG-328
   saw 21% L4 utilization). In a profile of one pairing, `evaluation_metadata`
@@ -95,3 +90,9 @@ Pass 6 implementation choices (2026-11-27):
 
 During compression I kept the scalar `play_pairing` keyword arguments used by
 experiments. Both runners pass the same `PairingSpec` through admission.
+
+Scalar and vector callers apply memory blanking before shared host preparation
+(2026-11-27). The eval paths use ordinary decision-memory rows, which can be
+joined across forwards. Training's retained
+prefixes select fold trees separately. Job declarations supply evaluation
+precision because saved policy checkpoints have no training-precision field.

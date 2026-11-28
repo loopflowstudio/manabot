@@ -23,7 +23,7 @@ Jack Heart added MLX in steer `d440244b`: prefer CUDA, then MLX, then MPS,
 then CPU. Measure MLX against the same Apple Silicon MPS and CPU arms while
 the Etude binding and its deployment are evaluated separately.
 
-## Upstream state (checked 2026-11-27; PyPI still 0.4.7 at decision pass 3)
+## Upstream state (checked 2026-11-27)
 
 - The dependency pin and latest published [etude-sdk on PyPI](https://pypi.org/project/etude-sdk/)
   are `0.4.7` (verified 2026-11-27). That release has only synchronous
@@ -120,7 +120,7 @@ passes 1–3. `scratch/concept-review.html` was rewritten at `c1df3f02c2`
 - **Host work and live frames (F1, Q1/Q2) -> deferred.** 1a changes stored
   trace annotations and breaks the "same traces as serial play" acceptance
   below, so it is not taken headless; the runner keeps live frames (1b).
-- **Q4 (transport) -> 4a**, deferred below.
+- **Q4 (transport).** Ship review moved the remaining input copies into Pass 7.
 
 ## Passes
 
@@ -128,7 +128,14 @@ passes 1–3. `scratch/concept-review.html` was rewritten at `c1df3f02c2`
 `d2012147d4`/`c4924ee4ed`, `3d685ce0aa`/`966e8ff296`, `a27d8c0264`/`92a578b417`);
 see "What exists".
 6. Done (`bb911a150`). Refactored sampling, loading, slot budgets and retention with exact trace parity. Verified 104 focused Python tests, 28 debug vector tests, the rebuilt CPython 3.13 extension, the public API snapshot, and a local Etude MPS bf16 trophy deal with four complete records.
-7. **Release (blocked on `etude-sdk 0.5.0` on PyPI; 0.4.7 on 2026-11-27).**
+7. Done (`f3b00a846`, `43d5ef0da`, `06389e498`). Made strided inputs contiguous,
+   separated batch preparation from seat sampling and reproduced and fixed a
+   negative grant after 10 failed matches filled a 9-slot runner's error queue.
+   Live Etude resume reused a stored named trophy benchmark row and played only
+   the new checkpoint. All 512 Gate 1 games replayed with zero array copies.
+   The MPS compilation probe favored eager execution. See `scratch/qa.html`
+   and `experiments/reports/eval_throughput.md`.
+8. **Release (blocked on `etude-sdk 0.5.0` on PyPI; 0.4.7 on 2026-11-27).**
    Update the three `etude-sdk` bounds and the `==0.4.7` play-runtime pin in
    `pyproject.toml`, run `uv lock --upgrade-package etude-sdk`, then a locked
    sync and the managed eval tests.
@@ -148,14 +155,10 @@ Managed loading, precision and Apple device selection are documented in
   trace decision.
 - **L4 `w160l8` bf16 slower than float32** (forward 24.0 -> 40.5 s). Needs a
   CUDA profile on a rental.
-- **Zero-copy compact `Prepared` transport (S1, Q4 4a).** Gate 1 pickled
-  4.13 GB in-band, 0 arrays by pointer. Waits on Etude's array-container
-  interface.
 - **Scalar host overhead (S2)** in `scratch/questions.md`.
 - **Etude (S3):** `etude-sdk 0.5.0` release (merge gate), Apple shared GPU
   (`310ac1`, `de0c927`), never evicting the only checkpoint in
   `Forwards._evict`.
-- `torch.compile` (optional per the Task).
 
 ## Done when
 
