@@ -158,3 +158,9 @@ During compression I kept admitted deals in grant order. When a vector drains,
 the oldest waiting deal chooses the next layout. The standalone throughput
 arms keep the same Match key across precisions and use the trophy pairing's
 game budget.
+
+MTG-506 Pass 2 uses the single-step walker for integer-only committed
+trajectories with no interventions or issued object-candidate frames and no
+consumer apply callback. This covers vector evaluation and keeps semantic
+boundary replay on its fork-based path. After a divergent step the walker
+rebuilds the verified position, including card capture when requested.

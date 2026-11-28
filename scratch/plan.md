@@ -265,11 +265,7 @@ evidence, `Play` counts and any viewer frame derive from walking it.
 
 0. **Sync with main** (`6a48ef1c68`) brought in MTG-502 while keeping the MTG-497 stack.
 1. **Native heuristic seats** (`bc03df8508`) added capped policies, per-game code players, replayable slot policies and isolation for failed openings.
-2. **Compact evidence and background replay.** Design 3 and 5. Shows: a test
-   reconstructing a vector record's frames matches the scalar record's
-   `frame_sha256` at each checkpoint decision using the scalar revision.
-   Native settlement makes the vector's surfaced revision count shorter.
-   `cards()` excludes the diverged step, and stepping continues while a deal replays.
+2. **Compact evidence and background replay** (`4071284d29`) removed live viewer projection, verified indexed transitions once, and moved replay to two bounded workers.
 3. **Leftovers and measurement.** Design 6, a re-profile, then the panel:
    Apple arms (CPU scalar, MPS-64, MLX-64) for both checkpoints on the M4 Max,
    CUDA-64 float32 and bf16 on one L4 rental under `--max-usd 5`. Report and
@@ -285,6 +281,21 @@ of 64. Forwards were the largest stage at 17.66 of 33.44 seconds. The mean
 includes the drain after the last deal was seated. The earlier 15.8-row
 reference used 32 deals and the prior heuristic seed cohort.
 Receipts are in `/tmp/mtg506-pass1.W3eFkt`. The full Apple and L4 panel is Pass 3.
+
+### Pass 2 evidence
+
+The same 16 MPS deals replayed all 64 games and matched Pass 1 on all
+5,964 actions, pre-decision digests, and game endings. The debug extension
+ran at 4,825 games/hour and 21.2 mean rows per forward. The probe used a
+different build profile from Pass 1, so compare throughput on matched builds
+in Pass 3. Pass 2 receipts are in `/tmp/mtg506-pass2.eqDN3S/vector`.
+
+The focused checks passed for replay overlap and shutdown, registered seats,
+memory blanking, reconstructed scalar frame hashes, failure binding, and
+verified-prefix card capture. Public API and package boundary checks passed.
+For the matched local panel, the retained corpus is under
+`ETUDE_INPUTS_DIR=/tmp/mtg497-probe/inputs` and the trained checkpoint is
+`/tmp/mtg497-local-policy/00002000-raw.safetensors`.
 
 ## Deferred findings
 

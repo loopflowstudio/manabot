@@ -1,7 +1,9 @@
-at: bc03df8508f2d6b348d34414fecd8e9a136c493d
+at: 4071284d29e013cd556cd9b514ff749dea37ddfd
 first:
   - path: docs/evaluation.md
-    why: Native heuristic behavior and tournament identity
+    why: Native seating, compact traces and background replay
+  - path: docs/engine-python.md
+    why: Per-slot policies and verified record traversal
   - path: managym/src/agent/player_policy.rs
     why: Seat policy encoding and legal action cap
   - path: managym/src/agent/vector_env/slots.rs
@@ -9,13 +11,27 @@ first:
   - path: managym/src/agent/vector_env.rs
     why: Opening and step failure isolation
   - path: managym/recording.py
-    why: Policies retained with each game's replay inputs
+    why: Replay inputs and isolated failure frames
   - path: manabot/eval/agents.py
     why: Built-in and registered code player lifecycle
   - path: manabot/eval/vector.py
-    why: Native seating and match-owned queues for compatible slots
+    why: Match-owned queues, sampling and replay workers
+  - path: manabot/sim/evaluation_records.py
+    why: Shared decision identity and derived audit commands
+  - path: manabot/sim/replay.py
+    why: Actor checks and optional viewer evidence
+  - path: managym/replay.py
+    why: Indexed replay and verified prefix recovery
+  - path: managym/src/python/bindings.rs
+    why: Scalar native calls release the GIL
+  - path: experiments/eval_throughput.py
+    why: Concurrent replay time and wall-clock stages
   - path: tests/eval/test_vector_eval.py
-    why: Scalar parity, backfill, registered opponents and failure replay
+    why: Scalar parity, native failures and overlapping replay
+  - path: tests/env/test_record_reducers.py
+    why: Divergence preserves verified card exposure
 hide:
   - path: tests/public_api.json
     why: Generated additive signatures
+  - path: scratch/concept-review.page.html
+    why: Generated review page
