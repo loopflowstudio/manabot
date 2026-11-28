@@ -1,0 +1,321 @@
+<h1>Concept review: L4 bf16 evaluation profile (MTG-507)</h1>
+
+<p>
+  <strong>Area reviewed:</strong> CUDA evaluation precision execution, profiling harness, and precision guidance
+  across <code>manabot/eval/agent_loader.py</code>, <code>manabot/backends/torch/policy.py</code>,
+  <code>manabot/backends/torch/learner.py</code>, <code>manabot/policy/admission.py</code>,
+  <code>manabot/policy/batching.py</code>, <code>experiments/eval_throughput.py</code>, the planned
+  <code>experiments/eval_precision_profile.py</code>, and <code>docs/evaluation.md#etude-agents</code>.
+  MTG-507 is pre-implementation (one commit, <code>73be5ae6e8</code>, on top of MTG-497
+  <code>fb1580b472</code>), so this reviews the whole thing the plan builds and whether its premise and first
+  slice are right before launching the L4 rental.
+</p>
+
+<p>
+  <strong>Sync check against <code>origin/main</code>:</strong> Freshly fetched <code>origin/main</code>
+  (<code>23212c88f5</code>) is two commits ahead of MTG-497's base (<code>624751ae71</code> runtime
+  program-token guard and <code>23212c88f5</code> counterfactual board edits). Neither touches
+  <code>manabot/eval/</code>, <code>manabot/backends/torch/</code>, or <code>docs/evaluation.md</code>, so the
+  evaluation precision vocabulary has not moved on <code>origin/main</code>.
+</p>
+
+<h2>Do the domain concepts and the code concepts line up?</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Domain concept</th>
+      <th>Code concept</th>
+      <th>Aligned?</th>
+      <th>What is wrong</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Why L4 bf16 slows one checkpoint and speeds up another</strong> ("width/batch threshold vs per-call cast overhead")</td>
+      <td><code>GameObjectAttention</code> (<code>nn.MultiheadAttention</code>, <code>head_dim = hidden_dim // num_heads</code>), CUDA SDPA backend dispatch, and <code>BF16_MIN_HIDDEN_DIM = 256</code> (<code>manabot/infra/config.py:347</code>)</td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>A concept the code has and the plan never sees.</strong>
+        <code>w160l8</code> has <code>head_dim = 160 / 8 = 20</code> (not divisible by 8), while
+        <code>w256l8</code> has <code>32</code> and <code>w384l8</code> has <code>48</code>. On CUDA,
+        <code>float32</code> memory-efficient SDPA accepts <code>head_dim % 4 == 0</code>, whereas
+        <code>bf16</code> Flash and memory-efficient SDPA require <code>head_dim % 8 == 0</code> and fall back
+        to materialized <code>math</code> attention. Existing L4 evidence in
+        <code>experiments/reports/cuda_precision.md</code> (MTG-317) already measured <code>w160l8 padded</code>
+        bf16 running <strong>1.55× slower</strong> (464 → 719 ms at ≥64 rows) and <strong>doubling learner peak
+        VRAM</strong> (5.3 → 10.7 GB), while <code>w256l8</code> and <code>w384l8</code> sped up 1.95–2.71× and
+        halved VRAM. The plan's 8-head <code>(160, 256, 384)</code> grid confounds width with
+        <code>head_dim % 8</code>, and its profiler buckets omit SDPA backend and peak VRAM.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Replaying one captured batch set across widths and batch sizes</strong> ("trained set replayed by 160/256/384, re-chunked to 1, 4, 16, 64 rows")</td>
+      <td><code>Prepared</code>, <code>admission.binding(model, space, readings)</code> (<code>manabot/policy/admission.py:110</code>), and <code>batching.concatenate</code> (<code>manabot/policy/batching.py:24</code>)</td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>Two missing code primitives the plan assumes exist.</strong>
+        (1) <code>admission.binding</code> dumps the full <code>ModelConfig</code> (including
+        <code>hidden_dim</code> and <code>num_attention_heads</code>), so
+        <code>ActorCritic.forward_distribution</code> (<code>policy.py:770</code>) deterministically rejects
+        <code>w160l8</code>-prepared batches on <code>w256l8</code>/<code>w384l8</code>—even though
+        <code>Prepared</code> carries zero width-dependent arrays—contradicting the plan's own threshold grid
+        (<code>plan.md:98</code>) and refusal contract (<code>plan.md:164</code>).
+        (2) <code>batching.py</code> implements only <code>concatenate</code>, not <code>split</code>; re-chunking
+        18.6-row arena batches down to 1, 4, and 16 rows requires inventing a full inverse of
+        <code>concatenate</code>'s CSR, fact-program, effect-route, and memory-schedule rebasing.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Bit-identical <code>bf16-cast-once</code> fix for <code>etude-policy-bf16-auto-v1</code></strong> ("weights cast to bf16 at load, GRU left float32, still under autocast")</td>
+      <td><code>torch_logits</code> (<code>manabot/eval/agent_loader.py:89</code>) and PyTorch <code>torch.autocast</code> fp32/bf16 promotion lists (<code>LayerNorm</code>, <code>Embedding</code>, <code>nn.Parameter</code>, <code>Linear</code>, <code>MultiheadAttention</code>)</td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>One name for two numerical semantics.</strong>
+        Under <code>torch.autocast("cuda", bfloat16)</code>, <code>LayerNorm</code>, <code>Embedding</code>
+        (including <code>token_embedding</code> feeding float32 <code>packed_gru</code> inside
+        <code>cache_programs()</code>), and bare <code>nn.Parameter</code>s (<code>perspective</code>,
+        <code>value_token</code>) stay <strong>float32</strong>; only <code>Linear</code> and
+        <code>MultiheadAttention</code> projection weights downcast. Casting all non-GRU weights to bf16 alters
+        <code>cache_programs()</code> and norm/embedding arithmetic, guaranteeing non-identical logits and falsely
+        failing the parity check. Meanwhile, entering and exiting <code>torch.autocast</code> per call clears
+        PyTorch's own built-in autocast weight cache every forward.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>One shared Torch model-loading path for evaluation and profiling</strong> (<code>load_torch_policy</code> vs <code>torch_logits</code>)</td>
+      <td><code>manabot/eval/agent_loader.py</code> and the Torch-free child-import contract (<code>tests/test_package_boundaries.py:260</code>)</td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>Action with a split owner.</strong>
+        Splitting only load (<code>load_torch_policy</code> returning <code>ActorCritic</code>) leaves the
+        per-call precision contract (<code>apply_matmul_precision</code>, <code>torch.inference_mode</code>,
+        <code>forward_precision</code>, transfer, float32 readback) duplicated in <code>replay</code>. Adding an
+        eager <code>ActorCritic</code> annotation to <code>agent_loader.py</code> would also break
+        <code>test_evaluation_child_modules_import_without_array_framework</code> because
+        <code>manabot.eval.agents</code> imports <code>agent_loader</code> at module top.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>L4 diagnostic order</strong> ("confirm whether slowdown reproduces, then explain it")</td>
+      <td>Pass 1: 12 full 32-deal arena repeats (~30 min, 72–89% host + replay) alongside 20 min of replays</td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>Wrong first slice.</strong>
+        MTG-317 already reproduced the <code>w160l8 padded</code> L4 bf16 slowdown (1.55×, repeats within 2%).
+        Noisy local MPS numbers taken at host load 30–40 misled the plan into treating L4 variance as the leading
+        risk. Spending ~30 minutes of L4 rental on 12 full arena runs before a ~3-minute captured-batch profile
+        burns budget before naming the mechanism.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Declared evaluation precision &amp; compute identity</strong> (<code>float32</code> default; explicit <code>AGENTS_TF32</code> / <code>AGENTS_BF16</code>)</td>
+      <td><code>EvalPrecision</code>, <code>etude_compute_class</code>, <code>AGENTS_*</code>, <code>validate_precision</code>, <code>forward_precision</code></td>
+      <td><strong>Yes</strong></td>
+      <td>Single precision validator, explicit opt-in compute classes, and unchanged <code>float32</code> default.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Biggest mismatch: width threshold vs <code>head_dim % 8</code> SDPA fallback</h2>
+
+<p>
+  The plan frames MTG-507 around two hypotheses—host-side autocast cast overhead (~1,300 ops/call) and batch/width
+  scaling—while noting that a fixed per-call cast cost cannot explain why <code>w160l8</code> adds 27.5 ms/call
+  when <code>w384l8</code> takes only 18.6 ms/call in total (<code>scratch/plan.md:33-35</code>).
+  It misses the third mechanism already visible in this repository's own L4 precision report:
+</p>
+
+<lf-file path="experiments/reports/cuda_precision.md" lines="85-108"></lf-file>
+
+<p>
+  On the same NVIDIA L4 and PyTorch 2.15.0+cu132 stack, <code>w160l8 padded</code> bf16 was already 1.55× slower
+  at 64–256 rows/call <em>and doubled learner peak VRAM from 5.3 GB to 10.7 GB</em>, whereas <code>w256l8</code>
+  and <code>w384l8</code> sped up 1.95–2.71× and cut peak VRAM nearly in half. Why does bf16 double memory only
+  at <code>w160l8</code>? Look at <code>GameObjectAttention</code>:
+</p>
+
+<lf-file path="manabot/backends/torch/policy.py" lines="1455-1518"></lf-file>
+
+<p>
+  <code>model("w160l8")</code> uses <code>num_attention_heads = 8</code>, giving <code>head_dim = 20</code>
+  (<code>20 % 8 == 4</code>). In <code>experiments/eval_throughput.py:90</code>, varying only
+  <code>hidden_dim</code> across <code>(160, 256, 384)</code> produces <code>head_dim = (20, 32, 48)</code>.
+  On CUDA, PyTorch's <code>mem_efficient</code> SDPA supports <code>head_dim % 4 == 0</code> in
+  <code>float32</code>, while both <code>flash</code> and <code>mem_efficient</code> require
+  <code>head_dim % 8 == 0</code> in <code>bfloat16</code>. When <code>head_dim = 20</code> enters bf16
+  autocast, SDPA falls back to the <code>math</code> backend, materializing the full
+  <code>[B, 8, N, N]</code> attention score matrix across all 8 layers (which scales with batch size
+  <code>B</code>, explaining why 18.6 rows/call adds 27.5 ms and 256 rows/call adds 255 ms + 5.4 GB VRAM).
+  Because a naive op-name classifier puts <code>math</code> SDPA's <code>aten::bmm</code> and
+  <code>aten::_softmax</code> into <code>linear/MLP</code> or <code>unattributed</code>, the plan's proposed
+  buckets can also misattribute the slowdown unless SDPA backends and peak CUDA memory are recorded explicitly.
+</p>
+
+<p>
+  Two concrete code boundaries in the plan also fail on contact with the existing implementation:
+</p>
+
+<lf-file path="manabot/policy/admission.py" lines="110-118"></lf-file>
+<lf-file path="manabot/policy/batching.py" lines="24-50"></lf-file>
+<lf-file path="manabot/eval/agent_loader.py" lines="89-127"></lf-file>
+
+<lf-diff path="scratch/plan.md" lines="60-118"></lf-diff>
+
+<lf-component name="before-after">
+  <div slot="before">
+    <h4>Current plan (<code>73be5ae6e8</code>)</h4>
+    <ul>
+      <li><strong>Threshold grid:</strong> 8-head widths <code>(160, 256, 384)</code> → <code>head_dim = (20, 32, 48)</code>, confounding width with <code>head_dim % 8</code>.</li>
+      <li><strong>Batch capture &amp; replay:</strong> Captures multi-row <code>w160l8</code> <code>Prepared</code> batches, then expects <code>w256l8</code>/<code>w384l8</code> to replay them (rejected by <code>Prepared.binding</code>) and re-chunks them to 1, 4, 16, 64 rows (no <code>split</code> exists in <code>batching.py</code>).</li>
+      <li><strong>Candidate fix:</strong> <code>bf16-cast-once</code> casts all non-GRU weights to bf16, which rounds <code>LayerNorm</code>, <code>Embedding</code>, and <code>cache_programs()</code> away from <code>etude-policy-bf16-auto-v1</code>.</li>
+      <li><strong>Profiler buckets:</strong> Single <code>attention</code> bucket; no SDPA kernel dispatch breakdown or peak CUDA VRAM.</li>
+      <li><strong>Rental order:</strong> 12 full 32-deal arena repeats (~30 min) bundled ahead of / alongside diagnosis.</li>
+    </ul>
+  </div>
+  <div slot="after">
+    <h4>Recommended design</h4>
+    <ul>
+      <li><strong>Deconfounded grid:</strong> Add one 8-aligned narrow point (<code>w160</code> with 5 heads, <code>head_dim = 32</code>, or <code>w192l8</code>, <code>head_dim = 24</code>) and one unaligned wide point (<code>w288l8</code>, <code>head_dim = 36</code>).</li>
+      <li><strong>No <code>split_prepared</code> &amp; clean cross-width replay:</strong> Keep multi-row arena batches for exact arena replay on the capturing checkpoint; capture single-row <code>Prepared</code> batches for the grid and build 1, 4, 16, 64-row calls with existing <code>batching.concatenate</code>. For cross-width replay on identical boards, assert equal <code>space.config</code>, <code>readings</code>, and <code>decision_memory</code> and explicitly re-tag <code>Prepared.binding</code> in the harness (or prepare per width from captured raw observations).</li>
+      <li><strong>Exact autocast-preserving variants:</strong> Test (a) <code>bf16-cached-autocast</code> (keeping PyTorch's <code>torch.autocast(..., cache_enabled=True)</code> open across calls—zero parameter mutation) and (b) <code>bf16-linear-once</code> (casting only <code>nn.Linear</code> and <code>nn.MultiheadAttention</code> projection weights/biases after <code>cache_programs()</code>, leaving <code>LayerNorm</code>, <code>Embedding</code>, <code>nn.GRU</code>, and bare <code>nn.Parameter</code>s float32).</li>
+      <li><strong>SDPA + memory attribution:</strong> Record dispatched SDPA kernels (<code>flash</code> vs <code>mem_efficient</code> vs <code>math</code> / <code>bmm+softmax</code> inside attention via <code>record_function</code> scopes) and <code>torch.cuda.max_memory_allocated()</code> per replay.</li>
+      <li><strong>Diagnose first, replicate second:</strong> Run the ~3-minute replay/profile pass first on L4, then run only the arena repeats needed to measure spread and verify any bit-identical fix.</li>
+    </ul>
+  </div>
+</lf-component>
+
+<h2>Walking one interaction: normal, failure, recovery, and counterexamples</h2>
+
+<h3>Normal path (revised)</h3>
+<ol>
+  <li><strong>Capture (local or L4, float32):</strong> Run 32 held-out deals once per model to save exact arena multi-row <code>Prepared</code> calls (for arena-order replay) plus a pool of 1-row <code>Prepared</code> inputs from the trained <code>w160l8</code> games (composed into 1, 4, 16, 64-row batches with <code>batching.concatenate</code>).</li>
+  <li><strong>Diagnose on L4 (~3 min):</strong> Replay the captured sets through <code>float32</code>, <code>tf32</code>, <code>bf16</code>, <code>bf16-cached-autocast</code>, and <code>bf16-linear-once</code> on trained <code>w160l8</code>, seeded <code>w160l8</code>, <code>w160</code> (5 heads, <code>head_dim = 32</code>), <code>w256l8</code>, <code>w288l8</code> (<code>head_dim = 36</code>), and <code>w384l8</code>. Record per-call stage times, bucket totals (including <code>record_function</code>-scoped attention with SDPA kernel names), peak CUDA VRAM, and max/exact logit diff vs shipped <code>bf16</code>.</li>
+  <li><strong>Confirm in arena:</strong> If a bit-identical fix removes the penalty, apply it in <code>agent_loader.py</code> and run alternating arena replicates before/after; otherwise run the arena replicates to report the real spread and document the exact L4 rule in <code>docs/evaluation.md#etude-agents</code> (for example, requiring both <code>head_dim % 8 == 0</code> and sufficient width/batch).</li>
+</ol>
+
+<h3>Where the current plan fails</h3>
+<ul>
+  <li><strong>Cross-width binding failure:</strong> <code>replay --checkpoint seeded-w384.safetensors --batches trained-w160.batches</code> raises <code>ValueError("observation was admitted for a different policy configuration")</code> at <code>manabot/backends/torch/policy.py:771</code> because <code>admission.binding()</code> hashes <code>hidden_dim</code>.</li>
+  <li><strong>Re-chunking gap:</strong> Slicing a 24-row <code>Prepared</code> batch down to 4 rows has no helper in <code>manabot/policy/batching.py</code>; naive slicing corrupts flat <code>link_targets</code>, <code>legal_batches</code>, <code>facts.programs</code>, <code>effects</code>, and <code>memory</code> schedules.</li>
+  <li><strong>False parity rejection:</strong> Casting all non-GRU weights to bf16 changes <code>LayerNorm</code> and <code>token_embedding</code>, altering <code>cache_programs()</code> outputs and failing bit-exactness against <code>etude-policy-bf16-auto-v1</code> even if eliminating repeated <code>Linear</code> casts would have been bit-identical.</li>
+  <li><strong>Misleading docs rule:</strong> Publishing "use bf16 above width 256" when the cliff is <code>head_dim % 8 == 0</code> misleads anyone evaluating <code>w288l8</code> (<code>head_dim = 36</code>) or <code>w192l8</code> (<code>head_dim = 24</code>).</li>
+</ul>
+
+<h3>What must survive vs what changes on purpose</h3>
+<ul>
+  <li><strong>Must survive:</strong> <code>float32</code> remains the evaluation default; <code>etude-policy-bf16-auto-v1</code> logits stay bit-identical if any loader fix lands; <code>manabot.eval.agents</code> and <code>manabot.eval.vector</code> stay Torch-free on import; production <code>ActorCritic.forward_distribution</code> keeps strict <code>Prepared.binding</code> checks; <code>eval_throughput</code> keeps its <code>summary.json</code> schema and does no per-call disk flushes inside timed forwards.</li>
+  <li><strong>Changes on purpose:</strong> Adding <code>head_dim % 8</code> deconfounding points, 1-row grid capture via <code>concatenate</code>, <code>record_function</code>-scoped SDPA + VRAM reporting, autocast-exact cast-once variants, and profiling before the 12-arm arena sweep.</li>
+</ul>
+
+<h3>Counterexamples tested</h3>
+<ul>
+  <li><strong>What if <code>head_dim % 8</code> is <em>not</em> the cause on PyTorch 2.15 + L4?</strong> Including <code>w160</code> with 5 heads (<code>head_dim = 32</code>) and <code>w288l8</code> (<code>head_dim = 36</code>) costs &lt;60 seconds of L4 replay time and immediately falsifies the hypothesis if <code>w160</code> (<code>head_dim = 32</code>) still slows down and <code>w288l8</code> speeds up.</li>
+  <li><strong>What if <code>bf16-cached-autocast</code> is bit-identical and fast, or what if <code>torch.autocast</code> only caches per-enter?</strong> Measuring both persistent <code>autocast</code> (keeping the context alive across calls on the loader's single inference thread) and <code>Linear</code>/<code>MHA</code>-only bf16 weights tests the exact mechanism with zero guesswork—while remembering that a persistent thread-local autocast context would leak into other Torch work on the same thread if not scoped carefully, so <code>Linear</code>/<code>MHA</code>-only weights are safer for production if bit-identical.</li>
+  <li><strong>What if the slowdown is driven by trained games having denser boards / more packed-GRU facts rather than <code>head_dim</code>?</strong> Keeping the trained-vs-seeded <code>w160l8</code> batch cross plus explicit <code>record_function</code> buckets for <code>packed_gru</code>, <code>attention_sdpa</code>, and <code>autocast_casts</code> separates board density from kernel dispatch in one pass.</li>
+</ul>
+
+<h2>Findings</h2>
+
+<lf-component name="decision" id="f1" title="F1: Deconfound head_dim % 8 from hidden_dim, log SDPA kernels and peak VRAM, and cite MTG-317" recommendation="Fix here">
+  <p>
+    <strong>Scope: This work (revise plan before Pass 1).</strong>
+    <code>experiments/reports/cuda_precision.md</code> already shows <code>w160l8 padded</code> bf16 slowing
+    1.55× and doubling learner VRAM (5.3 → 10.7 GB) on an L4, pointing squarely at
+    <code>head_dim = 20</code> failing CUDA's 8-element bf16 SDPA alignment. Add an 8-aligned narrow checkpoint
+    (<code>w160</code> with 5 heads → <code>head_dim = 32</code>, or <code>w192l8</code> → <code>head_dim = 24</code>)
+    and an unaligned wide checkpoint (<code>w288l8</code> → <code>head_dim = 36</code>) to the grid, scope
+    <code>GameObjectAttention</code> / <code>packed_gru</code> / transfers with <code>torch.profiler.record_function</code>
+    in the profiler pass so <code>math</code> SDPA's <code>aten::bmm</code> + <code>aten::_softmax</code> do not
+    hide inside <code>linear/MLP</code>, and record dispatched SDPA op names and <code>torch.cuda.max_memory_allocated()</code>.
+  </p>
+</lf-component>
+
+<lf-component name="decision" id="f2" title="F2: Fix the cross-width binding contradiction and avoid writing split_prepared" recommendation="Fix here">
+  <p>
+    <strong>Scope: This work (revise plan before Pass 1).</strong>
+    <code>Prepared.binding</code> hashes <code>ModelConfig</code> (<code>hidden_dim</code>,
+    <code>num_attention_heads</code>), so the plan's threshold grid cannot replay <code>w160l8</code>-prepared
+    batches on <code>w256l8</code> or <code>w384l8</code> as written, and <code>manabot/policy/batching.py</code>
+    has no <code>split</code> to re-chunk multi-row batches to 1, 4, or 16 rows. Keep multi-row arena batches for
+    exact same-model replay, capture single-row <code>Prepared</code> batches for the grid (building 1, 4, 16, 64
+    via existing <code>concatenate</code>), and either prepare grid rows per target config or re-tag
+    <code>Prepared.binding</code> inside the harness only after asserting identical <code>space.config</code>,
+    <code>readings</code>, and <code>decision_memory</code>.
+  </p>
+</lf-component>
+
+<lf-component name="decision" id="f3" title="F3: Align bf16-cast-once with PyTorch autocast's downcast set (and test cached autocast)" recommendation="Fix here">
+  <p>
+    <strong>Scope: This work (revise plan before Pass 1).</strong>
+    Casting all non-GRU weights to bf16 rounds <code>LayerNorm</code>, <code>Embedding</code>, and bare
+    <code>nn.Parameter</code>s that <code>torch.autocast</code> keeps in float32, corrupting
+    <code>cache_programs()</code> and guaranteeing non-identical logits. Restrict <code>bf16-linear-once</code>
+    to <code>nn.Linear</code> and <code>nn.MultiheadAttention</code> projection parameters (applied <em>after</em>
+    <code>cache_programs()</code>), and include a diagnostic <code>bf16-cached-autocast</code> variant that keeps
+    PyTorch's autocast context open across replayed calls to measure the upper bound of eliminating per-call
+    <code>aten::copy_</code> weight casts.
+  </p>
+</lf-component>
+
+<lf-component name="decision" id="f4" title="F4: Run the 3-minute L4 replay profile before the 12-arm arena sweep, and buffer forwards.jsonl" recommendation="Fix here">
+  <p>
+    <strong>Scope: This work (revise plan before Pass 1).</strong>
+    Because MTG-317 already established the L4 <code>w160l8 padded</code> slowdown with &lt;2% repeat spread,
+    run the fast replay/profiler pass first so the rental immediately identifies the mechanism before spending
+    ~30 minutes on full arena host + replay runs. In <code>experiments/eval_throughput.py</code>, collect
+    <code>(rows, seconds)</code> in memory on <code>ForwardTiming</code> and write <code>forwards.jsonl</code>
+    once after the run so per-call disk writes never enter timed forwards.
+  </p>
+</lf-component>
+
+<lf-component name="decision" id="f5" title="F5: Keep agent_loader Torch-free on import and keep precision invocation owned in one place" recommendation="Fix here">
+  <p>
+    <strong>Scope: This work (revise plan before Pass 1).</strong>
+    <code>manabot.eval.agents</code> imports <code>agent_loader</code> at module top and is tested Torch-free
+    (<code>tests/test_package_boundaries.py:260</code>). If <code>agent_loader.py</code> exposes
+    <code>load_torch_policy</code>, keep Torch/<code>ActorCritic</code> types under <code>TYPE_CHECKING</code>
+    and pair it with a shared per-call context helper (<code>apply_matmul_precision</code> +
+    <code>inference_mode</code> + <code>forward_precision</code>) so <code>torch_logits</code> and
+    <code>replay</code> do not drift—or keep <code>agent_loader.py</code> untouched until Pass 2 proves a loader
+    fix is warranted.
+  </p>
+</lf-component>
+
+<lf-component name="decision" id="f6" title="F6: Follow up on head_dim % 8 model-config guidance and BF16_MIN_HIDDEN_DIM if confirmed" recommendation="File Task">
+  <p>
+    <strong>Scope: Separate outcome (only if F1 confirms <code>head_dim % 8</code> SDPA fallback).</strong>
+    If the L4 profile confirms that <code>head_dim % 8 != 0</code> drives the <code>w160l8</code> bf16 penalty
+    (in both evaluation and MTG-317 training), file a separate Task to update frontier model-width guidance and
+    revisit <code>BF16_MIN_HIDDEN_DIM = 256</code> in <code>manabot/infra/config.py:347</code>. Padding
+    <code>head_dim</code> inside <code>GameObjectAttention</code> would alter bf16 rounding and therefore require
+    a new compute class id—an irreversible identity choice once published—so it stays out of MTG-507.
+  </p>
+</lf-component>
+
+<h2>Questions</h2>
+
+<div data-choice="q1" data-label="Q1: Grid deconfounding">
+  <p><strong>1. Should the L4 threshold grid add <code>head_dim % 8</code> control points alongside <code>(160, 256, 384)</code>?</strong></p>
+  <button data-value="1a">1a. Yes — add <code>w160</code> with 5 heads (<code>head_dim = 32</code>) and <code>w288l8</code> (<code>head_dim = 36</code>) to separate SDPA alignment from width (Recommended)</button>
+  <button data-value="1b">1b. Keep only 8-head widths <code>(160, 256, 384)</code> and inspect SDPA kernel dispatch on those three</button>
+</div>
+
+<div data-choice="q2" data-label="Q2: Cast-once variant">
+  <p><strong>2. Which cast-elimination variants should <code>replay</code> test against shipped <code>bf16</code>?</strong></p>
+  <button data-value="2a">2a. Both <code>bf16-linear-once</code> (<code>Linear</code>/<code>MHA</code> weights only, post-<code>cache_programs</code>) and <code>bf16-cached-autocast</code> (persistent autocast context) (Recommended)</button>
+  <button data-value="2b">2b. Only <code>bf16-linear-once</code> (production-safe, no thread-local autocast state)</button>
+  <button data-value="2c">2c. Keep the plan's all-non-GRU cast-once and accept non-identical logits</button>
+</div>
+
+<div data-choice="q3" data-label="Q3: Rental execution order">
+  <p><strong>3. In what order should the L4 rental run replays vs the 12 arena replicates?</strong></p>
+  <button data-value="3a">3a. Run the ~3-minute replay/profiler pass first, then run arena replicates sized to what it finds (Recommended)</button>
+  <button data-value="3b">3b. Run all 12 arena replicates first, then replays</button>
+</div>
+
+<div data-choice="q4" data-label="Q4: Loader surface">
+  <p><strong>4. Should <code>manabot/eval/agent_loader.py</code> add <code>load_torch_policy</code> now or stay untouched until a loader fix is justified?</strong></p>
+  <button data-value="4a">4a. Split <code>load_torch_policy</code> + shared precision-context helper in <code>agent_loader.py</code> with <code>TYPE_CHECKING</code>-only Torch types (Recommended)</button>
+  <button data-value="4b">4b. Leave <code>agent_loader.py</code> untouched in Pass 1; cross-check <code>replay</code> logits against <code>torch_logits</code> in the smoke test</button>
+</div>
