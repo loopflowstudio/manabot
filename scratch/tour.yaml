@@ -1,43 +1,45 @@
-at: 3b12be84e5552ee48cce79a2338806ef833407d6
+at: 0f885b1f43e1c6d272347eed1082264c869c390b
 first:
   - path: docs/evaluation.md
     why: Managed callbacks, runtime targets, precision and game budgets
   - path: experiments/reports/eval_throughput.md
-    why: Throughput measurements and replay parity across devices
+    why: Throughput, replay parity, zero-copy rerun and compilation probe
   - path: scratch/qa.html
-    why: Live benchmark resume and accelerator checks
+    why: Post-compression backfill, replay and managed Metal verification
+  - path: .lf/qa/evaluation.md
+    why: Named benchmark resume procedure and stored experiment names
   - path: experiments/tla_trophies.py
-    why: Shared trophy pairings and precision-specific tournament names
-  - path: experiments/eval_throughput.py
-    why: Times the same pairings with fixed match keys
-  - path: experiments/tla_trophies_floor.py
-    why: Preserves stored floor and colab environment identity
+    why: Trophy pairings, async callback and precision-specific tournament identity
   - path: manabot/eval/pairing.py
-    why: Paired deal specification, admission and results
+    why: Pairing contract shared by scalar and vector evaluation
   - path: managym/__init__.pyi
     why: Public seeded slot loads and opt-in decision events
   - path: manabot/eval/vector.py
-    why: Seats queued legs and releases failed matches before backfill
+    why: Owns queued legs per match and isolates checkpoint failures
   - path: manabot/eval/agents.py
-    why: Prepares checkpoint inputs and samples seeded actions
+    why: Admits checkpoint batches independently of seeded seat sampling
   - path: manabot/policy/prepare.py
-    why: Builds contiguous name and effect lookup columns
+    why: Builds contiguous lookup and attention arrays
   - path: manabot/eval/agent_loader.py
-    why: Selects the runtime and runs batched inference
+    why: Loads eager batch inference on each runtime target
   - path: manabot/sim/native_game.py
-    why: Viewer frames and decision evidence shared across runners
+    why: Shared viewer frames and decision evidence
   - path: managym/recording.py
-    why: Detaches completed records before slot reuse
+    why: Detaches recording evidence before a slot is reused
   - path: managym/src/agent/vector_env/slots.rs
     why: Explicit deals preserve the automatic seed sequence
   - path: manabot/eval/match.py
     why: Replays and retains settled deals
+  - path: experiments/eval_throughput.py
+    why: Times paired deals using the shared game budget
+  - path: experiments/tla_trophies_floor.py
+    why: Preserves stored floor and colab environment identity
   - path: tests/eval/test_vector_eval.py
-    why: Trace parity, layout reuse and queued failure isolation
+    why: Trace parity and mixed-layout failure delivery before backfill
   - path: tests/eval/test_experiment_files.py
-    why: Schedules BF16 and float32 trophies together
+    why: Float32 and BF16 tournaments coexist with paired seeds
   - path: tests/model/test_prepare_rows.py
-    why: Verifies compact attention and effect array contiguity
+    why: Verifies contiguous prepared arrays including live effect kinds
 hide:
   - path: tests/public_api.json
     why: Generated snapshot of optional native arguments
