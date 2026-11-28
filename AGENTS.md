@@ -770,6 +770,9 @@ follows one card through moves the engine made uses the support helpers
 `now`, `zone_of`, `permanent_of` and `move_card`; a pre-move id passed to
 `Game::move_object` or compared with an event's object does nothing or fails
 ([objects and zones](docs/engine.md#objects-and-zones)).
+Native card capture tracks physical-copy continuity independently of rules
+events. Use `capture_object_move` for each quiet zone transition, including
+each meld component and a token that ceases to exist.
 
 `GameState::object` and `state[object]` check appearance identity against the
 zone manager; `ObjectVec` has no object-id or card-id indexing. Zone-entry

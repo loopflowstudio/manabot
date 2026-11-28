@@ -180,8 +180,31 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   (38 steps), then run each edit on `env.clone_env()` and step 30 random
   actions after it; the original `state_digest()` must not move. Gray Ogre /
   Hill Giant mirrors (seed 11, always attack) reach `DeclareBlocker` by turn 7.
+  At `DeclareAttacker`, batch `create_token("token.spirit", seat)` with a
+  tapped creature from hand and an unready creature from the opposing library
+  under your control. Decline each attack to see the Spirit offered in the
+  remaining prompts. The tapped and unready creatures should stay out of those
+  prompts. If an Aura is in hand, add it with `attached_to` set to a surviving
+  host's `Permanent.id`. Restore the same batch with `RestoreOptions.determinize`
+  in both a scalar fork and `SlotLoad.snapshot`; compare digests before and
+  after the same action.
   For Academy, a snapshot replay that ends at the edit shows the edited board
   but no branch note (the note rides the next recorded choice): step 25
   actions past the edit before `to_replay_json()`, then the History panel
   shows **Branch · game state edited**. Only the branch kind reaches the
   browser, never edit ids or destinations.
+  For battlefield-adding edits, a hero deck with Pacifism, Lotus Cobra, Leaves
+  from the Vine (Saga), Lightning Bolt and Liliana, Dreadhorde General against
+  Mountain/Gray Ogre/Hill Giant reached a turn-9 hero `DeclareAttacker` with
+  Pacifism in hand at seed 6 (play land, cast, pass; decline other attacks).
+  Read new permanents by ids absent before the edit: `controller_id`,
+  `is_token`, `is_summoning_sick`, `attached_to`, `counters` (`loyalty`,
+  `lore`). A battlefield card's `Card.id` is its `Permanent.object_id`;
+  `Permanent.card` is a `Card` object. Mana abilities are never standalone
+  Priority offers, so an added Treasure shows up as newly castable spells.
+  A random-batch sweep (1–4 edits at 8% of supported decisions, cold
+  `from_replay_json` after each accepted batch) ran 200 games in about 15 min
+  on the debug wheel, mostly in those replays; 10 games take about 10 s.
+  For the Academy view, `npm --prefix academy/ui ci` and the static build
+  take about a minute; a Playwright script must sit inside `academy/ui` to
+  resolve `@playwright/test`.

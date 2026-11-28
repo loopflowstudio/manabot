@@ -196,8 +196,41 @@ class SetLife(StateEditFields):
     life: int
 
 
+class CreateToken(StateEditFields):
+    kind: Literal["create_token"]
+    key: str
+    controller: int = Field(ge=0, le=1)
+    ready: bool
+    tapped: bool
+
+
+class BattlefieldCardEditFields(StateEditFields):
+    controller: int | None = Field(default=None, ge=0, le=1)
+    ready: bool
+    tapped: bool
+    attached_to: int | None = None
+
+
+class AddToBattlefield(BattlefieldCardEditFields):
+    kind: Literal["add_to_battlefield"]
+    card: int
+
+
+class AddFromLibrary(BattlefieldCardEditFields):
+    kind: Literal["add_from_library"]
+    player: int = Field(ge=0, le=1)
+    name: str
+
+
 GameStateEdit = Annotated[
-    MovePermanent | SetTapped | SetDamage | SetCounters | SetLife,
+    MovePermanent
+    | SetTapped
+    | SetDamage
+    | SetCounters
+    | SetLife
+    | CreateToken
+    | AddToBattlefield
+    | AddFromLibrary,
     Field(discriminator="kind"),
 ]
 

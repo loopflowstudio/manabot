@@ -878,6 +878,82 @@ impl Game {
         (!face.types.is_instant_or_sorcery()).then_some(face)
     }
 
+    /// Update knowledge while the departing appearance still holds its position.
+    #[inline]
+    pub(super) fn forget_zone_departure(
+        &mut self,
+        prior_object: ObjectId,
+        old_zone: Option<ZoneType>,
+        to_zone: ZoneType,
+        entry: &ZoneEntry,
+    ) -> Option<CardDefId> {
+        let owner = self.state.entry_object(prior_object).owner;
+        match old_zone {
+            Some(ZoneType::Library) => {
+                self.state
+                    .library_order_pins_mut(owner)
+                    .remove(&prior_object);
+                if entry.library_top_departure {
+                    self.state.known_library_mut(owner).remove_top()
+                } else if entry.inspected_library_departure {
+                    let position = self
+                        .library_from_top(owner)
+                        .position(|object| object == prior_object)
+                        .expect("departing inspected card in library");
+                    self.state
+                        .known_library_mut(owner)
+                        .remove_position(position)
+                } else {
+                    self.state.known_library_mut(owner).forget_order();
+                    None
+                }
+            }
+            Some(ZoneType::Hand) if to_zone != ZoneType::Hand => {
+                let seen = ((to_zone != ZoneType::Library || entry.shuffle_library == Some(true))
+                    && !entry.is_face_down())
+                .then(|| self.state.entry_object(prior_object).definition_id);
+                self.forget_hand_card(owner, seen);
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// Install a battlefield appearance and its paired permanent row.
+    #[inline]
+    pub(super) fn install_permanent(
+        &mut self,
+        object: ObjectId,
+        controller: PlayerId,
+        entry: ZoneEntry,
+        entry_turn: u32,
+        summoning_sick: bool,
+    ) -> PermanentId {
+        let id = PermanentId(self.state.permanents.len());
+        let mut permanent = Permanent::new(
+            self.state.id_gen_mut().next_id(),
+            object,
+            &self.state[object],
+        );
+        permanent.chosen = entry.chosen.map(std::sync::Arc::new);
+        permanent.manifested = entry.face == EntryFace::Manifested;
+        permanent.controller = controller;
+        permanent.entry_turn = entry_turn;
+        permanent.summoning_sick = summoning_sick;
+        permanent.spell_entry = entry.spell;
+        permanent.tapped = entry.tapped;
+        permanent.counters = entry.counters;
+        permanent.attached_to = entry.attached_to;
+        if let (Some(target), Some(combat)) = (entry.attack_target, self.state.combat.as_mut()) {
+            permanent.attacking = true;
+            combat.attack_targets.push((id, Some(target)));
+            combat.attacker_to_blockers.entry(id).or_default();
+        }
+        self.state.permanents.push(Some(permanent));
+        self.state.object_to_permanent[object.slot()] = Some(id);
+        id
+    }
+
     /// Return the appearance minted by this move (CR 400.7), including
     /// the initial appearance of an object entering its first zone.
     pub(crate) fn commit_zone_move(
@@ -885,45 +961,17 @@ impl Game {
         prior_object: ObjectId,
         old_zone: Option<ZoneType>,
         to_zone: ZoneType,
-        entry: ZoneEntry,
+        mut entry: ZoneEntry,
         departing_lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
     ) -> EventResult {
         let owner = self.state.entry_object(prior_object).owner;
-
         let definition = self.state.entry_object(prior_object).definition_id;
         let public_source = old_zone.is_some_and(|zone| {
             !matches!(zone, ZoneType::Hand | ZoneType::Library)
                 && !(zone == ZoneType::Exile && self.is_face_down_in_exile(prior_object))
         });
-        let known_top = if old_zone == Some(ZoneType::Library) {
-            self.state
-                .library_order_pins_mut(owner)
-                .remove(&prior_object);
-            if entry.library_top_departure {
-                self.state.known_library_mut(owner).remove_top()
-            } else if entry.inspected_library_departure {
-                let position = self
-                    .library_from_top(owner)
-                    .position(|object| object == prior_object)
-                    .expect("departing inspected card in library");
-                self.state
-                    .known_library_mut(owner)
-                    .remove_position(position)
-            } else {
-                self.state.known_library_mut(owner).forget_order();
-                None
-            }
-        } else {
-            None
-        };
-        if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
-            let seen = ((to_zone != ZoneType::Library || entry.shuffle_library == Some(true))
-                && !entry.is_face_down())
-            .then_some(definition);
-            self.forget_hand_card(owner, seen);
-        }
-
+        let known_top = self.forget_zone_departure(prior_object, old_zone, to_zone, &entry);
         let holder = match (to_zone, entry.controller) {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
@@ -1025,6 +1073,7 @@ impl Game {
                 .insert(object_id, entry.counters.clone());
         }
 
+        let discard = entry.discard;
         let entered_permanent = (to_zone == ZoneType::Battlefield).then(|| {
             match entry.face {
                 EntryFace::Front => {}
@@ -1049,32 +1098,14 @@ impl Game {
                     self.state[object_id].show_melded(result, row.printed.clone());
                 }
             }
-            let permanent_id = PermanentId(self.state.permanents.len());
-            let mut permanent = Permanent::new(
-                self.state.id_gen_mut().next_id(),
-                object_id,
-                &self.state[object_id],
-            );
-            permanent.chosen = entry.chosen.map(std::sync::Arc::new);
-            permanent.manifested = entry.face == EntryFace::Manifested;
-            permanent.controller = holder;
-            permanent.entry_turn = self.state.turn.turn_number;
-            permanent.spell_entry = entry.spell.or_else(|| cast.map(std::sync::Arc::new));
-            permanent.tapped = entry.tapped;
-            if let (Some(target), Some(combat)) = (entry.attack_target, self.state.combat.as_mut())
-            {
-                permanent.attacking = true;
-                combat.attack_targets.push((permanent_id, Some(target)));
-                combat.attacker_to_blockers.entry(permanent_id).or_default();
-            }
-            permanent.counters = entry.counters;
-            permanent.attached_to = entry.attached_to;
-            self.state.permanents.push(Some(permanent));
+            let prepared = entry.prepared;
+            entry.spell = entry.spell.or_else(|| cast.map(std::sync::Arc::new));
+            let permanent_id =
+                self.install_permanent(object_id, holder, entry, self.state.turn.turn_number, true);
             if self.state[object_id].types.is_land() {
                 self.state.turn.history[holder.0].land_entered = true;
             }
-            self.state.object_to_permanent[object_id.slot()] = Some(permanent_id);
-            if entry.prepared {
+            if prepared {
                 self.prepare_inset(object_id);
             }
             permanent_id
@@ -1087,11 +1118,11 @@ impl Game {
             from: old_zone,
             to: to_zone,
             controller: event_controller,
-            discarded: entry.discard.is_some(),
+            discarded: discard.is_some(),
             face_down: entry_face_down,
         };
         self.emit(event);
-        if entry.discard == Some(crate::flow::proposed_event::DiscardCause::Cleanup) {
+        if discard == Some(crate::flow::proposed_event::DiscardCause::Cleanup) {
             self.presentation_cleanup_discard();
         }
         if let Some(permanent) = entered_permanent {

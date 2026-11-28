@@ -1899,11 +1899,10 @@ impl Observation {
                 .collect(),
             cant_be_blocked_this_turn: game.cant_be_blocked(perm_id),
             is_animated: characteristics.is_animated,
-            has_exile_link: game
-                .state
-                .exile_links
-                .iter()
-                .any(|link| link.source == permanent.object),
+            has_exile_link: game.state.exile_links.iter().any(|link| {
+                link.source == permanent.object
+                    && game.state.zones.zone_of(link.exiled_object) == Some(ZoneType::Exile)
+            }),
             counters: permanent
                 .counters
                 .iter()

@@ -2596,6 +2596,18 @@
       "GameStateEdit": {
         "kind": "class",
         "members": {
+          "add_from_library": {
+            "kind": "staticmethod",
+            "signature": "(player, name, *, controller=..., ready=..., tapped=..., attached_to=...)"
+          },
+          "add_to_battlefield": {
+            "kind": "staticmethod",
+            "signature": "(card, *, controller=..., ready=..., tapped=..., attached_to=...)"
+          },
+          "create_token": {
+            "kind": "staticmethod",
+            "signature": "(key, controller, *, ready=..., tapped=...)"
+          },
           "move_permanent": {
             "kind": "staticmethod",
             "signature": "(permanent, to=...)"

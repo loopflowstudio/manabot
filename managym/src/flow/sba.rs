@@ -437,7 +437,11 @@ impl Game {
     /// unattached, attached to itself or to an object its enchant ability
     /// doesn't allow, has lost that ability, or is also a creature
     /// (CR 303.4d, 704.5m).
-    fn aura_attachment_illegal(&self, aura: PermanentId, view: &Characteristics) -> bool {
+    pub(super) fn aura_attachment_illegal(
+        &self,
+        aura: PermanentId,
+        view: &Characteristics,
+    ) -> bool {
         if !view.has_subtype("Aura") {
             return false;
         }

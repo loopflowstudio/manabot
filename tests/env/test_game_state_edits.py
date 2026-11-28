@@ -11,8 +11,9 @@ import pytest
 import managym
 from managym.decision import Command, DecisionFrame
 from managym.possible_worlds import PossibleWorldSpace
-from managym.recording import GameStateEdits, RecordedVectorEnv, read_record
+from managym.recording import GameInputs, GameStateEdits, RecordedVectorEnv, read_record
 from managym.replay import walk
+from managym.statistics import reduce_cards
 
 
 def chooser(env: managym.Env) -> managym.Observation:
@@ -239,6 +240,40 @@ def test_edit_errors_leave_the_boundary_and_journal_intact(
         managym.Env().edit_game_state([life])
 
 
+def check_vector_restore(
+    players: managym.GameSetup,
+    root: managym.GameSnapshot,
+    options: managym.RestoreOptions,
+    scalar: managym.Env,
+) -> GameInputs:
+    """Load the same branch in a vector slot and advance both by one action."""
+    with closing(
+        RecordedVectorEnv(num_envs=1, decision_memory_include_own=True)
+    ) as vector:
+        vector.set_observation_layout(
+            {
+                "rewards": np.zeros(1),
+                "terminated": np.zeros(1, dtype=np.uint8),
+                "truncated": np.zeros(1, dtype=np.uint8),
+            },
+            layout=managym.ObservationLayout(),
+        )
+        vector.reset_all_into_buffers(players)
+        [loaded] = vector.load_slots_into_buffers(
+            [managym.SlotLoad.snapshot(0, root, options)]
+        )
+        assert loaded.source_digest == root.state_digest
+        assert vector.native.state_digests() == [scalar.state_digest()]
+        [loaded_obs] = vector.native.decision_observations([True])
+        assert (
+            loaded_obs is not None and loaded_obs.toJSON() == chooser(scalar).toJSON()
+        )
+        vector.step_into_buffers([0])
+        scalar.step(0)
+        assert vector.native.state_digests() == [scalar.state_digest()]
+        return vector.game_inputs(0)
+
+
 def test_edited_priority_branch_loads_in_a_recorded_vector(
     blocking_game: managym.Env,
 ) -> None:
@@ -264,44 +299,225 @@ def test_edited_priority_branch_loads_in_a_recorded_vector(
         obs.agent.zone_counts[managym.ZoneEnum.GRAVEYARD] + 1
     )
 
-    with closing(
-        RecordedVectorEnv(num_envs=1, decision_memory_include_own=True)
-    ) as vector:
-        layout = managym.ObservationLayout()
-        vector.set_observation_layout(
+    inputs = check_vector_restore(setup(), root, options, scalar)
+    [intervention] = inputs.interventions
+    assert isinstance(intervention, GameStateEdits)
+    assert intervention.at_action == len(inputs.actions) - 1
+
+
+def test_battlefield_additions_round_trip_at_declare_attackers(tmp_path: Path) -> None:
+    deck = {"Mountain": 24, "Gray Ogre": 10, "Hill Giant": 4, "Pacifism": 2}
+    players = managym.GameSetup(
+        [managym.PlayerConfig(str(seat), deck) for seat in (0, 1)]
+    )
+    env = managym.Env(seed=42, decision_memory=True, decision_memory_include_own=True)
+    env.reset(players)
+    for _ in range(150):
+        obs = chooser(env)
+        if (
+            obs.action_space.action_space_type
+            == managym.ActionSpaceEnum.DECLARE_ATTACKER
+        ):
+            hand = {
+                card.characteristics.name: card
+                for card in obs.agent_cards
+                if card.zone == managym.ZoneEnum.HAND
+            }
+            host = next(
+                (
+                    p
+                    for p in obs.opponent_permanents
+                    if p.characteristics.card_types.is_creature
+                ),
+                None,
+            )
+            if host is not None and {"Gray Ogre", "Pacifism"} <= hand.keys():
+                break
+            env.step(
+                next(
+                    i for i, a in enumerate(obs.action_space.actions) if not a.declared
+                )
+            )
+        else:
+            env.step(play_default(obs))
+    else:
+        pytest.fail("seeded game did not reach attackers with the cards for the edit")
+
+    root = env.snapshot()
+    before = root.to_replay_json()
+    edit = managym.GameStateEdit
+    seat = obs.agent.player_index
+    land = next(p for p in obs.agent_permanents if p.characteristics.card_types.is_land)
+    edits = [
+        edit.create_token("token.spirit", seat),
+        edit.add_to_battlefield(hand["Gray Ogre"].id, tapped=True),
+        edit.add_from_library(
+            obs.opponent.player_index, "Hill Giant", controller=seat, ready=False
+        ),
+        edit.add_to_battlefield(hand["Pacifism"].id, attached_to=host.id),
+        edit.move_permanent(land.id),
+    ]
+    with pytest.raises(managym.AgentError, match="attachment"):
+        env.edit_game_state([*edits, edit.move_permanent(host.id)])
+    assert env.state_digest() == root.state_digest
+    assert env.snapshot().to_replay_json() == before
+
+    probe = env.clone_env()
+    updated = probe.edit_game_state(edits)
+    assert (
+        updated.action_space.action_space_type
+        == managym.ActionSpaceEnum.DECLARE_ATTACKER
+    )
+    previous_ids = {p.id for p in obs.agent_permanents}
+    added = {
+        p.characteristics.name: p
+        for p in updated.agent_permanents
+        if p.id not in previous_ids
+    }
+    assert set(added) == {"Spirit", "Gray Ogre", "Hill Giant", "Pacifism"}
+    spirit = added["Spirit"]
+    assert spirit.is_token and not spirit.tapped and not spirit.is_summoning_sick
+    assert not spirit.entered_this_turn
+    ogre = added["Gray Ogre"]
+    assert ogre.object_id == hand["Gray Ogre"].id and ogre.tapped
+    giant = added["Hill Giant"]
+    assert giant.owner_id == obs.opponent.player_index and giant.controller_id == seat
+    assert giant.is_summoning_sick and giant.entered_this_turn and not giant.tapped
+    assert added["Pacifism"].attached_to == host.id
+    assert updated.agent.zone_counts[managym.ZoneEnum.HAND] == (
+        obs.agent.zone_counts[managym.ZoneEnum.HAND] - 2
+    )
+    assert updated.opponent.zone_counts[managym.ZoneEnum.LIBRARY] == (
+        obs.opponent.zone_counts[managym.ZoneEnum.LIBRARY] - 1
+    )
+    assert updated.decision_memory_json() == obs.decision_memory_json()
+
+    branch = root.restore(managym.RestoreOptions.exact(game_state_edits=edits))
+    assert branch.state_digest() == probe.state_digest()
+    raw = branch.snapshot().to_replay_json()
+    cold = managym.GameSnapshot.from_replay_json(raw).restore()
+    assert cold.state_digest() == branch.state_digest()
+    assert chooser(cold).toJSON() == updated.toJSON()
+    attackers = set()
+    while (
+        current := chooser(branch)
+    ).action_space.action_space_type == managym.ActionSpaceEnum.DECLARE_ATTACKER:
+        actions = current.action_space.actions
+        attackers.update(a.focus[0] for a in actions if a.declared)
+        decline = next(i for i, a in enumerate(actions) if not a.declared)
+        branch.step(decline)
+        cold.step(decline)
+    assert spirit.id in attackers
+    assert not {ogre.id, giant.id} & attackers
+    assert cold.state_digest() == branch.state_digest()
+
+    path = tmp_path / "battlefield.json"
+    path.write_text(branch.snapshot().to_replay_json())
+    record = read_record(path)
+    [intervention] = record.games[0].interventions
+    assert isinstance(intervention, GameStateEdits)
+    assert [item.kind for item in intervention.edits] == [
+        "create_token",
+        "add_to_battlefield",
+        "add_from_library",
+        "add_to_battlefield",
+        "move_permanent",
+    ]
+    assert intervention.model_dump() == json.loads(raw)["interventions"][0]
+    replay = walk(record, capture_cards=True)
+    for _ in replay:
+        pass
+    assert replay.stop is not None and replay.stop.status == "interrupted"
+    assert replay.env.state_digest() == branch.state_digest()
+    cards = replay.cards()
+    assert {
+        ("Spirit", None, "Battlefield"),
+        ("Gray Ogre", "Hand", "Battlefield"),
+        ("Hill Giant", "Library", "Battlefield"),
+        ("Pacifism", "Hand", "Battlefield"),
+        ("Mountain", "Battlefield", "Graveyard"),
+    } <= {
+        (move.card.name, move.from_, move.card.zone)
+        for move in cards.capture.moves
+        if move.cause == "move"
+    }
+    assert any(row.name == "Spirit" and row.seat == seat for row in reduce_cards(cards))
+
+    options = managym.RestoreOptions.determinize(seat, 19, game_state_edits=edits)
+    sampled = root.restore(options)
+    assert (
+        json.loads(chooser(sampled).toJSON())["agent_permanents"]
+        == json.loads(updated.toJSON())["agent_permanents"]
+    )
+    inputs = check_vector_restore(players, root, options, sampled)
+    assert [
+        item for item in inputs.interventions if isinstance(item, GameStateEdits)
+    ] == [intervention]
+
+    assert env.snapshot().to_replay_json() == before
+
+
+def test_battlefield_edit_constructor_errors() -> None:
+    edit = managym.GameStateEdit
+    for key in ("Spirit", "lea.gray_ogre"):
+        with pytest.raises(managym.AgentError, match="unknown token key"):
+            edit.create_token(key, 0)
+    with pytest.raises(managym.AgentError, match="controller"):
+        edit.create_token("token.spirit", -1)
+    with pytest.raises(managym.AgentError, match="controller"):
+        edit.add_to_battlefield(42, controller=2)
+    with pytest.raises(managym.AgentError, match="player"):
+        edit.add_from_library(2, "Gray Ogre")
+    with pytest.raises(managym.AgentError, match="controller"):
+        edit.add_from_library(1, "Gray Ogre", controller=-1)
+
+
+@pytest.mark.parametrize(
+    ("edit", "message"),
+    [
+        ({"kind": "set_tapped", "permanent": 42, "tapped": 1}, "valid boolean"),
+        (
             {
-                "rewards": np.zeros(1),
-                "terminated": np.zeros(1, dtype=np.uint8),
-                "truncated": np.zeros(1, dtype=np.uint8),
+                "kind": "create_token",
+                "key": "token.spirit",
+                "controller": "0",
+                "ready": True,
+                "tapped": False,
             },
-            layout=layout,
-        )
-        vector.reset_all_into_buffers(setup())
-        [loaded] = vector.load_slots_into_buffers(
-            [managym.SlotLoad.snapshot(0, root, options)]
-        )
-        assert loaded.source_digest == root.state_digest
-        assert vector.native.state_digests() == [scalar.state_digest()]
-        [loaded_obs] = vector.native.decision_observations([True])
-        assert (
-            loaded_obs is not None and loaded_obs.toJSON() == chooser(scalar).toJSON()
-        )
-        vector.step_into_buffers([0])
-        scalar.step(0)
-        assert vector.native.state_digests() == [scalar.state_digest()]
-        inputs = vector.game_inputs(0)
-        [intervention] = inputs.interventions
-        assert isinstance(intervention, GameStateEdits)
-        assert intervention.at_action == len(inputs.actions) - 1
-
-
-def test_game_state_edits_record_rejects_untyped_payloads() -> None:
-    with pytest.raises(ValidationError, match="valid boolean"):
+            "valid integer",
+        ),
+        (
+            {
+                "kind": "add_to_battlefield",
+                "card": 42,
+                "controller": None,
+                "ready": 1,
+                "tapped": False,
+            },
+            "valid boolean",
+        ),
+        (
+            {
+                "kind": "add_from_library",
+                "player": 0,
+                "name": "Gray Ogre",
+                "ready": True,
+                "tapped": False,
+                "owner": 1,
+            },
+            "Extra inputs",
+        ),
+    ],
+)
+def test_game_state_edits_record_rejects_untyped_payloads(
+    edit: dict[str, str | int | bool | None], message: str
+) -> None:
+    with pytest.raises(ValidationError, match=message):
         GameStateEdits.model_validate(
             {
                 "op": "game_state_edits",
                 "at_action": 0,
-                "edits": [{"kind": "set_tapped", "permanent": 42, "tapped": 1}],
+                "edits": [edit],
             }
         )
 
@@ -313,6 +529,11 @@ def test_edits_read_as_their_constructor_calls() -> None:
         managym.GameStateEdit.set_damage(7, 3),
         managym.GameStateEdit.set_counters(7, "plus_one_plus_one", 2),
         managym.GameStateEdit.set_life(1, 5),
+        managym.GameStateEdit.create_token("token.spirit", 0),
+        managym.GameStateEdit.add_to_battlefield(42, attached_to=7),
+        managym.GameStateEdit.add_from_library(
+            1, "Kyoshi's\u2003Battlefield\n", controller=0, ready=False, tapped=True
+        ),
     ]
     namespace = {"GameStateEdit": managym.GameStateEdit}
     for edit in edits:

@@ -588,10 +588,14 @@ journaling use the same replay inputs.
 ### Counterfactual state edits
 
 At a `Priority`, `DeclareAttacker`, or `DeclareBlocker` decision, apply a batch
-of `GameStateEdit` values to compare choices on a different board. Use the
-observed `Permanent.id` for a permanent and `permanent.characteristics.name`
-for its effective name. For a player, use the native seat index from
-`obs.agent.player_index` or `obs.opponent.player_index`.
+of `GameStateEdit` values to compare choices on a different board. Address an
+existing permanent by its observed `Permanent.id` (`permanent.characteristics.name`
+gives its effective name), an off-battlefield card by its observed `Card.id`
+from `obs.agent_cards` or `obs.opponent_cards` (`card.characteristics.name` and
+`card.zone`), and a player by native seat index (`obs.agent.player_index` or
+`obs.opponent.player_index`). Tokens take a catalog `"token.*"` key from
+`managym.content_pool("world")["definitions"]` (filter rows where `row["key"]`
+starts with `"token."`).
 
 ```python
 import managym
@@ -599,14 +603,26 @@ import managym
 blocker = next(
     p for p in obs.opponent_permanents if p.characteristics.name == "Gray Ogre"
 )
+pacifism = next(
+    c
+    for c in obs.agent_cards
+    if c.zone == managym.ZoneEnum.HAND and c.characteristics.name == "Pacifism"
+)
 edits = [
-    managym.GameStateEdit.move_permanent(blocker.id, to="library_bottom"),
+    managym.GameStateEdit.create_token("token.spirit", obs.agent.player_index),
+    managym.GameStateEdit.add_to_battlefield(pacifism.id, attached_to=blocker.id),
+    managym.GameStateEdit.add_from_library(
+        obs.opponent.player_index, "Gray Ogre", ready=False
+    ),
     managym.GameStateEdit.set_life(obs.opponent.player_index, 5),
 ]
 
 # Probe a live decision. The clone retains decision memory and freezes capture.
 probe = game.clone_env()
 edited_obs = probe.edit_game_state(edits)
+# edited_obs shows the Spirit, Pacifism attached to the blocker, and a
+# summoning-sick Gray Ogre with fresh Permanent.id values and active static
+# abilities. The agent's hand and opponent's library each shrink by one card.
 
 # Fork the same decision with its original memory capture setting.
 options = managym.RestoreOptions.exact(game_state_edits=edits)
@@ -617,6 +633,9 @@ assert managym.GameSnapshot.from_replay_json(replay).state_digest == branch.stat
 
 | Constructor | Effect |
 |---|---|
+| `create_token(key, controller, *, ready=True, tapped=False)` | Creates one token per edit under `controller`, using its catalog key (for example `"token.spirit"`). |
+| `add_to_battlefield(card, *, controller=None, ready=True, tapped=False, attached_to=None)` | Moves the observed card from hand, graveyard, exile, or an inspected library top. |
+| `add_from_library(player, name, *, controller=None, ready=True, tapped=False, attached_to=None)` | Moves one copy with the deck-entry `name` from `player`'s library. Prefers the bottom-most unpinned copy unknown to either player, falling back to the bottom-most copy. |
 | `move_permanent(permanent, to="graveyard")` | Moves a card to its owner's `"graveyard"`, `"exile"`, or `"library_bottom"`. A melded permanent moves both cards. Tokens cease to exist. Cards exiled until the permanent leaves stay in exile. A bottom placement stays pinned through `shuffle_libraries`. |
 | `set_tapped(permanent, tapped)` | Sets tap state directly, bypassing stun counters and tap or untap triggers. |
 | `set_damage(permanent, damage)` | Sets nonnegative marked damage. Zero also clears the deathtouch mark. `dealt_damage_this_turn` keeps its value. |
@@ -630,22 +649,56 @@ previous revision become stale. Opening hands, pending choices, suspended
 decisions and finished games cannot be edited. An empty live batch at a
 supported decision returns its observation and preserves the revision.
 
-Edits preserve turn, stack, mana, decision memory and the 32-row policy-history
-window. A moved permanent's history rows lose their live object links. Quiet
-moves produce no departure or arrival events. State-based actions, including
-lethal damage and unattached Auras, wait until the next ordinary check.
+Both card edits default to the card's owner as controller. For an Aura, pass
+the host's observed `Permanent.id` as `attached_to`. Each addition gets a
+fresh `Permanent.id` and timestamp in batch order. To edit a new permanent or
+attach an Aura to it, use its id from the returned observation in a second batch.
 
-During declarations, newly eligible creatures join the remaining prompts.
-The current declarer must stay eligible and retain a legal action. An invalid
-batch raises `managym.AgentError` and preserves the original state and journal.
-This includes a phased-out or unknown permanent, a second edit to a permanent
-already moved in the batch, and an unknown destination or counter kind.
+Static abilities apply immediately. With `ready=True`, added permanents count
+as on the board since before this turn. With `ready=False`, they have
+summoning sickness and `entered_this_turn` is true. They enter without
+attacking or blocking. Cards enter face up on their printed front face, even
+from face-down exile. Planeswalkers get printed loyalty, Sagas get one lore
+counter, and Equipment enters unattached.
+
+Quiet entry skips replacement effects (including “as this enters” choices),
+arrival and counter events, and triggers such as landfall, constellation and
+Saga chapter I. A Clone enters as a 0/0. Lands played and other turn history
+keep their values.
+
+Edits preserve turn, stack, mana, decision memory and the 32-row policy-history
+window. Moving a permanent or a card expires its live object links in policy
+history. Native card capture records quiet zone changes when enabled,
+including during replay with `walk(record, capture_cards=True)`. The engine
+checks added Auras against the state-based Aura rule on the layered board
+after the whole batch. Other state-based actions, including lethal damage,
+0 toughness, the legend rule, and existing Auras whose host moved, wait until
+the next ordinary check.
+
+During declarations, newly eligible creatures (including ready creatures added
+in the batch) join the remaining prompts. The current declarer must stay
+eligible and retain a legal action. An invalid batch raises `managym.AgentError`
+and preserves the original state and journal. Refusals include:
+
+- an unknown token key (including a card key or printed name), unknown
+  destination or counter kind, invalid seat, or negative damage or counter count
+- a phased-out or unknown permanent, or a second edit to a permanent already
+  moved in the batch
+- an unknown card id, a non-card object, a card already on the battlefield or
+  in the stack, command zone, or sideboard, or the same card named twice
+- no remaining copy of `name` in `player`'s library (accounting for earlier
+  edits in the batch)
+- an instant or sorcery
+- an Aura without `attached_to`, `attached_to` on a non-Aura, an unknown or
+  phased-out host, or an added Aura whose attachment is illegal after the batch
 
 Snapshot restore applies edits before reseeding, shuffling or determinizing.
+`add_from_library` therefore fails with `managym.AgentError` if every
+remaining copy is in the opponent's hidden hand in the snapshot.
 `SlotLoad.snapshot` accepts the same options for a vector slot. A non-empty
-batch excludes `forced_first_action` because the action indices can change.
-For recorded counterfactuals, export via `snapshot().to_replay_json()` or load
-into `RecordedVectorEnv` with `SlotLoad.snapshot` rather than calling
+batch excludes `forced_first_action` because the action indices can
+change. For recorded counterfactuals, export via `snapshot().to_replay_json()`
+or load into `RecordedVectorEnv` with `SlotLoad.snapshot` rather than calling
 `env.edit_game_state` directly on a `ScalarCapture`-tracked `Env`, which does
 not record mid-game branch interventions. Cold replay and `walk` reapply
 journaled edits. Academy Replay labels the choice recorded after the edit

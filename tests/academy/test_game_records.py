@@ -266,7 +266,9 @@ def test_imported_state_edit_marks_the_verified_replay_choice(
         obs, *_ = env.step(0)
     else:
         pytest.fail("seeded game did not reach a land play")
-    env.edit_game_state([managym.GameStateEdit.set_life(obs.agent.player_index, 13)])
+    env.edit_game_state(
+        [managym.GameStateEdit.create_token("token.spirit", obs.agent.player_index)]
+    )
     env.step(0)
 
     imported = import_game(json.loads(env.snapshot().to_replay_json()))
