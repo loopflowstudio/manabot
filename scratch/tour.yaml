@@ -1,28 +1,30 @@
-at: 5301417e8b94e5b77afddcea782c6e56f6805032
+at: b4fdb1048ad5f1487b57641b2585f87881e75463
 first:
   - path: docs/engine.md
-    why: The four vocabulary lists and how admission joins them
-  - path: managym/src/agent/record_vocabulary.rs
-    why: Shared registration and the native admission guard
-  - path: managym/src/agent/decision_memory.rs
-    why: Names owned by the decision-memory encoder
+    why: Admission rules and a working program vocabulary example
   - path: managym/__init__.pyi
-    why: Public vocabulary signatures
+    why: Public names and tuple fields
+  - path: managym/src/agent/record_vocabulary.rs
+    why: One card walk registers names and runtime symbols
+  - path: managym/src/agent/decision_memory.rs
+    why: The encoder owns its optional memory names
   - path: manabot/policy/catalog.py
-    why: How the policy assigns names and tokens embedding rows
+    why: Program tokens and name aliases acquire embedding rows
   - path: managym/src/cards/token_renames.rs
-    why: Frozen execution and memory keys keep their learned vectors
+    why: Historical key dispositions preserve learned vectors
   - path: scripts/pinned_pilot.py
-    why: Selects the probe for the archived writer's vocabulary
+    why: Selects the trace format for each archived writer
   - path: scripts/pilot_names.rs
-  - path: tests/model/test_checkpoint_binding.py
-    why: Legacy keys retain their trained vectors
+  - path: tests/model/test_record_vocabulary.py
+    why: Each name reads its assigned embedding row
   - path: tests/model/test_effect_vocabulary.py
-    why: Exact program keys and optional memory names
+    why: Optional memory leaves program admission unchanged
+  - path: tests/model/test_checkpoint_binding.py
+    why: A constructed historical checkpoint reproduces its policy outputs
 hide:
   - path: tests/public_api.json
-    why: Generated signatures match the two new stub declarations
+    why: Generated from the public declarations
   - path: scratch/concept-review.html
-    why: Historical concept-review artifact. The plan records its dispositions.
+    why: Compiled review page
   - path: scratch/concept-review.page.html
-    why: Rendered copy of the historical concept review
+    why: The plan records the earlier review and dispositions
