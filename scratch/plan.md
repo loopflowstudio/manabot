@@ -72,9 +72,20 @@ Drafted in place before implementation (read these when building and reviewing):
 At `51730e1dde`, the acceptance filter plus the six mana preview tests passed
 in debug (54/54). The ten-Forest rejection still visits exactly 207 fork states.
 
-## Delivery (after Pass 6)
+## Publication
 
-Refresh Academy fixtures with `uv run --extra dev python scripts/refresh_academy_fixtures.py` and verify conformance receipts. Run the full debug suites and Engine Budget. Record an Engine Budget baseline for the v36 digest change only after verifying the budget result.
+The full debug run exposed an extra choice after Delve paid the last generic
+pip. The payment model now drops Delve when the remaining cost has no generic
+mana, so the mandatory exact tap completes automatically.
+
+Hash v36 changes the live Academy and conformance digests. The refreshed
+semantic cases keep their 3,161 Commands and the authored replay matches
+across live, headless and replay surfaces for all 174 Commands.
+
+[Engine Budget run 46112437968](https://github.com/loopflowstudio/manabot/actions/runs/46112437968)
+passed on `d5ba06de36`. All benchmark digests matched, so the current reference
+still applies. The publication fix affects Delve and the benchmark decks have
+no Delve. The PR reruns Engine Budget on the published head.
 
 ## Acceptance check
 

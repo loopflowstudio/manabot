@@ -1083,7 +1083,7 @@ button.lf-btn-quiet[aria-pressed="true"] {
 <div class="lf-before-after">
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">Before</div>
-    
+
     <h4>Before Pass 6 (<code>52fb812008</code>)</h4>
     <ul>
       <li><code>CoupledPayment.delve: Option&lt;DelveCost&gt;</code> tracked only Delve beside pre-flattened <code>tap_obligations</code> tiers recovered by suffix matching.</li>
@@ -1091,11 +1091,11 @@ button.lf-btn-quiet[aria-pressed="true"] {
       <li><code>next_delve</code> was gated on <code>stateful_delve()</code>, dropping Delve after a Convoke tap on sacrifice-coupled boards.</li>
       <li>Partial-tier spends set <code>saved_delve = None</code>, stripping Delve from the generic tail.</li>
     </ul>
-  
+
   </div>
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">After</div>
-    
+
     <h4>After Pass 6 (<code>f3779cb5b2</code>)</h4>
     <ul>
       <li><code>Obligation::Helped(Box&lt;HelpedCost&gt;)</code> sits directly in the ordered obligations list; no side-channel or suffix matching exists.</li>
@@ -1103,7 +1103,7 @@ button.lf-btn-quiet[aria-pressed="true"] {
       <li><code>help_obligations</code> lowers <code>Obligation::Helped</code> only for pure handoff and uncoupled queries; <code>FixedOnly</code> lowers it to plain <code>mana_and_life</code>.</li>
       <li><code>CoupledMemoKey</code> hashes <code>obligations</code> directly (including <code>cost</code>, <code>waterbend</code>, and <code>life</code>), and <code>PurposeProjection</code> reads <code>&amp;helped.cost</code>.</li>
     </ul>
-  
+
   </div>
 </div>
 
