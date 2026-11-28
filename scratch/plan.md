@@ -127,9 +127,10 @@ check each added Aura with `aura_attachment_illegal`,
 `*self = edited` only on `Ok`. Atomicity no longer depends on validation
 predicting post-batch rules state.
 
-**Validation before writes** keeps what is cheap and exact; anything that
-depends on the edited board is checked on `edited` afterward. Refusals, each
-an `AgentError` that leaves state and journal untouched:
+**One pass through the edits.** Resolve input ids and library preferences
+from the original position. Apply each edit to the rollback copy after
+checking that its target is still available. Check Aura legality on the
+edited board after the batch. Refusals leave state and journal untouched:
 
 - unknown token key (a card key or a printed name included; checked before
   `prepare_token`, which `debug_assert!`s); invalid seat
@@ -169,12 +170,11 @@ departure `forget_hand_card`), `policy_history::expire_links(game,
 object.id, None)` (`agent/policy_history.rs:126`), `mint_appearance(...,
 Battlefield, false)`, and the shared installation.
 
-**Quiet token:** `prepare_token(key, controller)`, `mint_appearance`, shared
-installation, and — when card capture or statistics is on — insert its
-`snapshot` into `capture_originals` (as `capture_object_move` does at
-`card_capture.rs:402`) without recording a move, so `capture_resolution`
-(`card_capture.rs:369`) attributes a later Treasure/Food/Clue ability to the
-token's definition. Deck cards are already in `capture_originals` from setup.
+**Quiet token:** `prepare_token(key, controller)`, `mint_appearance`, and
+shared installation. All quiet zone changes use `capture_object_move`, which
+also retains the original token definition for resolution attribution. Capture
+records both meld components and departing tokens. Exile departure clears
+links to the old appearance.
 
 ## Risks answered
 
@@ -271,52 +271,17 @@ the three new kinds and still rejects untyped payloads.
 - `Copy` on `GameStateEdit`.
 - The in-place Priority branch of `edit_game_state` (`state_edit.rs:99–103`).
 
-Nothing else is removed; the five existing edits, their journal spelling and
-their tests survive unchanged.
+- The token-only capture registration and the separate batch validation
+  passes. The existing edit kinds keep their journal spelling.
 
 ## Passes
 
 1. **Engine complete** (`4e2a85351`). 14 focused debug tests passed.
 2. **Python surface complete** (`fddd9a4d8`). 20 focused Python/Academy tests and `public_api.py check` passed.
-3. **Review fix pass (next).** From the post-build concept review
-   (`scratch/concept-review.html`, against `20d7b59d18`); all three are
-   confirmed in code:
-   - *Capture continuity.* Quiet edits write no `CardMove`, so
-     `CapturedCards.complete()` (`managym/card_capture.py:154-182`) raises
-     on any edited game and live `Statistics` diverges from
-     `reduce_capture`. Record every quiet zone transition through the
-     existing `capture_object_move` (CreateToken `None -> Battlefield`,
-     AddToBattlefield/AddFromLibrary `from -> Battlefield`, MovePermanent
-     including meld partner and departing tokens `Battlefield -> zone/None`),
-     cause unchanged; delete `capture_quiet_token` (`card_capture.rs:392`)
-     and `Statistics::register` (`statistics.rs:60`). Extend
-     `quiet_token_records_its_later_sacrifice_resolution` to assert live
-     statistics equal `reduce_capture`, and add a Python test that
-     `walk(record, capture_cards=True)` reaches `replay.cards()` /
-     `reduce_cards(...)` on an edited game.
-     Passed over: a new `cause = "edit"` (changes the NativeCapture v1
-     schema), disabling capture after edits (breaks counterfactual replays).
-   - *Exile links.* `AddToBattlefield` from exile leaves the exiler's
-     `ExileLink`, so `has_exile_link` (`agent/observation.rs:1902`) stays
-     true. Prune `exile_links` by `exiled_object` on an exile departure, and
-     make `has_exile_link` also require the linked object still be in exile
-     (as `GameState::exiled_with`, `game.rs:218`). Rust test: Banishing
-     Light's exiled card added back clears the flag.
-   - *One pass.* `apply_game_state_edits` (`state_edit.rs:207`) runs three
-     8-arm matches (`validate_permanent_edits`, `validate_additions`, the
-     lockstep `CardAddition` loop) and is not atomic on its own. Collapse to
-     one pass inside the rollback transaction, bounding observed ids by
-     `pre_batch_permanents = self.state.permanents.len()`; make it private
-     to `edit_game_state` (or atomic) so tests do not observe partial
-     writes; move Planeswalker loyalty and Saga lore into `quiet_enter` so
-     tokens share the rule; name the Aura card and its input `Card.id`, not
-     the rolled-back `Permanent.id`, in the illegal-attachment error.
-   It should teach whether capture parity holds for every edit kind
-   (MTG-502's `move_permanent` included).
+3. **Review fixes complete** (`853464096`). 15 native tests, 21 Python/Academy tests and the public API check passed. Edited replay yields complete card facts, live and retained statistics agree, and rejected batches preserve state and capture.
 
-Sync onto `origin/main` (MTG-500, `606e79e90a`) is mechanical: adjacent
-`.lf/qa/engine.md` entry, match-state digest v35. The native performance
-budget and full suites are deferred to CI.
+Synced with MTG-500 (`606e79e90a`). The native performance budget and full
+suites are deferred to CI.
 
 ## Docs written
 
@@ -335,10 +300,9 @@ batch raises `managym.AgentError` and changes nothing.
 ## Concept reviews — disposition
 
 - Pre-build: all findings adopted above as choices made for review.
-- Post-build (`20d7b59d18`): capture continuity, exile links and the
-  one-pass batch go to pass 3 (choices made for review: plain
-  `capture_object_move`, one pass). Wire keys kept as built (review
-  recommendation; irreversible once shipped, listed in `questions.md`).
+- Post-build (`20d7b59d18`): pass 3 addressed capture continuity, exile
+  links, and the one-pass transaction. Quiet moves use plain
+  `capture_object_move` with the existing capture cause and replay keys.
   Token-catalog discovery and the hidden-hand limit are deferred below.
 
 ## Deferred findings

@@ -1,21 +1,25 @@
-at: fddd9a4d82bd9ea6e6fd0a6e7c978cc14e0106d7
+at: 8534640962b5182ab76df49a1d35864229789ce2
 first:
   - path: docs/engine-python.md
     why: Live edit examples and the entry contract
-  - path: managym/src/flow/state_edit.rs
-    why: Replay variants, validation and the live decision transaction
   - path: managym/__init__.pyi
-    why: Public Python constructors and keyword defaults
-  - path: managym/src/python/bindings.rs
-    why: Constructor validation and round-trippable representations
+    why: Public constructors and keyword defaults
+  - path: managym/src/flow/state_edit.rs
+    why: Replay variants and the single-pass rollback transaction
   - path: managym/recording.py
     why: Strict Python models for each replay variant
+  - path: managym/src/python/bindings.rs
+    why: Constructor validation and round-trippable representations
   - path: managym/src/flow/zones.rs
     why: Shared departure knowledge and permanent installation
+  - path: managym/src/flow/card_capture.rs
+    why: Shared capture records and token attribution
+  - path: managym/src/agent/observation.rs
+    why: Exile link visibility follows the live appearance
   - path: tests/env/test_game_state_edits.py
-    why: Combat offers, rollback, cold replay and vector restore
+    why: Combat offers, cold replay, card facts, and vector restore
   - path: managym/src/flow/state_edit/tests.rs
-    why: Quiet entry, Aura legality, knowledge and statistics
+    why: Aura legality, exile links, meld, and statistics parity
   - path: managym/src/agent/env/state_edit_tests.rs
     why: Refreshed combat offers and cold replay
   - path: tests/academy/test_game_records.py
