@@ -714,28 +714,21 @@ independent FIFOs but share immutable entries, source lists, output alternatives
 and tap-candidate lists. Reservations detach source lists on writes. The cache
 stays outside hashes and observations; debug builds recompute every hit.
 
-When a mana source can change rules state that another source, cost or
-replacement reads — life totals, counters, sacrifices (including delve
-graveyards and sacrifice-count outputs), keywords, static grants or
-replacement-effect choices — `PaymentModel` answers through a coupled fork
-search instead of the pure path and bypasses `PaymentCache`. For example, at 4
-life with Tarnished Citadel, The Great Henge and a damage replacement that adds
-life gained this turn, only Citadel-first is offered and the payment completes
-at 1 life; with Angel of Vitality, Raucous Audience and Tarnished Citadels (or
-The Great Henge), a spell is castable exactly when some order of sources pays
-it, and only completing first steps are offered. A cached board profile
-classifies each source from a closed whitelist of pure rules facts; boards with
-no mutating source stay on the uncoupled direct and search paths with no fork
-overhead. Coupled searches step candidate activations, taps, mana choices,
-Delve exiles and replacement orders natively on game forks using the fork's
-real mana pool. Their memo key represents the payment state and omits event
-logs, priority and `id_gen`. While a player is paying a cost,
-`Decision::OrderReplacement` offers and admits only orders that still allow
-the payment to complete (for example,
-applying Caradora before Doubling Season during a `{G}{G}` payment; a sole
-completing order is taken under `skip_trivial`). An opponent's replacement order
-is never filtered: the payment is offered only when every legal opponent order
-still completes it. Outside a payment, all replacement orders remain offered.
+A cached board profile identifies payments where one step can change a later
+cost or mana output. For those payments, `PaymentModel` tries activations,
+taps, Delve exiles and choices on game forks. Each fork uses its own mana pool
+and can finish with the pure solver once its remaining sources suffice. The
+search remembers failed payment states within the query. Its key includes the
+remaining obligations, board resources and continuation. Ordinary boards use
+the pure solver and its shared `PaymentCache`.
+
+For example, at 4 life with Tarnished Citadel, The Great Henge and a damage
+replacement that adds life gained this turn, only Citadel first lets the payer
+finish at 1 life. If paying opens `Decision::OrderReplacement`, the payer sees
+only orders that can complete the payment. An opponent keeps every choice,
+so the payment must succeed in every order the opponent can choose.
+`skip_trivial` takes a sole completing order. Outside a payment, all
+replacement orders remain available.
 
 Automatic-prefix searches start at the fewest taps whose largest fixed outputs
 or waterbend contributions could cover the pool shortfall, conservatively
@@ -1167,21 +1160,16 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   non-simple mana abilities such as Treasure remain explicit). On coupled
   boards, completing choice taps stay available alongside Pay.
 
-Cast, activation and resolution payments use the same feasibility check for
-mana, life, help and coupled board changes. Mana abilities can change the
-payer's life, counters, sacrifices, keywords or static grants during payment, or
-open a replacement-effect order choice: every offered cast, activation, tap,
-color choice or payer replacement order leads to a completed payment, and orders
-that would strand the cost are omitted. For example, tapping a Mountain making
-`{U}{R}` beside a Heartbeat of Spring matching tapped lands pauses on the
-blue/red bonus choice before committing its mana, then completes the cast (and
-automatic payment completes through that choice as well); tapping a
-trample-counter Mountain beside a trample-reading Heartbeat offers tapping first
-and omits spending the counter into a dead end. A Delve exile that would weaken
-a mana source needed to finish paying appears once the payer has enough other
-mana or has produced the needed mana from that source. The check carries signed
-life through payment steps, accounting for self-damage, life gain and their
-replacements. Paying zero life is always legal. Positive
+Cast, activation and resolution payments use the same feasibility check.
+Each offered payment step leaves a way to finish. For example, tapping a
+Mountain that makes `{U}{R}` beside a Heartbeat of Spring matching tapped
+lands opens the blue/red bonus choice before committing the new mana. The
+automatic payer also completes through that choice. A Delve exile that would
+weaken a needed mana source becomes available after the source produces its
+mana or another source can cover the cost.
+
+The check carries signed life through production, self-damage, life gain and
+their replacements. Paying zero life is always legal. Positive
 fees require a life total that can change and covers the fee (CR 119.4, 119.8).
 A life fee on the announced cost follows mana production, so life gained along
 the way can fund it. State-based loss for zero or less life is
@@ -1323,8 +1311,7 @@ non-mana activated ability previews its fee; `PayCost` previews the pending
 payment. A fixed source-tap offer previews tapping that source and then paying
 automatically, with the chosen source first; if tapping that source triggers a
 bonus mana choice, the preview reports `needs_choice`. Each source carries its
-object reference, name
-and output; pools carry the six amounts and the restriction, spend-effect and
+object reference, name and output. Pools carry the six amounts and the restriction, spend-effect and
 combat-expiry classes of the mana in them.
 
 This is an inspection API for Academy and tools. It adds no action,

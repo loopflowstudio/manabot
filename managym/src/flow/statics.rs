@@ -600,9 +600,7 @@ impl Game {
             for permissions in &mut play_permissions {
                 permissions.extra_land_plays += land_plays_each_player;
             }
-            arithmetic.reads_tapped |= evaluated.reads.tapped;
-            arithmetic.reads_mana |= evaluated.reads.mana;
-            arithmetic.reads_life |= evaluated.reads.life;
+            arithmetic.reads.merge(evaluated.reads);
             LayerBoard {
                 player_modifications,
                 control_changes,

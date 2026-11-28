@@ -32,6 +32,18 @@ fn put(game: &mut Game, name: &str) -> PermanentId {
     game.scenario_force_battlefield(PAYER, name, true).unwrap()
 }
 
+fn put_forest_in_graveyard(game: &mut Game) -> ObjectId {
+    let forest = game
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, PAYER)
+        .iter()
+        .copied()
+        .find(|&card| game.state[card].name == "Forest")
+        .unwrap();
+    game.move_object(forest, ZoneType::Graveyard)
+}
+
 fn activate(permanent: PermanentId, ability_index: usize) -> Action {
     Action::ActivateAbility {
         player: PAYER,
@@ -680,16 +692,7 @@ fn coupled_delve_waits_for_graveyard_reading_mana() {
             ..Default::default()
         }];
         let spell = only_card_in_main(&mut game, PAYER, "Gray Ogre");
-        game.scenario_force_card_in_hand(PAYER, "Forest").unwrap();
-        let extra = game
-            .state
-            .zones
-            .zone_objects(ZoneType::Hand, PAYER)
-            .iter()
-            .copied()
-            .find(|card| *card != spell)
-            .unwrap();
-        let graveyard = game.move_object(extra, ZoneType::Graveyard);
+        let graveyard = put_forest_in_graveyard(&mut game);
         game.state[spell].mana_cost = Some(ManaCost::parse("1GGG"));
         game.state[spell]
             .additional_costs
@@ -861,16 +864,7 @@ fn coupled_improvise_must_tap_before_delve_removes_the_artifact_type() {
         vec![Modification::AddTypes(vec![CardType::Artifact])],
     )];
     let spell = only_card_in_main(&mut game, PAYER, "Gray Ogre");
-    game.scenario_force_card_in_hand(PAYER, "Forest").unwrap();
-    let extra = game
-        .state
-        .zones
-        .zone_objects(ZoneType::Hand, PAYER)
-        .iter()
-        .copied()
-        .find(|card| *card != spell)
-        .unwrap();
-    let graveyard = game.move_object(extra, ZoneType::Graveyard);
+    let graveyard = put_forest_in_graveyard(&mut game);
     game.state[spell].mana_cost = Some(ManaCost::parse("2GG"));
     game.state[spell].additional_costs = vec![AdditionalCost::Delve, AdditionalCost::Improvise];
     game.state

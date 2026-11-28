@@ -1,6 +1,7 @@
 //! Board facts that determine whether a frozen payment model is sufficient.
 
 use super::*;
+use crate::flow::layers::StateReads;
 use crate::state::card::{LayerValue, StaticAbility};
 use crate::state::{effect::Modification, predicate::CardPredicate};
 
@@ -14,9 +15,7 @@ pub(in crate::flow) struct BoardArithmeticProfile {
     damage_replacements: bool,
     life_replacements: bool,
     counter_or_zone_replacements: bool,
-    pub(in crate::flow) reads_tapped: bool,
-    pub(in crate::flow) reads_mana: bool,
-    pub(in crate::flow) reads_life: bool,
+    pub(in crate::flow) reads: StateReads,
 }
 
 impl BoardArithmeticProfile {
@@ -30,22 +29,14 @@ impl BoardArithmeticProfile {
                         ..Default::default()
                     })
             }),
-            stateful_abilities: view.activated_abilities.iter().any(|ability| {
-                ability.is_mana_ability()
-                    && (ability.has_dynamic_mana_output()
-                        || ability.condition.is_some()
-                        || ability.cost_reduction_per.is_some()
-                        || ability.reduce_by_source_power
-                        || ability.tap_cost.is_some())
-            }),
             ..Default::default()
         };
-        if profile.stateful_abilities {
-            for ability in &view.activated_abilities {
-                let reads = crate::flow::layers::mana_ability_reads(ability);
-                profile.reads_mana |= reads.mana;
-                profile.reads_tapped |= reads.tapped;
-                profile.reads_life |= reads.life;
+        for ability in &view.activated_abilities {
+            if ability.is_mana_ability() && ability_reads_board(ability) {
+                profile.stateful_abilities = true;
+                profile
+                    .reads
+                    .merge(crate::flow::layers::mana_ability_reads(ability));
             }
         }
         for ability in &view.static_abilities {
@@ -85,7 +76,7 @@ impl BoardArithmeticProfile {
             StaticAbility::ActivatedAbilitiesCostLess { predicate, .. } => {
                 self.stateful_statics = true;
                 self.writes_non_pt = true;
-                self.reads_tapped |= crate::flow::layers::payment_predicate_reads(predicate).tapped;
+                self.reads.tapped |= crate::flow::layers::payment_predicate_reads(predicate).tapped;
             }
             StaticAbility::Ward(_)
             | StaticAbility::HexproofFrom(_)
@@ -122,12 +113,10 @@ impl BoardArithmeticProfile {
     }
 
     pub(in crate::flow) fn add_effect(&mut self, modification: &Modification) {
-        match modification {
-            Modification::ExileIfWouldDie | Modification::ExileIfWouldLeave => {
-                self.counter_or_zone_replacements = true;
-            }
-            _ => {}
-        }
+        self.counter_or_zone_replacements |= matches!(
+            modification,
+            Modification::ExileIfWouldDie | Modification::ExileIfWouldLeave
+        );
     }
 
     pub(in crate::flow) fn merge(&mut self, other: Self) {
@@ -139,13 +128,11 @@ impl BoardArithmeticProfile {
         self.damage_replacements |= other.damage_replacements;
         self.life_replacements |= other.life_replacements;
         self.counter_or_zone_replacements |= other.counter_or_zone_replacements;
-        self.reads_tapped |= other.reads_tapped;
-        self.reads_mana |= other.reads_mana;
-        self.reads_life |= other.reads_life;
+        self.reads.merge(other.reads);
     }
 
     pub(super) fn stateful_tap(self) -> bool {
-        self.reads_tapped || self.reads_mana
+        self.reads.tapped || self.reads.mana
     }
 
     pub(super) fn sensitive_tap(self) -> bool {
@@ -160,7 +147,7 @@ impl BoardArithmeticProfile {
         facts.counters
             || facts.unverified_suffix
             || facts.life
-                && (self.reads_life
+                && (self.reads.life
                     || self.stateful_statics
                     || self.stateful_triggers
                     || self.damage_replacements
@@ -183,4 +170,26 @@ pub(super) struct ActivationFacts {
     pub(super) rule_source: bool,
     pub(super) unverified_suffix: bool,
     pub(super) reads: bool,
+}
+
+/// Read the original definition before dynamic output is priced on this board.
+pub(super) fn ability_reads_board(ability: &ActivatedAbilityDefinition) -> bool {
+    ability.has_dynamic_mana_output()
+        || ability.condition.is_some()
+        || ability.tap_cost.is_some()
+        || ability.cost_reduction_per.is_some()
+        || ability.reduce_by_source_power
+}
+
+impl Game {
+    pub(super) fn supplies_payment_rules(&self, object: ObjectId, view: &Characteristics) -> bool {
+        !view.static_abilities.is_empty()
+            || !view.triggered_mana_abilities.is_empty()
+            || !self.state[object].replacement_effects.is_empty()
+            || self
+                .state
+                .exile_links
+                .iter()
+                .any(|link| link.source == object)
+    }
 }

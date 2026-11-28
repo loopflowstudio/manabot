@@ -150,7 +150,7 @@ impl Game {
         }
         model.payable(
             pool.clone(),
-            self.cost_obligations(player, cost, permissions, life, model.coupled().is_some()),
+            self.cost_obligations(player, cost, permissions, life, model.coupled.is_some()),
             SourcePolicy::All,
         )
     }
@@ -174,7 +174,7 @@ impl Game {
             return candidates;
         }
         let model = self.payment_model(player, None);
-        if let Some(coupled) = model.coupled() {
+        if let Some(coupled) = &model.coupled {
             let pool = self.pooled_mana(player);
             let obligations = self.payment_obligations_for(player, &model);
             candidates.retain(|&object| {
@@ -275,7 +275,7 @@ impl Game {
                 if asked.is_empty() {
                     return None;
                 }
-                if let Some(coupled) = model.coupled() {
+                if let Some(coupled) = &model.coupled {
                     let obligations = self.cost_obligations(player, cost, permissions, life, true);
                     let options: Vec<_> = asked
                         .into_iter()

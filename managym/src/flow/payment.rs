@@ -235,7 +235,7 @@ pub(crate) fn pay_pip_with(
 
 /// The ways a payer may pay part of a mana cost with something other than
 /// mana, fixed as the cost is announced.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct Help {
     /// Generic mana that taps of untapped artifacts and creatures may pay,
     /// {1} each (waterbend), as announced; taps made are the receipt's
@@ -274,7 +274,7 @@ impl Help {
 /// Copyable permission bundle for paying one mana cost with non-mana help:
 /// which help rules apply, how much generic remains payable by waterbend taps,
 /// and an optional permanent already tapped by the operation itself.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub(crate) struct CostPermissionContext {
     pub help: Help,
     pub waterbend: u8,
@@ -1406,15 +1406,9 @@ impl Game {
         let tap = payment.owes(&CostComponent::Source(How::Tapped));
         let mut frame = EffectFrame::new(player, Vec::new());
         frame.completion = match payment.operation {
-            operation @ Operation::Spell(_) => {
+            Operation::Spell(_) => {
                 frame.batch = Some(self.announced_cost_batch(&payment.receipt, []));
-                FrameCompletion::Paid {
-                    player,
-                    payment: Payment {
-                        operation,
-                        ..payment
-                    },
-                }
+                FrameCompletion::Paid { player, payment }
             }
             Operation::Activation {
                 source,
