@@ -3,7 +3,6 @@
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional
-import warnings
 
 import typer
 
@@ -163,54 +162,6 @@ def belief_learn_demo_command(
         steps=steps,
         seed=seed,
     )
-
-
-@app.command("export-game")
-def export_game_command(
-    source: Path = typer.Argument(..., help="Recorded games directory or receipt"),
-    out: Path = typer.Option(..., help="Output .game.jsonl.gz"),
-    game: str | None = typer.Option(None, help="Game index or receipt digest prefix"),
-    players: tuple[str, str] | None = typer.Option(None, help="Names of the two seats"),
-) -> None:
-    """Export one complete training game without loading its policy."""
-    warnings.warn(
-        "export-game is deprecated; open records directly with managym academy replay; removal in 0.3.0",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    from manabot.sim.recording import TrainingGames
-
-    try:
-        recorded = TrainingGames(source)
-        games = recorded.games()
-        if not games:
-            raise ValueError(
-                f"{source} holds no complete game ({recorded.cut_off} cut off)"
-            )
-        if game is None and len(games) != 1:
-            typer.echo(
-                f"{source} holds {len(games)} complete games ({recorded.cut_off} cut off); select one with --game <index-or-digest>."
-            )
-            seed_width = max(4, *(len(str(item.seed)) for item in games))
-            typer.echo(f"  game  {'seed':<{seed_width}}  stream  decisions  receipt")
-            for index, item in enumerate(games):
-                typer.echo(
-                    f"  {index:4}  {item.seed:<{seed_width}}  {item.stream:<6}  {item.decisions:<9}  {item.receipt_sha256[:12]}"
-                )
-            raise typer.Exit(2)
-        if game is None:
-            selected = games
-        elif game.isdecimal():
-            selected = games[int(game) : int(game) + 1]
-        else:
-            selected = [g for g in games if g.receipt_sha256.startswith(game)]
-        if len(selected) != 1:
-            raise ValueError(
-                "select exactly one complete game by index or receipt digest prefix"
-            )
-        typer.echo(str(selected[0].export(out, players=players)))
-    except (ValueError, OSError) as error:
-        raise typer.BadParameter(str(error)) from error
 
 
 def main(argv: Sequence[str] | None = None) -> None:

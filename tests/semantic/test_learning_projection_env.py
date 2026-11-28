@@ -3,10 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.semantic.learning import BoundSemanticPack
 from manabot.verify.text_observation import keep_opening_hands
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def _engine() -> managym.Env:
@@ -59,9 +60,13 @@ def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_ref
     projection = pack.project_observation(visible, identity_mode="semantic_only")
     assert not projection.opaque_identity_valid.any()
     assert (projection.opaque_identity_ids == -1).all()
-    assert any(card.name == "Invasion Reinforcements" for card in visible.agent_cards)
+    assert any(
+        card.characteristics.name == "Invasion Reinforcements"
+        for card in visible.agent_cards
+    )
     assert all(
-        card.name != "Invasion Reinforcements" for card in visible.opponent_cards
+        card.characteristics.name != "Invasion Reinforcements"
+        for card in visible.opponent_cards
     )
 
     rows = {
@@ -87,7 +92,7 @@ def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_ref
     assert _projection_bytes(hidden_variants[0]) == _projection_bytes(projection)
     assert _projection_bytes(hidden_variants[1]) == _projection_bytes(projection)
 
-    encoded = encode_observation(ObservationSpace(), visible)
+    encoded = observation_arrays(ObservationSpace(), visible)
     assert set(encoded) == set(ObservationSpace().shapes)
     assert all(
         encoded[key].shape == shape for key, shape in ObservationSpace().shapes.items()

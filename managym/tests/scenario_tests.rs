@@ -33,7 +33,7 @@ fn villain_bomb_deck() -> BTreeMap<String, usize> {
 }
 
 fn make_env(seed: u64) -> Env {
-    let mut env = Env::new(seed, true, false, false);
+    let mut env = Env::new(seed, true, false);
     let p0 = PlayerConfig::new("hero", hero_counter_deck());
     let p1 = PlayerConfig::new("villain", villain_bomb_deck());
     env.reset(vec![p0, p1]).expect("reset should succeed");

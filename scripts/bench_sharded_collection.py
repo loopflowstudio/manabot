@@ -1,4 +1,4 @@
-"""Time four-worker buffered steps and slot refills, hashing each batch's outcomes."""
+"""Time four-worker steps and refills. Hash packed legal offers, choices and outcomes."""
 
 import argparse
 from contextlib import closing
@@ -9,7 +9,7 @@ from time import perf_counter
 
 import numpy as np
 
-from manabot.env.observation import ObservationSpace, allocate_vector_buffers
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
 
@@ -32,7 +32,7 @@ def main() -> None:
     seed = 24
     rng = random.Random(seed)
     space = ObservationSpace()
-    buffers = allocate_vector_buffers(space, streams)
+    buffers = step_buffers(streams)
     setup = managym.GameSetup(
         [
             managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
@@ -42,7 +42,9 @@ def main() -> None:
     digest = hashlib.sha256()
     seconds = 0.0
     with closing(ShardedVectorEnv(streams, seed, workers=4)) as env:
-        env.set_buffers(buffers, layout=space.layout)
+        env.set_observation_layout(
+            buffers, action_overflow=space.config.action_overflow, layout=space.layout
+        )
         env.reset_all_into_buffers(setup)
         for _ in range(batches):
             done = np.flatnonzero(
@@ -54,12 +56,12 @@ def main() -> None:
                     [managym.SlotLoad.fresh(int(s)) for s in done]
                 )
                 seconds += perf_counter() - start
-            actions = [
-                int(rng.choice(np.flatnonzero(mask)))
-                for mask in buffers["actions_valid"]
-            ]
-            digest.update(buffers["actions"])
-            digest.update(buffers["actions_valid"])
+            rows = env.observation_rows()
+            batch = rows[0][0].gather(rows)
+            actions = [rng.randrange(count) for count in batch.action_counts]
+            _, offsets, values = batch.tables()["actions"]
+            digest.update(offsets)
+            digest.update(values)
             digest.update(np.asarray(actions, dtype="<u4"))
             start = perf_counter()
             env.step_into_buffers(actions)

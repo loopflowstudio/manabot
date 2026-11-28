@@ -129,7 +129,7 @@ def test_incompatible_checkpoint_is_refused_with_the_mismatch(runs: Path) -> Non
         message = _new_game_error(
             client,
             {
-                "villain_type": "checkpoint",
+                "villain_type": "policy",
                 "opponent_sha256": _id(runs / "older" / "step_0.pt"),
             },
         )
@@ -138,7 +138,7 @@ def test_incompatible_checkpoint_is_refused_with_the_mismatch(runs: Path) -> Non
         message = _new_game_error(
             client,
             {
-                "villain_type": "checkpoint",
+                "villain_type": "policy",
                 "opponent_sha256": _id(runs / "self-play" / "step_0.pt"),
                 "hero_deck": "interactive",
                 "villain_deck": "interactive",
@@ -162,7 +162,7 @@ def test_chosen_checkpoint_plays_either_deck_and_is_recorded(
                 {
                     "type": "new_game",
                     "config": {
-                        "villain_type": "checkpoint",
+                        "villain_type": "policy",
                         "opponent_sha256": sha256,
                         "hero_deck": hero_deck,
                         "villain_deck": villain_deck,
@@ -202,7 +202,7 @@ def test_replaced_checkpoint_cannot_replace_playable_match(runs: Path) -> None:
     before = game.current_recovery("explicit_resync")["frame"]
     checkpoint.write_bytes(b"different bytes")
     with pytest.raises(ValueError, match="not a policy checkpoint|changed"):
-        game.new_game({"villain_type": "checkpoint", "opponent_sha256": sha256})
+        game.new_game({"villain_type": "policy", "opponent_sha256": sha256})
     assert game.current_recovery("explicit_resync")["frame"] == before
 
 
@@ -230,7 +230,7 @@ def test_imported_decks_play_world_checkpoints_and_refuse_setup_bindings(
         message = _new_game_error(
             client,
             {
-                "villain_type": "checkpoint",
+                "villain_type": "policy",
                 "opponent_sha256": _id(runs / "self-play" / "step_0.pt"),
                 "deck_import": _deck_import(),
             },
@@ -241,7 +241,7 @@ def test_imported_decks_play_world_checkpoints_and_refuse_setup_bindings(
                 {
                     "type": "new_game",
                     "config": {
-                        "villain_type": "checkpoint",
+                        "villain_type": "policy",
                         "opponent_sha256": _id(world),
                         "deck_import": _deck_import(),
                         "seed": 7,
@@ -400,15 +400,3 @@ def test_setup_preview_names_bound_decks_without_loading(runs: Path) -> None:
         assert checked["compatible"] is True
         assert checked["reason"] is None
         assert checked["fit"]["status"] == "unknown"
-
-
-def test_retained_checkpoint_loader_accepts_omitted_setup(runs: Path) -> None:
-    from manabot.sim.table_bots import CheckpointVillain
-
-    with pytest.warns(DeprecationWarning, match="removed in 0.3.0"):
-        policy = CheckpointVillain(str(runs / "self-play" / "step_0.pt"))
-    try:
-        assert policy.agent is not None
-        assert policy.obs_space is not None
-    finally:
-        policy.close()

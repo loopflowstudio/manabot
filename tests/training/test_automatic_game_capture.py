@@ -1,5 +1,6 @@
 """Strict paths retain replay inputs without opting into tolerance or recovery."""
 
+from contextlib import closing
 import json
 from pathlib import Path
 import subprocess
@@ -16,11 +17,9 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
-from manabot.env.failures import CaptureScope, capture_scope, runtime_identities
+from manabot.env.failures import CaptureScope, RecordedVectorEnv, capture_scope
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
-from manabot.env.replay import require_replay_runtime
-from manabot.env.vector_env import VectorEnv
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.sim import rollout
 from manabot.training.rollout import selection_data
@@ -69,50 +68,6 @@ def _bounded(path: Path) -> dict[str, Any]:
     return json.loads(result.stdout)
 
 
-@pytest.mark.parametrize("field", ["engine_extension_sha256", "source_sha256"])
-@pytest.mark.parametrize("allow_changed_runtime", [False, True])
-def test_replay_runtime_admission(field: str, allow_changed_runtime: bool) -> None:
-    identities = {**runtime_identities(), field: "changed"}
-    if not allow_changed_runtime:
-        with pytest.raises(ValueError, match="differs|bytes differ"):
-            require_replay_runtime(
-                identities,
-                allow_changed_runtime=allow_changed_runtime,
-                require_source=True,
-            )
-    else:
-        assert (
-            require_replay_runtime(
-                identities, allow_changed_runtime=True, require_source=True
-            )
-            == runtime_identities()["engine_extension_sha256"]
-        )
-
-
-def test_replay_runtime_ignores_historical_world_label() -> None:
-    # Historical records may carry a world label; current readers ignore it.
-    with_world = {**runtime_identities(), "world": "changed"}
-    assert (
-        require_replay_runtime(
-            with_world, allow_changed_runtime=False, require_source=True
-        )
-        == runtime_identities()["engine_extension_sha256"]
-    )
-
-
-def test_replay_requires_source_only_for_automatic_records() -> None:
-    identities = runtime_identities().copy()
-    del identities["source_sha256"]
-    assert (
-        require_replay_runtime(identities, allow_changed_runtime=False)
-        == identities["engine_extension_sha256"]
-    )
-    with pytest.raises(KeyError, match="source_sha256"):
-        require_replay_runtime(
-            identities, allow_changed_runtime=False, require_source=True
-        )
-
-
 def test_scalar_prefix_and_reset_capture(tmp_path: Path) -> None:
     scope = CaptureScope(tmp_path, lambda: {"update": 7, "allocation_deadline": 123.0})
     with capture_scope(scope):
@@ -146,23 +101,22 @@ def test_bounded_replay_separates_binding_and_error_agreement(
     scope = CaptureScope(tmp_path / "original")
     with capture_scope(scope):
         if mode == "vector":
-            vector = VectorEnv(
-                1, Match(), ObservationSpace(), Reward(RewardConfig()), "cpu", seed=24
-            )
-            vector.reset()
-            with pytest.raises(managym.AgentError):
-                vector.step(torch.tensor([-1]))
+            with closing(RecordedVectorEnv(num_envs=1, seed=24)) as vector:
+                vector.set_observation_layout(
+                    step_buffers(1), layout=ObservationSpace().layout
+                )
+                vector.reset_all_into_buffers(Match().to_rust())
+                with pytest.raises(managym.AgentError):
+                    vector.step_into_buffers([-1])
         else:
             env = _env()
             env.reset()
             if mode == "search":
                 pool = env.rollout_pool(1, 1, 197, 100)
-                space = ObservationSpace()
-                buffers = rollout.allocate_buffers(space, pool.num_slots)
-                pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
-                pool.encode_active()
+                pool.set_observation_layout(ObservationSpace().layout)
+                pool.encode_active_batch()
                 with pytest.raises(managym.AgentError):
-                    pool.step_active([-1] * pool.num_slots)
+                    pool.step_active_batch([-1] * pool.num_slots)
             else:
                 with pytest.raises(managym.AgentError):
                     env.step(-1)
@@ -194,33 +148,33 @@ def test_bounded_replay_separates_binding_and_error_agreement(
 
 
 @pytest.mark.parametrize("policy", ["agent", "random"])
-def test_ordinary_vector_replays_current_game_after_autoreset(
+def test_ordinary_vector_replays_current_game_after_refill(
     tmp_path: Path,
     policy: str,
 ) -> None:
     scope = CaptureScope(tmp_path)
-    with capture_scope(scope):
-        env = VectorEnv(
-            2,
-            Match(),
-            ObservationSpace(),
-            Reward(RewardConfig()),
-            "cpu",
-            seed=24,
-            player_policies=("agent", policy),
-        )
-        env.reset()
+    with (
+        capture_scope(scope),
+        closing(
+            RecordedVectorEnv(num_envs=2, seed=24, player_policies=("agent", policy))
+        ) as env,
+    ):
+        outcomes = step_buffers(2)
+        env.set_observation_layout(outcomes, layout=ObservationSpace().layout)
+        env.reset_all_into_buffers(Match().to_rust())
         for _ in range(2000):
-            _, _, done, truncated, _ = env.step(torch.zeros(2, dtype=torch.int64))
-            if bool((done | truncated).any()):
+            env.step_into_buffers([0, 0])
+            done = np.flatnonzero(outcomes["terminated"] | outcomes["truncated"])
+            if done.size:
+                env.load_slots_into_buffers(
+                    [managym.SlotLoad.fresh(int(slot)) for slot in done]
+                )
                 break
         else:
-            pytest.fail(
-                "fixture failed to reach a terminal before the wrapper refilled it"
-            )
-        seeds = env._rust_env.current_game_seeds()
+            pytest.fail("fixture failed to finish a game")
+        seeds = env.current_game_seeds()
         with pytest.raises(managym.AgentError):
-            env.step(torch.tensor([-1, 0]))
+            env.step_into_buffers([-1, 0])
     evidence = read_record(scope.paths[0])
     assert [game.seed for game in evidence.games] == seeds
     assert evidence.seed_stride == 2
@@ -318,17 +272,15 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
             Reward(RewardConfig()),
             seed=24,
             enable_profiler=False,
-            enable_behavior_tracking=False,
         )
         env.failure_context.update(game_index=11)
         env.reset(seed=24)
         pool = env.rollout_pool(1, 1, 197, 100)
-        space = ObservationSpace()
-        buffers = rollout.allocate_buffers(space, pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
-        assert pool.encode_active()
+        pool.set_observation_layout(ObservationSpace().layout)
+        active, _ = pool.encode_active_batch()
+        assert active
         with pytest.raises(managym.AgentError):
-            pool.step_active([-1] * pool.num_slots)
+            pool.step_active_batch([-1] * pool.num_slots)
         with pytest.raises(managym.AgentError):
             env.step(-1)
     assert read_record(scope.paths[0]).mode == "search"
@@ -382,7 +334,7 @@ def test_value_search_failure_keeps_sampled_pool_actions(
     def invalid_actions(
         batch: managym.ObservationBatch, rng: np.random.Generator
     ) -> np.ndarray:
-        return np.full(len(batch.action_counts), -1, dtype=np.int64)
+        return np.full(batch.batch_size, -1, dtype=np.int64)
 
     monkeypatch.setattr(value, "_random_valid_actions", invalid_actions)
     scope = CaptureScope(tmp_path)
@@ -402,7 +354,7 @@ def test_rollout_evaluation_propagates_without_completed_denominator(
 ) -> None:
     class InvalidController:
         def select(
-            self, buffers: dict[str, np.ndarray], rows: np.ndarray
+            self, batch: managym.ObservationBatch, rows: np.ndarray
         ) -> np.ndarray:
             return np.full(len(rows), -1, dtype=np.int64)
 
@@ -539,12 +491,3 @@ def test_search_construction_failure_retains_original_error(tmp_path: Path) -> N
     assert failed.value is original
     evidence = read_record(scope.paths[0])
     assert evidence.mode == "search" and evidence.error == str(original)
-
-
-@pytest.mark.parametrize("name", ["GameRecord", "GameInputs", "PlayerSetup"])
-def test_portable_record_names_warn_before_removal(name: str) -> None:
-    from manabot.env import failures
-    from managym import recording
-
-    with pytest.warns(DeprecationWarning, match="removal in 0.3.0"):
-        assert getattr(failures, name) is getattr(recording, name)

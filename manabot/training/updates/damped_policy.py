@@ -18,9 +18,7 @@ policy forward (`Learner.loss`), which is how a functional framework takes a
 gradient.
 """
 
-from dataclasses import dataclass
 from typing import Any
-import warnings
 
 import numpy as np
 
@@ -29,7 +27,6 @@ from manabot.policy.prepare import reference_distribution
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.backend import (
-    AdmittedRollout,
     Array,
     Learner,
     Observations,
@@ -54,32 +51,6 @@ from manabot.training.updates.selection import (
     value_scale,
 )
 from manabot.training.updates.targets import BatchTargets, compute_batch_targets
-
-
-@dataclass(frozen=True)
-class DampedTargets:
-    advantages: Array
-    values: Array
-    selected: Array
-
-
-def compute_targets(
-    backend: UpdateBackend,
-    learner: Learner,
-    admitted: AdmittedRollout,
-    learning: DampedPolicyLearning,
-    bootstrap_agent: Policy | None = None,
-) -> DampedTargets:
-    """Compatibility reader for the original three damped target arrays."""
-    warnings.warn(
-        "compute_targets is deprecated and will be removed in 0.3.0; use compute_batch_targets",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    targets = compute_batch_targets(
-        backend, learner, admitted, learning, bootstrap_agent
-    )
-    return DampedTargets(targets.advantages, targets.value_targets, targets.selected)
 
 
 def update_damped_iteration(

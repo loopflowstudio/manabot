@@ -25,8 +25,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
-from manabot.env.replay import require_replay_runtime
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import MatchConfig, ObservationConfig
 import managym
 from managym.recording import Intervention, read_record
@@ -36,6 +35,7 @@ from managym.replay import (
     interventions_by_offset,
     matches_retained_error,
     replay_failure_inputs,
+    require_replay_runtime,
     run_bounded_replay,
 )
 
@@ -299,7 +299,6 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
         else None
     )
     # Replay the same fixed allocation at every step, as the collector does.
-    buffers = space.allocate() if space is not None else {}
     boundaries = interventions_by_offset(attempt)
     if any(offset > len(attempt.actions) for offset in boundaries):
         raise ValueError("intervention outside retained action prefix")
@@ -345,15 +344,7 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
         if space is not None:
             # Native gameplay alone cannot reproduce an allocation failure.
             try:
-                if space.one_token:
-                    managym.encode_observation_batch(
-                        [observation], space.layout, space.config.action_overflow
-                    )
-                else:
-                    # Deprecated v9/v10 dense path; removed in 0.3.0.
-                    managym.encode_observation_into(
-                        observation, space.layout, buffers, space.config.action_overflow
-                    )
+                encode_policy_batch(space, [observation])
             except managym.ObservationCapacity as error:
                 retained = matches_retained_error(
                     error, attempt.error_class, attempt.error

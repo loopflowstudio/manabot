@@ -9,7 +9,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 import json
 import math
-from pathlib import Path
 import random
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -27,7 +26,6 @@ from manabot.backends.mlx.checkpoint import (
 )
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
-from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 from manabot.training.state.optimizer import AdamState, admit_adam, admit_policy_arrays
@@ -145,15 +143,6 @@ def restore_sampling(
     mx.random.seed((high << 32) | low)
 
 
-def restore_legacy(
-    folder: Path, learner: Learner, ema: MLXActorCritic | None, *, step: int
-) -> None:
-    raise ValueError(
-        "learner.pt: this save was written by Torch object registration; "
-        "resume once on Torch to write a portable save"
-    )
-
-
 @dataclass
 class IncidentTensors:
     arrays: dict[str, mx.array] = field(default_factory=dict)
@@ -258,28 +247,19 @@ def capture_incident(
                 "slots": packed.slots,
                 "capacity": np.array(packed.capacity),
                 "log_probabilities": packed.log_probabilities,
-                **packed.fields,
             }.items():
                 retain(f"packed_actions/{name}", value, value)
         source = batch.recorded.rows
-        if isinstance(source, ObservationSelection):
-            selected_obs = source.select(batch.recorded.index[rows])
-        for name in source:
-            if isinstance(source, ObservationSelection):
-                size = (
-                    np.prod(source.space.shapes[name])
-                    * np.dtype(source.space.dtypes[name]).itemsize
-                )
-            else:
-                size = source[name][0].nbytes
+        selected_obs = source.select(batch.recorded.index[rows])
+        for name in source.fields:
+            size = (
+                np.prod(source.space.shapes[name])
+                * np.dtype(source.space.dtypes[name]).itemsize
+            )
             if len(rows) * size > remaining:
                 shapes[f"observation/{name}"] = {"omitted": "evidence byte budget"}
                 continue
-            sample = (
-                selected_obs[name]
-                if isinstance(source, ObservationSelection)
-                else source[name][batch.recorded.index[rows]]
-            )
+            sample = selected_obs.project(name)
             retain(f"observation/{name}", sample, sample)
 
     state = IncidentTensors(

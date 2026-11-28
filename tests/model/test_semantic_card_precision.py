@@ -25,7 +25,6 @@ from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.match import Match, Reward
-from manabot.env.memory_store import PrefixObservation
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
@@ -33,6 +32,7 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
+from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout import collection
 from manabot.training.rollout.collection import (
     close_collector,
@@ -48,7 +48,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def exercise_gru_memory(
     model: ActorCritic,
-    retained: PrefixObservation,
+    retained: ObservationSelection,
     precision: Literal["float32", "bf16"] = "float32",
 ) -> None:
     """Exercise cold/warm serving folds, learner fold, and stateless GRU memory."""
@@ -76,7 +76,15 @@ def exercise_gru_memory(
 
     for batch, expect_fold in (
         (on_device(model.prepare(retained), device), True),
-        (on_device(model.prepare(retained.materialize()), device), False),
+        (
+            on_device(
+                model.prepare(
+                    ObservationSelection(retained.space, retained.coordinates)
+                ),
+                device,
+            ),
+            False,
+        ),
     ):
         assert batch.memory is not None
         assert (batch.memory.fold is not None) is expect_fold

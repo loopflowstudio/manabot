@@ -7,9 +7,8 @@ use crate::support::{
 use managym::state::card::SpellProfile;
 use managym::{
     agent::{
-        action::ActionSpaceKind,
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig},
+        action::ActionSpaceKind, observation::Observation,
+        observation_encoder::ObservationEncoderConfig, observation_rows::InputRows,
     },
     flow::turn::StepKind,
     state::{
@@ -58,8 +57,8 @@ fn beorn_adds_bear_and_keeps_trample_after_kellan_replaces_types() {
         let obs = Observation::for_player(s.game(), PlayerId(0));
         let config = ObservationEncoderConfig::default();
         assert_eq!(
-            encode(&obs, &config).unwrap(),
-            encode(&Observation::for_player(&fork, PlayerId(0)), &config).unwrap()
+            InputRows::read(&obs, &config).unwrap(),
+            InputRows::read(&Observation::for_player(&fork, PlayerId(0)), &config).unwrap()
         );
     }
 }
@@ -1124,10 +1123,7 @@ fn flameshape_permission_terms_reach_the_policy_input() {
         play::{cast_card, cast_profile},
     };
     use managym::{
-        agent::{
-            observation_encoder::{FACT_DIM, PLAY_GRANT},
-            observation_layout::fact,
-        },
+        agent::{observation_encoder::PLAY_GRANT, observation_layout::fact},
         cards::tokens::name_value,
         state::{player::ManaPayment, zone::ZoneType},
     };
@@ -1144,10 +1140,10 @@ fn flameshape_permission_terms_reach_the_policy_input() {
 
     let grant_details = |viewer: usize| {
         let observation = Observation::for_player(s.game(), PlayerId(viewer));
-        let input = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+        let input = InputRows::read(&observation, &ObservationEncoderConfig::default()).unwrap();
         input
-            .facts
-            .chunks_exact(FACT_DIM)
+            .rows("facts")
+            .into_iter()
             .filter(|row| {
                 let id = ((row[fact::ID_HIGH] as u32) << 16) | row[fact::ID_LOW] as u32;
                 id == name_value(PLAY_GRANT) as u32

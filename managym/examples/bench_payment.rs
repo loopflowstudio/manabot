@@ -31,7 +31,7 @@ fn replay(path: &str) {
         .enumerate()
         .map(|(seat, deck)| PlayerConfig::new(format!("seat {seat}"), deck).submit_to_world())
         .collect();
-    let mut env = Env::new(seed, true, false, false);
+    let mut env = Env::new(seed, true, false);
     env.reset(GameSetup {
         players,
         decklists: DecklistMode::Closed,
@@ -98,7 +98,7 @@ fn board(label: &str, battlefield: &[(&str, usize)], hand: &[&str]) {
     }
     // Padding keeps the library non-empty; it never reaches the battlefield.
     *cards.entry("Plains".into()).or_default() += 20;
-    let mut env = Env::new(7, true, false, false);
+    let mut env = Env::new(7, true, false);
     env.reset(vec![
         PlayerConfig::new("subject", cards),
         PlayerConfig::new("idle", deck(&[("Plains", 40)])),

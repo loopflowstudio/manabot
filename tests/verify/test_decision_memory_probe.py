@@ -12,8 +12,10 @@ import torch
 
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.decision_memory_probe import HandProbe, _predict, fit
-from manabot.env.memory_store import MemoryStore, PrefixIdentity, PrefixObservation
+from manabot.env.memory_store import MemoryStore, PrefixIdentity
+from manabot.policy.captured_observations import unpack_observation
 from manabot.policy.prepare import Prepared
+from manabot.policy.spans import ObservationSelection
 import manabot.verify.decision_memory_probe as probe_module
 from manabot.verify.decision_memory_probe import (
     CAPACITIES,
@@ -25,12 +27,12 @@ from manabot.verify.decision_memory_probe import (
     game_losses,
     hand_presence,
     new_corpus,
+    probe_observations,
     probe_space,
     split_game,
 )
 import managym
 from managym.decision_memory import DecisionContext, DecisionRecord, PublicChoice
-from tests.model.test_decision_memory import encode_with_records
 
 
 def _planted() -> Corpus:
@@ -70,10 +72,14 @@ def _planted() -> Corpus:
                 references=[],
             ),
         )
-        encoded = encode_with_records(space, raw, [record])
-        dense = {key: value[None] for key, value in encoded.items()}
-        prefix = store.capture(dense, 0, PrefixIdentity("fixture", 0, str(signal)))
-        observations.append(PrefixObservation(dense, [prefix], CAPACITIES))
+        payload = json.loads(raw.toJSON())
+        payload["decision_memory"] = [record.model_dump(mode="json")]
+        batch = managym.encode_observation_batch(
+            [managym.Observation.from_json(json.dumps(payload))], space.layout
+        )
+        selection = ObservationSelection(space, ((batch, 0),))
+        prefix = store.capture(selection, 0, PrefixIdentity("fixture", 0, str(signal)))
+        observations.append((batch.blank_decision_memory(), prefix))
     corpus = Corpus([], [], ("target",))
     # Both signals occur in every game, with separate whole-game splits.
     for game in range(60):
@@ -84,7 +90,7 @@ def _planted() -> Corpus:
                     0,
                     signal,
                     "open",
-                    observations[signal],
+                    *observations[signal],
                     np.zeros(3, np.float32),
                     np.array([0.5], np.float32),
                 )
@@ -166,22 +172,29 @@ def test_labels_stay_outside_recorded_and_prepared_inputs(tmp_path: Path) -> Non
     }
     model = HandProbe(corpus, "gru", 1)
     assert model.policy is not None
-    for row in corpus.rows:
-        assert set(row.observation) <= set(probe_space().shapes)
-        assert not {"label", "labels", "presence", "target"} & row.observation.keys()
-    with np.load(tmp_path / "row-00000.npz") as recorded:
-        assert set(recorded.files) == set(probe_space().shapes)
-        for key, value in corpus.rows[0].observation.materialize().items():
-            np.testing.assert_array_equal(value, recorded[key])
-    dense = corpus.rows[0].observation.materialize()
-    batch = on_device(model.policy.prepare(dense), "cpu")
+    space = model.policy.observation_space
+    expected = probe_observations([corpus.rows[0]], space)
+    with np.load(tmp_path / "row-00000.npz", allow_pickle=False) as recorded:
+        assert not {"label", "labels", "presence", "target"}.intersection(
+            recorded.files
+        )
+        restored = unpack_observation(recorded, space)
+    assert restored.batch.to_bytes() == expected.batch.to_bytes()
+
+    def summaries(selection: ObservationSelection) -> torch.Tensor:
+        return model.policy.encode_decision_memory(
+            on_device(model.policy.prepare(selection), "cpu")
+        )
+
+    torch.testing.assert_close(summaries(restored), summaries(expected), atol=0, rtol=0)
+    batch = on_device(model.policy.prepare(expected), "cpu")
     before = model.policy.encode_decision_memory(batch).detach().clone()
     corpus.labels[0][:] = 1 - corpus.labels[0]
     torch.testing.assert_close(
         before, model.policy.encode_decision_memory(batch), atol=0, rtol=0
     )
     with pytest.raises(TypeError):
-        model.policy.encode_decision_memory(dense)  # type: ignore[arg-type]
+        model.policy.encode_decision_memory(expected)  # type: ignore[arg-type]
 
 
 def test_native_capacity_failure_discards_the_whole_game(

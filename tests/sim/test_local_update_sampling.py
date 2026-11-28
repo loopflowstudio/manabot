@@ -1,6 +1,7 @@
 """Fixture-only direct sampling, replay and lifecycle checks; no optimizer runs."""
 
 from dataclasses import asdict, dataclass, replace
+import json
 from pathlib import Path
 from typing import Callable, Sequence, cast
 
@@ -10,11 +11,13 @@ import torch
 
 from manabot.backends import resolve
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
+from manabot.belief.checkpoint import FORMAT
 from manabot.belief.sampling_types import SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
+from manabot.policy.checkpoint import encode_safetensors
 from manabot.policy.prepare import Prepared
 from manabot.policy.spans import observation_spans
 from manabot.sim.search.branch import BranchSession
@@ -37,6 +40,7 @@ from managym.decision import (
     Observation,
 )
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 from tests.sim import test_local_update as fixtures
 from tests.sim.test_local_update import make_teacher
@@ -51,19 +55,21 @@ def saved_sampler(teacher: LocalUpdateTeacher, path: Path) -> SamplerArtifact:
     model = AutoregressiveBeliefSampler(schema, hidden_size=8)
     identity = teacher.likelihood.checkpoint_sha256
     world = sampling_digest(teacher.agent.world_binding)
-    torch.save(
-        {
-            "format": "manabot.autoregressive-belief-sampler/v1",
-            "schema": asdict(schema),
-            "schema_identity": schema.identity,
-            "dataset_identity": "untrained-fixture",
-            "policy_identity": identity,
-            "world_identity": world,
-            "hidden_size": 8,
-            "history_dropout": 0.0,
-            "state_dict": model.state_dict(),
-        },
-        path,
+    metadata = {
+        "format": FORMAT,
+        "schema": asdict(schema),
+        "schema_identity": schema.identity,
+        "dataset_identity": "untrained-fixture",
+        "policy_identity": identity,
+        "world_identity": world,
+        "hidden_size": model.hidden_size,
+        "history_dropout": model.history_dropout,
+    }
+    path.write_bytes(
+        encode_safetensors(
+            resolve("torch").belief.sampler_parameters(model),
+            {key: json.dumps(value) for key, value in metadata.items()},
+        )
     )
     return SamplerArtifact(
         path=path,
@@ -80,7 +86,9 @@ def test_direct_search_lifecycle_and_receipt(
     tmp_path: Path, learned: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     original, env = make_teacher(tmp_path)
-    artifact = saved_sampler(original, tmp_path / "sampler.pt") if learned else None
+    artifact = (
+        saved_sampler(original, tmp_path / "belief.safetensors") if learned else None
+    )
     teacher = LocalUpdateTeacher(
         original.likelihood.checkpoint,
         original.likelihood.checkpoint_sha256,
@@ -218,7 +226,7 @@ def test_learned_arena_replay_without_fitting(
             teacher.likelihood.checkpoint,
             teacher.likelihood.checkpoint_sha256,
             teacher.config.model_copy(update={"sampling": "learned"}),
-            sampler=saved_sampler(teacher, directory / "saved-sampler.pt"),
+            sampler=saved_sampler(teacher, directory / "belief.safetensors"),
             backend=resolve("torch"),
         )
 
@@ -446,13 +454,12 @@ def test_batched_search_checks_deadline_after_forward(
         teacher.search(env._engine, history, seed=17)
 
 
-@pytest.mark.parametrize("native_encoder", [True, False])
 def test_batch_rejects_incomplete_and_nonfinite_rows(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, native_encoder: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    teacher, env = make_teacher(tmp_path, native_encoder=native_encoder)
+    teacher, env = make_teacher(tmp_path)
     # A fresh teacher, so native frontier buffers are first sized for this space.
-    narrow, _ = make_teacher(tmp_path, native_encoder=native_encoder)
+    narrow, _ = make_teacher(tmp_path)
     with monkeypatch.context() as patch:
         patch.setattr(
             narrow,
@@ -501,7 +508,7 @@ def test_batch_inputs_match_python_at_selected_capacities(
     engines = [env._engine, branch, env._engine]
     witnesses = [engine.search_witness_json() for engine in engines]
     expected = [
-        encode_observation(
+        observation_arrays(
             teacher.space, engine.observation_for_player(engine.current_agent_index())
         )
         for engine in engines
@@ -530,7 +537,12 @@ def test_batch_inputs_match_python_at_selected_capacities(
         patch.setattr(teacher.agent, "prepare", check_inputs)
         predictions = teacher.predict_batch(engines)
     with torch.inference_mode():
-        logits, values = teacher.agent(device_input(teacher.agent, tensors))
+        # An independent encoding of the same viewer observations.
+        independent = encode_policy_batch(
+            teacher.space,
+            [e.observation_for_player(e.current_agent_index()) for e in engines],
+        )
+        logits, values = teacher.agent(device_input(teacher.agent, independent))
     for i, (probabilities, value) in enumerate(predictions):
         count = int(expected[i]["actions_valid"].sum())
         np.testing.assert_array_equal(

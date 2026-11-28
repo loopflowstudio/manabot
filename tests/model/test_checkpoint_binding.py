@@ -10,13 +10,14 @@ import torch
 from manabot.backends.torch.checkpoint import BACKEND, load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.catalog import inspect_checkpoint
-from manabot.policy import buckets
 from manabot.policy.binding import packed
+from manabot.policy.catalog import catalog_tables
 from manabot.policy.checkpoint import read_container, write_container
+from manabot.policy.prepare import RecordNamespace
 from manabot.policy.readings import (
     fresh_readings,
     input_width,
@@ -26,14 +27,96 @@ from manabot.policy.readings import (
 )
 from manabot.recipes.builders import elemental_self_play, gray_ogre_self_play
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+
+
+@pytest.mark.parametrize("exact_decks", [False, True])
+def test_checkpoint_keeps_vectors_after_vocabulary_keys_retire(
+    tmp_path: Path, exact_decks: bool
+) -> None:
+    """A world-bound and an exact-deck checkpoint both rebind record rows by key."""
+    players = [
+        managym.PlayerConfig("A", {"Forest": 20, "Gray Ogre": 20}),
+        managym.PlayerConfig("B", {"Mountain": 20, "Gray Ogre": 20}),
+    ]
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=8,
+            max_decision_reference_details=64,
+            max_decision_references=64,
+            max_decision_members=256,
+            decision_memory_include_own=True,
+        )
+    )
+    writer = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8,
+            world=managym.WORLD_SETUP,
+            attention_on=True,
+            policy_film=True,
+            decision_memory="gru",
+        ),
+    ).eval()
+    path = tmp_path / "before-vocabulary-split.safetensors"
+    save_checkpoint(
+        writer, space, path, player_configs=players if exact_decks else None
+    )
+    record = read_checkpoint(path)
+    assert ("world_digest" in record["world_binding"]) != exact_decks
+    state = record["model_state_dict"]
+    weights = "semantic_cards.token_embedding.weight"
+    no_memory = catalog_tables(managym.WORLD_SETUP, records=True, decision_memory=False)
+    assert len(state[weights]) == no_memory.embedding_rows + 44
+
+    def key(kind: int, name: str) -> int:
+        return packed(kind, managym.catalog_token_value(name))
+
+    def rows_by_key(family: str) -> dict[int, int]:
+        keys = state[f"semantic_cards.record_{family}_keys"]
+        rows = state[f"semantic_cards.record_{family}_rows"]
+        return dict(zip(keys.tolist(), rows.tolist(), strict=True))
+
+    names = rows_by_key("name")
+    tokens = rows_by_key("token")
+    # Each historical pair of keys addressed one learned vector.
+    memory = "DecisionMemory::Priority"
+    tokens[key(3, memory)] = names[key(RecordNamespace.TOKEN, memory)]
+    old = key(6, "kept creature")
+    tokens[old] = tokens.pop(key(6, "kept permanent"))
+    names[key(RecordNamespace.TOKEN, "execution/6/kept creature")] = tokens[old]
+
+    for family, table in (("name", names), ("token", tokens)):
+        keys = sorted(table)
+        state[f"semantic_cards.record_{family}_keys"] = torch.tensor(keys)
+        state[f"semantic_cards.record_{family}_rows"] = torch.tensor(
+            [table[k] for k in keys]
+        )
+    write_checkpoint(record, path)
+
+    restored, _ = load_checkpoint(str(path))
+    torch.testing.assert_close(
+        restored.state_dict()[weights], state[weights], atol=0, rtol=0
+    )
+    env = managym.Env(seed=17, decision_memory_include_own=True)
+    env.reset(players)
+    for _ in range(4):
+        env.step(0)
+    batch = managym.encode_observation_batch([env], space.layout)
+    prepared = writer.prepare(batch)
+    assert prepared.memory is not None
+    expected = writer.evaluate(prepared)
+    actual = restored.evaluate(restored.prepare(batch))
+    for before, after in zip(expected, actual, strict=True):
+        np.testing.assert_array_equal(before, after)
 
 
 @pytest.mark.parametrize("legacy_file", [False, True])
 def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     tmp_path: Path, legacy_file: bool
 ) -> None:
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     agent = ActorCritic(space, ModelConfig(hidden_dim=8, world="world"))
     path = tmp_path / "pilot"
     save_checkpoint(agent, space, path, player_configs=None)
@@ -133,17 +216,29 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
             managym.PlayerConfig("B", {"Mountain": 20, "Gray Ogre": 20}),
         ]
     )
-    batch = {
-        key: value[None]
-        for key, value in encode_observation(
-            space, env.observation_for_player(0)
-        ).items()
-    }
-    batch["agent_player"][..., -1] = 1
+    observation = env.observation_for_player(0)
+    batch = encode_policy_batch(space, [observation])
+    arrays = observation_arrays(space, observation)
+    # The runtime encodes one more player column than the writer saved.
+    assert arrays["agent_player"].shape[-1] > len(loaded.readings["agent_player"])
     prepared = loaded.prepare(batch)
     np.testing.assert_array_equal(
         prepared.agent_player,
-        read_numeric(batch["agent_player"][..., :-1], loaded.readings["agent_player"]),
+        np.concatenate(
+            (
+                read_numeric(
+                    arrays["agent_player"][
+                        None, : len(loaded.readings["agent_player"])
+                    ],
+                    loaded.readings["agent_player"],
+                ),
+                read_numeric(
+                    arrays["player_turn_state"][None, :1],
+                    loaded.readings["player_turn_state"],
+                ),
+            ),
+            axis=-1,
+        ),
     )
     assert np.isfinite(loaded.evaluate(prepared)[0]).all()
 
@@ -203,14 +298,15 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
             managym.PlayerConfig("B", {"Forest": 20, "Gray Ogre": 20}),
         ]
     )
-    batch = {
-        key: value[None]
-        for key, value in encode_observation(space, observation).items()
-    }
+    batch = encode_policy_batch(space, [observation])
     expected = policy.evaluate(policy.prepare(batch))
-
-    # Emulate a later engine with appended columns and an unknown card digest.
     # Without the embedded writer catalog the original file cannot bind here.
+    loaded, runtime = load_checkpoint(str(path))
+    actual = loaded.evaluate(loaded.prepare(batch))
+    for before, after in zip(expected, actual, strict=True):
+        np.testing.assert_array_equal(before, after)
+
+    # A later engine with appended columns admits the saved column prefixes.
     native_layout = managym.ObservationLayout
     growing = (
         "agent_cards",
@@ -248,19 +344,12 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
         def __getattr__(self, name: str) -> Any:
             return getattr(self._inner, name)
 
-    # The space derives its shapes from the layout, so it grows with it.
-    monkeypatch.setattr(managym, "ObservationLayout", ExtendedLayout)
-    monkeypatch.setattr(buckets, "_EVENT_WIDTH", space.shapes["events"][-1] + 1)
-    loaded, runtime = load_checkpoint(str(path))
-    for key in growing:
-        batch[key] = np.concatenate(
-            (batch[key], np.full_like(batch[key][..., :1], 999)), axis=-1
-        )
-    actual = loaded.evaluate(loaded.prepare(batch))
-    for before, after in zip(expected, actual, strict=True):
-        np.testing.assert_array_equal(before, after)
-    rebound = tmp_path / "rebound.safetensors"
-    save_checkpoint(loaded, runtime, rebound, player_configs=None)
+    with monkeypatch.context() as later:
+        later.setattr(managym, "ObservationLayout", ExtendedLayout)
+        grown, grown_runtime = load_checkpoint(str(path))
+        assert grown.readings == loaded.readings
+        rebound = tmp_path / "rebound.safetensors"
+        save_checkpoint(grown, grown_runtime, rebound, player_configs=None)
     rewritten = read_checkpoint(rebound)
     assert rewritten["input_columns"] == record["input_columns"]
     assert rewritten["input_readings"] == record["input_readings"]
@@ -293,11 +382,10 @@ def test_setup_policy_keeps_its_pre_x_action_scores(
     loaded, runtime = load_checkpoint(str(path))
     env = managym.Env(seed=17)
     obs, _ = env.reset(players)
-    batch = {
-        key: value[None] for key, value in encode_observation(runtime, obs).items()
-    }
+    batch = encode_policy_batch(runtime, [obs])
+    # Offers carry the later columns; the writer and its reload read 23.
+    assert observation_arrays(runtime, obs)["actions"].shape[-1] > 23
     expected = writer.evaluate(writer.prepare(batch))
-    batch["actions"][..., 23:] = 1
     actual = loaded.evaluate(loaded.prepare(batch))
     for before, after in zip(expected, actual, strict=True):
         np.testing.assert_array_equal(before, after)

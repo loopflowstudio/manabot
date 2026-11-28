@@ -36,7 +36,7 @@ fn make_game(seed: u64) -> Game {
 }
 
 fn make_env(seed: u64) -> Env {
-    let mut env = Env::new(seed, true, false, false);
+    let mut env = Env::new(seed, true, false);
     let p1 = PlayerConfig::new("hero", interactive_deck());
     let p2 = PlayerConfig::new("villain", interactive_deck());
     env.reset(vec![p1, p2]).expect("reset should succeed");
@@ -386,7 +386,7 @@ fn flat_mc_survives_stage2_decision_points() {
 
     let mut decisions_evaluated = 0_usize;
     for seed in 0..12_u64 {
-        let mut env = Env::new(seed, true, false, false);
+        let mut env = Env::new(seed, true, false);
         let p0 = PlayerConfig::new("hero", stage2_deck.clone());
         let p1 = PlayerConfig::new("villain", stage2_deck.clone());
         env.reset(vec![p0, p1]).expect("reset");
@@ -469,7 +469,7 @@ fn flat_mc_survives_milestone1_matchup() {
 
     let mut decisions_evaluated = 0_usize;
     for seed in 0..12_u64 {
-        let mut env = Env::new(seed, true, false, false);
+        let mut env = Env::new(seed, true, false);
         let p0 = PlayerConfig::new("lessons", ur_deck.clone());
         let p1 = PlayerConfig::new("allies", gw_deck.clone());
         env.reset(vec![p0, p1]).expect("reset");

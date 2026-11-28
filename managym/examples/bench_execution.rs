@@ -24,7 +24,7 @@ fn main() {
     let mut forks = 0;
     let mut retained_boundaries = 0;
     for seed in 0..32 {
-        let mut env = Env::new(seed, true, false, false);
+        let mut env = Env::new(seed, true, false);
         env.reset(curated::setup(false)).unwrap();
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let mut count = 0;
@@ -84,7 +84,7 @@ fn main() {
         "projection_ns":projection_ns,"projection_allocations":projection_allocations})
     );
     for seed in [1, 2] {
-        let mut env = Env::new(seed, true, false, false);
+        let mut env = Env::new(seed, true, false);
         env.reset(curated::setup(false)).unwrap();
         let mut digest = blake3::Hasher::new();
         let mut times = Vec::new();

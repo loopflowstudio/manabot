@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import math
 
-from managym.possible_worlds import PossibleWorld, PossibleWorldSpace, WorldQuery
 import numpy as np
 import pytest
 
 from manabot.belief.range import BeliefError, BeliefState
+from managym.possible_worlds import PossibleWorld, PossibleWorldSpace, WorldQuery
 from tests.belief.fresh_env import fresh_env
 
 

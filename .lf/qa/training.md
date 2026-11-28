@@ -49,9 +49,8 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   `{"updates": 2, "streams": 4, "backend": "mlx", "device": "mps"}` about 27 s.
   Cross-read every `out/policies/*.safetensors` of a Torch and an MLX run on
   both `resolve("torch")` and `resolve("mlx", precision="float32")`: encode a
-  scalar `managym.Env` observation with `encode_observation(space, raw)` and add
-  the batch axis yourself (`{k: v[None]}`), or admission refuses
-  `known_library`. Agreement was below 1e-7 on 153 decisions. Seat an MLX-written
+  scalar `managym.Env` observation with `encode_policy_batch(space, [raw])`
+  and prepare that batch. Agreement was below 1e-7 on 153 decisions. Seat an MLX-written
   Elemental policy in Academy with `--policy`, `--deck elemental_ur
   --opponent-deck elemental_gw`. For Ctrl-C on a pty, poll the master with
   `select` (the run prints nothing between "local" and its end, so a blocking
@@ -183,7 +182,7 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   recipe to a later update. Compare saved recipes by `snapshot_id` and
   confirm that the prior policy file is byte-identical.
   For MLX, use the `mlx` extra and pass `"backend":"mlx"` to the recipe.
-  Inspect `continuation.json` beside `training.safetensors` in the current
+  Inspect `continuation.json` beside `learner.safetensors` in the current
   save. Its stream roots record which seed each slot will play after
   resuming. A zero-action `capture closed` row can name the saved opening
   of an interrupted attempt. Compare terminal rows to the completed-game
@@ -281,6 +280,13 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   shared tensors equal the control's. A control without the log capacities is
   refused as a trunk. Test reliance by seating the same checkpoint with
   `config={"blank_decision_memory": True}` through `manabot.eval.pairing`.
+  A scalar `managym.Env` captures no decision log unless built with
+  `decision_memory=True` (manabot's `Env` sets it from `max_decision_records`);
+  without it every batch's `decision_*` tables are empty and
+  `batch.blank_decision_memory()` changes nothing. With it, a four-update GRU
+  policy on Gray Ogre differed from its blanked log on 58 of 60 decisions
+  (by about 1e-8, its gate still near zero).
+
   For a tracked run at a chosen device and precision, put that `SelfPlay`
   (with `device`, `precision` and `decision_memory` from a small pydantic
   config) in a `.runs/` recipe and run `etude train <recipe> --experiment
@@ -311,18 +317,28 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   pty once `out/policies/00000002-raw.safetensors` exists (exit 75),
   `--resume`, and compare tensor bytes of `00000004-*.safetensors` with an
   uninterrupted run; only `bc.counts.training_seconds` differs. A legacy save
-  comes from a detached `main` worktree with this checkout's `.so` when Rust
-  is unchanged (`learner.pt`/`optimizer.pt`/`ema.pt`); MLX refuses it, Torch
-  `--resume` rewrites it in the four-file layout, and a copy then continues
-  on MLX. Editing a seed in `continuation.json` must refuse naming that file
-  and leave `out/` byte-identical (Etude marks the attempt `failed`).
+  holding `learner.pt` (written before portable saves) is refused on both Torch
+  and MLX before model/reading diffing or tensor loading, pointing to manabot
+  0.2.5 or warm-starting from the published policy, and leaves `out/`
+  byte-identical. Real legacy saves to copy live in sibling checkouts'
+  `.runs/` (`find ../manabot.* -path '*/.runs/*' -name learner.pt`); copy a
+  `local` run's whole `ETUDE_HOME`, `--resume` it on Torch, and copy its `out/`
+  into a new experiment with `{"backend":"mlx","device":"mps"}` for MLX.
+  Their published policies predate the current card content, so warm-starting
+  from them is refused for content drift; check the warm-start route with a
+  `.runs/` recipe that sets `pretrained` to a current run's policy. A legacy
+  belief sampler is a Torch zip: `torch.save` a current `belief.safetensors`'s
+  tensors and metadata, then pass it and its SHA-256 to
+  `python -m manabot.reports.belief` (the refusal is a traceback ending in the
+  `ValueError`). Editing a seed in `continuation.json` must refuse naming that
+  file and leave `out/` byte-identical (Etude marks the attempt `failed`).
 - Torch MPS inference layout (`attention="bucketed_columns"`): run
   `uv run etude train manabot/recipes/local.py --config '{"device":"mps"}' --until updates=2`,
   then load the policy and its `ObservationSpace` with
   `resolve("torch").load_policy`, build a wide `ActorCritic` (for example
   `hidden_dim=384`, 8 heads) and play scalar `Env(Match(selected_match()), space,
   Reward(RewardConfig()))` games by CPU argmax, keeping each encoded decision.
-  Stack them into 64- and 256-row dense dicts and compare CPU `prepare(rows,
+  Encode 64 and 256 of them with `managym.encode_observation_batch` and compare CPU `prepare(rows,
   inference=True)`, MPS `prepare(rows, inference=True)` and the same MPS batch
   with `dataclasses.replace(batch, attention_columns=None)`. Choose moves with
   the trained policy and use the same wide model weights in each forward

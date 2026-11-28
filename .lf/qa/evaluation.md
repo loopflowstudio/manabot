@@ -2,7 +2,12 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
 
 - Local-update search changes: `uv run --extra dev python
   scripts/bench_local_update.py --reference main --worlds 4 16` checks in
-  seconds that receipts still equal main's, field for field; the
+  seconds that receipts still equal main's, field for field. `--reference`
+  executes the reference's modules against this checkout's imports, so it
+  fails with `ImportError` across a change that removes a name they import
+  (MTG-433's dense transport), and at `3be5a0cfb2` even its default reference
+  failed on `manabot.belief.sampling`; then run the default mode on each tree
+  and compare its `parity` blocks; the
   `--rollout-evidence`/`--native-encoder` arms check that full evidence and
   per-row encoding still match the compact, batched defaults. To play
   games, build two players per arm with `make_player` and drive `act`,
@@ -23,15 +28,9 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
   data=json.loads(line)))` → `retain_evidence` → `trace_card_tables`; no
   checkpoint inference is needed. MTG-415: 51 MTG-408 trophy matches (204
   games) replayed in about 3 minutes.
-- Old checkpoints in a local evaluation: a checkpoint from a TLA
-  frontier run (such as u1952 at `.runs/qa/final.pt` or the
-  `experiments/best_player_on_main.py` artifact) refuses the CLI's default
-  Allies/Lessons setup. Write a `DeckMatchup` JSON (for example
-  `new_card_pairs()[0].matchup.model_dump_json()` from that experiment) and
-  pass it with `--matchup`; one deal of four games took about 75 s. Read
-  `writer_revision` and `stored_programs` from `<out>/request.json`'s
-  `candidate`; `evaluation.json` is under `<out>/panel/`. To act as a returning
-  user, strip those two fields from a request and repeat it with `--request`.
+- A frontier Small u1952 checkpoint uses v9. Local evaluation must reject it
+  with a message naming v0.2.6. Its original evaluation is reproduced from
+  the revision in `experiments/reports/best-player-on-main.md`.
 - Served evaluation without a GPU: `evaluate(request, out_dir=...,
   execution=EvalExecution(device="cpu", deadline_unix=time.time() + 900))`
   runs the same serving child (and its checkpoint ABI checks) as CUDA; omitting

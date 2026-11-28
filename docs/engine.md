@@ -137,6 +137,52 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
 Consumers read the encoded arrays by name; see
 [encoded observations](#encoded-observations).
 
+#### Turn steps and Observation JSON
+
+Rust `StepKind` and the integer values of Python's `managym.StepEnum` follow
+rules order. First-strike damage (`COMBAT_FIRST_STRIKE_DAMAGE`, `7`) precedes
+regular damage (`COMBAT_DAMAGE`, `8`). Cleanup (`ENDING_CLEANUP`, `12`)
+is the last step. `Observation.toJSON()` writes `turn.phase` and `turn.step`
+as their public enum names.
+
+```python
+import json
+import managym
+
+game = managym.Env(seed=42)
+obs, _ = game.reset([
+    managym.PlayerConfig("Alice", {"Mountain": 20, "Gray Ogre": 20}),
+    managym.PlayerConfig("Bob", {"Forest": 20, "Llanowar Elves": 20}),
+])
+for _ in range(2):  # keep both opening hands
+    obs, _, _, _, _ = game.step(0)
+
+wire = json.loads(obs.toJSON())
+print(wire["turn"]["phase"], wire["turn"]["step"])
+# PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP
+print(
+    int(managym.StepEnum.COMBAT_FIRST_STRIKE_DAMAGE),
+    int(managym.StepEnum.COMBAT_DAMAGE),
+)
+# 7 8
+
+# 0.2.x captures with integer phase/step codes (including 12 for first strike) still load.
+wire["turn"]["phase"], wire["turn"]["step"] = 1, 3
+restored = managym.Observation.from_json(json.dumps(wire))
+assert restored.toJSON() == obs.toJSON()
+```
+
+`Observation.from_json` reads standalone observations. `validate_observation_json`
+checks the same turn fields inside a semantic observation's `viewer_state`.
+Both accept public enum names and 0.2.x integer codes. Legacy phase codes
+range from `0` to `4`. Legacy step codes range from `0` to `12`, with `12`
+meaning `COMBAT_FIRST_STRIKE_DAMAGE`. Unknown names, out-of-range integers,
+floats, booleans and nulls raise an error.
+
+Live `viewer_state_hash` values reflect the names in canonical observation
+JSON. Policy inputs and decision memory keep the stored step indices `0..=11`.
+Both damage steps use index `7`, and cleanup uses `11`.
+
 ### Executing an action
 
 Whatever chose the action, the engine checks it again before anything changes.
@@ -335,10 +381,10 @@ Only the remaining exchangeable slots permute in place.
 Training and evaluation step many games in lockstep: one array of actions in,
 one batch of observations out, so a single forward pass serves every active
 game. `VectorEnv` ([`managym/src/agent/vector_env.rs`](../managym/src/agent/vector_env.rs))
-owns the games and their reset seeds; the Python wrapper is
-[`manabot/env/vector_env.py`](../manabot/env/vector_env.py). A finished slot
-reports its terminal outcome once and parks until the caller loads a new game
-or resets the vector; the Torch wrapper reloads finished slots automatically.
+owns the games and their reset seeds. Training uses `RecordedVectorEnv` to retain
+replay evidence. A finished slot reports its terminal outcome once and parks
+until the caller loads a new game or resets the vector. The deprecated Torch
+wrapper refills slots automatically through 0.2.x.
 By default an observation that exceeds its
 declared capacity is an error; the `first-legal` action-overflow policy and
 isolated capacity recovery are explicit opt-ins.
@@ -399,14 +445,12 @@ Supplying an external index for a built-in chooser raises an error. Native
 trivial skipping still applies. Each seat owns independent heuristic memory;
 reset clears both, even with the same seed, and forks copy both.
 
-The Python training wrapper accepts the same tuple. The public vector
-`opponent_policy` argument is deprecated, warns, and will be removed in 0.3.0:
-`none` maps to `(agent, agent)`, other values to `(agent, value)`. Supplying both
-arguments or an unknown name raises `ValueError`.
+The Python training wrapper accepts the same tuple. Supplying an unknown policy
+name raises `ValueError`.
 Encoding capacity failures remain errors under the configured overflow policy;
 they do not switch a player policy to random play.
-`"passive"` is removed and raises an unsupported-policy `ValueError`, including
-through RecordedVectorEnv and Torch. Retained failure evidence keeps its original
+`"passive"` is unsupported and raises `ValueError`, including
+through `RecordedVectorEnv` and Torch. Retained failure evidence keeps its original
 policy name; replaying a passive-policy receipt requires its original source.
 
 ### Built-in heuristic
@@ -471,35 +515,29 @@ comparison, source evidence and independent follow-ups.
 Install the native API as the [engine-only `managym` distribution](engine-python.md)
 and use `import managym`. Installing `manabot` adds training and keeps
 `from manabot import managym` as a compatibility alias to the same engine.
-The Torch wrapper and the capture wrapper are separate Python classes:
+The capture wrapper is a separate Python class:
 
 | Need | API |
 |---|---|
-| One game, explicit reset, readable observations | `managym.Env` |
+| One game, explicit reset, readable observations | `managym.Env` (and `manabot.env.env.Env`) |
 | A fixed viewer's observation | `Env.observation_for_player(player_index)` |
-| Encoded fixed-viewer observations for all or selected slots, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
+| Encoded fixed-viewer observations for all or selected slots, including nonchoosing seats | `VectorEnv.observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
 | Live snapshots and batched slot loading (`GameSnapshot`, `RestoreOptions`, `SlotLoad`) | `Env.snapshot` / `restore`; `VectorEnv.snapshot_slots`, `slot_metadata`, `load_slots_into_buffers` ([Batched slot loading and snapshots](engine-python.md#batched-slot-loading-and-snapshots)) |
 | Counterfactual state edits (`GameStateEdit`) | `Env.edit_game_state`; `RestoreOptions.exact(game_state_edits=...)` ([Counterfactual state edits](engine-python.md#counterfactual-state-edits)) |
 | Revision-bound Commands, decision captures, search forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
 | Batched readable observations | `managym.VectorEnv.reset_all` / `step` |
-| Caller-owned NumPy buffers, per-slot setups, sparse slot loading and partial stepping | Native `VectorEnv` buffer methods |
+| Native `ObservationBatch` stepping, per-slot setups, sparse slot loading and partial stepping | `VectorEnv.set_observation_layout` with `observation_rows()` / `step_into_buffers`, or `step_observation_batch` |
 | Private failure replay inputs around buffered execution | `manabot.env.failures.RecordedVectorEnv` |
-| Torch observation/reward tensors on a selected device with Gym-style automatic reset | `manabot.env.vector_env.VectorEnv` |
 
-Scalar `Env.step` returns the terminal observation and waits for `reset`.
+The scalar `manabot.env.env.Env` returns a viewer's `managym.Observation` on
+reset, step, and semantic step. After a scenario injection, `scenario_refresh()`
+returns the refreshed observation. Read legal offers from
+`observation.action_space.actions`. A checkpoint player encodes the observation
+with its own input layout when it acts. A terminal step waits for an explicit reset.
 Native `VectorEnv` and `RecordedVectorEnv` return the terminal observation,
 reward, flags and winner, then park that slot with chooser `-1`. Restart
 all slots with the matching readable or buffered reset, or use
 `load_slots_into_buffers` to replace individual slots.
-
-Torch `VectorEnv.step` saves the rewards, flags and diagnostics before
-refilling finished slots. Its observation tensors then show the replacement
-games. Clone tensors you need to retain across steps.
-
-Torch `VectorEnv.reset(seed=s)` restarts slot `i` at seed `s + i` for any
-explicit seed, including the current one, so equal seeds reproduce deals.
-`reset()` without a seed continues native seed succession. Its
-`current_agent_indices()` names each slot's chooser.
 
 `RecordedVectorEnv` records both readable and buffered steps and resets. Each
 reset or successful slot load starts a new replay prefix, including when the
@@ -508,8 +546,7 @@ seed repeats or saturates at its maximum value.
 Native buffered stepping and `RecordedVectorEnv.step_into_buffers` accept an
 `active` boolean per slot. Inactive games and observation rows stay unchanged;
 the Python buffer bindings clear their rewards and done flags to zero/false.
-Apply the same mask when collecting transitions. The Torch wrapper's `step`
-advances every slot and does not accept an active mask.
+Apply the same mask when collecting transitions.
 
 Strict batch errors can occur after other slots have advanced. Do not retry
 the same batch assuming nothing changed. `RecordedVectorEnv` retains private
@@ -564,10 +601,10 @@ Each snapshot contains:
 
 Save your collection/run identity with `(game_id, revision, player)` and, for
 batches, the list index identifying the slot.
-Game IDs are allocated process-wide, including across Torch native-vector
-rebuilds; they are not portable replay identifiers, consecutive counters or
-reproducible values. A seed alone cannot distinguish repeated resets to the same
-deal. For replay, retain the match configuration and runtime identity separately.
+Game IDs are allocated process-wide; they are not portable replay identifiers,
+consecutive counters or reproducible values. A seed alone cannot distinguish
+repeated resets to the same deal. For replay, retain the match configuration
+and runtime identity separately.
 
 `set_seed(s)` schedules the next reset; existing snapshots and subsequent reads
 of the live game retain its original reset seed until reset succeeds. Forks and
@@ -579,17 +616,16 @@ origin and stale checks still apply independently of these snapshot fields.
 Both methods synchronously read authoritative hand zones, with one native call
 for the whole batch, without stepping, resetting, consuming randomness or
 building viewer observations. Counts are detached snapshots; dictionary edits cannot affect the
-game or retained snapshot. `RecordedVectorEnv` and Torch `VectorEnv` expose the same
-method and CPU records. Ordinary reset/step calls do not collect snapshots.
+game or retained snapshot. `RecordedVectorEnv` exposes the same method and CPU
+records. Ordinary reset/step calls do not collect snapshots.
 
-Read before stepping to capture the current hands; copy reused observation
-buffers too if retaining both. After a successful step, snapshots describe the
-current game states. Scalar games and native vector slots retain their terminal
-hands while parked, until reset or reloaded with `load_slots_into_buffers`.
-Torch `VectorEnv` reloads finished slots during `step`, so its done slots
-describe replacement games. Partial stepping leaves inactive games unchanged,
-but snapshots still include every slot: apply the same active mask when
-selecting results.
+Read before stepping to capture the current hands; each returned
+`ObservationBatch` already owns its snapshot across later steps. After a
+successful step, snapshots describe the current game states. Scalar games and
+native vector slots retain their terminal hands while parked, until reset or
+reloaded with `load_slots_into_buffers`. Partial stepping leaves inactive games
+unchanged, but snapshots still include every slot: apply the same active mask
+when selecting results.
 
 A wrong-length seat list, a seat outside `0..1` or reading before reset raises
 an error. After a failed step, discard that call's results and recover or reset
@@ -605,24 +641,29 @@ player may observe, and requires no policy-input version or checkpoint migration
 ### Fixed-seat observations
 
 Read seat 0 in one game and seat 1 in another, even when those seats are not
-choosing. Allocate a separate batch from the observation space used by your
-consumer:
+choosing, after registering an `ObservationLayout` on the vector environment:
 
 ```python
+import numpy as np
 import managym
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 
 space = ObservationSpace()
+state = {
+    "rewards": np.zeros(2, dtype=np.float64),
+    "terminated": np.zeros(2, dtype=np.uint8),
+    "truncated": np.zeros(2, dtype=np.uint8),
+}
 games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "agent"))
-games.reset_all(Match().to_rust())
-buffers = space.allocate(2)
+games.set_observation_layout(state, space.layout, space.config.action_overflow)
+games.reset_all_into_buffers(Match().to_rust())
 
 players = [0, 1]
-reads = games.write_observations_for_players(
-    players, buffers, layout=space.layout, action_overflow=space.config.action_overflow
-)
-# Row i in every array describes players[i] in slot i.
+reads, batch = games.observations_for_players(players)
+# Row i in `batch` describes players[i] in reads[i].slot.
+print(batch.batch_size, [(r.slot, r.player) for r in reads])
+# 2 [(0, 0), (1, 1)]
 
 # Read the opposite hands at the same boundary, without stepping in between.
 hands = games.hand_snapshots([1 - player for player in players])
@@ -633,15 +674,16 @@ for slot, (read, hand) in enumerate(zip(reads, hands, strict=True)):
     assert read.player == 1 - hand.player
 ```
 
-`write_observations_for_players(players, buffers, action_overflow="error", *, layout)`
-takes one entry per slot. Pass seat `0` or `1` to read it, or `None` to
-leave its game and buffer row untouched. This permits reads beside terminal,
-poisoned or unset slots. Each requested slot returns an `ObservationRead` in
-ascending slot order.
+`observations_for_players(players)` takes one entry per slot using the layout
+and `action_overflow` policy registered via `set_observation_layout`. Pass seat
+`0` or `1` to read it, or `None` to skip that slot. This permits reads beside
+terminal, poisoned or unset slots. The call returns `(reads, batch)`: one
+`ObservationRead` per requested slot in ascending slot order, and one immutable
+`ObservationBatch` containing those rows in the same order.
 
 | Field | Meaning |
 |---|---|
-| `slot: int` | The row in every array (equal to the list index when no slot is `None`) |
+| `slot: int` | The source slot in `VectorEnv` |
 | `player: int` | Requested native seat, unchanged by control effects |
 | `game_id: int`, `seed: int`, `revision: int` | The same values a `HandSnapshot` of that slot reports at this read boundary |
 
@@ -650,54 +692,45 @@ revision agree, selecting matching or opposite seats as needed. Save a
 collection/run identity too: `game_id` distinguishes resets within the process,
 even to the same seed, but is not a portable replay ID.
 
-The arrays contain the same encoding as scalar
-`Env.observation_for_player(player_index)` for the requested seat and selected
-policy-input version. Native visibility rules apply, including closed decklists
+The returned `ObservationBatch` carries the same v11 encoding as
+`encode_observation_batch([env.observation_for_player(player)], layout)` for
+the requested seat. Native visibility rules apply, including closed decklists
 and information shared through player-control effects. Requesting a seat does
 not remap it to its controller or grant access to hidden information. Only the
 published chooser sees legal actions. Hand snapshots are separate privileged
 records and must stay out of viewer-safe inputs and exports.
 
-`space.allocate(num_envs)` supplies every required writable, contiguous
-NumPy array at the selected version's shapes, dtypes and capacities. No reward
-or done arrays are needed. Keep these buffers separate from ordinary step
-buffers and copy rows you need to retain before the next write.
+`RecordedVectorEnv` exposes the same `observations_for_players` method. A
+fixed-seat read preserves the chooser's observations, legal choices and RNG,
+and the returned `ObservationBatch` stays immutable across later steps. A
+parked terminal slot describes the finished game until reloaded (or pass `None`
+to skip it). The seat list selects rows independently of the preceding step's
+active mask. Ordinary steps and resets only encode the chooser's view.
+Fixed-seat reads confer no Command or decision-capture authority.
 
-`RecordedVectorEnv` and the Torch `VectorEnv` wrapper expose the same NumPy-buffer
-method and CPU identity records. The Torch wrapper supplies its own layout.
-Pass `layout=consumer_space.layout` for a consumer with different capacities.
-Use `torch.from_numpy` and an explicit device transfer as needed. Clone shared CPU tensors you need to retain before the next write.
-
-A fixed-seat read preserves the chooser's observations, legal choices and RNG.
-On native `VectorEnv` and `RecordedVectorEnv`, a parked terminal slot describes
-the finished game until reloaded (or pass `None` to skip it); on Torch
-`VectorEnv`, a finished slot describes its replacement game. The seat list
-selects rows independently of the preceding step's active mask. Ordinary steps
-and resets only encode the chooser's view. Fixed-seat reads confer no Command
-or decision-capture authority.
-
-A wrong-length seat list, an invalid seat, reading before reset, or malformed
-buffers raises an error. Encoding uses supplied capacities and the selected
-policy-input version's admission rules. Overflow errors by default;
+A wrong-length seat list, an invalid seat, calling before
+`set_observation_layout` or reset raises an error. Encoding uses the registered
+capacities and `action_overflow` policy. Overflow errors by default;
 `action_overflow="first-legal"` permits only the existing action-prefix policy,
-never truncation of other data. Discard all output rows after a failed read.
-Correct the request, increase capacity or select an input version that supports
-the state before retrying. After a failed step, recover or reset the games first.
+never truncation of other data. Correct the request or increase capacity before
+retrying. After a failed step, recover or reset the games first.
 
 ## Encoded observations
 
-One native encoder turns an observation into NumPy arrays, one layout per
-engine release. Every caller's arrays come from it: a single observation, a
-batch of search branches and the vector environment's step buffers. manabot
-reads the same arrays as its policy input
-(`ObservationConfig.policy_input_version`, v11); how its network reads them is
-in [observations and the policy network](observation-and-model.md#policy-inputs).
+One native encoder turns observations into immutable typed CSR batches
+(`managym.ObservationBatch`), using policy input v11. Every caller's policy
+inputs come from it: a single observation, a batch of search branches, the
+vector environment's step rows, and validated offline bytes. manabot reads the
+same batch as its policy input (`ObservationConfig.policy_input_version == 11`);
+how its network reads it is in
+[observations and the policy network](observation-and-model.md#policy-inputs).
 
-### Encoding one observation
+### Encoding observations
 
 ```python
+import numpy as np
 import managym
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 
 game = managym.Env(seed=42)
 observation, info = game.reset([
@@ -706,43 +739,62 @@ observation, info = game.reset([
 ])
 
 space = ObservationSpace()
-arrays = encode_observation(space, observation)
-print(int(arrays["agent_cards_valid"].sum()))
+batch = managym.encode_observation_batch([observation], space.layout)
+_, offsets, _ = batch.tables()["agent_cards"]
+starts = np.frombuffer(offsets, dtype=np.int32)
+print(int(starts[1] - starts[0]))
 # 7
 
 restored = managym.Observation.from_json(observation.toJSON())
 del game
-print(int(encode_observation(space, restored)["agent_cards_valid"].sum()))
+restored_batch = managym.encode_observation_batch([restored], space.layout)
+_, restored_offsets, _ = restored_batch.tables()["agent_cards"]
+restored_starts = np.frombuffer(restored_offsets, dtype=np.int32)
+print(int(restored_starts[1] - restored_starts[0]))
 # 7
 ```
 
-`encode_observation(space, obs)` returns freshly allocated arrays at the
-space's shapes, so a caller may keep them. The space builds `space.layout`
-from its `ObservationConfig`. The native layout resolves the shapes for the
-configured input version, optional blocks and capacities. `space.shapes`
-reads those shapes from the layout, and `space.allocate()` uses the layout's
-allocator. The encoder accepts any `managym.Observation`, including the
-one a step returned, a fixed seat's view from `observation_for_player`, or one
+`managym.encode_observation_batch(items, layout, action_overflow="error")`
+accepts a sequence of `managym.Env` or `managym.Observation` items and returns
+an immutable `managym.ObservationBatch`. Each `ObservationBatch` certifies its
+v11 layout, CSR row offsets, capacities and native joins. `ObservationSpace`
+builds `space.layout` (`managym.ObservationLayout`) from its
+`ObservationConfig`, resolving optional history/memory blocks and capacities.
+`encode_observation_batch` accepts any `managym.Observation`, including the one
+a step returned, a fixed seat's view from `observation_for_player`, or one
 restored with `Observation.from_json`. No game needs to be open. A restored
 observation retains the public history written by `toJSON()`. Older JSON
 without that field loads with empty public history. Semantic `viewer_state`,
 decision captures and search witnesses keep the canonical bytes without it; a
 capture carries its own bounded `history`.
 
-To write into arrays you own, call the function underneath:
+For direct native encoding without manabot, construct the layout directly:
 
 ```python
 layout = managym.ObservationLayout(max_actions=256, policy_history=True)
-buffers = layout.allocate()
-managym.encode_observation_into(observation, layout, buffers)
+batch = managym.encode_observation_batch([observation], layout)
+
+# Persist and reload a validated native batch for offline parity or probes.
+raw = batch.to_bytes()
+reloaded = managym.ObservationBatch.from_bytes(raw)
+assert reloaded.batch_size == batch.batch_size
+assert reloaded.action_counts == batch.action_counts
 ```
 
-The same layout allocates a batch with `layout.allocate(batch_size)`.
-In manabot, pass `space.layout` to use the configured input version, history,
-memory and capacities. Both encoders check every key, shape and dtype before
-writing. Vector stepping also requires the reward and done arrays that
-`allocate_vector_buffers(space, num_envs)` supplies. Register those arrays
-with `games.set_buffers(step_buffers, layout=space.layout)`.
+`ObservationLayout(policy_input_version=11, ...)` accepts only v11 (any other
+version raises `ValueError`). `ObservationBatch.from_bytes(data)` validates the
+layout, CSR offsets, capacities and native joins once in Rust on load and
+raises `ValueError` on corrupt, truncated, out-of-bounds or non-v11 bytes.
+The reader requires the same packed schema and byte order as the writer.
+
+For vector environments, register the layout and per-stream outcome arrays
+(`rewards` float64, `terminated` uint8, `truncated` uint8) with
+`games.set_observation_layout(state, space.layout, space.config.action_overflow)`
+and read `games.observation_rows()` after each reset or step, or call
+`games.step_observation_batch(actions, layout, action_overflow="error")`
+directly. For `RolloutPool`, pair
+`pool.set_observation_layout(layout, action_overflow="error")` with
+`pool.encode_active_batch()` and `pool.step_active_batch(actions)`.
 
 An observation that does not fit raises `managym.ObservationCapacity`, a
 `ValueError` naming the field, the count and the capacity:
@@ -752,54 +804,32 @@ from manabot.infra.config import ObservationConfig
 
 small = ObservationSpace(ObservationConfig(max_cards_per_player=4))
 try:
-    encode_observation(small, observation)
+    managym.encode_observation_batch([observation], small.layout)
 except managym.ObservationCapacity as error:
     print(error)
 # observation capacity exceeded: agent_cards plus sideboard 7 > 4
 ```
 
-Catch that type to count or recover from a game that outgrew its buffers;
-`encode_observation_into` and the batch `encode_observations_into` raise it,
-including for more legal actions than slots without
-`action_overflow="first-legal"`. A vector environment's step raises
-`managym.AgentError` with the same message for an unrecovered failure (its
-retained evidence names that class) and records `ObservationCapacity` as the
-failure class when it recovers the game. Any other `ValueError` means the
-buffers or the request are wrong: malformed arrays, or state the selected
-input version cannot hold (`managym.input_v10_state(obs)` and
-`managym.unrepresentable_state(obs)` name it). Nothing is truncated to fit.
-Discard the arrays after a failure.
+Catch that type to count or recover from a game that outgrew its capacities;
+`encode_observation_batch` raises it, including for more legal actions than
+slots without `action_overflow="first-legal"`. A vector environment's step
+raises `managym.AgentError` with the same message for an unrecovered failure
+(its retained evidence names that class) and records `ObservationCapacity` as
+the failure class when it recovers the game. Any other `ValueError` means the
+request or serialized batch is invalid, or the position contains
+`managym.unrepresentable_state(obs)`. Nothing is truncated to fit.
 
-`Env.encode_observation` and `Env.encode_observation_into` are deprecated
-aliases that warn and are removed in 0.3.0. Replace the first with
-`encode_observation(space, obs)` and the second with
-`managym.encode_observation_into`. In manabot, `ObservationSpace.encode(obs)`,
-`space.encoder` (now the space itself), `ObservationEncoder` (now
-`ObservationSpace`), and the legacy encoder shortcut attributes on
-`ObservationSpace` (`max_actions`, `cards_per_player`, `perms_per_player`,
-`max_events`, `max_stack_objects`, `max_focus_objects`, `*_dim` widths,
-`library_shape`, and the `num_*` enum counts) warn and are removed in 0.3.0
-too. Read capacities from `space.config`, table shapes and widths from
-`space.shapes`, and enum counts from `managym.enums`. On v9 and v10,
-the compatibility attribute `max_stack_objects` returns zero and
-`library_shape` returns the v11 known-library shape.
+### Reading batch tables by name
+
+To read a permanent's card definition without hard-coding column positions, ask
+the native API for the schema and packed record fields:
 
 ```python
-space = ObservationSpace()
-max_actions = space.config.max_actions    # replaces space.encoder.max_actions
-action_dim = space.shapes["actions"][-1]  # replaces space.encoder.action_dim
-```
-
-### Reading arrays by name
-
-To read a permanent's card definition without hard-coding column 24, ask the
-native API for the layout:
-
-```python
+import numpy as np
 import managym
 
-layout = managym.observation_layout()
-definition = layout["agent_permanents"]["columns"]["definition"]
+schema = managym.observation_layout()
+definition = schema["agent_permanents"]["columns"]["definition"]
 print(definition["index"], definition["kind"])
 # 24 id
 print(definition["encoding"])
@@ -809,7 +839,7 @@ print(definition["encoding"])
 A count or number also says whether the encoder already divided it:
 
 ```python
-columns = layout["agent_permanents"]["columns"]
+columns = schema["agent_permanents"]["columns"]
 print(columns["power"]["kind"], columns["power"]["scale"])
 # number 10
 print(columns["exhausted_abilities"]["kind"], columns["exhausted_abilities"]["scale"])
@@ -822,33 +852,36 @@ column by column, 0 means absent, except a player's `seat`, where 0 is the
 seat on the play:
 
 ```python
-frame_kind = layout["relations"]["columns"]["frame_kind"]
+frame_kind = schema["relations"]["columns"]["frame_kind"]
 print(frame_kind["kind"], frame_kind["size"])
 # category 14
 ```
 
-The encoder writes the arrays the layout describes. With `arrays` from
-[the example above](#encoding-one-observation), read only valid permanent rows
+With `batch` from [the example above](#encoding-observations), read only live
+permanent rows for item 0 using `batch.layout.csr_fields` and `batch.tables()`
 (the first decision can have none):
 
 ```python
-valid = arrays["agent_permanents_valid"].astype(bool)
-references = arrays["agent_permanents"][valid, definition["index"]]
-definition_ids = [int(reference) - 1 for reference in references if reference != 0]
+fields = batch.layout.csr_fields["agent_permanents"]
+row_dtype = np.dtype([(name, dtype) for name, dtype, _ in fields])
+_, offsets, values = batch.tables()["agent_permanents"]
+starts = np.frombuffer(offsets, dtype=np.int32)
+permanents = np.frombuffer(values, dtype=row_dtype)[starts[0]:starts[1]]
+definition_ids = [int(ref) - 1 for ref in permanents["definition"] if ref != 0]
 ```
 
 These are definition IDs for catalog joins, not object identities or numeric
 features. Do not log-scale them or infer similarity from their magnitude.
-Retain the installed world's content identity with saved arrays and catalog
+Retain the installed world's content identity with saved batches and catalog
 references.
 
-`observation_layout(*, policy_history=False, turn_state=True, legacy=False, decision_memory=False)` returns a mapping keyed by the
-encoder's array names. Each array describes its `axes`, `shape` and stored
-`dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
-default. The seat axis is viewer-relative (agent first, opponent second).
-Feature arrays have a `columns` mapping keyed by column name. Each column gives
-its zero-based `index`, `kind`, `encoding` and `range`. The kind is one of a
-closed set:
+`observation_layout(*, policy_history=False, decision_memory=False)` returns a
+mapping keyed by the encoder's table names. Each entry describes its logical
+`axes`, `shape` and logical `dtype`; a `None` extent in `shape` is a
+caller-selected capacity, not a default. The seat axis is viewer-relative
+(agent first, opponent second). Feature tables have a `columns` mapping keyed
+by column name. Each column gives its zero-based `index`, `kind`, `encoding`
+and `range`. The kind is one of a closed set:
 
 | Kind | The column holds |
 | --- | --- |
@@ -875,32 +908,31 @@ row kind in `row_kinds` (integer codes mapped to descriptions); `facts` and
 `effect_details` maps its program kinds to catalog `TokenKind` codes in
 `program_token_kinds`, so a reader looks kinds up by name rather than copying
 numbers. Masks and
-scalar-valued arrays have empty `columns` and describe their `element` meaning
-without inventing a feature axis. Shared headers own the detail/member slices;
-unused rows are zero. `policy_history=True` describes the 12-column public
-history rows of `events` instead of the 7-column raw events; public history is
-bounded to 32 rows, even though its allocated event capacity is selected
-separately. `turn_state=True` adds policy input v10's `player_turn_state` (columns
-`life_lost`, `spells_cast`, then `nonartifact_mana_white` through
-`nonartifact_mana_colorless`) and `card_turn_state`.
+scalar-valued tables have empty `columns` and describe their `element` meaning
+without inventing a feature axis. Shared headers own the detail/member slices.
+`policy_history=True` describes the 12-column public history rows of `events`
+instead of the 7-column raw events; public history is bounded to 32 rows, even
+though its event capacity is selected separately. Turn-state tables
+(`player_turn_state` and `card_turn_state`) are always part of the layout.
 
 Read the kind and `scale` before adding preprocessing: permanent damage, power
 and toughness are already divided by 10, flags are 0 or 1, and IDs stay exact.
-Timestamp ranks are stored as ranks. The layout describes the array values,
+In packed CSR records, fact payloads hold raw integer units — divide by
+`layout.csr_fact_divisors[kind]` for their logical numeric values.
+Timestamp ranks are stored as ranks. The layout describes the logical values,
 not a blanket normalization to apply to every column; the built-in model
 chooses its treatment from the kind
 ([how the network reads a column](observation-and-model.md#how-the-network-reads-a-column)).
 
 The layout comes from the column table the native encoder writes through, so
-it cannot drift from the arrays. Reading it starts no game and imports no
-Torch. Row capacities are a separate allocation choice: use
-`ObservationSpace.shapes` when allocating caller-owned buffers, and retain all
-its keys. Capacity errors need larger buffers and a compatible model; state is
-never truncated.
+it cannot drift from the packed batch. Reading it starts no game and imports no
+Torch. Row capacities are a separate configuration choice on `ObservationLayout`
+/ `ObservationConfig`. Capacity errors need larger capacities and a compatible
+model; state is never truncated.
 
-A later engine release can change the layout. Save the package version and
-world identity with collected arrays, and look columns up by name rather than
-by position.
+A later engine release can append columns to the layout. Save the package
+version and world identity with collected batches, and look columns up by name
+rather than by position.
 
 ### Card definition IDs
 
@@ -919,48 +951,41 @@ seen.
 
 ### Program-token vocabulary
 
-`managym.catalog_tokens()` holds only the printed rules spans of catalog
-definitions (cards, tokens and back faces). Live observations also emit
-runtime program tokens in fact and shared-effect rows — suspended resolution
-frames, granted abilities and last-known characteristics — whose runtime-only
-symbols come from `managym.record_vocabulary()`.
+A catalog policy reads printed rules from `managym.catalog_tokens()`, indexed
+by `CardDefId` for cards, tokens and back faces. Runtime projections such as
+suspended resolution frames and last-known characteristics can emit additional
+symbols. `managym.runtime_tokens()` lists registered `(kind, name, value)`
+triples, including symbols that also occur in print. Both sources use the
+same token kinds and signed 32-bit values.
 
 ```python
 import managym
 
 catalog = managym.catalog_tokens()
 printed = set(zip(catalog["token_kind"], catalog["token_value"], strict=True))
-runtime = {
-    (kind, value)
-    for _space, name, _hashed, kind, value in managym.record_vocabulary()
-    if kind is not None
-    and value is not None
-    and not name.startswith("DecisionMemory::")
-}
+runtime = {(kind, value) for kind, _, value in managym.runtime_tokens()}
 admitted_program_tokens = printed | runtime
 ```
 
-`Integer` and `Boolean` carry their values directly. Every other token,
-including `Null` and `DefinitionRef`, needs an exact pair in
-`admitted_program_tokens`. Admission reports missing pairs as `(kind, 0x…)`.
-Policies with decision memory enabled also admit the `DecisionMemory::*` rows.
+`Integer` and `Boolean` carry literal values. Every other program token,
+including `Null` and `DefinitionRef`, needs an exact pair in this union.
+Admission reports missing pairs as `(kind, 0x…)`.
+
+`managym.record_vocabulary()` lists the names fact and shared-effect encoders
+hash into the `token`, `name` and `restriction` namespaces. Each entry is a
+`(namespace, name, value, token_kind, token_value)` tuple. A name with a token
+shares that token's embedding row (for example, granted `flying` shares the
+row for printed `Keyword::flying`). Other names get their own rows.
+
+Policies that read decision memory also allocate name rows in the `token`
+namespace for the `(name, value)` pairs in `managym.decision_memory_names()`,
+such as `DecisionMemory::Priority`. The program vocabulary is the same with
+decision memory enabled or disabled.
 
 An expanded naming source can supply a chosen card name outside the installed
 catalog. Suspended entries and named exile or search programs encode it as
 `Null`, and permanent facts omit its vocabulary row. Rules state and readable
 observations keep the chosen spelling.
-
-### Deprecated names
-
-Engine names describe what managym produces. These earlier spellings, named for
-manabot's use, still work with a `DeprecationWarning` and are removed in 0.3.0:
-
-| Deprecated | Use |
-|---|---|
-| `managym.learning_catalog()` / `LearningCatalog` | `managym.catalog_tokens()` / `CatalogTokens` |
-| `managym.learning_token_value(name)` | `managym.catalog_token_value(name)` |
-| `managym.learning_record_names()` | `managym.record_vocabulary()` |
-
 ## Cards as programs
 
 A card is one Rust function returning the engine's own `CardDefinition`, written
@@ -1758,8 +1783,7 @@ The engine has no world label. `managym.world_identity()`
 ([`world.rs`](../managym/src/world.rs)) names the installed cards by their
 digest; checkpoints, recordings and evaluation records written before the
 label was removed still carry one, which nothing compares
-([history](../WORLDS.md)). `managym.WORLD_VERSION` is a deprecated alias,
-removed in 0.3.0. Which checkpoints load is
+([history](../WORLDS.md)). Which checkpoints load is
 [compatibility](observation-and-model.md#running-a-checkpoint-on-a-later-revision);
 which measurements line up is
 [evaluation](evaluation.md#comparing-measurements-across-revisions).
@@ -1851,12 +1875,11 @@ observations and learning tokens tell them apart. Lita, Mechanical Engineer
 makes a 5/5 colorless Zeppelin Vehicle with flying and crew 3, a token with no
 printing and so no Scryfall id.
 
-Bloodchief Ascension, Brought Back and Cityscape Leveler depend on state that
-policy input v9 cannot hold: life lost this turn, cards put into a graveyard
-from the battlefield this turn, and Powerstone mana that can't be spent on
-nonartifact spells. Their decks admit and play under any input, but a v9 policy
-refuses an observation that needs that state; train on them with input v10
-([policy inputs](observation-and-model.md#input-v10-turn-history-and-powerstone-mana)).
+Bloodchief Ascension, Brought Back and Cityscape Leveler read turn-level state
+that policy input v11 carries in `player_turn_state` and `card_turn_state`:
+life lost this turn, cards put into a graveyard from the battlefield this turn,
+and Powerstone mana that can't be spent on nonartifact spells
+([policy inputs](observation-and-model.md#input-v11-one-row-per-game-thing)).
 
 `managym.set_cards(["tla"])` selects definitions by their first-printing set.
 Adding `"tle"` still excludes reprints defined under earlier sets. Admit the
@@ -1891,7 +1914,7 @@ saved training corpora or change their split assignments.
 | Decisions and forced play | `Game::tick`, `publish_action_space` in [`flow/tick.rs`](../managym/src/flow/tick.rs) |
 | Observations | `Observation::for_player` in [`agent/observation.rs`](../managym/src/agent/observation.rs) |
 | Env, fork, determinize | [`agent/env.rs`](../managym/src/agent/env.rs), [`flow/search.rs`](../managym/src/flow/search.rs) |
-| Batched games | [`agent/vector_env.rs`](../managym/src/agent/vector_env.rs), [`manabot/env/vector_env.py`](../manabot/env/vector_env.py) |
+| Batched games | [`agent/vector_env.rs`](../managym/src/agent/vector_env.rs), [`manabot/env/failures.py`](../manabot/env/failures.py) |
 | Replay verification and records | [`manabot/sim/replay.py`](../manabot/sim/replay.py), [`canonical_replay.rs`](../managym/src/canonical_replay.rs) (record shape) |
 | Possible worlds | [`possible_worlds.rs`](../managym/src/possible_worlds.rs) |
 | Cards and rules types | [`managym/cards/src/`](../managym/cards/src/), [`managym/state/`](../managym/state/) |

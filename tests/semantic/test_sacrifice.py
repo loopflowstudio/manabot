@@ -30,12 +30,17 @@ def test_sacrifice_game_uses_the_training_observation_path() -> None:
     match = MatchConfig.authored(
         "elemental-sacrifice-v1", "sacrifice_left", "sacrifice_right"
     )
-    env = Env(Match(match), ObservationSpace(), Reward(RewardConfig()), seed=162)
+    space = ObservationSpace()
+    env = Env(Match(match), space, Reward(RewardConfig()), seed=162)
     observation, _ = env.reset(seed=162)
     rng = np.random.default_rng(162)
     for _ in range(5000):
-        actions = np.flatnonzero(observation["actions_valid"])
-        observation, _, terminal, truncated, info = env.step(int(rng.choice(actions)))
+        batch = managym.encode_observation_batch([observation], space.layout)
+        action_count = int(batch.action_counts[0])
+        assert action_count == len(observation.action_space.actions)
+        observation, _, terminal, truncated, info = env.step(
+            int(rng.integers(action_count))
+        )
         assert not truncated
         assert not info["action_space_truncated"]
         assert not info["card_space_truncated"]

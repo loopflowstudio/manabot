@@ -5,35 +5,24 @@ Profile the active Rust vector-env path, with or without model inference.
 """
 
 import argparse
+from contextlib import closing
 import json
 
 from bench_observation_support import identity, matched_breakdown
+import numpy as np
 import torch
 
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
-from manabot.env.vector_env import VectorEnv
+from manabot.env.failures import RecordedVectorEnv
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.infra.config import (
     POLICY_INPUT_VERSION,
     ModelConfig,
-    ObservationConfig,
-    RewardConfig,
 )
 from manabot.infra.profiler import Profiler
-
-
-def build_env(num_envs: int, seed: int, *, opponent: str = "random") -> VectorEnv:
-    return VectorEnv(
-        num_envs=num_envs,
-        match=Match(),
-        observation_space=ObservationSpace(ObservationConfig()),
-        reward=Reward(RewardConfig()),
-        device="cpu",
-        seed=seed,
-        player_policies=("agent", opponent),
-    )
+from manabot.policy.spans import ObservationSelection
+import managym
 
 
 def run_breakdown(
@@ -43,51 +32,43 @@ def run_breakdown(
     seed: int,
 ) -> tuple[dict[str, dict[str, float]], float]:
     profiler = Profiler(enabled=True)
-    env = build_env(num_envs, seed)
+    space = ObservationSpace()
+    buffers = step_buffers(num_envs)
+    agent = ActorCritic(space, ModelConfig()).eval() if with_inference else None
+    with closing(
+        RecordedVectorEnv(
+            num_envs=num_envs, seed=seed, player_policies=("agent", "random")
+        )
+    ) as env:
+        env.set_observation_layout(
+            buffers, action_overflow=space.config.action_overflow, layout=space.layout
+        )
+        env.reset_all_into_buffers(Match().to_rust())
+        actions = [0] * num_envs
 
-    agent = None
-    if with_inference:
-        agent = ActorCritic(env.observation_space, ModelConfig())
-        agent.eval()
+        def step() -> None:
+            env.step_into_buffers(actions)
+            done = np.flatnonzero(buffers["terminated"] | buffers["truncated"])
+            if done.size:
+                env.load_slots_into_buffers(
+                    [managym.SlotLoad.fresh(int(slot)) for slot in done]
+                )
 
-    obs, _ = env.reset()
-    actions = torch.zeros(num_envs, dtype=torch.int64)
-
-    for _ in range(20):
-        env.step(actions)
-
-    with profiler.track("update"):
-        for _ in range(total_steps):
-            with profiler.track("step"):
-                if agent is not None:
-                    with profiler.track("inference"):
-                        with torch.no_grad():
-                            action, _, _, _ = agent.get_action_and_value(
-                                on_device(
-                                    agent.prepare(
-                                        {
-                                            key: to_numpy(value)
-                                            for key, value in (obs).items()
-                                        },
-                                        inference=True,
-                                    ),
-                                    device_of(agent),
-                                )
+        for _ in range(20):
+            step()
+        with profiler.track("update"):
+            for _ in range(total_steps):
+                with profiler.track("step"):
+                    if agent is not None:
+                        with profiler.track("inference"):
+                            rows = ObservationSelection(
+                                space, tuple(env.observation_rows())
                             )
-                        actions = action
-
-                with profiler.track("step_and_refill"):
-                    env._step_and_refill(actions)
-
-                with profiler.track("sync_observations"):
-                    env._sync_observations()
-
-                with profiler.track("apply_reward_policy"):
-                    env._apply_reward_policy()
-
-                obs = env._obs_tensors
-
-    env.close()
+                            actions = agent.sample(
+                                agent.prepare(rows, inference=True)
+                            ).tolist()
+                    with profiler.track("step_and_refill"):
+                        step()
     stats = profiler.get_stats()
     wall_time = stats.get("update", {}).get("total_time", 0.0)
     sps = (total_steps * num_envs) / wall_time if wall_time > 0 else 0.0
@@ -151,7 +132,7 @@ def main() -> None:
     parser.add_argument(
         "--matched-corpus",
         action="store_true",
-        help="Measure identical native priority/target/payment/large-action roots (benchmark feature required)",
+        help="Measure identical native priority/target/payment/large-action roots (benchmark feature adds Rust allocation counts)",
     )
     parser.add_argument(
         "--json", action="store_true", help="Emit a portable timing receipt"
@@ -166,11 +147,16 @@ def main() -> None:
             )
         torch.set_num_threads(1)
         torch.set_num_interop_threads(1)
-        env = build_env(args.num_envs, args.seed, opponent="agent")
-        try:
-            env.reset()
+        space = ObservationSpace()
+        with closing(RecordedVectorEnv(num_envs=args.num_envs, seed=args.seed)) as env:
+            env.set_observation_layout(
+                step_buffers(args.num_envs),
+                action_overflow=space.config.action_overflow,
+                layout=space.layout,
+            )
+            env.reset_all_into_buffers(Match().to_rust())
             before = identity()
-            rows = matched_breakdown(env, args.steps)
+            rows = matched_breakdown(env, space, args.num_envs, args.steps)
             print(
                 json.dumps(
                     {
@@ -183,8 +169,6 @@ def main() -> None:
                     }
                 )
             )
-        finally:
-            env.close()
         return
 
     stats, sps = run_breakdown(

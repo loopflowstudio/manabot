@@ -26,7 +26,7 @@ cargo run --manifest-path managym/Cargo.toml --example export_study_recorded_dec
 uv run --extra play python - <<'PY'
 import json
 from pathlib import Path
-from academy.advice import advice_schema
+from managym.academy.advice import advice_schema
 
 Path("protocol/advice-v1.schema.json").write_text(
     json.dumps(advice_schema(), indent=2, sort_keys=True) + "\n"

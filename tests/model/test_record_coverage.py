@@ -22,21 +22,33 @@ def test_every_id_random_games_emit_has_a_catalog_row() -> None:
     assert report.fact_rows > 0 and report.effect_rows > 0
 
 
-@pytest.mark.parametrize(
-    "missing_prefix", ["Modification::", "execution/6/effect execution"]
-)
-def test_a_name_missing_from_the_vocabulary_fails_the_sweep(
+def test_a_record_name_missing_from_the_vocabulary_fails_the_sweep(
     monkeypatch: pytest.MonkeyPatch,
-    missing_prefix: str,
 ) -> None:
     torch.set_num_threads(1)
     names = managym.record_vocabulary()
     monkeypatch.setattr(
         managym,
         "record_vocabulary",
-        lambda: [n for n in names if not n[1].startswith(missing_prefix)],
+        lambda: [n for n in names if not n[1].startswith("Modification::")],
     )
     with pytest.raises(ValueError, match="outside the catalog record vocabulary"):
+        record_coverage.coverage_sweep(_GAMES, seed=0, backend=resolve("torch"))
+
+
+def test_a_runtime_token_missing_from_the_vocabulary_fails_the_sweep(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    torch.set_num_threads(1)
+    tokens = managym.runtime_tokens()
+    name = "effect execution"
+    monkeypatch.setattr(
+        managym,
+        "runtime_tokens",
+        lambda: [token for token in tokens if token[1] != name],
+    )
+    value = managym.catalog_token_value(name)
+    with pytest.raises(ValueError, match=rf"missing keys: .*\(6, 0x{value:08x}\)"):
         record_coverage.coverage_sweep(_GAMES, seed=0, backend=resolve("torch"))
 
 

@@ -5,6 +5,7 @@ labels are a separate corpus column. Reservoir sampling bounds each viewer to
 16 decisions without favoring the opening. Whole games own split membership.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 import json
@@ -14,10 +15,10 @@ from typing import Literal
 
 import numpy as np
 
-from manabot.env.decision_memory import MEMORY_FIELDS
-from manabot.env.memory_store import MemoryStore, PrefixIdentity, PrefixObservation
+from manabot.env.memory_store import MemoryStore, Prefix, PrefixIdentity, RetainedMemory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
+from manabot.policy.captured_observations import pack_observation
 from manabot.policy.spans import ObservationSelection
 import managym
 from managym.recording import ScalarCapture
@@ -56,9 +57,21 @@ class ProbeRow:
     viewer: int
     decision: int
     disclosure: Literal["open", "closed"]
-    observation: PrefixObservation
+    observation: managym.ObservationBatch
+    prefix: Prefix
     public: np.ndarray
     analytic: np.ndarray
+
+
+def probe_observations(
+    rows: Sequence[ProbeRow], space: ObservationSpace
+) -> ObservationSelection:
+    """Reattach each sampled viewer's interned history in minibatch order."""
+    return ObservationSelection(
+        space,
+        tuple((row.observation, 0) for row in rows),
+        RetainedMemory(tuple(row.prefix for row in rows), CAPACITIES),
+    )
 
 
 @dataclass
@@ -215,15 +228,8 @@ def collect_games(
                         viewer,
                         decision,
                         disclosure,
-                        PrefixObservation(
-                            {
-                                k: selection.project(k)
-                                for k in selection
-                                if k not in MEMORY_FIELDS
-                            },
-                            [prefix],
-                            CAPACITIES,
-                        ),
+                        batch.blank_decision_memory(),
+                        prefix,
                         state,
                         analytic,
                     )
@@ -251,7 +257,8 @@ def collect_games(
                     # Retain exact sampled inputs in compact form; all joins
                     # remain admitted production prefixes on reload/materialize.
                     np.savez_compressed(
-                        out / f"row-{index:05d}.npz", **row.observation.materialize()
+                        out / f"row-{index:05d}.npz",
+                        **pack_observation(probe_observations([row], space)),
                     )
         with (out / "games.jsonl").open("a") as stream:
             stream.write(

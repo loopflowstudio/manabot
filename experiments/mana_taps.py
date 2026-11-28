@@ -403,7 +403,7 @@ def play(match: Match[Deals], agents: Sequence[object]) -> Result:
             candidate, "heuristic", player_id="opponent"
         ).model_copy(update={"player_spec": dict(HEURISTIC)})
     key = EvaluationKey(
-        world=managym.WORLD_VERSION,
+        world="w17",
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
         arena_version="mana-taps-paired",

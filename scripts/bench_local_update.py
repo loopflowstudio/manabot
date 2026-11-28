@@ -1,10 +1,10 @@
 """Bounded fixed-position local-search timing and pre-change receipt comparison.
 
-Run `uv run python scripts/bench_local_update.py --reference 841b1c50c`.
+Run `uv run python scripts/bench_local_update.py` to compare compact and full evidence.
 No games are played: both teachers search the same two seeded opening positions
 at depth 20, on one CPU thread. By default the policy is initialized (64 x 2),
 not trained; --checkpoint selects an admitted observation-only checkpoint.
-The reference is loaded from git, never installed as another production path.
+An explicit --reference uses code from git and requires compatible local imports.
 Timings are unprofiled; a separate search profiles the largest allocation.
 For native attribution, build the extension with --features python,benchmark;
 ordinary wheels omit those timers. Instrumented builds also include existing
@@ -20,9 +20,8 @@ and SHA-256 from composite construction/serialization skipped by direct hashes.
 A reference whose config predates the evidence mode is compared with full
 evidence; any other reference uses the defaults.
 
---rollout-evidence and --native-encoder instead compare arms against the
-defaults (compact evidence, native frontier encoding) under the current code,
-with no git reference; an omitted flag holds that setting at its default. Every
+--rollout-evidence compares full and compact evidence against the compact
+default under the current code, with no git reference. Every
 arm searches the same openings and seeds; an unprofiled parity pass checks
 Commands, native frontier tensors and values before any timing.
 --inference-threads sets Torch's intra-op count once, before any model loads.
@@ -47,7 +46,6 @@ from typing import Literal, ParamSpec, Sequence, TypedDict, TypeVar, cast
 from unittest.mock import patch
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import TypeAdapter
 import torch
 
@@ -70,8 +68,14 @@ from managym.decision import Observation
 
 RolloutEvidence = Literal["full", "compact"]
 # Search defaults: compact evidence with native frontier encoding.
-_DEFAULT_ARM: tuple[RolloutEvidence, str] = ("compact", "on")
-_DEFAULT_NAME = "/".join(_DEFAULT_ARM)
+_DEFAULT_NAME: RolloutEvidence = "compact"
+
+
+def reference_commit(revision: str) -> str:
+    return subprocess.check_output(
+        ["git", "rev-parse", "--verify", "--end-of-options", f"{revision}^{{commit}}"],
+        text=True,
+    ).strip()
 
 
 def reference_module(revision: str, relative_path: str) -> types.ModuleType:
@@ -263,7 +267,7 @@ def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
                 ("semantic_observation_json", "semantic_json_and_hash"),
                 ("semantic_viewer_state_hash", "semantic_direct_hash"),
                 ("observation_for_player", "native_observation"),
-                ("encode_observation_into", "observation_encoding"),
+                ("encode_observation_batch", "observation_encoding"),
                 ("apply_policy_choice", "native_step_and_audit"),
                 ("as_tensor", "tensor_assembly"),
             ):
@@ -364,28 +368,22 @@ def compare_arm(baseline: LocalUpdateReceipt, arm: LocalUpdateReceipt) -> Parity
 
 @contextmanager
 def _checked_native_frontiers(teacher: LocalUpdateTeacher) -> Iterator[list[int]]:
-    """Compare every native frontier with the row encoder during a parity pass.
-
-    Yields the sizes of the frontiers checked; a row-encoding teacher has none.
-    """
+    """Check frontier encoding against independent singleton reads outside timing."""
     checked: list[int] = []
-    if not teacher.native_encoder:
-        yield checked
-        return
-    native = teacher._encode_native
+    encode_frontier = teacher._encode
 
     def encode(
         engines: Sequence[managym.Env],
-    ) -> tuple[dict[str, NDArray[np.generic]], list[int]]:
-        actual, counts = native(engines)
-        expected, expected_counts = teacher._encode_rows(engines)
-        assert counts == expected_counts
-        for key, value in expected.items():
-            np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    ) -> tuple[managym.ObservationBatch, list[int]]:
+        actual, counts = encode_frontier(engines)
+        for index, engine in enumerate(engines):
+            expected, single_count = encode_frontier([engine])
+            assert single_count == [counts[index]]
+            assert actual.gather([(actual, index)]).tables() == expected.tables()
         checked.append(len(engines))
         return actual, counts
 
-    with patch.object(teacher, "_encode_native", encode):
+    with patch.object(teacher, "_encode", encode):
         yield checked
 
 
@@ -395,7 +393,6 @@ def compare_arms(
     position_seeds: Sequence[int],
     *,
     evidence: Sequence[RolloutEvidence],
-    encoders: Sequence[str],
     threads: dict[str, int],
 ) -> None:
     """Time arms against the default arm on identical searches."""
@@ -407,23 +404,16 @@ def compare_arms(
                 Path(temporary) / "initialized.safetensors", match
             )
         digest = file_sha256(checkpoint)
-        arms = [_DEFAULT_ARM] + [
-            (mode, encoder)
-            for mode in evidence
-            for encoder in encoders
-            if (mode, encoder) != _DEFAULT_ARM
-        ]
         teachers = {
-            f"{mode}/{encoder}": LocalUpdateTeacher(
+            mode: LocalUpdateTeacher(
                 checkpoint,
                 digest,
                 LocalSearchConfig(
                     depth=20, decision_seconds=120, rollout_evidence=mode
                 ),
-                native_encoder=encoder == "on",
                 backend=resolve("torch"),
             )
-            for mode, encoder in arms
+            for mode in dict.fromkeys((_DEFAULT_NAME, *evidence))
         }
         for teacher in teachers.values():
             validate_agent_setup(teacher.agent, match.to_rust())
@@ -498,7 +488,10 @@ def compare_arms(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reference", default="841b1c50c")
+    comparison = parser.add_mutually_exclusive_group()
+    comparison.add_argument(
+        "--reference", help="Compare with a source-compatible git revision"
+    )
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--worlds", type=int, nargs="+", default=[1, 4, 16])
     parser.add_argument("--position-seeds", type=int, nargs="+", default=[42, 43])
@@ -513,17 +506,11 @@ def main() -> None:
         type=Path,
         help="Compare against previously retained original-runtime receipts",
     )
-    parser.add_argument(
+    comparison.add_argument(
         "--rollout-evidence",
         nargs="+",
         choices=("full", "compact"),
         help="Compare these evidence arms against the defaults instead of --reference",
-    )
-    parser.add_argument(
-        "--native-encoder",
-        nargs="+",
-        choices=("off", "on"),
-        help="Compare these frontier encoders against the defaults",
     )
     parser.add_argument(
         "--inference-threads",
@@ -542,16 +529,25 @@ def main() -> None:
         "inter_op": torch.get_num_interop_threads(),
     }
     torch.manual_seed(15)
-    if args.rollout_evidence or args.native_encoder:
+    if args.rollout_evidence and (args.retain_reference or args.native_reference):
+        parser.error("reference receipts require a git reference comparison")
+    if args.native_reference and args.reference is None:
+        first = (
+            args.native_reference / f"{args.position_seeds[0]}-{args.worlds[0]}.json"
+        )
+        args.reference = json.loads(first.read_bytes())["reference"]
+    if args.retain_reference and args.reference is None:
+        args.reference = "HEAD"
+    if args.reference is None:
         compare_arms(
             args.checkpoint,
             args.worlds,
             args.position_seeds,
-            evidence=args.rollout_evidence or [_DEFAULT_ARM[0]],
-            encoders=args.native_encoder or [_DEFAULT_ARM[1]],
+            evidence=args.rollout_evidence or ["compact", "full"],
             threads=threads,
         )
         return
+    args.reference = reference_commit(args.reference)
     # Retain the changed execution owners. Current imported encoders would
     # otherwise silently give the baseline today's optimizations.
     reference_search = reference_module(
@@ -595,7 +591,9 @@ def main() -> None:
         with patch(
             "manabot.backends.torch.checkpoint.ActorCritic", reference_model.ActorCritic
         ):
-            before = reference(checkpoint, digest, _reference_config(config))
+            before = reference(
+                checkpoint, digest, _reference_config(config), backend=resolve("torch")
+            )
         teachers = {
             "before": before,
             "after": LocalUpdateTeacher(
@@ -662,7 +660,7 @@ def main() -> None:
                     if original_runtime_sha256 is not None:
                         assert original.runtime_sha256 == original_runtime_sha256
                     original_runtime_sha256 = original.runtime_sha256
-                    assert retained["reference"] == args.reference
+                    assert reference_commit(retained["reference"]) == args.reference
                     original_timings.append(
                         replace(
                             results[-1],

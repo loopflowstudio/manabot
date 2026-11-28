@@ -48,7 +48,7 @@ from manabot.training.state.game_errors import (
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.verify.games import INTERACTIVE_DECK
-from tests.fixtures.dense_collector import dense_collector
+from tests.fixtures.rollout_arrays import trajectory_field
 from tests.training.test_two_seat_learning import ScriptedGames, _agent
 
 
@@ -145,7 +145,7 @@ def _one_seat(closure: BatchClosure) -> Collector:
         batch_closure=closure,
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
-    collector._env = ScriptedGames(dense_collector(collector))
+    collector._env = ScriptedGames(collector)
     return collector
 
 
@@ -173,7 +173,7 @@ def test_one_seat_complete_games_end_every_trajectory_at_a_result() -> None:
     agent = _agent()
     collector = _one_seat("complete-games")
     batch = collect(collector, agent, 2)
-    assert batch.ordered_obs()["agent_player"].shape[1] == 1
+    assert trajectory_field(batch, "agent_player").shape[1] == 1
     assert bool(batch.next_done.all())
     # Every packed trajectory closes on a terminal row, so nothing bootstraps.
     assert bool(batch.dones[-1].all())
@@ -556,7 +556,7 @@ def test_two_seat_exact_quota_handles_all_terminal_boundary_with_zero_cuts() -> 
     try:
         # ScriptedGames has 5 moves on stream 0 and 3 moves on stream 1; after
         # 15 moves (LCM of 5 and 3), both streams end cleanly on step 15.
-        collector._env = ScriptedGames(dense_collector(collector))
+        collector._env = ScriptedGames(collector)
         batch = collect(collector, agent, 15)
         assert batch.actions.shape == (30, 1)
         assert collector.stats.idle_stream_steps == 0

@@ -22,10 +22,11 @@ from etude.records import ArtifactRef
 import pytest
 import torch
 
+from experiments import tla_frontier
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match as EnvMatch
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.eval import pairing
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import blank_decision_memory, build
@@ -36,6 +37,7 @@ from manabot.infra.identity import file_sha256
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 
 
 @pytest.fixture
@@ -80,6 +82,25 @@ def fixture_checkpoint(
             uri=path.as_uri(), sha256=file_sha256(path), size_bytes=path.stat().st_size
         ),
     )
+
+
+def test_frontier_registers_its_checkpoint_layout(
+    tmp_path: Path, cpu_threads: None
+) -> None:
+    fresh = tla_frontier.settings(tla_frontier.FrontierConfig(size="w64")).observation
+    assert fresh.policy_input_version == 11
+    space = ObservationSpace(fresh)
+    protocol = tla_frontier.PROTOCOL
+    matchup = tla_frontier.deck_matchup(
+        tla_frontier.corpus(), protocol, protocol.pairs[0]
+    )
+    player = checkpoint_player(fixture_checkpoint(tmp_path, 19, space))
+    _, path = tla_frontier._registration(player, "candidate", matchup, fresh)
+    assert path == player.checkpoint.path
+    with pytest.raises(ValueError, match="observation differs"):
+        tla_frontier._registration(
+            player, "candidate", matchup, fresh.model_copy(update={"max_actions": 32})
+        )
 
 
 @pytest.mark.parametrize(
@@ -155,7 +176,7 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
     assert request.authored_matchup is not None
     env = managym.Env(seed=123)
     env.reset(EnvMatch(request.authored_matchup.match()).to_rust())
-    decklists = encode_observation(space, env.observation_for_player(0))["decklists"]
+    decklists = observation_arrays(space, env.observation_for_player(0))["decklists"]
     assert decklists[0].any()
     assert bool(decklists[1].any()) == (disclosure == "open")
     assert request.opponent.player_spec.get("blank_decision_memory", False) == blank

@@ -321,9 +321,6 @@ read through the same functions. Private snapshot replays (`managym-snapshot-v1`
 exported by `GameSnapshot.to_replay_json()`) also open directly through
 `read_record`, `read_records`, `records_from_source`, `walk`, and
 `managym academy replay`, executing any recorded boundary interventions natively.
-`FailureEvidence` and `read_failure` are the
-former names of `GameRecord` and `read_record`; they warn and are removed in
-0.3.0.
 
 ### Keep a durable journal
 
@@ -365,10 +362,9 @@ the known prefix and, for this diagnostic command only, can attempt a pending
 indexed action with its retained fresh binding; Academy and `walk` never
 attempt a pending call and show the game as interrupted there. Unknown setup or
 binding is reported as unavailable, and the original interrupted outcome stays
-unknown even if replay succeeds. Older manabot receipts keep their original
-source-digest meaning; when legacy source verification requires manabot, use
-its [replay command](training.md#inspect-and-replay-a-journal) in the original
-environment. Replay does not restore a process or optimizer.
+unknown even if replay succeeds. Older receipts with a legacy source digest
+require `--allow-changed-runtime` or the revision that wrote them. Replay does
+not restore a process or optimizer.
 
 Each boundary requires serialization and fsync, which can reduce throughput;
 no training measurement of that cost exists yet. Automatic atomic compaction
@@ -512,14 +508,13 @@ import numpy as np
 import managym
 
 layout = managym.ObservationLayout()
-buffers = {
-    **layout.allocate(2),
+state = {
     "rewards": np.zeros(2, dtype=np.float64),
     "terminated": np.zeros(2, dtype=np.uint8),
     "truncated": np.zeros(2, dtype=np.uint8),
 }
 games = managym.VectorEnv(num_envs=2, seed=42)
-games.set_buffers(buffers, layout=layout)
+games.set_observation_layout(state, layout)
 players = [
     managym.PlayerConfig(f"p{seat}", {"Mountain": 8, "Gray Ogre": 4})
     for seat in (0, 1)
@@ -908,9 +903,9 @@ Engine-only projects should depend on `managym` and use `import managym`.
 Projects using `from manabot import managym` or `manabot.managym` can keep those
 imports when `manabot` is installed: they reach the same engine classes and
 submodules, without a second extension or game state. Installing `managym`
-alone does not provide the `manabot` namespace. Python training wrappers such
-as `manabot.env.vector_env.VectorEnv` still require `manabot`; the native
-batch class is `managym.VectorEnv`.
+alone does not provide the `manabot` namespace. The native batch class is `managym.VectorEnv`. Training uses
+`manabot.env.failures.RecordedVectorEnv`. The legacy Torch tensor wrapper
+`manabot.env.vector_env.VectorEnv` is deprecated for removal in 0.3.0.
 
 The two packages release together at the same version. Package upgrades do
 not change frozen observation layouts. Retain the package versions, configuration

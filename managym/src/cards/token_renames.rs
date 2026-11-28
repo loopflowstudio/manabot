@@ -2,7 +2,10 @@
 //! successor means the old meaning was removed or split across several tokens.
 //! Stored programs can still read the learned vector of a retired name.
 
+use std::collections::BTreeSet;
+
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
+use crate::agent::record_vocabulary::content_names;
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (
@@ -180,8 +183,12 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
         "Effect::EachPlayerSacrificesCreatures",
         Some("Effect::EachPlayerSacrifices"),
     ),
-    (Text, "creatures each player sacrifices", None),
-    (Text, "kept creature", None),
+    (
+        Text,
+        "creatures each player sacrifices",
+        Some("permanents each player sacrifices"),
+    ),
+    (Text, "kept creature", Some("kept permanent")),
     (
         Structure,
         "/Effect::EachPlayerSacrificesCreatures",
@@ -211,68 +218,511 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Field, "combat", None),
 ];
 
-/// The search now describes arbitrary distinct names and a structured ending;
-/// a payment's contributions are `contribution` facts.
-pub const RECORDS: &[(&str, &str, Option<&str>)] = &[
-    ("token", "execution/2/combat", None),
-    (
-        "token",
-        "execution/6/kept creature",
-        Some("execution/6/kept permanent"),
-    ),
-    (
-        "token",
-        "execution/6/creatures each player sacrifices",
-        Some("execution/6/permanents each player sacrifices"),
-    ),
-    (
-        "token",
-        "execution/1//ReplacementEffect::ExileInsteadOfGraveyard",
-        None,
-    ),
-    (
-        "token",
-        "execution/3/ReplacementEffect::ExileInsteadOfGraveyard",
-        None,
-    ),
-    ("token", "Modification::ControlChanged", None),
-    (
-        "token",
-        "execution/1//ReplacementEffect::DoubleDamageToController",
-        None,
-    ),
-    (
-        "token",
-        "execution/3/ReplacementEffect::DoubleDamageToController",
-        None,
-    ),
-    (
-        "token",
-        "execution/1//ReplacementEffect::PreventDamageToController",
-        None,
-    ),
-    (
-        "token",
-        "execution/3/ReplacementEffect::PreventDamageToController",
-        None,
-    ),
-    ("token", "execution/6/attached at activation", None),
-    ("token", "execution/6/land choices remaining", None),
-    ("token", "execution/6/selected lands", None),
-    ("token", "execution/6/waterbend contributions", None),
+pub const RECORDS: &[(&str, &str, Option<&str>)] =
+    &[("token", "Modification::ControlChanged", None)];
+
+// MTG-504, pre-0.3.0. These symbols also had synthetic record-name keys.
+// Keep this ledger independent of the live runtime projection's registrations.
+const LEGACY_EXECUTION_TOKENS: &[(TokenKind, &str)] = &[
+    (Field, "ability"),
+    (Field, "actor"),
+    (Field, "amounts"),
+    (Field, "attacking"),
+    (Field, "by"),
+    (Field, "cause"),
+    (Field, "combat"),
+    (Field, "condition"),
+    (Field, "copies"),
+    (Field, "cost"),
+    (Field, "definition"),
+    (Field, "entry_counters"),
+    (Field, "exile_instead_of_graveyard"),
+    (Field, "expiry"),
+    (Field, "face_down"),
+    (Field, "flash_surcharge"),
+    (Field, "flashback"),
+    (Field, "free"),
+    (Field, "from_prepared"),
+    (Field, "gains"),
+    (Field, "grantee"),
+    (Field, "help"),
+    (Field, "index"),
+    (Field, "kicked"),
+    (Field, "kind"),
+    (Field, "mode"),
+    (Field, "name"),
+    (Field, "owner"),
+    (Field, "play_lands"),
+    (Field, "player"),
+    (Field, "predicate"),
+    (Field, "prepared"),
+    (Field, "program"),
+    (Field, "remaining"),
+    (Field, "replaced"),
+    (Field, "resolving"),
+    (Field, "result"),
+    (Field, "second_from_top"),
+    (Field, "source"),
+    (Field, "waterbend"),
+    (Field, "x"),
+    (Field, "zone"),
+    (Structure, "/Bending::Air"),
+    (Structure, "/Bending::Earth"),
+    (Structure, "/Bending::Fire"),
+    (Structure, "/Bending::Water"),
+    (Structure, "/CardDefId"),
+    (Structure, "/CastChoices"),
+    (Structure, "/CopyEffect"),
+    (Structure, "/CostComponent::Life"),
+    (Structure, "/CostComponent::Mana"),
+    (Structure, "/CounterProvenance"),
+    (Structure, "/DamageTransform::Prevent"),
+    (Structure, "/DamageTransform::PreventAll"),
+    (Structure, "/Effect::CounterAbility"),
+    (Structure, "/Effect::ExileNamed"),
+    (Structure, "/Effect::GrantPlay"),
+    (Structure, "/Effect::HaveAbilitiesOf"),
+    (Structure, "/Effect::PlaceTargetInLibrary"),
+    (Structure, "/Effect::RestoreController"),
+    (Structure, "/Effect::SelectTargetRequirement"),
+    (Structure, "/EffectiveTrigger"),
+    (Structure, "/EntryChoice::CardName"),
+    (Structure, "/EntryChoice::Color"),
+    (Structure, "/EntryChoice::CreatureType"),
+    (Structure, "/EventBinding::Bending"),
+    (Structure, "/EventBinding::Combat"),
+    (Structure, "/EventBinding::Countered"),
+    (Structure, "/EventBinding::Created"),
+    (Structure, "/EventBinding::Damage"),
+    (Structure, "/EventBinding::Deaths"),
+    (Structure, "/EventBinding::Destroyed"),
+    (Structure, "/EventBinding::Discard"),
+    (Structure, "/EventBinding::ExileLinked"),
+    (Structure, "/EventBinding::LifeLost"),
+    (Structure, "/EventBinding::None"),
+    (Structure, "/EventBinding::OwnSacrifices"),
+    (Structure, "/EventBinding::PlaceInLibrary"),
+    (Structure, "/EventBinding::SacrificedBy"),
+    (Structure, "/EventBinding::Shuffle"),
+    (Structure, "/EventBinding::ThisWay"),
+    (Structure, "/EventCause::Cost"),
+    (Structure, "/EventCause::Effect"),
+    (Structure, "/EventCause::TurnAction"),
+    (Structure, "/GameEvent::LibrarySearched"),
+    (Structure, "/GameEvent::Scried"),
+    (Structure, "/GameEvent::Surveilled"),
+    (Structure, "/Help"),
+    (Structure, "/How::Discarded"),
+    (Structure, "/How::Exiled"),
+    (Structure, "/How::Returned"),
+    (Structure, "/How::Sacrificed"),
+    (Structure, "/How::Tapped"),
+    (Structure, "/LibraryEnd::Bottom"),
+    (Structure, "/LibraryEnd::Top"),
+    (Structure, "/ManaExpiry::EndOfCombat"),
+    (Structure, "/ManaExpiry::EndOfTurn"),
+    (Structure, "/ManaExpiry::Step"),
+    (Structure, "/ManaSpent"),
+    (Structure, "/Modification::AddColors"),
+    (Structure, "/Modification::AddTypes"),
+    (Structure, "/Modification::ModeChosen"),
+    (Structure, "/PlayGrantExtension"),
+    (Structure, "/PlayerId"),
+    (Structure, "/ReplacementEffect::AdventureExile"),
+    (Structure, "/ReplacementEffect::DoubleDamageToController"),
+    (Structure, "/ReplacementEffect::ExileInsteadOfGraveyard"),
+    (Structure, "/ReplacementEffect::PreventCombatDamage"),
+    (Structure, "/ReplacementEffect::PreventDamageToController"),
+    (Structure, "/SpellProfile::BackFace"),
+    (Structure, "/SpellProfile::Omen"),
+    (Structure, "/SpendPredicate::ActivateCreatureSubtype"),
+    (Structure, "/SpendPredicate::CastCreatureSubtype"),
+    (Structure, "/TargetSpec::Ability"),
+    (Structure, "/Toward::Alternative"),
+    (Structure, "/Toward::Bargain"),
+    (Structure, "/Toward::Convoke"),
+    (Structure, "/Toward::Crew"),
+    (Structure, "/Toward::Delve"),
+    (Structure, "/Toward::Forage"),
+    (Structure, "/Toward::Improvise"),
+    (Structure, "/Toward::Printed"),
+    (Structure, "/Toward::Saddle"),
+    (Structure, "/Toward::Station"),
+    (Structure, "/Toward::Waterbend"),
+    (Structure, "/TriggerCondition::TappedForMana"),
+    (Structure, "/ZoneSelection"),
+    (Structure, "/ZoneType::Stack"),
+    (Structure, "CardDefId"),
+    (Structure, "CastChoices"),
+    (Structure, "CopyEffect"),
+    (Structure, "CounterProvenance"),
+    (Structure, "EffectiveTrigger"),
+    (Structure, "Help"),
+    (Structure, "ManaSpent"),
+    (Structure, "PlayGrantExtension"),
+    (Structure, "PlayerId"),
+    (Structure, "ZoneSelection"),
+    (Text, "DamageEvent::Amount"),
+    (Text, "X"),
+    (Text, "ability"),
+    (Text, "activation source"),
+    (Text, "after selection"),
+    (Text, "all"),
+    (Text, "another damage step"),
+    (Text, "applied replacements"),
+    (Text, "assigned combat damage"),
+    (Text, "attach to"),
+    (Text, "attached at activation"),
+    (Text, "attacked defender"),
+    (Text, "batch"),
+    (Text, "bind moved"),
+    (Text, "bind result"),
+    (Text, "caller frame"),
+    (Text, "captured activation"),
+    (Text, "cascade exiled"),
+    (Text, "cascade mana value limit"),
+    (Text, "cast choices"),
+    (Text, "cast from exile"),
+    (Text, "cast from graveyard"),
+    (Text, "cast from hand"),
+    (Text, "cast from library"),
+    (Text, "cast predicate"),
+    (Text, "choice"),
+    (Text, "chosen creature type"),
+    (Text, "chosen instruction"),
+    (Text, "chosen object"),
+    (Text, "chosen on entry"),
+    (Text, "chosen to exile"),
+    (Text, "combat damage source"),
+    (Text, "commit completion event"),
+    (Text, "contribution"),
+    (Text, "controller"),
+    (Text, "copy definition"),
+    (Text, "copy exceptions"),
+    (Text, "copy front face"),
+    (Text, "cost sacrifice"),
+    (Text, "counter on decline"),
+    (Text, "counter placement"),
+    (Text, "counter recipient"),
+    (Text, "countered by"),
+    (Text, "counters remaining"),
+    (Text, "create tokens"),
+    (Text, "created"),
+    (Text, "creature type choice"),
+    (Text, "creatures each player sacrifices"),
+    (Text, "current characteristics"),
+    (Text, "damage"),
+    (Text, "damage source"),
+    (Text, "damage target"),
+    (Text, "damaged player"),
+    (Text, "discard cause"),
+    (Text, "discard controller"),
+    (Text, "discard from hand"),
+    (Text, "discard source"),
+    (Text, "discards remaining"),
+    (Text, "distinct name search"),
+    (Text, "effect execution"),
+    (Text, "end batch"),
+    (Text, "end the turn"),
+    (Text, "entering card"),
+    (Text, "entering definition"),
+    (Text, "enters attached to"),
+    (Text, "enters back face up"),
+    (Text, "enters face down"),
+    (Text, "enters tapped"),
+    (Text, "enters transformed"),
+    (Text, "entry X"),
+    (Text, "entry cast from"),
+    (Text, "entry choice"),
+    (Text, "entry controller"),
+    (Text, "entry counters"),
+    (Text, "event"),
+    (Text, "event ordinal"),
+    (Text, "excess damage"),
+    (Text, "excluded"),
+    (Text, "execution holder"),
+    (Text, "exile choice"),
+    (Text, "exile instants and sorceries"),
+    (Text, "exiled with"),
+    (Text, "face-down pile size"),
+    (Text, "face-up pile"),
+    (Text, "finish spell"),
+    (Text, "finish state-based actions"),
+    (Text, "first-strike participant"),
+    (Text, "grant index"),
+    (Text, "grantor"),
+    (Text, "graveyard choices remaining"),
+    (Text, "if declined"),
+    (Text, "if none selected"),
+    (Text, "if paid"),
+    (Text, "inherited definition"),
+    (Text, "inspected"),
+    (Text, "instructions"),
+    (Text, "iteration instructions"),
+    (Text, "kept creature"),
+    (Text, "kept on top"),
+    (Text, "kept permanent"),
+    (Text, "land choices remaining"),
+    (Text, "last blocker"),
+    (Text, "last known attachment"),
+    (Text, "last known attacking"),
+    (Text, "last known characteristics"),
+    (Text, "last known creature"),
+    (Text, "last known definition"),
+    (Text, "last known in combat"),
+    (Text, "last known kicker"),
+    (Text, "last known land"),
+    (Text, "last known spell"),
+    (Text, "last known spell profile"),
+    (Text, "last known tapped"),
+    (Text, "legend group"),
+    (Text, "legends kept"),
+    (Text, "library end"),
+    (Text, "library order"),
+    (Text, "life change"),
+    (Text, "life lost this way"),
+    (Text, "life paid"),
+    (Text, "linked exile"),
+    (Text, "linked return"),
+    (Text, "linked source"),
+    (Text, "mana spent"),
+    (Text, "maximum total power"),
+    (Text, "may copy"),
+    (Text, "meld component"),
+    (Text, "minimum assignment"),
+    (Text, "mode"),
+    (Text, "moved"),
+    (Text, "moving object"),
+    (Text, "named search"),
+    (Text, "new target"),
+    (Text, "normal combat damage"),
+    (Text, "once each turn ability"),
+    (Text, "once each turn source"),
+    (Text, "ordered prefix"),
+    (Text, "paid activation"),
+    (Text, "paid announcement"),
+    (Text, "paid by"),
+    (Text, "paid source"),
+    (Text, "paid spell"),
+    (Text, "pay casting costs"),
+    (Text, "payer"),
+    (Text, "permanents each player sacrifices"),
+    (Text, "placed on bottom"),
+    (Text, "placement"),
+    (Text, "pre-event object"),
+    (Text, "quota type"),
+    (Text, "remaining"),
+    (Text, "remaining instructions"),
+    (Text, "remaining iteration subjects"),
+    (Text, "remaining payment"),
+    (Text, "remaining target"),
+    (Text, "replacement"),
+    (Text, "replacement option"),
+    (Text, "replacement source"),
+    (Text, "resolving controller"),
+    (Text, "resume discard payment"),
+    (Text, "retarget"),
+    (Text, "retargeted stack object"),
+    (Text, "return"),
+    (Text, "revealed lands"),
+    (Text, "sacrificed object"),
+    (Text, "sacrificing player"),
+    (Text, "saved decision"),
+    (Text, "selected"),
+    (Text, "selected distinct names"),
+    (Text, "selected for graveyard"),
+    (Text, "selected lands"),
+    (Text, "selected so far"),
+    (Text, "selection"),
+    (Text, "selection domain"),
+    (Text, "selection limits"),
+    (Text, "shuffle library after move"),
+    (Text, "snapshot"),
+    (Text, "source after cost"),
+    (Text, "source transforms"),
+    (Text, "spell"),
+    (Text, "spell mana value limit"),
+    (Text, "spending option"),
+    (Text, "target"),
+    (Text, "target clauses"),
+    (Text, "target divisions"),
+    (Text, "target eligibility"),
+    (Text, "target shares"),
+    (Text, "this way"),
+    (Text, "token definition"),
+    (Text, "triggering player"),
+    (Text, "turn action"),
+    (Text, "turn face up"),
+    (Text, "waterbend contributions"),
+    (Text, "you control a Wizard permanent"),
+    (Text, "zone move"),
+    (Variant, "Bending::Air"),
+    (Variant, "Bending::Earth"),
+    (Variant, "Bending::Fire"),
+    (Variant, "Bending::Water"),
+    (Variant, "CostComponent::Discard"),
+    (Variant, "CostComponent::Life"),
+    (Variant, "CostComponent::Mana"),
+    (Variant, "DamageKind::Combat"),
+    (Variant, "DamageRecipientFilter::Any"),
+    (Variant, "DamageTransform::Prevent"),
+    (Variant, "DamageTransform::PreventAll"),
+    (Variant, "Effect::CounterAbility"),
+    (Variant, "Effect::ExileNamed"),
+    (Variant, "Effect::GrantPlay"),
+    (Variant, "Effect::HaveAbilitiesOf"),
+    (Variant, "Effect::PlaceTargetInLibrary"),
+    (Variant, "Effect::RestoreController"),
+    (Variant, "Effect::SelectTargetRequirement"),
+    (Variant, "EntryChoice::CardName"),
+    (Variant, "EntryChoice::Color"),
+    (Variant, "EntryChoice::CreatureType"),
+    (Variant, "EventBinding::Bending"),
+    (Variant, "EventBinding::Combat"),
+    (Variant, "EventBinding::Countered"),
+    (Variant, "EventBinding::Created"),
+    (Variant, "EventBinding::Damage"),
+    (Variant, "EventBinding::Deaths"),
+    (Variant, "EventBinding::Destroyed"),
+    (Variant, "EventBinding::Discard"),
+    (Variant, "EventBinding::ExileLinked"),
+    (Variant, "EventBinding::LifeLost"),
+    (Variant, "EventBinding::None"),
+    (Variant, "EventBinding::OwnSacrifices"),
+    (Variant, "EventBinding::PlaceInLibrary"),
+    (Variant, "EventBinding::SacrificedBy"),
+    (Variant, "EventBinding::Shuffle"),
+    (Variant, "EventBinding::ThisWay"),
+    (Variant, "EventCause::Cost"),
+    (Variant, "EventCause::Effect"),
+    (Variant, "EventCause::TurnAction"),
+    (Variant, "GameEvent::LibrarySearched"),
+    (Variant, "GameEvent::Scried"),
+    (Variant, "GameEvent::Surveilled"),
+    (Variant, "How::Discarded"),
+    (Variant, "How::Exiled"),
+    (Variant, "How::Returned"),
+    (Variant, "How::Sacrificed"),
+    (Variant, "How::Tapped"),
+    (Variant, "LibraryEnd::Bottom"),
+    (Variant, "LibraryEnd::Top"),
+    (Variant, "LoyaltyCost::MinusX"),
+    (Variant, "ManaExpiry::EndOfCombat"),
+    (Variant, "ManaExpiry::EndOfTurn"),
+    (Variant, "ManaExpiry::Step"),
+    (Variant, "ReplacementEffect::AdventureExile"),
+    (Variant, "ReplacementEffect::DoubleDamageToController"),
+    (Variant, "ReplacementEffect::ExileInsteadOfGraveyard"),
+    (Variant, "ReplacementEffect::PreventCombatDamage"),
+    (Variant, "ReplacementEffect::PreventDamageToController"),
+    (Variant, "SpellProfile::BackFace"),
+    (Variant, "SpellProfile::Omen"),
+    (Variant, "SpendPredicate::ActivateCreatureSubtype"),
+    (Variant, "SpendPredicate::CastCreatureSubtype"),
+    (Variant, "TargetSpec::Ability"),
+    (Variant, "Toward::Alternative"),
+    (Variant, "Toward::Bargain"),
+    (Variant, "Toward::Convoke"),
+    (Variant, "Toward::Crew"),
+    (Variant, "Toward::Delve"),
+    (Variant, "Toward::Forage"),
+    (Variant, "Toward::Improvise"),
+    (Variant, "Toward::Printed"),
+    (Variant, "Toward::Saddle"),
+    (Variant, "Toward::Station"),
+    (Variant, "Toward::Waterbend"),
+    (Variant, "TriggerCondition::TappedForMana"),
+    (Variant, "ZoneType::Stack"),
 ];
+
+// These name rows retain their learned vectors by name after their unused
+// program-token keys retire.
+const LEGACY_DECISION_MEMORY_TOKENS: &[&str] = &[
+    "DecisionMemory::Ability",
+    "DecisionMemory::Attacking",
+    "DecisionMemory::Blocking",
+    "DecisionMemory::BoardCounts",
+    "DecisionMemory::Choice",
+    "DecisionMemory::ChooseMode",
+    "DecisionMemory::ChooseTarget",
+    "DecisionMemory::DeclareAttacker",
+    "DecisionMemory::DeclareBlocker",
+    "DecisionMemory::Declared",
+    "DecisionMemory::DeclineChoice",
+    "DecisionMemory::Definition",
+    "DecisionMemory::Discard",
+    "DecisionMemory::Foretell",
+    "DecisionMemory::Hand",
+    "DecisionMemory::Learn",
+    "DecisionMemory::LearnDiscard",
+    "DecisionMemory::LearnTakeLesson",
+    "DecisionMemory::LegendRule",
+    "DecisionMemory::Life",
+    "DecisionMemory::LookAndSelect",
+    "DecisionMemory::Mana",
+    "DecisionMemory::Modal",
+    "DecisionMemory::Mode",
+    "DecisionMemory::Named",
+    "DecisionMemory::OrderTriggers",
+    "DecisionMemory::PassPriority",
+    "DecisionMemory::PayCost",
+    "DecisionMemory::PayOrNot",
+    "DecisionMemory::Power",
+    "DecisionMemory::Priority",
+    "DecisionMemory::PriorityActivateAbility",
+    "DecisionMemory::PriorityCastSpell",
+    "DecisionMemory::PriorityPlayLand",
+    "DecisionMemory::Program",
+    "DecisionMemory::Ready",
+    "DecisionMemory::Role",
+    "DecisionMemory::Scry",
+    "DecisionMemory::SelectCard",
+    "DecisionMemory::TapForCost",
+    "DecisionMemory::Tapped",
+    "DecisionMemory::Toughness",
+    "DecisionMemory::TurnFaceUp",
+    "DecisionMemory::Waterbend",
+];
+
+pub fn token_renames() -> impl Iterator<Item = (TokenKind, &'static str, Option<&'static str>)> {
+    TOKENS.iter().copied().chain(
+        LEGACY_DECISION_MEMORY_TOKENS
+            .iter()
+            .map(|name| (Variant, *name, None)),
+    )
+}
+
+pub fn record_renames() -> Vec<(&'static str, String, Option<&'static str>)> {
+    let names: BTreeSet<_> = LEGACY_EXECUTION_TOKENS
+        .iter()
+        .copied()
+        .chain(content_names().iter().map(|name| (Text, name.as_str())))
+        .map(|(kind, name)| format!("execution/{}/{name}", kind as u16))
+        .collect();
+    RECORDS
+        .iter()
+        .map(|&(namespace, old, successor)| (namespace, old.to_owned(), successor))
+        .chain(names.into_iter().map(|name| ("token", name, None)))
+        .collect()
+}
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use crate::{agent::record_vocabulary::PROGRAM_VOCABULARY, cards::tokens::name_value};
+    use crate::{
+        agent::{
+            decision_memory::decision_memory_names,
+            record_vocabulary::{record_names, RecordNamespace, PROGRAM_VOCABULARY},
+        },
+        cards::tokens::name_value,
+    };
 
     #[test]
     fn each_historical_token_has_one_disposition_and_renames_resolve() {
         let mut classified = HashSet::new();
-        for &(kind, old, successor) in TOKENS {
+        for (kind, old, successor) in token_renames() {
             assert!(classified.insert((kind as u16, name_value(old))), "{old}");
             if let Some(new) = successor {
                 assert!(
@@ -280,6 +730,54 @@ mod tests {
                     "{old} -> {new}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn each_historical_record_has_one_disposition_and_renames_resolve() {
+        let records: HashSet<_> = record_names()
+            .into_iter()
+            .map(|record| (record.namespace.as_str(), record.value))
+            .chain(
+                decision_memory_names()
+                    .into_iter()
+                    .map(|(_, value)| (RecordNamespace::Token.as_str(), value)),
+            )
+            .collect();
+        let mut classified = HashSet::new();
+        for (namespace, old, successor) in record_renames() {
+            assert!(classified.insert((namespace, name_value(&old))), "{old}");
+            if let Some(new) = successor {
+                assert!(
+                    records.contains(&(namespace, name_value(new))),
+                    "{old} -> {new}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn legacy_keys_are_classified_after_their_registrations_are_gone() {
+        let old = "kept creature";
+        let memory = "DecisionMemory::Priority";
+        assert!(!PROGRAM_VOCABULARY.contains(&(Text as u16, name_value(old))));
+        assert!(!PROGRAM_VOCABULARY.contains(&(Variant as u16, name_value(memory))));
+        assert!(token_renames().any(|entry| entry == (Text, old, Some("kept permanent"))));
+        assert!(token_renames().any(|entry| entry == (Variant, memory, None)));
+
+        let records = record_names();
+        let retirements = record_renames();
+        for synthetic in [
+            "execution/6/kept creature",
+            "execution/6/effect execution",
+            "execution/6/you control a Wizard permanent",
+        ] {
+            assert!(records.iter().all(|record| record.name != synthetic));
+            assert!(retirements
+                .iter()
+                .any(|(space, name, successor)| *space == "token"
+                    && name == synthetic
+                    && successor.is_none()));
         }
     }
 }

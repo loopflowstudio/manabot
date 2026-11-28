@@ -1,11 +1,12 @@
 //! Freeze the encoder's live prefixes before they cross the Python boundary.
 // PyO3 wrappers generate identity conversions for PyResult.
 #![allow(clippy::useless_conversion)]
+mod archive;
+
 use super::bindings::{map_agent_err, map_encode_err, PyEnv, PyObservation};
 use super::layout_bindings::{ObservationLayout, PackedTableLayout};
 use crate::agent::{
-    observation::Observation,
-    observation_encoder::{InputLayout, ObservationEncoderConfig},
+    observation::Observation, observation_encoder::ObservationEncoderConfig,
     observation_rows::PackedRows,
 };
 use pyo3::{
@@ -22,7 +23,9 @@ struct FrozenTable {
     values: Py<PyBytes>,
 }
 
-/// Live v11 rows in batch order, frozen by native encoding and preserved by pickle.
+/// Live v11 rows in batch order, frozen by native encoding. Pickle and archives
+/// (`to_bytes`/`from_bytes`) preserve them; archives validate the layout, row
+/// boundaries and joins on load.
 #[pyclass(frozen, module = "managym")]
 pub struct ObservationBatch {
     layout: Py<ObservationLayout>,
@@ -33,6 +36,17 @@ pub struct ObservationBatch {
 
 #[pymethods]
 impl ObservationBatch {
+    /// Store the configured layout and packed records, including empty seat spans.
+    fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        archive::encode(py, self)
+    }
+
+    /// Reload a complete v11 batch after checking its physical layout and native joins.
+    #[staticmethod]
+    fn from_bytes(py: Python<'_>, data: &[u8]) -> PyResult<Self> {
+        archive::decode(py, data)
+    }
+
     #[getter]
     fn layout(&self, py: Python<'_>) -> Py<ObservationLayout> {
         self.layout.clone_ref(py)
@@ -184,11 +198,6 @@ pub(super) fn config(
     layout: &ObservationLayout,
     overflow: &str,
 ) -> PyResult<ObservationEncoderConfig> {
-    if layout.config.layout != InputLayout::OneToken {
-        return Err(PyValueError::new_err(
-            "observation batches require policy input v11",
-        ));
-    }
     Ok(ObservationEncoderConfig {
         action_overflow: overflow.parse().map_err(PyValueError::new_err)?,
         ..layout.config
@@ -301,7 +310,7 @@ fn _restore_observation_batch(
     tables: &Bound<'_, PyDict>,
 ) -> PyResult<ObservationBatch> {
     let schema = layout.borrow(py);
-    if schema.config.layout != InputLayout::OneToken || tables.len() != schema.packed.len() {
+    if tables.len() != schema.packed.len() {
         return Err(PyValueError::new_err(
             "expected the tables of a v11 observation layout",
         ));

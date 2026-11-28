@@ -113,31 +113,6 @@ class BufferedStreams:
                 stack.enter_context(shard.native.reconstructing())
             yield
 
-    def set_buffers(
-        self,
-        buffers: dict[str, Array],
-        action_overflow: str = "error",
-        *,
-        layout: managym.ObservationLayout,
-    ) -> None:
-        """Deprecated dense buffer registration; use `set_observation_layout` for v11. Removed in 0.3.0."""
-        self._check()
-        for value in buffers.values():
-            self._rows(len(value))
-            if not value.flags.c_contiguous or not value.flags.writeable:
-                raise ValueError("producer buffers must be writable and contiguous")
-        self._run(
-            [
-                partial(
-                    shard.native.set_buffers,
-                    {key: value[shard.rows] for key, value in buffers.items()},
-                    action_overflow,
-                    layout=layout,
-                )
-                for shard in self._shards
-            ]
-        )
-
     def set_observation_layout(
         self,
         buffers: dict[str, Array],
@@ -186,51 +161,6 @@ class BufferedStreams:
         return reads, first if len(results) == 1 else first.gather(
             [(batch, i) for _, batch in results for i in range(batch.batch_size)]
         )
-
-    def write_observations_for_players(
-        self,
-        players: Sequence[int | None],
-        buffers: dict[str, Array],
-        action_overflow: Literal["error", "first-legal"] = "error",
-        *,
-        layout: managym.ObservationLayout,
-    ) -> list[ObservationRead]:
-        """Project native seats into disjoint row slices and return global identities."""
-        self._rows(len(players))
-        for value in buffers.values():
-            self._rows(len(value))
-        selected = [
-            shard
-            for shard in self._shards
-            if any(player is not None for player in players[shard.rows])
-        ]
-        reads = self._run(
-            [
-                partial(
-                    shard.native.write_observations_for_players,
-                    players[shard.rows],
-                    {key: value[shard.rows] for key, value in buffers.items()},
-                    action_overflow,
-                    layout=layout,
-                )
-                for shard in selected
-            ]
-        )
-        return [
-            ObservationRead(
-                shard.start + read.slot,
-                read.player,
-                read.game_id,
-                read.seed,
-                read.revision,
-            )
-            for shard, local in zip(selected, reads, strict=True)
-            for read in local
-        ]
-
-    # The two roster setters run serially, before reset: native admission is
-    # input-determined, so a rejection comes from the first shard and leaves
-    # every shard unchanged.
 
     def set_uniform_roster(self, roster: list[managym.PlayerConfig]) -> None:
         self._check()

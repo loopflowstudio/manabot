@@ -53,13 +53,11 @@ def test_invalid_player_policies(
         api(player_policies=policies)
 
 
-def test_legacy_opponent_argument_warns_and_conflicts() -> None:
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
+def test_removed_environment_options_raise_type_error() -> None:
+    with pytest.raises(TypeError, match="opponent_policy"):
         managym.VectorEnv(1, opponent_policy="heuristic")
-    with pytest.raises(ValueError, match="not both"):
-        managym.VectorEnv(
-            1, opponent_policy="random", player_policies=("agent", "heuristic")
-        )
+    with pytest.raises(TypeError, match="enable_behavior_tracking"):
+        managym.Env(enable_behavior_tracking=True)
 
 
 def test_two_builtins_reset_is_unplayed_and_forks_continue_identically() -> None:

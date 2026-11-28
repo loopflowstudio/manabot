@@ -21,10 +21,10 @@ from manabot.backends.mlx.rl import (
     require,
 )
 from manabot.backends.mlx.rollout import check_packed, observation_arrays, packing_mask
-from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
+from manabot.policy.spans import ObservationSelection, PolicyObservation
 from manabot.training.learning import Precision
 from manabot.training.rollout.numerics import SampledRows, prepared_chunks
 from manabot.training.rollout.selection_data import SelectionDraw
@@ -80,7 +80,10 @@ class CollectionScope:
     inference: PolicyInference
 
     def opponent_actions(
-        self, observation: ObservationBuffers, *, execution_rows: int | None = None
+        self,
+        observation: ObservationSelection,
+        *,
+        execution_rows: int | None = None,
     ) -> np.ndarray:
         return self.sample(
             observation, Profiler(), execution_rows=execution_rows
@@ -101,7 +104,7 @@ class CollectionScope:
 
     def sample(
         self,
-        observation: ObservationBuffers,
+        observation: ObservationSelection,
         profiler: Profiler,
         *,
         execution_rows: int | None = None,
@@ -155,9 +158,8 @@ class SelectionPredictor:
         self.agent = agent
         self._key = mx.random.key(seed)
 
-    def predict(self, encoded: dict[str, np.ndarray]) -> SelectionDraw:
-        batch = {key: value[None] for key, value in encoded.items()}
-        prepared = self.agent.prepare(batch, inference=True)
+    def predict(self, encoded: PolicyObservation) -> SelectionDraw:
+        prepared = self.agent.prepare(encoded, inference=True)
         with mx.stream(self.agent.inference_device):
             logits, value = self.agent(prepared)
         # Sample and normalize the same float32 logits reported by evaluate().

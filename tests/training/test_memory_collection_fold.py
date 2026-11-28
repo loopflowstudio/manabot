@@ -4,43 +4,79 @@ from dataclasses import replace
 import gc
 import weakref
 
-import numpy as np
 import pytest
 import torch
 
 from manabot.backends.torch.arrays import on_device
-from manabot.backends.torch.policy import PolicyInference
-from manabot.env.decision_memory import MEMORY_FIELDS
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.memory_store import (
     MemoryStore,
+    Prefix,
     PrefixIdentity,
-    PrefixObservation,
+    RetainedMemory,
+    archive_memory,
+    gather_memory,
     record_tail,
+    restore_memory,
 )
+from manabot.env.observation import ObservationSpace
+from manabot.policy.prepare import Prepared
+from manabot.policy.spans import ObservationSelection
+import managym
 from tests.model.test_decision_memory import policy
-from tests.training.test_memory_chunk_cache import chunk_input
+from tests.training.memory_chunks import (
+    capacities,
+    capture_stream,
+    capture_streams,
+    chunk_batch,
+    chunk_input,
+    chunk_space,
+    record,
+)
+
+
+def single(
+    space: ObservationSpace, batch: managym.ObservationBatch
+) -> ObservationSelection:
+    return ObservationSelection(space, ((batch, 0),))
+
+
+def retained(
+    native: ObservationSelection, prefixes: list[Prefix]
+) -> ObservationSelection:
+    """`native`'s rows with `prefixes` as their interned decision memory."""
+    caps = capacities(native.space)
+    return ObservationSelection(
+        native.space, native.coordinates, RetainedMemory(tuple(prefixes), caps)
+    )
+
+
+def stateless(
+    model: ActorCritic, native: ObservationSelection
+) -> Prepared[torch.Tensor]:
+    """The reference: each row's own native memory tables, without a fold."""
+    return on_device(model.prepare(native, inference=True), "cpu")
 
 
 @pytest.mark.parametrize("summaries", [1, 4])
 @pytest.mark.parametrize("live", [False, True])
-def test_collection_fold_matches_dense_cold_warm_coalesced_fork_reset_and_update(
+def test_collection_fold_matches_native_cold_warm_coalesced_fork_reset_and_update(
     summaries: int, live: bool
 ) -> None:
-    space, raw = chunk_input()
+    space = chunk_space()
     # Introduce the second reference only after the first complete chunk.
-    raw["decision_members"][0, :128, 0] = 1
-    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
-    store = MemoryStore(capacities)
+    raw = single(
+        space, chunk_batch(space, [record(i, second=i >= 32) for i in range(65)])
+    )
+    store = MemoryStore(capacities(space))
     identity = PrefixIdentity("game", 0, "root")
     prefix = store.capture(raw, 0, identity)
-    selected = PrefixObservation(raw, [prefix], capacities)
+    selected = retained(raw, [prefix])
     model = policy(space, "gru", summaries, live=live, bucketed=True)
     with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
         for _ in range(2):
             prepared = scope.prepare(selected)
-            expected = on_device(
-                model.prepare(selected.materialize(), inference=True), "cpu"
-            )
+            expected = stateless(model, raw)
             for actual, dense in zip(
                 model.forward_distribution(prepared),
                 model.forward_distribution(expected),
@@ -56,20 +92,21 @@ def test_collection_fold_matches_dense_cold_warm_coalesced_fork_reset_and_update
         assert prepared.memory is not None and prepared.memory.fold is not None
         assert len(prepared.memory.numbers) == 1
         assert len(scope.memory.nodes) == 64
-        changed = {key: value.copy() for key, value in raw.items()}
-        changed["decision_records"][0, 64, 3] = 2
-        changed["decision_records"][0, 64, 9] = 65
+        changed = single(
+            space,
+            chunk_batch(
+                space,
+                [*(record(i, second=i >= 32) for i in range(64)), record(64, count=2)],
+            ),
+        )
         coalesced = store.capture(changed, 0, identity)
-        for candidate in (
-            coalesced,
-            replace(prefix, identity=PrefixIdentity("fork", 1, "branch")),
-            replace(prefix, native_epoch=2),
+        for candidate, native in (
+            (coalesced, changed),
+            (replace(prefix, identity=PrefixIdentity("fork", 1, "branch")), raw),
+            (replace(prefix, native_epoch=2), raw),
         ):
-            obs = PrefixObservation(changed, [candidate], capacities)
-            actual = scope.prepare(obs)
-            expected = on_device(
-                model.prepare(obs.materialize(), inference=True), "cpu"
-            )
+            actual = scope.prepare(retained(native, [candidate]))
+            expected = stateless(model, native)
             for a, b in zip(
                 model.forward_distribution(actual),
                 model.forward_distribution(expected),
@@ -86,9 +123,7 @@ def test_collection_fold_matches_dense_cold_warm_coalesced_fork_reset_and_update
     assert not scope.memory.nodes
     with PolicyInference(model, cache_catalog=False) as fresh, torch.no_grad():
         actual = fresh.prepare(selected)
-        expected = on_device(
-            model.prepare(selected.materialize(), inference=True), "cpu"
-        )
+        expected = stateless(model, raw)
         for a, b in zip(
             model.forward_distribution(actual),
             model.forward_distribution(expected),
@@ -99,10 +134,9 @@ def test_collection_fold_matches_dense_cold_warm_coalesced_fork_reset_and_update
 
 def test_collection_cache_has_weak_node_ownership_and_empty_history_is_zero() -> None:
     space, raw = chunk_input()
-    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
-    store = MemoryStore(capacities)
+    store = MemoryStore(capacities(space))
     prefix = store.capture(raw, 0, PrefixIdentity("game", 0, "root"))
-    selected = PrefixObservation(raw, [prefix], capacities)
+    selected = retained(raw, [prefix])
     model = policy(space, "gru", 1)
     with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
         prepared = scope.prepare(selected)
@@ -115,41 +149,30 @@ def test_collection_cache_has_weak_node_ownership_and_empty_history_is_zero() ->
         gc.collect()
         assert all(node() is None for node in weak)
         assert not scope.memory.nodes
-        for key in MEMORY_FIELDS:
-            raw[key][:] = 0
-        empty = store.capture(raw, 0, PrefixIdentity("empty", 0, "root"))
-        batch = scope.prepare(PrefixObservation(raw, [empty], capacities))
+        _, opening = chunk_input(0)
+        empty = store.capture(opening, 0, PrefixIdentity("empty", 0, "root"))
+        batch = scope.prepare(retained(opening, [empty]))
         assert torch.count_nonzero(model.encode_decision_memory(batch)) == 0
 
 
 def test_collection_fold_preserves_shuffled_repeated_and_empty_policy_rows() -> None:
-    space, raw = chunk_input()
-    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
-    store = MemoryStore(capacities)
+    space = chunk_space()
+    store = MemoryStore(capacities(space))
     identity = PrefixIdentity("game", 0, "root")
-    prefixes = []
-    for length in (0, 32, 33, 65):
-        selected = {key: value.copy() for key, value in raw.items()}
-        selected["decision_records"][:, length:] = 0
-        selected["decision_members"][:, length * 4 :] = 0
-        if not length:
-            for key in MEMORY_FIELDS:
-                selected[key][:] = 0
-        prefixes.append(store.capture(selected, 0, identity))
+    batches = [
+        chunk_batch(space, [record(i) for i in range(length)])
+        for length in (0, 32, 33, 65)
+    ]
+    prefixes = [store.capture(single(space, b), 0, identity) for b in batches]
     model = policy(space, "gru", 1, bucketed=True)
     with PolicyInference(model) as scope, torch.no_grad():
-        warm = PrefixObservation(raw, [prefixes[-1]], capacities)
-        model(scope.prepare(warm))
+        model(scope.prepare(retained(single(space, batches[-1]), [prefixes[-1]])))
         order = [3, 0, 1, 3, 2]
-        ordinary = {
-            key: np.repeat(value, len(order), axis=0) for key, value in raw.items()
-        }
-        batch = PrefixObservation(ordinary, [prefixes[i] for i in order], capacities)
-        actual = scope.prepare(batch)
-        dense = on_device(model.prepare(batch.materialize(), inference=True), "cpu")
+        native = ObservationSelection(space, tuple((batches[i], 0) for i in order))
+        actual = scope.prepare(retained(native, [prefixes[i] for i in order]))
         for a, b in zip(
             model.forward_distribution(actual),
-            model.forward_distribution(dense),
+            model.forward_distribution(stateless(model, native)),
             strict=True,
         ):
             torch.testing.assert_close(a, b, atol=2e-6, rtol=2e-5)
@@ -158,10 +181,9 @@ def test_collection_fold_preserves_shuffled_repeated_and_empty_policy_rows() -> 
 def test_warm_collection_prepares_only_the_open_tail() -> None:
     """A cached root carries the full reference join without its ancestry."""
     space, raw = chunk_input()
-    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
-    store = MemoryStore(capacities)
+    store = MemoryStore(capacities(space))
     prefix = store.capture(raw, 0, PrefixIdentity("game", 0, "root"))
-    selected = PrefixObservation(raw, [prefix], capacities)
+    selected = retained(raw, [prefix])
     model = policy(space, "gru", 1)
     with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
         model(scope.prepare(selected))
@@ -171,19 +193,15 @@ def test_warm_collection_prepares_only_the_open_tail() -> None:
         assert len(warm.memory.numbers) == 1
         assert len(warm.memory.reference_numbers) == 0
         assert len(warm.memory.detail_numbers) == 0
-        dense = on_device(model.prepare(selected.materialize(), inference=True), "cpu")
         torch.testing.assert_close(
             model.encode_decision_memory(warm),
-            model.encode_decision_memory(dense),
+            model.encode_decision_memory(stateless(model, raw)),
             atol=2e-6,
             rtol=2e-5,
         )
         # Shared content under a different game lifetime cannot use this root.
-        mixed = PrefixObservation(
-            {key: np.repeat(value, 2, axis=0) for key, value in raw.items()},
-            [prefix, replace(prefix, native_epoch=2)],
-            capacities,
-        )
+        doubled = raw.select([0, 0])
+        mixed = retained(doubled, [prefix, replace(prefix, native_epoch=2)])
         # A mixed cache can hold the newer root for one lifetime and its
         # predecessor for another. Rejecting the former must not expose the
         # latter to the wrong lifetime through the global root map.
@@ -195,10 +213,9 @@ def test_warm_collection_prepares_only_the_open_tail() -> None:
         )
         assert not scope.memory.roots(mixed)
         actual = scope.prepare(mixed)
-        expected = on_device(model.prepare(mixed.materialize(), inference=True), "cpu")
         torch.testing.assert_close(
             model.encode_decision_memory(actual),
-            model.encode_decision_memory(expected),
+            model.encode_decision_memory(stateless(model, doubled)),
             atol=2e-6,
             rtol=2e-5,
         )
@@ -206,156 +223,98 @@ def test_warm_collection_prepares_only_the_open_tail() -> None:
 
 def test_native_open_segment_reuses_records_and_preserves_issued_versions() -> None:
     """Append/coalesce work is bounded by new records, across snapshot order."""
-    from manabot.env.memory_store import archive_memory, gather_memory, restore_memory
-
-    space, raw = chunk_input()
-    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
-    store = MemoryStore(capacities)
-    identity = PrefixIdentity("game", 0, "root")
+    space = chunk_space()
+    store = MemoryStore(capacities(space))
     model = policy(space, "gru", 1, live=True)
     issued = []
+    sources = []
     with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
         for length in (5, 6, 7, 31, 32, 33):
-            source = {key: value.copy() for key, value in raw.items()}
-            source["decision_records"][:, length:] = 0
-            source["decision_members"][:, length * 4 :] = 0
-            counts = (length, 0, 2, length * 4)
-            # Detail counts come from this fixture's exact snapshot program.
-            counts = (
-                length,
-                int((source[MEMORY_FIELDS[1]][0, :, 5] == 1).sum()),
-                2,
-                length * 4,
+            source = single(
+                space, chunk_batch(space, [record(i) for i in range(length)])
             )
-            prefix = store.capture_live(
-                source, 0, identity, epoch=1, counts=counts, tail_version=length
-            )
-            obs = PrefixObservation(source, [prefix], capacities)
-            actual = scope.prepare(obs)
-            expected = on_device(
-                model.prepare(obs.materialize(), inference=True), "cpu"
-            )
+            prefix = capture_stream(store, source, length)
+            actual = scope.prepare(retained(source, [prefix]))
             torch.testing.assert_close(
                 model.encode_decision_memory(actual),
-                model.encode_decision_memory(expected),
+                model.encode_decision_memory(stateless(model, source)),
                 atol=2e-6,
                 rtol=2e-5,
             )
             if length in (6, 7, 32, 33):
                 assert len(actual.memory.numbers) == 2
             issued.append(prefix)
+            sources.append(source)
         original = gather_memory(issued)
         # Revisit old snapshots after the shared segment grew/sealed.
-        for prefix in reversed(issued):
-            obs = PrefixObservation(raw, [prefix], capacities)
-            actual = scope.prepare(obs)
-            expected = on_device(
-                model.prepare(obs.materialize(), inference=True), "cpu"
-            )
+        for prefix, source in reversed(list(zip(issued, sources, strict=True))):
+            actual = scope.prepare(retained(source, [prefix]))
             torch.testing.assert_close(
                 model.encode_decision_memory(actual),
-                model.encode_decision_memory(expected),
+                model.encode_decision_memory(stateless(model, source)),
                 atol=2e-6,
                 rtol=2e-5,
             )
         for key, value in gather_memory(
-            restore_memory(archive_memory(issued, capacities))
+            restore_memory(archive_memory(issued, capacities(space)))
         ).items():
-            np.testing.assert_array_equal(value, original[key])
+            assert (value == original[key]).all()
 
 
 def test_coalesced_open_record_keeps_both_versions_and_reuses_earlier_fragments() -> (
     None
 ):
-    space, raw = chunk_input()
-    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
-    store = MemoryStore(capacities)
-    identity = PrefixIdentity("game", 0, "root")
-    raw["decision_records"][:, 7:] = 0
-    raw["decision_members"][:, 28:] = 0
-    counts = (7, int((raw[MEMORY_FIELDS[1]][0, :, 5] == 1).sum()), 2, 28)
-    before = store.capture_live(
-        raw, 0, identity, epoch=1, counts=counts, tail_version=7
-    )
+    space = chunk_space()
+    store = MemoryStore(capacities(space))
+    raw = single(space, chunk_batch(space, [record(i) for i in range(7)]))
+    before = capture_stream(store, raw, 7)
     model = policy(space, "gru", 4)
     with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
-        obs = PrefixObservation(raw, [before], capacities)
-        model(scope.prepare(obs))
+        model(scope.prepare(retained(raw, [before])))
         previous = record_tail(before)
-        raw["decision_records"][0, 6, 3] = 2
-        raw["decision_records"][0, 6, 9] = 7
-        after = store.capture_live(
-            raw, 0, identity, epoch=1, counts=counts, tail_version=8
+        changed = single(
+            space,
+            chunk_batch(space, [*(record(i) for i in range(6)), record(6, count=2)]),
         )
+        after = capture_stream(store, changed, 8)
         current = record_tail(after)
         assert current is not previous and current.previous is previous.previous
-        for prefix in (after, before, after):
-            obs = PrefixObservation(raw, [prefix], capacities)
-            actual = scope.prepare(obs)
+        for prefix, native in ((after, changed), (before, raw), (after, changed)):
+            actual = scope.prepare(retained(native, [prefix]))
             assert len(actual.memory.numbers) == 1
-            expected = on_device(
-                model.prepare(obs.materialize(), inference=True), "cpu"
-            )
             torch.testing.assert_close(
                 model.encode_decision_memory(actual),
-                model.encode_decision_memory(expected),
+                model.encode_decision_memory(stateless(model, native)),
                 atol=2e-6,
                 rtol=2e-5,
             )
 
 
 def test_identical_native_prefixes_do_not_share_a_growing_segment() -> None:
-    space, raw = chunk_input()
-    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
-    store = MemoryStore(capacities)
-    source = {key: np.repeat(value, 2, axis=0) for key, value in raw.items()}
-    source["decision_records"][:, 5:] = 0
-    source["decision_members"][:, 20:] = 0
-    details = int((source[MEMORY_FIELDS[1]][0, :, 5] == 1).sum())
-    first = [
-        store.capture_live(
-            source,
-            row,
-            PrefixIdentity(str(row), 0, "root"),
-            epoch=1,
-            counts=(5, details, 2, 20),
-            tail_version=5,
-        )
-        for row in range(2)
-    ]
+    space = chunk_space()
+    store = MemoryStore(capacities(space))
+    short = chunk_batch(space, [record(i) for i in range(5)])
+    first = capture_streams(
+        store, ObservationSelection(space, ((short, 0), (short, 0))), [5, 5]
+    )
     assert first[0].tail is first[1].tail  # immutable content is interned
     assert record_tail(first[0]) is not record_tail(first[1])
+    # Both streams grow to seven records; stream one saw a different life total
+    # at its sixth decision.
+    grown = [
+        chunk_batch(space, [record(i) for i in range(7)]),
+        chunk_batch(space, [record(i, life=21 if i == 5 else 20) for i in range(7)]),
+    ]
+    native = ObservationSelection(space, ((grown[0], 0), (grown[1], 0)))
+    prefixes = capture_streams(store, native, [7, 7])
     model = policy(space, "gru", 1)
     with PolicyInference(model, cache_catalog=False) as scope, torch.no_grad():
-        for row, length in ((0, 7), (1, 7)):
-            source["decision_records"][row, :length] = raw["decision_records"][
-                0, :length
-            ]
-            source["decision_members"][row, : length * 4] = raw["decision_members"][
-                0, : length * 4
-            ]
-            if row == 1:
-                source["decision_records"][row, 5, 21] += (
-                    1  # viewer's life at this decision
-                )
-            prefix = store.capture_live(
-                source,
-                row,
-                first[row].identity,
-                epoch=1,
-                counts=(length, details, 2, length * 4),
-                tail_version=length,
-            )
-            obs = PrefixObservation(
-                {key: value[row : row + 1] for key, value in source.items()},
-                [prefix],
-                capacities,
-            )
-            actual = scope.prepare(obs)
-            dense = on_device(model.prepare(obs.materialize(), inference=True), "cpu")
+        for row, prefix in enumerate(prefixes):
+            rows = native.select([row])
+            actual = scope.prepare(retained(rows, [prefix]))
             torch.testing.assert_close(
                 model.encode_decision_memory(actual),
-                model.encode_decision_memory(dense),
+                model.encode_decision_memory(stateless(model, rows)),
                 atol=2e-6,
                 rtol=2e-5,
             )

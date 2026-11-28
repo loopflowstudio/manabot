@@ -9,7 +9,9 @@ use managym::{
         action::{Action, ActionSpaceKind},
         env::Env,
         observation::Observation,
-        observation_encoder::{encode, encode_into, ObservationEncoderConfig},
+        observation_encoder::ObservationEncoderConfig,
+        observation_layout::configured_arrays,
+        observation_rows::PackedRows,
         player_policy::PlayerPolicy,
         vector_env::VectorEnv,
     },
@@ -794,7 +796,7 @@ fn build(recipe: &Recipe) -> Env {
     if matches!(recipe.state.as_str(), "float-origins" | "mixed-pools") {
         setup.mana_floats[0] = ManaFloats::All;
     }
-    let mut env = Env::new(7, true, false, false);
+    let mut env = Env::new(7, true, false);
     env.reset(setup).unwrap();
     for _ in 0..2 {
         let keep = actions(&mut env)
@@ -1656,7 +1658,6 @@ fn config(obs: &Observation) -> ObservationEncoderConfig {
         max_actions: obs.action_space.actions.len().max(512),
         max_facts: 4096,
         max_events: obs.recent_events.len().max(32),
-        turn_state: true,
         ..Default::default()
     }
 }
@@ -1704,6 +1705,7 @@ fn run(
     let actor = root.current_agent_index().unwrap();
     let obs = root.observation_for_player(actor).unwrap();
     let config = config(&obs);
+    let arrays = configured_arrays(&config).unwrap();
     for &layer in LAYERS {
         if !layers.is_empty()
             && !layers
@@ -1742,7 +1744,7 @@ fn run(
         for sample in 0..samples {
             let mut env = root.fork().unwrap();
             let mut vector = VectorEnv::new(1, 7, true, [PlayerPolicy::Agent; 2]);
-            let buffer = std::cell::RefCell::new(encode(&obs, &config).unwrap());
+            let buffer = std::cell::RefCell::new(PackedRows::new(&arrays));
             if layer == "vector" {
                 vector.reset_all(root.player_configs().to_vec()).unwrap();
                 vector.benchmark_load_root(root).unwrap();
@@ -1811,7 +1813,7 @@ fn run(
                 }
                 "observe" => {
                     let observation = env.observation_for_player(actor).unwrap();
-                    encode_into(&observation, &config, buffer.borrow_mut().buffers_mut()).unwrap();
+                    buffer.borrow_mut().append(&observation, &config).unwrap();
                     black_box(&buffer);
                     Output::Observation {
                         cards: observation.agent_cards.len() + observation.opponent_cards.len(),
@@ -1827,7 +1829,7 @@ fn run(
                 "vector" => {
                     let result = vector
                         .step_isolated_into(&[0], &[true], false, |_, obs, _, _, _| {
-                            encode_into(obs, &config, buffer.borrow_mut().buffers_mut())?;
+                            buffer.borrow_mut().append(obs, &config)?;
                             Ok(())
                         })
                         .unwrap();

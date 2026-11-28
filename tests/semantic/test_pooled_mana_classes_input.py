@@ -13,7 +13,6 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     POOLED_MANA,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.managym.enums import ActionEnum
@@ -22,6 +21,7 @@ from manabot.verify.text_observation import priority_root
 import managym
 from managym.experience import LegacyPlayerView
 from managym.experience_projection import serialize_observation
+from tests.fixtures.observation_rows import observation_arrays
 
 # Integer tokens: a program of literals needs no vocabulary.
 _PROGRAM = [[4, 0], [4, 1], [4, 2]]
@@ -51,7 +51,7 @@ def test_pooled_mana_classes_encode_as_a_program_on_their_player() -> None:
     for seat, object_row in (("agent", 1), ("opponent", 2)):
         env, obs = _observation(seat)
         assert managym.unrepresentable_state(obs) is None
-        expected = encode_observation(ObservationSpace(ObservationConfig()), obs)
+        expected = observation_arrays(ObservationSpace(ObservationConfig()), obs)
         token = managym.catalog_token_value(POOLED_MANA)
         facts = expected["facts"].reshape(-1, FACT_DIM)
         rows = facts[
@@ -68,15 +68,14 @@ def test_pooled_mana_classes_encode_as_a_program_on_their_player() -> None:
 
 
 def _assert_encodes(env: managym.Env, obs: managym.Observation) -> None:
-    """Both legacy inputs encode ``obs``; the acting view matches the batch path."""
-    for version in (9, 10):
-        space = ObservationSpace(ObservationConfig(policy_input_version=version))
-        reference = encode_observation(space, obs)
-        if obs.agent.player_index == env.current_agent_index():
-            buffers = space.allocate(1)
-            managym.encode_observations_into([env], space.layout, buffers, 1)
-            for key, value in reference.items():
-                np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
+    """The acting view and its engine encode identical packed tables."""
+    layout = managym.ObservationLayout()
+    reference = managym.encode_observation_batch([obs], layout)
+    if obs.agent.player_index == env.current_agent_index():
+        assert (
+            managym.encode_observation_batch([env], layout).tables()
+            == reference.tables()
+        )
 
 
 def test_animal_attendant_mana_and_cast_receipt_reach_input_and_text() -> None:
@@ -184,11 +183,7 @@ def test_spending_choices_share_native_vector_text_and_academy_observations() ->
     assert pools[0]["combat"] is False
     # Every selectable unit, not just the aggregate colors, reaches the
     # policy's closed runtime vocabulary through the execution program.
-    vocabulary = {
-        (kind, token)
-        for _, _, _, kind, token in managym.record_vocabulary()
-        if kind is not None
-    }
+    vocabulary = {(kind, value) for kind, _, value in managym.runtime_tokens()}
     catalog = managym.catalog_tokens()
     vocabulary.update(zip(catalog["token_kind"], catalog["token_value"], strict=True))
     for frame in obs.continuation:
@@ -218,7 +213,7 @@ def test_combat_mana_without_qualifiers_round_trips_and_projects_absence() -> No
     assert native_class.restriction is None
     serialized = json.loads(obs.toJSON())["agent"]["pooled_mana_classes"][0]
     assert "effect" not in serialized and "restriction" not in serialized
-    encode_observation(ObservationSpace(ObservationConfig()), obs)
+    observation_arrays(ObservationSpace(ObservationConfig()), obs)
     view = serialize_observation(obs, include_details=True)["agent"]
     expected = {"mana": [0, 0, 0, 0, 1, 0], "combat": True}
     assert view["pooled_mana_classes"] == [expected]

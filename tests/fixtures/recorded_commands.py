@@ -27,7 +27,9 @@ def record_until_object_candidate(
             env.current_agent_index() or 0
         ).action_space.actions
         chosen = preferred_action(
-            actions, managym.ActionEnum.PRIORITY_PLAY_LAND, managym.ActionEnum.PRIORITY_CAST_SPELL
+            actions,
+            managym.ActionEnum.PRIORITY_PLAY_LAND,
+            managym.ActionEnum.PRIORITY_CAST_SPELL,
         )
         capture.step(env, chosen)
     raise AssertionError("fixture did not reach a decision with an object candidate")

@@ -66,7 +66,7 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     assert (stage / "content/semantic/current/setups.json").is_file()
     assert (engine / "managym/academy/packs/elemental-world/v2/manifest.json").is_file()
     assert (stage / "manabot/reports/time_cohort.html").is_file()
-    assert not (stage / "academy/ui/node_modules").exists()
+    assert not (engine / "academy").exists()
     assert not (stage / "experiments").exists()
     source = json.loads((stage / ".manabot-source.json").read_text())
     assert len(source["commit"]) == 40
@@ -113,7 +113,7 @@ def test_release_requires_matching_tag_and_notes(
         module.check("v0.0.0")
 
 
-def _artifacts(directory: Path) -> None:
+def _artifacts(directory: Path, *, legacy_academy_sdist: bool = False) -> None:
     """Small archives exercise paired inventories without compiling the engine."""
     for project in ("managym", "manabot"):
         metadata = f"Name: {project}\nVersion: 0.2.0\nRequires-Python: >=3.12, <3.14\n"
@@ -161,6 +161,8 @@ def _artifacts(directory: Path) -> None:
                 ("content/semantic/current/learning_schema.json", "{}"),
             ]
             if project == "managym":
+                if legacy_academy_sdist:
+                    contents.append(("academy/__init__.py", ""))
                 contents.extend(
                     [
                         ("managym/academy/site/index.html", "Academy fixture"),
@@ -183,6 +185,18 @@ def test_release_requires_both_platforms_and_interpreters(tmp_path: Path) -> Non
     next(tmp_path.glob("*cp313*whl")).unlink()
     with pytest.raises(ValueError, match="four wheels"):
         module.validate(tmp_path, True)
+
+
+@pytest.mark.parametrize("archive_type", ["wheel", "sdist"])
+def test_engine_artifacts_reject_the_top_level_academy_shim(
+    tmp_path: Path, archive_type: str
+) -> None:
+    _artifacts(tmp_path, legacy_academy_sdist=archive_type == "sdist")
+    if archive_type == "wheel":
+        with zipfile.ZipFile(next(tmp_path.glob("managym-*.whl")), "a") as wheel:
+            wheel.writestr("academy/__init__.py", "")
+    with pytest.raises(ValueError, match="top-level academy"):
+        _load("validate").validate(tmp_path, True)
 
 
 def test_engine_wheel_ships_the_lockfile_training_provenance_hashes(

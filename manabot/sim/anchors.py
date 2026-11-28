@@ -1,6 +1,6 @@
 """Frozen v1 code anchors: scripted greedy and uniform random players.
 
-These players read only the acting viewer's offers or encoded observation and
+These players read only the acting viewer's offers in the viewer observation and
 stay Torch-free, so an evaluation game child that plays them never loads Torch
 (`players.build_code_player` builds them). Arena registrations pin this file's
 bytes as the scripted and random source identity; `heuristic` builds on
@@ -12,18 +12,15 @@ from __future__ import annotations
 import numpy as np
 
 from manabot.env.env import Env
-from manabot.env.observation import ObservationBuffers
 import managym
 
 
 class ScriptedGreedyPlayer:
     """Deterministic viewer-safe baseline over the current offered actions."""
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int:
-        del obs
-        raw = env.last_raw_obs
-        actions = list(raw.action_space.actions)
-        kind = int(raw.action_space.action_space_type)
+    def act(self, env: Env, obs: managym.Observation) -> int:
+        actions = obs.action_space.actions
+        kind = int(obs.action_space.action_space_type)
         if not actions:
             raise RuntimeError("scripted player received no legal offers")
         if kind == int(managym.ActionSpaceEnum.PRIORITY):
@@ -50,7 +47,7 @@ class ScriptedGreedyPlayer:
 
 
 class RandomMatchupPlayer:
-    """Uniform random over valid actions in the encoded observation.
+    """Uniform random over offered actions.
 
     Matches the RandomPolicy used for every historical vs-random baseline.
     """
@@ -58,9 +55,9 @@ class RandomMatchupPlayer:
     def __init__(self, seed: int = 0) -> None:
         self._rng = np.random.default_rng(seed)
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int:
+    def act(self, env: Env, obs: managym.Observation) -> int:
         del env
-        valid = np.flatnonzero(obs["actions_valid"] > 0)
+        valid = np.arange(len(obs.action_space.actions))
         if len(valid) == 0:
             return 0
         return int(self._rng.choice(valid))

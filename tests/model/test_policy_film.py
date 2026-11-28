@@ -17,9 +17,9 @@ from manabot.recipes.local import LocalConfig
 from manabot.verify.action_cases import (
     decision_case,
     identity_removed,
-    reorder_objects,
-    reorder_offers,
 )
+from manabot.verify.choice_inputs import reorder_objects, reorder_offers
+import managym
 from tests.model.prepared_routes import device_input
 
 SPEC = {"hidden_dim": 32, "num_attention_heads": 2, "attention_feedforward_dim": 64}
@@ -83,10 +83,13 @@ def test_film_gradient_couples_offer_and_state(distinct_modes: bool) -> None:
     """Opposite labels on two states give the state code a nonzero gradient."""
     film = _agent(4, True)
     cases = [decision_case("mode", preference=p) for p in (0, 1)]
-    observations = [
-        c.observation if distinct_modes else identity_removed(c) for c in cases
-    ]
-    batch = {k: torch.cat([obs[k] for obs in observations]) for k in observations[0]}
+    batch = film.prepare(
+        managym.encode_observation_batch(
+            [c.observation for c in cases], film.observation_space.layout
+        )
+    )
+    if not distinct_modes:
+        batch = identity_removed("mode", batch, film.readings)
     labels = torch.tensor([c.preferred for c in cases])
     logits, _ = film(device_input(film, batch))
     torch.nn.functional.cross_entropy(logits, labels).backward()
@@ -106,17 +109,13 @@ def test_film_preserves_offer_and_object_order_invariance() -> None:
         film.policy_film.bias.normal_()
     film.eval()
     obs = decision_case("learn").observation
-    count = int(obs["actions_valid"].sum())
+    count = len(obs.action_space.actions)
     order = torch.randperm(count, generator=torch.Generator().manual_seed(3))
     with torch.no_grad():
         expected = film(device_input(film, obs))[0].softmax(-1)
-        offers = film(
-            device_input(
-                film, reorder_offers(obs, order, film.observation_space.layout)
-            )
-        )[0].softmax(-1)
-        objects = film(
-            device_input(film, reorder_objects(obs, film.observation_space.layout))
-        )[0].softmax(-1)
+        with reorder_offers(obs, order.tolist()):
+            offers = film(device_input(film, obs))[0].softmax(-1)
+        with reorder_objects(obs):
+            objects = film(device_input(film, obs))[0].softmax(-1)
     torch.testing.assert_close(offers[:, :count], expected[:, order], atol=1e-6, rtol=0)
     torch.testing.assert_close(objects, expected, atol=1e-6, rtol=0)

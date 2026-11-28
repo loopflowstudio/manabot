@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>MTG-433 QA: one policy input, one transport</title>
+<style>
+body { font: 15px/1.5 system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+h1 { font-size: 1.5rem; } h2 { font-size: 1.15rem; margin-top: 2rem; border-bottom: 1px solid #ddd; }
+code, pre { font: 13px ui-monospace, monospace; background: #f5f3ef; }
+pre { padding: .6rem; overflow-x: auto; }
+.ok { color: #176c2e; font-weight: 600; } .pre { color: #8a5a00; font-weight: 600; } .open { color: #a3261b; font-weight: 600; }
+img { max-width: 100%; border: 1px solid #ccc; margin: .5rem 0; }
+td, th { border-bottom: 1px solid #eee; padding: .3rem .5rem; text-align: left; vertical-align: top; }
+table { border-collapse: collapse; width: 100%; }
+</style>
+
+<h1>MTG-433 QA: v11 only, native batches only</h1>
+<p>Run at <code>78a4ede25f</code> on 2026-11-25, on a shared laptop whose load average was 100–240 from other work.
+The release extension was rebuilt first because the last compress commit changed Rust after the previous build.
+The merge base <code>3be5a0cfb2</code> was built in <code>/private/tmp/mtg433-base</code> to supply a returning user's files.
+All runs used <code>ETUDE_HOME</code> under <code>.runs/qa/</code>.</p>
+
+<h2>Scenarios</h2>
+<table>
+<tr><th>Scenario</th><th>What I did</th><th>What I saw</th></tr>
+<tr><td>Engine guide examples</td><td>Extracted the six <code>python</code> blocks of <code>docs/engine.md#encoded-observations</code> and ran them as written</td><td class="ok">Printed output matches the guide (7, 7, capacity message, column readings)</td></tr>
+<tr><td>Batch bytes, corrupt input</td><td><code>to_bytes</code>/<code>from_bytes</code> on a two-row batch; empty, half, one flipped byte, one extra byte</td><td class="ok">Round trip equal; every corruption raises <code>ValueError</code> ("corrupt or truncated observation batch"); pickle round trip equal</td></tr>
+<tr><td>Version refusals</td><td><code>ObservationLayout</code> and <code>ObservationConfig</code> with v9, v10, v12</td><td class="ok">All refused with the release/revision text. Removed exports (<code>encode_observation_into</code>, <code>input_v10_state</code>, <code>legacy_card_lists</code>, <code>Env.encode_observation</code>) are absent</td></tr>
+<tr><td>Fresh training</td><td><code>etude train manabot/recipes/local.py --experiment smoke --config '{"record_games":1,"statistics":true}' --until updates=2</code>, then <code>--resume --until updates=4</code></td><td class="ok">Both exit 0 (9 s, 14 s); ten policy files; finite losses</td></tr>
+<tr><td>Returning user: run written on main</td><td>Trained <code>demo</code> to update 2 with the merge base's code, then <code>--resume --until updates=4</code> here</td><td class="ok">Resumes; the update-2 policies are byte-identical afterwards</td></tr>
+<tr><td>Returning user: same checkpoint, both trees</td><td>Scored main's update-2 EMA policy on 120 decisions of two seeded games via <code>encode_observation_batch</code> → <code>prepare</code> → <code>evaluate</code> on each tree</td><td class="ok">Max logit difference 0.0 and value difference 0.0 over 586 legal actions</td></tr>
+<tr><td>Pinned pilot</td><td><code>tests/model/test_pinned_pilot.py</code></td><td class="ok">Passes</td></tr>
+<tr><td>Sim</td><td><code>manabot sim</code> with the trained checkpoint in both seats, deck files from its <code>world_binding</code>, 4 games</td><td class="ok">Completes; zero "Error getting action" lines</td></tr>
+<tr><td>Local evaluation</td><td><code>manabot.eval.local --checkpoint smoke-4-ema --opponent heuristic</code>, two deal seeds; then the v9 pilot as candidate and as opponent</td><td class="ok">8/8 games, empty <code>failures/</code>, <code>--status</code> agrees. v9 is refused in both seats with <code>UnsupportedPolicyInput</code></td></tr>
+<tr><td>Academy listing</td><td><code>managym academy play</code> with <code>MANABOT_RUNS_DIR</code> holding the v9 pilot, the v11 pilot, the branch's policy and main's policy</td><td class="ok">The v9 pilot is disabled in the picker with its reason; the others are available</td></tr>
+<tr><td>Academy game vs policy</td><td>Playwright: Set up a different game → Registered policy → <code>smoke-4-ema</code> → Start game; first ready offer each time, reloading after 10 decisions</td><td class="ok">106 decisions to "You win" on turn 29 with the reload in the middle; the policy cast, attacked and blocked; no console errors</td></tr>
+<tr><td>Academy replay of main's record</td><td><code>managym academy replay</code> on the <code>demo</code> run's games, End key</td><td class="ok">85 decisions to game over with the value trace</td></tr>
+<tr><td>Torch vs MLX</td><td>Same checkpoint on both backends over 80 live decisions, then one 80-row batch</td><td class="ok">Max difference 2.4e-7</td></tr>
+<tr><td>Decision memory (GRU)</td><td>A <code>.runs/</code> Gray Ogre recipe with <code>decision_memory="gru"</code>, two updates plus a resume to four; live play with and without <code>blank_decision_memory()</code></td><td class="ok">Trains and resumes. With <code>managym.Env(decision_memory=True)</code>, 58/60 decisions differ from the blanked log (about 1e-8, gate near zero). Without that flag the log is empty, as designed</td></tr>
+<tr><td>Belief recipe</td><td><code>etude train experiments/belief.py</code> twice (policy, then sampler); <code>tests/belief</code></td><td class="ok">Both jobs finish. <span class="pre">4 tests fail, and the same 4 fail at the merge base</span></td></tr>
+<tr><td>Snapshot self-play</td><td>The three <code>docs/training-loop.md</code> snapshot commands, as written</td><td class="ok">All exit 0; snapshots start at update 3 (4 per update); zero failed branches</td></tr>
+<tr><td>Installed wheels</td><td>Fresh <code>/tmp</code> venvs: engine-only <code>engine_smoke.py</code> plus the engine-only byte round trip; both wheels with <code>torch==2.15.0</code> CPU and <code>smoke.py</code></td><td class="ok">"engine smoke passed: 108 decisions"; "release smoke passed"</td></tr>
+<tr><td>Training report</td><td><code>manabot training-report</code> over the QA track, benchmarks included</td><td class="ok">Training runs show numeric learner transitions; the belief sampler shows "unavailable", as expected</td></tr>
+<tr><td>Local-update search</td><td><code>scripts/bench_local_update.py --worlds 4</code> on the branch; <code>--reference 3be5a0cfb2</code>; the default mode at base</td><td>Branch parity errors are all 0.0. <span class="pre">The reference graft can't import across this change, and at base it already failed (<code>manabot.belief.sampling</code>), so there is no cross-tree receipt comparison</span></td></tr>
+<tr><td>Merchant-payment reconnect (open in plan)</td><td>Ran <code>tests/academy/test_merchant_payment_recovery.py::test_merchant_payment_reconnect_vector_and_fork</code> on both trees</td><td class="pre">Fails identically at the merge base (<code>sum(agent.mana) == 1</code>, got 0): not caused by this branch</td></tr>
+</table>
+
+<h2>Screenshots</h2>
+<p>Picker, with the v9 pilot disabled and its reason shown:</p>
+<img src="qa-shots/02-picker.jpg" alt="Academy opponent picker">
+<p>The finished game against the four-update policy, after a mid-game reload:</p>
+<img src="qa-shots/04-after.jpg" alt="Academy game over">
+<p>Main's recorded training game replayed on this branch:</p>
+<img src="qa-shots/06-replay.jpg" alt="Academy replay">
+<p>Training report:</p>
+<img src="qa-shots/07-report.jpg" alt="Training report">
+
+<h2>Fixed</h2>
+<p>No product defects found. QA notes updated: the v9 pilot's source now that the repository no longer holds one;
+how to reach the Academy picker from the launch card; scalar decision-memory capture needs <code>decision_memory=True</code>;
+<code>bench_local_update --reference</code> can't cross removed imports; the MPS layout note now encodes native batches instead of stacking dense dicts.</p>
+
+<h2>Still wrong or unchecked, worst first</h2>
+<ol>
+<li class="open">The refusal text names <code>v0.2.5</code> as the last release supporting v9-v10, but <code>v0.2.6</code> is tagged and still supports them (questions 22). Users see it in Academy, evaluation and <code>load_policy</code>. The plan replaces it with the last 0.2.x tag at merge time.</li>
+<li>The refusal begins "the checkpoint was written for policy input vN" even for a hand-built <code>ObservationConfig(policy_input_version=9)</code>, and names the v9-v10 release for v12. The wording predates this branch.</li>
+<li>Not reached: a belief-enabled model (<code>belief_count_buckets &gt; 0</code>) in a real game. Self-play refuses one, and only <code>ManabotPlayer</code> uses it, with no CLI; <code>tests/belief</code> covers it with the 4 failures from base.</li>
+<li>Not reached: CUDA (no GPU here) and the debug-profile Rust suite and full Python suites that the plan leaves to gate/CI.</li>
+</ol>
+</html>

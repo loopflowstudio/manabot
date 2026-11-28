@@ -196,7 +196,7 @@ def _run_line(
     content: str | None = None
     env = None
     try:
-        env, _, raw = build_scenario_env(scenario, None, seed)
+        env, raw = build_scenario_env(scenario, None, seed)
         content = hashlib.sha256(
             json.dumps(env._engine.content_pack_manifest(), sort_keys=True).encode()
         ).hexdigest()

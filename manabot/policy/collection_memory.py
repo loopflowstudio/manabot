@@ -9,8 +9,8 @@ from manabot.env.memory_store import PrefixIdentity, RecordNode, record_tail
 from manabot.policy.decision_memory import retained_memory
 
 if TYPE_CHECKING:
-    from manabot.env.observation import PolicyObservation
     from manabot.policy.prepare import Prepared
+    from manabot.policy.spans import PolicyObservation
 
 
 class CacheArray(Protocol):

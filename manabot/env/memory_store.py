@@ -9,7 +9,7 @@ chunk certificates remain the authority and no neural state enters these views.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field, fields
 from hashlib import sha256
 import sys
@@ -37,6 +37,7 @@ __all__ = [
 
 if TYPE_CHECKING:
     from manabot.policy.decision_memory import MemoryFeatures
+    from manabot.policy.spans import ObservationSelection
 
 MemoryCapacities = tuple[int, int, int, int]
 _CHUNK_ROWS = 32
@@ -335,107 +336,40 @@ def _record_chunk(
     return parent
 
 
-class PrefixObservation(dict[str, np.ndarray]):
-    """Ordinary rows and immutable prefixes, without a dense memory owner."""
+@dataclass(frozen=True, slots=True)
+class RetainedMemory:
+    """One bounded, immutable decision prefix for each selected viewer row."""
 
-    def __init__(
-        self,
-        rows: Mapping[str, np.ndarray],
-        prefixes: Sequence[Prefix],
-        capacities: MemoryCapacities,
-    ) -> None:
+    prefixes: tuple[Prefix, ...]
+    capacities: MemoryCapacities
+
+    def __post_init__(self) -> None:
         if (
-            len(capacities) != len(MEMORY_FIELDS)
-            or min(capacities) < 1
+            len(self.capacities) != len(MEMORY_FIELDS)
+            or min(self.capacities) < 1
             or any(
                 any(
-                    count > cap for count, cap in zip(p.counts, capacities, strict=True)
+                    count > cap
+                    for count, cap in zip(p.counts, self.capacities, strict=True)
                 )
-                for p in prefixes
+                for p in self.prefixes
             )
         ):
             raise ValueError("decision-memory prefix exceeds configured capacity")
-        if any(
-            len(v) != len(prefixes) for k, v in rows.items() if k not in MEMORY_FIELDS
-        ):
-            raise ValueError("decision-memory prefix batch mismatch")
-        super().__init__((k, v) for k, v in rows.items() if k not in MEMORY_FIELDS)
-        self.prefixes = tuple(prefixes)
-        self.memory_capacities = capacities
 
     def __reduce__(
         self,
-    ) -> tuple[
-        type[PrefixObservation],
-        tuple[dict[str, np.ndarray], tuple[Prefix, ...], MemoryCapacities],
-    ]:
-        return PrefixObservation, (dict(self), self.prefixes, self.memory_capacities)
+    ) -> tuple[type[RetainedMemory], tuple[tuple[Prefix, ...], MemoryCapacities]]:
+        # Restore through the constructor so loaded prefixes meet their capacities.
+        return RetainedMemory, (self.prefixes, self.capacities)
 
-    def materialize(self) -> "CompactObservation":
-        return CompactObservation(self, self.prefixes, self.memory_capacities)
-
-
-class CompactObservation(PrefixObservation):
-    """Selected rows padded to their maxima under explicitly declared bounds."""
-
-    def __init__(
-        self,
-        rows: Mapping[str, np.ndarray],
-        prefixes: Sequence[Prefix],
-        capacities: MemoryCapacities,
-        memory: Mapping[str, np.ndarray] | None = None,
-    ) -> None:
-        super().__init__(rows, prefixes, capacities)
-        self.update(gather_memory(self.prefixes) if memory is None else memory)
-
-    def __reduce__(
-        self,
-    ) -> tuple[
-        type[CompactObservation],
-        tuple[
-            dict[str, np.ndarray],
-            tuple[Prefix, ...],
-            MemoryCapacities,
-            dict[str, np.ndarray],
-        ],
-    ]:
-        # An explicit dense export may have been edited since its prefixes were captured.
-        ordinary = {key: rows for key, rows in self.items() if key not in MEMORY_FIELDS}
-        memory = {key: self[key] for key in MEMORY_FIELDS if key in self}
-        return CompactObservation, (
-            ordinary,
-            self.prefixes,
-            self.memory_capacities,
-            memory,
-        )
-
-
-def select_rows(
-    rows: Mapping[str, np.ndarray], indexes: np.ndarray | slice
-) -> Mapping[str, np.ndarray]:
-    from manabot.policy.spans import ObservationSelection
-
-    if type(rows) is ObservationSelection:
-        return rows.select(indexes)
-    # Deprecated dense row slicing; removed in 0.3.0.
-    selected = {key: value[indexes] for key, value in rows.items()}
-    if isinstance(rows, PrefixObservation):
+    def select(self, indexes: np.ndarray | slice) -> "RetainedMemory":
         prefixes = (
-            rows.prefixes[indexes]
+            self.prefixes[indexes]
             if isinstance(indexes, slice)
-            else tuple(rows.prefixes[int(i)] for i in indexes)
+            else tuple(self.prefixes[i] for i in indexes)
         )
-        if isinstance(rows, CompactObservation):
-            # Dense exports may contain edits made after prefix capture.
-            return CompactObservation(
-                selected,
-                prefixes,
-                rows.memory_capacities,
-                memory={key: selected[key] for key in MEMORY_FIELDS},
-            )
-        if not any(key in rows for key in MEMORY_FIELDS):
-            return PrefixObservation(selected, prefixes, rows.memory_capacities)
-    return selected
+        return RetainedMemory(prefixes, self.capacities)
 
 
 def gather_bytes(prefixes: Sequence[Prefix]) -> int:
@@ -536,26 +470,28 @@ class MemoryStore:
         return tail
 
     def capture(
-        self, buffers: Mapping[str, np.ndarray], row: int, identity: PrefixIdentity
+        self,
+        buffers: "ObservationSelection",
+        row: int,
+        identity: PrefixIdentity,
     ) -> Prefix:
-        for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
-            if buffers[key].dtype != np.float32 or buffers[key][row].shape != (
-                capacity,
-                MEMORY_WIDTHS[key],
-            ):
-                raise ValueError(
-                    "decision-memory capacity mismatch or non-float32 transport"
-                )
-        selected = {key: buffers[key][row : row + 1] for key in MEMORY_FIELDS}
-        rows = live_memory(selected)[0]
+        if (
+            tuple(buffers.space.shapes[key][0] for key in MEMORY_FIELDS)
+            != self.capacities
+        ):
+            raise ValueError("decision-memory capacity mismatch")
+        if buffers.memory is not None:
+            return Prefix(identity, buffers.memory.prefixes[row].tail)
         tail = None
-        for blocks in record_chunks(rows, _CHUNK_ROWS):
+        for blocks in record_chunks(
+            buffers.live_memory(row, (0, 0, 0, 0)), _CHUNK_ROWS
+        ):
             tail = self._append(tail, self._intern(blocks))
         return Prefix(identity, tail)
 
     def capture_live_rows(
         self,
-        buffers: Mapping[str, np.ndarray],
+        buffers: "ObservationSelection",
         rows: np.ndarray,
         seeds: Sequence[int],
         seats: Sequence[int],
@@ -565,15 +501,11 @@ class MemoryStore:
         """Capture selected native streams; unchanged cursors do no row work.
 
         Generation, chooser, counts and coalesced-tail revision are compared in
-        bulk. Dense buffers use global slot indexes. A native selection is
-        already in requested order, while stream identities still use global
-        slots. Only the changed suffix enters chunk admission.
+        bulk. The selection is already in requested order, while stream
+        identities use global slots. Only the changed suffix enters chunk admission.
         The seed is checked independently so an identity change within a native
         generation still fails rather than reusing an unrelated issued prefix.
         """
-        from manabot.policy.spans import ObservationSelection
-
-        native = type(buffers) is ObservationSelection
         count = len(seeds)
         if self._live_prefixes.shape != (count, 2):
             self._live_prefixes = np.full((count, 2), None, object)
@@ -595,16 +527,6 @@ class MemoryStore:
             counts = selected_cursors[changed, :4]
             if (counts > np.asarray(self.capacities)).any():
                 raise ValueError("decision-memory native counts exceed capacity")
-            if not native:
-                for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
-                    if buffers[key].dtype != np.float32 or buffers[key].shape != (
-                        count,
-                        capacity,
-                        MEMORY_WIDTHS[key],
-                    ):
-                        raise ValueError(
-                            "decision-memory capacity mismatch or non-float32 transport"
-                        )
         for index in changed:
             row, seat = int(rows[index]), int(selected_seats[index])
             epoch = int(selected_epochs[index])
@@ -624,62 +546,23 @@ class MemoryStore:
                 epoch=epoch,
                 counts=selected_cursors[index, :4],
                 tail_version=int(selected_cursors[index, 4]),
-                native_index=int(index) if native else None,
+                native_index=int(index),
             )
         self._live_prefixes[rows, selected_seats] = previous
         self._live_metadata[rows, selected_seats] = metadata
         self._live_valid[rows, selected_seats] = True
         return tuple(previous)
 
-    def capture_live(
-        self,
-        buffers: Mapping[str, np.ndarray],
-        row: int,
-        identity: PrefixIdentity,
-        *,
-        epoch: int,
-        counts: Sequence[int],
-        tail_version: int | None = None,
-    ) -> Prefix:
-        """Extend a synchronous native stream read using its generation and counts.
-
-        Only native caller-owned buffers qualify: arbitrary imports use capture.
-        A generation changes on reset/fork/replacement, including repeated seeds.
-        A matching native tail revision reuses the issued prefix. Otherwise only
-        the open chunk is re-admitted; coalescing can rewrite its last record.
-        The native read and buffer write must describe the same unstepped env.
-        """
-        if len(counts) != 4 or any(
-            n < 0 or n > cap for n, cap in zip(counts, self.capacities, strict=True)
-        ):
-            raise ValueError("decision-memory native counts exceed capacity")
-        for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
-            if buffers[key].dtype != np.float32 or buffers[key][row].shape != (
-                capacity,
-                MEMORY_WIDTHS[key],
-            ):
-                raise ValueError(
-                    "decision-memory capacity mismatch or non-float32 transport"
-                )
-        return self._capture_live_admitted(
-            buffers,
-            row,
-            identity,
-            epoch=epoch,
-            counts=counts,
-            tail_version=tail_version,
-        )
-
     def _capture_live_admitted(
         self,
-        buffers: Mapping[str, np.ndarray],
+        buffers: "ObservationSelection",
         row: int,
         identity: PrefixIdentity,
         *,
         epoch: int,
         counts: Sequence[int],
         tail_version: int | None,
-        native_index: int | None = None,
+        native_index: int,
     ) -> Prefix:
         """Native transport shape/count admission precedes this chunk admission."""
         previous = self._streams.get((row, identity.viewer))
@@ -704,16 +587,7 @@ class MemoryStore:
         )
         cursor = tail.cursor if tail else MemoryCursor()
         starts = (cursor.records, cursor.details, cursor.references, cursor.members)
-        if native_index is not None:
-            from manabot.policy.spans import ObservationSelection
-
-            assert isinstance(buffers, ObservationSelection)
-            rows = buffers.live_memory(native_index, starts)
-        else:
-            rows = tuple(
-                buffers[key][row, start:count]
-                for key, start, count in zip(MEMORY_FIELDS, starts, counts, strict=True)
-            )
+        rows = buffers.live_memory(native_index, starts)
         for blocks in record_chunks(
             rows, _CHUNK_ROWS, reference_offset=cursor.references
         ):

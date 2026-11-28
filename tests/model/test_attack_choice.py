@@ -21,22 +21,20 @@ from manabot.verify.action_cases import (
     DecisionCase,
     decision_case,
     identity_removed,
-    reorder_offers,
 )
+from manabot.verify.choice_inputs import encode, reorder_offers
 from tests.model.prepared_routes import device_input
 
 
 @pytest.fixture
 def attack_case() -> DecisionCase:
     case = decision_case("attack")
-    obs = case.observation
-    torch.testing.assert_close(obs["action_focus"][0, 0], obs["action_focus"][0, 1])
-    torch.testing.assert_close(
-        obs["actions"][0, :2, ACTION_DECLARED_INDEX], torch.tensor([1.0, 0.0])
-    )
-    torch.testing.assert_close(
-        obs["actions"][0, :2, :ACTION_TYPE_DIM].sum(-1), torch.ones(2)
-    )
+    obs = encode(case.observation, ObservationSpace())
+    actions = obs.project("actions")
+    focus = obs.project("action_focus")
+    np.testing.assert_array_equal(focus[0, 0], focus[0, 1])
+    np.testing.assert_array_equal(actions[0, :2, ACTION_DECLARED_INDEX], [1, 0])
+    np.testing.assert_array_equal(actions[0, :2, :ACTION_TYPE_DIM].sum(-1), [1, 1])
     return case
 
 
@@ -56,7 +54,16 @@ def test_native_attack_choice_can_learn_either_preference(
                 ModelConfig(hidden_dim=8, num_attention_heads=2, attention_on=False),
             )
         # Erasing the declaration reproduces the old, weight-independent tie.
-        logits, _ = agent(device_input(agent, identity_removed(attack_case)))
+        logits, _ = agent(
+            device_input(
+                agent,
+                identity_removed(
+                    "attack",
+                    agent.prepare(encode(attack_observation, agent.observation_space)),
+                    agent.readings,
+                ),
+            )
+        )
         torch.testing.assert_close(logits[0, 0], logits[0, 1], rtol=0, atol=0)
 
         optimizer = torch.optim.Adam(agent.parameters(), lr=0.02)
@@ -69,20 +76,12 @@ def test_native_attack_choice_can_learn_either_preference(
         with torch.no_grad():
             logits, _ = agent(device_input(agent, attack_observation))
             assert float(logits.softmax(-1)[0, preferred]) > 0.95
-            swapped, _ = agent(
-                device_input(
-                    agent,
-                    reorder_offers(
-                        attack_observation,
-                        torch.tensor([1, 0]),
-                        agent.observation_space.layout,
-                    ),
-                )
-            )
+            with reorder_offers(attack_observation, [1, 0]):
+                swapped, _ = agent(device_input(agent, attack_observation))
             torch.testing.assert_close(swapped[:, :2], logits[:, [1, 0]])
         for kind in ("uniform", "action_type_uniform"):
             prior = reference_distribution(
-                {k: v.numpy() for k, v in attack_observation.items()}, kind
+                encode(attack_observation, agent.observation_space), kind
             )
             np.testing.assert_allclose(prior[0, :2], [0.5, 0.5])
             assert not prior[0, 2:].any()

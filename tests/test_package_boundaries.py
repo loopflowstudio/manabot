@@ -232,7 +232,7 @@ def test_simulation_imports_and_plays_without_training() -> None:
             env = Env(match, space, Reward(RewardConfig()), seed=17)
             observation, _ = env.reset(seed=17)
             action = player.act(env, observation)
-            assert observation['actions_valid'][action] > 0
+            assert 0 <= action < len(observation.action_space.actions)
         assert not any(name.startswith('manabot.training') for name in sys.modules)
         """
     )
@@ -389,7 +389,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
     (
         "manabot/backends/parity.py",
         "manabot/belief/population.py",
-        "manabot/env/vector_env.py",
         "manabot/eval/evaluate.py",
         "manabot/eval/agent_loader.py",
         "manabot/experiment/numerics.py",
@@ -399,7 +398,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/reports/belief.py",
         *_TORCH_LOOPS,
         "manabot/training/mps.py",
-        "manabot/verify/action_cases.py",
     )
 )
 
@@ -544,7 +542,6 @@ def test_backend_resolver_selects_configured_backends_and_names_missing_extras(
 # capabilities to library code. Mixed modules permit only named entry points.
 _BACKEND_ROOTS = frozenset(
     (
-        "manabot/sim/table_bots.py",
         "manabot/sim/policy_provider.py",
         "manabot/cli.py",
         "manabot/eval/cards.py",
@@ -602,8 +599,7 @@ def _backend_violations(path: str, source: str) -> list[int]:
 def test_only_composition_roots_choose_a_backend() -> None:
     violations = [
         f"{path.relative_to(REPO_ROOT)}:{line}"
-        for package in ("manabot", "academy")
-        for path in (REPO_ROOT / package).rglob("*.py")
+        for path in (REPO_ROOT / "manabot").rglob("*.py")
         if _BACKENDS not in path.parents
         for line in _backend_violations(
             str(path.relative_to(REPO_ROOT)), path.read_text()
@@ -680,19 +676,6 @@ with patch('managym.academy.extensions.entry_points', return_value=[]):
     policy = build_villain_policy(config)
     observation, *_ = engine.step(policy(engine, observation))
     assert observation.action_space.actions or observation.game_over
-"""
-    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
-
-
-def test_deprecated_academy_alias_keeps_module_identity() -> None:
-    probe = """
-import warnings
-with warnings.catch_warnings(record=True) as seen:
-    warnings.simplefilter('always')
-    import academy.server as old
-    import managym.academy.server as current
-assert old is current
-assert any('0.3.0' in str(row.message) for row in seen)
 """
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
 
@@ -777,11 +760,10 @@ def exercise_choice_inspection(out: Path) -> None:
     assert len(cases) >= 2 and not findings
     with np.load(out / "observations.npz", allow_pickle=False) as stored:
         for case in cases:
-            for key, value in case.obs.items():
-                assert isinstance(value, np.ndarray)
-                np.testing.assert_array_equal(
-                    stored[f"{case.name}/{key}"], value, strict=True
-                )
+            restored_batch = managym.ObservationBatch.from_bytes(
+                stored[case.name].tobytes()
+            )
+            assert restored_batch.tables() == case.obs.batch.tables()
 
     backend = resolve("mlx", precision="float32")
     space = ObservationSpace()

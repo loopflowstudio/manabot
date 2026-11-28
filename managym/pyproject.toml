@@ -26,7 +26,7 @@ features = ["python"]
 manifest-path = "Cargo.toml"
 module-name = "managym._managym"
 python-source = ".."
-python-packages = ["managym", "academy"]
+python-packages = ["managym"]
 include = [
     { path = "managym/arena_ids.json", format = ["sdist", "wheel"] },
     { path = "content/semantic/**/*.json", format = "sdist" },
@@ -35,8 +35,6 @@ include = [
 # Keep src/**/*.rs and Cargo.lock at their original package paths: heuristic
 # registrations and manabot runtime provenance hash these installed bytes.
 exclude = [
-    "academy/ui/**",
-    "academy/README.md",
     "**/__pycache__/**", "**/*.pyc", "**/target/**", "**/*.dSYM/**",
     { path = "**/Cargo.toml", format = "wheel" },
     { path = "**/uv.lock", format = "wheel" },

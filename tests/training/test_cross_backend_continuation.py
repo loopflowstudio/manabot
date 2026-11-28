@@ -2,7 +2,6 @@
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -280,7 +279,7 @@ def test_tracked_mlx_continuation_without_torch(tmp_path: Path) -> None:
 
 @pytest.fixture
 def legacy_save(tmp_path: Path, settings: loop.SelfPlay) -> RestoredState:
-    """Write the former registered objects with real nonempty optimizer history."""
+    """Write the former Etude object-registered save without model or readings."""
     from manabot.backends.torch.learner import Learner
 
     backend = resolve("torch")
@@ -291,95 +290,55 @@ def legacy_save(tmp_path: Path, settings: loop.SelfPlay) -> RestoredState:
     ):
         learner, ema = loop.create(settings, seed=run.seed, backend=backend)
         assert isinstance(learner, Learner) and ema is not None
-        counts = loop.Counts(model=settings.model.checkpoint_payload())
-        counts.readings = loop.resume_readings(
-            counts, learner.agent.readings, learner.agent.observation_space
-        )
+        counts = loop.Counts()
         run.resume(
             learner=learner.agent, optimizer=learner.optimizer, ema=ema, extra=counts
         )
-        with loop.self_play_games(settings, run, counts, backend=backend) as collector:
-            for _ in run.steps("updates", to=1):
-                row = loop.step(
-                    settings,
-                    learner,
-                    ema,
-                    collector,
-                    counts,
-                    np.random.default_rng(1),
-                    out=run.out,
-                    backend=backend,
-                )
-                run.log(row, **loop.clocks(counts))
-                run.save()
+        for update in run.steps("updates", to=1):
+            counts.updates = update
+            run.log({}, **loop.clocks(counts))
+            run.save()
     saved = latest(tmp_path)
     assert set(saved.record.files.values()) == {"learner.pt", "ema.pt", "optimizer.pt"}
-    assert saved.record.extra["optimizer_updates"] > 0
     return saved
 
 
-def test_legacy_torch_save_migrates(
-    tmp_path: Path, legacy_save: RestoredState, settings: loop.SelfPlay
+@pytest.mark.parametrize("reader", ["torch", "mlx"])
+def test_legacy_torch_save_is_refused(
+    tmp_path: Path, legacy_save: RestoredState, settings: loop.SelfPlay, reader: str
 ) -> None:
-    original = {p: file_sha256(p) for p in legacy_save.path.iterdir()}
+    if reader == "mlx":
+        pytest.importorskip("mlx.core")
+    # Early saves also lacked the model settings and input readings.
+    record_path = legacy_save.path / "state.json"
+    record = json.loads(record_path.read_bytes())
+    del record["extra"]["model"], record["extra"]["readings"]
+    record_path.write_text(json.dumps(record))
+    pointer = tmp_path / "out/state/current.json"
+    original = {p: file_sha256(p) for p in (*legacy_save.path.iterdir(), pointer)}
 
-    def inspect(
-        learner: SelfPlayLearner,
-        ema: BackendPolicy | None,
-        collector: Collector,
-        counts: loop.Counts,
-        rng: np.random.Generator,
-    ) -> None:
-        import torch
-
-        from manabot.backends.torch.learner import Learner
-
-        assert isinstance(learner, Learner)
-        assert counts.model_dump(mode="json") == legacy_save.record.extra
-        for file, obj in (("learner.pt", learner.agent), ("ema.pt", ema)):
-            assert isinstance(obj, torch.nn.Module)
-            expected = torch.load(
-                legacy_save.path / file, map_location="cpu", weights_only=True
-            )
-            torch.testing.assert_close(obj.state_dict(), expected, rtol=0, atol=0)
-        optimizer = torch.load(
-            legacy_save.path / "optimizer.pt", map_location="cpu", weights_only=True
-        )
-        assert optimizer["state"]
-        torch.testing.assert_close(
-            learner.optimizer.state_dict()["state"], optimizer["state"], rtol=0, atol=0
-        )
-        assert all(
-            not stream.recipe.actions
-            for stream in capture_host(collector, rng).collector.streams
-        )
-
-    with inspect_first_update(inspect):
-        final = train(tmp_path, settings, resolve("torch"), updates=2, resume=True)
-    assert final.name == "00000002-ema.safetensors" and final.is_file()
-    saved = latest(tmp_path)
-    assert {p.name for p in saved.path.iterdir()} == {
-        "state.json",
-        "learner.safetensors",
-        "sampling.safetensors",
-        "continuation.json",
-    }
-    assert (
-        saved.record.extra["optimizer_updates"]
-        > legacy_save.record.extra["optimizer_updates"]
-    )
-    assert all(file_sha256(p) == digest for p, digest in original.items())
-
-
-@pytest.mark.skipif(importlib.util.find_spec("mlx") is None, reason="requires MLX")
-def test_legacy_torch_save_requires_torch(
-    tmp_path: Path, legacy_save: RestoredState, settings: loop.SelfPlay
-) -> None:
-    with pytest.raises(
-        ValueError, match="resume once on Torch to write a portable save"
+    backend = resolve(reader)
+    state = require_continuation(backend)
+    with (
+        patch.dict(os.environ, ETUDE_OUT=str(tmp_path / "out")),
+        loop.device_settings(settings, backend=backend),
+        attempt(tmp_path, resume=True) as run,
     ):
-        train(tmp_path, settings, resolve("mlx"), updates=2, resume=True)
-    assert latest(tmp_path).path == legacy_save.path
+        learner, ema = loop.create(settings, seed=41, backend=backend)
+        assert ema is not None
+        policies = (learner.agent, ema)
+        before = [
+            {k: v.copy() for k, v in state.policy_arrays(policy).items()}
+            for policy in policies
+        ]
+        with pytest.raises(
+            ValueError,
+            match=r"learner\.pt.*resume it with manabot 0\.2\.5.*warm-started.*published policy",
+        ):
+            loop.resume_training(settings, run, backend, learner, ema)
+        for policy, expected in zip(policies, before, strict=True):
+            same_arrays(state.policy_arrays(policy), expected)
+    assert all(file_sha256(p) == digest for p, digest in original.items())
 
 
 def test_torch_cpu_safe_stop_matches_uninterrupted(

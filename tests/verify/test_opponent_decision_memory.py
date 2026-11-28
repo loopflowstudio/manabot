@@ -8,15 +8,19 @@ import numpy as np
 import pytest
 
 from manabot.env.match import Match
-from manabot.env.memory_store import CompactObservation, MemoryStore, PrefixIdentity
+from manabot.env.memory_store import MemoryStore, PrefixIdentity, gather_memory
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
-    encode_observation,
+    encode_policy_batch,
+    step_buffers,
 )
 from manabot.infra.config import ObservationConfig
+from manabot.policy.decision_memory import MemoryCursor, admit_chunk
+from manabot.policy.spans import ObservationSelection
+from manabot.verify.text_observation import reset_to_first_main
 import managym
 from managym.decision_memory import read_records
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 
 
 def _root(disclosure: Literal["open", "closed"] = "open") -> managym.Env:
@@ -50,23 +54,11 @@ def test_memory_exposure_retains_game_disclosure_and_own_flag(
     )
 
 
-def test_decision_memory_metadata_and_legacy_admission() -> None:
+def test_decision_memory_metadata() -> None:
     layout = managym.observation_layout(decision_memory=True)
     assert len(layout["decision_records"]["columns"]) == 74
     assert len(layout["decision_reference_details"]["columns"]) == 6
     assert "decision_records" not in managym.observation_layout()
-    with pytest.raises(ValueError, match="v11"):
-        managym.observation_layout(decision_memory=True, legacy=True)
-    with pytest.raises(ValueError, match="v11"):
-        ObservationSpace(
-            ObservationConfig(
-                policy_input_version=9,
-                max_decision_records=1,
-                max_decision_reference_details=1,
-                max_decision_references=1024,
-                max_decision_members=16384,
-            )
-        )
 
 
 @pytest.mark.parametrize("disclosure", ["open", "closed"])
@@ -95,14 +87,15 @@ def test_decision_memory_live_native_python_replay_fork_and_roundtrip(
     assert _observations(env) == retained
     for seat in range(2):
         obs = env.observation_for_player(seat)
-        expected = encode_observation(space, obs)
+        expected = observation_arrays(space, obs)
         store = MemoryStore((32, 32768, 1024, 16384))
+        batch = encode_policy_batch(space, [obs])
         prefix = store.capture(
-            {key: value[None] for key, value in expected.items()},
+            ObservationSelection(space, ((batch, 0),)),
             0,
             PrefixIdentity("native-replay", seat, "root"),
         )
-        compact = CompactObservation({}, [prefix], (32, 32768, 1024, 16384))
+        compact = gather_memory([prefix])
         for key, width in (
             ("decision_records", 74),
             ("decision_reference_details", 6),
@@ -123,10 +116,67 @@ def test_decision_memory_live_native_python_replay_fork_and_roundtrip(
             "decision_members",
         ):
             np.testing.assert_array_equal(
-                encode_observation(space, restored)[key], expected[key]
+                observation_arrays(space, restored)[key], expected[key]
             )
     env.reset(Match().to_rust())
     assert _observations(env) == ["[]", "[]"]
+
+
+def test_damage_windows_and_cleanup_keep_their_recorded_step() -> None:
+    env = managym.Env(seed=23, decision_memory=True)
+    deck = {"Mountain": 20, "Lightning Bolt": 20, "Drogskol Reaver": 20}
+    actor = reset_to_first_main(
+        env,
+        managym.GameSetup([managym.PlayerConfig(name, deck) for name in ("a", "b")]),
+    )
+    env.scenario_force_battlefield(actor, "Drogskol Reaver", ready=True)
+    env.scenario_force_battlefield(actor, "Mountain", ready=True)
+    # A castable instant gives priority in each damage step. The Reaver's
+    # draws leave enough cards for a discard decision in cleanup.
+    env.scenario_force_card_in_hand(actor, "Lightning Bolt")
+    obs = env.scenario_refresh()
+    viewer = 1 - actor
+    saved = {"COMBAT_FIRST_STRIKE_DAMAGE": 7, "COMBAT_DAMAGE": 7, "ENDING_CLEANUP": 11}
+    windows: list[str] = []
+    for _ in range(48):
+        name = json.loads(obs.toJSON())["turn"]["step"]
+        actor_decision = env.current_agent_index() == actor
+        actions = obs.action_space.actions
+        if name == "ENDING_CLEANUP":
+            assert obs.action_space.action_space_type == managym.ActionSpaceEnum.DISCARD
+            index = 0
+        else:
+            index = next(
+                i
+                for i, action in enumerate(actions)
+                if action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
+                or (
+                    action.action_type == managym.ActionEnum.DECLARE_ATTACKER
+                    and action.declared
+                )
+            )
+        obs = env.step(index)[0]
+        if actor_decision and name in saved:
+            retained = env.observation_for_player(viewer)
+            records = read_records(retained.decision_memory_json())
+            assert records[-1].context.step == saved[name]
+            if not windows or windows[-1] != name:
+                windows.append(name)
+            if name == "ENDING_CLEANUP":
+                break
+    assert windows == list(saved)
+
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=32,
+            max_decision_reference_details=32768,
+            max_decision_references=1024,
+            max_decision_members=16384,
+        )
+    )
+    batch = managym.encode_observation_batch([retained], space.layout)
+    rows = ObservationSelection(space, ((batch, 0),)).live_memory(0, (0, 0, 0, 0))
+    assert admit_chunk(rows, MemoryCursor()).records == len(records)
 
 
 def test_decision_memory_scalar_overflow_and_companion_validation() -> None:
@@ -147,14 +197,10 @@ def test_decision_memory_scalar_overflow_and_companion_validation() -> None:
         )
     )
     with pytest.raises(managym.ObservationCapacity, match="capacity exceeded"):
-        encode_observation(space, obs)
-    buffers = space.allocate()
-    del buffers["decision_members"]
-    with pytest.raises(ValueError, match="decision_members"):
-        managym.encode_observation_into(obs, space.layout, buffers)
+        observation_arrays(space, obs)
 
 
-def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> None:
+def test_decision_memory_vector_rows_and_builtin_choices_match_scalar() -> None:
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=32,
@@ -170,16 +216,16 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
     hot = managym.VectorEnv(
         2, seed=111, decision_memory=True, player_policies=("agent", "heuristic")
     )
-    buffers = allocate_vector_buffers(space, 2)
-    hot.set_buffers(buffers, layout=space.layout)
+    hot.set_observation_layout(step_buffers(2), layout=space.layout)
     reference.reset_all(configs)
     hot.reset_all_into_buffers(configs)
     retained = []
     for _ in range(8):
         rows = reference.step([0, 0])
         hot.step_into_buffers([0, 0])
+        published = vector_arrays(space, hot.observation_rows())
         for index, (obs, _, _, _, _) in enumerate(rows):
-            expected = encode_observation(space, obs)
+            expected = observation_arrays(space, obs)
             retained.extend(read_records(obs.decision_memory_json()))
             for key in (
                 "decision_records",
@@ -187,7 +233,7 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
                 "decision_references",
                 "decision_members",
             ):
-                np.testing.assert_array_equal(buffers[key][index], expected[key])
+                np.testing.assert_array_equal(published[key][index], expected[key])
     assert retained, "built-in opponent choices must reach the external viewer"
 
 
@@ -251,7 +297,7 @@ def test_own_seat_option_is_default_off_and_rebases_opposing_view_only(
         obs = own.observation_for_player(seat)
         records = read_records(obs.decision_memory_json())
         assert {record.actor for record in records} == {1, 2}
-        encode_observation(
+        observation_arrays(
             space, obs
         )  # include-own memory fits its declared capacities
         # Own public signals are the other seat's opponent records, with pairs

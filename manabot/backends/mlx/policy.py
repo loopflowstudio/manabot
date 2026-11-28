@@ -42,21 +42,18 @@ from manabot.backends.mlx.decision_memory import DecisionMemory
 from manabot.backends.mlx.gru import PackedGRU
 from manabot.backends.mlx.live_tokens import attend_live
 from manabot.backends.mlx.rl import (
-    NumericalError,
     expected_outcome,
     outcome_probabilities,
 )
-from manabot.belief.encoding import BeliefCheckpointBinding, BeliefEncodingSchema
-from manabot.env.observation import (
-    ObservationBuffers,
-    ObservationSpace,
-    PolicyObservation,
+from manabot.belief.encoding import (
+    BeliefCheckpointBinding,
+    BeliefEncodingSchema,
+    BeliefRows,
 )
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
 from manabot.policy.buckets import (
-    BucketedObservation,
-    bucket_observation,
     object_trimming,
 )
 from manabot.policy.checkpoint import Dimensions
@@ -75,8 +72,8 @@ from manabot.policy.prepare import (
 from manabot.policy.protocol import InferenceResult, Precision
 from manabot.policy.readings import Readings
 from manabot.policy.spans import (
-    ObservationSelection,
     ObservationSpans,
+    PolicyObservation,
     observation_spans,
 )
 import managym
@@ -233,19 +230,15 @@ def zero_projection(width: int) -> nn.Linear:
 
 
 class SemanticCards(nn.Module):
-    def __init__(
-        self, dims: Dimensions, *, library: bool = False, stream_norm: bool = False
-    ) -> None:
+    def __init__(self, dims: Dimensions, *, stream_norm: bool = False) -> None:
         super().__init__()
         self.token_embedding = padding_embedding(dims.token_rows, dims.hidden)
         self.encoder = PackedGRU(dims.hidden, dims.hidden)
         self.decklist_projection = nn.Linear(4 * dims.hidden, dims.hidden)
-        if library:
-            self.library_projection = nn.Linear(dims.hidden, dims.hidden, bias=False)
+        self.library_projection = nn.Linear(dims.hidden, dims.hidden, bias=False)
         if stream_norm:
             self.hand_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
-            if library:
-                self.library_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
+            self.library_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
             self.decklist_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
 
 
@@ -347,7 +340,6 @@ class MLXActorCritic(nn.Module):
         self.config = config
         self.bucketed_shapes = bucketed_shapes
         self.live_tokens = live_tokens
-        self.stack_tokens = space.one_token
         self.value_semantic: Literal["signed_outcome", "win_logit"] | None = (
             "signed_outcome" if config.value_kind == "categorical_wdl" else None
         )
@@ -358,9 +350,7 @@ class MLXActorCritic(nn.Module):
                 managym.CARD_DEFINITION_COUNT + 1, hidden
             )
         else:
-            self.semantic_cards = SemanticCards(
-                dims, library=space.one_token, stream_norm=config.stream_norm
-            )
+            self.semantic_cards = SemanticCards(dims, stream_norm=config.stream_norm)
         self.player_embedding = Projection(dims.player, hidden)
         self.card_embedding = Projection(dims.card, hidden)
         self.perm_embedding = Projection(dims.permanent, hidden)
@@ -416,14 +406,11 @@ class MLXActorCritic(nn.Module):
         if config.recent_events:
             self.recent_events = RecentEventEncoder(hidden)
         self.continuation = Continuation(dims)
-        if space.one_token:
-            self.stack_embedding = Projection(dims.stack, hidden)
-            self.stack_source = zero_projection(hidden)
+        self.stack_embedding = Projection(dims.stack, hidden)
+        self.stack_source = zero_projection(hidden)
         if config.stream_norm:
             self.final_norm = nn.LayerNorm(hidden, eps=1e-5)
-            streams = ["player", "card", "permanent", "definition", "context"]
-            if space.one_token:
-                streams.append("stack")
+            streams = ["player", "card", "permanent", "definition", "context", "stack"]
             self.stream_norms = {
                 name: nn.LayerNorm(hidden, eps=1e-5) for name in streams
             }
@@ -680,42 +667,38 @@ class MLXActorCritic(nn.Module):
         obs: PolicyObservation,
         *,
         inference: bool = False,
+        belief: BeliefRows[np.ndarray] | None = None,
         memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Admit and index raw host observations; malformed inputs are refused."""
-        measured = self._admit_observation(obs)
-        return self._prepare_rows(measured or obs, inference, memory_roots)
+        measured = self._admit_observation(obs, belief)
+        return self._prepare_rows(measured, inference, belief, memory_roots)
 
     def prepare_admitted(
         self,
         obs: PolicyObservation,
         *,
         inference: bool = False,
+        belief: BeliefRows[np.ndarray] | None = None,
         needs: np.ndarray | None = None,
         memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Index unchanged rows previously checked for this policy's configuration."""
         space = self._static.space
-        if type(obs) in (managym.ObservationBatch, ObservationSelection):
-            rows = observation_spans(
-                obs,
-                space,
-                bucketed=self.bucketed_shapes,
-                objects=self.object_trimming(),
-                minimum_needs=needs,
-            )
-            return self._prepare_rows(rows, inference, memory_roots)
-        bucketed = (
-            bucket_observation(obs, space, needs, objects=self.object_trimming())
-            if self.bucketed_shapes
-            else None
+        rows = observation_spans(
+            obs,
+            space,
+            bucketed=self.bucketed_shapes,
+            objects=self.object_trimming(),
+            minimum_needs=needs,
         )
-        return self._prepare_rows(bucketed or obs, inference, memory_roots)
+        return self._prepare_rows(rows, inference, belief, memory_roots)
 
     def _prepare_rows(
         self,
-        obs: ObservationBuffers | BucketedObservation | ObservationSpans,
+        obs: ObservationSpans,
         inference: bool,
+        belief: BeliefRows[np.ndarray] | None,
         memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
         # Learner compaction requires inert object padding.
@@ -738,6 +721,7 @@ class MLXActorCritic(nn.Module):
             obs,
             self._static.tables,
             attention=attention,
+            belief=belief,
             facts=facts,
             select_programs=not inference,
             binding=self._binding(),
@@ -749,33 +733,23 @@ class MLXActorCritic(nn.Module):
             value_token=self.config.value_aggregation == "value_token",
         )
 
-    def check_observation(self, obs: PolicyObservation) -> np.ndarray | None:
+    def check_observation(
+        self, obs: PolicyObservation, *, belief: BeliefRows[np.ndarray] | None = None
+    ) -> np.ndarray | None:
         """The shared admission checks on raw rows, before booleans or lookups."""
-        measured = self._admit_observation(obs)
-        return None if measured is None else measured.needs
+        measured = self._admit_observation(obs, belief)
+        return measured.needs
 
     def _admit_observation(
-        self, obs: PolicyObservation
-    ) -> BucketedObservation | ObservationSpans | None:
+        self, obs: PolicyObservation, belief: BeliefRows[np.ndarray] | None
+    ) -> ObservationSpans:
         definition_count = (
             0 if self.has_programs else self.card_definitions.weight.shape[0]
         )
         spec = admission.Spec(
             self.config, self._static.space, self._static.tables, definition_count
         )
-        if type(obs) in (managym.ObservationBatch, ObservationSelection):
-            return admission.admit_native(obs, spec, bucketed=self.bucketed_shapes)
-        mask = np.asarray(obs["actions_valid"])
-        try:
-            legal = admission.legal_mask(mask)
-        except ValueError as error:
-            # Allocate framework evidence only for a rejected host input.
-            failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
-            raise NumericalError(
-                "invalid_action_mask",
-                {"mask": mx.array(mask), "failed": mx.array(failed)},
-            ) from error
-        return admission.admit(obs, spec, legal, bucketed=self.bucketed_shapes)
+        return admission.admit(obs, spec, bucketed=self.bucketed_shapes, belief=belief)
 
     # Programs ----------------------------------------------------------------------
 
@@ -834,7 +808,8 @@ class MLXActorCritic(nn.Module):
     ) -> tuple[mx.array, mx.array]:
         """Differentiable policy logits and raw scalar [B,1] or WDL [B,3] critic."""
         with self.forward_precision():
-            return self._forward(batch)
+            logits, values = self.forward_heads(batch)
+            return logits, values.astype(mx.float32)
 
     def _public(self, programs: mx.array) -> mx.array:
         """`NameCandidateEncoder.public_definitions`: the definition vectors objects
@@ -882,7 +857,8 @@ class MLXActorCritic(nn.Module):
             return logits, expected_outcome(outcome_probabilities(raw))
         return logits, raw.squeeze(-1)
 
-    def _forward(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
+    def forward_heads(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
+        """Inside forward_precision, expose the critic before its host-facing float32 cast."""
         if not isinstance(batch, Prepared):
             raise TypeError("policy forward requires a Prepared batch")
         if batch.guard is not None:
@@ -912,7 +888,7 @@ class MLXActorCritic(nn.Module):
         def defs(rows: np.ndarray) -> mx.array:
             return _take(definitions, mx.array(rows))
 
-        # Objects: players, cards, permanents and optional v11 stack rows.
+        # Objects: players, cards, permanents and stack rows.
         card_programs = defs(batch.card_rows)
         agent_player = self._stream(
             "player", self.player_embedding(self._floating(batch.agent_player))
@@ -930,17 +906,16 @@ class MLXActorCritic(nn.Module):
             known = self._masked_norm(
                 getattr(cards, "hand_norm", None), known, batch.known_counts
             )
-            if "library_projection" in cards:
-                library_pooled = (
-                    defs(batch.library_rows)
-                    * self._floating(batch.library_weights)[..., None]
-                    / attenuation
-                ).sum(2)
-                known = known + self._masked_norm(
-                    getattr(cards, "library_norm", None),
-                    cards.library_projection(library_pooled),
-                    batch.library_weights,
-                )
+            library_pooled = (
+                defs(batch.library_rows)
+                * self._floating(batch.library_weights)[..., None]
+                / attenuation
+            ).sum(2)
+            known = known + self._masked_norm(
+                getattr(cards, "library_norm", None),
+                cards.library_projection(library_pooled),
+                batch.library_weights,
+            )
             pooled = mx.einsum(
                 "bsrh,bsrc->bsch",
                 defs(batch.deck_rows),
@@ -973,13 +948,9 @@ class MLXActorCritic(nn.Module):
             opponent_cards,
             permanents[:, 0],
             permanents[:, 1],
+            self._stream("stack", self.stack_embedding(self._floating(batch.stack)))
+            + defs(batch.stack_rows),
         ]
-        if self.stack_tokens:
-            assert batch.stack is not None and batch.stack_rows is not None
-            parts.append(
-                self._stream("stack", self.stack_embedding(self._floating(batch.stack)))
-                + defs(batch.stack_rows)
-            )
         if (belief := batch.belief) is not None:
             rows = (
                 self.belief_card_embedding(mx.array(belief.cards))
@@ -994,8 +965,7 @@ class MLXActorCritic(nn.Module):
         objects = mx.concatenate(parts, axis=1)
         count = objects.shape[1]
         objects = self._links(batch, objects)
-        if self.stack_tokens:
-            objects = self._join_stack_sources(batch, objects)
+        objects = self._join_stack_sources(batch, objects)
         objects = self._facts(batch, objects, tokens, definitions)
         objects = self._effects(batch, objects, tokens, definitions)
 
@@ -1229,7 +1199,7 @@ class MLXActorCritic(nn.Module):
             projected = (projected * validity[..., None]).sum(1) / validity.sum(
                 1, keepdims=True
             )
-        return head[5](head[4](head[3](projected))).astype(mx.float32)
+        return head[5](head[4](head[3](projected)))
 
     def _links(self, batch: Prepared[np.ndarray], objects: mx.array) -> mx.array:
         """`ActorCritic._join_permanent_links`."""
@@ -1263,8 +1233,6 @@ class MLXActorCritic(nn.Module):
         self, batch: Prepared[np.ndarray], objects: mx.array
     ) -> mx.array:
         """`ActorCritic._join_stack_sources`: add source embeddings to v11 stack rows."""
-        assert batch.stack is not None
-        assert batch.stack_targets is not None and batch.stack_mask is not None
         b, total, hidden = objects.shape
         start = 2 + 2 * batch.agent_cards.shape[1] + 2 * batch.permanents.shape[2]
         count = batch.stack.shape[1]

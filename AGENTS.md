@@ -54,8 +54,7 @@ Published library API and patch-clean `main`: `manabot`'s published surface is
 the fifteen modules in `PUBLIC_MODULES` (`scripts/public_api.py`, mirrored in
 `manabot/README.md#library-api`), each defining `__all__` while package
 `__init__.py` files stay empty; no unpublished `manabot` module defines
-`__all__` (except explicitly exempted `0.3.0`-deprecated shims such as
-`manabot/sim/search/flat.py`). `managym`'s top-level surface is
+`__all__`. `managym`'s top-level surface is
 `managym/__init__.pyi`. `Prepared`, `Collector`, `Prefix`, and `MemoryArchive`
 are opaque handles (class identity promised, internal fields free to evolve);
 everything else in `manabot` is internal. `tests/public_api.json` snapshots the
@@ -201,7 +200,7 @@ it.
 - Library code receives a framework backend (the module for an update, a
   `BackendPolicy` for simulation and evaluation) and never imports
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
-  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/table_bots.py`, `manabot/sim/policy_provider.py` and the
+  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/policy_provider.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
   in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
@@ -216,19 +215,16 @@ it.
   not add a forward that reads an observation dictionary or a second
   preparation for one framework.
 
-For dense observation dicts, `historical_mean` includes masked object slots
-(preserve supplied numeric features when skipping zero padding) and relation
-features use the relation validity column. Read-only NumPy dicts get full
-admission because their origin and writable aliases are unknown. V11
-`ObservationBatch` offsets certify live rows and native joins; keep model
-layout and vocabulary admission on that path, read packed fields from
-`layout.csr_fields` and fact units from `layout.csr_fact_divisors`, and use
-full int32 words for lookups with saved logical columns for readings. The
-dense observation transport and dict admission graph (`VectorEnv.set_buffers`,
-`RolloutPool.set_buffers`, `encode_observation_into`, `encode_observations_into`,
-`ObservationLayout.axis_extents`, `ObservationLayout.object_references`,
-`EncodedObservation`, dense `ObservationRows`, dense admission/bucketing)
-is scheduled for removal in 0.3.0 alongside v9/v10.
+A policy reads observations only as native `ObservationBatch` rows (or an
+`ObservationSelection` over them); there is no dense observation dictionary
+transport or dict admission. V11 `ObservationBatch` offsets certify live rows
+and native joins; keep model layout and vocabulary admission on that path,
+read packed fields from `layout.csr_fields` and fact units from
+`layout.csr_fact_divisors`, and use full int32 words for lookups with saved
+logical columns for readings. Tests read padded fields through
+`ObservationSelection.project` (`tests/fixtures/observation_rows.py`); Rust
+tests read one observation's rows through
+`managym::agent::observation_rows::InputRows`.
 
 Execution row limits bound prefix materialization before preparation, independently
 of stream counts and logical optimizer minibatches. Accumulate actor and critic
@@ -342,8 +338,9 @@ change already touches it; do not rewrite a module only for style. Rust in
   to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
   field or record name the token serializer hashes needs an entry in
   `managym/src/cards/token_renames.rs`; a name is never reused with a new
-  meaning. When removing a registered execution label, retire its token and
-  its `execution/<kind>/<name>` record name there. Never learn a `CardDefId`.
+  meaning. Classify each runtime token or hashed record name removed there.
+  Keep the pre-0.3.0 synthetic record and decision-memory token retirements
+  independent of current registrations. Never learn a `CardDefId`.
   Bind tables indexed by card or name by definition key or name. A change that
   alters what a stored pilot computes fails `tests/model/test_pinned_pilot.py`
   until it adds the rename or column or declares the break with
@@ -352,29 +349,22 @@ change already touches it; do not rewrite a module only for style. Rust in
 - The engine has no world label. New checkpoints, recordings, decision captures
   (v6) and evaluation records write none; a reader ignores one in an older file
   (`manabot.model.world.current_binding_form`, optional `world` fields omitted
-  when absent) and never rewrites stored data. `managym.WORLD_VERSION` is a
-  warning alias until 0.3.0. Matchup ids keep `w17` as the plain string
+  when absent) and never rewrites stored data. Matchup ids keep `w17` as the plain string
   `manabot.sim.matchup.SUITE_PREFIX`, and frozen experiment files write the
   literal, so retained tournaments find their records. Add no new label.
-- Main carries policy input v11, the fresh default
+- From 0.3.0 onward, v11 is the only supported policy input
   (`ObservationConfig.policy_input_version`, always serialized): one row per
   game thing. Card rows hold cards outside the battlefield and stack;
   permanents own one effective `CharacteristicsData` projection plus object
   identity and token status; spells own a `SpellData` projection, and abilities
-  carry only source references. Old Python `.card` and flat characteristic
-  getters derive from those records (removed in 0.3.0); the `stack`
+  carry only source references; the `stack`
   buffer holds every spell and ability. A battlefield object's or spell's card
   id indexes its permanent or stack row, so focus, relations and history name
-  one row. V11 carries v10's `player_turn_state` and `card_turn_state`; a
-  turn-state-free encoder refuses an observation that needs them
-  (`managym.input_v10_state`) before writing buffers. Inputs v9 and v10 are a
-  deprecated fork for earlier checkpoints (`agent/legacy_input.rs`,
-  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed once a v11 pilot is at least as strong as
-  the best v9 one, not before 0.3.0); never extend it. A checkpoint,
-  replay or saved configuration bound to any other version, or omitting it,
-  raises `UnsupportedPolicyInput`, which names the revision to run it from
-  (`ac601834d` is the last revision supporting v1-v8). Add no other version
-  branch.
+  one row. Both `player_turn_state` and `card_turn_state` are part of v11.
+  Checkpoints, replays and saved configurations must record v11. An omitted
+  version in saved input means v1. Raise `UnsupportedPolicyInput` naming
+  `v0.2.6` as the last release supporting v9-v10 and `ac601834d` as the
+  last revision supporting v1-v8.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`
@@ -408,13 +398,14 @@ change already touches it; do not rewrite a module only for style. Rust in
   `legacy_readings`, which is never extended. The native kinds of buffers with
   their own preparation (decision memory, history events) are not used. A
   run's saved state records its model settings and readings. Resume checks both before
-  restoring weights. Older runs supply their model settings from the initial raw policy.
+  restoring weights.
 - Model and name rules state and observation fields directly after the
   Comprehensive Rules, not derived consequence flags; new state reaches policy
-  input, LLM text and learning tokens together. To extend an integer-serialized
-  enum, append its discriminant for wire JSON, tag out-of-order values for the
-  next minor release (`0.3.0`), and map them into append-only named policy
-  columns (keeping any legacy coarse column set) for stored checkpoints. Pass
+  input, LLM text and learning tokens together. To extend an enum that crosses
+  a wire or checkpoint boundary, serialize it by name in Observation JSON (or
+  append its discriminant if integer-serialized) and map new variants into
+  append-only named policy columns (keeping any legacy coarse column set) for
+  stored checkpoints. Pass
   `ObservationSpace.layout` to encoding and derive buffers from it, validate
   keys and companion shapes before encoding, read columns by native name
   (`column("facts", "value")`), test new columns on a constructed position, and
@@ -438,8 +429,11 @@ change already touches it; do not rewrite a module only for style. Rust in
   not game objects; do not use card slots or invent definitions for them.
 - Fact and shared-effect ids read the card encoder's token rows
   (`ModelConfig.record_vocabulary="catalog"`, the fresh default, omitted from
-  regimes); native `agent/record_vocabulary.rs` lists every name the encoders
-  hash, so a new hashed name must appear there or the policy rejects it.
+  regimes). Register hashed fact and shared-effect names in native
+  `agent/record_vocabulary.rs`. Program admission uses the union of
+  `catalog_tokens()` and `runtime_tokens()`, including every program token
+  aliased by a record name. Decision-memory names live in native
+  `agent/decision_memory.rs` and have their own rows when enabled.
   Schema-specific labels use an owner prefix (for example `OpponentMemory::Role`):
   the token namespace is shared, and an unprefixed label can collide with an
   existing rules field that has a different token meaning. Optional model
@@ -576,12 +570,12 @@ admission. Admission-rejection fixtures must mark the config as submitted
   class names are `PyAgentError` / `PanicException`. Catch the former through
   its public export `managym.AgentError` (there is no `managym.PyAgentError`).
   Replay compares these through
-  `manabot.env.replay.matches_retained_error`, retaining original class names and
+  `managym.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
 - An observation that does not fit its buffers raises
   `managym.ObservationCapacity` (a `ValueError`, message
-  `observation capacity exceeded: …`) from `encode_observation_into` and
-  `encode_observations_into`. Collectors that count capacity failures catch
+  `observation capacity exceeded: …`) from `encode_observation_batch` and
+  the vector and rollout-pool batch writers. Collectors that count capacity failures catch
   that type, never a message prefix, and propagate other failures. Vector
   steps keep raising `AgentError` for an unrecovered one (retained evidence
   names `PyAgentError`) and record `ObservationCapacity` when they recover.

@@ -19,12 +19,12 @@ import pytest
 from manabot.env.observation import (
     ObservationConfig,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 import managym
 from managym.disclosure import DecklistDisclosure
 from managym.experience_projection import decision_surface_view
+from tests.fixtures.observation_rows import observation_arrays
 
 SPACE = ObservationSpace(ObservationConfig())
 CONTROLLER, OPPONENT = 0, 1
@@ -83,7 +83,7 @@ def opponent_views(env: managym.Env) -> dict[str, object]:
         "observation": observation.toJSON(),
         "buffers": {
             key: np.asarray(value).tobytes()
-            for key, value in encode_observation(SPACE, observation).items()
+            for key, value in observation_arrays(SPACE, observation).items()
         },
         "text": text.text,
         "capture": text.capture_json,

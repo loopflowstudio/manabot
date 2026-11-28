@@ -8,12 +8,9 @@ not performance against a fixed opponent.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
-import warnings
 
 from manabot.training.update_metrics import (
     OUTCOME_COUNTS,
-    SEAT_LABELS,
     MetricRow,
     parse_outcome_scalar,
 )
@@ -34,16 +31,6 @@ class SelfPlayPoint:
     @property
     def games(self) -> int:
         return self.wins + self.losses + self.draws
-
-    @property
-    def position(self) -> Literal["play", "draw"]:
-        warnings.warn(
-            "SelfPlayPoint.position is deprecated and will be removed in 0.3.0; "
-            "use seat (0 is on the play)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return SEAT_LABELS[self.seat]
 
 
 def self_play_points(

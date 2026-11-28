@@ -12,9 +12,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 from manabot.belief.range import BeliefState
-from manabot.env.observation import ObservationBuffers, encode_observation
+from manabot.env.observation import encode_policy_batch
 from manabot.infra.identity import file_sha256
 from manabot.policy.protocol import PolicyLoader
+import managym
 from managym.decision import DecisionFrame, PublicCommitment, SemanticContractError
 
 
@@ -142,16 +143,13 @@ class FrozenPolicyLikelihood:
         matching_counts = np.zeros(belief.support_size, dtype=np.int64)
 
         def infer_batch(
-            encoded_batch: list[ObservationBuffers],
+            observations: list[managym.Observation],
             matching_batch: list[list[int]],
             legal_batch: list[int],
             row_batch: list[int],
         ) -> None:
-            buffers = {
-                key: np.stack([encoded[key] for encoded in encoded_batch])
-                for key in encoded_batch[0]
-            }
-            prepared_batch = self.agent.prepare(buffers, inference=True)
+            batch = encode_policy_batch(self.obs_space, observations)
+            prepared_batch = self.agent.prepare(batch, inference=True)
             probabilities, _ = self.agent.evaluate_probabilities(prepared_batch)
             for local, row in enumerate(row_batch):
                 matching = matching_batch[local]
@@ -172,7 +170,7 @@ class FrozenPolicyLikelihood:
                 [self.counterfactual_seed] * batch_size,
                 True,
             )
-            encoded_batch: list[dict[str, np.ndarray]] = []
+            observations: list[managym.Observation] = []
             matching_batch: list[list[int]] = []
             legal_batch: list[int] = []
             for hypothesis in branches:
@@ -180,18 +178,17 @@ class FrozenPolicyLikelihood:
                     raise RulesProviderGap(
                         "likelihood materialization did not publish the opponent decision"
                     )
-                raw = hypothesis.observation_for_player(opponent)
                 frame = DecisionFrame.from_json(
                     hypothesis.semantic_decision_frame_json()
                 )
                 matching, legal_count = _matching_offer_indexes(frame, commitment)
-                encoded_batch.append(encode_observation(self.obs_space, raw))
+                observations.append(hypothesis.observation_for_player(opponent))
                 matching_batch.append(matching)
                 legal_batch.append(legal_count)
             del hypothesis
             del branches
-            infer_batch(encoded_batch, matching_batch, legal_batch, row_batch)
-            del encoded_batch, matching_batch, legal_batch, row_batch
+            infer_batch(observations, matching_batch, legal_batch, row_batch)
+            del observations, matching_batch, legal_batch, row_batch
             completed_rows = stop
             batches += 1
             if self.batch_observer is not None:

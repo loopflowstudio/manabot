@@ -5,14 +5,16 @@ are a synthetic projection of a native modal decision; Rust owns their native
 legality and resolution regression.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 import numpy as np
-import torch
 
 from manabot.env import observation as observation_schema
-from manabot.verify import choice_inputs
+from manabot.env.observation import ObservationSpace
+from manabot.policy.prepare import Prepared
+from manabot.policy.readings import Readings, write_numeric_column
+from manabot.verify.choice_inputs import encode
 from manabot.verify.text_observation import keep_opening_hands
 import managym
 
@@ -60,12 +62,6 @@ def reach(env: managym.Env, kind: int) -> managym.Observation:
         raw, _, done, _, _ = env.step(index)
         assert not done
     raise AssertionError(f"did not reach decision {kind}")
-
-
-def encode(raw: managym.Observation) -> dict[str, torch.Tensor]:
-    return {
-        key: torch.from_numpy(value) for key, value in choice_inputs.encode(raw).items()
-    }
 
 
 Family = Literal["attack", "target", "mode", "ability", "land", "learn"]
@@ -139,7 +135,7 @@ def _resolved_outcomes(
 @dataclass
 class DecisionCase:
     family: Family
-    observation: dict[str, torch.Tensor]
+    observation: managym.Observation
     candidates: list[int]
     preference: int
     split: str
@@ -254,7 +250,7 @@ def decision_case(
     assert len(candidates) >= 2
     return DecisionCase(
         kind,
-        encode(raw),
+        raw,
         candidates,
         preference,
         split,
@@ -266,50 +262,34 @@ def decision_case(
     )
 
 
-def identity_removed(case: DecisionCase) -> dict[str, torch.Tensor]:
-    """Erase the audited identity channel without changing legal offers."""
-    obs = {k: v.clone() for k, v in case.observation.items()}
+def identity_removed(
+    family: Family, batch: Prepared[np.ndarray], readings: Readings
+) -> Prepared[np.ndarray]:
+    """Erase one identity channel in a prepared batch of the same choice family."""
     columns = {
         "attack": observation_schema.ACTION_DECLARED_INDEX,
         "mode": observation_schema.ACTION_MODE_INDEX,
         "ability": observation_schema.ACTION_ABILITY_INDEX,
     }
-    if case.family in columns:
-        obs["actions"][..., columns[case.family]] = 0
-    elif case.family == "target":
-        permanents = obs["opponent_permanents"]
-        permanents[..., observation_schema.PERMANENT_DEFINITION_INDEX] = 0
-        # The policy input also orders permanents by timestamp (CR 613.7).
-        if permanents.shape[-1] == observation_schema.PERMANENT_DIM:
-            permanents[..., observation_schema.PERMANENT_TIMESTAMP_INDEX] = 0
-    else:
-        obs["semantic_cards"].zero_()
-    return obs
-
-
-def reorder_offers(
-    obs: dict[str, torch.Tensor],
-    order: torch.Tensor | list[int],
-    layout: managym.ObservationLayout,
-) -> dict[str, torch.Tensor]:
-    host = {key: value.detach().cpu().numpy() for key, value in obs.items()}
-    indices = order.cpu().numpy() if isinstance(order, torch.Tensor) else order
-    return tensors_like(choice_inputs.reorder_offers(host, indices, layout), obs)
-
-
-def tensors_like(
-    host: dict[str, np.ndarray], obs: dict[str, torch.Tensor]
-) -> dict[str, torch.Tensor]:
-    return {
-        key: torch.from_numpy(value).to(obs[key].device) for key, value in host.items()
-    }
-
-
-def reorder_objects(
-    obs: dict[str, torch.Tensor], layout: managym.ObservationLayout
-) -> dict[str, torch.Tensor]:
-    host = {key: value.detach().cpu().numpy() for key, value in obs.items()}
-    return tensors_like(choice_inputs.reorder_objects(host, layout), obs)
+    if family in columns:
+        actions = batch.action_features.copy()
+        write_numeric_column(
+            actions, slice(None), readings["actions"], columns[family], 0
+        )
+        return replace(batch, action_features=actions)
+    if family == "target":
+        rows = batch.permanent_rows.copy()
+        rows[:, 1] = 0
+        board = batch.permanents.copy()
+        write_numeric_column(
+            board[:, 1],
+            slice(None),
+            readings["opponent_permanents"],
+            observation_schema.PERMANENT_TIMESTAMP_INDEX,
+            0,
+        )
+        return replace(batch, permanent_rows=rows, permanents=board)
+    return replace(batch, card_rows=np.zeros_like(batch.card_rows))
 
 
 # Version of the case set `curriculum()` builds; bump it when its digest changes.
@@ -321,29 +301,31 @@ CASE_SET = "action-cases-2"
 _NATIVE_SEEDS: dict[tuple[Family, int], int] = {("learn", 1): 116}
 
 
-def _definitions(obs: dict[str, torch.Tensor]) -> set[int]:
-    """Card definitions visible anywhere in one observation (registry key + 1)."""
-    hand_def = observation_schema.column("known_hand", "definition")
-    found = {int(x) for x in obs["semantic_cards"].flatten() if x > 0}
-    found |= {int(x) for x in obs["known_hand"][..., hand_def].flatten() if x > 0}
-    for key in ("agent_permanents", "opponent_permanents"):
-        rows = obs[key][obs[key + "_valid"] > 0]
-        found |= {
-            int(x) for x in rows[:, observation_schema.PERMANENT_DEFINITION_INDEX]
-        }
-    return found
+def _definitions(raw: managym.Observation, space: ObservationSpace) -> set[int]:
+    """Visible definition keys in the same encoded inputs used by the fit."""
+    tables = encode(raw, space).spans.tables
+    values = [
+        tables["semantic_cards"].records.ravel(),
+        tables["known_hand"].records["definition"],
+    ]
+    values.extend(
+        tables[key].records["definition"]
+        for key in ("agent_permanents", "opponent_permanents")
+    )
+    return {int(value) for array in values for value in array if value > 0}
 
 
 def unseen_definitions(cases: list[DecisionCase]) -> dict[str, set[int]]:
     """Held-out case key -> definitions its family's fit cases never show."""
+    space = ObservationSpace()
     fit: dict[Family, set[int]] = {family: set() for family in FAMILIES}
     for case in cases:
         if case.split == "fit":
-            fit[case.family] |= _definitions(case.observation)
+            fit[case.family] |= _definitions(case.observation, space)
     unseen: dict[str, set[int]] = {}
     for case in cases:
         if case.split == "held_out":
-            extra = _definitions(case.observation) - fit[case.family]
+            extra = _definitions(case.observation, space) - fit[case.family]
             if extra:
                 unseen[f"{case.family}/{case.variant}/{case.preference}"] = extra
     return unseen

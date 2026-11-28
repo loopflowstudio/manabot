@@ -2,7 +2,7 @@
 // PyO3's #[pyfunction] wrappers trigger false-positive `useless_conversion`.
 #![allow(clippy::useless_conversion)]
 use crate::agent::{
-    observation_encoder::{InputLayout, ObservationEncoderConfig},
+    observation_encoder::ObservationEncoderConfig,
     observation_layout::{self as native_layout, ValueLayout},
 };
 use native_layout::ArrayLayout;
@@ -29,33 +29,16 @@ fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py,
 
 /// Column names, value encodings and fixed extents of each encoded array.
 ///
-/// Keys are the encoder's array names; `policy_history` selects the public
-/// history rows of `events`; `turn_state` adds the `player_turn_state` and
-/// `card_turn_state` arrays (inputs v10 and v11); `legacy` selects the
-/// deprecated v9/v10 object rows (removed in 0.3.0) instead of input v11's
-/// one-token rows and `stack`. A `None` extent is a caller-selected capacity.
-/// Seats are viewer-relative. No game or buffer is created.
+/// Variable axes have a caller-selected capacity; seats are viewer-relative.
 #[pyfunction]
-#[pyo3(signature = (*, policy_history=false, turn_state=true, legacy=false, decision_memory=false))]
+#[pyo3(signature = (*, policy_history=false, decision_memory=false))]
 fn observation_layout(
     py: Python<'_>,
     policy_history: bool,
-    turn_state: bool,
-    legacy: bool,
     decision_memory: bool,
 ) -> PyResult<PyObject> {
-    let layout = if legacy {
-        InputLayout::Legacy
-    } else {
-        InputLayout::OneToken
-    };
-    let mut arrays = native_layout::observation_layout(policy_history, turn_state, layout);
+    let mut arrays = native_layout::observation_layout(policy_history);
     if decision_memory {
-        if legacy {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "decision memory requires v11",
-            ));
-        }
         arrays.extend(native_layout::decision_memory_layout());
     }
     arrays_dict(py, &arrays)
@@ -124,7 +107,7 @@ impl PackedTableLayout {
     }
 }
 
-/// Resolved policy input, shared by allocation and native buffer validation.
+/// Resolved policy input, shared by batch encoding and archive validation.
 #[pyclass(frozen, module = "managym")]
 #[derive(Clone)]
 pub struct ObservationLayout {
@@ -136,15 +119,11 @@ pub struct ObservationLayout {
 impl ObservationLayout {
     pub fn from_config(config: ObservationEncoderConfig) -> PyResult<Self> {
         let arrays = native_layout::configured_arrays(&config).map_err(PyValueError::new_err)?;
-        let packed = if config.layout == InputLayout::OneToken {
-            arrays
-                .iter()
-                .filter(|(key, _)| !key.ends_with("_valid"))
-                .map(|(key, array)| Ok((key.clone(), PackedTableLayout::new(key, array)?)))
-                .collect::<PyResult<_>>()?
-        } else {
-            BTreeMap::new()
-        };
+        let packed = arrays
+            .iter()
+            .filter(|(key, _)| !key.ends_with("_valid"))
+            .map(|(key, array)| Ok((key.clone(), PackedTableLayout::new(key, array)?)))
+            .collect::<PyResult<_>>()?;
         Ok(Self {
             config,
             arrays,
@@ -172,18 +151,10 @@ impl ObservationLayout {
         max_decision_reference_details: usize,
         max_decision_members: usize,
     ) -> PyResult<Self> {
-        let layout = match policy_input_version {
-            9 | 10 => InputLayout::Legacy,
-            11 => InputLayout::OneToken,
-            _ => {
-                return Err(PyValueError::new_err(
-                    "supported policy input versions are 9, 10 and 11",
-                ))
-            }
-        };
+        if policy_input_version != 11 {
+            return Err(PyValueError::new_err(format!("unsupported policy input v{policy_input_version}; v0.2.6 is the last release supporting v9-v10, and ac601834d is the last revision supporting v1-v8")));
+        }
         Self::from_config(ObservationEncoderConfig {
-            layout,
-            turn_state: policy_input_version >= 10,
             policy_history,
             max_cards_per_player,
             max_permanents_per_player,
@@ -205,16 +176,7 @@ impl ObservationLayout {
         let py = slf.py();
         let c = slf.borrow().config;
         let kwargs = PyDict::new_bound(py);
-        kwargs.set_item(
-            "policy_input_version",
-            if c.layout == InputLayout::OneToken {
-                11
-            } else if c.turn_state {
-                10
-            } else {
-                9
-            },
-        )?;
+        kwargs.set_item("policy_input_version", 11)?;
         kwargs.set_item("policy_history", c.policy_history)?;
         kwargs.set_item("max_cards_per_player", c.max_cards_per_player)?;
         kwargs.set_item("max_permanents_per_player", c.max_permanents_per_player)?;
@@ -250,52 +212,6 @@ impl ObservationLayout {
         buffers
     }
 
-    /// Deprecated dense object-reference metadata; removed in 0.3.0.
-    /// Object coordinate columns and their index bases. None denotes the whole buffer.
-    #[getter]
-    fn object_references(
-        &self,
-        py: Python<'_>,
-    ) -> PyResult<BTreeMap<String, Vec<(Option<usize>, usize)>>> {
-        super::bindings::warn_deprecated(
-            py,
-            "ObservationLayout.object_references is deprecated; removed with dense observation admission in 0.3.0",
-        )?;
-        use crate::agent::observation_extents::{joins, Join};
-        let mut references = BTreeMap::new();
-        for key in self.arrays.keys() {
-            for join in joins(key, self.config.policy_history, self.config.layout) {
-                let field = match *join {
-                    Join::Objects => (None, 0),
-                    Join::Object(column, base) => (Some(column), base),
-                    _ => continue,
-                };
-                references
-                    .entry(key.clone())
-                    .or_insert_with(Vec::new)
-                    .push(field);
-            }
-        }
-        Ok(references)
-    }
-
-    /// Deprecated dense extent scanner; removed in 0.3.0.
-    /// Occupied or referenced row extents per batch item. Keep all input
-    /// storage stable until return; the scan releases the GIL.
-    #[pyo3(signature = (obs, *, omit_decision_memory=false))]
-    fn axis_extents(
-        &self,
-        py: Python<'_>,
-        obs: &Bound<'_, PyAny>,
-        omit_decision_memory: bool,
-    ) -> PyResult<Option<PyObject>> {
-        super::bindings::warn_deprecated(
-            py,
-            "ObservationLayout.axis_extents is deprecated; use ObservationBatch offsets for v11 observations; removal in 0.3.0",
-        )?;
-        super::layout_extents::axis_extents(py, self, obs, omit_decision_memory)
-    }
-
     #[getter]
     fn arrays(&self, py: Python<'_>) -> PyResult<PyObject> {
         arrays_dict(py, &self.arrays)
@@ -315,9 +231,7 @@ impl ObservationLayout {
     fn csr_fields(&self) -> BTreeMap<&str, Vec<(&str, &str, usize)>> {
         self.arrays
             .iter()
-            .filter(|(key, _)| {
-                self.config.layout == InputLayout::OneToken && !key.ends_with("_valid")
-            })
+            .filter(|(key, _)| !key.ends_with("_valid"))
             .map(|(key, array)| {
                 (
                     key.as_str(),
@@ -349,21 +263,6 @@ impl ObservationLayout {
             .iter()
             .map(|(k, a)| (k.clone(), a.dtype))
             .collect()
-    }
-
-    #[pyo3(signature=(*leading_dims))]
-    fn allocate(&self, py: Python<'_>, leading_dims: Vec<usize>) -> PyResult<PyObject> {
-        let zeros = py.import_bound("numpy")?.getattr("zeros")?;
-        let out = PyDict::new_bound(py);
-        for (key, array) in &self.arrays {
-            let shape: Vec<_> = leading_dims
-                .iter()
-                .chain(array.shape.iter().flatten())
-                .copied()
-                .collect();
-            out.set_item(key, zeros.call1((shape, array.dtype))?)?;
-        }
-        Ok(out.into())
     }
 }
 

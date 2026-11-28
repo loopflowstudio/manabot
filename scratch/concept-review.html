@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-433 Post-Build Concept Review — Observation-to-Policy Pipeline</title>
+<style>
+  :root {
+    --bg: #faf8f4;
+    --surface: #ffffff;
+    --surface-2: #f3efe7;
+    --ink: #1e1b16;
+    --muted: #5d554a;
+    --border: #dcd4c6;
+    --yes-bg: #e4f3e8;
+    --yes-ink: #185c2d;
+    --no-bg: #fce6e2;
+    --no-ink: #9c2419;
+    --existing-bg: #efe9dc;
+    --existing-ink: #5a4b35;
+    --proposed-bg: #e1eef9;
+    --proposed-ink: #144d7a;
+    --note-bg: #fff1d6;
+    --note-ink: #8a4b00;
+    --accent: #7a4c1e;
+    --code-bg: #f1ede4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151412;
+      --surface: #1e1c19;
+      --surface-2: #27241f;
+      --ink: #ede7dc;
+      --muted: #a69c8e;
+      --border: #3a342c;
+      --yes-bg: #183622;
+      --yes-ink: #8be0a4;
+      --no-bg: #451b17;
+      --no-ink: #f8a298;
+      --existing-bg: #322c23;
+      --existing-ink: #d4c4aa;
+      --proposed-bg: #183148;
+      --proposed-ink: #8cc5f5;
+      --note-bg: #422e0c;
+      --note-ink: #ffd07a;
+      --accent: #d99b52;
+      --code-bg: #26231e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  main {
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 36px 24px 80px;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+  }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  h1 {
+    margin: 6px 0 10px;
+    font-size: 28px;
+    line-height: 1.2;
+  }
+  h2 {
+    margin: 36px 0 12px;
+    font-size: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+  h3 {
+    margin: 18px 0 8px;
+    font-size: 16px;
+  }
+  p { margin: 0 0 12px; }
+  .lead {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 86ch;
+  }
+  .verdict {
+    background: var(--yes-bg);
+    border: 1px solid var(--yes-ink);
+    border-left: 5px solid var(--yes-ink);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin: 18px 0;
+  }
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin: 16px 0;
+  }
+  .callout.warn {
+    border-left-color: var(--note-ink);
+    background: var(--note-bg);
+  }
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 999px;
+    vertical-align: middle;
+  }
+  .tag.yes { background: var(--yes-bg); color: var(--yes-ink); }
+  .tag.no { background: var(--no-bg); color: var(--no-ink); }
+  .tag.existing { background: var(--existing-bg); color: var(--existing-ink); }
+  .tag.proposed { background: var(--proposed-bg); color: var(--proposed-ink); }
+  .tag.note { background: var(--note-bg); color: var(--note-ink); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.45;
+    margin: 8px 0 14px;
+  }
+  pre code { background: none; padding: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--surface-2);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  tr:last-child td { border-bottom: none; }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 16px;
+    margin: 14px 0 20px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card h3 { margin-top: 0; }
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .node {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .node.good {
+    border-color: var(--yes-ink);
+    background: var(--yes-bg);
+    color: var(--yes-ink);
+  }
+  .node.bad {
+    border-color: var(--no-ink);
+    background: var(--no-bg);
+    color: var(--no-ink);
+  }
+  .node.prop {
+    border-color: var(--proposed-ink);
+    background: var(--proposed-bg);
+    color: var(--proposed-ink);
+  }
+  .arrow { color: var(--muted); font-weight: 700; }
+  .q-list { list-style: none; padding: 0; margin: 12px 0; }
+  .q-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .q-item strong { display: block; margin-bottom: 6px; }
+  .opts { margin: 8px 0 0; padding-left: 18px; }
+  .opts li { margin-bottom: 4px; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Post-Build Concept Review &middot; MTG-433 &middot; HEAD <code>3f9d0dea1a</code> vs <code>main</code> (<code>3be5a0cfb2</code>)</div>
+    <h1>Do the built pipeline's domain concepts and code concepts line up?</h1>
+    <p class="lead">
+      <strong>Area reviewed:</strong> the full <em>observation-to-policy pipeline</em> across <code>managym</code> and
+      <code>manabot</code> &mdash; viewer observations, v11 CSR layout and encoding, native batch serialization (IPC pickle
+      and disk archives), row selection, interned decision memory, belief attachment, host admission, preparation, backend
+      inference/learning, rollout packing, and counterfactual/invariance probes (313 files changed, +8,948 / &minus;16,415 lines).
+      Reviewed as built against <code>main</code>, judged by throughput, memory/cache ownership, thread safety, statistical
+      validity, and steady-state composability.
+    </p>
+  </header>
+
+  <div class="verdict">
+    <strong>Outcome: core model aligned; nothing blocking the build.</strong>
+    Every live, evaluation, search, belief, probe, and offline-parity path now runs on one policy input (v11) and one
+    transport (<code>managym.ObservationBatch</code> &rarr; <code>ObservationSelection</code> &rarr; <code>admission.admit</code>
+    &rarr; <code>ObservationSpans</code> &rarr; <code>prepare</code> &rarr; <code>Prepared</code>). Two small dict-era
+    API seams survived on Python wrapper types (<code>ActionRows</code> / <code>PackedActions.behavior</code> and
+    <code>ObservationSpace</code>'s unused Gym dict methods), plus two already-tracked items (the pre-merge <code>v0.2.5</code>
+    &rarr; final <code>0.2.x</code> release name sweep, and the pre-existing native decision-memory token vocabulary defect).
+    None require re-opening the pipeline design.
+  </div>
+
+  <section>
+    <h2>1. Concept Alignment Table (Built at <code>HEAD</code>)</h2>
+    <p>
+      Badges distinguish what is built at <code>HEAD</code> <span class="tag existing">Existing</span> from optional
+      follow-up simplifications <span class="tag proposed">Proposed</span>.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:18%">Domain concept</th>
+          <th style="width:34%">Code concepts at <code>HEAD</code> <span class="tag existing">Existing</span></th>
+          <th style="width:9%">Aligned?</th>
+          <th style="width:39%">Assessment &amp; any mismatch</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Viewer observation</strong><br><span class="muted">One acting player's legal state &amp; offers</span></td>
+          <td><code>managym.Observation</code> returned directly by <code>managym.Env</code> and <code>manabot.env.env.Env</code> (<code>reset</code>, <code>step</code>, <code>step_semantic</code>, <code>scenario_refresh</code>; <code>ViewerSpace</code>). Policies encode at decision time via <code>encode_policy_batch</code>.</td>
+          <td><span class="tag yes">Yes</span></td>
+          <td>Zero tensor encoding on heuristic, random, LLM, or search steps. <code>Env.last_raw_obs</code> stays as a read-only alias for ~57 test/verify readers.</td>
+        </tr>
+        <tr>
+          <td><strong>Single v11 schema &amp; Rust inspection</strong><br><span class="muted">One policy input version, zero padding in transport</span></td>
+          <td><code>SUPPORTED_POLICY_INPUTS = (11,)</code>, <code>ObservationLayout</code> (v11 only; <code>packed</code>, <code>csr_fields</code>, <code>csr_fact_divisors</code>), <code>PackedRows</code> (transport), <code>InputRows</code> (dense-column reader for Rust tests/benches).</td>
+          <td><span class="tag yes">Yes</span></td>
+          <td><code>InputLayout</code>, <code>turn_state</code>, <code>legacy_input.{rs,py}</code>, <code>EncodedObservation(Mut)</code>, dense vector buffers, and <code>object_references</code> are gone. Note: refusal strings still name <code>v0.2.5</code> instead of <code>v0.2.6</code> (pre-merge sweep tracked in <code>plan.md</code>).</td>
+        </tr>
+        <tr>
+          <td><strong>Policy input space descriptor</strong><br><span class="muted">Config + native layout + shapes/dtypes</span></td>
+          <td><code>manabot.env.observation.ObservationSpace(gym.spaces.Space)</code> holds <code>config</code>, <code>layout</code>, <code>shapes</code>, <code>dtypes</code>, <code>axis_buffers</code> &mdash; <em>and</em> allocates a <code>gym.spaces.Dict</code> of float32 <code>Box</code>es with <code>sample()</code>, <code>__getitem__</code>, <code>keys()</code>, <code>values()</code>, <code>items()</code>, plus a <code>0.3.0</code> <code>PolicyObservation</code> shim.</td>
+          <td><span class="tag no">No</span></td>
+          <td><strong>Residual mismatch #2:</strong> a concept the code keeps that no caller uses. <code>Env.observation_space</code> is <code>ViewerSpace()</code>, <code>contains()</code> was deleted, and <code>space.sample()</code> returns a dense dict no policy accepts. <span class="tag proposed">Proposed</span> Drop <code>gym.spaces.Space</code> / <code>spaces</code> / <code>sample</code> / dict methods and the <code>0.3.0</code> shim at or before the <code>0.3.0</code> cut.</td>
+        </tr>
+        <tr>
+          <td><strong>Encoded batch &amp; row selection</strong><br><span class="muted">Immutable CSR rows in consumer order</span></td>
+          <td><code>managym.ObservationBatch</code> (frozen PyO3 class) + <code>ObservationSelection(space, coordinates, memory)</code> (plain frozen dataclass, no <code>Mapping</code>; explicit <code>.project(key)</code>, <code>.select</code>, <code>.concatenate</code>, <code>.action_columns</code>) + <code>PolicyObservation</code> union.</td>
+          <td><span class="tag yes">Yes</span></td>
+          <td>No accidental dense scatters on hot paths; <code>PrefixObservation</code>, <code>CompactObservation</code>, <code>ObservationRows</code>, and <code>select_rows</code> are deleted. Fixed-seat vector reads are explicit methods (<code>RecordedVectorEnv.observations_for_players</code>, <code>SnapshotVector</code>).</td>
+        </tr>
+        <tr>
+          <td><strong>Batch serialization (IPC vs disk archive)</strong><br><span class="muted">Move batches across workers &amp; persist for parity/probes</span></td>
+          <td>Two native mechanisms on <code>ObservationBatch</code>: (1) <code>__reduce__</code> &rarr; <code>_restore_observation_batch</code> (trusted pickle IPC; checks table keys/offsets/capacity and memo-shares unchanged <code>PyBytes</code> across <code>blank_decision_memory()</code>); (2) <code>to_bytes()</code> / <code>from_bytes()</code> (<code>archive.rs</code>; SHA-256, schema digest, full row/join validation under <code>allow_pickle=False</code>) wrapped by <code>captured_observations.py</code>.</td>
+          <td><span class="tag yes">Yes</span></td>
+          <td>Intentional split between two real engineering boundaries: trusted zero-copy worker-to-learner IPC (O(tables) check, preserves <code>PyBytes</code> sharing) vs untrusted disk captures/probes (O(rows) full join certificate, no pickle). Clearly documented on <code>ObservationBatch</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>Interned decision memory</strong><br><span class="muted">Shared immutable prefix handles beside a batch</span></td>
+          <td>Frozen <code>RetainedMemory(prefixes, capacities)</code> with <code>__reduce__</code> capacity enforcement + <code>MemoryStore</code> + <code>MemoryArchive</code>; zero-copy ablation via <code>ObservationBatch.blank_decision_memory()</code>.</td>
+          <td><span class="tag yes">Yes</span></td>
+          <td>Empty-dict <code>PrefixObservation</code> and duplicate <code>blank_memory</code> are gone. Separate pre-existing engine bug noted in <code>questions.md</code> #18: native memory details emit program tokens absent from <code>record_vocabulary()</code>, which native <code>admit</code> rejects while retained-prefix <code>memory_vocabulary</code> still uses non-failing <code>tables.tokens</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>Rollout observations vs behavior support</strong><br><span class="muted">Selected training rows vs legal-mask validation</span></td>
+          <td><code>RolloutBatch.observations(indexes) -&gt; ActionRows</code> (with <code>ObservationSelection</code>) AND <code>PackedActions.behavior(indexes) -&gt; ActionRows</code> returning <code>ActionRows({"actions_valid": mask}, logs)</code>; so <code>ActionRows.observation</code> is widened to <code>ObservationSelection | Mapping[str, NDArray]</code>.</td>
+          <td><span class="tag no">No</span></td>
+          <td><strong>Biggest remaining mismatch (#1):</strong> one type (<code>ActionRows</code>) for two ideas, leaving a fake 1-key dense dict <code>{"actions_valid": mask}</code> solely for <code>check_packed</code> in <code>backends/{torch,mlx}/rollout.py</code>. <span class="tag proposed">Proposed</span> Narrow <code>ActionRows.observation</code> to <code>ObservationSelection</code> and return a small <code>BehaviorSupport(legal, log_probabilities)</code> (or tuple) from <code>PackedActions.behavior</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>Explicit belief attachment</strong><br><span class="muted">Viewer-marginal hidden-zone distribution</span></td>
+          <td><code>BeliefTensorView.rows(batch_size) -&gt; BeliefRows</code> passed explicitly via <code>belief=</code> through <code>BackendPolicy.prepare</code>, <code>admission.admit</code>, and <code>prepare</code>.</td>
+          <td><span class="tag yes">Yes</span></td>
+          <td>Six string dict keys removed; attention compaction (<code>used_columns</code>, <code>bucketed_columns</code>, <code>live_tokens</code>) includes belief rows and the belief global token.</td>
+        </tr>
+        <tr>
+          <td><strong>Host admission &amp; preparation</strong><br><span class="muted">Certify vocabularies once; prepare <code>Prepared</code> once</span></td>
+          <td><code>admission.admit</code> (single steady-state function) &rarr; <code>ObservationSpans</code> &rarr; <code>prepare(spans, ...)</code> &rarr; <code>Prepared</code>. <code>reference_distribution</code> reads packed CSR <code>actions</code> / <code>action_counts</code> directly.</td>
+          <td><span class="tag yes">Yes</span></td>
+          <td>Zero intermediate <code>dense = {}</code> dicts, zero v9/v10 branches, zero per-minibatch <code>[B, 512, 23]</code> scatters in PPO/damped updates. Torch and MLX share the exact same host contract (max diff 2.4e-7 in QA).</td>
+        </tr>
+        <tr>
+          <td><strong>Counterfactual &amp; invariance probes</strong><br><span class="muted">Board perturbations &amp; offer/object permutations</span></td>
+          <td><code>combat_probe.combat_samples</code> prepares once and edits <code>Prepared.permanents</code> via <code>replace</code> + <code>write_numeric_column</code>; <code>action_cases.identity_removed</code> edits <code>Prepared</code>; <code>choice_inputs.reorder_{offers,objects}</code> permute <code>managym.Observation</code> and re-encode natively.</td>
+          <td><span class="tag yes">Yes</span></td>
+          <td>1&times; <code>prepare</code> instead of 5&times; in <code>combat_probe</code>; permutations exercise the real Rust encoder and its join remapping without <code>layout.object_references</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>2. End-to-End Flow as Built (Training, Failure &amp; Recovery)</h2>
+    <div class="card">
+      <h3><span class="tag existing">Existing at HEAD</span> Single-representation v11 pipeline</h3>
+      <div class="flow">
+        <span class="node good">RecordedVectorEnv / Env</span><span class="arrow">&rarr;</span>
+        <span class="node good">ObservationBatch (frozen CSR)</span><span class="arrow">&rarr;</span>
+        <span class="node good">ObservationSelection(coords, RetainedMemory)</span><span class="arrow">&rarr;</span>
+        <span class="node good">admission.admit</span><span class="arrow">&rarr;</span>
+        <span class="node good">ObservationSpans</span><span class="arrow">&rarr;</span>
+        <span class="node good">prepare</span><span class="arrow">&rarr;</span>
+        <span class="node good">Prepared (Torch / MLX)</span>
+      </div>
+      <div class="flow">
+        <span class="node">Worker IPC: <code>pickle</code> (<code>_restore_observation_batch</code>, shared <code>PyBytes</code>)</span>
+        <span class="node">Disk parity / probes: <code>to_bytes</code> / <code>from_bytes</code> (SHA-256 + full join check, <code>allow_pickle=False</code>)</span>
+      </div>
+      <p class="muted" style="margin-top:8px;">
+        <strong>Failure &amp; recovery verified in QA (<code>scratch/qa.html</code>):</strong>
+        v9/v10/v12 configs, checkpoints, and archives fail at admission with <code>UnsupportedPolicyInput</code> / <code>ValueError</code>
+        (Academy disables incompatible checkpoints in the picker with reason); truncated, flipped, or extra bytes in
+        <code>ObservationBatch.from_bytes</code> raise <code>ValueError</code> before constructing a batch; capacity overflows raise
+        <code>managym.ObservationCapacity</code>; returning main checkpoints score with 0.0 max logit/value difference across 586 legal actions.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>3. Biggest Remaining Mismatch (Small API Seam, Before vs Proposed)</h2>
+    <p>
+      The pipeline's core data model is clean. The largest remaining conceptual mismatch is a small local API seam where
+      <code>ActionRows</code> still carries a one-key dense dict for behavior-support checks:
+    </p>
+    <div class="grid-2">
+      <div class="card">
+        <h3><span class="tag existing">Existing at HEAD</span> <code>ActionRows</code> serves two roles</h3>
+<pre><code># manabot/training/rollout/actions.py:37-41, 113-116
+@dataclass
+class ActionRows:
+    # A legal-support mask alone ({"actions_valid": ...})
+    observation: ObservationSelection | Mapping[str, NDArray[np.generic]]
+    log_probabilities: NDArray[np.generic]
+
+def behavior(self, indexes: NDArray[np.int64]) -&gt; ActionRows:
+    mask = np.arange(self.capacity) &lt; self.selection.action_counts[indexes, None]
+    return ActionRows({"actions_valid": mask}, self.unpack_logs(indexes))
+
+# backends/{torch,mlx}/rollout.py
+rows = packed.behavior(indexes)
+check_behavior(..., rows.observation["actions_valid"])</code></pre>
+      </div>
+      <div class="card">
+        <h3><span class="tag proposed">Proposed</span> One type per role (optional pre-0.3.0 cleanup)</h3>
+<pre><code># manabot/training/rollout/actions.py
+@dataclass
+class ActionRows:
+    observation: ObservationSelection
+    log_probabilities: NDArray[np.generic]
+
+@dataclass(frozen=True)
+class BehaviorSupport:
+    legal: NDArray[np.bool_]
+    log_probabilities: NDArray[np.generic]
+
+def behavior(self, indexes: NDArray[np.int64]) -&gt; BehaviorSupport:
+    mask = np.arange(self.capacity) &lt; self.selection.action_counts[indexes, None]
+    return BehaviorSupport(mask, self.unpack_logs(indexes))</code></pre>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <span class="tag note">Secondary Residual Seam</span>
+      <strong><code>ObservationSpace</code> still builds an unused <code>gym.spaces.Dict</code> of float32 <code>Box</code>es</strong>
+      (<code>manabot/env/observation.py:194-260</code>) and defines a <code>0.3.0</code> deprecation shim for
+      <code>PolicyObservation</code> (<code>:284-294</code>) inside a PR held for the <code>0.3.0</code> cut.
+      Zero callers in <code>manabot/</code> or <code>tests/</code> invoke <code>space.sample()</code>, <code>space.spaces</code>,
+      <code>space[key]</code>, or <code>space.keys()/values()/items()</code>; removing them makes <code>ObservationSpace</code>
+      match what it actually is (a config + native layout descriptor) and shrinks <code>tests/public_api.json</code>.
+    </div>
+  </section>
+
+  <section>
+    <h2>4. Separate Outcomes Outside MTG-433</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:28%">Item</th>
+          <th style="width:72%">Why it is separate &amp; what it would take</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Pre-merge <code>0.2.x</code> release name sweep</strong><br><span class="muted"><code>plan.md</code> remaining before merge</span></td>
+          <td>Refusal messages and docs still name <code>v0.2.5</code> while <code>v0.2.6</code> is tagged on <code>main</code> (and another <code>0.2.x</code> patch may land before the <code>0.3.0</code> cut). Replace with the final <code>v0.2.*</code> tag right before merging for <code>0.3.0</code>, and optionally reword <code>UnsupportedPolicyInput</code> so hand-built <code>ObservationConfig(policy_input_version=9)</code> doesn't say "the checkpoint was written for...".</td>
+        </tr>
+        <tr>
+          <td><strong>Native decision-memory program token vocabulary defect</strong><br><span class="muted"><code>questions.md</code> #18</span></td>
+          <td>Elemental games emit decision-memory program tokens (kinds 1&ndash;3) absent from <code>managym.record_vocabulary()</code>. Native <code>admission.admit</code> strictly refuses them (strict xfail on <code>test_fresh_inputs_stay_within_the_bound[memory]</code>), while retained-prefix <code>memory_vocabulary</code> still calls non-failing <code>tables.tokens</code>. Fix emission/vocabulary in Rust, then make <code>memory_vocabulary</code> call <code>Catalog.require_tokens</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>Other <code>0.3.0</code> deprecated compatibility graphs</strong><br><span class="muted"><code>plan.md</code> Exclusions</span></td>
+          <td><code>WORLD_VERSION</code>, <code>manabot.env.failures</code> aliases, <code>TrainingGames</code>, <code>CheckpointVillain</code>, <code>InMemorySnapshotVector</code>, <code>.card</code> getters, and <code>manabot.managym</code> belong to the coordinated <code>0.3.0</code> removal rollover.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>5. Questions for Review</h2>
+    <p class="muted">Reply with question number and letter (e.g. "1b, 2a"). Choices marked <strong>(Chosen)</strong> are what this branch carries into gate.</p>
+    <ol class="q-list">
+      <li class="q-item">
+        <strong>1. Residual dict-era seams on <code>ActionRows.behavior()</code> and <code>ObservationSpace</code>:</strong>
+        <ol class="opts" type="a">
+          <li><strong>(Chosen)</strong> Advance MTG-433 to gate as built; track narrowing <code>ActionRows.observation</code> to <code>ObservationSelection</code> and dropping <code>ObservationSpace</code>'s unused Gym dict methods (<code>sample</code>/<code>keys</code>/<code>values</code>/<code>items</code>) + <code>PolicyObservation</code> shim in the pre-<code>0.3.0</code> cut cleanup.</li>
+          <li>Take one focused cleanup commit on this branch before gate to narrow <code>ActionRows.observation</code>, add <code>BehaviorSupport</code>, and remove <code>ObservationSpace</code>'s Gym dict surface and <code>PolicyObservation</code> shim now.</li>
+        </ol>
+      </li>
+      <li class="q-item">
+        <strong>2. Dual <code>ObservationBatch</code> serialization (<code>pickle</code> IPC vs <code>to_bytes</code>/<code>from_bytes</code> archive):</strong>
+        <ol class="opts" type="a">
+          <li><strong>(Chosen)</strong> Keep both: <code>__reduce__</code> / <code>_restore_observation_batch</code> for trusted worker-to-learner IPC (memo-shares <code>PyBytes</code> across <code>blank_decision_memory()</code> with O(tables) boundary checks) and <code>to_bytes</code> / <code>from_bytes</code> for untrusted disk captures/probes (<code>allow_pickle=False</code>, SHA-256, full join validation).</li>
+          <li>Unify <code>__reduce__</code> onto <code>to_bytes</code> / <code>from_bytes</code> (sacrificing shared-<code>PyBytes</code> IPC memoization and paying O(rows) join validation on every worker queue receive).</li>
+        </ol>
+      </li>
+      <li class="q-item">
+        <strong>3. <code>UnsupportedPolicyInput</code> release tag and wording before merge:</strong>
+        <ol class="opts" type="a">
+          <li><strong>(Chosen)</strong> Keep the pre-merge sweep in <code>plan.md</code> to stamp the final <code>v0.2.*</code> tag right before merging for <code>0.3.0</code>.</li>
+          <li>Also generalize the opening phrase ("policy input vN is unsupported..." instead of "the checkpoint was written for policy input vN") during that pre-merge sweep so direct <code>ObservationConfig(policy_input_version=9)</code> and v12 messages read accurately.</li>
+        </ol>
+      </li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

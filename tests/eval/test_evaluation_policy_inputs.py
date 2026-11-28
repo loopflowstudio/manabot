@@ -18,7 +18,6 @@ from manabot.infra.provenance import runtime_fingerprints
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
 from manabot.sim.registration import PlayerRegistration
 from tests.eval.arena_fixture import arena_fixture
-from tests.model.prepared_routes import host_inputs
 from tests.model.test_inference import _policy
 
 
@@ -97,7 +96,7 @@ def test_row_sampling_is_independent_of_neighbors_and_preserves_rng() -> None:
 def test_packed_transfer_makes_one_copy_per_dtype() -> None:
     case = _policy()
     case.agent.bucketed_shapes = True
-    host = case.agent.prepare(host_inputs(case.obs))
+    host = case.agent.prepare(case.obs)
     arrays = array_fields(host, np.ndarray)
     device, transferred, copies = transfer(host, "meta")
     assert host.bucket_needs is not None and device.bucket_needs is host.bucket_needs

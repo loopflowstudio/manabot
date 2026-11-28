@@ -14,7 +14,6 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch import rollout as torch_rollout
 from manabot.backends.torch.arrays import array_fields
 from manabot.backends.torch.collection import CollectionSession
 from manabot.backends.torch.policy import ActorCritic
@@ -24,14 +23,11 @@ from manabot.env.memory_store import (
     MemoryStore,
     Prefix,
     PrefixIdentity,
-    PrefixObservation,
-    archive_memory,
+    RetainedMemory,
     record_tail,
-    restore_memory,
     restore_prefix,
-    select_rows,
 )
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -40,7 +36,7 @@ from manabot.infra.config import (
 )
 from manabot.policy.spans import ObservationSelection
 from manabot.sim.child import ChildProcess
-from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
+from manabot.training.rollout.actions import PackedActions
 from manabot.training.rollout.collection import (
     RecordedObservations,
     RolloutBatch,
@@ -52,6 +48,7 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.updates.targets import grouped_roots
 import managym
+from tests.fixtures.memory_rows import memory_rows
 from tests.model.test_decision_memory import memory_input
 
 
@@ -122,7 +119,7 @@ def receive_worker_game(connection: Connection, memory: bool) -> None:
 
 
 def assert_same_inputs(
-    agent: ActorCritic, first: ObservationBuffers, second: ObservationBuffers
+    agent: ActorCritic, first: ObservationSelection, second: ObservationSelection
 ) -> None:
     a = array_fields(agent.prepare(first), np.ndarray)
     b = array_fields(agent.prepare(second), np.ndarray)
@@ -132,10 +129,11 @@ def assert_same_inputs(
 
 
 def chunk_count(batch: RolloutBatch) -> int:
+    memory = batch.recorded.rows.memory
     return len(
         {
             id(node.chunk)
-            for p in batch.recorded.memory
+            for p in (memory.prefixes if memory is not None else ())
             if p.tail
             for node in p.tail.chunks()
         }
@@ -168,25 +166,17 @@ def test_worker_queue_preserves_learner_rows(memory: bool) -> None:
         assert chunk_count(other) == chunk_count(original)
         if memory:
             assert chunk_count(other) > 0
-            assert all(
-                p is q
-                for p, q in zip(
-                    other.recorded.memory,
-                    other.recorded.rows.memory.prefixes,
-                    strict=True,
-                )
-            )
         for start in range(0, original.actions.size, 8):
             indexes = np.arange(start, min(start + 8, original.actions.size))
-            a, b = original.policy_rows(indexes), other.policy_rows(indexes)
+            a, b = original.observations(indexes), other.observations(indexes)
             np.testing.assert_array_equal(a.log_probabilities, b.log_probabilities)
             assert_same_inputs(agent, a.observation, b.observation)
         assert_same_inputs(agent, original.next_obs, other.next_obs)
 
     joined = RolloutBatch.concatenate([original, received])
     boundary = original.actions.size
-    crossing = joined.policy_rows(np.array([boundary - 1, boundary]))
-    expected = original.policy_rows(np.array([boundary - 1, 0]))
+    crossing = joined.observations(np.array([boundary - 1, boundary]))
+    expected = original.observations(np.array([boundary - 1, 0]))
     np.testing.assert_array_equal(
         crossing.log_probabilities, expected.log_probabilities
     )
@@ -230,7 +220,7 @@ def test_packed_transport_shares_bytes_and_drops_selection_caches(
     )
     warm = pickle.dumps(selected)
     assert cold == warm
-    assert len(warm) < sum(a.nbytes for a in selected.export().values())
+    assert len(warm) < sum(selected.project(key).nbytes for key in selected.fields)
     assert pickle.loads(warm).batch.tables() == selected.batch.tables()
 
 
@@ -267,47 +257,42 @@ def test_restore_checks_packed_table_boundaries(
     ):
         with pytest.raises(ValueError):
             restore(layout, size, bad)
-    with pytest.raises(ValueError, match="v11"):
-        restore(managym.ObservationLayout(policy_input_version=10), size, tables)
 
 
-def test_deep_prefixes_restore_certificates_and_preserve_edits() -> None:
-    _, dense = memory_input()
+def test_deep_prefixes_restore_certificates() -> None:
     capacity = (96, 8, 8, 8)
     store = MemoryStore(capacity)
     identity = PrefixIdentity("game", 0, "root")
     # One new admitted record per node, so recursive tail pickling would overflow.
-    record = dense["decision_records"][0, :1].copy()
-    empty_companions = tuple(dense[key][0, :0] for key in MEMORY_FIELDS[1:])
+    rows = memory_rows(*memory_input())
+    record = rows["decision_records"][:1].copy()
+    empty_companions = tuple(rows[key][:0] for key in MEMORY_FIELDS[1:])
     tail = None
     for i in range(capacity[0]):
         record[0, [1, 7, 9]] = i
         tail = store._append(tail, store._intern((record, *empty_companions)))
     assert tail is not None
     prefix = Prefix(identity, tail, native_epoch=9)
-    selection = PrefixObservation(
-        {}, [Prefix(identity, None), prefix, prefix], capacity
-    )
-    export = selection.materialize()
-    export["decision_records"][1, 0, 3] = 21
-    cold = pickle.dumps(selection)
+    retained = RetainedMemory((Prefix(identity, None), prefix, prefix), capacity)
+    cold = pickle.dumps(retained)
     assert record_tail(prefix) is not None
-    assert pickle.dumps(selection) == cold
+    assert pickle.dumps(retained) == cold
     limit = sys.getrecursionlimit()
     try:
         sys.setrecursionlimit(120)
-        decoded, edited = pickle.loads(pickle.dumps((selection, export)))
+        decoded = pickle.loads(pickle.dumps(retained))
     finally:
         sys.setrecursionlimit(limit)
     a, b, c = decoded.prefixes
-    assert a.tail is None and b is c is edited.prefixes[1]
+    assert a.tail is None and b is c
     assert b.tail.key == tail.key and b.native_epoch is None
-    assert edited["decision_records"][1, 0, 3] == 21
-    assert decoded.materialize()["decision_records"][1, 0, 3] == 1
     assert b.serving.tail is None and b.tail.features.record_tail is None
-    selection.memory_capacities = (1, *capacity[1:])
+    # A tampered archive still meets the constructor's capacity check on load.
+    oversized = object.__new__(RetainedMemory)
+    object.__setattr__(oversized, "prefixes", retained.prefixes)
+    object.__setattr__(oversized, "capacities", (1, *capacity[1:]))
     with pytest.raises(ValueError, match="capacity"):
-        pickle.loads(pickle.dumps(selection))
+        pickle.loads(pickle.dumps(oversized))
     chain = tuple(tail.chunks())
     for invalid in (chain[1:], chain[:2] + chain[3:]):
         with pytest.raises(ValueError, match="disconnected"):
@@ -344,8 +329,8 @@ def assert_worker_rows(
                 )
         for start in range(0, count, 16):
             indexes = np.arange(start, min(start + 16, count))
-            original = worker.policy_rows(indexes)
-            joined = merged.policy_rows(indexes + offset)
+            original = worker.observations(indexes)
+            joined = merged.observations(indexes + offset)
             np.testing.assert_array_equal(
                 joined.log_probabilities, original.log_probabilities
             )
@@ -378,80 +363,6 @@ def test_concatenate_complete_games(
     assert_worker_rows(agent, merged, (first, second))
 
 
-def test_archive_and_dense_worker_merge(
-    workers: tuple[ActorCritic, RolloutBatch, RolloutBatch],
-) -> None:
-    agent, first, second = workers
-    # jace 9d212cb strips just the recorded prefixes before IPC. Its merger
-    # then projects every mapping key and derives offsets from the first field.
-    restored = []
-    for worker in (first, second):
-        record = worker.recorded
-        assert record.memory_capacities is not None
-        archive = archive_memory(record.memory, record.memory_capacities)
-        stripped = replace(
-            worker, recorded=replace(record, memory=(), memory_capacities=None)
-        )
-        batch, archive = pickle.loads(pickle.dumps((stripped, archive)))
-        restored.append(
-            replace(
-                batch,
-                recorded=replace(
-                    batch.recorded,
-                    memory=restore_memory(archive),
-                    memory_capacities=archive.capacities,
-                ),
-            )
-        )
-
-    rows = {
-        key: np.concatenate([b.recorded.rows[key] for b in restored])
-        for key in restored[0].recorded.rows
-    }
-    indexes = []
-    base = 0
-    for b in restored:
-        indexes.append(b.recorded.index + base)
-        base += next(iter(b.recorded.rows.values())).shape[0]
-    recorded = RecordedObservations(
-        rows,
-        np.concatenate(indexes),
-        np.concatenate([b.recorded.needs for b in restored]),
-        tuple(p for b in restored for p in b.recorded.memory),
-        restored[0].recorded.memory_capacities,
-    )
-    native = RolloutBatch.concatenate(restored)
-    legacy = replace(
-        native,
-        recorded=recorded,
-        action_data=PackedActions.concatenate([b.action_data for b in restored]),
-    )
-    assert_worker_rows(agent, legacy, (native,))
-
-    dense_parts = []
-    for batch in restored:
-        support = batch.action_data.unpack(np.arange(batch.actions.size))
-        packed = PackedActions.pack(
-            support.observation, support.log_probabilities, validator=torch_rollout
-        )
-        obs_fields = {
-            key: batch.recorded.rows[key]
-            for key in batch.recorded.rows
-            if key not in ACTION_FIELDS
-        }
-        dense_parts.append(
-            replace(
-                batch,
-                recorded=replace(batch.recorded, rows=obs_fields),
-                action_data=packed,
-                next_obs=batch.next_obs.export(),
-            )
-        )
-    dense = RolloutBatch.concatenate(dense_parts)
-    assert isinstance(dense.recorded.rows, dict)
-    assert_worker_rows(agent, dense, (native,))
-
-
 def snapshot_part(batch: RolloutBatch, snapshot: int, cut: bool) -> RolloutBatch:
     # Two sibling roots and one fresh trajectory. Retain real collected input,
     # action support and memory for each decision and for the frozen viewer.
@@ -467,7 +378,9 @@ def snapshot_part(batch: RolloutBatch, snapshot: int, cut: bool) -> RolloutBatch
         action_data=PackedActions.concatenate(
             [batch.action_data.row(i) for i in indexes]
         ),
-        next_obs=batch.recorded.gather(indexes[1:2]) if cut else {},
+        next_obs=batch.recorded.gather(indexes[1:2])
+        if cut
+        else ObservationSelection(batch.recorded.rows.space, ()),
         next_done=np.zeros(int(cut), bool),
         trajectories=(
             TrajectorySpan(0, 1, 0),
@@ -482,9 +395,8 @@ def snapshot_part(batch: RolloutBatch, snapshot: int, cut: bool) -> RolloutBatch
     )
 
 
-@pytest.mark.parametrize("dense", [False, True])
 def test_concatenate_snapshot_trajectories(
-    workers: tuple[ActorCritic, RolloutBatch, RolloutBatch], dense: bool
+    workers: tuple[ActorCritic, RolloutBatch, RolloutBatch],
 ) -> None:
     agent, first, second = workers
     a, ended, b = (
@@ -492,18 +404,14 @@ def test_concatenate_snapshot_trajectories(
         snapshot_part(second, 22, False),
         snapshot_part(second, 23, True),
     )
-    if dense:
-        a, b = (replace(part, next_obs=part.next_obs.export()) for part in (a, b))
     parts = (a, ended, b)
     merged = RolloutBatch.concatenate(parts)
     assert_worker_rows(agent, merged, parts)
     np.testing.assert_array_equal(merged.next_done, [False, False])
-    assert isinstance(
-        merged.next_obs, PrefixObservation if dense else ObservationSelection
-    )
+    assert isinstance(merged.next_obs, ObservationSelection)
     for i, worker in enumerate((a, b)):
         assert_same_inputs(
-            agent, select_rows(merged.next_obs, np.array([i])), worker.next_obs
+            agent, merged.next_obs.select(np.array([i])), worker.next_obs
         )
     assert merged.bootstrap_indexes().ravel().tolist() == [
         -1,
@@ -524,7 +432,7 @@ def test_concatenate_snapshot_trajectories(
     assert merged.branch_group_id.ravel().tolist() == [4, 4, -1, 9, 9, -1, 14, 14, -1]
     assert b.branch_group_id.ravel().tolist() == [4, 4, -1]
     terminal = RolloutBatch.concatenate([ended, ended])
-    assert not len(terminal.next_done) and terminal.next_obs == {}
+    assert not len(terminal.next_done) and not terminal.next_obs.coordinates
 
 
 def test_incompatible_worker_batches(
@@ -555,13 +463,9 @@ def test_incompatible_worker_batches(
     with pytest.raises(ValueError, match="sample_weight"):
         RolloutBatch.concatenate([a, replace(b, sample_weight=np.ones_like(b.values))])
     record = a.recorded
-    with pytest.raises(ValueError, match="native and dense"):
+    with pytest.raises(ValueError, match="memory capacities"):
         RecordedObservations.concatenate(
-            [record, replace(record, rows=dict(record.rows))]
-        )
-    with pytest.raises(ValueError, match="recorded memory"):
-        RecordedObservations.concatenate(
-            [replace(record, memory=(), memory_capacities=None)]
+            [record, replace(record, rows=replace(record.rows, memory=None))]
         )
     config = record.rows.space.config.model_copy(
         update={"decision_memory_include_own": True}
@@ -576,29 +480,21 @@ def test_incompatible_worker_batches(
             [
                 a.action_data,
                 replace(
-                    a.action_data, native=replace(a.action_data.native, space=space)
+                    a.action_data,
+                    selection=replace(a.action_data.selection, space=space),
                 ),
             ]
         )
-    cut = snapshot_part(b, 24, True)
-    with pytest.raises(ValueError, match="native and dense"):
-        RolloutBatch.concatenate([cut, replace(cut, next_obs=cut.next_obs.export())])
 
 
-def test_recorded_rows_validate_each_store_before_rebasing() -> None:
-    record = RecordedObservations({"a": np.arange(3)}, np.array([2, 0, 2]))
+def test_recorded_rows_validate_each_store_before_rebasing(
+    batch: managym.ObservationBatch,
+) -> None:
+    space = ObservationSpace(ObservationConfig(max_focus_objects=3))
+    rows = ObservationSelection(space, ((batch, 0), (batch, 1), (batch, 0)))
+    record = RecordedObservations(rows, np.array([2, 0, 2]))
     for index in (np.array([3]), np.array([-1]), np.array([[2]]), np.array([1.5])):
         with pytest.raises(ValueError, match="index"):
             RecordedObservations.concatenate([replace(record, index=index)])
-    for rows in ({}, {"a": np.arange(4), "b": np.arange(2)}, {"a": np.array(1)}):
-        with pytest.raises(ValueError, match="dense observation"):
-            RecordedObservations.concatenate([replace(record, rows=rows)])
-    for rows in (
-        {"b": np.arange(3)},
-        {"a": np.ones((3, 2), dtype=int)},
-        {"a": np.arange(3, dtype=float)},
-    ):
-        with pytest.raises(ValueError, match="dense observation"):
-            RecordedObservations.concatenate([record, replace(record, rows=rows)])
     with pytest.raises(ValueError, match="needs"):
         RecordedObservations.concatenate([replace(record, needs=np.zeros((2, 1)))])

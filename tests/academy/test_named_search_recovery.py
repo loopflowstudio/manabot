@@ -17,15 +17,16 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
-    encode_observation,
+    encode_policy_batch,
+    step_buffers,
 )
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import ModelConfig
 import managym
 from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
 from managym.experience_projection import decision_surface_view
 from tests.academy.socket_messages import settled_message
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 from tests.model.prepared_routes import device_input
 
 
@@ -131,13 +132,12 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     monkeypatch.setattr(managym, "naming_catalog", lambda: catalog)
                     torch.set_num_threads(1)
                     torch.manual_seed(243)
-                    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+                    space = ObservationSpace()
                     vector = managym.VectorEnv(num_envs=1, seed=165)
                     vector.reset_all(game.trace.config.to_rust())
                     for event in game.trace.events:
                         vector.step([event.action])
-                    buffers = allocate_vector_buffers(space, 1)
-                    vector.set_buffers(buffers, layout=space.layout)
+                    vector.set_observation_layout(step_buffers(1), layout=space.layout)
                     vector.scenario_naming_vocabulary_into_buffers()
                     model = ActorCritic(
                         space, ModelConfig(hidden_dim=16, attention_on=False)
@@ -154,13 +154,14 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             strength claim. Scalar and vector encodings must agree first.
             """
             assert game.env is not None and game.obs is not None
-            values = encode_observation(space, game.obs)
+            values = observation_arrays(space, game.obs)
+            current = vector_arrays(space, vector.observation_rows())
             for key, expected in values.items():
-                np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+                np.testing.assert_array_equal(current[key][0], expected, err_msg=key)
             assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
                 game.env.semantic_decision_frame_json()
             )
-            obs = {key: torch.from_numpy(value)[None] for key, value in values.items()}
+            obs = encode_policy_batch(space, [game.obs])
             wanted = frame.offers.index(_toward(frame, target))
             for _ in range(20):
                 optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
@@ -252,9 +253,10 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                 assert json.loads(
                     vector.semantic_decision_frames_json()[0]
                 ) == json.loads(game.env.semantic_decision_frame_json())
-                for key, expected in encode_observation(space, game.obs).items():
+                current = vector_arrays(space, vector.observation_rows())
+                for key, expected in observation_arrays(space, game.obs).items():
                     np.testing.assert_array_equal(
-                        buffers[key][0], expected, err_msg=key
+                        current[key][0], expected, err_msg=key
                     )
                 recorded = game.trace.events[trace_length:][: len(selections)]
                 assert [event.action for event in recorded] == selections

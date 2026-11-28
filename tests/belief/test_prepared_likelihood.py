@@ -11,7 +11,6 @@ import torch
 from manabot.belief import likelihood as likelihood_module
 from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_indexes
 from manabot.belief.range import BeliefState
-from manabot.env.observation import encode_observation
 import managym
 from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
@@ -163,8 +162,8 @@ class _FakeObservationSpace:
     def __init__(self) -> None:
         self.encoded: list[weakref.ReferenceType[np.ndarray]] = []
 
-    def encode(self, row: int) -> dict[str, np.ndarray]:
-        encoded = np.asarray([row], dtype=np.float32)
+    def encode(self, rows: list[int]) -> dict[str, np.ndarray]:
+        encoded = np.asarray(rows, dtype=np.float32)[:, None]
         self.encoded.append(weakref.ref(encoded))
         return {"row": encoded}
 
@@ -173,8 +172,10 @@ class _FakeObservationSpace:
         return all(reference() is None for reference in self.encoded)
 
 
-def _fake_encode(space: _FakeObservationSpace, row: int) -> dict[str, np.ndarray]:
-    return space.encode(row)
+def _fake_encode(
+    space: _FakeObservationSpace, rows: list[int]
+) -> dict[str, np.ndarray]:
+    return space.encode(rows)
 
 
 class _FakeAgent:
@@ -194,7 +195,7 @@ class _FakeAgent:
 def test_frozen_likelihood_uses_one_prepared_handle_and_releases_each_batch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(likelihood_module, "encode_observation", _fake_encode)
+    monkeypatch.setattr(likelihood_module, "encode_policy_batch", _fake_encode)
     prepared = _FakePrepared()
     root = _FakeRoot(prepared)
     space = PossibleWorldSpace(
@@ -251,7 +252,7 @@ def test_frozen_likelihood_uses_one_prepared_handle_and_releases_each_batch(
 def test_batch_observer_aborts_before_the_next_provider_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(likelihood_module, "encode_observation", _fake_encode)
+    monkeypatch.setattr(likelihood_module, "encode_policy_batch", _fake_encode)
     prepared = _FakePrepared()
     root = _FakeRoot(prepared)
     space = PossibleWorldSpace(
@@ -318,13 +319,11 @@ def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
         )
         frame = DecisionFrame.from_json(branch.semantic_decision_frame_json())
         indexes, count = _matching_offer_indexes(frame, commitment)
-        encoded = encode_observation(
-            likelihood.obs_space, branch.observation_for_player(1 - viewer)
-        )
-        tensors = {key: torch.from_numpy(value[None]) for key, value in encoded.items()}
         with torch.inference_mode():
             logits, _ = likelihood.agent.forward(
-                device_input(likelihood.agent, tensors)
+                device_input(
+                    likelihood.agent, branch.observation_for_player(1 - viewer)
+                )
             )
             expected.append(float(torch.softmax(logits, dim=-1)[0, indexes].sum()))
         legal.append(count)

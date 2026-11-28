@@ -144,8 +144,4 @@ def definition_programs() -> tuple[DefinitionProgram, ...]:
 def decision_name_values() -> tuple[int, ...]:
     """Native memory labels for host admission, without optional model rows."""
 
-    return tuple(
-        value
-        for _, name, value, _, _ in managym.record_vocabulary()
-        if name.startswith("DecisionMemory::")
-    )
+    return tuple(value for _, value in managym.decision_memory_names())

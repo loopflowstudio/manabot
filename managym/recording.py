@@ -381,7 +381,12 @@ class GameRecord(BaseModel):
     @property
     def resolved_player_policies(self) -> tuple[str, str]:
         """Read either receipt spelling without deprecating retained evidence."""
-        return self.player_policies or _retained_player_policies(self.opponent_policy)
+        if self.player_policies is not None:
+            return self.player_policies
+        return (
+            "agent",
+            "agent" if self.opponent_policy in (None, "none") else self.opponent_policy,
+        )
 
 
 class GameChange(BaseModel):
@@ -676,15 +681,6 @@ class _Capture:
 
     def _snapshot(self) -> GameRecord:
         raise NotImplementedError
-
-    def evidence(self) -> GameRecord:
-        """Deprecated spelling of snapshot, removed in 0.3.0."""
-        warnings.warn(
-            "evidence() is deprecated; use snapshot(); removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.snapshot()
 
     def snapshot(self) -> GameRecord:
         """Copy replay inputs without accessing a live native game from a watchdog."""
@@ -1244,7 +1240,6 @@ _VECTOR_READS = frozenset(
         "snapshot_slots",
         "slot_metadata",
         "observation_rows",
-        "observations_for_players",
         "current_matchup_indices",
         "current_player_configs",
         "get_last_info",
@@ -1253,37 +1248,6 @@ _VECTOR_READS = frozenset(
         "state_digests",
     }
 )
-
-
-def _retained_player_policies(opponent_policy: str | None) -> tuple[str, str]:
-    """Translate retained names; native construction validates the resulting seats."""
-    return (
-        "agent",
-        "agent" if opponent_policy in (None, "none") else opponent_policy,
-    )
-
-
-def resolve_player_policies(
-    opponent_policy: str | None, player_policies: tuple[str, str] | None
-) -> tuple[str, str]:
-    """Per-seat chooser policies from either spelling of the argument.
-
-    The legacy ``opponent_policy`` warns (removal in 0.3.0): ``none`` surfaces
-    both seats and any other name plays seat 1 natively. Native construction
-    rejects unknown per-seat names.
-    """
-    if opponent_policy is None:
-        return player_policies or ("agent", "agent")
-    if opponent_policy not in ("none", "random", "heuristic"):
-        raise ValueError(f"unsupported opponent_policy: {opponent_policy}")
-    if player_policies is not None:
-        raise ValueError("use player_policies or opponent_policy, not both")
-    warnings.warn(
-        "opponent_policy is deprecated; use player_policies; removal in 0.3.0",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    return _retained_player_policies(opponent_policy)
 
 
 class _ExposureSummary(BaseModel):
@@ -1312,7 +1276,6 @@ class RecordedVectorEnv(_Capture):
         num_envs: int,
         seed: int = 0,
         skip_trivial: bool = True,
-        opponent_policy: str | None = None,
         player_policies: tuple[str, str] | None = None,
         seed_stride: int | None = None,
         stream_offset: int = 0,
@@ -1334,7 +1297,9 @@ class RecordedVectorEnv(_Capture):
         self.decision_memory = decision_memory or decision_memory_include_own
         self._branch_roots: list[BranchRoot | None] = [None] * num_envs
         self.skip_trivial = skip_trivial
-        self.player_policies = resolve_player_policies(opponent_policy, player_policies)
+        self.player_policies = (
+            ("agent", "agent") if player_policies is None else player_policies
+        )
         self.native = managym.VectorEnv(
             num_envs=num_envs,
             decision_memory=self.decision_memory,
@@ -1391,40 +1356,18 @@ class RecordedVectorEnv(_Capture):
             "evidence stays aligned with the games"
         )
 
-    def write_observations_for_players(
-        self,
-        players: Sequence[int | None],
-        buffers: dict[str, np.ndarray],
-        action_overflow: Literal["error", "first-legal"] = "error",
-        *,
-        layout: managym.ObservationLayout,
-    ) -> list[managym.ObservationRead]:
-        """Write viewer-safe NumPy rows; discard every output row after an error.
+    def observations_for_players(
+        self, players: Sequence[int | None]
+    ) -> tuple[list[managym.ObservationRead], managym.ObservationBatch]:
+        """Read viewer-safe rows of native seats under the registered layout.
 
-        Execution and capture buffers stay unchanged. Seats are native indices.
+        Games, chooser state and execution rows stay unchanged.
         """
-        return self.native.write_observations_for_players(
-            players, buffers, action_overflow=action_overflow, layout=layout
-        )
+        return self.native.observations_for_players(list(players))
 
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
         """Read privileged current hands without adding them to failure evidence."""
         return self.native.hand_snapshots(players)
-
-    def set_buffers(
-        self,
-        buffers: dict[str, Any],
-        action_overflow: str = "error",
-        *,
-        layout: managym.ObservationLayout | None = None,
-    ) -> None:
-        """Deprecated; use `set_observation_layout` for v11 observations. Removed in 0.3.0."""
-        self.native.set_buffers(buffers, action_overflow, layout=layout)
-        self._register_outcomes(buffers, action_overflow, buffers["actions"].shape[1])
-        self.identities["input_buffers"] = {
-            key: {"shape": list(value.shape[1:]), "dtype": str(value.dtype)}
-            for key, value in buffers.items()
-        }
 
     def set_observation_layout(
         self,
@@ -2131,26 +2074,6 @@ class CapturedSearch(_Capture):
         with self._guard(self._snapshot):
             return self.native.step_active_batch(actions)
 
-    def set_buffers(
-        self,
-        buffers: dict[str, Any],
-        capacity: int,
-        *,
-        layout: managym.ObservationLayout | None = None,
-    ) -> None:
-        """Deprecated; use `set_observation_layout` with `encode_active_batch`/`step_active_batch`. Removed in 0.3.0."""
-        self.native.set_buffers(buffers, capacity, layout=layout)
-        self.search.buffers = {
-            key: BufferSpec(shape=list(value.shape), dtype=str(value.dtype))
-            for key, value in buffers.items()
-        }
-        self.search.capacity = capacity
-
-    def step_active(self, actions: list[int]) -> list[int]:
-        self.search.operations.append(list(actions))
-        with self._guard(self._snapshot):
-            return self.native.step_active(actions)
-
     def finish_random(self) -> None:
         self.search.operations.append("finish_random")
         with self._guard(self._snapshot):
@@ -2381,36 +2304,3 @@ def read_record(path: Path) -> GameRecord:
     if record is None or next(records, None) is not None:
         raise ValueError("expected exactly one game record")
     return record
-
-
-class FailureEvidence(GameRecord):
-    """Deprecated name of GameRecord, removed in 0.3.0."""
-
-    def __init__(self, **data: Any) -> None:
-        warnings.warn(
-            "FailureEvidence is deprecated; use GameRecord; removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(**data)
-
-
-def read_failure(path: Path) -> GameRecord:
-    warnings.warn(
-        "read_failure is deprecated; use read_record; removal in 0.3.0",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return read_record(path)
-
-
-def __getattr__(name: str) -> Any:
-    if name == "CapturedVector":
-        warnings.warn(
-            "managym.recording.CapturedVector is deprecated; "
-            "use RecordedVectorEnv; removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return RecordedVectorEnv
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

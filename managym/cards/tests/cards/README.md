@@ -37,7 +37,8 @@ after card changes so the pool is current.
 ## Effect vocabulary checks
 
 On the default content pack, debug builds check every stream leaving
-`TokenWriter::into_rules_tokens` against the default policy vocabulary.
+`TokenWriter::into_rules_tokens` against the program-token vocabulary
+(`catalog_tokens()` ∪ `runtime_tokens()`).
 A failure lists each missing `(kind, 0x…)` pair. This covers live effects,
 suspended frames and last-known characteristics. The exact admission rules
 are in the [engine guide](../../../../docs/engine.md#program-token-vocabulary).
@@ -56,7 +57,8 @@ and reports the spell or runtime serialization path for each one. For example,
 `definition` field even when no printed card contains the effect.
 
 Project storage IDs as viewer-visible references and omit private provenance.
-Register genuine runtime-only symbols in `managym/src/agent/record_vocabulary.rs`.
+Register genuine runtime-only symbols in `runtime_tokens()`
+(`managym/src/agent/record_vocabulary.rs`).
 Use catalog values for incidental witness data.
 
 After [rebuilding the native extension](../../../../AGENTS.md#commands), run

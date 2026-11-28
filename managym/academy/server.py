@@ -22,7 +22,6 @@ import secrets
 import sqlite3
 import threading
 from typing import Any, Callable, Literal, TypedDict
-import warnings
 
 from fastapi import (
     FastAPI,
@@ -800,13 +799,6 @@ def _parse_game_config(config: Any) -> GameConfig:
         raise ValueError("new_game.config must be an object.")
 
     villain_type = data.get("villain_type", "search")
-    if villain_type == "checkpoint":
-        warnings.warn(
-            "checkpoint player names are deprecated; use registered policies (removed in 0.3.0)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        villain_type = "policy"
     if villain_type not in VILLAIN_TYPES:
         raise ValueError(
             "villain_type must be one of: " + ", ".join(sorted(VILLAIN_TYPES)) + "."

@@ -196,10 +196,9 @@ def test_prefetched_minibatches_preserve_order_and_policy_input(
                 np.testing.assert_array_equal(
                     rows.log_probabilities, expected_rows.log_probabilities
                 )
-                for name in rows.observation:
-                    np.testing.assert_array_equal(
-                        rows.observation[name], expected_rows.observation[name]
-                    )
+                assert rows.observation.coordinates == (
+                    expected_rows.observation.coordinates
+                )
                 for actual, wanted in zip(
                     agent(prepared), agent(expected), strict=True
                 ):

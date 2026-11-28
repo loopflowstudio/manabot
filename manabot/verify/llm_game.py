@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from manabot.env.match import Match
-from manabot.env.observation import encode_observation
+from manabot.env.observation import encode_policy_batch
 from manabot.infra.artifacts import verify_file
 from manabot.infra.config import MatchConfig
 from manabot.llm.schema import DecisionInput, InferenceConfig, SelectionResult
@@ -38,7 +38,6 @@ from manabot.semantic.text_observation import (
 from manabot.verify.llm_opponent import (
     CheckpointOpponent as ConfiguredCheckpointOpponent,
 )
-from manabot.verify.util import select_agent_action
 import managym
 from managym.decision import DecisionFrame, apply_semantic_command
 
@@ -162,15 +161,17 @@ class CheckpointOpponent:
             raise ValueError(
                 "checkpoint encoding would truncate native observations or offers"
             )
-        encoded = encode_observation(self.space, raw)
+        encoded = encode_policy_batch(self.space, [raw])
         encoding_seconds = time.monotonic() - started
         started = time.monotonic()
-        index = select_agent_action(self.agent, encoded, deterministic=False)
+        index = int(
+            self.agent.sample(
+                self.agent.prepare(encoded, inference=True), deterministic=False
+            )[0]
+        )
         inference_seconds = time.monotonic() - started
-        if index < 0 or index >= len(encoded["actions_valid"]):
+        if not 0 <= index < len(raw.action_space.actions):
             raise ValueError("policy returned an invalid action index")
-        if not encoded["actions_valid"][index]:
-            raise ValueError("policy selected a masked action")
         frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
         offer_id = int(frame.offers[index]["id"])
         choices = [a for a in decision.actions if a.command.offer_id == offer_id]

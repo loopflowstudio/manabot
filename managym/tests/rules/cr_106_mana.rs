@@ -194,7 +194,8 @@ fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
         agent::{
             action::Action,
             observation::{Observation, RestrictedManaData},
-            observation_encoder::{encode, ObservationEncodeError, ObservationEncoderConfig},
+            observation_encoder::{ObservationEncodeError, ObservationEncoderConfig},
+            observation_rows::InputRows,
         },
         state::{
             game_object::PlayerId,
@@ -225,7 +226,7 @@ fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
         .as_deref()
         .is_some_and(|restriction| restriction.contains("Ogre")));
     assert_eq!(pooled[0].mana, [0, 0, 0, 3, 0, 0]);
-    encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+    InputRows::read(&observation, &ObservationEncoderConfig::default()).unwrap();
     // The columns sum Lesson, Shrine and Ally purposes, so only the classes
     // they solve for encode: these two pools would share one encoding.
     let class = |spells: &[&str], abilities: &[&str]| RestrictedManaData {
@@ -259,7 +260,7 @@ fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
     ] {
         let mut observation = observation.clone();
         observation.agent.restricted_mana = pool.to_vec();
-        match encode(&observation, &ObservationEncoderConfig::default()) {
+        match InputRows::read(&observation, &ObservationEncoderConfig::default()) {
             Err(ObservationEncodeError::Unrepresentable(state)) => assert_eq!(state, refused),
             Ok(_) => assert!(refused.is_empty()),
             Err(error) => panic!("{error}"),

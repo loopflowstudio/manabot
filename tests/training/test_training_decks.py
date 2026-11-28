@@ -25,7 +25,7 @@ from manabot.backends.torch.collection import (
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -39,6 +39,7 @@ from manabot.model.world import (
     validate_agent_decks,
     validate_agent_setup,
 )
+from manabot.policy.spans import ObservationSelection
 from manabot.training.decks import UniformDecks
 from manabot.training.rollout import collection
 from manabot.training.rollout.collection import (
@@ -60,6 +61,7 @@ from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
 from managym.disclosure import DecklistSampling
 from managym.recording import GameRecord, read_records
 from managym.replay import walk
+from tests.fixtures.rollout_arrays import trajectory_field, trajectory_rows
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 WORLD = managym.WORLD_SETUP
@@ -217,7 +219,10 @@ def test_sampled_decks_agree_across_producer_counts(
     one, many = collectors
     try:
         left, right = collect(one, agent, 1), collect(many, agent, 1)
-        expected, actual = left.ordered_obs(), right.ordered_obs()
+        expected, actual = (
+            trajectory_rows(left).observation,
+            trajectory_rows(right).observation,
+        )
         for key in expected:
             np.testing.assert_array_equal(expected[key], actual[key])
         np.testing.assert_array_equal(left.actions, right.actions)
@@ -519,7 +524,7 @@ def test_closed_fixed_roots_survive_refill(decks: UniformDecks) -> None:
             pair.decklists == "closed"
             for pair in collector._env.current_player_configs()
         )
-        assert not batch.ordered_obs()["decklists"][..., 1, :, :].any()
+        assert not trajectory_field(batch, "decklists")[..., 1, :, :].any()
     finally:
         close_collector(collector)
 
@@ -562,15 +567,19 @@ def test_mixed_source_closed_streams_match_all_closed_inputs(
     actual = mixed.current_player_configs()
     mask = np.array([setup.decklists == "closed" for setup in actual])
     assert mask.any() and not mask.all()
-    buffers = [space.allocate(8) for _ in range(2)]
-    for vector, output in zip((mixed, closed), buffers, strict=True):
-        vector.write_observations_for_players([viewer] * 8, output, layout=space.layout)
-    for key, value in buffers[0].items():
-        np.testing.assert_array_equal(value[mask], buffers[1][key][mask], err_msg=key)
-    prepared = [
-        agent.prepare({key: value[mask] for key, value in output.items()})
-        for output in buffers
-    ]
+    rows = np.flatnonzero(mask)
+    selections = []
+    for vector in (mixed, closed):
+        vector.set_observation_layout(step_buffers(8), space.layout)
+        _, batch = vector.observations_for_players([viewer] * 8)
+        selections.append(
+            ObservationSelection(space, tuple((batch, int(row)) for row in rows))
+        )
+    for key in space.shapes:
+        np.testing.assert_array_equal(
+            selections[0].project(key), selections[1].project(key), err_msg=key
+        )
+    prepared = [agent.prepare(selection) for selection in selections]
     np.testing.assert_equal(asdict(prepared[0]), asdict(prepared[1]))
 
 

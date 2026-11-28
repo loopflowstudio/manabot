@@ -2,9 +2,10 @@
 
 Catalog models (`ModelConfig.record_vocabulary="catalog"`) embed fact and
 effect ids through the card encoder's exact vocabulary and reject an id outside
-it. That vocabulary is native `record_vocabulary`, a list maintained beside
-the encoders, so an encoder that starts hashing a new name without listing it
-would stop training mid-run. This sweep plays seeded random games whose decks
+it. That vocabulary is native `record_vocabulary` for names and
+`catalog_tokens` with `runtime_tokens` for program tokens, lists maintained
+beside the encoders, so an encoder that starts emitting a new name or token
+without listing it would stop training mid-run. This sweep plays seeded random games whose decks
 together hold every eligible world card, encodes each decision at policy input
 v11 and runs a tiny catalog policy over the batch, so a missing name fails here
 with the game that produced it. `--decks elemental` instead exercises the curated
@@ -19,16 +20,12 @@ from dataclasses import dataclass
 import random
 from typing import Literal
 
-import numpy as np
-
 from manabot.env.observation import (
-    FACT_VALID_INDEX,
     ObservationSpace,
-    column,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.protocol import BackendPolicy
+from manabot.policy.spans import BatchRow, ObservationSelection
 from manabot.training.state.backend import FreshPolicies
 import managym
 
@@ -37,7 +34,6 @@ _BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
 _SPELLS_PER_DECK = 12
 _MAX_DECISIONS = 600
 _BATCH = 128
-_EFFECT_VALID_INDEX = column("effects", "valid")
 
 
 @dataclass(frozen=True)
@@ -137,23 +133,23 @@ def coverage_sweep(
             decision_memory=space.config.max_decision_records > 0,
         )
         env.reset(seats)
-        pending: list[dict[str, np.ndarray]] = []
+        pending: list[BatchRow] = []
         for _ in range(_MAX_DECISIONS):
             player = env.current_agent_index()
             if player is None:
                 break
             obs = env.observation_for_player(player)
             try:
-                encoded = encode_observation(space, obs)
+                encoded = managym.encode_observation_batch([obs], space.layout)
             except managym.ObservationCapacity:
                 # Training aborts a game past its capacities (`recover_capacity`).
                 overflows += 1
                 break
-            facts += int(encoded["facts"][..., FACT_VALID_INDEX].sum())
-            effects += int((encoded["effects"][..., _EFFECT_VALID_INDEX] > 0).sum())
-            pending.append(encoded)
+            pending.append((encoded, 0))
             if len(pending) == _BATCH:
-                _embed(model, pending, game, first, second)
+                fact_count, effect_count = _embed(model, pending, game, first, second)
+                facts += fact_count
+                effects += effect_count
                 decisions += len(pending)
                 pending = []
             _, _, done, truncated, _ = env.step(
@@ -162,7 +158,9 @@ def coverage_sweep(
             if done or truncated:
                 break
         if pending:
-            _embed(model, pending, game, first, second)
+            fact_count, effect_count = _embed(model, pending, game, first, second)
+            facts += fact_count
+            effects += effect_count
             decisions += len(pending)
     return CoverageReport(
         games=games,
@@ -177,12 +175,12 @@ def coverage_sweep(
 
 def _embed(
     model: BackendPolicy,
-    rows: list[dict[str, np.ndarray]],
+    rows: list[BatchRow],
     game: int,
     first: list[str],
     second: list[str],
-) -> None:
-    batch = {key: np.stack([r[key] for r in rows]) for key in rows[0]}
+) -> tuple[int, int]:
+    batch = ObservationSelection(model.observation_space, tuple(rows))
     try:
         model.evaluate(model.prepare(batch, inference=True))
     except ValueError as error:
@@ -190,6 +188,8 @@ def _embed(
             f"game {game} (decks {first} / {second}) emitted an id outside the "
             f"catalog record vocabulary: {error}"
         ) from error
+    tables = batch.spans.tables
+    return len(tables["facts"].records), len(tables["effects"].records)
 
 
 def main() -> None:

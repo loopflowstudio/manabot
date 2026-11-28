@@ -90,7 +90,7 @@ def score_checkpoint(
             return score, None
         assert space is not None
         scenario = SCENARIOS[scenario_name]
-        env, observation, _ = build_scenario_env(scenario, space, seed)
+        env, observation = build_scenario_env(scenario, space, seed)
         validate_agent_setup(player.agent, env.match.to_rust())
         game = {
             "match_id": f"scenario:{scenario_name}:{seed}:{score.checkpoint_sha256}",

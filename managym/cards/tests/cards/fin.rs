@@ -15,10 +15,8 @@ use crate::support::{
 };
 use managym::{
     agent::{
-        action::Action,
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig},
-        observation_layout::stack,
+        action::Action, observation::Observation, observation_encoder::ObservationEncoderConfig,
+        observation_layout::stack, observation_rows::InputRows,
     },
     flow::{event::GameEvent, turn::StepKind},
     state::{
@@ -54,9 +52,9 @@ fn check_cast(s: &Scenario, from_graveyard: bool) {
             .cast_from_graveyard,
         from_graveyard
     );
-    let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
     assert_eq!(
-        encoded.stack[stack::CAST_FROM_GRAVEYARD],
+        encoded.row("stack", 0)[stack::CAST_FROM_GRAVEYARD],
         f32::from(from_graveyard)
     );
 }
@@ -133,10 +131,10 @@ fn esper_origins_flashes_back_through_exile_and_finishes_its_saga() {
         .unwrap();
     assert_eq!(projected.mana_value(), 2);
     assert_eq!(projected.characteristics.mana_cost, Default::default());
-    let encoded = encode(&seen, &ObservationEncoderConfig::default()).unwrap();
+    let encoded = InputRows::read(&seen, &ObservationEncoderConfig::default()).unwrap();
     use managym::agent::observation_layout::permanent;
     assert_eq!(
-        encoded.opponent_permanents[slot * permanent::WIDTH + permanent::MANA_VALUE],
+        encoded.row("opponent_permanents", slot)[permanent::MANA_VALUE],
         0.2
     );
     s.game_mut().transform_permanent(saga);
@@ -264,16 +262,12 @@ fn cecil_transforms_in_place_under_a_pending_bolt_and_protects_other_attackers()
         .windows(2)
         .position(|pair| pair == damage_tokens)
         .unwrap();
-    let encoded = encode(&before, &ObservationEncoderConfig::default()).unwrap();
-    assert!(encoded
-        .facts
-        .chunks_exact(fact::WIDTH)
-        .any(
-            |row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32
-                && row[fact::VALUE] == TokenKind::Integer as u16 as f32
-                && row[fact::VALUE_2] == (rank + 1) as f32
-                && row[fact::DETAIL_HIGH + 1] == 3.0
-        ));
+    let encoded = InputRows::read(&before, &ObservationEncoderConfig::default()).unwrap();
+    assert!(encoded.rows("facts").into_iter().any(|row| row[fact::KIND]
+        == FactKind::ContinuationProgram as u8 as f32
+        && row[fact::VALUE] == TokenKind::Integer as u16 as f32
+        && row[fact::VALUE_2] == (rank + 1) as f32
+        && row[fact::DETAIL_HIGH + 1] == 3.0));
     let front = before
         .opponent_permanents
         .iter()

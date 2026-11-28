@@ -6,71 +6,17 @@ output types. Heavy model imports happen only when a capability is requested.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
-import warnings
 
-import managym
 from managym.bots import (
     BeliefSummary,
     BotArtifactError,
     BotDecision,
     VerifiedArena,
 )
-from managym.policy import PolicyRunner, PolicySpec
 
 if TYPE_CHECKING:
     from manabot.sim.search.runtime import RetainedCheckpointRegistration
-
-
-class CheckpointVillain:
-    """Retained checkpoint loader, delegating execution to an independent provider session."""
-
-    def __init__(
-        self,
-        path: str,
-        *,
-        deterministic: bool = False,
-        player_configs: Sequence[managym.PlayerConfig] | None = None,
-    ) -> None:
-        from manabot.model.world import validate_agent_setup
-        from manabot.sim.policy_provider import BaselineSession, provider
-
-        warnings.warn(
-            "CheckpointVillain is deprecated; use PolicySpec and PolicyRegistry (removed in 0.3.0)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        spec = PolicySpec("manabot", path, {"deterministic": deterministic})
-        # The retained loader permits omitted setup; Academy itself admits every
-        # explicit setup through PolicyRegistry before constructing a runner.
-        session = BaselineSession(spec, seed=0)
-        try:
-            descriptor = provider.policy(spec).describe()
-        except BaseException:
-            session.close()
-            raise
-        self._runner = PolicyRunner(session, descriptor, seat=1)
-        assert session.agent is not None and session.space is not None
-        self.agent = session.agent
-        self.obs_space = session.space
-        self.deterministic = deterministic
-        try:
-            if player_configs is not None:
-                validate_agent_setup(self.agent, player_configs)
-        except BaseException:
-            self._runner.close()
-            raise
-
-    @property
-    def last_decision(self) -> BotDecision | None:
-        return self._runner.last_decision
-
-    def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
-        return self._runner(env, obs)
-
-    def close(self) -> None:
-        self._runner.close()
 
 
 class TrainingBots:

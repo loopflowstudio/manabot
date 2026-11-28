@@ -31,6 +31,8 @@ def _metadata(data: bytes) -> _Metadata:
 
 
 def _academy_files(files: list[str]) -> None:
+    if any(name == "academy" or name.startswith("academy/") for name in files):
+        raise ValueError("engine artifact contains the top-level academy package")
     required = {
         "managym/academy/site/index.html",
         "managym/academy/packs/elemental-world/v2/manifest.json",
@@ -111,14 +113,8 @@ def validate(directory: Path, complete: bool) -> None:
             if metadata.name == "managym":
                 if len(native) != 1 or not native[0].startswith("managym/_managym."):
                     raise ValueError("managym wheel must own its native extension")
-                if any(
-                    p.startswith("manabot/")
-                    or (p.startswith("academy/") and p != "academy/__init__.py")
-                    for p in files
-                ):
-                    raise ValueError(
-                        "engine wheel contains training or legacy Academy modules"
-                    )
+                if any(p.startswith("manabot/") for p in files):
+                    raise ValueError("engine wheel contains training modules")
                 _academy_files(files)
                 if "managym/Cargo.lock" not in files:
                     raise ValueError("managym wheel is missing its provenance lockfile")

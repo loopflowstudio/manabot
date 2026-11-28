@@ -8,15 +8,19 @@ Read when the change touches checkpoint loading, input readings or files an earl
   --no-open --port <unused>` (bare `academy`; `watch` requires `--player`);
   `GET /api/opponents` lists each entry's `available` and `reason`, and the
   Seat 2 bot select's "Registered policy" shows them as disabled options.
-  An unexplained-key copy: set `semantic_cards.record_token_keys[0]` in a v9
+  An unexplained-key copy: set `semantic_cards.record_token_keys[0]` in a v11
   `.pt` state dict to `(3 << 32) | 12345`. In the browser, select
   `[data-testid=opponent-select]` → `policy`, then the
   `[data-testid=checkpoint-select]` option, and press "Start game" (the setup
   form has no "New Game" button); the end dialog offers "Rematch".
   `uv run python -m manabot.backends.convert` must accept both a
   PyTorch zip and a container saved under a `.pt` name (`save_checkpoint`
-  always writes a container); convert the pinned pilots and u1952, then load
-  each `.safetensors`.
+  always writes a container); convert a v11 PyTorch zip and load its `.safetensors`. A v9 or
+  v10 checkpoint must report v0.2.6 as its last supporting release. The repository
+  no longer holds one: take the v9 pilot from the last 0.2.x tag
+  (`git show v0.2.6:tests/fixtures/pinned_pilot/v9/pilot.pt > .runs/…/v9-pilot.pt`)
+  and check `load_policy`, `manabot.eval.local` as either seat and
+  `/api/opponents` (listed with `available: false` and the reason).
   `manabot sim` cannot seat `heuristic` as villain; seat the checkpoint twice.
   Write returning-user checkpoints on `main` as in "Files a returning user
   wrote". For a column append, cover both `deck_world` and `checkpoint_world`
@@ -49,3 +53,20 @@ Read when the change touches checkpoint loading, input readings or files an earl
   `input_readings`: they must equal the parent's legacy readings. A copy with
   one reading renamed must show in `/api/opponents` as unavailable, naming
   the column.
+- Record-vocabulary changes (`record_vocabulary.rs`, `runtime_tokens`,
+  decision-memory names): `local.py` and baseline checkpoints bind exact decks
+  (`setups`, no `world_digest`), so they take `bind_records`, not
+  `bind_catalog`; the pinned pilots and Elemental checkpoints only cover the
+  world path. Write both kinds on the base: build its release extension in a
+  `/private/tmp` worktree with its own `CARGO_TARGET_DIR`, then from that
+  worktree with `PYTHONPATH` at it run this checkout's `.venv/bin/etude train
+  manabot/recipes/local.py --until updates=1` (about 20 s) and a `.runs/` copy
+  that sets `decision_memory="gru"`, all four `max_decision_*` capacities and
+  `collection_rows`/`bootstrap_rows`/`learner_rows` (validation refuses either
+  omission, and a refused run still takes its run name). Play two seeded
+  authored-deck games per checkpoint with `Env(decision_memory=...)` and
+  `evaluate_observation` on base, follow the same actions on HEAD and compare
+  probabilities and values (MTG-504: 387 decisions, identical). In Academy an
+  exact-deck checkpoint needs its decks:
+  `/?hero=ur_lessons&villain=gw_allies&opponent=<sha256>`. `--resume` across a
+  buffer change is refused by design (`incompatible buffer …`).

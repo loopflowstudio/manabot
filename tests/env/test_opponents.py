@@ -1,25 +1,20 @@
 """Supported opponent policies and rejection at public API boundaries."""
 
-import numpy as np
 import pytest
 
 from manabot.env.failures import RecordedVectorEnv
-from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.match import Match
 from manabot.env.opponents import RandomPolicy, build_opponent_policy
-from manabot.env.vector_env import VectorEnv
-from manabot.infra.config import RewardConfig
 import managym
 from managym.recording import GameInputs, GameRecord
 from managym.replay import replay_failure_inputs
 
 
 def test_random_policy_picks_only_valid_actions() -> None:
-    obs = {"actions_valid": np.array([1, 0, 1, 0], dtype=np.float32)}
+    obs, _ = managym.Env(seed=3).reset(Match().to_rust())
     policy = RandomPolicy()
-    chosen = {policy(obs) for _ in range(100)}
-    assert chosen.issubset({0, 2})
-    assert chosen
+    for _ in range(100):
+        assert 0 <= policy(obs) < len(obs.action_space.actions)
 
 
 def test_build_opponent_policy_none() -> None:
@@ -27,24 +22,15 @@ def test_build_opponent_policy_none() -> None:
 
 
 @pytest.mark.parametrize("name", ["passive", "unknown"])
-@pytest.mark.parametrize("api", ["factory", "native", "captured", "torch"])
+@pytest.mark.parametrize("api", ["factory", "native", "captured"])
 def test_unsupported_opponent_policy(name: str, api: str) -> None:
     with pytest.raises(ValueError, match=f"[Uu]nsupported .*policy:.*{name}"):
         if api == "factory":
             build_opponent_policy(name)
         elif api == "native":
             managym.VectorEnv(num_envs=1, player_policies=("agent", name))
-        elif api == "captured":
-            RecordedVectorEnv(num_envs=1, player_policies=("agent", name))
         else:
-            VectorEnv(
-                1,
-                Match(),
-                ObservationSpace(),
-                Reward(RewardConfig()),
-                "cpu",
-                player_policies=("agent", name),
-            )
+            RecordedVectorEnv(num_envs=1, player_policies=("agent", name))
 
 
 @pytest.mark.filterwarnings("error::DeprecationWarning")

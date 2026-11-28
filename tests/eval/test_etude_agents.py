@@ -13,7 +13,7 @@ from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.eval.admission import register_anchor
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import Sampler, build, game_players, registration
@@ -21,6 +21,7 @@ import manabot.eval.game as game
 from manabot.eval.match import play_cell
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import file_sha256
+from manabot.policy.admission import admit
 from manabot.policy.prepare import prepare
 from manabot.sim.card_evidence import EvidenceRef
 from manabot.sim.matchup import DeckMatchup
@@ -96,7 +97,11 @@ def test_loader_batches_prepared_rows_without_sampling(
     env = Env(match, space, Reward(RewardConfig()), seed=71)
     try:
         obs, _ = env.reset()
-        batch = {key: value[None] for key, value in obs.items()}
+        batch = admit(
+            managym.encode_observation_batch([obs], space.layout),
+            sampler.spec,
+            bucketed=False,
+        )
         row = prepare(batch, sampler.spec.tables, binding=sampler.spec.binding)
         [single] = forward([row])
         joined = forward([row, row])
@@ -206,12 +211,12 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
     assert isinstance(sampler, Sampler)
     rows = []
     for env in (shared_effect_root(1), kellan_upgrade_root()):
-        obs = encode_observation(
-            space, env.observation_for_player(env.current_agent_index())
+        batch = encode_policy_batch(
+            space, [env.observation_for_player(env.current_agent_index())]
         )
         rows.append(
             prepare(
-                {k: v[None] for k, v in obs.items()},
+                admit(batch, sampler.spec, bucketed=False),
                 sampler.spec.tables,
                 binding=sampler.spec.binding,
             )
@@ -235,7 +240,7 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(
     )
     key = arena_fixture().key.model_copy(
         update={
-            "world": managym.WORLD_VERSION,
+            "world": "w17",
             "content_suite": matchup.content_suite,
             "viewer_boundary": "acting-viewer",
         }

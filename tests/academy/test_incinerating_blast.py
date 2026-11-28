@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.text_observation import keep_opening_hands
 import managym
@@ -16,6 +16,7 @@ from managym.academy import server, trace as trace_store
 from managym.academy.server import GameSession
 from managym.decision import Command, DecisionFrame
 from tests.academy.socket_messages import settled_message
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def pending_blast(hidden: str) -> managym.Env:
@@ -138,13 +139,13 @@ def test_pending_blast_privacy_and_recovery(tmp_path: Path) -> None:
     caster_a, caster_b = (env.observation_for_player(0) for env in roots)
     assert caster_a.toJSON() != caster_b.toJSON()
     cards_a, cards_b = (
-        encode_observation(space, obs)["semantic_cards"] for obs in (caster_a, caster_b)
+        observation_arrays(space, obs)["semantic_cards"] for obs in (caster_a, caster_b)
     )
     assert not np.array_equal(cards_a, cards_b)
 
     opponent_a, opponent_b = (env.observation_for_player(1) for env in roots)
     assert opponent_a.toJSON() == opponent_b.toJSON()
-    x, y = (encode_observation(space, obs) for obs in (opponent_a, opponent_b))
+    x, y = (observation_arrays(space, obs) for obs in (opponent_a, opponent_b))
     assert x.keys() == y.keys()
     for key in x:
         np.testing.assert_array_equal(x[key], y[key], err_msg=key)

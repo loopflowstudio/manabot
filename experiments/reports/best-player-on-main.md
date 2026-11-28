@@ -56,6 +56,8 @@ new-card lists. [New-card lists, evaluation rows, Commands and replay receipts](
 
 ## Reproduce
 
+Use the experiment checkout at `14a168309f` for this v9 pilot.
+
 Both arms load the original 3,945,456-byte policy from run `59718fe34945`
 by its recorded digest and play through local evaluation. With access to the
 artifact bucket, run from the repository root and choose fresh output directories.

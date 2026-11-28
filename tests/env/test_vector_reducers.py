@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from manabot.env.observation import ObservationSpace, allocate_vector_buffers
+from manabot.env.observation import ObservationSpace, step_buffers
 import managym
 from managym.card_capture import CapturedCards
 from managym.recording import (
@@ -47,8 +47,7 @@ def players() -> list[managym.PlayerConfig]:
 
 def buffers(vector: RecordedVectorEnv, count: int) -> None:
     space = ObservationSpace()
-    arrays = allocate_vector_buffers(space, count)
-    vector.set_buffers(arrays, layout=space.layout)
+    vector.set_observation_layout(step_buffers(count), layout=space.layout)
 
 
 def test_vector_games_and_masked_history_equal_offline_analysis(tmp_path: Path) -> None:

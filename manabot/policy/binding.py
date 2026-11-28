@@ -6,14 +6,14 @@ so that a stored program can still read every vector it was trained with.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from manabot.model.writer_catalog import WriterCatalog
-from manabot.policy.catalog import catalog_tables
+from manabot.policy.catalog import CatalogTables, catalog_tables
 from manabot.policy.prepare import RecordNamespace, record_key
 from manabot.semantic.learning import TOKEN_KINDS
 import managym
@@ -92,6 +92,77 @@ def bind_catalog(
         records=True,
         decision_memory=bool(checkpoint.space.config.max_decision_records),
     )
+    definitions = writer["definition_keys"]
+    now = {key: i for i, key in enumerate(current["definition_keys"])}
+    stored = checkpoint.buffers["semantic_cards.tokens"]
+    if len(definitions) != len(stored) or len(set(definitions)) != len(definitions):
+        raise ValueError("writer catalog does not identify each stored program")
+
+    def reference(value: int) -> int:
+        if value >= len(definitions) or definitions[value] not in now:
+            raise ValueError(f"missing referenced definition for writer row {value}")
+        return now[definitions[value]]
+
+    programs = [(i, now[key]) for i, key in enumerate(definitions) if key in now]
+    bound, report = rebind(checkpoint, catalog, programs, reference)
+    stored_names = [item["name"] for item in writer["naming_catalog"]]
+    names = [item["name"] for item in current["naming_catalog"]]
+    name_param = "name_candidates.embedding.weight"
+    params = dict(bound.parameters)
+    params[name_param] = named_rows(params[name_param], stored_names, names)
+    name_defs = np.array(
+        [0]
+        + [
+            0 if item["definition"] is None else item["definition"] + 1
+            for item in current["naming_catalog"]
+        ],
+        dtype=np.int64,
+    )
+    buffers = dict(bound.buffers)
+    buffers["name_candidates.definitions"] = name_defs
+    buffers["name_candidates.program_rows"] = buffers["semantic_cards.definition_rows"][
+        name_defs
+    ]
+    return replace(bound, parameters=params, buffers=buffers), replace(
+        report, new_names=len(set(names) - set(stored_names))
+    )
+
+
+def bind_records(
+    checkpoint: PolicyCheckpoint,
+) -> tuple[PolicyCheckpoint, BindingReport]:
+    """Rebind the record rows of a policy bound to exact decks.
+
+    Its world binding fixed the card content, so the stored card programs must
+    equal the running pack's; record names and runtime tokens are global
+    vocabularies and are joined by key like any other learned row."""
+    catalog = catalog_tables(
+        checkpoint.model.world,
+        records=True,
+        decision_memory=bool(checkpoint.space.config.max_decision_records),
+    )
+    for name in ("tokens", "lengths", "definition_rows"):
+        if not np.array_equal(
+            checkpoint.buffers["semantic_cards." + name], catalog.buffers[name]
+        ):
+            raise ValueError(
+                f"stored card programs differ from the running pack ({name})"
+            )
+    programs = [(i, i) for i in range(len(catalog.buffers["lengths"]))]
+    return rebind(checkpoint, catalog, programs, lambda value: value)
+
+
+def rebind(
+    checkpoint: PolicyCheckpoint,
+    catalog: CatalogTables,
+    programs: Sequence[tuple[int, int]],
+    reference: Callable[[int], int],
+) -> tuple[PolicyCheckpoint, BindingReport]:
+    """Move learned token rows onto the running catalog's record and token keys.
+
+    `programs` pairs each stored program row with its running row; `reference`
+    maps a writer definition id in a `definition_ref` token to the running one.
+    Retired rows follow the running vocabulary so stored programs keep them."""
     buffers = catalog.buffers.copy()
     prefix = "semantic_cards."
     old = {
@@ -102,12 +173,6 @@ def bind_catalog(
     params = dict(checkpoint.parameters)
     token_param = prefix + "token_embedding.weight"
     weights = params[token_param]
-    definitions = writer["definition_keys"]
-    now = {key: i for i, key in enumerate(current["definition_keys"])}
-    if len(definitions) != len(old["tokens"]) or len(set(definitions)) != len(
-        definitions
-    ):
-        raise ValueError("writer catalog does not identify each stored program")
     # Index by runtime embedding row. Distinct token and record keys can
     # deliberately address the same embedding; both joins must agree.
     move = np.full(catalog.embedding_rows, -1, dtype=np.int64)
@@ -128,11 +193,7 @@ def bind_catalog(
         for key, row in zip(old[keys].tolist(), old[rows].tolist(), strict=True):
             kind, value = divmod(key, 1 << 32)
             if family == "record_token" and kind == TOKEN_KINDS["definition_ref"]:
-                if value >= len(definitions) or definitions[value] not in now:
-                    raise ValueError(
-                        f"missing referenced definition for writer row {value}"
-                    )
-                key = packed(kind, now[definitions[value]])
+                key = packed(kind, reference(value))
                 if key not in runtime:
                     # The definition still exists but no running card references it.
                     continue
@@ -169,48 +230,31 @@ def bind_catalog(
     table[len(move) :] = weights[retired_rows]
     params[token_param] = table
     lengths = buffers["lengths"].copy()
-    programs = buffers["tokens"]
-    width = max(programs.shape[1], old["tokens"].shape[1])
-    programs = np.pad(programs, ((0, 0), (0, width - programs.shape[1])))
+    tokens = buffers["tokens"]
+    width = max(tokens.shape[1], old["tokens"].shape[1])
+    tokens = np.pad(tokens, ((0, 0), (0, width - tokens.shape[1])))
     changed = 0
-    for index, key in enumerate(definitions):
-        if key not in now:
-            continue
-        row = now[key]
+    for index, row in programs:
         length = int(old["lengths"][index])
         stored = old["tokens"][index, :length]
         if not 0 < length <= old["tokens"].shape[1] or np.any(
             (stored < 1) | (stored >= len(weights))
         ):
-            raise ValueError(f"invalid stored card program for {key}")
+            raise ValueError(f"invalid stored card program at row {index}")
         stored = writer_to_bound[stored]
-        if not np.array_equal(programs[row, : lengths[row]], stored):
+        if not np.array_equal(tokens[row, : lengths[row]], stored):
             changed += 1
-        programs[row].fill(0)
-        programs[row, :length] = stored
+        tokens[row].fill(0)
+        tokens[row, :length] = stored
         lengths[row] = length
-    buffers.update(tokens=programs, lengths=lengths)
-    stored_names = [item["name"] for item in writer["naming_catalog"]]
-    names = [item["name"] for item in current["naming_catalog"]]
-    name_param = "name_candidates.embedding.weight"
-    params[name_param] = named_rows(params[name_param], stored_names, names)
-    name_defs = np.array(
-        [0]
-        + [
-            0 if item["definition"] is None else item["definition"] + 1
-            for item in current["naming_catalog"]
-        ],
-        dtype=np.int64,
-    )
+    buffers.update(tokens=tokens, lengths=lengths)
     result = dict(checkpoint.buffers)
     result.update({prefix + name: value for name, value in buffers.items()})
-    result["name_candidates.definitions"] = name_defs
-    result["name_candidates.program_rows"] = buffers["definition_rows"][name_defs]
     return replace(checkpoint, parameters=params, buffers=result), BindingReport(
-        stored_programs=len(now.keys() & definitions),
+        stored_programs=len(programs),
         changed_programs=changed,
         new_tokens=count,
-        new_names=len(set(names) - set(stored_names)),
+        new_names=0,
         retired_keys=retired,
         renamed_keys=renamed,
     )

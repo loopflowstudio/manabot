@@ -13,9 +13,9 @@ Each test aims to verify a specific aspect of the agent's behavior while
 maintaining robustness to architectural changes.
 """
 
+from contextlib import closing
 from dataclasses import replace
 import logging
-from typing import Generator
 
 import pytest
 import torch
@@ -24,9 +24,12 @@ import torch.nn as nn
 from manabot.backends.torch.policy import ActorCritic
 
 # Local imports
-from manabot.env.observation import ObservationSpace
+from manabot.env.failures import RecordedVectorEnv
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.infra.config import ModelConfig
 from manabot.policy.prepare import Prepared
+from manabot.policy.spans import ObservationSelection
 from tests.model.prepared_routes import device_input
 
 # Configure logging
@@ -65,32 +68,17 @@ def agent(
 @pytest.fixture
 def real_observation(
     observation_space: ObservationSpace, agent: ActorCritic
-) -> Generator[Prepared[torch.Tensor], None, None]:
-    """
-    Create a real observation using a vector env and the real observation encoder.
-
-    Returns the batch (batch_size=2) as produced by the real environment,
-    admitted for `agent`.
-    """
-    # Local imports
-    from manabot.env.match import Match, Reward
-    from manabot.infra.config import RewardConfig
-
-    reward = Reward(RewardConfig(trivial=True))
-    match = Match()
-    from manabot.env.vector_env import VectorEnv
-
-    vec_env = VectorEnv(
-        num_envs=2,
-        match=match,
-        observation_space=observation_space,
-        reward=reward,
-        device="cpu",
-        player_policies=("agent", "random"),
-    )
-    obs, _ = vec_env.reset()
-    yield device_input(agent, obs)
-    vec_env.close()
+) -> Prepared[torch.Tensor]:
+    """Prepare two real vector decisions for the model."""
+    with closing(
+        RecordedVectorEnv(num_envs=2, player_policies=("agent", "random"))
+    ) as vector:
+        vector.set_observation_layout(step_buffers(2), layout=observation_space.layout)
+        vector.reset_all_into_buffers(Match().to_rust())
+        return device_input(
+            agent,
+            ObservationSelection(observation_space, tuple(vector.observation_rows())),
+        )
 
 
 # -----------------------------------------------------------------------------

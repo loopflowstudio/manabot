@@ -1,35 +1,35 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "4c85b7f3202d01c1d74922709da95f048d104979",
-    "date": "2026-11-27",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45927645401",
-    "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6975P-C (4 vCPU), release",
-    "reason": "Canonicalize indistinguishable game objects across legal actions and tie-break autotapper equal-reluctance sources by color/output class (MTG-487): action spaces and digests move intentionally; same-runner search total 71.261s -> 63.715s (-10.6%), worst reply 1.780s -> 1.700s (-4.5%), steps 31,166.3 -> 32,175.9/s (+3.2%)"
+    "commit": "b612847b74328b77df912ef612100ad471277522",
+    "date": "2026-11-28",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/46094840811",
+    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
+    "reason": "Sync 0.3.0 branch with main (MTG-487 canonicalized actions and layer CoW) while keeping 0.3.0 3-arg Env::new; all digests match main baseline"
   },
   "bench_search": {
-    "worst_s": 1.700499218,
-    "total_s": 63.715,
+    "worst_s": 2.885570962,
+    "total_s": 108.534,
     "seeds": {
       "1": {
-        "worst_s": 1.340348774,
-        "total_s": 25.717211274,
+        "worst_s": 2.2661558445,
+        "total_s": 43.59456435850001,
         "digest": 16432375288198849020
       },
       "2": {
-        "worst_s": 1.1355771495,
-        "total_s": 18.353014688000002,
+        "worst_s": 1.9391800975,
+        "total_s": 31.50348383049999,
         "digest": 12945150739141146268
       },
       "3": {
-        "worst_s": 1.700499218,
-        "total_s": 19.6449115285,
+        "worst_s": 2.885570962,
+        "total_s": 33.43562397000001,
         "digest": 200128212830785895
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 32175.86105283769,
+    "steps_per_s": 18437.844428595832,
     "steps": 119453,
     "games": 512,
     "digest": 9897414478134187774

@@ -66,7 +66,7 @@ class NativeContractEngine:
         }
 
     def semantic_observation_json(self, viewer: int) -> str:
-        offers = [{"id": index, "label": f"action-{index}"} for index in range(3)]
+        offers = [{"id": index, "label": f"action-{index}"} for index in range(2)]
         return json.dumps(
             {
                 "identity": {
@@ -139,7 +139,7 @@ def test_manabot_player_generates_belief_before_ordinary_action() -> None:
     player.start_game(engine, 0)
     action = player.act(engine, fixture_observation())
 
-    assert action in {0, 1, 2}
+    assert action in {0, 1}
     assert player.last_step is not None
     assert player.last_step.belief_update.belief.normalization_error < 1e-12
     command = player.command_for_action(engine, action, command_id="runtime-test")

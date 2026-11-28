@@ -12,57 +12,62 @@ from manabot.backends.torch.rl import (
     reverse_kl,
 )
 import manabot.backends.torch.rollout as torch_rollout
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace, encode_policy_batch
+from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.actions import PackedActions
 from manabot.training.updates.objective import damped_policy_loss
+import managym
 
 
-def evidence() -> tuple[dict[str, np.ndarray], np.ndarray, np.ndarray]:
+def decisions(count: int = 4) -> list[managym.Observation]:
+    """Real decisions with at least two legal offers, from one seeded game."""
+    env = managym.Env(seed=243, skip_trivial=True)
+    env.reset(Match().to_rust())
+    found = []
+    while len(found) < count:
+        obs = env.observation_for_player(env.current_agent_index())
+        if len(obs.action_space.actions) >= 2:
+            found.append(obs)
+        env.step(len(obs.action_space.actions) - 1)
+    return found
+
+
+def evidence() -> tuple[ObservationSelection, np.ndarray, np.ndarray]:
+    space = ObservationSpace()
+    batch = encode_policy_batch(space, decisions())
+    observation = ObservationSelection(
+        space, tuple((batch, row) for row in range(batch.batch_size))
+    )
+    valid = observation.project("actions_valid")
     rng = np.random.default_rng(243)
-    valid = np.zeros((4, 928), dtype=np.float32)
-    for row, count in enumerate((928, 21, 4, 4)):
-        valid[row, rng.choice(928, count, replace=False)] = 1
-    observation = {
-        "actions_valid": valid,
-        "actions": rng.normal(size=(4, 928, 18)).astype(np.float32),
-        "action_focus": rng.integers(-1, 5, size=(4, 928, 3)).astype(np.float32),
-        "name_candidates": np.zeros((4, 928, 2), dtype=np.float32),
-    }
-    observation["name_candidates"][0, :, 0] = np.arange(1, 929)
-    for key, value in observation.items():
-        if key != "actions_valid":
-            value[valid == 0] = -1 if key == "action_focus" else 0
     logits = torch.from_numpy(rng.normal(size=valid.shape).astype(np.float32))
-    # Retain underflowed legal probabilities without replacing finite logs.
-    logits[0, 927] = -150
+    # Retain an underflowed legal probability without replacing finite logs.
+    logits[0, int(observation.action_counts[0]) - 1] = -150
     logs = policy_logs(logits, torch.from_numpy(valid).bool()).numpy()
-    actions = valid.argmax(-1).astype(np.int64)
+    actions = (observation.action_counts - 1).astype(np.int64)
     return observation, logs, actions
 
 
-def test_packed_actions_preserve_sparse_coordinates_distributions_and_copy_ownership() -> (
-    None
-):
+def test_packed_actions_preserve_coordinates_distributions_and_copy_ownership() -> None:
     obs, logs, actions = evidence()
     packed = PackedActions.pack(obs, logs, validator=torch_rollout)
     selected = logs[np.arange(4), actions]
     packed.check(actions, selected, validator=torch_rollout)
     order = np.array([2, 0, 3, 1])
-    restored = packed.unpack(order)
-    for key, value in obs.items():
-        np.testing.assert_array_equal(restored.observation[key], value[order])
-    np.testing.assert_array_equal(restored.log_probabilities, logs[order])
+    restored = packed.unpack_logs(order)
+    np.testing.assert_array_equal(restored, logs[order])
+    assert packed.selection.select(order).coordinates == obs.select(order).coordinates
     assert np.isfinite(packed.log_probabilities).all()
     assert (np.exp(packed.log_probabilities) == 0).any()
-    assert packed.nbytes < sum(v.nbytes for v in obs.values()) + logs.nbytes
-    obs["actions"].fill(0)
-    np.testing.assert_array_equal(
-        packed.unpack(order).observation["actions"], restored.observation["actions"]
-    )
+    assert packed.nbytes < logs.nbytes
+    logs.fill(0)
+    np.testing.assert_array_equal(packed.unpack_logs(order), restored)
     joined = PackedActions.concatenate(
         [
             PackedActions.pack(
-                {k: v[i : i + 1] for k, v in restored.observation.items()},
-                restored.log_probabilities[i : i + 1],
+                obs.select(order[i : i + 1]),
+                restored[i : i + 1],
                 validator=torch_rollout,
             )
             for i in range(4)
@@ -83,11 +88,11 @@ def test_packed_action_learning_loss_and_gradients_match_dense_evidence(
     obs, logs, actions = evidence()
     packed = PackedActions.pack(obs, logs, validator=torch_rollout)
     indexes = np.array([3, 0])
-    restored = packed.unpack(indexes)
+    restored = packed.behavior(indexes)
     gradients = []
     losses = []
     for old, valid in (
-        (logs[indexes], obs["actions_valid"][indexes]),
+        (logs[indexes], obs.project("actions_valid")[indexes]),
         (restored.log_probabilities, restored.observation["actions_valid"]),
     ):
         current = torch.tensor(np.where(valid, old, 0) + 0.01, requires_grad=True)
@@ -132,7 +137,7 @@ def test_packed_action_checks_reject_corruption_in_original_rows() -> None:
     with pytest.raises(NumericalError, match="nonfinite_behavior_logs") as caught:
         packed.check(actions, logs[np.arange(4), actions], validator=torch_rollout)
     assert caught.value.tensors["minibatch_indexes"].tolist() == [0, 1, 2, 3]
-    logs[1, np.flatnonzero(obs["actions_valid"][1] == 0)[0]] = -1
+    logs[1, int(obs.action_counts[1])] = -1
     with pytest.raises(ValueError, match="illegal_log_mass"):
         PackedActions.pack(obs, logs, validator=torch_rollout)
 
@@ -144,14 +149,13 @@ def test_rows_of_a_packed_block_reassemble_it_exactly() -> None:
     np.testing.assert_array_equal(whole.offsets, packed.offsets)
     np.testing.assert_array_equal(whole.slots, packed.slots)
     np.testing.assert_array_equal(whole.log_probabilities, packed.log_probabilities)
-    for key, value in packed.fields.items():
-        np.testing.assert_array_equal(whole.fields[key], value)
+    assert whole.selection.coordinates == packed.selection.coordinates
 
 
 def test_selected_types_read_the_chosen_action_of_every_row() -> None:
     obs, logs, actions = evidence()
     packed = PackedActions.pack(obs, logs, validator=torch_rollout)
-    expected = obs["actions"][np.arange(4), actions, :6].argmax(-1)
+    expected = obs.project("actions")[np.arange(4), actions, :6].argmax(-1)
     np.testing.assert_array_equal(
         packed.selected_types(actions.reshape(2, 2), 6), expected.reshape(2, 2)
     )
@@ -161,6 +165,6 @@ def test_selected_types_reject_an_action_outside_packed_support() -> None:
     obs, logs, actions = evidence()
     packed = PackedActions.pack(obs, logs, validator=torch_rollout)
     illegal = actions.copy()
-    illegal[2] = np.flatnonzero(obs["actions_valid"][2] == 0)[0]
+    illegal[2] = obs.action_counts[2]
     with pytest.raises(ValueError, match="absent from packed support"):
         packed.selected_types(illegal, 6)

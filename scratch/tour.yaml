@@ -1,0 +1,55 @@
+at: 2f2af0354cf529ffc4a8da638e1bec910f65d6ee
+first:
+  - path: scratch/plan.md
+    why: v11-only transport design, completed passes and merge checks
+  - path: docs/training-loop.md
+    why: Inspect selected decisions and their behavior probabilities
+  - path: docs/engine.md
+    why: Read viewer observations and manage parked vector slots
+  - path: manabot/infra/config.py
+    why: Reject retired inputs and identify their last release
+  - path: managym/src/agent/observation_layout.rs
+    why: Publish the single v11 schema
+  - path: managym/src/agent/observation_encoder.rs
+    why: Encode one row per game object
+  - path: managym/src/agent/observation_rows.rs
+    why: Pack rows for policies and read them in engine tests
+  - path: managym/src/python/vector_env_bindings.rs
+    why: Publish vector rows only as frozen batches
+  - path: managym/src/python/observation_batch/archive.rs
+    why: Preserve packed layout and validate restored joins
+  - path: managym/recording.py
+    why: Read fixed seats as one native batch
+  - path: manabot/env/env.py
+    why: Return the acting viewer's native observation
+  - path: manabot/policy/spans.py
+    why: Select immutable rows and project named fields
+  - path: manabot/env/memory_store.py
+    why: Retain each viewer's history across sampled rows
+  - path: manabot/training/rollout/collection.py
+    why: Align trajectory indexes, behavior logs and retained memory
+  - path: manabot/policy/admission.py
+    why: Admit native batches, vocabularies, memory and belief rows
+  - path: manabot/policy/prepare.py
+    why: Prepare native rows with saved readings
+  - path: manabot/training/combat_probe.py
+    why: Perturb prepared combat features in bounded chunks
+  - path: manabot/verify/choice_inputs.py
+    why: Preserve game identities across viewer permutations
+  - path: manabot/verify/learning_regression.py
+    why: Score checkpoint invariance and paired outcomes
+  - path: manabot/verify/decision_memory.py
+    why: Compare packed histories across replay and reload
+  - path: manabot/policy/captured_observations.py
+    why: Restore offline batches with their interned prefixes
+  - path: scripts/bench_breakdown.py
+    why: Time packed vector stepping and inference
+  - path: tests/training/test_collection.py
+    why: Verify repeated row selection and aligned behavior
+  - path: tests/training/test_combat_probe.py
+    why: Verify counterfactuals against checkpoint readings
+  - path: tests/model/test_policy_input_rejection.py
+    why: Exercise config, checkpoint, catalog, replay and native admission
+  - path: tests/model/test_pinned_pilot.py
+    why: Replay the released v11 pilot on recorded decisions
+hide: []

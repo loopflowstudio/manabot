@@ -12,7 +12,6 @@ import hashlib
 import json
 from pathlib import Path
 import random
-import struct
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
@@ -109,7 +108,7 @@ def restore_host_rng(host: HostContinuation, rng: np.random.Generator) -> None:
 
 @dataclass(frozen=True)
 class RestoredContinuation:
-    host: HostContinuation | None = None
+    host: HostContinuation
     sampling: dict[str, np.ndarray] | None = None
     sampling_reseeded: bool = False
     adam_steps_aligned: int = 0
@@ -192,21 +191,22 @@ def export_continuation(
 
 def read_tensors(path: Path) -> tuple[dict[str, np.ndarray], dict[str, str]]:
     try:
-        arrays, header = read_safetensors(path)
-        if not isinstance(header, dict) or any(
-            not isinstance(v, str) for v in header.values()
-        ):
-            raise ValueError("invalid safetensors metadata")
-        return arrays, header
-    except (
-        OSError,
-        ValueError,
-        TypeError,
-        KeyError,
-        AttributeError,
-        struct.error,
-    ) as error:
+        return read_safetensors(path)
+    except (OSError, ValueError) as error:
         raise ValueError(f"{path.name}: {error}") from error
+
+
+def admit_save_format(folder: Path) -> None:
+    """Refuse pre-portable saves before model or reading admission."""
+    if (folder / "training.safetensors").exists():
+        raise ValueError("training.safetensors: unsupported pre-portable MLX save")
+    record = json.loads((folder / "state.json").read_bytes())
+    if "learner" in record["files"] or (folder / "learner.pt").exists():
+        raise ValueError(
+            "state.json: this save holds learner.pt, written before portable saves; "
+            "resume it with manabot 0.2.5, or start a new run warm-started from "
+            "the run's published policy"
+        )
 
 
 def restore_continuation(
@@ -219,22 +219,11 @@ def restore_continuation(
     settings: SelfPlay,
 ) -> RestoredContinuation:
     """Validate the entire snapshot before copying into the live policies and Adam."""
+    admit_save_format(folder)
     record = json.loads((folder / "state.json").read_bytes())
     if record["at"].get("updates") != counts.updates:
         raise ValueError("state.json: updates differs from the saved counts")
     files = record["files"]
-    if (folder / "training.safetensors").exists():
-        raise ValueError("training.safetensors: unsupported pre-portable MLX save")
-    if "learner" in files:
-        expected = {"learner": "learner.pt", "optimizer": "optimizer.pt"}
-        if ema is not None:
-            expected["ema"] = "ema.pt"
-        if files != expected:
-            raise ValueError(
-                f"state.json: expected legacy files {expected}, got {files}"
-            )
-        state.restore_legacy(folder, learner, ema, step=counts.optimizer_updates)
-        return RestoredContinuation()
     # Etude decodes extra into Counts before the callback. Check the recorded
     # payload as well, so defaults or ignored fields cannot mask a damaged file.
     counts_digest = canonical_sha256(record["extra"])

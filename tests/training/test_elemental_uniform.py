@@ -34,6 +34,7 @@ from manabot.training.state.game_errors import (
 )
 import managym
 from managym.disclosure import DecklistDisclosure
+from tests.fixtures.rollout_arrays import trajectory_rows
 
 PACK = "elemental-world-v2"
 
@@ -142,7 +143,10 @@ def test_uniform_draws_agree_across_producer_counts(workers: int) -> None:
     try:
         for _ in range(2):
             left, right = collect(one, agent, 64), collect(many, agent, 64)
-            expected, actual = left.ordered_obs(), right.ordered_obs()
+            expected, actual = (
+                trajectory_rows(left).observation,
+                trajectory_rows(right).observation,
+            )
             for key in expected:
                 np.testing.assert_array_equal(expected[key], actual[key])
             np.testing.assert_array_equal(left.actions, right.actions)

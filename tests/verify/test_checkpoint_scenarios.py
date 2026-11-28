@@ -4,7 +4,6 @@ from copy import deepcopy
 import json
 from pathlib import Path
 
-import numpy as np
 import pytest
 import torch
 
@@ -19,6 +18,7 @@ from manabot.sim.replay import replay_games
 from manabot.sim.search.flat_mc import make_player
 from manabot.verify.checkpoint_scenarios import main, score_checkpoint
 from manabot.verify.scenarios import SCENARIOS, build_scenario_env
+import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
@@ -128,17 +128,19 @@ def test_hidden_hand_swap_preserves_checkpoint_inputs_and_decision(
         seed=2,
         backend=TORCH_BACKEND,
     )
-    env, observation, _ = build_scenario_env(SCENARIOS[name], space, 2)
+    env, observation = build_scenario_env(SCENARIOS[name], space, 2)
     try:
         action = player.act(env, observation)
         before = env._engine.state_digest()
         env._engine.scenario_clear_hand(1)
         for _ in range(2):
             env._engine.scenario_force_card_in_hand(1, "Mountain")
-        changed, _ = env.scenario_refresh()
+        changed = env.scenario_refresh()
         assert env._engine.state_digest() != before
-        for key in observation:
-            np.testing.assert_array_equal(observation[key], changed[key])
+        assert (
+            managym.encode_observation_batch([observation], space.layout).to_bytes()
+            == managym.encode_observation_batch([changed], space.layout).to_bytes()
+        )
         assert player.act(env, changed) == action
     finally:
         env.close()

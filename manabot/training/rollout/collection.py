@@ -44,19 +44,15 @@ from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import (
     MEMORY_FIELDS,
-    CompactObservation,
     MemoryStore,
     Prefix,
     PrefixIdentity,
-    PrefixObservation,
-    select_rows,
+    RetainedMemory,
 )
 from manabot.env.observation import (
     ACTION_TYPE_DIM,
     ActionEnum,
-    ObservationBuffers,
     ObservationSpace,
-    allocate_vector_buffers,
     step_buffers,
 )
 from manabot.infra.config import MatchConfig
@@ -70,7 +66,7 @@ from manabot.sim.rollout import (
 )
 from manabot.training.decks import UniformDecks
 from manabot.training.learning import BatchClosure
-from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
+from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.adaptive import (
     AdaptiveConfig,
     AdaptiveDiagnostics,
@@ -130,91 +126,6 @@ OPPONENT_MODES = ("random", "frozen", "self", "learning")
 # -----------------------------------------------------------------------------
 
 
-class ObservationRows:
-    """Deprecated dense per-update observation store; removed in 0.3.0 (replaced by `RecordedSpans`).
-
-    One update's recorded non-action observation rows, each copied once.
-
-    Recording copies a step's sampled rows from the native buffers straight into
-    `[capacity, *shape]` arrays; a pending decision keeps only its row number, and
-    the batch indexes these arrays instead of re-stacking every row. Each update
-    allocates a fresh store because a returned batch may outlive collection
-    (incidents) while the next update records; appends never write
-    rows a batch already views. Capacity starts a quarter above the larger of
-    the previous update's rows and the closure's row floor; growth doubles and
-    copies used rows once. Beside the observation fields it keeps each row's
-    bucket needs as admission measured them for the acting policy
-    (`manabot.policy.buckets.row_needs`; -1 where none were measured), so the
-    learner can preserve the original extents after packing legal actions. Opponent memory
-    is retained only as immutable prefix references in the collector's shared
-    MemoryStore; it never enters these dense per-update arrays.
-    """
-
-    def __init__(
-        self, buffers: ObservationBuffers, keys: list[str], capacity: int
-    ) -> None:
-        self.buffers = buffers
-        self._keys = [key for key in keys if key not in MEMORY_FIELDS]
-        self.memory: list[Prefix] = []
-        self.memory_capacities = (
-            tuple(buffers[key].shape[1] for key in MEMORY_FIELDS)
-            if "decision_records" in buffers
-            else None
-        )
-        self.rows = 0
-        self.capacity = max(capacity, 1)
-        self._arrays = self._allocate(self.capacity)
-        self._needs = np.full((self.capacity, len(AXES)), -1, np.int64)
-
-    def _allocate(self, capacity: int) -> dict[str, np.ndarray]:
-        # Untouched np.empty pages are not resident, so spare capacity is cheap.
-        return {
-            key: np.empty(
-                (capacity, *self.buffers[key].shape[1:]),
-                dtype=self.buffers[key].dtype,
-            )
-            for key in self._keys
-        }
-
-    def append(
-        self,
-        rows: np.ndarray,
-        needs: np.ndarray | None = None,
-        *,
-        prefixes: tuple[Prefix, ...] = (),
-    ) -> int:
-        """Copy buffer `rows` (and their bucket `needs`, when measured) to the end
-        of the store; return the first store row."""
-        if self.memory_capacities is not None:
-            if len(prefixes) != len(rows):
-                raise ValueError("missing decision-memory prefix references")
-            self.memory.extend(prefixes)
-        start, stop = self.rows, self.rows + len(rows)
-        if stop > self.capacity:
-            self.capacity = max(2 * self.capacity, stop)
-            grown = self._allocate(self.capacity)
-            for key, array in self._arrays.items():
-                grown[key][:start] = array[:start]
-            self._arrays = grown
-            grown_needs = np.full((self.capacity, len(AXES)), -1, np.int64)
-            grown_needs[:start] = self._needs[:start]
-            self._needs = grown_needs
-        self._needs[start:stop] = -1 if needs is None else needs
-        for key, array in self._arrays.items():
-            # `clip` writes `out` directly; `raise` would buffer. Rows are in range.
-            np.take(self.buffers[key], rows, axis=0, out=array[start:stop], mode="clip")
-        self.rows = stop
-        return start
-
-    def arrays(self) -> dict[str, np.ndarray]:
-        """Used rows as views; rows of discarded failed games stay unreferenced."""
-        return {key: array[: self.rows] for key, array in self._arrays.items()}
-
-    def needs(self) -> np.ndarray:
-        """Used rows' bucket needs [rows, len(AXES)], -1 where unmeasured."""
-        return self._needs[: self.rows]
-
-
 class RecordedSpans:
     """Append selected native coordinates; keep one immutable owner for every field."""
 
@@ -249,7 +160,7 @@ class RecordedSpans:
 
     def arrays(self) -> ObservationSelection:
         memory = (
-            PrefixObservation({}, self.memory, self.memory_capacities)
+            RetainedMemory(tuple(self.memory), self.memory_capacities)
             if self.memory_capacities is not None
             else None
         )
@@ -278,14 +189,14 @@ class _SnapshotRollout:
     starts: Iterator[SnapshotBranch | None]
     ready: list[int]
     plan: BatchPlan | None = None
-    frozen: RecordedSpans | ObservationRows | None = None
+    frozen: RecordedSpans | None = None
 
 
 @dataclass
 class _Pending:
     """A decision awaiting its reward at the same seat's next turn or game end."""
 
-    obs_row: int  # Row in this update's ObservationRows.
+    obs_row: int  # Row in this update's RecordedSpans.
     action: int
     logprob: float
     value: float
@@ -317,44 +228,18 @@ class RecordedObservations:
     readers address observations only through rollout indexes.
     """
 
-    rows: ObservationBuffers
+    rows: ObservationSelection
     index: np.ndarray
     # Recorded rows' bucket needs [N, len(AXES)], -1 where unmeasured.
     needs: np.ndarray | None = None
-    memory: tuple[Prefix, ...] = ()
-    memory_capacities: tuple[int, int, int, int] | None = None
 
     @classmethod
     def concatenate(cls, parts: Sequence[RecordedObservations]) -> RecordedObservations:
         """Append recording stores and translate learner indexes into the joined store."""
         if not parts:
             raise ValueError("cannot concatenate empty recorded observations")
-        capacities = parts[0].memory_capacities
-        counts = [observation_row_count(part.rows) for part in parts]
+        counts = [len(part.rows.coordinates) for part in parts]
         for part, count in zip(parts, counts, strict=True):
-            if capacities != part.memory_capacities:
-                raise ValueError("recorded memory capacities differ")
-            if len(part.memory) != (count if capacities is not None else 0):
-                raise ValueError("recorded memory count differs from observation rows")
-            if isinstance(part.rows, ObservationSelection):
-                retained = part.rows.memory
-                native_capacities = (
-                    retained.memory_capacities if retained is not None else None
-                )
-                if native_capacities != capacities:
-                    raise ValueError(
-                        "recorded memory capacities differ from native observations"
-                    )
-                if retained is not None and (
-                    len(retained.prefixes) != count
-                    or any(
-                        not same_prefix(a, b)
-                        for a, b in zip(retained.prefixes, part.memory, strict=True)
-                    )
-                ):
-                    raise ValueError(
-                        "recorded memory differs from native observation memory"
-                    )
             index = part.index
             if (
                 index.ndim != 1
@@ -367,20 +252,15 @@ class RecordedObservations:
                 raise ValueError(
                     "recorded bucket needs must match observation rows and axes"
                 )
+        rows = ObservationSelection.concatenate([part.rows for part in parts])
         if len(parts) == 1:
             return parts[0]
-        rows = concatenate_observation_rows([part.rows for part in parts])
         offsets = np.cumsum([0, *counts[:-1]], dtype=np.int64)
         indexes = np.concatenate(
             [
                 part.index.astype(np.int64, copy=False) + offset
                 for part, offset in zip(parts, offsets, strict=True)
             ]
-        )
-        memory = (
-            rows.memory.prefixes
-            if isinstance(rows, ObservationSelection) and rows.memory is not None
-            else tuple(prefix for part in parts for prefix in part.memory)
         )
         needs = None
         if any(part.needs is not None for part in parts):
@@ -392,99 +272,17 @@ class RecordedObservations:
                     for part, count in zip(parts, counts, strict=True)
                 ]
             )
-        return cls(rows, indexes, needs, memory, capacities)
+        return cls(rows, indexes, needs)
 
-    def gather(self, indexes: np.ndarray) -> ObservationBuffers:
+    def gather(self, indexes: np.ndarray) -> ObservationSelection:
         """Rows for flat time-major rollout `indexes`, as [batch, ...]."""
-        recorded = self.index[indexes]
-        if isinstance(self.rows, ObservationSelection):
-            return self.rows.select(recorded)
-        rows = {key: value[recorded] for key, value in self.rows.items()}
-        if self.memory_capacities is not None:
-            return PrefixObservation(
-                rows, [self.memory[int(i)] for i in recorded], self.memory_capacities
-            )
-        return rows
+        return self.rows.select(self.index[indexes])
 
     def gather_needs(self, indexes: np.ndarray) -> np.ndarray | None:
         """Select collection extents, preserving -1 for unmeasured entries."""
         if self.needs is None:
             return None
         return self.needs[self.index[indexes]]
-
-    def ordered(self, shape: tuple[int, ...]) -> dict[str, np.ndarray]:
-        """Ordinary fields in trajectory order; memory requires selected indexes."""
-        rows = self.gather(np.arange(len(self.index)))
-        return {
-            key: array.reshape(*shape, *array.shape[1:])
-            for key, array in rows.items()
-            if key not in ACTION_FIELDS
-        }
-
-
-def same_prefix(a: Prefix, b: Prefix) -> bool:
-    # Independently restored archives can own equal histories. The tail key binds
-    # every chunk and predecessor, without walking the chain or comparing arrays.
-    return a is b or (
-        a.identity == b.identity
-        and (a.tail.key if a.tail else None) == (b.tail.key if b.tail else None)
-    )
-
-
-def observation_row_count(rows: ObservationBuffers) -> int:
-    if isinstance(rows, ObservationSelection):
-        return len(rows.coordinates)
-    if not rows or any(value.ndim == 0 for value in rows.values()):
-        raise ValueError(
-            "dense observations require at least one field with a row axis"
-        )
-    count = len(next(iter(rows.values())))
-    if any(len(value) != count for value in rows.values()):
-        raise ValueError("dense observation row counts differ across fields")
-    return count
-
-
-def concatenate_observation_rows(
-    parts: Sequence[ObservationBuffers],
-) -> ObservationBuffers:
-    """Join retained coordinates or compatible dense observation fields along the row axis."""
-    selections = [part for part in parts if isinstance(part, ObservationSelection)]
-    if selections:
-        if len(selections) != len(parts):
-            raise ValueError("cannot mix native and dense observations")
-        return ObservationSelection.concatenate(selections)
-
-    # Dense observation transport is removed in 0.3.0.
-    first = parts[0]
-    for part in parts[1:]:
-        if part.keys() != first.keys():
-            raise ValueError("dense observation fields differ")
-        for key, array in part.items():
-            if (
-                array.shape[1:] != first[key].shape[1:]
-                or array.dtype != first[key].dtype
-            ):
-                raise ValueError(f"dense observation shape or dtype differs for {key}")
-    retained = [part for part in parts if isinstance(part, PrefixObservation)]
-    if retained and (
-        len(retained) != len(parts)
-        or any(
-            part.memory_capacities != retained[0].memory_capacities for part in retained
-        )
-    ):
-        raise ValueError("dense observation memory capacities differ")
-    if len(parts) == 1:
-        return first
-    rows = {key: np.concatenate([part[key] for part in parts]) for key in first}
-    if not retained:
-        return rows
-    prefixes = tuple(prefix for part in retained for prefix in part.prefixes)
-    capacities = retained[0].memory_capacities
-    if isinstance(first, CompactObservation):
-        return CompactObservation(
-            rows, prefixes, capacities, memory={key: rows[key] for key in MEMORY_FIELDS}
-        )
-    return PrefixObservation(rows, prefixes, capacities)
 
 
 @dataclass(frozen=True)
@@ -504,9 +302,9 @@ class TrajectorySpan:
 class RolloutBatch:
     """On-policy rows [time, trajectory]; complete games may be packed [rows, 1].
 
-    Native observation spans own every legal offer. Dense imports split legal
-    offers into `action_data`, which stores the behavior distribution for both
-    transports. `policy_rows` gathers training inputs in trajectory order.
+    Native observation spans own every legal offer; `action_data` stores the
+    behavior distribution over them. `observations` gathers training inputs in
+    trajectory order.
     """
 
     recorded: RecordedObservations
@@ -515,7 +313,7 @@ class RolloutBatch:
     rewards: np.ndarray
     dones: np.ndarray
     values: np.ndarray
-    next_obs: ObservationBuffers
+    next_obs: ObservationSelection
     next_done: np.ndarray
     action_data: PackedActions
     # Collection-time loss/draw/win probabilities [T,E,3], absent for scalar.
@@ -605,7 +403,7 @@ class RolloutBatch:
 
         if explicit:
             spans: list[TrajectorySpan] = []
-            bootstraps: list[ObservationBuffers] = []
+            bootstraps: list[ObservationSelection] = []
             row_offset = bootstrap_offset = 0
             for batch in batches:
                 assert batch.trajectories is not None
@@ -626,7 +424,7 @@ class RolloutBatch:
                 bootstrap_offset += len(batch.next_done)
             trajectories: tuple[TrajectorySpan, ...] | None = tuple(spans)
             next_obs = (
-                concatenate_observation_rows(bootstraps)
+                ObservationSelection.concatenate(bootstraps)
                 if bootstraps
                 else batches[0].next_obs
             )
@@ -695,51 +493,11 @@ class RolloutBatch:
         )
         return float(cuts / (cuts + np.count_nonzero(self.dones)))
 
-    def observations(self, indexes: np.ndarray | None = None) -> ActionRows:
-        """Materialize only requested flat rollout rows on CPU.
-
-        Explicit indexes return [batch,...]; omitting them restores
-        [time,trajectory,...] for bounded inspection. Learners always select a
-        minibatch through policy_rows, preserving native provenance.
-        """
-        if indexes is None and self.recorded.memory_capacities is not None:
-            raise ValueError(
-                "decision memory requires explicit selected rollout indexes"
-            )
-        trajectory_shape = self.actions.shape if indexes is None else None
-        if indexes is None:
-            indexes = np.arange(self.actions.size)
-        observed = self.recorded.gather(indexes)
-        if isinstance(observed, ObservationSelection):
-            rows = ActionRows(observed.export(), self.action_data.unpack_logs(indexes))
-        else:
-            rows = self.action_data.unpack(indexes)
-            if isinstance(observed, PrefixObservation):
-                observed.update(rows.observation)
-                rows.observation = observed
-            else:
-                rows.observation = {**rows.observation, **observed}
-        if trajectory_shape is not None:
-            rows.observation = {
-                key: value.reshape(*trajectory_shape, *value.shape[1:])
-                for key, value in rows.observation.items()
-            }
-            rows.log_probabilities = rows.log_probabilities.reshape(
-                *trajectory_shape, -1
-            )
-        return rows
-
-    def policy_rows(self, indexes: np.ndarray) -> ActionRows:
-        """Gather native inputs for learning, retaining full admission on dense imports."""
-        if not isinstance(self.recorded.rows, ObservationSelection):
-            return self.observations(indexes)
+    def observations(self, indexes: np.ndarray) -> ActionRows:
+        """Read flat trajectory indexes in order, including repeats and their behavior logs."""
         return ActionRows(
             self.recorded.gather(indexes), self.action_data.unpack_logs(indexes)
         )
-
-    def ordered_obs(self) -> ObservationBuffers:
-        """Ordinary non-action fields in [time, trajectory, ...] order."""
-        return self.recorded.ordered(self.actions.shape)
 
 
 def offset_worker_groups(groups: np.ndarray, batches: Sequence[RolloutBatch]) -> None:
@@ -799,13 +557,7 @@ def validate_rollout_metadata(batch: RolloutBatch) -> None:
     if batch.next_done.ndim != 1 or batch.next_done.any():
         raise ValueError("packed bootstrap observations must all be nonterminal")
     count = len(batch.next_done)
-    valid_count = (
-        len(batch.next_obs.coordinates) == count
-        if isinstance(batch.next_obs, ObservationSelection)
-        else (not count or bool(batch.next_obs))
-        and all(len(field) == count for field in batch.next_obs.values())
-    )
-    if not valid_count:
+    if len(batch.next_obs.coordinates) != count:
         raise ValueError("packed bootstrap observation count differs from next_done")
     previous = 0
     used: set[int] = set()
@@ -1003,8 +755,7 @@ class Collector:
     # Native streams, an injected snapshot vector, or a diagnostic root.
     _env: Any
     _buffers: dict[str, np.ndarray]
-    _observation_keys: list[str]
-    _observations: RecordedSpans | ObservationRows
+    _observations: RecordedSpans
     # Shared immutable prefix chunks of the opponent decision log; None when
     # the observation space has no decision-record capacity.
     _memory_store: MemoryStore | None
@@ -1417,23 +1168,9 @@ def open_collector(
                 raise ValueError(
                     "snapshot self-play requires native trivial-decision skipping"
                 )
-        packed = observation_space.one_token and isinstance(
-            env, (RecordedVectorEnv, BufferedStreams)
-        )
-        buffers = (
-            step_buffers(num_envs)
-            if packed
-            else allocate_vector_buffers(observation_space, num_envs)
-        )
+        buffers = step_buffers(num_envs)
         slots = num_envs * (2 if learning_seats == "both" else 1)
-        observation_keys = [
-            key for key in observation_space.shapes if key not in ACTION_FIELDS
-        ]
-        observations = (
-            RecordedSpans(observation_space)
-            if packed
-            else ObservationRows(buffers, observation_keys, 0)
-        )
+        observations = RecordedSpans(observation_space)
         collector = Collector(
             observation_space=observation_space,
             match=match,
@@ -1455,7 +1192,6 @@ def open_collector(
             profiler=Profiler(enabled=False),
             _env=env,
             _buffers=buffers,
-            _observation_keys=observation_keys,
             _observations=observations,
             _memory_store=(
                 MemoryStore(observations.memory_capacities)
@@ -1485,8 +1221,7 @@ def open_collector(
             if snapshots
             else [],
         )
-        register = env.set_observation_layout if packed else env.set_buffers
-        register(
+        env.set_observation_layout(
             buffers,
             action_overflow=observation_space.config.action_overflow,
             layout=observation_space.layout,
@@ -1637,7 +1372,7 @@ def _opponent_actions(
 def _capture_memory(
     collector: Collector,
     rows: np.ndarray,
-    buffers: ObservationBuffers,
+    buffers: ObservationSelection,
     players: Sequence[int | None] | None = None,
 ) -> tuple[Prefix, ...]:
     if collector._memory_store is None:
@@ -1653,6 +1388,8 @@ def _capture_memory(
         live_rows = rows if live.all() else rows[live]
         prefixes: tuple[Prefix, ...] = ()
         if live_rows.size:
+            if live_rows.size != rows.size:
+                buffers = buffers.select(np.flatnonzero(live))
             prefixes = collector._memory_store.capture_live_rows(
                 buffers,
                 live_rows,
@@ -1673,12 +1410,10 @@ def _capture_memory(
         )
 
 
-def live_observations(collector: Collector) -> ObservationBuffers:
-    if isinstance(collector._observations, RecordedSpans):
-        return ObservationSelection(
-            collector.observation_space, tuple(collector._env.observation_rows())
-        )
-    return collector._buffers
+def live_observations(collector: Collector) -> ObservationSelection:
+    return ObservationSelection(
+        collector.observation_space, tuple(collector._env.observation_rows())
+    )
 
 
 def retain_spans(
@@ -1693,46 +1428,24 @@ def retain_spans(
     memory = None
     if collector._memory_store is not None:
         prefixes = _capture_memory(collector, rows, selected, players)
-        memory = PrefixObservation({}, prefixes, collector._memory_store.capacities)
+        memory = RetainedMemory(prefixes, collector._memory_store.capacities)
         batch = batch.blank_decision_memory()
     return ObservationSelection(
         selected.space, tuple((batch, i) for i in range(batch.batch_size)), memory
     )
 
 
-def _retain_obs_rows(
-    collector: Collector, rows: np.ndarray, *, bootstrap: bool = False
-) -> ObservationBuffers:
-    """Borrow live buffers for this decision, or own them across later bootstrap reads."""
+def _retain_obs_rows(collector: Collector, rows: np.ndarray) -> ObservationSelection:
+    """Retain the selected live rows with their decision-memory prefixes."""
     with collector.profiler.track("Observation retention"):
-        live = live_observations(collector)
-        if isinstance(live, ObservationSelection):
-            return retain_spans(collector, live.select(rows), rows)
-        indexes: np.ndarray | slice = rows
-        if not bootstrap and np.array_equal(rows, np.arange(collector.num_envs)):
-            indexes = slice(None)
-        obs = {
-            key: collector._buffers[key][indexes]
-            for key in collector.observation_space.shapes
-            if key not in MEMORY_FIELDS
-        }
-        if collector._memory_store is not None:
-            obs = PrefixObservation(
-                obs,
-                _capture_memory(collector, rows, collector._buffers),
-                collector._memory_store.capacities,
-            )
-        return obs
+        return retain_spans(collector, live_observations(collector).select(rows), rows)
 
 
 def _count_action_types(
     collector: Collector, counter: dict[str, int], rows: np.ndarray, actions: np.ndarray
 ) -> None:
     live = live_observations(collector)
-    if isinstance(live, ObservationSelection):
-        chosen = live.action_columns(rows, actions, range(ACTION_TYPE_DIM))
-    else:
-        chosen = live["actions"][rows, actions, :ACTION_TYPE_DIM]
+    chosen = live.action_columns(rows, actions, range(ACTION_TYPE_DIM))
     type_indices = chosen.argmax(axis=1)
     # At priority all additional mana abilities, fixed and choice-output,
     # follow PassPriority. The first-legal policy projection preserves order.
@@ -1740,14 +1453,11 @@ def _count_action_types(
         chosen[:, ActionEnum.PRIORITY_ACTIVATE_ABILITY] > 0
     )
     if floats.any():
-        if isinstance(live, ObservationSelection):
-            spans = live.select(rows[floats]).spans.tables["actions"]
-            passes = spans.scatter(
-                spans.integers[:, ActionEnum.PRIORITY_PASS_PRIORITY],
-                int(spans.counts.max()),
-            )
-        else:
-            passes = live["actions"][rows[floats], :, ActionEnum.PRIORITY_PASS_PRIORITY]
+        spans = live.select(rows[floats]).spans.tables["actions"]
+        passes = spans.scatter(
+            spans.integers[:, ActionEnum.PRIORITY_PASS_PRIORITY],
+            int(spans.counts.max()),
+        )
         collector.stats.priority_taps += int(
             (passes.any(axis=1) & (actions[floats] > passes.argmax(axis=1))).sum()
         )
@@ -1867,17 +1577,7 @@ def _collect(
     # Update boundaries hold no pending row, so nothing live refers to the
     # previous store; returned batches keep their own reference to it.
     if all(pending is None for pending in collector._pending):
-        # The batch holds num_steps rows per stream (exact quota) or at least
-        # that floor (complete games); whole-game counts give no floor.
-        floor = 0 if collector.games_per_stream is not None else num_steps * num_envs
-        rows = max(collector._observations.rows, floor)
-        collector._observations = (
-            RecordedSpans(collector.observation_space)
-            if isinstance(collector._observations, RecordedSpans)
-            else ObservationRows(
-                collector._buffers, collector._observation_keys, rows + rows // 4
-            )
-        )
+        collector._observations = RecordedSpans(collector.observation_space)
     if snapshot_plan is not None:
         if snapshot_starts is not None or not collector._episodes:
             raise ValueError(
@@ -2050,7 +1750,7 @@ def _collect(
                 snapshots,
             )
 
-    frozen_cuts: RecordedSpans | ObservationRows | None = None
+    frozen_cuts: RecordedSpans | None = None
     if two_seat_exact:
         cuts = [
             row
@@ -2487,13 +2187,13 @@ def _pool_quota_active(collector: Collector, num_steps: int) -> np.ndarray:
 
 def _freeze_cut_bootstraps(
     collector: Collector,
-    frozen: RecordedSpans | ObservationRows | None,
+    frozen: RecordedSpans | None,
     cuts: list[int],
     *,
     expected_generations: Mapping[int, int | None] | None = None,
     expected_seeds: Mapping[int, int] | None = None,
     label: str = "cut bootstrap",
-) -> RecordedSpans | ObservationRows | None:
+) -> RecordedSpans | None:
     """Freeze viewer-safe observations for every pending slot at a cut without retiring games.
 
     Reads at most two passes of `observations_for_players` (one per open seat),
@@ -2506,11 +2206,7 @@ def _freeze_cut_bootstraps(
     env = collector._env
     space = collector.observation_space
     if frozen is None:
-        if isinstance(collector._observations, RecordedSpans):
-            frozen = RecordedSpans(space)
-        else:
-            scratch = space.allocate(collector.num_envs)
-            frozen = ObservationRows(scratch, list(scratch), 0)
+        frozen = RecordedSpans(space)
     generations = (
         expected_generations
         if expected_generations is not None
@@ -2531,15 +2227,7 @@ def _freeze_cut_bootstraps(
         players: list[int | None] = [None] * collector.num_envs
         for row in rows:
             players[int(row)] = viewers[int(row)][index]
-        if isinstance(frozen, RecordedSpans):
-            reads, batch = env.observations_for_players(players)
-        else:
-            reads = env.write_observations_for_players(
-                players,
-                frozen.buffers,
-                layout=space.layout,
-                action_overflow=space.config.action_overflow,
-            )
+        reads, batch = env.observations_for_players(players)
         if len(reads) != len(rows):
             raise ValueError(f"missing {label} read")
         for row, read in zip(rows, reads, strict=True):
@@ -2552,16 +2240,10 @@ def _freeze_cut_bootstraps(
                 or read.revision != revisions.setdefault(slot, read.revision)
             ):
                 raise ValueError(f"{label} read identity mismatch in slot {slot}")
-        if isinstance(frozen, RecordedSpans):
-            selected = ObservationSelection(
-                space, tuple((batch, i) for i in range(batch.batch_size))
-            )
-            first = frozen.append(retain_spans(collector, selected, rows, players))
-        else:
-            first = frozen.append(
-                rows,
-                prefixes=_capture_memory(collector, rows, frozen.buffers, players),
-            )
+        selected = ObservationSelection(
+            space, tuple((batch, i) for i in range(batch.batch_size))
+        )
+        first = frozen.append(retain_spans(collector, selected, rows, players))
         for offset, row in enumerate(rows):
             slot = int(row)
             _finalize(
@@ -2904,17 +2586,7 @@ def _sample_learning_rows(
     acts, logprobs, values = sampled.actions, sampled.logprobs, sampled.values
     outcomes, needs = sampled.outcomes, sampled.needs
     with collector.profiler.track("Rollout recording"):
-        if isinstance(collector._observations, RecordedSpans):
-            assert isinstance(observation, ObservationSelection)
-            first = collector._observations.append(observation, needs)
-        else:
-            first = collector._observations.append(
-                rows,
-                needs,
-                prefixes=observation.prefixes
-                if isinstance(observation, PrefixObservation)
-                else (),
-            )
+        first = collector._observations.append(observation, needs)
         packed = PackedActions.pack(
             observation,
             sampled.log_probabilities,
@@ -3004,7 +2676,7 @@ def _build_packed_batch(
     slots: list[int],
     *,
     snapshots: _SnapshotRollout | None = None,
-    frozen: RecordedSpans | ObservationRows | None = None,
+    frozen: RecordedSpans | None = None,
     explicit_spans: bool = False,
 ) -> RolloutBatch:
     rows: list[_Transition] = []
@@ -3040,23 +2712,25 @@ def _build_packed_batch(
 
 
 def frozen_bootstraps(
-    frozen: RecordedSpans | ObservationRows | None, spans: list[TrajectorySpan]
-) -> tuple[ObservationBuffers, tuple[TrajectorySpan, ...], int]:
+    frozen: RecordedSpans | None,
+    spans: list[TrajectorySpan],
+    space: ObservationSpace,
+) -> tuple[ObservationSelection, tuple[TrajectorySpan, ...], int]:
     """Keep the frozen observations referenced by surviving trajectories."""
     if frozen is None:
-        return {}, tuple(spans), 0
-    observations = frozen.arrays()
-    if isinstance(frozen, ObservationRows) and frozen.memory_capacities is not None:
-        observations = PrefixObservation(
-            observations, frozen.memory, frozen.memory_capacities
+        return (
+            ObservationSelection(space, ()),
+            tuple(spans),
+            0,
         )
+    observations = frozen.arrays()
     indexes = sorted(
         {s.bootstrap_index for s in spans if s.bootstrap_index is not None}
     )
     if len(indexes) != frozen.rows:
         # A later sibling failure can discard a group whose cut was already read.
         remap = {old: new for new, old in enumerate(indexes)}
-        observations = select_rows(observations, np.asarray(indexes, dtype=np.intp))
+        observations = observations.select(np.asarray(indexes, dtype=np.intp))
         spans = [
             replace(s, bootstrap_index=remap[s.bootstrap_index])
             if s.bootstrap_index is not None
@@ -3072,7 +2746,7 @@ def _build_batch(
     shape: tuple[int, int],
     *,
     snapshots: _SnapshotRollout | None = None,
-    frozen: RecordedSpans | ObservationRows | None = None,
+    frozen: RecordedSpans | None = None,
     spans: list[TrajectorySpan] | None = None,
 ) -> RolloutBatch:
     """Write every field and capture reference in the same flat time-major order."""
@@ -3081,10 +2755,12 @@ def _build_batch(
     trajectories = None
     provenance: dict[str, np.ndarray] = {}
     if spans is None:
-        next_obs = _retain_obs_rows(collector, np.arange(shape[1]), bootstrap=True)
+        next_obs = _retain_obs_rows(collector, np.arange(shape[1]))
         next_done = dones[-1].copy()
     else:
-        next_obs, trajectories, count = frozen_bootstraps(frozen, spans)
+        next_obs, trajectories, count = frozen_bootstraps(
+            frozen, spans, collector.observation_space
+        )
         next_done = np.zeros(count, bool)
     if snapshots is not None:
         plan = snapshots.plan
@@ -3111,8 +2787,6 @@ def _build_batch(
             recorded.arrays(),
             np.asarray([p.obs_row for p in pending], np.int64),
             recorded.needs(),
-            tuple(recorded.memory),
-            recorded.memory_capacities,
         ),
         actions=np.asarray([p.action for p in pending], np.int64).reshape(shape),
         logprobs=np.asarray([p.logprob for p in pending], np.float32).reshape(shape),

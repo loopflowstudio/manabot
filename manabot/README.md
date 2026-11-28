@@ -122,10 +122,7 @@ whole game. It is a read-only seat sequence; slicing and re-wrapping with
 `GameSetup(setup)` preserve disclosure unless explicitly overridden.
 A plain list of seats uses the open default.
 `MatchConfig.from_players(first, second, decklists="closed")`
-records native seats and rejects differing worlds. The old
-`PlayerConfig.disclosure` alias warns and will be removed in 0.3.0; disagreeing
-legacy seat values or hints conflicting with the game setting raise when
-creating a game. Evaluation matchups take
+records native seats and rejects differing worlds. Evaluation matchups take
 `MatchConfig.decklists`, open or closed, never mixed; an
 [`AuthoredMatchup`](#explicit-research-evaluation-matrices) sets it for all of
 its legs.
@@ -292,13 +289,13 @@ print(len(probs), round(sum(probs), 6), round(value_est, 4))
 Package `__init__.py` files stay empty so inference and replay children do not
 pull in Torch or training modules; import each symbol from its defining module.
 Each published module declares `__all__`, and no internal `manabot` module
-defines `__all__` (aside from deprecated `0.3.0` shims), so `__all__` inside an
+defines `__all__`, so `__all__` inside an
 installed wheel names the same boundary as this table:
 
 | Module | Published surface |
 | --- | --- |
 | `manabot.infra.config` | `ObservationConfig`, `MatchConfig`, `ModelConfig`, `RewardConfig`, `UnsupportedPolicyInput`, `PolicyInputVersion`, `POLICY_INPUT_VERSION` |
-| `manabot.env.observation` | `ObservationSpace`, `column`, `columns`, `column_names`, `width`, plus `0.3.0`-deprecated `encode_observation` and `ObservationEncoder` |
+| `manabot.env.observation` | `ObservationSpace`, `column`, `columns`, `column_names`, `width`, `encode_policy_batch` |
 | `manabot.env.match` | `Match`, `Reward` |
 | `manabot.env.memory_store` | `MemoryArchive`, `MemoryCapacities`, `Prefix`, `archive_memory`, `restore_memory` |
 | `manabot.training.decks` | `UniformDecks` |
@@ -471,27 +468,17 @@ relabels an existing experiment's receipts or registrations.
 
 ### Native frontier encoding
 
-A v11 teacher passes the live branches to
+A teacher passes the live branches to
 `managym.encode_observation_batch(envs, space.layout)`. The returned batch
 owns immutable typed rows and their int32 offsets in frontier order. Both
 backends bind the checkpoint's vocabulary and apply its saved readings to these
 rows through the shared host preparation. The teacher
 reads each branch's legal support from `batch.action_counts`. Search requires
-every legal action to fit the checkpoint's layout. V9 and v10 teachers use
-`managym.encode_observations_into` with reusable dense buffers.
+every legal action to fit the checkpoint's layout.
 
-`LocalUpdateTeacher(..., native_encoder=False)`, or a top-level
-`"native_encoder": false` beside `"config"` in a `make_player` spec, instead
-allocates a fresh batch for each frontier forward and fills its rows with one
-`managym.encode_observation_into` call per branch. The same native encoder
-writes both, so the tensors are identical; the switch selects one batched call
-or one call per row, and its name is kept because saved specs carry it.
-
-A teacher owns its search state, so only one search may use it at a time; give each concurrent search its own teacher. An extension without the
-batch writer, or a buffer whose shape, dtype or writability does not match the
-selected observation space, raises before any inference. Search never falls
-back to per-row encoding: rebuild the extension, or select
-`native_encoder=False` explicitly.
+A teacher owns its search state, so only one search may use it at a time; give
+each concurrent search its own teacher. Recorded search specs that set
+`"native_encoder": false` are refused naming `v0.2.6`.
 
 ### Inference threads
 
@@ -525,7 +512,8 @@ Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
 When the binding records exact decks and sideboards, every binding field except
 the input schema must match exactly, including the content manifest. As with
-any checkpoint, the runtime input columns may extend the saved column prefixes.
+any checkpoint, the runtime input columns may extend the saved column prefixes
+and learned record rows bind by key.
 Without exact decks, the model can play any admitted deck. The card digest
 describes the cards of the writing revision.
 Loading compares input columns, token names and action kinds by name
@@ -586,8 +574,10 @@ self-play, evaluation, and promotion evidence over the authoritative managym
 world. The cross-package contracts are in the
 [README](../README.md#contracts-the-code-enforces).
 
-1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
-   (`VectorEnv`, `ObservationSpace`, `Match`, `Reward`)
+1. **`manabot.env`**: Gymnasium-compatible scalar wrapper around managym
+   (`Env`, `ObservationSpace`, `Match`, `Reward`); `Env` returns native
+   `managym.Observation` views directly without encoding tensors until a policy
+   prepares a batch
 2. **`manabot.model`**: trainable policy and value models (`ActorCritic`);
    `manabot.training` owns the self-play loop and `Learner`
 3. **`manabot.sim`**: players and game runners.
@@ -604,8 +594,9 @@ world. The cross-package contracts are in the
 
 Belief input is opt-in: schema-bound checkpoints load through the ordinary
 `checkpoint` player and update belief before each policy/value decision.
-`belief-demo` uses a freshly initialized policy to prove intervention wiring;
-`belief-learn-demo` trains a belief scorer on one scripted population and holds
+`belief-demo` keeps the opening hands, then compares the same in-game choice
+under two beliefs about whether the opponent holds Lightning Bolt. It reports the
+change in each legal action’s probability. `belief-learn-demo` trains a belief scorer on one scripted population and holds
 out whole episodes. Neither demonstrates strategic strength or opponent
 transfer. The generic PPO trainer does not yet produce the
 semantic belief inputs required to train a belief-enabled policy. Historical
@@ -650,8 +641,7 @@ value and update at each decision. Academy plays it again through the engine
 and steps through it with no policy, checkpoint or manabot. A loop of your own
 passes `games_path=` to its collector. Games cut off when the run stopped open
 as interrupted. A fresh game between current policies is an evaluation game,
-not a training game; evaluation records those the same way. `record_games(...)`
-and `manabot export-game` warn and are removed in 0.3.0. The
+not a training game; evaluation records those the same way. The
 [Academy guide](../docs/academy.md#watch-a-game-from-your-training-loop) covers
 selection, naming the seats and failures.
 
@@ -707,8 +697,8 @@ their gradients, including duplicate memberships. An unused continuation module
 keeps absent gradients so Adam does not update its momentum spuriously.
 
 The input version is explicit in saved observation and configuration
-identities. Main defaults to v11 and loads deprecated v9/v10 checkpoints
-until 0.3.0; see
+identities. Main supports policy input v11 only; earlier v9/v10 checkpoints
+run from `v0.2.6`. See
 [policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
 and the saved-checkpoint and world admission requirements. Text representation
 `manabot-text-10` renders each native payload once with exact public source and
@@ -883,12 +873,15 @@ observed learning difficulty; chunking changes no checkpoint weights or buffers.
 
 Fresh models (`ModelConfig.record_vocabulary`,
 default `catalog`) embed fact and shared-effect ids through the same token
-embedding. Native `record_vocabulary` lists every counter kind, color,
-subtype, keyword, modification, set name and combat restriction the encoders
-hash. Each reads the row of the card token for the same concept (a granted
-`flying` and a printed `Keyword::flying` share one row) or a row appended after
-the card tokens. Runtime program tokens use the printed and registered rows in
-the [program-token vocabulary](../docs/engine.md#program-token-vocabulary).
+embedding. After printed card tokens from `managym.catalog_tokens()`, any
+remaining tokens from `managym.runtime_tokens()` append their rows so the
+admitted [program-token vocabulary](../docs/engine.md#program-token-vocabulary)
+is `catalog_tokens()` ∪ `runtime_tokens()`. Native `record_vocabulary()` lists
+only the counter kinds, colors, subtypes, keywords, modifications, set names
+and combat restrictions the encoders hash; each aliases an existing
+program-token row (a granted `flying` and a printed `Keyword::flying` share one
+row) or appends a name row. Policies with decision memory enabled append
+`managym.decision_memory_names()` as name rows without adding program tokens.
 Integers and booleans read one row per kind plus their exact value. Fact and
 effect sources read the card encoder's row for that definition, and ability
 or frame ordinals are numbers. Admission reports missing symbolic pairs as

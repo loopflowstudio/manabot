@@ -1,5 +1,6 @@
 """Ordinary checkpoint admission binds corrected rules and complete setup."""
 
+from contextlib import closing
 from copy import deepcopy
 from pathlib import Path
 
@@ -14,7 +15,8 @@ from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.source import source_commit
 from manabot.model.interface import world_fields
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
-from manabot.sim.table_bots import CheckpointVillain
+from manabot.sim.policy_provider import provider
+from managym.policy import PolicyRegistry, PolicySpec
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
@@ -52,9 +54,11 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(
     write_checkpoint(payload, path)
     agent, space = load_checkpoint(str(path))
     assert agent.world_binding == payload["world_binding"]
+    registry = PolicyRegistry(providers={"manabot": provider})
+    key = registry.register(PolicySpec("manabot", str(path)))
     for match in (selected_match(), selected_match().swapped()):
-        policy = CheckpointVillain(str(path), player_configs=match.to_rust())
-        assert policy.agent.world_binding == agent.world_binding
+        with closing(registry.load(key, match.to_rust(), seat=1, seed=0)) as policy:
+            assert policy.descriptor.id == key
     assert space.shapes["actions"][0] == 512
 
 
@@ -134,7 +138,9 @@ def test_same_shapes_do_not_admit_another_matchup():
 
 
 @pytest.mark.parametrize("consumer", ["policy", "puct", "rollout", "value", "play"])
-def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
+def test_loaded_consumers_reject_another_actual_setup(
+    tmp_path: Path, consumer: str
+) -> None:
     from manabot.env.env import Env
     from manabot.env.match import Reward
     from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
@@ -145,8 +151,10 @@ def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
     path = tmp_path / "policy.pt"
     torch.save(checkpoint(), path)
     if consumer == "play":
+        registry = PolicyRegistry(providers={"manabot": provider})
+        key = registry.register(PolicySpec("manabot", str(path)))
         with pytest.raises(ValueError, match="setup differs"):
-            CheckpointVillain(str(path), player_configs=Match().to_rust())
+            registry.admit(key, Match().to_rust())
         return
     agent, space = load_checkpoint(str(path))
     players = {

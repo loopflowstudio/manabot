@@ -4,7 +4,7 @@ Each table has one span per batch row, or two viewer-relative seat spans.
 Only outputs whose model shape includes padding need to materialize those slots.
 """
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from functools import cached_property, lru_cache
 
@@ -12,8 +12,7 @@ import numpy as np
 
 from manabot.env.memory_store import (
     MEMORY_FIELDS,
-    CompactObservation,
-    PrefixObservation,
+    RetainedMemory,
 )
 from manabot.env.observation import (
     FACT_KIND_INDEX,
@@ -93,6 +92,26 @@ class RowSpans:
     offsets: np.ndarray
     groups: tuple[int, ...]
 
+    @classmethod
+    def from_table(
+        cls,
+        table: tuple[bool, bytes, bytes],
+        layout: RecordLayout,
+        shape: tuple[int, ...],
+        batch_size: int,
+    ) -> "RowSpans":
+        seat_axis, offsets, values = table
+        axis = int(seat_axis)
+        records = np.frombuffer(values, layout.dtype)
+        if layout.dtype.names is None:
+            records = records.reshape(-1, *shape[axis + 1 :])
+        return cls(
+            records,
+            layout,
+            np.frombuffer(offsets, np.int32),
+            (batch_size, *shape[:axis]),
+        )
+
     @cached_property
     def integers(self) -> np.ndarray:
         """Integer joins, flags and whole words in logical column order."""
@@ -155,22 +174,29 @@ type BatchRow = tuple[managym.ObservationBatch, int]
 
 
 @dataclass(frozen=True, eq=False)
-class ObservationSelection(Mapping[str, np.ndarray]):
+class ObservationSelection:
     """Immutable native coordinates in consumer order, with optional interned memory.
 
-    A policy reads the selected CSR spans. Mapping access projects one logical
-    field as a read-only array. Explicit exports produce editable dense rows.
+    A policy reads the selected CSR spans. Inspection projects a single logical
+    field into configured coordinates.
     """
 
     space: ObservationSpace
     coordinates: tuple[BatchRow, ...]
-    memory: PrefixObservation | None = None
+    memory: RetainedMemory | None = None
+
+    def __post_init__(self) -> None:
+        if self.memory is not None and len(self.coordinates) != len(
+            self.memory.prefixes
+        ):
+            raise ValueError("decision-memory prefix batch mismatch")
 
     def __reduce__(
         self,
     ) -> tuple[
-        type, tuple[ObservationSpace, tuple[BatchRow, ...], PrefixObservation | None]
+        type, tuple[ObservationSpace, tuple[BatchRow, ...], RetainedMemory | None]
     ]:
+        # Cached projections stay behind; the native batches and prefixes travel.
         return ObservationSelection, (self.space, self.coordinates, self.memory)
 
     @classmethod
@@ -181,9 +207,7 @@ class ObservationSelection(Mapping[str, np.ndarray]):
         if not parts:
             raise ValueError("cannot concatenate empty observation selections")
         first = parts[0]
-        capacities = (
-            first.memory.memory_capacities if first.memory is not None else None
-        )
+        capacities = first.memory.capacities if first.memory is not None else None
         for part in parts:
             if (
                 part.space is not first.space
@@ -191,25 +215,20 @@ class ObservationSelection(Mapping[str, np.ndarray]):
             ):
                 raise ValueError("native observation configs differ")
             memory = part.memory
-            if (memory.memory_capacities if memory is not None else None) != capacities:
+            if (memory.capacities if memory is not None else None) != capacities:
                 raise ValueError("native observation memory capacities differ")
-            if memory is not None and len(memory.prefixes) != len(part.coordinates):
-                raise ValueError(
-                    "native observation memory count differs from coordinates"
-                )
         if len(parts) == 1:
             return first
         return cls(
             first.space,
             tuple(coord for part in parts for coord in part.coordinates),
-            PrefixObservation(
-                {},
-                [
+            RetainedMemory(
+                tuple(
                     prefix
                     for part in parts
                     if part.memory is not None
                     for prefix in part.memory.prefixes
-                ],
+                ),
                 capacities,
             )
             if capacities is not None
@@ -244,31 +263,18 @@ class ObservationSelection(Mapping[str, np.ndarray]):
     def spans(self) -> "ObservationSpans":
         return observation_spans(self.batch, self.space, bucketed=False, objects=False)
 
-    def __iter__(self) -> Iterator[str]:
-        return (
-            k
-            for k in self.space.shapes
-            if self.memory is None or k not in MEMORY_FIELDS
+    @cached_property
+    def fields(self) -> tuple[str, ...]:
+        """Projectable fields. Interned decision memory lives on the selection."""
+        return tuple(
+            key
+            for key in self.space.shapes
+            if self.memory is None or key not in MEMORY_FIELDS
         )
-
-    def __len__(self) -> int:
-        return len(self.space.shapes) - (
-            len(MEMORY_FIELDS) if self.memory is not None else 0
-        )
-
-    def __contains__(self, key: object) -> bool:
-        return key in self.space.shapes and (
-            self.memory is None or key not in MEMORY_FIELDS
-        )
-
-    def __getitem__(self, key: str) -> np.ndarray:
-        values = self.project(key)
-        values.flags.writeable = False
-        return values
 
     def project(self, key: str) -> np.ndarray:
         """Editable logical field in configured coordinates, independent of native storage."""
-        if key not in self:
+        if key not in self.fields:
             raise KeyError(key)
         if key == "actions_valid":
             return (
@@ -284,27 +290,8 @@ class ObservationSelection(Mapping[str, np.ndarray]):
             if isinstance(indexes, slice)
             else tuple(self.coordinates[i] for i in indexes)
         )
-        memory = self.memory
-        if memory is not None:
-            prefixes = (
-                memory.prefixes[indexes]
-                if isinstance(indexes, slice)
-                else tuple(memory.prefixes[i] for i in indexes)
-            )
-            memory = PrefixObservation({}, prefixes, memory.memory_capacities)
+        memory = self.memory.select(indexes) if self.memory is not None else None
         return ObservationSelection(self.space, coords, memory)
-
-    def export(self) -> PrefixObservation | dict[str, np.ndarray]:
-        rows = {key: self.project(key) for key in self}
-        if self.memory is None:
-            return rows
-        return PrefixObservation(
-            rows, self.memory.prefixes, self.memory.memory_capacities
-        )
-
-    def materialize(self) -> CompactObservation | dict[str, np.ndarray]:
-        rows = self.export()
-        return rows.materialize() if isinstance(rows, PrefixObservation) else rows
 
     def action_columns(
         self, rows: np.ndarray, slots: np.ndarray, columns: Sequence[int]
@@ -341,6 +328,9 @@ class ObservationSelection(Mapping[str, np.ndarray]):
         return tuple(result)
 
 
+type PolicyObservation = managym.ObservationBatch | ObservationSelection
+
+
 @dataclass(frozen=True)
 class ObservationSpans:
     fact_divisors: np.ndarray
@@ -349,7 +339,7 @@ class ObservationSpans:
     buckets: BucketSizes | None
     needs: np.ndarray | None
 
-    memory: PrefixObservation | None = None
+    memory: RetainedMemory | None = None
 
     def fact_payloads(self, rows: np.ndarray) -> np.ndarray:
         values = rows[..., FACT_VALUE_INDEX : FACT_VALUE_INDEX + 2].astype(np.float32)
@@ -394,21 +384,11 @@ def observation_spans(
     schema = batch_layout(batch.layout)
     tables: dict[str, RowSpans] = {}
     capacities: dict[str, int] = {}
-    for key, (seat_axis, offsets, values) in batch.tables().items():
-        axis = int(seat_axis)
+    for key, table in batch.tables().items():
         shape = space.shapes[key]
-        capacities[key] = shape[axis]
-        groups = (batch.batch_size, *shape[:axis])
-        trailing = shape[axis + 1 :]
-        layout = schema.records[key]
-        records = np.frombuffer(values, layout.dtype)
-        if layout.dtype.names is None:
-            records = records.reshape(-1, *trailing)
-        tables[key] = RowSpans(
-            records,
-            layout,
-            np.frombuffer(offsets, np.int32),
-            groups,
+        capacities[key] = shape[int(table[0])]
+        tables[key] = RowSpans.from_table(
+            table, schema.records[key], shape, batch.batch_size
         )
     needs = buckets = None
     if bucketed:

@@ -164,10 +164,9 @@ where and why it stops. A game from another world is refused with the managym
 version that recorded it. `managym academy replay <recording-id>` reopens any
 saved game from **History**, finished or unfinished.
 
-Evaluation command traces (`traces/<cell-id>.commands.jsonl.gz`) and games
-exported by `manabot export-game`, both written by earlier releases, still
-open; those two are verified by manabot, installed at the same release
-version. The
+Evaluation command traces (`traces/<cell-id>.commands.jsonl.gz`) and exported
+training games written by earlier releases still open; those two are verified
+by manabot, installed at the same release version. The
 [replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#open-a-replay-directly)
 covers selection and troubleshooting.
 
@@ -236,7 +235,10 @@ each zone holds only the objects the Comprehensive Rules allow it
 ([objects and zones](../docs/engine.md#objects-and-zones)). The engine runs these values
 directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.catalog_tokens`)
-derives policy tokens from it. `src/world.rs` owns the card/deck
+derives printed policy tokens from it; runtime program tokens
+(`managym.runtime_tokens`), hashed record names (`managym.record_vocabulary`)
+and decision-memory names (`managym.decision_memory_names`) live in separate
+lists ([program-token vocabulary](../docs/engine.md#program-token-vocabulary)). `src/world.rs` owns the card/deck
 support check (defined cards, excluding tokens and rules fixtures) and the set
 filter. Known rules bugs are tracked as Tasks without revoking playability. Keep
 decklist data separate from card behavior; see
@@ -718,8 +720,8 @@ source must have, `ExceptNonartifactSpells` is a Powerstone's exclusion and
 the zone it is cast from, `Activate` with the source's zone and subtypes, or
 `Resolving`, which only exclusions admit. Observation data names each
 restriction whole. The policy input's restricted-mana columns name exactly
-Lesson and Shrine spells and Ally spells or sources (and, in v10, Powerstone
-mana); every other restriction is a `pooled_mana_classes` class and a
+Lesson and Shrine spells, Ally spells or sources, and Powerstone
+mana; every other restriction is a `pooled_mana_classes` class and a
 `PooledMana` fact program, never a player column.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
@@ -751,9 +753,9 @@ mana by spending subtype and announced X. Its
 layout, checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
 
-For a v11 batch, call
+To encode observations into an `ObservationBatch`, call
 `encode_observation_batch(items, layout, action_overflow="error")` with `Env`
-or `Observation` items.
+or `Observation` items (`ObservationLayout` accepts policy input v11 only).
 `RolloutPool.set_observation_layout(layout, action_overflow="error")` pairs with
 `encode_active_batch()` and `step_active_batch(actions)` to return
 `(active_slots, ObservationBatch)`.
@@ -776,9 +778,12 @@ current decisions. Pass one seat or `None` per stream. The result contains the
 selected slot identities and a batch in that order. Any batch's
 `gather(coordinates)` copies just the selected live spans from compatible
 batches, preserving the requested order and repeated rows.
+`blank_decision_memory()` returns a copy with empty decision-memory spans for
+memory-reliance ablations.
 
-Each `ObservationBatch` owns its snapshot across later steps. Its `tables()` maps
-each value buffer to `(seat_axis, offsets, values)`, with immutable byte
+Each `ObservationBatch` owns its snapshot across later steps and certifies its
+v11 layout, CSR row offsets, capacities and native joins. Its `tables()` maps
+each value table to `(seat_axis, offsets, values)`, with immutable byte
 strings for native-endian int32 row offsets and packed, native-endian records.
 One span belongs to each batch item, or to each (item, seat) if `seat_axis`
 is true. Subtract consecutive offsets for live counts, including all-zero
@@ -791,16 +796,19 @@ transports the layout, batch size and immutable byte tables without copying or
 densifying live spans, preserving shared buffers across batches (such as after
 `blank_decision_memory()`). Unpickling validates the v11 layout, table keys,
 `seat_axis` flags, monotonic in-bounds span offsets and packed byte lengths,
-raising `ValueError` on corrupt data. `ObservationBatch` has no public
-raw-bytes constructor; batches originate from native encoding or pickle
-restoration.
+raising `ValueError` on corrupt data.
+
+For offline parity captures and probes, `batch.to_bytes()` serializes an
+`ObservationBatch` and `ObservationBatch.from_bytes(data)` reloads it after
+validating the layout, CSR offsets, capacities and native joins once in Rust
+(raising `ValueError` on corrupt, truncated, out-of-bounds or non-v11 bytes).
 
 `layout.csr_fields[key]` lists each record field's name, dtype and logical
 column index in byte order. IDs, joins, enums, unscaled counts and full signed
-words use int32. Flags use uint8 and scaled scalars use float32. In a dense
-input a word occupies two 16-bit columns. The packed field takes their common
-name and the first column's index. Both fact payloads use raw integer units.
-Divide by `layout.csr_fact_divisors[kind]` for their logical numeric values.
+words use int32. Flags use uint8 and scaled scalars use float32. A packed word
+field carries the full signed int32 value under its logical name and first
+column index. Both fact payloads use raw integer units. Divide by
+`layout.csr_fact_divisors[kind]` for their logical numeric values.
 Decision memory includes separate presence flags for optional selectors.
 
 ```python
@@ -810,25 +818,16 @@ _, offsets, values = batch.tables()["actions"]
 starts = np.frombuffer(offsets, dtype=np.int32)
 actions = np.frombuffer(values, dtype=dtype)
 first_game_modes = actions["mode"][starts[0]:starts[1]]
+
+reloaded = managym.ObservationBatch.from_bytes(batch.to_bytes())
+assert reloaded.action_counts == batch.action_counts
 ```
 
 For element arrays, the single field describes each element. An action-focus
 row contains `layout.shapes["action_focus"][1]` consecutive int32 elements,
-with -1 for unused focus slots. Dense buffer allocation uses `layout.dtypes`.
-
-For dense batched buffers, `VectorEnv.set_buffers`, `RolloutPool.set_buffers`,
-`encode_observation_into`, `encode_observations_into`,
-`ObservationLayout.axis_extents` and `ObservationLayout.object_references` all
-emit a `DeprecationWarning` targeting removal in `0.3.0` (retained alongside
-the deprecated v9/v10 fork; v11 callers should use `set_observation_layout` and
-`encode_observation_batch`). `layout.axis_extents(buffers)` returns one int64
-vector per variable axis. Each item includes its occupied rows and rows needed
-by joins. Keep the buffers stable until the scan returns. A key or shape
-mismatch returns `None`. For each of those axes, `layout.axis_buffers` lists
-the buffer names and their unbatched row dimensions. For a pair `(key, dim)`,
+with -1 for unused focus slots. For each variable axis, `layout.axis_buffers`
+lists the table names and their unbatched row dimensions; for a pair `(key, dim)`,
 `layout.shapes[key][dim]` is the configured capacity of that axis.
-`layout.object_references` lists each buffer's object-reference columns and
-their index bases. A `None` column means every element is a reference.
 
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.
@@ -1410,9 +1409,13 @@ the rest. Without trample, that sole blocker takes all 5. The engine deals
 the assignments together after the final choice.
 
 When a combatant has first strike or double strike (CR 510.4), the first damage
-step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAMAGE`),
-followed by the regular `StepKind::CombatDamage` (`COMBAT_DAMAGE`) step. Each
-permanent's `first_strike_participant` remembers whether it had first strike or
+step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAMAGE`,
+discriminant `7`), followed by the regular `StepKind::CombatDamage`
+(`COMBAT_DAMAGE`, `8`) through `StepKind::Cleanup` (`ENDING_CLEANUP`, `12`).
+`Observation.toJSON()` writes `turn.phase` and `turn.step` as their public enum
+names while `Observation.from_json` continues to decode 0.2.x integer codes
+([turn steps and Observation JSON](../docs/engine.md#turn-steps-and-observation-json)).
+Each permanent's `first_strike_participant` remembers whether it had first strike or
 double strike when the first step began, including after its abilities change.
 
 ### Reading creature types and counted bonuses

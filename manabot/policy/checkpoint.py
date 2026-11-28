@@ -41,7 +41,7 @@ from manabot.model.architecture import (
 )
 from manabot.model.interface import model_interface, saved_readings, world_fields
 from manabot.model.world import checkpoint_source, validate_policy_input, written_at
-from manabot.policy.binding import BindingReport, bind_catalog
+from manabot.policy.binding import BindingReport, bind_catalog, bind_records
 from manabot.policy.prepare import Layout, Tables
 from manabot.policy.readings import Readings
 
@@ -170,7 +170,7 @@ class Dimensions:
     token_rows: int
     name_rows: int
     links: int
-    stack: int = 0
+    stack: int
 
     @classmethod
     def from_layout(
@@ -184,19 +184,15 @@ class Dimensions:
         fact_kinds: int = FACT_KINDS,
     ) -> "Dimensions":
         """Use the policy's input readings and its actual embedding sizes."""
-        player = columns.numeric_width("agent_player")
-        card = columns.numeric_width("agent_cards")
-        if space.turn_state:
-            player += columns.numeric_width("player_turn_state")
-            card += 1
         return cls(
             hidden=model.hidden_dim,
             heads=model.num_attention_heads,
             layers=model.attention_layers,
             feedforward=model.attention_feedforward_dim
             or model.num_attention_heads * model.hidden_dim,
-            player=player,
-            card=card,
+            player=columns.numeric_width("agent_player")
+            + columns.numeric_width("player_turn_state"),
+            card=columns.numeric_width("agent_cards") + 1,
             permanent=columns.numeric_width("agent_permanents"),
             action=columns.numeric_width("actions"),
             focus=space.config.max_focus_objects,
@@ -207,7 +203,7 @@ class Dimensions:
             token_rows=token_rows,
             name_rows=name_rows,
             links=len(columns.link_columns),
-            stack=columns.numeric_width("stack") if space.one_token else 0,
+            stack=columns.numeric_width("stack"),
         )
 
 
@@ -522,7 +518,7 @@ def read_saved_container(path: str | Path) -> PolicyCheckpoint:
     remedy = "convert the PyTorch .pt with `uv run python -m manabot.backends.convert`"
     try:
         arrays, metadata = read_safetensors(path)
-    except (struct.error, ValueError, KeyError) as error:
+    except ValueError as error:
         raise NotAContainer(f"{path} is not a safetensors file; {remedy}") from error
     missing = [key for key in _METADATA_KEYS if key not in metadata]
     if missing:
@@ -570,12 +566,17 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         )
     if projection.shape[1] != checkpoint.dimensions().player:
         raise ValueError("checkpoint player columns differ from its projection")
-    if interface is None:
-        return checkpoint
-    if not checkpoint.model.catalog_records() and interface.writer == interface.current:
+    if not checkpoint.model.catalog_records() and (
+        interface is None or interface.writer == interface.current
+    ):
         return checkpoint
     try:
-        bound, report = bind_catalog(checkpoint, interface.writer, interface.current)
+        if interface is None:
+            bound, report = bind_records(checkpoint)
+        else:
+            bound, report = bind_catalog(
+                checkpoint, interface.writer, interface.current
+            )
     except ValueError as error:
         raise ValueError(f"{error}; {written_at(record)}") from error
     logging.getLogger(__name__).info(
@@ -653,17 +654,32 @@ def read_safetensors(path: Path) -> tuple[dict[str, np.ndarray], dict[str, str]]
 
 
 def decode_safetensors(data: bytes) -> tuple[dict[str, np.ndarray], dict[str, str]]:
+    if len(data) < 8:
+        raise ValueError("truncated safetensors header")
     (length,) = struct.unpack("<Q", data[:8])
+    if length > len(data) - 8:
+        raise ValueError("invalid safetensors header length")
     header = json.loads(data[8 : 8 + length])
+    if not isinstance(header, dict):
+        raise ValueError("invalid safetensors header")
     metadata = header.pop("__metadata__", None) or {}
+    if not isinstance(metadata, dict) or any(
+        not isinstance(k, str) or not isinstance(v, str) for k, v in metadata.items()
+    ):
+        raise ValueError("invalid safetensors metadata")
     body = memoryview(data)[8 + length :]
     arrays = {}
     for name, entry in header.items():
-        start, end = entry["data_offsets"]
-        dtype = np.dtype(_DTYPES[entry["dtype"]]).newbyteorder("<")
-        arrays[name] = (
-            np.frombuffer(body[start:end], dtype=dtype)
-            .reshape(entry["shape"])
-            .astype(dtype.newbyteorder("="))
-        )
+        if not isinstance(entry, dict):
+            raise ValueError(f"invalid safetensors entry {name!r}")
+        try:
+            start, end = entry["data_offsets"]
+            dtype = np.dtype(_DTYPES[entry["dtype"]]).newbyteorder("<")
+            arrays[name] = (
+                np.frombuffer(body[start:end], dtype=dtype)
+                .reshape(entry["shape"])
+                .astype(dtype.newbyteorder("="))
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError(f"invalid safetensors tensor {name!r}") from error
     return arrays, metadata

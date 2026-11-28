@@ -31,7 +31,7 @@ from managym.decision import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-planeswalkers.json"
+    / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-named-turns.json"
 )
 AUTHORITY_SHA256 = "a2eb4df25ac2651be7121644aff8d27d13ca02188308bd74c70c79d2c538441e"
 TERMINAL_STATE = "7579635e057980ae75908fc77f25300fa96cc1ed4fb45184b83ca595bd754dff"

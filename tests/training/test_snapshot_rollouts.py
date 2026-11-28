@@ -23,11 +23,10 @@ from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.failures import CaptureScope, RecordedVectorEnv, capture_scope
 from manabot.env.match import Match, Reward
-from manabot.env.memory_store import MEMORY_FIELDS
+from manabot.env.memory_store import MEMORY_FIELDS, gather_memory
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
-    encode_observation,
+    step_buffers,
 )
 from manabot.infra.config import (
     ModelConfig,
@@ -70,7 +69,6 @@ from manabot.training.rollout.collection import (
 from manabot.training.rollout.producers import ShardedVectorEnv
 from manabot.training.rollout.snapshot_vector import (
     CapturedSnapshot,
-    InMemorySnapshotVector,
     SlotInstall,
     SnapshotBranch,
     SnapshotRecipe,
@@ -96,12 +94,15 @@ from manabot.training.state.game_errors import (
     settle,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.objective import damped_policy_loss
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.targets import BatchTargets, compute_batch_targets
 import managym
 from managym.recording import GameInputs, PlayerSetup, read_records
 from managym.statistics import read_statistics
 from scripts.inspect_batch import _report
+from tests.fixtures.observation_rows import observation_arrays
+from tests.fixtures.rollout_arrays import projected_fields
 from tests.fixtures.training_records import recording
 from tests.model.prepared_routes import device_input
 
@@ -242,32 +243,31 @@ def three_choices(
         spans += (TrajectorySpan(2, 3, 1, None if terminal else 1),)
     assert batch.trajectories == spans
     if terminal:
-        assert not batch.next_obs and batch.next_done.size == 0
+        assert batch.next_done.size == 0
         return batch, torch.empty(0)
 
     expected = []
     for span in spans:
-        encoded = encode_observation(space, scalar.observation_for_player(span.seat))
+        viewer = scalar.observation_for_player(span.seat)
+        encoded = observation_arrays(space, viewer)
         assert span.bootstrap_index is not None
         frozen = batch.next_obs
         if retained_memory(frozen) is not None:
-            dense = frozen.materialize()
+            dense = gather_memory(frozen.memory.prefixes)
             # Compact memory pads only to the largest live prefix in this read.
             for key in MEMORY_FIELDS:
                 np.testing.assert_array_equal(
                     dense[key][span.bootstrap_index],
                     encoded[key][: dense[key].shape[1]],
                 )
-        for key in frozen:
+        for key, value in projected_fields(frozen).items():
             np.testing.assert_array_equal(
-                frozen[key][span.bootstrap_index], encoded[key], err_msg=key
+                value[span.bootstrap_index], encoded[key], err_msg=key
             )
         assert bool(encoded["actions_valid"].any()) == (
             scalar.current_agent_index() == span.seat
         )
-        _, prediction = agent.forward_distribution(
-            device_input(agent, {key: value[None] for key, value in encoded.items()})
-        )
+        _, prediction = agent.forward_distribution(device_input(agent, viewer))
         expected.append(prediction[0])
     return batch, torch.stack(expected)
 
@@ -315,7 +315,7 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
     # Storage order is independent of the trajectory packing order.
     reordered = replace(
         batch,
-        next_obs={k: v[[1, 0]] for k, v in batch.next_obs.items()},
+        next_obs=batch.next_obs.select(np.array([1, 0])),
         trajectories=(TrajectorySpan(0, 2, 0, 1), TrajectorySpan(2, 3, 1, 0)),
     )
     reordered_targets = torch_targets(learner, reordered, learning)
@@ -327,7 +327,7 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
         changed_rows = np.array([0, 0, 1]) == seat
         other = 1 - seat
         perturbed = replace(
-            batch, next_obs={k: v[[other, other]] for k, v in batch.next_obs.items()}
+            batch, next_obs=batch.next_obs.select(np.array([other, other]))
         )
         changed = torch_targets(learner, perturbed, learning)
         torch.testing.assert_close(
@@ -350,7 +350,7 @@ def test_mixed_ppo_discounts_each_cut_and_censors_only_its_own_span() -> None:
         batch,
         dones=np.array([[False], [False], [True]]),
         rewards=np.array([[0], [0], [-1]], np.float32),
-        next_obs={key: value[:1] for key, value in batch.next_obs.items()},
+        next_obs=batch.next_obs.select(slice(0, 1)),
         next_done=np.zeros(1, bool),
         trajectories=(TrajectorySpan(0, 2, 0, 0), TrajectorySpan(2, 3, 1)),
     )
@@ -400,8 +400,7 @@ def test_packed_terminal_spans_need_no_bootstrap_input(
 
 
 def scalar_backend_agent() -> ActorCritic:
-    with pytest.warns(DeprecationWarning):
-        space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     return ActorCritic(
         space,
         ModelConfig(
@@ -486,18 +485,17 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
     setup = Match().to_rust()
     vector = ShardedVectorEnv(3, 42, 2)
     try:
-        vector.set_buffers(allocate_vector_buffers(space, 3), layout=space.layout)
+        vector.set_observation_layout(
+            step_buffers(3), space.config.action_overflow, layout=space.layout
+        )
         seeds = [701, 49, 33]
         vector.reset_each_into_buffers([setup] * 3, seeds=seeds)
         generations = vector.current_game_generations()
         with pytest.raises(ValueError, match="native seed must fit uint64"):
             vector.reset_each_into_buffers([setup] * 3, seeds=[800, 900, -1])
         assert vector.current_game_generations() == generations
-        frozen = space.allocate(3)
         players = [1, 0, 1]
-        reads = vector.write_observations_for_players(
-            players, frozen, layout=space.layout
-        )
+        reads, frozen = vector.observations_for_players(players)
         digests = vector.state_digests([True, False, True])
         for slot, read in enumerate(reads):
             assert (read.slot, read.player, read.seed, read.game_id) == (
@@ -509,11 +507,10 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
             scalar = managym.Env(seed=seeds[slot])
             scalar.reset(setup)
             assert digests[slot] == (None if slot == 1 else scalar.state_digest())
-            encoded = encode_observation(
-                space, scalar.observation_for_player(players[slot])
+            encoded = managym.encode_observation_batch(
+                [scalar.observation_for_player(players[slot])], space.layout
             )
-            for key in frozen:
-                np.testing.assert_array_equal(frozen[key][slot], encoded[key])
+            assert frozen.gather([(frozen, slot)]).to_bytes() == encoded.to_bytes()
     finally:
         vector.close()
 
@@ -527,7 +524,7 @@ def test_replay_prefix_records_only_the_supplied_root(tmp_path: Path) -> None:
         num_envs=1, seed=900, games_path=games, statistics_path=statistics
     )
     try:
-        vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+        vector.set_observation_layout(step_buffers(1), layout=space.layout)
         replay_prefix(vector, recipe, None)
         assert vector.state_digests() == [scalar.state_digest()]
         assert vector.current_agent_indices() == [scalar.current_agent_index()]
@@ -899,7 +896,7 @@ def test_mixed_sources_filter_eligible_rows_independently(
         sample_weight=weights,
         trajectories=tuple(TrajectorySpan(i, i + 1, 0) for i in range(12)),
         next_done=np.empty(0, bool),
-        next_obs={},
+        next_obs=batch.next_obs.select(slice(0, 0)),
     )
     learning = Learning(
         epochs=1, minibatches=1, filter_kind=kind, retained_fraction=0.4
@@ -945,7 +942,7 @@ def test_weighted_steps_match_hand_weighted_actor_and_critic(rule: str) -> None:
     indices = np.array([0, 1])
     rows = batch.observations(indices)
     logits, values = reference.agent(device_input(reference.agent, rows.observation))
-    valid = torch.tensor(rows.observation["actions_valid"], dtype=torch.bool)
+    valid = torch.tensor(rows.observation.project("actions_valid"), dtype=torch.bool)
     behavior_logs = torch.tensor(rows.log_probabilities)
     magnet = torch.tensor(reference_distribution(rows.observation, learning.reference))
     actions = torch.tensor(batch.actions[indices, 0])
@@ -969,7 +966,8 @@ def test_weighted_steps_match_hand_weighted_actor_and_critic(rule: str) -> None:
         value_loss *= 0.5 * learning.value_weight
     else:
         rate, tau = learning.rates(1)
-        policy_loss = backend.rl.damped_policy_loss(
+        policy_loss = damped_policy_loss(
+            backend.rl,
             logits,
             actions,
             advantages,
@@ -1058,12 +1056,13 @@ def test_damped_minibatches_preserve_source_and_root_weights(framework: str) -> 
         logits, values = reference.agent(
             device_input(reference.agent, rows.observation)
         )
-        mask = torch.tensor(rows.observation["actions_valid"], dtype=torch.bool)
+        mask = torch.tensor(rows.observation.project("actions_valid"), dtype=torch.bool)
         behavior = torch.tensor(rows.log_probabilities)
         magnet = torch.tensor(
             reference_distribution(rows.observation, learning.reference)
         )
-        actor_loss = backend.rl.damped_policy_loss(
+        actor_loss = damped_policy_loss(
+            backend.rl,
             logits,
             torch.tensor(batch.actions[ids, 0]),
             targets.advantages[ids, 0],
@@ -1356,14 +1355,12 @@ def test_cold_bank_matches_hot_draws_scores_evictions_and_group_draining() -> No
                             for action in game.actions:
                                 observation, *_ = scalar.step(action)
                             assert scalar.state_digest() == game.root_digest
-                            expected = encode_observation(space, observation)
+                            expected = observation_arrays(space, observation)
                             actual = batch.observations(
                                 np.array([candidate.row])
                             ).observation
-                            for key in actual:
-                                np.testing.assert_array_equal(
-                                    actual[key][0], expected[key]
-                                )
+                            for key, value in projected_fields(actual).items():
+                                np.testing.assert_array_equal(value[0], expected[key])
                         assert len(receipt.captures) > config.capacity
                     else:
                         [visit] = receipt.visited_groups
@@ -2127,22 +2124,6 @@ def test_self_play_rejects_unavailable_signals_without_custom_scorer(
         snapshot_scorer=lambda signals: 1.0,
     )
     close_collector(collector)
-
-
-@pytest.mark.parametrize("use_factory", [True, False])
-def test_deprecated_snapshot_factory_uses_native_deferred_slots(
-    use_factory: bool,
-) -> None:
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
-        vector = (
-            InMemorySnapshotVector.factory(ObservationSpace(), Match(), 1, 42)
-            if use_factory
-            else InMemorySnapshotVector(ObservationSpace(), 1, 42)
-        )
-    try:
-        assert vector.next_fresh_seeds() == [42]
-    finally:
-        vector.close()
 
 
 def test_snapshot_callbacks_require_settings() -> None:

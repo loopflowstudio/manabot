@@ -193,7 +193,8 @@ fn retarget_projects_earlier_chosen_targets_before_final_commit() {
         agent::{
             action::ActionType,
             observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_encoder::ObservationEncoderConfig,
+            observation_rows::InputRows,
         },
         state::{
             game_object::{PlayerId, Target},
@@ -235,11 +236,11 @@ fn retarget_projects_earlier_chosen_targets_before_final_commit() {
 
     let obs_c = Observation::for_player(fork_c.game(), PlayerId(0));
     let obs_d = Observation::for_player(fork_d.game(), PlayerId(0));
-    let enc_c = encode(&obs_c, &ObservationEncoderConfig::default()).unwrap();
-    let enc_d = encode(&obs_d, &ObservationEncoderConfig::default()).unwrap();
+    let enc_c = InputRows::read(&obs_c, &ObservationEncoderConfig::default()).unwrap();
+    let enc_d = InputRows::read(&obs_d, &ObservationEncoderConfig::default()).unwrap();
     assert_ne!(
-        (enc_c.facts, enc_c.relations),
-        (enc_d.facts, enc_d.relations),
+        (enc_c.rows("facts"), enc_c.rows("relations")),
+        (enc_d.rows("facts"), enc_d.rows("relations")),
         "slot 1 encoded observations must distinguish earlier retarget choices"
     );
 

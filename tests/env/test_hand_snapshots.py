@@ -6,7 +6,6 @@ from typing import Literal
 
 import numpy as np
 import pytest
-import torch
 
 from manabot import managym
 from manabot.env.env import Env
@@ -14,13 +13,12 @@ from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
-    encode_observation,
+    step_buffers,
 )
-from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.decision import Command, DecisionFrame
 from managym.disclosure import DecklistDisclosure
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 
 
 def _players(
@@ -38,7 +36,7 @@ def _players(
 def _hand(env: managym.Env, player: int) -> dict[str, int]:
     return dict(
         Counter(
-            card.name
+            card.characteristics.name
             for card in env.observation_for_player(player).agent_cards
             if int(card.zone) == int(managym.ZoneEnum.HAND)
         )
@@ -87,10 +85,10 @@ def test_hand_snapshots_match_scalar_without_changing_observations(
             int(card.zone) == int(managym.ZoneEnum.HAND) for card in obs.opponent_cards
         )
         assert obs.opponent.known_hand == {}
-        expected = encode_observation(
+        expected = observation_arrays(
             space, scalar.observation_for_player(obs.agent.player_index)
         )
-        for key, actual in encode_observation(space, obs).items():
+        for key, actual in observation_arrays(space, obs).items():
             np.testing.assert_array_equal(actual, expected[key], err_msg=key)
         if disclosure == "closed":
             assert obs.opponent.main_counts is None
@@ -134,23 +132,30 @@ def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> No
         else managym.VectorEnv(2, seed=42)
     )
     space = ObservationSpace()
-    buffers = allocate_vector_buffers(space, 2)
-    vector.set_buffers(buffers, layout=space.layout)
+    buffers = step_buffers(2)
+    vector.set_observation_layout(buffers, layout=space.layout)
     try:
         vector.reset_each_into_buffers([_players(), _players()[::-1]])
         before = vector.hand_snapshots([1, 0])
-        frozen = {key: value[1].copy() for key, value in buffers.items()}
+        frozen = {
+            key: value[1].copy()
+            for key, value in vector_arrays(space, vector.observation_rows()).items()
+        }
         for key in ("rewards", "terminated", "truncated"):
             buffers[key][1] = 1
-            frozen[key] = np.zeros_like(frozen[key])
+            frozen[key] = np.zeros_like(buffers[key][1])
         vector.step_into_buffers([0, -999], [True, False])
+        current = {
+            **vector_arrays(space, vector.observation_rows()),
+            **buffers,
+        }
         after = vector.hand_snapshots([1, 0])
         assert _identity(before[1]) == _identity(after[1])
         assert before[1].cards == after[1].cards
         assert before[0].game_id == after[0].game_id
         assert after[0].revision > before[0].revision
         for key, expected in frozen.items():
-            np.testing.assert_array_equal(buffers[key][1], expected)
+            np.testing.assert_array_equal(current[key][1], expected, err_msg=key)
         vector.reset_seeds_into_buffers([42, 43])
         reset = vector.hand_snapshots([1, 0])
         assert [t.cards for t in reset] == [t.cards for t in before]
@@ -193,36 +198,6 @@ def test_hand_snapshots_after_done_describe_the_terminal_game() -> None:
     while not scalar.is_game_over():
         scalar.step(0)
     assert after.cards == scalar.hand_snapshot(1).cards == _hand(scalar, 1)
-
-
-def test_torch_hand_snapshots_track_native_rebuilds() -> None:
-    match = Match(MatchConfig(hero_deck={"Mountain": 12}, villain_deck={"Island": 12}))
-    vector = TorchVectorEnv(
-        2, match, ObservationSpace(), Reward(RewardConfig()), "cpu", seed=42
-    )
-    try:
-        observations, _ = vector.reset()
-        before = {key: value.clone() for key, value in observations.items()}
-        assert vector.current_agent_indices() == [0, 0]
-        first = vector.hand_snapshots([1, 0])
-        assert first[0].cards == {"Island": 7}
-        assert repr(first[0]) == (
-            f"HandSnapshot(player=1, game_id={first[0].game_id}, "
-            f'seed=42, revision={first[0].revision}, cards={{"Island": 7}})'
-        )
-        for key in observations:
-            assert torch.equal(observations[key], before[key])
-        assert "hand_snapshots" not in observations
-        vector.step(torch.zeros(2, dtype=torch.int64))
-        assert vector.hand_snapshots([1, 0])[0].game_id == first[0].game_id
-        for seed in (99, 42):
-            vector.reset(seed=seed)
-            current = vector.hand_snapshots([1, 0])
-            assert current[0].game_id != first[0].game_id
-            assert current[0].seed == seed
-            assert current[0].cards == first[0].cards
-    finally:
-        vector.close()
 
 
 def test_hand_snapshots_return_an_empty_hand_after_its_last_card_is_played() -> None:

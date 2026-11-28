@@ -33,24 +33,17 @@ from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.name_candidates import NameCandidateEncoder
 from manabot.backends.torch.numerics import buffer_on
 from manabot.backends.torch.recent_events import RecentEventEncoder
-from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.semantic_cards import (
     SemanticCardEncoder,
 )
 from manabot.backends.torch.shared_effects import SharedEffectEncoder
-from manabot.env.observation import (
-    FACT_KINDS,
-    ObservationBuffers,
-    ObservationSpace,
-    PolicyObservation,
-)
+from manabot.belief.encoding import BeliefRows
+from manabot.env.observation import FACT_KINDS, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
 from manabot.policy.buckets import (
-    BucketedObservation,
-    bucket_observation,
     object_trimming,
 )
 from manabot.policy.catalog import fresh_policy_tables
@@ -58,7 +51,6 @@ from manabot.policy.checkpoint import Dimensions
 from manabot.policy.collection_memory import CollectionMemory
 from manabot.policy.prepare import (
     AttentionLayout,
-    BeliefRows,
     FactLayout,
     Layout,
     Prepared,
@@ -70,6 +62,7 @@ from manabot.policy.readings import Readings, fresh_readings
 from manabot.policy.spans import (
     ObservationSelection,
     ObservationSpans,
+    PolicyObservation,
     observation_spans,
 )
 import managym
@@ -177,8 +170,6 @@ class ActorCritic(nn.Module):
             name_rows=len(tables.definitions),
             fact_kinds=fact_kinds,
         )
-        self.turn_state = observation_space.turn_state
-        self.stack_tokens = observation_space.one_token
         self.max_focus_objects = dims.focus
         embed_dim = dims.hidden
 
@@ -191,7 +182,7 @@ class ActorCritic(nn.Module):
                 tables.catalog,
                 embed_dim,
                 decklists=True,
-                library=observation_space.one_token,
+                library=True,
                 stream_norm=config.stream_norm,
             )
         else:
@@ -384,24 +375,13 @@ class ActorCritic(nn.Module):
         self.live_tokens = live_tokens
         self.name_candidates.bucketed = self.bucketed_shapes
 
-        # Input v11 stack rows, built after every v9/v10 parameter (except the
-        # value readout, built last) so those checkpoints keep their
-        # initialization and state-dict names. A row
-        # projects its numeric columns and adds its definition's program, as a
-        # permanent does; an ability's definition is its source's. Its source
-        # link (one-based object index) adds the source's pre-attention
-        # embedding through a zero-initialized layer, so the initial function
-        # ignores it.
-        self.stack_embedding: ProjectionLayer | None = None
-        self.stack_source: nn.Linear | None = None
-        if self.stack_tokens:
-            self.stack_embedding = ProjectionLayer(dims.stack, embed_dim)
-            self.stack_source = torch.nn.utils.skip_init(
-                nn.Linear, embed_dim, embed_dim
-            )
-            nn.init.zeros_(self.stack_source.weight)
-            nn.init.zeros_(self.stack_source.bias)
-            self.logger.info(f"Stack embedding: ({dims.stack} -> {embed_dim})")
+        # Spells and abilities read the definition's program. A zero-initialized
+        # source projection adds the source object's pre-attention embedding.
+        self.stack_embedding = ProjectionLayer(dims.stack, embed_dim)
+        self.stack_source = torch.nn.utils.skip_init(nn.Linear, embed_dim, embed_dim)
+        nn.init.zeros_(self.stack_source.weight)
+        nn.init.zeros_(self.stack_source.bias)
+        self.logger.info(f"Stack embedding: ({dims.stack} -> {embed_dim})")
 
         # Built last: every other parameter keeps the masked-mean arm's draws
         # under the same seed, so the two readouts start from one shared model.
@@ -421,9 +401,7 @@ class ActorCritic(nn.Module):
         self.final_norm: nn.LayerNorm | None = None
         if config.stream_norm:
             self.final_norm = nn.LayerNorm(embed_dim)
-            streams = ["player", "card", "permanent", "definition", "context"]
-            if self.stack_tokens:
-                streams.append("stack")
+            streams = ["player", "card", "permanent", "definition", "context", "stack"]
             self.stream_norms = nn.ModuleDict(
                 {name: nn.LayerNorm(embed_dim) for name in streams}
             )
@@ -500,40 +478,26 @@ class ActorCritic(nn.Module):
         obs: PolicyObservation,
         *,
         inference: bool = False,
+        belief: BeliefRows[np.ndarray] | None = None,
         memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Validate host buffers and build the shared policy input exactly once."""
-        bucketed, tables = self._admit_observation(obs)
-        return self._prepare_rows(bucketed or obs, tables, inference, memory_roots)
+        bucketed, tables = self._admit_observation(obs, belief)
+        return self._prepare_rows(bucketed, tables, inference, belief, memory_roots)
 
-    def check_observation(self, obs: PolicyObservation) -> np.ndarray | None:
+    def check_observation(
+        self, obs: PolicyObservation, *, belief: BeliefRows[np.ndarray] | None = None
+    ) -> np.ndarray | None:
         """Validate the current rows and return their measured extents when bucketed."""
-        bucketed, _ = self._admit_observation(obs)
-        return None if bucketed is None else bucketed.needs
+        bucketed, _ = self._admit_observation(obs, belief)
+        return bucketed.needs
 
     def _admit_observation(
-        self, obs: PolicyObservation
-    ) -> tuple[BucketedObservation | ObservationSpans | None, Tables]:
+        self, obs: PolicyObservation, belief: BeliefRows[np.ndarray] | None
+    ) -> tuple[ObservationSpans, Tables]:
         spec = self._admission_spec()
-        if type(obs) in (managym.ObservationBatch, ObservationSelection):
-            return admission.admit_native(
-                obs, spec, bucketed=self.bucketed_shapes
-            ), spec.tables
-        mask = np.asarray(obs["actions_valid"])
-        try:
-            legal = admission.legal_mask(mask)
-        except ValueError as error:
-            # Allocate framework evidence only for a rejected host input.
-            failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
-            raise NumericalError(
-                "invalid_action_mask",
-                {
-                    "mask": torch.from_numpy(mask.copy()),
-                    "failed": torch.from_numpy(failed),
-                },
-            ) from error
         return admission.admit(
-            obs, spec, legal, bucketed=self.bucketed_shapes
+            obs, spec, bucketed=self.bucketed_shapes, belief=belief
         ), spec.tables
 
     def prepare_admitted(
@@ -541,6 +505,7 @@ class ActorCritic(nn.Module):
         obs: PolicyObservation,
         *,
         inference: bool = False,
+        belief: BeliefRows[np.ndarray] | None = None,
         needs: np.ndarray | None = None,
         memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
@@ -551,33 +516,23 @@ class ActorCritic(nn.Module):
         MPS uses bucketed object columns for inference and bucketed live fact
         routes for both inference and learning.
         """
-        if type(obs) in (managym.ObservationBatch, ObservationSelection):
-            rows = observation_spans(
-                obs,
-                self.observation_space,
-                bucketed=self.bucketed_shapes,
-                objects=self.object_trimming(),
-                minimum_needs=needs,
-            )
-            return self._prepare_rows(
-                rows, self._admission_spec().tables, inference, memory_roots
-            )
-        bucketed = (
-            bucket_observation(
-                obs, self.observation_space, needs, objects=self.object_trimming()
-            )
-            if self.bucketed_shapes
-            else None
+        rows = observation_spans(
+            obs,
+            self.observation_space,
+            bucketed=self.bucketed_shapes,
+            objects=self.object_trimming(),
+            minimum_needs=needs,
         )
         return self._prepare_rows(
-            bucketed or obs, self._admission_spec().tables, inference, memory_roots
+            rows, self._admission_spec().tables, inference, belief, memory_roots
         )
 
     def _prepare_rows(
         self,
-        obs: ObservationBuffers | BucketedObservation | ObservationSpans,
+        obs: ObservationSpans,
         tables: Tables,
         inference: bool,
+        belief: BeliefRows[np.ndarray] | None,
         memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
         device = self.device_type
@@ -601,6 +556,7 @@ class ActorCritic(nn.Module):
             obs,
             tables,
             attention=attention,
+            belief=belief,
             facts=facts,
             value_token=self.value_token is not None,
             memory_summaries=self.memory_summaries,
@@ -1108,20 +1064,14 @@ class ActorCritic(nn.Module):
             enc_opp_cards,
             enc_agent_perms,
             enc_opp_perms,
+            self._stream("stack", self.stack_embedding(obs.stack))
+            + lookup(obs.stack_rows),
         ]
-        if self.stack_tokens:
-            assert self.stack_embedding is not None and obs.stack is not None
-            assert obs.stack_rows is not None
-            parts.append(
-                self._stream("stack", self.stack_embedding(obs.stack))
-                + lookup(obs.stack_rows)
-            )
         if obs.belief is not None:
             rows, global_row = self._belief_rows(obs.belief)
             parts.extend((rows, global_row))
         objects = self._join_permanent_links(obs, torch.cat(parts, dim=1))
-        if self.stack_tokens:
-            objects = self._join_stack_sources(obs, objects)
+        objects = self._join_stack_sources(obs, objects)
         token_embedding = (
             self.semantic_cards.token_embedding
             if self.semantic_cards is not None and self.semantic_cards.records
@@ -1160,8 +1110,6 @@ class ActorCritic(nn.Module):
         self, obs: Prepared[torch.Tensor], objects: torch.Tensor
     ) -> torch.Tensor:
         """Add source embeddings to the host-prepared v11 stack rows."""
-        assert self.stack_source is not None and obs.stack is not None
-        assert obs.stack_targets is not None and obs.stack_mask is not None
         start = 2 + 2 * obs.agent_cards.shape[1] + 2 * obs.permanents.shape[2]
         count = obs.stack.shape[1]
         sources = objects.flatten(0, 1)[obs.stack_targets].reshape(
@@ -1340,10 +1288,10 @@ class PolicyInference:
     @torch.no_grad()
     def prepare(self, obs: PolicyObservation) -> Prepared[torch.Tensor]:
         self.check(self.agent)
-        if type(obs) not in (managym.ObservationBatch, ObservationSelection) and any(
-            not isinstance(value, np.ndarray) for value in obs.values()
-        ):
-            raise TypeError("inference preparation requires NumPy observation buffers")
+        if type(obs) not in (managym.ObservationBatch, ObservationSelection):
+            raise TypeError(
+                "inference preparation requires a native ObservationBatch or ObservationSelection"
+            )
         roots = (
             self.memory.roots(obs)
             if self.agent.config.decision_memory == "gru"

@@ -7,10 +7,6 @@ use crate::{
         decision_surface::{DecisionSubmission, DecisionSurface},
         heuristic::Heuristic,
         observation::{EventData, Observation},
-        observation_encoder::{
-            encode, encode_into, EncodedObservation, EncodedObservationMut, ObservationEncodeError,
-            ObservationEncoderConfig,
-        },
         player_policy::PlayerPolicy,
     },
     cards::{
@@ -236,12 +232,7 @@ impl PreparedPossibleWorldMaterializer {
 }
 
 impl Env {
-    pub fn new(
-        seed: u64,
-        skip_trivial: bool,
-        enable_profiler: bool,
-        _enable_behavior_tracking: bool,
-    ) -> Self {
+    pub fn new(seed: u64, skip_trivial: bool, enable_profiler: bool) -> Self {
         Self {
             game: None,
             heuristics: [None, None],
@@ -293,7 +284,7 @@ impl Env {
             decision_memory_enabled: self.decision_memory_enabled,
             decision_memory_include_own: self.decision_memory_include_own,
             capture_generation: GAME_GENERATION.fetch_add(1, Ordering::Relaxed),
-            ..Self::new(self.seed, self.skip_trivial, false, false)
+            ..Self::new(self.seed, self.skip_trivial, false)
         }
     }
 
@@ -397,7 +388,7 @@ impl Env {
     }
 
     pub(crate) fn replacement_root(&self, seed: u64) -> Self {
-        let mut next = Self::new(seed, self.skip_trivial, self.profiler.is_enabled(), false)
+        let mut next = Self::new(seed, self.skip_trivial, self.profiler.is_enabled())
             .with_player_policies(self.player_policies)
             .with_decision_memory(self.decision_memory_enabled)
             .with_decision_memory_include_own(self.decision_memory_include_own);
@@ -1422,21 +1413,6 @@ impl Env {
         Ok(default_content_pack().manifest())
     }
 
-    pub fn encode_observation(
-        &self,
-        observation: &Observation,
-    ) -> Result<EncodedObservation, ObservationEncodeError> {
-        encode(observation, &ObservationEncoderConfig::default())
-    }
-
-    pub fn encode_observation_into(
-        &self,
-        observation: &Observation,
-        out: EncodedObservationMut<'_>,
-    ) -> Result<(), ObservationEncodeError> {
-        encode_into(observation, &ObservationEncoderConfig::default(), out)
-    }
-
     pub fn export_profile_baseline(&self) -> String {
         if self.profiler.is_enabled() {
             self.profiler.export_baseline()
@@ -2134,7 +2110,7 @@ mod hand_snapshot_tests {
 
     #[test]
     fn hand_snapshot_retains_live_seed_until_successful_reset() {
-        let mut env = Env::new(42, true, false, false);
+        let mut env = Env::new(42, true, false);
         env.reset(configs()).unwrap();
         let original = env.hand_snapshot(1).unwrap();
         let witness = env.selected_witness().unwrap();
@@ -2151,7 +2127,7 @@ mod hand_snapshot_tests {
         let reset = env.hand_snapshot(1).unwrap();
         assert_eq!(reset.seed, 99);
         assert_ne!(reset.game_id, original.game_id);
-        let mut reference = Env::new(99, true, false, false);
+        let mut reference = Env::new(99, true, false);
         reference.reset(configs()).unwrap();
         assert_eq!(reset.cards, reference.hand_snapshot(1).unwrap().cards);
         assert_eq!(
@@ -2162,7 +2138,7 @@ mod hand_snapshot_tests {
 
     #[test]
     fn hand_snapshot_forks_have_distinct_lifetimes_without_changing_replay_state() {
-        let mut env = Env::new(42, true, false, false);
+        let mut env = Env::new(42, true, false);
         env.reset(configs()).unwrap();
         let original = env.hand_snapshot(1).unwrap();
         let witness = env.selected_witness().unwrap();
@@ -2196,7 +2172,7 @@ mod hand_snapshot_tests {
 
     #[test]
     fn hand_snapshot_materializations_keep_reset_seed_and_distinct_lifetimes() {
-        let mut env = Env::new(42, true, false, false);
+        let mut env = Env::new(42, true, false);
         env.reset(configs()).unwrap();
         let original = env.hand_snapshot(1).unwrap();
         let witness = env.selected_witness().unwrap();
@@ -2281,7 +2257,7 @@ mod content_pack_contract_tests {
 
     #[test]
     fn content_pack_contract_covers_env_roots_siblings_and_rollout_slots() {
-        let absent = Env::new(1, true, false, false);
+        let absent = Env::new(1, true, false);
         let error = absent
             .fork()
             .expect_err("an environment without a match has no content pack");
@@ -2291,8 +2267,8 @@ mod content_pack_contract_tests {
             .expect_err("an environment without a match has no manifest");
         assert_eq!(error.0, "env.content_pack_manifest called before reset");
 
-        let mut first = Env::new(11, true, false, false);
-        let mut second = Env::new(12, true, false, false);
+        let mut first = Env::new(11, true, false);
+        let mut second = Env::new(12, true, false);
         first.reset(configs()).expect("first reset");
         second.reset(configs()).expect("second reset");
 
@@ -2354,7 +2330,7 @@ mod content_pack_contract_tests {
 
     #[test]
     fn fixed_player_observation_does_not_follow_the_acting_seat() {
-        let absent = Env::new(1, true, false, false);
+        let absent = Env::new(1, true, false);
         assert_eq!(
             absent
                 .observation_for_player(0)
@@ -2363,7 +2339,7 @@ mod content_pack_contract_tests {
             "env.observation_for_player called before reset"
         );
 
-        let mut env = Env::new(11, true, false, false);
+        let mut env = Env::new(11, true, false);
         env.reset(configs()).expect("reset");
         let player_zero = env.observation_for_player(0).expect("player zero view");
         let player_one = env.observation_for_player(1).expect("player one view");

@@ -309,10 +309,9 @@ to, not identical with, that study's numbers.
 
 Missing values stay absent (never zero or `NaN`): unprobed updates log no
 `combat/*` or `time/combat_probe` keys; a probed batch with no qualifying
-decisions of a kind omits that kind's keys (leaving a gap on the chart); a
+decisions of a kind omits that kind's keys (leaving a gap on the chart); and a
 sample with no creature on an edited side omits that side's shifts and
-`shift_decisions` while keeping the gap; and legacy v9/v10 layouts publish no
-`is_creature`, so runs on them log no `combat/*` keys.
+`shift_decisions` while keeping the gap.
 
 One Elemental CPU probe took 4.4 seconds for 256 attack and 237 block
 decisions. In the three-seed L4 run, 80 probes per seed took 0.28–0.31%

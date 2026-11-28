@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.academy.semantic_boundary import SemanticExperienceBoundary
-from manabot.verify.text_observation import keep_opening_hands
 from managym.decision import SEMANTIC_DECISION_VERSION, SemanticContractError
 
 

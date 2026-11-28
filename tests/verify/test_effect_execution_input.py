@@ -13,12 +13,13 @@ from pydantic import BaseModel, JsonValue, TypeAdapter
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ModelConfig
 from manabot.managym.decision_capture import DecisionInput
 from manabot.semantic.text_observation import render_decision
 from manabot.verify.text_observation import priority_root
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 # Relation decision code of a pending native `Decision::SelectCards`.
@@ -66,7 +67,7 @@ def test_real_fetch_search_encodes_its_pending_selection_frame() -> None:
         observation, *_ = env.step(passing)
     else:
         raise AssertionError("fetch search not reached")
-    encoded = encode_observation(ObservationSpace(), observation)
+    encoded = observation_arrays(ObservationSpace(), observation)
     rows = encoded["relations"][encoded["relations"][:, _relation("valid")] == 1]
     # Frame header rows (kind 1), one per continuation frame, each under its parent.
     headers = rows[rows[:, _relation("kind")] == 1]
@@ -104,7 +105,7 @@ def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
         )
     records = _evidence()
     for start in range(0, len(records), 2):
-        encoded = []
+        observations = []
         texts: list[str] = []
         for record in records[start : start + 2]:
             capture_json = json.dumps(record.capture)
@@ -115,34 +116,31 @@ def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
                 json.dumps(capture.observation.viewer_state),
                 continuation_json=json.dumps(record.capture["frames"]),
             )
-            tensors = encode_observation(space, obs)
+            tensors = observation_arrays(space, obs)
             for name, width, expected in (
                 ("facts", 12, record.facts),
                 ("relations", 49, record.relations),
             ):
                 # Recorded rows predate appended columns, which read zero here.
                 native = np.zeros_like(tensors[name])
-                native[: len(expected) // width, :width] = np.asarray(
-                    expected
-                ).reshape(-1, width)
+                native[: len(expected) // width, :width] = np.asarray(expected).reshape(
+                    -1, width
+                )
                 np.testing.assert_array_equal(
                     tensors[name], native, err_msg=f"{record.case}: {name}"
                 )
-            encoded.append(tensors)
+            observations.append(obs)
             text = render_decision(capture_json).text
             assert "effect execution:" in text
             texts.append(text)
         assert texts[0] != texts[1]
-        batch = {
-            key: torch.from_numpy(np.stack([value[key] for value in encoded]))
-            for key in encoded[0]
-        }
-        logits, values = model(device_input(model, batch))
+        prepared = device_input(model, encode_policy_batch(space, observations))
+        logits, values = model(prepared)
         assert torch.isfinite(values).all()
         assert not torch.equal(values[0], values[1]), records[start].case
         assert not torch.equal(logits[0], logits[1]), records[start].case
         model.zero_grad()
-        (values.sum() + logits[batch["actions_valid"].bool()].sum()).backward()
+        (values.sum() + logits[prepared.legal].sum()).backward()
         assert any(
             p.grad is not None and p.grad.abs().sum() > 0
             for p in model.facts.parameters()

@@ -11,10 +11,10 @@ from __future__ import annotations
 from typing import Any
 
 from manabot.env.env import Env
-from manabot.env.observation import ObservationBuffers
 from manabot.sim.anchors import RandomMatchupPlayer, ScriptedGreedyPlayer
 from manabot.sim.heuristic import HeuristicPlayer
 from manabot.sim.registration import PlayerRegistration
+import managym
 from managym.bots import FlatSearchPolicy
 
 CODE_PLAYER_KINDS = frozenset({"demo_search", "heuristic", "random", "scripted_greedy"})
@@ -31,7 +31,7 @@ class DemoSearchPlayer:
             seed=seed,
         )
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int:
+    def act(self, env: Env, obs: managym.Observation) -> int:
         return self.policy(env._engine, env.last_raw_obs)
 
 

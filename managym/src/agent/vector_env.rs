@@ -182,7 +182,7 @@ impl VectorEnv {
     ) -> Self {
         let envs = (0..num_envs)
             .map(|idx| {
-                Env::new(seed.saturating_add(idx as u64), skip_trivial, false, false)
+                Env::new(seed.saturating_add(idx as u64), skip_trivial, false)
                     .with_player_policies(player_policies)
             })
             .collect();
@@ -202,13 +202,6 @@ impl VectorEnv {
             decision_memory_include_own: false,
             slots: vec![SlotState::Unset; num_envs],
         }
-    }
-
-    #[cfg(feature = "python")]
-    pub(crate) fn parked_slots(&self) -> impl Iterator<Item = usize> + '_ {
-        self.slots.iter().enumerate().filter_map(|(slot, state)| {
-            matches!(state, SlotState::Terminal | SlotState::Poisoned).then_some(slot)
-        })
     }
 
     pub fn next_fresh_seeds(&self) -> &[u64] {
@@ -556,15 +549,7 @@ impl VectorEnv {
     /// Project each requested native seat without advancing games or chooser state.
     /// The whole request is validated before the first write; an encoding failure
     /// can leave a written prefix, so callers must discard all rows on failure.
-    pub fn write_observations_for_players(
-        &self,
-        players: &[Option<usize>],
-        write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
-    ) -> Result<Vec<ObservationRead>, AgentError> {
-        self.read_observations_for_players(players, write)
-    }
-
-    pub(crate) fn read_observations_for_players<E: From<AgentError>>(
+    pub fn read_observations_for_players<E: From<AgentError>>(
         &self,
         players: &[Option<usize>],
         mut write: impl FnMut(usize, &Observation) -> Result<(), E>,
@@ -1150,7 +1135,7 @@ mod tests {
         let players = sample_player_configs();
         let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(players.clone()).unwrap();
-        let mut scalar = Env::new(42, true, false, false);
+        let mut scalar = Env::new(42, true, false);
         scalar.reset(players).unwrap();
         let before = scalar.state_digest().unwrap();
         assert_eq!(
@@ -1166,7 +1151,7 @@ mod tests {
         let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
         let mut writes = 0;
         assert!(vector
-            .write_observations_for_players(&[Some(0), Some(1)], |_, _| {
+            .read_observations_for_players::<AgentError>(&[Some(0), Some(1)], |_, _| {
                 writes += 1;
                 Ok(())
             })
@@ -1182,7 +1167,7 @@ mod tests {
         }
         for players in [vec![], vec![Some(0)], vec![Some(0), Some(2)]] {
             assert!(vector
-                .write_observations_for_players(&players, |_, _| {
+                .read_observations_for_players::<AgentError>(&players, |_, _| {
                     writes += 1;
                     Ok(())
                 })
@@ -1197,7 +1182,7 @@ mod tests {
         let frames = vector.semantic_decision_frames_json(None).unwrap();
         for players in [[0, 1], [1, 0]] {
             let reads = vector
-                .write_observations_for_players(&players.map(Some), |slot, obs| {
+                .read_observations_for_players::<AgentError>(&players.map(Some), |slot, obs| {
                     assert_eq!(
                         obs.to_json(),
                         vector.envs[slot]
@@ -1345,7 +1330,10 @@ mod tests {
 
     #[test]
     fn first_legal_policy_prefix_keeps_vector_execution_identity() {
-        use crate::agent::observation_encoder::{encode, ActionOverflow, ObservationEncoderConfig};
+        use crate::agent::{
+            observation_encoder::{ActionOverflow, ObservationEncoderConfig},
+            observation_rows::InputRows,
+        };
         let land_names: Vec<String> = crate::cards::content_pack::default_content_pack()
             .definitions()
             .filter(|def| {
@@ -1383,8 +1371,8 @@ mod tests {
             action_overflow: ActionOverflow::FirstLegal,
             ..ObservationEncoderConfig::default()
         };
-        let encoded = encode(&observation, &config).unwrap();
-        assert_eq!(encoded.actions_valid, vec![1.0; 64]);
+        let encoded = InputRows::read(&observation, &config).unwrap();
+        assert_eq!(encoded.count("actions"), 64);
         assert_eq!(
             vector.current_action_summaries(),
             vec![(71, "Priority".into())]
@@ -1395,8 +1383,8 @@ mod tests {
             .step_into(&[63], None, |_, obs, _, _, _| {
                 assert_eq!(obs.to_json(), expected.to_json());
                 assert_eq!(
-                    encode(obs, &config).unwrap().actions,
-                    encode(&expected, &config).unwrap().actions
+                    InputRows::read(obs, &config).unwrap().rows("actions"),
+                    InputRows::read(&expected, &config).unwrap().rows("actions")
                 );
                 Ok(())
             })
@@ -1426,7 +1414,7 @@ mod tests {
         let actual = vector.current_player_configs();
         for (index, players) in actual.iter().enumerate() {
             assert_ne!(players[0].deck.main, players[1].deck.main);
-            let mut scalar = Env::new(seeds[index], true, false, false);
+            let mut scalar = Env::new(seeds[index], true, false);
             scalar.reset(players.clone()).unwrap();
             assert_eq!(
                 scalar.state_digest().unwrap(),
@@ -1557,7 +1545,7 @@ mod tests {
             for (seat, pair) in vector.current_matchup_indices().into_iter().enumerate() {
                 reached[seat].insert(pair);
                 if seed < 100 {
-                    let mut scalar = Env::new(seeds[seat], true, false, false);
+                    let mut scalar = Env::new(seeds[seat], true, false);
                     let obs = scalar
                         .reset(vec![roster[pair.0].clone(), roster[pair.1].clone()])
                         .unwrap()
@@ -1575,7 +1563,7 @@ mod tests {
             .iter()
             .zip(vector.current_matchup_indices())
             .map(|(seed, (a, b))| {
-                let mut env = Env::new(*seed, true, false, false);
+                let mut env = Env::new(*seed, true, false);
                 env.reset(vec![roster[a].clone(), roster[b].clone()])
                     .unwrap();
                 env
@@ -1858,7 +1846,7 @@ mod tests {
         vector
             .reset_seeds_into(seeds.to_vec(), |_, _, _, _, _| Ok(()))
             .unwrap();
-        let mut scalar = seeds.map(|seed| Env::new(seed, true, false, false));
+        let mut scalar = seeds.map(|seed| Env::new(seed, true, false));
         for env in &mut scalar {
             env.reset(sample_player_configs()).unwrap();
         }
@@ -1898,7 +1886,7 @@ mod tests {
             serde_json::to_value(&configs).unwrap()
         );
         assert_eq!(context["failed_action_index"], 999_999);
-        let mut scalar = Env::new(context["seed"].as_u64().unwrap(), true, false, false);
+        let mut scalar = Env::new(context["seed"].as_u64().unwrap(), true, false);
         scalar.reset(configs).unwrap();
         for action in context["trace"]["actions"].as_array().unwrap() {
             scalar.step(action.as_i64().unwrap()).unwrap();
@@ -1941,7 +1929,7 @@ mod tests {
             })
             .collect();
         let mut seeds = [33_u64, 34, 35];
-        let mut scalar = seeds.map(|seed| Env::new(seed, true, false, false));
+        let mut scalar = seeds.map(|seed| Env::new(seed, true, false));
         for (env, setup) in scalar.iter_mut().zip(&configs) {
             env.reset(setup.clone()).unwrap();
         }

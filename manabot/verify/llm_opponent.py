@@ -10,7 +10,6 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from manabot.env.observation import encode_observation
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import SeededPolicyLoader
 from manabot.semantic.text_observation import TextDecision
@@ -59,11 +58,10 @@ class CheckpointOpponent:
         raw = env.observation_for_player(env.current_agent_index())
         if len(raw.action_space.actions) != len(decision.actions):
             raise ValueError("policy action space differs from the captured decision")
-        obs = encode_observation(self.space, raw)
         with self.backend.seeded_inference(
             self.identity.seed + self.decisions, cpu_only=True
         ):
-            index = select_agent_action(self.agent, obs, deterministic=False)
+            index = select_agent_action(self.agent, raw, deterministic=False)
         if not 0 <= index < len(decision.actions):
             raise ValueError("policy selected an unavailable action")
         self.decisions += 1

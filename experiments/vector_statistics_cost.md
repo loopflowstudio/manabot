@@ -83,4 +83,6 @@ Validation: 34 capture/reducer/writer checks, 12 evaluation reducer checks,
 four debug Rust observation/reassignment checks, library Clippy with Python
 bindings, Ruff and diff whitespace checks passed. The Rust extension was
 rebuilt in release and replaced atomically before Python/vector measurements.
-Script: `experiments/vector_statistics_cost.py`.
+Run `experiments/vector_statistics_cost.py` from its frozen revision
+`a409c94ff3b77f2eab8d10611e6d97743c07fef6`. Both measured sources use
+the dense vector transport.

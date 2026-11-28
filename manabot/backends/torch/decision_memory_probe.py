@@ -21,7 +21,6 @@ from torch.nn import functional as F
 
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.memory_store import PrefixObservation
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.infra.source import source_commit
@@ -33,6 +32,7 @@ from manabot.verify.decision_memory_probe import (
     collect_games,
     game_losses,
     new_corpus,
+    probe_observations,
     probe_space,
     save_corpus,
 )
@@ -109,12 +109,9 @@ def _prepared(
 ) -> Prepared[torch.Tensor] | None:
     if model.policy is None:
         return None
-    rows = [corpus.rows[int(i)].observation for i in indexes]
-    batch = PrefixObservation(
-        {key: np.concatenate([row[key] for row in rows], 0) for key in rows[0]},
-        [row.prefixes[0] for row in rows],
-        rows[0].memory_capacities,
-    ).materialize()
+    batch = probe_observations(
+        [corpus.rows[int(i)] for i in indexes], model.policy.observation_space
+    )
     return on_device(model.policy.prepare(batch), "cpu")
 
 

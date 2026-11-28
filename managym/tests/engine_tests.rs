@@ -31,7 +31,7 @@ fn make_game(seed: u64, skip_trivial: bool) -> Game {
 }
 
 fn reset_env(seed: u64, skip_trivial: bool) -> (Env, Observation) {
-    let mut env = Env::new(seed, skip_trivial, false, false);
+    let mut env = Env::new(seed, skip_trivial, false);
     let p1 = PlayerConfig::new("gaea", mixed_deck());
     let p2 = PlayerConfig::new("urza", mixed_deck());
     let (obs, _) = env.reset(vec![p1, p2]).expect("reset should succeed");
@@ -92,8 +92,8 @@ fn deterministic_with_same_seed_and_actions() {
     let p1 = PlayerConfig::new("gaea", mixed_deck());
     let p2 = PlayerConfig::new("urza", mixed_deck());
 
-    let mut env1 = Env::new(99, true, false, false);
-    let mut env2 = Env::new(99, true, false, false);
+    let mut env1 = Env::new(99, true, false);
+    let mut env2 = Env::new(99, true, false);
 
     let (obs1, _) = env1.reset(vec![p1.clone(), p2.clone()]).unwrap();
     let (obs2, _) = env2.reset(vec![p1, p2]).unwrap();
@@ -126,7 +126,9 @@ fn observation_contract_enum_values_stable() {
     assert_eq!(PhaseKind::Ending as i32, 4);
 
     assert_eq!(StepKind::Untap as i32, 0);
-    assert_eq!(StepKind::Cleanup as i32, 11);
+    assert_eq!(StepKind::FirstStrikeCombatDamage as i32, 7);
+    assert_eq!(StepKind::CombatDamage as i32, 8);
+    assert_eq!(StepKind::Cleanup as i32, 12);
 }
 
 #[test]

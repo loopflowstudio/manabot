@@ -2,11 +2,12 @@
 
 import pytest
 
-from manabot.env.observation import ObservationSpace, column, encode_observation
+from manabot.env.observation import ObservationSpace, column
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
 import managym
 from managym.experience_projection import decision_surface_view
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def choose(env: managym.Env, description: str) -> None:
@@ -22,7 +23,7 @@ def assert_public_pending_power(env: managym.Env, power: int) -> None:
         assert ability.source_power == power
         restored = managym.Observation.from_json(obs.toJSON())
         assert restored.stack_objects[0].source_power == power
-        stack = encode_observation(ObservationSpace(), obs)["stack"]
+        stack = observation_arrays(ObservationSpace(), obs)["stack"]
         assert stack[0, column("stack", "source_power")] == pytest.approx(power / 10)
         (entry,) = decision_surface_view(env, viewer)["stack_objects"]
         assert f"source power {power}" in entry["label"]

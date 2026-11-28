@@ -163,7 +163,6 @@ json_record!(Deck {
             name: self.identity(),
             deck: self.clone(),
             submitted: true,
-            legacy_disclosure: None,
         }
     }
 });

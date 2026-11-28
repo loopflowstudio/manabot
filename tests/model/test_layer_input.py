@@ -29,13 +29,11 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
     ObservationSpace,
-    allocate_vector_buffers,
-    encode_observation,
+    step_buffers,
 )
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluate import validate_registered_player
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
-from manabot.policy import admission
 from manabot.recipes.baseline import settings
 from manabot.recipes.local import LocalConfig
 from manabot.semantic.text_observation import capture_text_decision, submit_response
@@ -43,11 +41,12 @@ from manabot.training.loops.self_play import SelfPlay
 from manabot.training.rollout.collection import close_collector, collect, open_collector
 from manabot.verify.representation import kellan_trigger_root, kellan_upgrade_root
 import managym
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
+from tests.fixtures.rollout_arrays import trajectory_field
 from tests.model.prepared_routes import (
     device_input,
     effect_rows,
     fact_rows,
-    record_vocabulary,
 )
 
 
@@ -70,7 +69,7 @@ def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> N
     try:
         model = ActorCritic(space, recipe.model)
         batch = collect(collector, model, 1)
-        assert batch.ordered_obs()["effect_details"].shape == (1, 1, 4096, 3)
+        assert trajectory_field(batch, "effect_details").shape == (1, 1, 4096, 3)
         assert batch.actions.size == 1
         path = tmp_path / "explicit.pt"
         save_checkpoint(
@@ -105,17 +104,15 @@ def test_layer_input_text_forward_backward_and_reload(
     )
     config = ObservationConfig()
     space = ObservationSpace(config)
-    reference = encode_observation(space, obs)
+    reference = observation_arrays(space, obs)
     assert reference["effect_details"].shape == (4096, 3)
     assert (reference["effect_details"][:, 0] >= 11).any()
     assert "exile" in capture_text_decision(env).text.lower()
-    values = {key: torch.from_numpy(value)[None] for key, value in reference.items()}
     model = ActorCritic(space, ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP))
-    logits, value = model(device_input(model, values))
+    prepared = device_input(model, obs)
+    logits, value = model(prepared)
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
-    (
-        logits[values["actions_valid"].bool()].square().mean() + value.square().mean()
-    ).backward()
+    (logits[prepared.legal].square().mean() + value.square().mean()).backward()
     assert any(
         p.grad is not None and p.grad.abs().sum()
         for p in model.shared_effects.parameters()
@@ -125,8 +122,8 @@ def test_layer_input_text_forward_backward_and_reload(
     restored, restored_space = load_checkpoint(str(path))
     assert restored_space.config == config
     for expected, actual in zip(
-        model(device_input(model, values)),
-        restored(device_input(restored, values)),
+        model(device_input(model, obs)),
+        restored(device_input(restored, obs)),
         strict=True,
     ):
         torch.testing.assert_close(expected, actual)
@@ -143,30 +140,28 @@ def test_layer_colors_counter_order_and_signed_program_payload_encode() -> None:
     payload["shared_effects"][0]["effect"]["program"] = [[4, -17], [4, 2**31 - 1]]
     observed = managym.Observation.from_json(json.dumps(payload))
     config = ObservationConfig()
-    encoded = encode_observation(ObservationSpace(config), observed)
+    encoded = observation_arrays(ObservationSpace(config), observed)
     assert set(encoded["facts"][:, 1]) >= {12, 13}
     assert encoded["facts"][encoded["facts"][:, 1] == 13, 9].min() > 0
 
 
-def test_vector_buffers_match_scalar_encoding() -> None:
+def test_vector_rows_match_scalar_encoding() -> None:
     space = ObservationSpace(ObservationConfig())
-    vector_buffers = allocate_vector_buffers(space, 1)
     players = [
         managym.PlayerConfig(name, {"Mountain": 20, "Gray Ogre": 20})
         for name in ("a", "b")
     ]
     vector = managym.VectorEnv(num_envs=1, seed=23)
-    vector.set_buffers(vector_buffers, layout=space.layout)
+    vector.set_observation_layout(step_buffers(1), layout=space.layout)
     vector.reset_all(players)
     vector.reset_seeds_into_buffers([23])
     scalar = managym.Env(seed=23)
     scalar.reset(players)
     observed = scalar.observation_for_player(scalar.current_agent_index())
-    expected = encode_observation(space, observed)
+    expected = observation_arrays(space, observed)
+    published = vector_arrays(space, vector.observation_rows())
     for key in expected:
-        np.testing.assert_array_equal(
-            vector_buffers[key][0], expected[key], err_msg=key
-        )
+        np.testing.assert_array_equal(published[key][0], expected[key], err_msg=key)
 
 
 def test_captured_continuation_program_reaches_input_and_policy() -> None:
@@ -197,11 +192,10 @@ def test_captured_continuation_program_reaches_input_and_policy() -> None:
     assert "captured program" in capture_text_decision(env).text.lower()
     config = ObservationConfig()
     space = ObservationSpace(config)
-    reference = encode_observation(space, obs)
+    reference = observation_arrays(space, obs)
     assert (reference["facts"][:, 1] == 14).sum() > 0
-    values = {key: torch.from_numpy(value)[None] for key, value in reference.items()}
     model = ActorCritic(space, ModelConfig(hidden_dim=16))
-    logits, value = model(device_input(model, values))
+    logits, value = model(device_input(model, obs))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     value.sum().backward()
     assert model.facts.output.weight.grad is not None
@@ -278,18 +272,6 @@ def test_fact_inference_preserves_sparse_rows_and_fresh_state(
         assert encoder.output.weight.grad.abs().sum() > 0
 
 
-@pytest.mark.parametrize(
-    "column,value",
-    [(FACT_VALID_INDEX, 0.5), (FACT_OBJECT_INDEX, 3), (FACT_KIND_INDEX, 99)],
-)
-def test_fact_admission_rejects_malformed_rows(column: int, value: float) -> None:
-    facts = torch.zeros(1, 32, FACT_DIM)
-    facts[0, 31, FACT_VALID_INDEX] = 1
-    facts[0, 31, column] = value
-    with pytest.raises(ValueError, match="fact"):
-        admission.facts((facts).detach().cpu().numpy(), 32, 2, record_vocabulary(None))
-
-
 def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() -> None:
     torch.set_num_threads(1)
     torch.manual_seed(244)
@@ -343,21 +325,6 @@ def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() ->
     assert encoder.program_sequence.weight_ih_l0.grad.abs().sum() > 0
     assert encoder.program_numeric.weight.grad is not None
     assert encoder.program_numeric.weight.grad.abs().sum() > 0
-
-
-@pytest.mark.parametrize("malformed", ["ordinal", "holder", "frame"])
-def test_local_program_admission_rejects_broken_boundaries(malformed: str) -> None:
-    rows = _program_rows(1, 1, (1, 2, 3))
-    if malformed == "ordinal":
-        rows[1, FACT_VALUE_INDEX + 1] = 3
-    elif malformed == "holder":
-        rows[1, FACT_OBJECT_INDEX] = 2
-    else:
-        rows[1, FACT_ID_INDEX + 1] = 2
-    with pytest.raises(ValueError, match="fact program"):
-        admission.facts(
-            (rows[None]).detach().cpu().numpy(), len(rows), 2, record_vocabulary(None)
-        )
 
 
 def test_shared_program_order_joins_padding_multiplicity_and_numeric_gradients() -> (

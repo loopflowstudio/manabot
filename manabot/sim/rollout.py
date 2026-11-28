@@ -6,7 +6,7 @@ time in torch — experiments/reports/sps-closeout.md). This module makes batchi
 default for every policy-in-the-loop consumer:
 
 - ``BatchedSampler``: one masked forward pass for many observations at once,
-  straight from the zero-copy numpy buffers the Rust envs write into.
+  directly from native `ObservationBatch` or `ObservationSelection` rows.
 - ``run_vector_games``: K parallel game streams on managym.VectorEnv
   (player_policies=("agent", "agent"), both seats surfaced) with per-seat controllers —
   seat-balanced policy-vs-random and policy-vs-policy evaluation without a
@@ -27,11 +27,8 @@ import numpy as np
 from manabot.env.env import Env
 from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match
-from manabot.env.memory_store import select_rows
 from manabot.env.observation import (
-    ObservationBuffers,
     ObservationSpace,
-    allocate_vector_buffers,
     step_buffers,
 )
 from manabot.infra.config import MatchConfig
@@ -45,8 +42,6 @@ from manabot.sim.search.flat_mc import (
 )
 import managym
 from managym import SlotLoad
-
-allocate_buffers = allocate_vector_buffers
 
 # -----------------------------------------------------------------------------
 # Batched action selection
@@ -87,49 +82,35 @@ class BatchedSampler:
 
     def select(
         self,
-        buffers: ObservationBuffers | managym.ObservationBatch | ObservationSelection,
+        buffers: managym.ObservationBatch | ObservationSelection,
         rows: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Actions for the selected rows of dense buffers or an `ObservationBatch`."""
-
+        """Actions for the selected rows of a native batch or selection."""
+        is_batch = isinstance(buffers, managym.ObservationBatch)
+        total = buffers.batch_size if is_batch else len(buffers.coordinates)
+        count = total if rows is None else len(rows)
+        width = self.execution_rows or max(1, count)
         logits: list[np.ndarray] = []
-        if isinstance(buffers, managym.ObservationBatch):
-            count = buffers.batch_size if rows is None else len(rows)
-            width = self.execution_rows or max(1, count)
-            with self.agent.inference_scope() as scope:
-                for start in range(0, count, width):
+        with self.agent.inference_scope() as scope:
+            for start in range(0, count, width):
+                if is_batch:
                     if rows is None and start == 0 and width >= count:
-                        selected: Any = buffers
+                        chunk: managym.ObservationBatch | ObservationSelection = buffers
                     else:
                         idx = (
                             range(start, min(count, start + width))
                             if rows is None
                             else rows[start : start + width]
                         )
-                        selected = buffers.gather([(buffers, int(i)) for i in idx])
-                    logits.append(scope.infer(selected).logits)
-                    del selected
-        elif isinstance(buffers, ObservationSelection):
-            count = len(buffers.coordinates) if rows is None else len(rows)
-            width = self.execution_rows or max(1, count)
-            with self.agent.inference_scope() as scope:
-                for start in range(0, count, width):
+                        chunk = buffers.gather([(buffers, int(i)) for i in idx])
+                else:
                     chunk = (
                         buffers.select(slice(start, min(count, start + width)))
                         if rows is None
                         else buffers.select(rows[start : start + width])
                     )
-                    logits.append(scope.infer(chunk).logits)
-                    del chunk
-        else:
-            assert rows is not None
-            count = len(rows)
-            width = self.execution_rows or max(1, count)
-            with self.agent.inference_scope() as scope:
-                for start in range(0, count, width):
-                    selected = select_rows(buffers, rows[start : start + width])
-                    logits.append(scope.infer(selected).logits)
-                    del selected
+                logits.append(scope.infer(chunk).logits)
+                del chunk
         actions = self.agent.sample_logits(
             np.concatenate(logits),
             deterministic=self.deterministic,
@@ -140,25 +121,10 @@ class BatchedSampler:
         if self.epsilon > 0.0:
             explore = self._rng.random(count) < self.epsilon
             if explore.any():
-                if isinstance(buffers, managym.ObservationBatch):
-                    counts = np.asarray(buffers.action_counts, dtype=np.int64)
-                    if rows is not None:
-                        counts = counts[rows]
-                    actions[explore] = _uniform_from_counts(counts[explore], self._rng)
-                elif isinstance(buffers, ObservationSelection):
-                    counts = buffers.action_counts.astype(np.int64, copy=False)
-                    if rows is not None:
-                        counts = counts[rows]
-                    actions[explore] = _uniform_from_counts(counts[explore], self._rng)
-                else:
-                    assert rows is not None
-                    valid = buffers["actions_valid"][rows[explore]] > 0
-                    # Vectorized uniform choice over each row's valid actions.
-                    weights = valid.astype(np.float64)
-                    weights /= weights.sum(axis=1, keepdims=True)
-                    cdf = np.cumsum(weights, axis=1)
-                    u = self._rng.random((len(cdf), 1))
-                    actions[explore] = (u < cdf).argmax(axis=1)
+                counts = np.asarray(buffers.action_counts, dtype=np.int64)
+                if rows is not None:
+                    counts = counts[rows]
+                actions[explore] = _uniform_from_counts(counts[explore], self._rng)
 
         self.forward_calls += 1
         self.obs_selected += count
@@ -184,28 +150,13 @@ class RandomBatchController:
 
     def select(
         self,
-        buffers: ObservationBuffers | managym.ObservationBatch | ObservationSelection,
+        buffers: managym.ObservationBatch | ObservationSelection,
         rows: np.ndarray | None = None,
     ) -> np.ndarray:
-        if isinstance(buffers, managym.ObservationBatch):
-            counts = np.asarray(buffers.action_counts, dtype=np.int64)
-            if rows is not None:
-                counts = counts[rows]
-            return _uniform_from_counts(counts, self._rng)
-        if isinstance(buffers, ObservationSelection):
-            counts = buffers.action_counts.astype(np.int64, copy=False)
-            if rows is not None:
-                counts = counts[rows]
-            return _uniform_from_counts(counts, self._rng)
-        assert rows is not None
-        valid = buffers["actions_valid"][rows] > 0
-        weights = valid.astype(np.float64)
-        totals = weights.sum(axis=1, keepdims=True)
-        totals[totals == 0] = 1.0
-        weights /= totals
-        cdf = np.cumsum(weights, axis=1)
-        u = self._rng.random((len(cdf), 1))
-        return (u < cdf).argmax(axis=1).astype(np.int64)
+        counts = np.asarray(buffers.action_counts, dtype=np.int64)
+        if rows is not None:
+            counts = counts[rows]
+        return _uniform_from_counts(counts, self._rng)
 
 
 # -----------------------------------------------------------------------------
@@ -386,7 +337,7 @@ class PolicyRolloutMCPlayer:
         self.last_scores: np.ndarray | None = None
         self._obs_space = ObservationSpace()
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int:
+    def act(self, env: Env, obs: managym.Observation) -> int:
         validate_agent_setup(getattr(self.sampler, "agent", None), env.match.to_rust())
         del obs  # search reads the raw engine state, not the encoding
         self._calls += 1

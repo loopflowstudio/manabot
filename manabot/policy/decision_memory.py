@@ -23,10 +23,9 @@ from managym.decision_memory import (
 )
 
 if TYPE_CHECKING:
-    from manabot.env.memory_store import PrefixObservation, RecordNode, Tail
-    from manabot.env.observation import ObservationBuffers
+    from manabot.env.memory_store import RecordNode, RetainedMemory, Tail
     from manabot.policy.prepare import Packed, Tables
-    from manabot.policy.spans import ObservationSpans
+    from manabot.policy.spans import ObservationSpans, PolicyObservation
 
 
 def _span(array: str, first: str, last: str) -> slice:
@@ -170,7 +169,7 @@ class MemoryRows[A](MemoryFeatures[A]):
     fold: MemoryFold[A] | None = None
 
 
-def memory_lengths(obs: "ObservationBuffers", row: int) -> tuple[int, int, int, int]:
+def memory_lengths(obs: Mapping[str, np.ndarray], row: int) -> tuple[int, int, int, int]:
     headers, details, references = (obs[key][row] for key in MEMORY_FIELDS[:3])
     return (
         int(headers[:, _RECORD_VALID].sum()),
@@ -219,8 +218,8 @@ class MemoryCursor:
     details: int = 0
 
 
-def live_memory(obs: "ObservationBuffers") -> list[tuple[np.ndarray, ...]]:
-    """Validate arbitrary dense shapes, padding and integers before slicing."""
+def live_memory(obs: Mapping[str, np.ndarray]) -> list[tuple[np.ndarray, ...]]:
+    """Validate padded retained rows (archives, chunks): shapes, padding, integers."""
     present = [key in obs for key in MEMORY_FIELDS]
     if not any(present):
         return []
@@ -297,13 +296,6 @@ def record_chunks(
     ):
         raise ValueError("unowned decision-memory companion rows")
     return result
-
-
-def admit_memory(obs: "ObservationBuffers") -> None:
-    for rows in live_memory(obs):
-        cursor = MemoryCursor()
-        for chunk in record_chunks(rows):
-            cursor = admit_chunk(chunk, cursor)
 
 
 def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCursor:
@@ -467,20 +459,6 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
     )
 
 
-def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> None:
-    """Validate only owned values, including for a control without learned heads."""
-    if _RECORDS not in obs:
-        return
-    for batch in range(obs[_RECORDS].shape[0]):
-        count, detail_count, reference_count, _ = memory_lengths(obs, batch)
-        memory_vocabulary(
-            obs[_RECORDS][batch, :count],
-            obs[_DETAILS][batch, :detail_count],
-            obs[_REFERENCES][batch, :reference_count],
-            tables,
-        )
-
-
 def memory_vocabulary(
     headers: np.ndarray, details: np.ndarray, references: np.ndarray, tables: "Tables"
 ) -> None:
@@ -603,22 +581,15 @@ def chunk_observation(node: "Tail | RecordNode") -> dict[str, np.ndarray]:
     return arrays
 
 
-def retained_memory(obs: object) -> "PrefixObservation | None":
-    from manabot.env.memory_store import PrefixObservation
+def retained_memory(obs: "PolicyObservation") -> "RetainedMemory | None":
+    """Interned prefixes selected with these rows; a bare native batch has none."""
     from manabot.policy.spans import ObservationSelection
 
-    if type(obs) is ObservationSelection:
-        return obs.memory
-    return (
-        obs
-        if isinstance(obs, PrefixObservation)
-        and not any(key in obs for key in MEMORY_FIELDS)
-        else None
-    )
+    return obs.memory if type(obs) is ObservationSelection else None
 
 
 def validate_retained_memory(
-    obs: "PrefixObservation", tables: "Tables", definition_count: int, include_own: bool
+    obs: "RetainedMemory", tables: "Tables", definition_count: int, include_own: bool
 ) -> None:
     from manabot.policy.admission import definition_ids
     from manabot.policy.prepare import record_word
@@ -656,16 +627,7 @@ def validate_retained_memory(
         size,
         lookup,
     )
-    validate_memory_vocabulary(
-        dict(
-            zip(
-                MEMORY_FIELDS[:3],
-                (a[None] for a in (headers, details, references)),
-                strict=True,
-            )
-        ),
-        tables,
-    )
+    memory_vocabulary(headers, details, references, tables)
     for node in pending.values():
         node.features.admission = binding
 
@@ -808,7 +770,7 @@ def _empty_memory(tables: Tables) -> MemoryRows[np.ndarray]:
 
 
 def _prepare_retained(
-    obs: "PrefixObservation", tables: "Tables"
+    obs: "RetainedMemory", tables: "Tables"
 ) -> MemoryRows[np.ndarray]:
     from manabot.env.memory_store import record_tail
     from manabot.policy.prepare import pack
@@ -855,7 +817,7 @@ def _prepare_retained(
 
 
 def _prepare_fold(
-    obs: PrefixObservation, tables: Tables, roots: Mapping[str, int] | None = None
+    obs: RetainedMemory, tables: Tables, roots: Mapping[str, int] | None = None
 ) -> MemoryRows[np.ndarray]:
     """Embed each selected node once, with exact joins to predecessor references.
 
@@ -1018,32 +980,28 @@ def _prepare_fold(
 
 
 def prepare_memory(
-    obs: "ObservationBuffers",
+    obs: "ObservationSpans",
     tables: "Tables",
     *,
     fold: bool = False,
     roots: Mapping[str, int] | None = None,
-    native: "ObservationSpans | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
-    retained = retained_memory(obs)
-    return (
-        (
-            _prepare_fold(retained, tables, roots)
-            if fold
-            else _prepare_retained(retained, tables)
-        )
-        if retained is not None
-        else _prepare_memory_rows(obs, tables, native=native)
-    )
+    """Featurize interned prefixes when retained, else the batch's own memory tables."""
+    if obs.memory is None:
+        return _prepare_memory_rows(None, tables, native=obs)
+    if fold:
+        return _prepare_fold(obs.memory, tables, roots)
+    return _prepare_retained(obs.memory, tables)
 
 
 def _prepare_memory_rows(
-    obs: "ObservationBuffers",
+    obs: Mapping[str, np.ndarray] | None,
     tables: "Tables",
     *,
     native: "ObservationSpans | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
-    from manabot.policy.prepare import pack, record_word
+    """Featurize native memory tables, or retained chunk rows in padded form."""
+    from manabot.policy.prepare import RecordNamespace, pack, record_word
     from manabot.policy.spans import full_word
 
     if native is None:
@@ -1088,10 +1046,12 @@ def _prepare_memory_rows(
         ),
         -1,
     ).astype(np.float32)
-    kinds = tables.names(1, word(selected, _RECORD_KIND))
+    kinds = tables.names(RecordNamespace.TOKEN, word(selected, _RECORD_KIND))
     choices = np.zeros(len(selected), np.int64)
     present = selected[:, _RECORD_CHOICE_PRESENT] == 1
-    choices[present] = tables.names(1, word(selected[present, _RECORD_CHOICE_KIND], 0))
+    choices[present] = tables.names(
+        RecordNamespace.TOKEN, word(selected[present, _RECORD_CHOICE_KIND], 0)
+    )
     choice_names = word(selected, _RECORD_NAME)
     references_list: list[np.ndarray] = []
     details_list: list[np.ndarray] = []
@@ -1166,7 +1126,9 @@ def _prepare_memory_rows(
     # Native stable hashes of DecisionMemory::Program and ::Mana. The lookup
     # is against the supplied checkpoint vocabulary, not a current-world join.
     field_values = np.array([30649973, 1006277364], np.int64)
-    fields = tables.names(1, field_values)[details[:, _DETAIL_FIELD].astype(np.int64)]
+    fields = tables.names(RecordNamespace.TOKEN, field_values)[
+        details[:, _DETAIL_FIELD].astype(np.int64)
+    ]
 
     def cat(arrays: list[np.ndarray], width: int | None = None) -> np.ndarray:
         return (

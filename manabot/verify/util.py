@@ -9,7 +9,7 @@ from pydantic import Field
 
 from manabot.config.load import deep_merge
 from manabot.env.env import Env
-from manabot.env.observation import ActionEnum, ObservationBuffers
+from manabot.env.observation import ActionEnum, encode_policy_batch
 from manabot.infra.config import (
     BaseConfig,
     MatchConfig,
@@ -19,6 +19,7 @@ from manabot.infra.config import (
 )
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
+import managym
 
 
 class VerificationConfig(BaseConfig):
@@ -42,17 +43,17 @@ def build_verification_config(**overrides: object) -> VerificationConfig:
 
 
 def prepare_observation(
-    agent: BackendPolicy, obs: ObservationBuffers
+    agent: BackendPolicy, obs: managym.Observation
 ) -> Prepared[np.ndarray]:
     """One encoded decision, admitted once with the inference input layout."""
     return agent.prepare(
-        {key: np.asarray(value, dtype=np.float32)[None] for key, value in obs.items()},
+        encode_policy_batch(agent.observation_space, [obs]),
         inference=True,
     )
 
 
 def select_agent_action(
-    agent: BackendPolicy, obs: ObservationBuffers, deterministic: bool
+    agent: BackendPolicy, obs: managym.Observation, deterministic: bool
 ) -> int:
     return int(
         agent.sample(prepare_observation(agent, obs), deterministic=deterministic)[0]

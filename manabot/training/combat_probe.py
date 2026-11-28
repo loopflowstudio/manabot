@@ -6,13 +6,15 @@ unmodified positions with the same policy.
 """
 
 from collections.abc import Iterable, Iterator
-from copy import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
 from manabot.env.observation import ObservationSpace
+from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
+from manabot.policy.readings import write_numeric_column
+from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.actions import PackedActions
 from manabot.training.rollout.collection import RolloutBatch
 
@@ -36,7 +38,7 @@ class CombatColumns:
     theirs: PermanentColumns
 
 
-def combat_columns(space: ObservationSpace) -> CombatColumns | None:
+def combat_columns(space: ObservationSpace) -> CombatColumns:
     arrays = space.layout.arrays
 
     def permanents(key: str) -> PermanentColumns:
@@ -52,17 +54,13 @@ def combat_columns(space: ObservationSpace) -> CombatColumns | None:
         )
 
     actions = arrays["actions"]["columns"]
-    try:
-        return CombatColumns(
-            actions["declare_attacker"]["index"],
-            actions["declare_blocker"]["index"],
-            actions["declared"]["index"],
-            permanents("agent_permanents"),
-            permanents("opponent_permanents"),
-        )
-    except KeyError:
-        # Earlier layouts do not identify creatures on the battlefield.
-        return None
+    return CombatColumns(
+        actions["declare_attacker"]["index"],
+        actions["declare_blocker"]["index"],
+        actions["declared"]["index"],
+        permanents("agent_permanents"),
+        permanents("opponent_permanents"),
+    )
 
 
 def combat_rows(
@@ -86,7 +84,7 @@ def combat_rows(
 
 def gap_shifts(
     policy: BackendPolicy,
-    chunks: Iterable[dict[str, np.ndarray]],
+    chunks: Iterable[ObservationSelection],
     columns: CombatColumns,
 ) -> dict[str, float | int]:
     """Pool per-decision readings across chunks, including partial final chunks."""
@@ -104,20 +102,27 @@ def gap_shifts(
 
 
 def combat_samples(
-    policy: BackendPolicy, rows: dict[str, np.ndarray], columns: CombatColumns
+    policy: BackendPolicy,
+    rows: ObservationSelection,
+    columns: CombatColumns,
 ) -> Iterator[tuple[str, str, np.ndarray]]:
     """Per-decision gaps and paired shifts for one execution chunk."""
-    legal = rows["actions_valid"] > 0
-    declared = rows["actions"][..., columns.declared] > 0
-    yes, no = legal & declared, legal & ~declared
-    if not (np.all(yes.sum(axis=1) == 1) and np.all(no.sum(axis=1) == 1)):
+    prepared = policy.prepare(rows)
+    batch, slots = prepared.legal_batches, prepared.legal_slots
+    declared = rows.spans.tables["actions"].records["declared"] > 0
+    if not all(
+        np.all(np.bincount(batch[mask], minlength=prepared.batch) == 1)
+        for mask in (declared, ~declared)
+    ):
         raise ValueError("gap_shifts requires two-offer declare/decline rows")
+    yes, no = slots[declared], slots[~declared]
+    indexes = np.arange(prepared.batch)
 
-    def gaps(observation: dict[str, np.ndarray]) -> np.ndarray:
-        logits, _ = policy.evaluate(policy.prepare(observation))
-        return logits[yes].astype(np.float64) - logits[no]
+    def gaps(observation: Prepared[np.ndarray]) -> np.ndarray:
+        logits, _ = policy.evaluate(observation)
+        return logits[indexes, yes].astype(np.float64) - logits[indexes, no]
 
-    base = gaps(rows)
+    base = gaps(prepared)
     yield "gap", "decisions", base
     # The rarer offer is selected about once in 10,000 at |gap| = 9.2.
     yield "saturated", "decisions", np.abs(base) > 9.2
@@ -137,21 +142,31 @@ def combat_samples(
             "their_creatures_9_9_untapped",
         ),
     ):
-        board = rows[key]
-        creatures = (board[..., cols.is_creature] > 0) & (rows[f"{key}_valid"] > 0)
+        seat = int(side == "theirs")
+        capacity = prepared.permanents.shape[2]
+        spans = rows.spans.tables[key]
+        creatures = spans.scatter(spans.records["is_creature"] > 0, capacity)
         present = creatures.any(axis=1)
         if not present.any():
             continue
-        # Shallow-copy the observation to retain any decision-memory prefixes.
-        edited = copy(rows)
-        edited[key] = board.copy()
+        readings = policy.readings[key]
         for label, power, toughness in ((weak, 0, 1), (strong, 9, 9)):
-            edited[key][..., cols.power][creatures] = power / cols.power_scale
-            edited[key][..., cols.toughness][creatures] = (
-                toughness / cols.toughness_scale
+            edited = replace(prepared, permanents=prepared.permanents.copy())
+            board = edited.permanents[:, seat]
+            write_numeric_column(
+                board, creatures, readings, cols.power, power / cols.power_scale
             )
-            if side == "theirs":
-                edited[key][..., cols.tapped][creatures] = power == 0
+            write_numeric_column(
+                board,
+                creatures,
+                readings,
+                cols.toughness,
+                toughness / cols.toughness_scale,
+            )
+            if seat == 1:
+                write_numeric_column(
+                    board, creatures, readings, cols.tapped, float(power == 0)
+                )
             yield (
                 f"shift/{label}",
                 f"shift_decisions/{side}",
@@ -171,8 +186,6 @@ def combat_probe(
         raise ValueError("execution_rows must be positive")
     columns = combat_columns(policy.observation_space)
     metrics: dict[str, float | int] = {}
-    if columns is None:
-        return metrics
     for kind, index in (
         ("attack", columns.declare_attacker),
         ("block", columns.declare_blocker),

@@ -26,7 +26,7 @@ use rand_chacha::ChaCha8Rng;
 use std::{sync::Arc, time::Instant};
 
 fn root() -> (Env, PermanentId) {
-    let mut env = Env::new(244, true, false, false);
+    let mut env = Env::new(244, true, false);
     env.reset(curated::setup(false)).unwrap();
     curated::add_layer_board(&mut env);
     // Urborg precedes Moon: timestamp order would incorrectly grant Swamp.

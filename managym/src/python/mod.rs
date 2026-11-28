@@ -14,9 +14,6 @@ pub mod heuristic_bindings;
 pub mod layout_bindings;
 
 #[cfg(feature = "python")]
-mod layout_extents;
-
-#[cfg(feature = "python")]
 mod snapshot_bindings;
 
 #[cfg(feature = "python")]

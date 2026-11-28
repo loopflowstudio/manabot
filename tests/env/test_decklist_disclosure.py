@@ -14,7 +14,7 @@ from manabot.env.observation import (
     DECKLIST_DIM,
     ObservationSpace,
     column,
-    encode_observation,
+    encode_policy_batch,
 )
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.managym.experience_projection import serialize_observation
@@ -28,6 +28,7 @@ from manabot.sim.registration import (
 from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.disclosure import DecklistDisclosure, DecklistSampling
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def _match(decklists: DecklistDisclosure) -> MatchConfig:
@@ -53,16 +54,14 @@ def _policy() -> ActorCritic:
 def _prepared(
     space: ObservationSpace, obs: managym.Observation
 ) -> Prepared[np.ndarray]:
-    return _policy().prepare(
-        {k: v[None] for k, v in encode_observation(space, obs).items()}
-    )
+    return _policy().prepare(encode_policy_batch(space, [obs]))
 
 
 def _assert_same_view(a: managym.Observation, b: managym.Observation) -> None:
     """Viewer JSON, every encoded buffer and the Prepared input all agree."""
     space = ObservationSpace()
     assert a.toJSON() == b.toJSON()
-    left, right = encode_observation(space, a), encode_observation(space, b)
+    left, right = observation_arrays(space, a), observation_arrays(space, b)
     for key, value in left.items():
         np.testing.assert_array_equal(value, right[key], err_msg=key)
     np.testing.assert_equal(asdict(_prepared(space, a)), asdict(_prepared(space, b)))
@@ -97,12 +96,12 @@ def test_opponent_lists_appear_exactly_when_open(decklists: DecklistDisclosure) 
     space = ObservationSpace(ObservationConfig())
     assert obs.decklists_closed == (decklists == "closed")
     for viewer in (0, 1):
-        encoded = encode_observation(space, env.observation_for_player(viewer))
+        encoded = observation_arrays(space, env.observation_for_player(viewer))
         for key in ("agent_player", "opponent_player"):
             assert encoded[key][0, column(key, "decklists_open")] == float(
                 decklists == "open"
             )
-    lists = encode_observation(space, obs)["decklists"]
+    lists = observation_arrays(space, obs)["decklists"]
     assert lists.shape == (2, 60, DECKLIST_DIM)
     assert lists[0, :, 1].sum() == 41
     assert lists[1, :, 1].sum() == (40 if decklists == "open" else 0)
@@ -150,8 +149,8 @@ def test_open_is_the_default_and_omitted_from_serialized_configuration() -> None
     assert _match("closed").model_dump()["decklists"] == "closed"
     setup = Match(_match("closed")).swapped().to_rust()
     assert setup.decklists == "closed"
-    with pytest.warns(DeprecationWarning, match="0.3.0"), pytest.raises(ValueError):
-        managym.PlayerConfig("x", {"Island": 1}, disclosure="partial")
+    with pytest.raises(TypeError, match="disclosure"):
+        managym.PlayerConfig("x", {"Island": 1}, disclosure="closed")
 
 
 def test_match_from_players_retains_setup_and_rejects_different_worlds() -> None:
@@ -201,8 +200,8 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
     ]
     assert opened[0].toJSON() != opened[1].toJSON()
     assert not np.array_equal(
-        encode_observation(space, opened[0])["decklists"],
-        encode_observation(space, opened[1])["decklists"],
+        observation_arrays(space, opened[0])["decklists"],
+        observation_arrays(space, opened[1])["decklists"],
     )
     assert not np.array_equal(
         _prepared(space, opened[0]).deck_rows, _prepared(space, opened[1]).deck_rows
@@ -248,9 +247,9 @@ def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
     for _ in range(3000):
         if owner is not None:
             view = env.observation_for_player(1 - owner)
-            encoded = encode_observation(space, view)
+            encoded = observation_arrays(space, view)
             assert not encoded["decklists"][1].any()
-            prepared = _policy().prepare({k: v[None] for k, v in encoded.items()})
+            prepared = _policy().prepare(encode_policy_batch(space, [view]))
             assert revealed is not None
             selected = encoded["known_hand"][1, :, 0] == revealed + 1
             if prepared_row is None:
@@ -286,58 +285,6 @@ def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
             assert not obs.game_over, "game ended before revealed card left hand"
             obs, *_ = env.step(rng.randrange(len(actions)))
     pytest.fail("no public reveal followed by hand departure in bounded game")
-
-
-def test_deprecated_seat_disclosure_rejects_disagreement() -> None:
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
-        first = managym.PlayerConfig("first", {"Island": 12}, disclosure="closed")
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
-        second = managym.PlayerConfig("second", {"Mountain": 12}, disclosure="open")
-    with pytest.raises(ValueError, match="per-seat disclosure values disagree"):
-        managym.Env(seed=7).reset([first, second])
-
-
-@pytest.mark.parametrize(
-    ("hint", "decklists"),
-    [("closed", "open"), ("open", "closed"), ("closed", "mixed"), ("open", "mixed")],
-)
-def test_deprecated_seat_disclosure_rejects_game_conflict(
-    hint: DecklistDisclosure,
-    decklists: DecklistSampling,
-) -> None:
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
-        first = managym.PlayerConfig("first", {"Island": 12}, disclosure=hint)
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
-        second = managym.PlayerConfig("second", {"Mountain": 12}, disclosure=hint)
-    # Omission exercises the constructor's ordinary open default.
-    setup = (
-        managym.GameSetup([first, second])
-        if decklists == "open"
-        else managym.GameSetup([first, second], decklists=decklists)
-    )
-    with pytest.raises(ValueError, match="conflicts with GameSetup.decklists"):
-        managym.Env(seed=7).reset(setup)
-    with pytest.raises(ValueError, match="conflicts with GameSetup.decklists"):
-        managym.VectorEnv(num_envs=1, seed=7).reset_all(setup)
-
-
-@pytest.mark.parametrize("hint", ["open", "closed"])
-@pytest.mark.parametrize("hinted_seat", [0, 1])
-def test_deprecated_seat_disclosure_ignores_unset_hints(
-    hint: DecklistDisclosure,
-    hinted_seat: int,
-) -> None:
-    players = [
-        managym.PlayerConfig("first", {"Island": 12}),
-        managym.PlayerConfig("second", {"Mountain": 12}),
-    ]
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
-        players[hinted_seat].disclosure = hint
-    for setup in (players, managym.GameSetup(players, decklists=hint)):
-        observation, _ = managym.Env(seed=7).reset(setup)
-        assert observation.decklists_closed is (hint == "closed")
-        ((observation, _),) = managym.VectorEnv(num_envs=1, seed=7).reset_all(setup)
-        assert observation.decklists_closed is (hint == "closed")
 
 
 @pytest.mark.parametrize("decklists", ["closed", "mixed"])
@@ -421,3 +368,5 @@ def test_bare_player_list_defaults_open_without_reading_unrelated_attributes() -
     env = managym.Env(seed=3)
     obs, _ = env.reset(players)
     assert obs.decklists_closed is False
+    ((vector_obs, _),) = managym.VectorEnv(1, seed=3).reset_all(players)
+    assert vector_obs.decklists_closed is False

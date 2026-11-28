@@ -43,9 +43,10 @@ use managym::{
             SpellData, StackObjectData, StackTargetData, TurnData, KEYWORD_COUNT,
         },
         observation_encoder::{
-            encode, EncodedObservation, FactKind, InputLayout, ObservationEncoderConfig, CARD_DIM,
-            FACT_DIM, PERMANENT_DIM, PLAYER_DIM, STACK_DIM, TURN_STATE_DIM,
+            FactKind, ObservationEncoderConfig, CARD_DIM, FACT_DIM, PERMANENT_DIM, PLAYER_DIM,
+            STACK_DIM, TURN_STATE_DIM,
         },
+        observation_rows::InputRows,
         record_vocabulary::missing_program_tokens,
         shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
@@ -704,7 +705,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 35] {
         ),
         (
             "spells_cast",
-            Seen::Via("input v10 player_turn_state column 1 (PlayerData.spells_cast)"),
+            Seen::Via("player_turn_state column 1 (PlayerData.spells_cast)"),
         ),
         (
             "history",
@@ -765,11 +766,11 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 35] {
         ),
         (
             "history.life_lost",
-            Seen::Via("input v10 player_turn_state column 0; v9 refuses it once a visible card reads it"),
+            Seen::Via("player_turn_state column 0"),
         ),
         (
             "graveyard_arrivals",
-            Seen::Via("input v10 card_turn_state (from_battlefield_this_turn) and input v11 card column put_into_graveyard_this_turn"),
+            Seen::Via("card column put_into_graveyard_this_turn and card_turn_state (from_battlefield_this_turn)"),
         ),
         (
             "history.attacked",
@@ -1819,7 +1820,7 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
         ),
         StaticAbility::Ward(_) => witnessed(
             "StaticAbility::Ward",
-            Seen::Card(card::WARD_COST),
+            Seen::Permanent(permanent::WARD_COST),
             "Waterfall Aerialist",
             "stx",
             "ward_asks_spell_controller_and_counters_on_decline",
@@ -2269,60 +2270,24 @@ fn ogre_game() -> (Game, PermanentId) {
     (game, ogre)
 }
 
-fn observe(game: &Game, viewer: usize) -> (Observation, EncodedObservation) {
+fn observe(game: &Game, viewer: usize) -> (Observation, InputRows) {
     let observation = Observation::for_player(game, PlayerId(viewer));
-    let encoded = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+    let encoded = InputRows::read(&observation, &ObservationEncoderConfig::default()).unwrap();
     (observation, encoded)
 }
 
-fn permanent_row(encoded: &EncodedObservation) -> &[f32] {
-    &encoded.agent_permanents[..PERMANENT_DIM]
+fn permanent_row(encoded: &InputRows) -> &[f32] {
+    encoded.row("agent_permanents", 0)
 }
 
-/// Card-row columns of a battlefield object, as the deprecated v9/v10 card
-/// row states them; asserts that input v11's permanent row (the object's one
-/// row in `encoded`) holds every characteristic it shares with that row.
-fn card_row(
+fn battlefield_row<'a>(
     game: &Game,
     observation: &Observation,
-    encoded: &EncodedObservation,
+    encoded: &'a InputRows,
     permanent: PermanentId,
-) -> Vec<f32> {
-    let legacy_config = ObservationEncoderConfig {
-        layout: InputLayout::Legacy,
-        ..ObservationEncoderConfig::default()
-    };
-    let legacy = encode(observation, &legacy_config).unwrap();
-    let row = legacy_card_index(game, observation, permanent);
-    let legacy_card_dim = legacy_config.card_dim();
-    let card_row = legacy.agent_cards[row * legacy_card_dim..(row + 1) * legacy_card_dim].to_vec();
+) -> &'a [f32] {
     let slot = permanent_slot(game, observation, permanent);
-    let permanent_row = &encoded.agent_permanents[slot * PERMANENT_DIM..(slot + 1) * PERMANENT_DIM];
-    let mut shared = vec![
-        (card::POWER, permanent::POWER),
-        (card::TOUGHNESS, permanent::TOUGHNESS),
-        (card::MANA_VALUE, permanent::MANA_VALUE),
-        (card::IS_LAND, permanent::IS_LAND),
-        (card::IS_CREATURE, permanent::IS_CREATURE),
-        (card::IS_ARTIFACT, permanent::IS_ARTIFACT),
-        (card::IS_ENCHANTMENT, permanent::IS_ENCHANTMENT),
-        (card::IS_PLANESWALKER, permanent::IS_PLANESWALKER),
-        (card::IS_BATTLE, permanent::IS_BATTLE),
-        (card::IS_LEGENDARY, permanent::IS_LEGENDARY),
-        (card::IS_TOKEN, permanent::IS_TOKEN),
-        (card::IS_ALLY, permanent::IS_ALLY),
-        (card::IS_LESSON, permanent::IS_LESSON),
-        (card::HAS_WARD, permanent::HAS_WARD),
-        (card::WARD_COST, permanent::WARD_COST),
-    ];
-    shared.extend(Keyword::ALL.into_iter().filter_map(keyword_columns));
-    for (card_column, permanent_column) in shared {
-        assert_eq!(
-            card_row[card_column], permanent_row[permanent_column],
-            "card column {card_column} and permanent column {permanent_column}"
-        );
-    }
-    card_row
+    encoded.row("agent_permanents", slot)
 }
 
 /// The permanent's slot among the agent's permanents.
@@ -2332,17 +2297,6 @@ fn permanent_slot(game: &Game, observation: &Observation, permanent: PermanentId
         .agent_permanents
         .iter()
         .position(|row| row.id == id)
-        .unwrap()
-}
-
-/// The battlefield card row's slot in the deprecated v9/v10 card list.
-fn legacy_card_index(game: &Game, observation: &Observation, permanent: PermanentId) -> usize {
-    let object = game.state.permanents[permanent].as_ref().unwrap().object;
-    let id = game.state[object].id.0 as i32;
-    managym::agent::legacy_input::view(observation)
-        .agent_cards
-        .iter()
-        .position(|object| object.id == id)
         .unwrap()
 }
 
@@ -2376,7 +2330,7 @@ fn every_effect_variant_reaches_the_learning_tokens() {
     names.dedup();
     assert_eq!(names.len(), EFFECT_VARIANTS, "one witness per variant");
     let pack = default_content_pack();
-    // Aggregate omissions across every variant and both serialization paths.
+    // Check both serialization paths against the printed and runtime union.
     let mut missing = BTreeSet::new();
     for effect in witnesses {
         let tokens = definition_tokens_unchecked(&spell(vec![effect.clone()]), pack).unwrap();
@@ -2825,7 +2779,7 @@ fn every_target_relation_reaches_the_learning_tokens() {
 // (b) Directed: each mechanic moves its named column or token.
 
 #[test]
-fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens() {
+fn printed_and_granted_keywords_set_their_permanent_columns_and_tokens() {
     let (base_game, ogre) = ogre_game();
     let (base_obs, base) = observe(&base_game, 0);
     let bare = tokens_of(&ObjectDefinition::face(PrintedCharacteristics {
@@ -2836,7 +2790,7 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
         let name = keyword.name();
         let keywords = Keywords::of(&[keyword]);
 
-        if let Some((card_column, permanent_column)) = keyword_columns(keyword) {
+        if let Some((_, permanent_column)) = keyword_columns(keyword) {
             let mut granted = base_game.clone();
             let affected = granted.affected_permanent(ogre).unwrap();
             granted.apply_continuous(
@@ -2859,10 +2813,10 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
             let (obs, after) = observe(&printed, 0);
             assert!(
                 changed(
-                    &card_row(&base_game, &base_obs, &base, ogre),
-                    &card_row(&printed, &obs, &after, ogre),
+                    battlefield_row(&base_game, &base_obs, &base, ogre),
+                    battlefield_row(&printed, &obs, &after, ogre),
                 )
-                .contains(&card_column),
+                .contains(&permanent_column),
                 "{name}"
             );
         }
@@ -2965,7 +2919,7 @@ fn player_life_and_mana_move_their_named_columns() {
             other => panic!("no directed mutation for {other}"),
         }
         let (_, after) = observe(&game, 0);
-        let moved = changed(&base.agent_player, &after.agent_player);
+        let moved = changed(base.row("agent_player", 0), after.row("agent_player", 0));
         assert!(
             moved.iter().any(|column| (start..end).contains(column)),
             "{field} moved {moved:?}, expected {start}..{end}"
@@ -3001,7 +2955,7 @@ fn turn_history_moves_each_players_named_column() {
             other => panic!("no directed mutation for {other}"),
         }
         let (_, after) = observe(&game, 0);
-        let moved = changed(&base.agent_player, &after.agent_player);
+        let moved = changed(base.row("agent_player", 0), after.row("agent_player", 0));
         assert!(
             moved.iter().any(|column| (start..end).contains(column)),
             "{field} moved {moved:?}, expected {start}..{end}"
@@ -3009,7 +2963,11 @@ fn turn_history_moves_each_players_named_column() {
         if field != "turn_number" {
             // Player 0's history is not the opponent's.
             assert!(
-                changed(&base.opponent_player, &after.opponent_player).is_empty(),
+                changed(
+                    base.row("opponent_player", 0),
+                    after.row("opponent_player", 0)
+                )
+                .is_empty(),
                 "{field}"
             );
         }
@@ -3047,14 +3005,20 @@ fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
     assert_ne!(hand(&mountains), hand(&ogres), "the hidden hands differ");
     let (_, left) = observe(&mountains, 0);
     let (_, right) = observe(&ogres, 0);
-    assert_eq!(left.agent_player, right.agent_player);
-    assert_eq!(left.opponent_player, right.opponent_player);
-    assert_eq!(left.agent_cards, right.agent_cards);
-    assert_eq!(left.opponent_cards, right.opponent_cards);
-    assert_eq!(left.opponent_permanents, right.opponent_permanents);
-    assert_eq!(left.known_hand, right.known_hand);
-    assert_eq!(left.known_library, right.known_library);
-    assert_eq!(left.semantic_cards, right.semantic_cards);
+    for table in [
+        "agent_player",
+        "opponent_player",
+        "agent_cards",
+        "opponent_cards",
+        "opponent_permanents",
+        "known_hand",
+        "known_library",
+        "semantic_cards",
+    ] {
+        for seat in 0..2 {
+            assert_eq!(left.seat(table, seat), right.seat(table, seat), "{table}");
+        }
+    }
 }
 
 #[test]
@@ -3257,7 +3221,17 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
 /// columns; a continuous P/T effect moves the permanent's power column.
 #[test]
 fn tensor_visible_statics_and_costs_move_their_named_columns() {
-    let (base_game, ogre) = ogre_game();
+    let (mut base_game, ogre) = ogre_game();
+    base_game
+        .scenario_force_card_in_hand(PlayerId(0), "Gray Ogre")
+        .unwrap();
+    let hand = *base_game
+        .state
+        .zones
+        .zone_objects(ZoneType::Hand, PlayerId(0))
+        .iter()
+        .find(|&&id| base_game.state[id].name == "Gray Ogre")
+        .unwrap();
     let (base_obs, base) = observe(&base_game, 0);
     let object = base_game.state.permanents[ogre].as_ref().unwrap().object;
     let edits = static_witnesses()
@@ -3277,12 +3251,18 @@ fn tensor_visible_statics_and_costs_move_their_named_columns() {
     let mut checked = 0;
     for (row, edit) in edits {
         let mut game = base_game.clone();
-        edit(&mut game.state[object]);
+        edit(
+            &mut game.state[if matches!(row.seen, Seen::Card(_)) {
+                hand
+            } else {
+                object
+            }],
+        );
         let (obs, after) = observe(&game, 0);
         let moved = match row.seen {
             Seen::Card(column) => changed(
-                &card_row(&base_game, &base_obs, &base, ogre),
-                &card_row(&game, &obs, &after, ogre),
+                &listed_card_row(&base_obs, base_game.state[hand].id.0 as i32).unwrap(),
+                &listed_card_row(&obs, base_game.state[hand].id.0 as i32).unwrap(),
             )
             .contains(&column),
             Seen::Permanent(column) => {
@@ -3319,7 +3299,7 @@ fn no_maximum_hand_size_keeps_the_hand_count_column_through_cleanup() {
             s.step_action(0);
         }
         s.advance_to_active_step(1, StepKind::Upkeep);
-        observe(s.game(), 0).1.agent_player[column]
+        observe(s.game(), 0).1.row("agent_player", 0)[column]
     };
     let kept = hand_column(true);
     let discarded = hand_column(false);
@@ -3341,7 +3321,7 @@ fn cant_be_blocked_if_removes_blocks_from_the_action_tensor() {
         s.declare_attack();
         s.advance_to_active_step(0, StepKind::DeclareBlockers);
         let (_, encoded) = observe(s.game(), 1);
-        encoded.actions_valid.iter().sum::<f32>()
+        encoded.count("actions")
     };
     assert!(valid_actions(2) < valid_actions(0));
 }
@@ -3388,7 +3368,7 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
                 permanent.characteristics.name == token.name && permanent.is_token
             })
             .unwrap_or_else(|| panic!("{} is not observed", token.key));
-        let row = &encoded.agent_permanents[slot * PERMANENT_DIM..(slot + 1) * PERMANENT_DIM];
+        let row = encoded.row("agent_permanents", slot);
         assert_eq!(
             row[permanent::IS_TOKEN],
             1.0,
@@ -3425,9 +3405,9 @@ enum Buffer {
     Relation,
     Action,
     Facts,
-    /// Input v10 `player_turn_state`: one row per seat.
+    /// `player_turn_state`: one row per seat.
     PlayerTurnState,
-    /// Input v10 `card_turn_state`: one value per card row.
+    /// `card_turn_state`: one value per card row.
     CardTurnState,
     /// Input v11 `stack`: one row per spell or ability.
     Stack,
@@ -3960,9 +3940,9 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         focus => [Rows("action_focus")],
         declared => [column(Action, action::DECLARED)],
         mode_index => [column(Action, action::MODE), column(Action, action::X)],
-        name_definition => [Rows("name_candidates columns 0-1 (v9)")],
-        name_index => [Rows("name_candidates columns 0-1 (v9)")],
-        name_group => [Rows("name_candidates columns 2-3 (v9)")],
+        name_definition => [Rows("name_candidates columns 0-1")],
+        name_index => [Rows("name_candidates columns 0-1")],
+        name_group => [Rows("name_candidates columns 2-3")],
         ability_index => [column(Action, action::ABILITY)],
         continuation_index => [column(Action, action::CONTINUATION)],
         pays_directly => [column(Action, action::PAYS_DIRECTLY)],
@@ -4256,18 +4236,24 @@ fn card_rows_off_the_battlefield_read_the_printed_card() {
 }
 
 /// A `Nonlegendary` record outside a copy (CR 205.4): the legend rule
-/// spares the permanent and card column 39 clears, both from
+/// spares the permanent and its legendary flag clears, both from
 /// `Characteristics::is_legendary`.
 #[test]
-fn a_nonlegendary_record_clears_the_legend_rule_and_card_column_39_together() {
+fn a_nonlegendary_record_clears_the_legend_rule_and_legendary_flag_together() {
     let mut s = ur_lessons_setup();
     let first = put_onto_battlefield(&mut s, 0, "Gran-Gran");
     let (observation, encoded) = observe(s.game(), 0);
-    assert_eq!(card_row(s.game(), &observation, &encoded, first)[39], 1.0);
+    assert_eq!(
+        battlefield_row(s.game(), &observation, &encoded, first)[permanent::IS_LEGENDARY],
+        1.0
+    );
     until_end_of_turn(&mut s, first, Modification::Nonlegendary);
     assert!(!s.game().characteristics(first).is_legendary);
     let (observation, encoded) = observe(s.game(), 0);
-    assert_eq!(card_row(s.game(), &observation, &encoded, first)[39], 0.0);
+    assert_eq!(
+        battlefield_row(s.game(), &observation, &encoded, first)[permanent::IS_LEGENDARY],
+        0.0
+    );
     let second = put_onto_battlefield(&mut s, 0, "Gran-Gran");
     s.pass_priority();
     assert_ne!(s.action_space().kind, ActionSpaceKind::LegendRule);
@@ -4280,48 +4266,60 @@ fn a_nonlegendary_record_clears_the_legend_rule_and_card_column_39_together() {
 // Directed states
 // ---------------------------------------------------------------------------
 
-fn encoded(s: &Scenario, viewer: usize) -> EncodedObservation {
+fn encoded(s: &Scenario, viewer: usize) -> InputRows {
     let observation = Observation::for_player(s.game(), PlayerId(viewer));
-    encode(&observation, &ObservationEncoderConfig::default()).expect("encodes")
+    InputRows::read(&observation, &ObservationEncoderConfig::default()).expect("encodes")
 }
 
-/// `viewer`'s encoding and the index of its shared-effect header row for the
-/// modification `name`.
-fn effect_row(s: &Scenario, viewer: usize, name: &str) -> (EncodedObservation, usize) {
+/// `viewer`'s encoding and its shared-effect header row for the modification
+/// `name`.
+fn effect_row(s: &Scenario, viewer: usize, name: &str) -> (InputRows, Vec<f32>) {
     let encoded = encoded(s, viewer);
     let id = id_columns(name_value(name));
     let row = encoded
-        .effects
-        .as_chunks::<18>()
-        .0
-        .iter()
-        .position(|row| row[17] == 1.0 && row[..2] == id)
-        .unwrap_or_else(|| panic!("no shared effect {name}"));
+        .rows("effects")
+        .into_iter()
+        .find(|row| row[17] == 1.0 && row[..2] == id)
+        .unwrap_or_else(|| panic!("no shared effect {name}"))
+        .to_vec();
     (encoded, row)
 }
 
-/// The flattened object, relation, action and event buffers; fact and
+/// The object, relation, action and event cells by table and seat; fact and
 /// shared-effect rows are compared separately.
-fn flat(encoded: &EncodedObservation) -> Vec<f32> {
+fn flat(encoded: &InputRows) -> Vec<Vec<f32>> {
     [
-        &encoded.relations,
-        &encoded.semantic_cards,
-        &encoded.known_hand,
-        &encoded.known_library,
-        &encoded.agent_player,
-        &encoded.opponent_player,
-        &encoded.agent_cards,
-        &encoded.opponent_cards,
-        &encoded.agent_permanents,
-        &encoded.opponent_permanents,
-        &encoded.actions,
-        &encoded.events,
+        "relations",
+        "semantic_cards",
+        "known_hand",
+        "known_library",
+        "agent_player",
+        "opponent_player",
+        "agent_cards",
+        "opponent_cards",
+        "agent_permanents",
+        "opponent_permanents",
+        "actions",
+        "events",
+        "action_focus",
     ]
     .into_iter()
-    .flatten()
-    .copied()
-    .chain(encoded.action_focus.iter().map(|v| *v as f32))
+    .flat_map(|table| (0..2).map(move |seat| encoded.seat(table, seat).concat()))
     .collect()
+}
+
+/// Cells that differ between two [`flat`] encodings, reading a row one
+/// encoding lacks as zeros.
+fn differing_cells(before: &[Vec<f32>], after: &[Vec<f32>]) -> usize {
+    before
+        .iter()
+        .zip(after)
+        .map(|(before, after)| {
+            (0..before.len().max(after.len()))
+                .filter(|&i| before.get(i).unwrap_or(&0.0) != after.get(i).unwrap_or(&0.0))
+                .count()
+        })
+        .sum()
 }
 
 /// `(side, row)` of a permanent in `viewer`'s observation; side 0 is the agent.
@@ -4346,12 +4344,12 @@ fn permanent_row_of(s: &Scenario, viewer: usize, id: PermanentId) -> (usize, usi
 fn permanent_value(s: &Scenario, viewer: usize, id: PermanentId, column: usize) -> f32 {
     let (side, row) = permanent_row_of(s, viewer, id);
     let encoded = encoded(s, viewer);
-    let rows = if side == 0 {
-        &encoded.agent_permanents
+    let table = if side == 0 {
+        "agent_permanents"
     } else {
-        &encoded.opponent_permanents
+        "opponent_permanents"
     };
-    rows[row * PERMANENT_DIM + column]
+    encoded.row(table, row)[column]
 }
 
 /// Object index of a permanent row, as action focus and joins use it.
@@ -4386,11 +4384,10 @@ fn assert_column_sees(
         permanent_value(changed, viewer, id, column),
     );
     assert_ne!(before, after, "column {column} misses the change");
-    let differing = flat(&encoded(baseline, viewer))
-        .iter()
-        .zip(flat(&encoded(changed, viewer)))
-        .filter(|(a, b)| **a != *b)
-        .count();
+    let differing = differing_cells(
+        &flat(&encoded(baseline, viewer)),
+        &flat(&encoded(changed, viewer)),
+    );
     assert_eq!(differing, differences, "columns that differ");
 }
 
@@ -4412,12 +4409,10 @@ fn on_permanent(s: &Scenario, id: PermanentId) -> Affected {
 /// `viewer`'s fact rows about the object at `object_index`.
 fn facts_about(s: &Scenario, viewer: usize, object_index: usize) -> Vec<Vec<f32>> {
     encoded(s, viewer)
-        .facts
-        .as_chunks::<FACT_DIM>()
-        .0
+        .seat("facts", 0)
         .iter()
         .filter(|row| row[fact::VALID] == 1.0 && row[fact::OBJECT] == (object_index + 1) as f32)
-        .map(|row| row.to_vec())
+        .cloned()
         .collect()
 }
 
@@ -4446,9 +4441,12 @@ fn qualified_abilities_and_player_hexproof_reach_policy_rows() {
     s.force_permanent_on_battlefield(1, "Crystal Barricade");
     for viewer in 0..2 {
         let observation = encoded(&s, viewer);
-        assert_eq!(observation.agent_player[player::HEXPROOF], viewer as f32);
         assert_eq!(
-            observation.opponent_player[player::HEXPROOF],
+            observation.row("agent_player", 0)[player::HEXPROOF],
+            viewer as f32
+        );
+        assert_eq!(
+            observation.row("opponent_player", 0)[player::HEXPROOF],
             (1 - viewer) as f32
         );
         for (permanent, ability, quality) in [
@@ -4478,8 +4476,8 @@ fn assert_facts_alone_see(baseline: &Scenario, changed: &Scenario, viewer: usize
         "a column tells the states apart"
     );
     assert_ne!(
-        encoded(baseline, viewer).facts,
-        encoded(changed, viewer).facts,
+        encoded(baseline, viewer).seat("facts", 0),
+        encoded(changed, viewer).seat("facts", 0),
         "the fact rows miss the change"
     );
 }
@@ -4595,10 +4593,10 @@ fn united_front_with_x(x: usize) -> Scenario {
 fn stack_x_one_and_three_differ() {
     let one = united_front_with_x(1);
     let three = united_front_with_x(3);
-    let x = |s: &Scenario| encoded(s, 0).relations[relation::X];
+    let x = |s: &Scenario| encoded(s, 0).row("relations", 0)[relation::X];
     assert_eq!((x(&one), x(&three)), (1.0, 3.0), "the stack frame is row 0");
     // The opponent sees the announced X of a spell on the stack too.
-    let opponent_x = |s: &Scenario| encoded(s, 1).relations[relation::X];
+    let opponent_x = |s: &Scenario| encoded(s, 1).row("relations", 0)[relation::X];
     assert_eq!((opponent_x(&one), opponent_x(&three)), (1.0, 3.0));
 }
 
@@ -4609,17 +4607,17 @@ fn announced_x_offers_carry_their_value() {
     let mut s = five_color_setup(&["United Front", "Gray Ogre"]);
     s.set_player_mana_pool(0, "3WW");
     let priority = encoded(&s, 0);
-    let width = priority.actions.len() / priority.actions_valid.len();
     assert!(priority
-        .actions
-        .chunks_exact(width)
+        .rows("actions")
+        .into_iter()
         .all(|row| row[action::HAS_X] == 0.0 && row[action::X] == 0.0));
     cast(&mut s, "United Front");
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let offers = &observation.action_space.actions;
     assert!(offers.len() > 1 && offers.iter().all(|offer| offer.announces_x));
     let rows = encoded(&s, 0);
-    for (offer, row) in offers.iter().zip(rows.actions.chunks_exact(width)) {
+    assert_eq!(rows.count("actions"), offers.len());
+    for (offer, row) in offers.iter().zip(rows.rows("actions")) {
         let mode = offer.mode_index.expect("an X offer has its value") as f32;
         assert_eq!(offer.description, Some(format!("X = {mode}")));
         assert_eq!(
@@ -4649,19 +4647,14 @@ fn tile_beside(toph: TophState) -> (Scenario, PermanentId) {
     (s, tile)
 }
 
-/// A granted land type reaches the card row's land column (layer 4 types)
-/// in every version; v5 also marks the permanent as granted rather than
-/// printed. Removing Toph's abilities in layer 6 cannot undo the type effect
+/// A granted land type sets both the permanent's land flag and its granted-land flag. Removing Toph's abilities in layer 6 cannot undo the type effect
 /// that already applied in layer 4 (CR 613.6).
 #[test]
-fn a_toph_granted_land_shows_in_its_card_row_and_the_granted_column() {
+fn a_toph_granted_land_sets_the_permanents_land_and_granted_flags() {
     let (plain, tile) = tile_beside(TophState::Absent);
     let (granted, _) = tile_beside(TophState::Present);
     let (abilityless, _) = tile_beside(TophState::Abilityless);
-    let land = |s: &Scenario| {
-        let observation = Observation::for_player(s.game(), PlayerId(0));
-        card_row(s.game(), &observation, &encoded(s, 0), tile)[11]
-    };
+    let land = |s: &Scenario| permanent_value(s, 0, tile, permanent::IS_LAND);
     let granted_land = |s: &Scenario| permanent_value(s, 0, tile, permanent::GRANTED_LAND);
     assert_eq!(
         (land(&plain), land(&granted), land(&abilityless)),
@@ -4687,8 +4680,8 @@ fn granted_firebending_reaches_its_permanent_column_and_an_effect_row() {
         permanent_value(&changed, 0, ogre, permanent::GRANTED_FIREBENDING),
         0.4
     );
-    let (encoded, row) = effect_row(&changed, 0, "Modification::Firebending");
-    assert!(encoded.effects[18 * row + 2..18 * row + 5].contains(&0.4));
+    let (_, row) = effect_row(&changed, 0, "Modification::Firebending");
+    assert!(row[2..5].contains(&0.4));
     assert_column_alone_sees(&baseline, &changed, 0, ogre, permanent::GRANTED_FIREBENDING);
 }
 
@@ -4753,15 +4746,11 @@ fn each_added_subtype_reaches_a_fact_row() {
         );
         let rows = facts_about(&changed, 0, object_index(&changed, 0, ogre));
         fact_row(&rows, FactKind::AddedSubtype, name_value(subtype));
-        let (encoded, row) = effect_row(&changed, 0, "Modification::AddSubtypes");
-        let header = &encoded.effects[18 * row..18 * (row + 1)];
+        let (encoded, header) = effect_row(&changed, 0, "Modification::AddSubtypes");
         assert_eq!(header[14], 1.0, "one detail: the subtype");
-        let detail = 3 * header[13] as usize;
-        assert_eq!(encoded.effect_details[detail], 2.0);
-        assert_eq!(
-            encoded.effect_details[detail + 1..detail + 3],
-            id_columns(name_value(subtype))
-        );
+        let detail = encoded.row("effect_details", header[13] as usize);
+        assert_eq!(detail[0], 2.0);
+        assert_eq!(detail[1..3], id_columns(name_value(subtype)));
         assert_facts_alone_see(&baseline, &changed, 0);
     }
 }
@@ -4833,7 +4822,7 @@ fn set_name_and_set_creature_types_reach_independent_fact_rows() {
 }
 
 /// Card and permanent keyword columns are checked by
-/// `printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens`;
+/// `printed_and_granted_keywords_set_their_permanent_columns_and_tokens`;
 /// this checks the v5 relation block for keywords granted to a stack object.
 #[test]
 fn every_keyword_reaches_its_relation_column() {
@@ -4851,8 +4840,8 @@ fn every_keyword_reaches_its_relation_column() {
         };
         frame.controller = 0;
         changed.continuation = vec![frame];
-        let encoded = encode(&changed, &ObservationEncoderConfig::default()).unwrap();
-        let relation = &encoded.relations[relation::FLYING..][..KEYWORD_COUNT];
+        let encoded = InputRows::read(&changed, &ObservationEncoderConfig::default()).unwrap();
+        let relation = &encoded.row("relations", 0)[relation::FLYING..][..KEYWORD_COUNT];
         assert_eq!(relation.iter().position(|v| *v == 1.0), Some(position));
         assert_eq!(relation.iter().sum::<f32>(), 1.0, "{position}");
     }
@@ -4875,7 +4864,7 @@ fn lo_and_li_grant_lifelink_to_a_lesson_on_the_stack() {
         cast(&mut s, "Firebending Lesson");
         pass_until(&mut s, ActionSpaceKind::ChooseTarget);
         assert!(s.choose_target(managym::state::game_object::Target::Permanent(ogre)));
-        encoded(&s, 1).relations
+        encoded(&s, 1).row("relations", 0).to_vec()
     };
     let (granted, plain) = (lesson(true), lesson(false));
     assert_eq!(granted[3], 1.0, "the top frame is the spell");
@@ -4940,7 +4929,7 @@ fn every_delayed_trigger_event_has_its_own_relation_code() {
 fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
     let waiting = |s: &Scenario, viewer: usize| -> Option<(f32, f32, f32, f32)> {
         let encoded = encoded(s, viewer);
-        let rows = encoded.relations.as_chunks::<RELATION_DIM>().0;
+        let rows = encoded.rows("relations");
         let header = rows
             .iter()
             .position(|row| row[0] == 1.0 && row[3] == 10.0)?;
@@ -4972,10 +4961,8 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
         assert!(watched > 0.0, "the watched creature is joined");
         let observation = encoded(&s, viewer);
         let remembered = observation
-            .relations
-            .as_chunks::<RELATION_DIM>()
-            .0
-            .iter()
+            .rows("relations")
+            .into_iter()
             .find(|row| row[0] == 8.0 && row[3] == 10.0)
             .expect("captured subject row");
         assert_eq!(
@@ -5016,8 +5003,8 @@ fn creature_death_counts_for_the_departing_controller_in_either_view() {
     for viewer in 0..2 {
         let (_, encoded) = observe(&game, viewer);
         let counts: Vec<_> = encoded
-            .player_turn_state
-            .chunks_exact(TURN_STATE_DIM)
+            .rows("player_turn_state")
+            .into_iter()
             .map(|row| row[turn_state::CREATURES_DIED])
             .collect();
         let seat = usize::from(controller != viewer);
@@ -5032,9 +5019,9 @@ fn turn_number_and_seat_reach_the_player_rows() {
     let turn = |s: &Scenario, viewer: usize| {
         let encoded = encoded(s, viewer);
         (
-            encoded.agent_player[player::TURN],
-            encoded.agent_player[player::SEAT],
-            encoded.opponent_player[player::SEAT],
+            encoded.row("agent_player", 0)[player::TURN],
+            encoded.row("agent_player", 0)[player::SEAT],
+            encoded.row("opponent_player", 0)[player::SEAT],
         )
     };
     let first = s.game().state.turn.turn_number;
@@ -5057,28 +5044,21 @@ fn definitions_seen(s: &Scenario, viewer: usize) -> BTreeSet<u32> {
             seen.insert(value as u32 - 1);
         }
     };
-    encoded.semantic_cards.iter().copied().for_each(&mut add);
     encoded
-        .known_hand
-        .iter()
-        .step_by(2)
-        .copied()
+        .cells("semantic_cards")
+        .into_iter()
         .for_each(&mut add);
-    for rows in [&encoded.agent_permanents, &encoded.opponent_permanents] {
-        rows.as_chunks::<PERMANENT_DIM>()
-            .0
-            .iter()
-            .for_each(|row| add(row[24]));
-    }
     encoded
-        .relations
-        .as_chunks::<RELATION_DIM>()
-        .0
-        .iter()
-        .for_each(|row| {
-            add(row[5]);
-            add(row[23]);
-        });
+        .rows("known_hand")
+        .into_iter()
+        .for_each(|row| add(row[0]));
+    for table in ["agent_permanents", "opponent_permanents"] {
+        encoded.rows(table).into_iter().for_each(|row| add(row[24]));
+    }
+    encoded.rows("relations").into_iter().for_each(|row| {
+        add(row[5]);
+        add(row[23]);
+    });
     seen
 }
 
@@ -5099,10 +5079,8 @@ fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
 
     let owner = encoded(&s, 0);
     let face_down = owner
-        .agent_cards
-        .as_chunks::<CARD_DIM>()
-        .0
-        .iter()
+        .rows("agent_cards")
+        .into_iter()
         .filter(|row| row[card::PERMISSION_FORETOLD] == 1.0)
         .count();
     assert_eq!(face_down, 1, "its owner sees the foretold card");
@@ -5115,10 +5093,8 @@ fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
     }
     let opponent = encoded(&s, 1);
     assert!(opponent
-        .opponent_cards
-        .as_chunks::<CARD_DIM>()
-        .0
-        .iter()
+        .rows("opponent_cards")
+        .into_iter()
         .all(|row| row[card::PERMISSION_FORETOLD] == 0.0));
 }
 
@@ -5245,11 +5221,11 @@ fn kept_red_mana_and_no_hand_size_reach_the_player_rows() {
         };
         apply(&mut changed, Affected::Player(PlayerId(1)), modification);
         let (before, after) = (encoded(&baseline, 0), encoded(&changed, 0));
-        assert_eq!(before.agent_player, after.agent_player);
+        assert_eq!(before.rows("agent_player"), after.rows("agent_player"));
         assert_eq!(
             (
-                before.opponent_player[column],
-                after.opponent_player[column]
+                before.row("opponent_player", 0)[column],
+                after.row("opponent_player", 0)[column]
             ),
             (0.0, 1.0)
         );
@@ -5266,8 +5242,8 @@ fn sacrifices_this_turn_reach_the_player_row() {
     let (before, after) = (encoded(&baseline, 0), encoded(&changed, 0));
     assert_eq!(
         (
-            before.opponent_player[player::PERMANENTS_SACRIFICED],
-            after.opponent_player[player::PERMANENTS_SACRIFICED]
+            before.row("opponent_player", 0)[player::PERMANENTS_SACRIFICED],
+            after.row("opponent_player", 0)[player::PERMANENTS_SACRIFICED]
         ),
         (0.0, 0.1)
     );
@@ -5277,8 +5253,8 @@ fn sacrifices_this_turn_reach_the_player_row() {
 // Cast permissions, restricted mana and announced X
 // ---------------------------------------------------------------------------
 
-fn encoded_default(observation: &Observation) -> EncodedObservation {
-    encode(observation, &ObservationEncoderConfig::default()).expect("v5 encodes")
+fn encoded_default(observation: &Observation) -> InputRows {
+    InputRows::read(observation, &ObservationEncoderConfig::default()).expect("v5 encodes")
 }
 
 fn object_id(s: &Scenario, object: ObjectId) -> i32 {
@@ -5288,12 +5264,12 @@ fn object_id(s: &Scenario, object: ObjectId) -> i32 {
 /// The encoded row of `card` on either side of `observation`, if listed.
 fn listed_card_row(observation: &Observation, object: i32) -> Option<Vec<f32>> {
     let encoded = encoded_default(observation);
-    for (objects, rows) in [
-        (&observation.agent_cards, &encoded.agent_cards),
-        (&observation.opponent_cards, &encoded.opponent_cards),
+    for (objects, table) in [
+        (&observation.agent_cards, "agent_cards"),
+        (&observation.opponent_cards, "opponent_cards"),
     ] {
         if let Some(slot) = objects.iter().position(|c| c.id == object) {
-            return Some(rows[slot * CARD_DIM..(slot + 1) * CARD_DIM].to_vec());
+            return Some(encoded.row(table, slot).to_vec());
         }
     }
     None
@@ -5348,7 +5324,7 @@ fn hand_only_lock_reaches_both_viewers_tensors() {
     let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
     let wurm_id = object_id(&s, card_of(&s, wurm));
     let baseline = encoded_default(&Observation::for_player(s.game(), PlayerId(0)));
-    assert_eq!(baseline.opponent_player[player::HAND_ONLY], 0.0);
+    assert_eq!(baseline.row("opponent_player", 0)[player::HAND_ONLY], 0.0);
     cast(&mut s, "Avatar's Wrath");
     assert!(s.choose_target(Target::Permanent(spared)));
     settle(&mut s);
@@ -5356,16 +5332,16 @@ fn hand_only_lock_reaches_both_viewers_tensors() {
     let caster = Observation::for_player(s.game(), PlayerId(0));
     assert_eq!(caster.opponent.hand_only_until, Some(caster.agent.id));
     assert_eq!(
-        encoded_default(&caster).opponent_player[player::HAND_ONLY],
+        encoded_default(&caster).row("opponent_player", 0)[player::HAND_ONLY],
         1.0
     );
     assert_eq!(
-        encoded_default(&caster).agent_player[player::HAND_ONLY],
+        encoded_default(&caster).row("agent_player", 0)[player::HAND_ONLY],
         0.0
     );
     let locked = Observation::for_player(s.game(), PlayerId(1));
     assert_eq!(
-        encoded_default(&locked).agent_player[player::HAND_ONLY],
+        encoded_default(&locked).row("agent_player", 0)[player::HAND_ONLY],
         1.0
     );
     assert_eq!(
@@ -5391,7 +5367,9 @@ fn restricted_mana_is_encoded_by_spending_subtype() {
     assert_eq!(classes[0].spells, ["Ally"]);
     assert_eq!(classes[0].abilities, ["Ally"]);
     assert_eq!(classes[0].mana, [0, 0, 0, 0, 1, 0]);
-    let player = encoded_default(&observation).agent_player;
+    let player = encoded_default(&observation)
+        .row("agent_player", 0)
+        .to_vec();
     let by_subtype = &player[player::RESTRICTED_LESSON_WHITE..player::HAND_ONLY];
     let mut expected = [0.0; 18];
     expected[12 + 4] = 0.1; // Ally, green
@@ -5434,8 +5412,8 @@ fn pooled_mana_classes_are_programs_on_their_player() {
         let encoded = encoded_default(&observation);
         let pooled = id_columns(name_value(managym::agent::observation_encoder::POOLED_MANA));
         let rows: Vec<&[f32]> = encoded
-            .facts
-            .chunks(FACT_DIM)
+            .rows("facts")
+            .into_iter()
             .filter(|row| {
                 row[fact::KIND] == FactKind::EffectProgram as u8 as f32
                     && row[fact::ID_HIGH..fact::ID_HIGH + 2] == pooled
@@ -5508,9 +5486,9 @@ fn a_ward_paid_in_life_is_a_program_on_its_permanent() {
 
         let encoded = encoded_default(&observation);
         let rows: Vec<&[f32]> = encoded
-            .agent_permanents
-            .chunks(PERMANENT_DIM)
-            .chain(encoded.opponent_permanents.chunks(PERMANENT_DIM))
+            .rows("agent_permanents")
+            .into_iter()
+            .chain(encoded.rows("opponent_permanents"))
             .filter(|row| row[permanent::HAS_WARD] == 1.0)
             .collect();
         let mut costs: Vec<f32> = rows.iter().map(|row| row[permanent::WARD_COST]).collect();
@@ -5523,8 +5501,8 @@ fn a_ward_paid_in_life_is_a_program_on_its_permanent() {
 
         let ward = id_columns(name_value(managym::agent::observation_encoder::WARD));
         let rows: Vec<&[f32]> = encoded
-            .facts
-            .chunks(FACT_DIM)
+            .rows("facts")
+            .into_iter()
             .filter(|row| {
                 row[fact::KIND] == FactKind::EffectProgram as u8 as f32
                     && row[fact::ID_HIGH..fact::ID_HIGH + 2] == ward
@@ -5573,7 +5551,7 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
         assert_eq!(frame.kind, 1);
         assert!(frame.effect_execution.contains(&marker));
         assert_execution_tokens_registered(frame);
-        let rows = encoded_default(&observation).facts;
+        let rows = encoded_default(&observation).cells("facts");
         let programs = rows
             .chunks(FACT_DIM)
             .filter(|row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32)
@@ -5605,8 +5583,7 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
     }
 }
 
-/// Every execution token of `frame` is a literal, a definition's token or a
-/// registered runtime name: the policy's whole token vocabulary.
+/// Use the runtime emission guard's admission rules for the projected frame.
 fn assert_execution_tokens_registered(frame: &ContinuationFrame) {
     let missing = missing_program_tokens(&frame.effect_execution);
     assert!(
@@ -5664,7 +5641,7 @@ fn life_lost_this_way_survives_a_private_choice_and_its_child_scope() {
         })
         .expect("the acting viewer can read the pending gain");
     assert_execution_tokens_registered(frame);
-    let facts = encoded_default(&actor).facts;
+    let facts = encoded_default(&actor).cells("facts");
     let tokens: Vec<_> = facts
         .chunks_exact(FACT_DIM)
         .filter(|row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32)
@@ -5722,7 +5699,7 @@ fn payment_contributions_reach_the_stack_frame_as_references() {
             .effect_execution_references
             .iter()
             .any(|reference| reference.definition == Some(ogre_definition)));
-        let rows = encoded_default(&observation).facts;
+        let rows = encoded_default(&observation).cells("facts");
         let programs = rows
             .chunks(FACT_DIM)
             .filter(|row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32)
@@ -6033,7 +6010,7 @@ fn announced_x_reaches_the_stack_row() {
         assert_eq!(spell.x, 3);
         assert!(listed_card_row(&observation, id).is_none());
         let encoded = encoded_default(&observation);
-        let row = &encoded.stack[slot * STACK_DIM..(slot + 1) * STACK_DIM];
+        let row = encoded.row("stack", slot);
         assert_eq!(&row[stack::HAS_X..stack::HAS_X + 2], &[1.0, 0.3]);
         assert_eq!(row[stack::SPELL], 1.0);
         assert_eq!(spell.effective_mana_value(), Some(5));
@@ -6076,12 +6053,16 @@ fn foretold_card_and_permission_reach_only_the_owner() {
     let json = opponent.to_json();
     assert!(!json.contains("Sozin") && !json.contains("foretold") && !json.contains("face_down"));
     let after = encoded_default(&opponent);
-    for rows in [&after.agent_cards, &after.opponent_cards] {
-        assert!(rows
-            .chunks(CARD_DIM)
+    for table in ["agent_cards", "opponent_cards"] {
+        assert!(after
+            .rows(table)
+            .into_iter()
             .all(|row| row[card::PERMISSION_FORETOLD] == 0.0 && row[card::PERMISSION] == 0.0));
     }
-    assert_eq!(after.opponent_cards, opponent_before.opponent_cards);
+    assert_eq!(
+        after.rows("opponent_cards"),
+        opponent_before.rows("opponent_cards")
+    );
 
     // On its owner's next turn the later-turn term clears.
     s.advance_to_active_step(1, StepKind::Main);
@@ -6114,8 +6095,7 @@ fn each_modification_reaches_a_shared_effect_row_with_its_duration_and_order() {
         let (name, _) = modification_seen(&modification);
         // The opponent sees every record too.
         for viewer in [0, 1] {
-            let (encoded, row) = effect_row(&s, viewer, name);
-            let header = &encoded.effects[18 * row..18 * (row + 1)];
+            let (_, header) = effect_row(&s, viewer, name);
             assert_eq!(
                 header[8],
                 duration_code(EffectDuration::Indefinite),
@@ -6179,10 +6159,7 @@ fn a_later_record_has_a_later_order_than_an_earlier_one() {
         affected,
         Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
     );
-    let order = |name: &str| {
-        let (encoded, row) = effect_row(&s, 0, name);
-        encoded.effects[18 * row + 9]
-    };
+    let order = |name: &str| effect_row(&s, 0, name).1[9];
     assert!(order("Modification::AddKeywords") > order("Modification::LoseAllAbilities"));
     assert!(
         permanent_value(&s, 0, ogre, permanent::TIMESTAMP)
@@ -6205,7 +6182,11 @@ fn transforms_and_scheduled_combat_restrictions_reach_policy_facts() {
     s.game_mut().transform_permanent(aang);
     s.game_mut().transform_permanent(aang);
     let flipped = encoded(&s, 0);
-    assert_ne!(baseline.facts, flipped.facts, "a round trip is visible");
+    assert_ne!(
+        baseline.rows("facts"),
+        flipped.rows("facts"),
+        "a round trip is visible"
+    );
     s.game_mut()
         .state
         .turn
@@ -6214,15 +6195,15 @@ fn transforms_and_scheduled_combat_restrictions_reach_policy_facts() {
             attackers: Some(CardPredicate::creature()),
         });
     let scheduled = encoded(&s, 0);
-    assert_ne!(flipped.facts, scheduled.facts);
-    assert_ne!(flipped.relations, scheduled.relations);
+    assert_ne!(flipped.rows("facts"), scheduled.rows("facts"));
+    assert_ne!(flipped.rows("relations"), scheduled.rows("relations"));
     let before = Observation::for_player(s.game(), PlayerId(0));
     s.game_mut().state.turn.extra_turns = vec![PlayerId(0), PlayerId(1)];
-    let order = encoded(&s, 0).relations;
+    let order = encoded(&s, 0).cells("relations");
     s.game_mut().state.turn.extra_turns.reverse();
     assert_ne!(
         order,
-        encoded(&s, 0).relations,
+        encoded(&s, 0).cells("relations"),
         "same turn counts, different order"
     );
     assert!(before
@@ -6284,18 +6265,16 @@ fn secret_of_bloodbending_control_reaches_tokens_and_native_policy_relations() {
         active: false,
     });
     let pending = encoded(&s, 0);
-    assert_ne!(pending.relations, baseline.relations);
+    assert_ne!(pending.rows("relations"), baseline.rows("relations"));
     s.game_mut().state.turn.player_controls[0].duration = PlayerControlDuration::NextTurn;
     let whole_turn = encoded(&s, 0);
-    assert_ne!(pending.relations, whole_turn.relations);
+    assert_ne!(pending.rows("relations"), whole_turn.rows("relations"));
     s.game_mut().state.turn.player_controls[0].active = true;
     let active = encoded(&s, 0);
-    assert_ne!(active.relations, whole_turn.relations);
+    assert_ne!(active.rows("relations"), whole_turn.rows("relations"));
     let headers: Vec<_> = active
-        .relations
-        .as_chunks::<RELATION_DIM>()
-        .0
-        .iter()
+        .rows("relations")
+        .into_iter()
         .filter(|r| r[0] == 1.0 && r[3] == 13.0)
         .collect();
     assert_eq!(headers.len(), 1);
@@ -6304,10 +6283,8 @@ fn secret_of_bloodbending_control_reaches_tokens_and_native_policy_relations() {
         (1.0, 2.0, 2.0)
     );
     assert!(active
-        .relations
-        .as_chunks::<RELATION_DIM>()
-        .0
-        .iter()
+        .rows("relations")
+        .into_iter()
         .any(|r| r[0] == 3.0 && r[3] == 13.0 && r[25] == 2.0));
     let tokens = tokens_of(&card_definition("Secret of Bloodbending"));
     for variant in [
@@ -6365,19 +6342,22 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
                 until_next_turn: expiry == DelayedExpiry::UntilYourNextTurn,
                 ..Default::default()
             };
-            let mut rows = vec![0.0; 64 * RELATION_DIM];
-            managym::agent::continuation::encode_into(&[frame], 0, &Default::default(), &mut rows)
-                .unwrap();
-            assert_eq!(rows[28], 6.0, "event code stays on header");
-            assert_eq!(rows[RELATION_DIM], 9.0);
-            assert_eq!(rows[RELATION_DIM + 28], f32::from(code));
+            let rows = managym::agent::continuation::encode_rows(
+                &[frame],
+                0,
+                &Default::default(),
+            )
+            .unwrap();
+            assert_eq!(rows[0][28], 6, "event code stays on header");
+            assert_eq!(rows[1][0], 9);
+            assert_eq!(rows[1][28], i64::from(code));
             assert_eq!(
-                rows[RELATION_DIM + relation::THIS_TURN],
-                f32::from(expiry == DelayedExpiry::ThisTurn)
+                rows[1][relation::THIS_TURN],
+                i64::from(expiry == DelayedExpiry::ThisTurn)
             );
             assert_eq!(
-                rows[RELATION_DIM + relation::UNTIL_NEXT_TURN],
-                f32::from(expiry == DelayedExpiry::UntilYourNextTurn)
+                rows[1][relation::UNTIL_NEXT_TURN],
+                i64::from(expiry == DelayedExpiry::UntilYourNextTurn)
             );
         }
     }
@@ -6434,42 +6414,29 @@ fn merchant_counted_tap_cost_reaches_learning_tokens() {
 }
 
 #[test]
-fn input_v10_carries_turn_state_that_v9_refuses() {
+fn turn_state_records_life_spells_graveyard_entries_and_restricted_mana() {
     use crate::support::{
         game::force_new_card_in_hand,
         inspect::card_of,
         play::{cast, settle},
     };
-    use managym::agent::observation_encoder::ObservationEncodeError;
-    let v9 = ObservationEncoderConfig {
-        layout: InputLayout::Legacy,
-        turn_state: false,
-        ..ObservationEncoderConfig::default()
-    };
-    // Input v11, the fresh default, carries v10's turn state.
-    let v10 = ObservationEncoderConfig::default();
-    let refusal = |s: &Scenario| match encode(&Observation::for_player(s.game(), PlayerId(0)), &v9)
-    {
-        Err(ObservationEncodeError::RequiresInputV10(state)) => Some(state),
-        Ok(_) => None,
-        Err(error) => panic!("{error}"),
-    };
     let encoded = |s: &Scenario| {
-        encode(&Observation::for_player(s.game(), PlayerId(0)), &v10).expect("v10 encodes")
+        InputRows::read(
+            &Observation::for_player(s.game(), PlayerId(0)),
+            &ObservationEncoderConfig::default(),
+        )
+        .unwrap()
     };
 
-    // Life lost is refused only once a visible card reads it.
+    // Life and spells are counted per seat.
     let mut s = five_color_setup(&["Bloodchief Ascension", "Lightning Strike"]);
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     settle(&mut s);
-    assert_eq!(refusal(&s), None);
     s.force_permanent_on_battlefield(0, "Bloodchief Ascension");
-    assert_eq!(refusal(&s), Some("life lost this turn"));
-    let row = encoded(&s).player_turn_state;
+    let row = encoded(&s).cells("player_turn_state");
     assert_eq!(row[turn_state::LIFE_LOST], 0.0);
     assert_eq!(row[TURN_STATE_DIM + turn_state::LIFE_LOST], 3.0 / 20.0);
-    // Spells cast this turn, per seat; v9 does not refuse it.
     assert_eq!(row[turn_state::SPELLS_CAST], 0.1);
     assert_eq!(row[TURN_STATE_DIM + turn_state::SPELLS_CAST], 0.0);
 
@@ -6481,36 +6448,26 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
-    assert_eq!(refusal(&s), None);
     force_new_card_in_hand(&mut s, 0, "Brought Back");
-    assert_eq!(
-        refusal(&s),
-        Some("a card put into a graveyard from the battlefield this turn")
-    );
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let slot = observation
         .agent_cards
         .iter()
         .position(|object| object.id == current_object(&s, ogre_card).id.0 as i32)
         .expect("graveyard row");
-    let objects = encoded(&s).card_turn_state;
+    let objects = encoded(&s).cells("card_turn_state");
     assert_eq!(objects[slot], 1.0);
     assert_eq!(objects.iter().sum::<f32>(), 1.0);
 
     // Powerstone mana in a pool (its production is exercised by the
     // castability test in `tests/cards/bro.rs`).
     let mut s = five_color_setup(&["Gray Ogre"]);
-    assert_eq!(refusal(&s), None);
     s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::restricted_to(
         managym::state::mana::ManaRestriction::ExceptNonartifactSpells,
         [0, 0, 0, 0, 0, 1],
     )
     .into();
-    assert_eq!(
-        refusal(&s),
-        Some("mana that can't be spent to cast nonartifact spells")
-    );
-    let row = encoded(&s).player_turn_state;
+    let row = encoded(&s).cells("player_turn_state");
     assert_eq!(row[turn_state::NONARTIFACT_MANA_COLORLESS], 0.1);
 }
 
@@ -6551,22 +6508,22 @@ fn release_and_lita_tokens_preserve_identity_and_expose_their_rules() {
     let tla_id = game.create_token(tla.key, PlayerId(0)).unwrap();
     let vehicle = game.create_token(zeppelin.key, PlayerId(0)).unwrap();
     let (observation, encoded) = observe(&game, 0);
-    let plain_row = card_row(&game, &observation, &encoded, plain_id);
-    let tla_row = card_row(&game, &observation, &encoded, tla_id);
+    let plain_row = battlefield_row(&game, &observation, &encoded, plain_id);
+    let tla_row = battlefield_row(&game, &observation, &encoded, tla_id);
     // Shared printed names still bind distinct catalog rows and programs.
     let definition = |permanent| {
         let slot = permanent_slot(&game, &observation, permanent);
-        encoded.agent_permanents[slot * PERMANENT_DIM + permanent::DEFINITION]
+        encoded.row("agent_permanents", slot)[permanent::DEFINITION]
     };
     assert_ne!(definition(plain_id), definition(tla_id));
-    assert_eq!(plain_row[card::FLYING], 0.0);
-    assert_eq!(tla_row[card::FLYING], 0.0);
-    let vehicle_row = card_row(&game, &observation, &encoded, vehicle);
-    assert_eq!(vehicle_row[card::FLYING], 1.0);
-    assert_eq!(vehicle_row[card::IS_CREATURE], 0.0);
-    assert_eq!(vehicle_row[card::IS_ARTIFACT], 1.0);
-    assert_eq!(vehicle_row[card::POWER], 0.5);
-    assert_eq!(vehicle_row[card::TOUGHNESS], 0.5);
+    assert_eq!(plain_row[permanent::FLYING], 0.0);
+    assert_eq!(tla_row[permanent::FLYING], 0.0);
+    let vehicle_row = battlefield_row(&game, &observation, &encoded, vehicle);
+    assert_eq!(vehicle_row[permanent::FLYING], 1.0);
+    assert_eq!(vehicle_row[permanent::IS_CREATURE], 0.0);
+    assert_eq!(vehicle_row[permanent::IS_ARTIFACT], 1.0);
+    assert_eq!(vehicle_row[permanent::POWER], 0.5);
+    assert_eq!(vehicle_row[permanent::TOUGHNESS], 0.5);
 }
 
 #[test]
@@ -6613,9 +6570,11 @@ fn library_knowledge_positions_reach_their_named_rows() {
     s.game_mut().scenario_refresh_priority().unwrap();
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let definition = observation.agent.known_library[&0];
-    let encoded = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
-    assert_eq!(&encoded.known_library[..2], &[(definition + 1) as f32, 1.0]);
-    assert!(encoded.known_library[2..].iter().all(|value| *value == 0.0));
+    let encoded = InputRows::read(&observation, &ObservationEncoderConfig::default()).unwrap();
+    assert_eq!(
+        encoded.rows("known_library"),
+        [&[(definition + 1) as f32, 1.0][..]]
+    );
     let other = Observation::for_player(s.game(), PlayerId(1));
     assert!(other.opponent.known_library.is_empty());
 }
@@ -6807,8 +6766,7 @@ fn combat_damage_amounts_carry_their_value_and_focus_attacker_and_blocker() {
     let combatants = [mammoth, elves];
     let public_ids =
         combatants.map(|id| s.game().state.permanents[id].as_ref().unwrap().id.0 as i32);
-    let focus_rows = combatants.map(|id| object_index(&s, 0, id) as i32);
-    let slots = ObservationEncoderConfig::default().max_focus_objects;
+    let focus_rows = combatants.map(|id| object_index(&s, 0, id) as f32);
     for (index, offer) in offers.iter().enumerate() {
         let amount = index + 1;
         assert!(offer.announces_x);
@@ -6820,14 +6778,11 @@ fn combat_damage_amounts_carry_their_value_and_focus_attacker_and_blocker() {
                 17 - amount
             ))
         );
-        let start = index * action::WIDTH;
-        assert_eq!(rows.actions[start + action::HAS_X], 1.0);
-        assert_eq!(rows.actions[start + action::X], amount as f32 / 10.0);
+        let row = rows.row("actions", index);
+        assert_eq!(row[action::HAS_X], 1.0);
+        assert_eq!(row[action::X], amount as f32 / 10.0);
         assert_eq!(offer.focus, public_ids);
-        assert_eq!(
-            rows.action_focus[index * slots..index * slots + 2],
-            focus_rows
-        );
+        assert_eq!(rows.row("action_focus", index)[..2], focus_rows);
     }
 }
 

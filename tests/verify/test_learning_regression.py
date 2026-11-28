@@ -135,9 +135,9 @@ def test_recipe_report_preserves_paired_deals_and_policy_inspection(
         seed=197,
         updates=1,
         deals=(1_915_100_000, 1_915_100_001),
-        # Sixteen scalar child games plus replay share this evaluation budget;
-        # leave headroom below the independent 300-second per-test watchdog.
-        seconds=180,
+        # Policy identities seed the sampled actions, so the same deals can take
+        # different numbers of decisions. Allow all 16 games and their replays.
+        seconds=240,
         backend=resolve("torch"),
     )
     assert report.software == "passed", report.error

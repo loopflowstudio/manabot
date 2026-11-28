@@ -2901,26 +2901,6 @@ impl Observation {
             }))
     }
 
-    /// Deprecated compatibility records; non-card objects are synthesized only here.
-    #[deprecated(note = "use object_records; removed in 0.3.0")]
-    pub fn card_records(&self) -> impl Iterator<Item = CardData> + Clone + '_ {
-        self.agent_cards
-            .iter()
-            .chain(&self.opponent_cards)
-            .cloned()
-            .chain(
-                self.agent_permanents
-                    .iter()
-                    .chain(&self.opponent_permanents)
-                    .filter_map(PermanentData::legacy_card),
-            )
-            .chain(
-                self.stack_objects
-                    .iter()
-                    .filter_map(|s| s.spell.as_ref().map(|spell| spell.legacy_card(s.x))),
-            )
-    }
-
     pub fn historical(&self) -> bool {
         self.agent_permanents
             .iter()
@@ -3112,7 +3092,7 @@ impl std::ops::Deref for ObjectData<'_> {
 mod characteristics_tests {
     use super::*;
     use crate::{
-        agent::observation_encoder::{encode, ObservationEncoderConfig},
+        agent::{observation_encoder::ObservationEncoderConfig, observation_rows::InputRows},
         state::player::PlayerConfig,
     };
 
@@ -3188,10 +3168,10 @@ mod characteristics_tests {
         };
         observation.action_space.actions = vec![action];
         let config = ObservationEncoderConfig::default();
-        let encoded = encode(&observation, &config).unwrap();
+        let encoded = InputRows::read(&observation, &config).unwrap();
         assert_eq!(
-            encoded.action_focus[0],
-            (2 + 2 * config.max_cards_per_player) as i32
+            encoded.row("action_focus", 0)[0],
+            (2 + 2 * config.max_cards_per_player) as f32
         );
         assert!(!observation.agent_cards.iter().any(|c| c.id == identity));
         let parsed = crate::agent::observation_json::parse(&observation.to_json()).unwrap();
@@ -3224,9 +3204,10 @@ mod characteristics_tests {
         let json = observation.to_json();
         let parsed = crate::agent::observation_json::parse(&json).unwrap();
         assert_eq!(parsed.to_json(), json);
-        let mut historical = crate::agent::legacy_input::view(&observation);
+        let mut historical = observation;
         for object in &mut historical.stack_objects {
-            object.spell = None;
+            let spell = object.spell.take().unwrap();
+            historical.agent_cards.push(spell.legacy_card(object.x));
         }
         assert!(crate::agent::observation_json::parse(&historical.to_json())
             .unwrap_err()

@@ -237,8 +237,8 @@ fn a_nonlegendary_record_exempts_its_permanent_from_the_legend_rule() {
 #[test]
 fn shared_effects_admit_many_memberships_without_changing_rules_records() {
     use managym::agent::{
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig},
+        observation::Observation, observation_encoder::ObservationEncoderConfig,
+        observation_rows::InputRows,
     };
     for (activations, targets) in [(7, 10), (9, 15)] {
         let (mut s, _) = ogre_scenario();
@@ -272,23 +272,19 @@ fn shared_effects_admit_many_memberships_without_changing_rules_records() {
                     .all(|effect| effect.effect.keywords.len() == 2
                         && effect.members.len() == targets)
             );
-            let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+            let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
             assert_eq!(
                 encoded
-                    .effects
-                    .as_chunks::<18>()
-                    .0
-                    .iter()
+                    .rows("effects")
+                    .into_iter()
                     .filter(|row| row[17] == 1.0)
                     .count(),
                 activations
             );
             assert_eq!(
                 encoded
-                    .effect_members
-                    .as_chunks::<2>()
-                    .0
-                    .iter()
+                    .rows("effect_members")
+                    .into_iter()
                     .filter(|row| row[0] > 0.0)
                     .count(),
                 activations * targets
@@ -356,8 +352,8 @@ fn shared_effects_keep_intervening_grants_and_different_expiries() {
 #[test]
 fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
     use managym::agent::{
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig},
+        observation::Observation, observation_encoder::ObservationEncoderConfig,
+        observation_rows::InputRows,
     };
     use managym::state::effect::ContinuousEffect;
     let (mut s, target) = ogre_scenario();
@@ -387,8 +383,11 @@ fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
         let new = ObservationEncoderConfig::default();
         let encoded = observations
             .each_ref()
-            .map(|obs| encode(obs, &new).unwrap());
-        assert_ne!(encoded[0].effects[12], encoded[1].effects[12]);
+            .map(|obs| InputRows::read(obs, &new).unwrap());
+        assert_ne!(
+            encoded[0].row("effects", 0)[12],
+            encoded[1].row("effects", 0)[12]
+        );
     }
     for game in &mut games {
         game.move_object(source_object, ZoneType::Hand);
@@ -1222,8 +1221,8 @@ fn cr_613_moon_after_saga_chapters_preserves_their_resolved_abilities() {
 fn cr_613_granted_activation_retains_program_after_sacrificing_source_and_suspending() {
     use managym::{
         agent::{
-            observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig},
+            observation::Observation, observation_encoder::ObservationEncoderConfig,
+            observation_rows::InputRows,
         },
         state::{ability::Effect, card::ActivatedAbilityDefinition},
     };
@@ -1246,7 +1245,7 @@ fn cr_613_granted_activation_retains_program_after_sacrificing_source_and_suspen
         .iter()
         .any(|frame| frame.kind == 2 && !frame.program.is_empty()));
     assert!(obs.shared_effects.as_ref().unwrap().is_empty());
-    assert!(encode(&obs, &config).is_ok());
+    assert!(InputRows::read(&obs, &config).is_ok());
     for _ in 0..4 {
         if s.game().state.suspended_decision.is_some() {
             break;
@@ -1261,8 +1260,8 @@ fn cr_613_granted_activation_retains_program_after_sacrificing_source_and_suspen
         .any(|frame| frame.kind == 5 && !frame.program.is_empty()));
     let fork = s.game().clone();
     assert_eq!(
-        encode(&obs, &config).unwrap(),
-        encode(&Observation::for_player(&fork, PlayerId(0)), &config).unwrap()
+        InputRows::read(&obs, &config).unwrap(),
+        InputRows::read(&Observation::for_player(&fork, PlayerId(0)), &config).unwrap()
     );
     crate::support::play::settle(&mut s);
     assert!(s.game().state.stack_objects.is_empty());

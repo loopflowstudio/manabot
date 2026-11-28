@@ -5,14 +5,13 @@ test_env.py
 import logging
 
 import pytest
-import torch
 
 # Local imports
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import RewardConfig
+import managym
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -54,28 +53,13 @@ def env(sample_match, observation_space, reward) -> Env:
     return Env(sample_match, observation_space, reward)
 
 
-@pytest.fixture
-def vector_env(
-    sample_match: Match, observation_space: ObservationSpace, reward: Reward
-) -> VectorEnv:
-    """Create a vectorized environment for testing."""
-    return VectorEnv(
-        num_envs=7,
-        match=sample_match,
-        observation_space=observation_space,
-        reward=reward,
-        device="cpu",
-        player_policies=("agent", "random"),
-    )
-
-
 class TestEnvironment:
     """Tests for the ManaBot environment wrapper."""
 
     def test_initialization(self, env):
         """Test basic environment initialization."""
         obs, info = env.reset()
-        assert isinstance(obs, dict), "Observation should be a dictionary"
+        assert isinstance(obs, managym.Observation)
         assert all(isinstance(v, (int, float, bool, dict)) for v in info.values()), (
             "Info values should be basic Python types"
         )
@@ -85,7 +69,7 @@ class TestEnvironment:
         obs, info = env.reset()
         next_obs, reward, done, truncated, step_info = env.step(0)
 
-        assert isinstance(next_obs, dict), "Observation should be a dictionary"
+        assert isinstance(next_obs, managym.Observation)
         assert isinstance(reward, float), "Reward should be a float"
         assert isinstance(done, bool), "Done should be a boolean"
         assert isinstance(truncated, bool), "Truncated should be a boolean"
@@ -119,7 +103,7 @@ class TestEnvironment:
 
         assert terminated, f"Game did not complete within {max_steps} steps"
         assert steps_taken < max_steps, "Possible infinite loop detected"
-        assert isinstance(next_obs, dict), "Final observation should be a dictionary"
+        assert isinstance(next_obs, managym.Observation)
 
     @pytest.mark.parametrize("steps", [1, 10, 100])
     def test_consistent_stepping(self, env, steps):
@@ -128,87 +112,10 @@ class TestEnvironment:
 
         for step in range(steps):
             next_obs, reward, done, truncated, info = env.step(0)
-            assert set(next_obs.keys()) == set(obs.keys()), (
-                f"Observation keys changed at step {step}"
-            )
-            obs = next_obs
+            assert next_obs is env.last_raw_obs
 
             if done or truncated:
                 break
-
-    def test_vectorenv_tensor_outputs(self, vector_env: VectorEnv) -> None:
-        """Test that VectorEnv properly converts everything to tensors."""
-        num_envs = vector_env.num_envs
-        device = vector_env.device
-
-        # Test reset
-        observations, info = vector_env.reset()
-
-        # Verify we get tensors with correct dtypes
-        assert isinstance(observations, dict)
-        for key, tensor in observations.items():
-            assert isinstance(tensor, torch.Tensor), f"{key} is not a tensor"
-            assert tensor.dtype == (
-                torch.int32 if key == "action_focus" else torch.float32
-            )
-            assert tensor.shape[0] == num_envs, f"{key} missing batch dimension"
-
-        # Test step with tensor action
-        action = torch.zeros(num_envs, dtype=torch.int64, device=device)
-        next_obs, reward, terminated, truncated, info = vector_env.step(action)
-
-        # Verify observation tensors maintain properties
-        for key, tensor in next_obs.items():
-            assert isinstance(tensor, torch.Tensor)
-            assert tensor.dtype == observations[key].dtype
-            assert tensor.shape[0] == num_envs
-
-        # Verify reward and flags are correct tensor types
-        assert isinstance(reward, torch.Tensor)
-        assert reward.dtype == torch.float32
-        assert reward.shape == (num_envs,)
-
-        assert isinstance(terminated, torch.Tensor)
-        assert terminated.dtype == torch.bool
-        assert terminated.shape == (num_envs,)
-
-        assert isinstance(truncated, torch.Tensor)
-        assert truncated.dtype == torch.bool
-        assert truncated.shape == (num_envs,)
-
-        # Test device movement
-        if torch.cuda.is_available():
-            vector_env = vector_env.to("cuda")
-            observations, info = vector_env.reset()
-            for key, tensor in observations.items():
-                assert tensor.device.type == "cuda"
-        if torch.backends.mps.is_available():
-            vector_env = vector_env.to("mps")
-            observations, info = vector_env.reset()
-            for key, tensor in observations.items():
-                assert tensor.device.type == "mps"
-
-        vector_env.close()
-
-    def test_vectorenv_single_agent_mode(
-        self, sample_match: Match, observation_space: ObservationSpace, reward: Reward
-    ) -> None:
-        vector_env = VectorEnv(
-            num_envs=3,
-            match=sample_match,
-            observation_space=observation_space,
-            reward=reward,
-            device="cpu",
-            player_policies=("agent", "random"),
-        )
-
-        obs, _ = vector_env.reset()
-        assert obs["agent_player"].shape[0] == 3
-
-        actions = torch.zeros(3, dtype=torch.int64)
-        next_obs, _, _, _, _ = vector_env.step(actions)
-        assert next_obs["agent_player"].shape[0] == 3
-        vector_env.close()
 
     def test_agent_turns_distribution(self, env):
         """Test that both raw player indices appear over a game."""

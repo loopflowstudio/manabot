@@ -4,10 +4,12 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use super::observation_encoder::{phase_index, step_index};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind},
+    cards::tokens::name_value,
     flow::game::Game,
     state::{
         game_object::{ObjectId, PlayerId},
@@ -513,8 +515,8 @@ pub const RECORD_DIM: usize = super::observation_layout::decision_record::WIDTH;
 pub const DETAIL_DIM: usize = super::observation_layout::decision_reference_detail::WIDTH;
 pub const REFERENCE_DIM: usize = super::observation_layout::decision_reference::WIDTH;
 pub const MEMBER_DIM: usize = super::observation_layout::decision_member::WIDTH;
-/// Names introduced by this projection, registered in the shared catalog.
-pub const RECORD_NAMES: &[&str] = &[
+/// Names introduced by this projection, in the shared token namespace.
+const RECORD_NAMES: &[&str] = &[
     "Priority",
     "DeclareAttacker",
     "DeclareBlocker",
@@ -560,6 +562,24 @@ pub const RECORD_NAMES: &[&str] = &[
     "Foretell",
     "TurnFaceUp",
 ];
+
+fn record_name(name: &str) -> String {
+    format!("DecisionMemory::{name}")
+}
+
+/// Hashed decision-memory names in name order.
+pub fn decision_memory_names() -> Vec<(String, i32)> {
+    let mut names: Vec<_> = RECORD_NAMES
+        .iter()
+        .map(|name| {
+            let name = record_name(name);
+            let value = name_value(&name);
+            (name, value)
+        })
+        .collect();
+    names.sort_unstable();
+    names
+}
 
 use super::{
     observation_encoder::ObservationEncodeError,
@@ -608,7 +628,6 @@ fn definition_only(reference: &DecisionReference) -> bool {
 /// One viewer prefix, with disjoint record members and shared exact snapshots.
 #[derive(Default)]
 pub struct EncodedMemory {
-    pub reset: bool,
     pub records: Vec<[f32; RECORD_DIM]>,
     pub references: Vec<[f32; REFERENCE_DIM]>,
     pub details: Vec<[f32; DETAIL_DIM]>,
@@ -637,89 +656,23 @@ impl RowWriter for EncodedMemory {
         }
         Ok(())
     }
-
-    fn reset_memory(&mut self) {
-        self.reset = true;
-    }
 }
 
-/// Caller-owned native transport state, never serialized with game facts.
-#[derive(Default)]
-pub struct MemoryEncoding {
-    origin: Option<Arc<()>>,
-    counts: [usize; 4],
-    version: u64,
-    indexes: std::collections::HashMap<usize, usize>,
-    // Keep pointer-indexed snapshots alive until this buffer changes games.
-    log: Option<DecisionLog>,
-}
-
+/// The log's rows in their dense column reading.
 pub fn encode(log: &DecisionLog) -> EncodedMemory {
-    encode_suffix(log, &mut MemoryEncoding::default()).1
-}
-
-pub fn encode_suffix(
-    log: &DecisionLog,
-    cursor: &mut MemoryEncoding,
-) -> ([usize; 4], EncodedMemory) {
     let mut out = EncodedMemory::default();
-    let starts =
-        write_suffix(log, cursor, &mut out).expect("dense memory projection is infallible");
-    (starts, out)
+    write(log, &mut out).expect("dense memory projection is infallible");
+    out
 }
 
-pub(super) fn write_suffix(
+/// Write every record, shared snapshot, detail and member of `log`.
+pub(super) fn write(
     log: &DecisionLog,
-    cursor: &mut MemoryEncoding,
-    out: &mut impl RowWriter,
-) -> Result<[usize; 4], ObservationEncodeError> {
-    let reset = cursor
-        .origin
-        .as_ref()
-        .is_none_or(|origin| !Arc::ptr_eq(origin, &log.origin));
-    if reset {
-        *cursor = MemoryEncoding::default();
-        cursor.origin = Some(log.origin.clone());
-        out.reset_memory();
-    }
-    let mut starts = cursor.counts;
-    if starts[0] > 0 && cursor.version != log.tail_version() {
-        starts[0] -= 1;
-        let last = cursor
-            .log
-            .as_ref()
-            .unwrap()
-            .tail
-            .as_ref()
-            .unwrap()
-            .rows
-            .last()
-            .unwrap();
-        starts[3] -=
-            last.context.mana_sources.len() + last.response.len() + last.choice.references.len();
-    }
-    write_from(log, starts, &mut cursor.indexes, out)?;
-    cursor.counts = [
-        log.len(),
-        log.detail_count(),
-        log.reference_count(),
-        log.member_count(),
-    ];
-    cursor.version = log.tail_version();
-    cursor.log = Some(log.clone());
-    Ok(starts)
-}
-
-fn write_from(
-    log: &DecisionLog,
-    starts: [usize; 4],
-    indexes: &mut std::collections::HashMap<usize, usize>,
     out: &mut impl RowWriter,
 ) -> Result<(), ObservationEncodeError> {
-    use crate::cards::tokens::name_value;
-    let [record_start, mut detail_slot, reference_start, mut member_slot] = starts;
-    for (offset, reference) in log.snapshots_since(reference_start).enumerate() {
-        let index = reference_start + offset;
+    let (mut detail_slot, mut member_slot) = (0, 0);
+    let mut indexes = std::collections::HashMap::new();
+    for (index, reference) in log.snapshots_since(0).enumerate() {
         indexes.insert(Arc::as_ptr(reference) as usize, index + 1);
         let mut header = [Cell::ZERO; REFERENCE_DIM];
         header[0] = Integer(reference.role as i64);
@@ -776,7 +729,7 @@ fn write_from(
         header[12] = Integer(1);
         out.write(Table::DecisionReferences, 0, index, &header)?;
     }
-    for (index, record) in log.records_since(record_start).enumerate() {
+    for (index, record) in log.records_since(0).enumerate() {
         let mut header = [Cell::ZERO; RECORD_DIM];
         for (offset, value) in [
             (0, record.ordinal),
@@ -789,7 +742,7 @@ fn write_from(
         }
         header[10] = Integer(record.context.phase as i64);
         header[11] = Integer(record.context.step as i64);
-        header[12] = Word(name_value(&format!("DecisionMemory::{}", record.kind)));
+        header[12] = Word(name_value(&record_name(&record.kind)));
         header[14] = Integer(member_slot as i64);
         for (group, references) in [
             &record.context.mana_sources,
@@ -836,7 +789,7 @@ fn write_from(
                 .choice
                 .kind
                 .as_ref()
-                .map(|kind| name_value(&format!("DecisionMemory::{kind}")) as u32),
+                .map(|kind| name_value(&record_name(kind)) as u32),
             record.choice.mode,
             record.choice.ability,
             record.choice.name_row.map(|n| n + 1),
@@ -854,7 +807,7 @@ fn write_from(
             header[72] = Integer(1);
             header[73] = Integer(i64::from(value));
         }
-        out.write(Table::DecisionRecords, 0, record_start + index, &header)?;
+        out.write(Table::DecisionRecords, 0, index, &header)?;
     }
     debug_assert_eq!(detail_slot, log.detail_count());
     debug_assert_eq!(member_slot, log.member_count());
@@ -1150,8 +1103,8 @@ pub(crate) fn capture(
         kind: format!("{:?}", space.kind),
         context: DecisionContext {
             turn: game.state.turn.turn_number,
-            phase: game.state.turn.current_phase_kind() as u8,
-            step: game.state.turn.current_step_kind() as u8,
+            phase: phase_index(game.state.turn.current_phase_kind()),
+            step: step_index(game.state.turn.current_step_kind()),
             life: players.map(|p| game.state.players[p.0].life),
             hand,
             board_counts,
@@ -1196,8 +1149,8 @@ mod tests {
     use super::*;
     use crate::{
         agent::{
-            observation::Observation,
-            observation_encoder::{self, ObservationEncoderConfig},
+            observation::Observation, observation_encoder::ObservationEncoderConfig,
+            observation_rows::InputRows,
         },
         state::player::PlayerConfig,
     };
@@ -1243,6 +1196,25 @@ mod tests {
     }
 
     #[test]
+    fn decision_memory_keeps_the_stored_combat_damage_and_cleanup_indices() {
+        use crate::flow::turn::{PhaseKind, StepKind, PHASE_STEPS};
+
+        let mut game = game();
+        for (phase, step, saved_phase, saved_step) in [
+            (PhaseKind::Combat, StepKind::CombatDamage, 2, 7),
+            (PhaseKind::Ending, StepKind::Cleanup, 4, 11),
+        ] {
+            game.state.turn.current_phase = phase as usize;
+            game.state.turn.current_step = PHASE_STEPS[phase as usize]
+                .iter()
+                .position(|&scheduled| scheduled == step)
+                .unwrap();
+            let context = pending_pass(&game).unwrap().record.context;
+            assert_eq!((context.phase, context.step), (saved_phase, saved_step));
+        }
+    }
+
+    #[test]
     fn decision_memory_disabled_and_search_clones_do_not_capture() {
         let mut game = game();
         assert!(pending_pass(&game).is_some());
@@ -1282,45 +1254,6 @@ mod tests {
         let observation = Observation::for_player(&first, PlayerId(1));
         let decoded = crate::agent::observation_json::parse(&observation.to_json()).unwrap();
         assert_eq!(decoded.decision_memory, observation.decision_memory);
-    }
-
-    #[test]
-    fn suffix_encoding_matches_dense_through_chunks_coalescing_and_reset() {
-        let mut game = game();
-        let pending = pending_pass(&game).unwrap();
-        let mut cursor = MemoryEncoding::default();
-        let mut retained = EncodedMemory::default();
-        for step in 0..100 {
-            let mut row = pending.clone();
-            row.record.context.turn = step / 2; // each second pass coalesces
-            commit(&mut game, Some(row));
-            let log = &game.decision_memory[1];
-            for _ in 0..2 {
-                // unchanged reads write no rows
-                let (starts, suffix) = encode_suffix(log, &mut cursor);
-                if suffix.reset {
-                    retained = EncodedMemory::default();
-                }
-                retained.records.truncate(starts[0]);
-                retained.details.truncate(starts[1]);
-                retained.references.truncate(starts[2]);
-                retained.members.truncate(starts[3]);
-                retained.records.extend(suffix.records);
-                retained.details.extend(suffix.details);
-                retained.references.extend(suffix.references);
-                retained.members.extend(suffix.members);
-                let dense = encode(log);
-                assert_eq!(retained.records, dense.records);
-                assert_eq!(retained.details, dense.details);
-                assert_eq!(retained.references, dense.references);
-                assert_eq!(retained.members, dense.members);
-            }
-        }
-        let restored: DecisionLog =
-            serde_json::from_str(&serde_json::to_string(&game.decision_memory[1]).unwrap())
-                .unwrap();
-        assert!(encode_suffix(&restored, &mut cursor).1.reset);
-        assert!(encode_suffix(&DecisionLog::default(), &mut cursor).1.reset);
     }
 
     #[test]
@@ -1439,7 +1372,7 @@ mod tests {
             max_decision_members: memory.members.len(),
             ..Default::default()
         };
-        assert!(observation_encoder::encode(&obs, &config).is_ok());
+        assert!(InputRows::read(&obs, &config).is_ok());
         for field in [
             "decision_records",
             "decision_references",
@@ -1454,11 +1387,10 @@ mod tests {
                 "decision_members" => small.max_decision_members -= 1,
                 _ => unreachable!(),
             }
-            match observation_encoder::encode(&obs, &small) {
-                Err(observation_encoder::ObservationEncodeError::Capacity {
-                    field: actual,
-                    ..
-                }) => assert_eq!(actual, field),
+            match InputRows::read(&obs, &small) {
+                Err(ObservationEncodeError::Capacity { field: actual, .. }) => {
+                    assert_eq!(actual, field)
+                }
                 _ => panic!("missing complete-prefix capacity error for {field}"),
             }
         }
@@ -1753,7 +1685,9 @@ mod tests {
             .all(|ability| matches!(ability.mana_cost.purpose, SpendingContext::Activate { .. })));
 
         let unmodified = snapshot(&game, land, PlayerId(0), true);
-        assert!(crate::agent::record_vocabulary::missing_program_tokens(&unmodified.program).is_empty());
+        assert!(
+            crate::agent::record_vocabulary::missing_program_tokens(&unmodified.program).is_empty()
+        );
         assert!(!unmodified.description.contains("SpendingObject"));
 
         let affected_land = game.affected_permanent(land_perm).unwrap();
@@ -1773,7 +1707,9 @@ mod tests {
             .any(|ability| ability.granted_by.is_some()));
 
         let reference = snapshot(&game, land, PlayerId(0), true);
-        assert!(crate::agent::record_vocabulary::missing_program_tokens(&reference.program).is_empty());
+        assert!(
+            crate::agent::record_vocabulary::missing_program_tokens(&reference.program).is_empty()
+        );
         assert!(!reference.description.contains("SpendingObject"));
         assert!(!reference.description.contains("AbilityGrant"));
     }

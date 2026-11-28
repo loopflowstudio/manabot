@@ -15,12 +15,12 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, Self
 
 import numpy as np
 
-from manabot.env.observation import (
-    ObservationSpace,
-    PolicyObservation,
-)
+from manabot.belief.encoding import BeliefRows
+from manabot.env.observation import ObservationSpace
 from manabot.policy.checkpoint import ParameterArrays, PolicyCheckpoint
 from manabot.policy.prepare import Prepared
+from manabot.policy.readings import Readings
+from manabot.policy.spans import PolicyObservation
 
 if TYPE_CHECKING:
     from manabot.infra.config import ModelConfig
@@ -85,6 +85,9 @@ class BackendPolicy(Protocol):
     observation_space: ObservationSpace
     belief_count_buckets: int
     value_semantic: Literal["signed_outcome", "win_logit"] | None
+
+    @property
+    def readings(self) -> Readings: ...
 
     @property
     def config(self) -> "ModelConfig": ...
@@ -152,7 +155,11 @@ class BackendPolicy(Protocol):
         ...
 
     def prepare(
-        self, obs: PolicyObservation, *, inference: bool = False
+        self,
+        obs: PolicyObservation,
+        *,
+        inference: bool = False,
+        belief: BeliefRows[np.ndarray] | None = None,
     ) -> Prepared[np.ndarray]:
         """Index one admitted observation batch (`inference`: compact as
         PyTorch CPU inference does)."""

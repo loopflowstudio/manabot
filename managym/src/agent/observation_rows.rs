@@ -1,11 +1,13 @@
 //! Destinations of the shared observation encoder. Integer cells retain their
 //! source value until the destination chooses its physical representation.
+//!
+//! `PackedRows` is the transport: CSR batches for policies. `InputRows` reads
+//! one observation's rows in their dense column reading, for engine tests and
+//! benchmarks that inspect a column.
 
 use super::{
     observation::Observation,
-    observation_encoder::{
-        encode_rows, EncodedObservationMut, ObservationEncodeError, ObservationEncoderConfig,
-    },
+    observation_encoder::{encode_rows, ObservationEncodeError, ObservationEncoderConfig},
     observation_layout::{ArrayLayout, PackedField, Storage},
 };
 use std::collections::BTreeMap;
@@ -51,7 +53,6 @@ pub trait RowWriter {
         slot: usize,
         row: &[Cell],
     ) -> Result<(), ObservationEncodeError>;
-    fn reset_memory(&mut self) {}
 }
 
 macro_rules! tables {
@@ -62,11 +63,6 @@ macro_rules! tables {
         impl Table {
             pub fn name(self) -> &'static str {
                 match self { $(Self::$table => stringify!($field),)* Self::ActionFocus => "action_focus" }
-            }
-        }
-        impl EncodedObservationMut<'_> {
-            fn values(&mut self, table: Table) -> &mut [f32] {
-                match table { $(Table::$table => self.$field,)* Table::ActionFocus => unreachable!() }
             }
         }
     }
@@ -99,7 +95,7 @@ tables! {
     DecisionMembers => decision_members
 }
 
-pub(super) fn write_dense_row(row: &[Cell], target: &mut [f32]) {
+pub(crate) fn write_dense_row(row: &[Cell], target: &mut [f32]) {
     let mut i = 0;
     while i < row.len() {
         match row[i] {
@@ -116,7 +112,53 @@ pub(super) fn write_dense_row(row: &[Cell], target: &mut [f32]) {
     }
 }
 
-impl RowWriter for EncodedObservationMut<'_> {
+/// One observation's rows by table and seat. Each row is in its dense column
+/// reading: a signed word fills its high and low columns, a payload reads as
+/// its scaled value. Only live rows are present; there is no padding.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct InputRows {
+    tables: BTreeMap<&'static str, [Vec<Vec<f32>>; 2]>,
+}
+
+impl InputRows {
+    pub fn read(
+        obs: &Observation,
+        config: &ObservationEncoderConfig,
+    ) -> Result<Self, ObservationEncodeError> {
+        let mut rows = Self::default();
+        encode_rows(obs, config, &mut rows)?;
+        Ok(rows)
+    }
+
+    /// The rows of `table` for `seat` (0 for tables without a seat axis).
+    pub fn seat(&self, table: &str, seat: usize) -> &[Vec<f32>] {
+        self.tables.get(table).map_or(&[], |seats| &seats[seat])
+    }
+
+    /// Every row of `table`, seat 0 first.
+    pub fn rows(&self, table: &str) -> Vec<&[f32]> {
+        (0..2)
+            .flat_map(|seat| self.seat(table, seat))
+            .map(Vec::as_slice)
+            .collect()
+    }
+
+    /// The `slot`th row of `table` across seats.
+    pub fn row(&self, table: &str, slot: usize) -> &[f32] {
+        self.rows(table)[slot]
+    }
+
+    /// Every cell of `table` in row order.
+    pub fn cells(&self, table: &str) -> Vec<f32> {
+        self.rows(table).concat()
+    }
+
+    pub fn count(&self, table: &str) -> usize {
+        self.rows(table).len()
+    }
+}
+
+impl RowWriter for InputRows {
     fn write(
         &mut self,
         table: Table,
@@ -124,37 +166,12 @@ impl RowWriter for EncodedObservationMut<'_> {
         slot: usize,
         row: &[Cell],
     ) -> Result<(), ObservationEncodeError> {
-        if table == Table::ActionFocus {
-            let start = slot * row.len();
-            for (dst, value) in self.action_focus[start..].iter_mut().zip(row) {
-                *dst = value.integer()?;
-            }
-            return Ok(());
-        }
-        let buffer = self.values(table);
-        let start = seat * (buffer.len() / 2) + slot * row.len();
-        let target = &mut buffer[start..start + row.len()];
-        write_dense_row(row, target);
-        match table {
-            Table::AgentPlayer => self.agent_player_valid[slot] = 1.0,
-            Table::OpponentPlayer => self.opponent_player_valid[slot] = 1.0,
-            Table::AgentCards => self.agent_cards_valid[slot] = 1.0,
-            Table::OpponentCards => self.opponent_cards_valid[slot] = 1.0,
-            Table::AgentPermanents => self.agent_permanents_valid[slot] = 1.0,
-            Table::OpponentPermanents => self.opponent_permanents_valid[slot] = 1.0,
-            Table::Stack => self.stack_valid[slot] = 1.0,
-            Table::Actions => self.actions_valid[slot] = 1.0,
-            Table::Events => self.events_valid[slot] = 1.0,
-            _ => {}
-        }
+        let rows = &mut self.tables.entry(table.name()).or_default()[seat];
+        debug_assert_eq!(slot, rows.len());
+        let mut dense = vec![0.0; row.len()];
+        write_dense_row(row, &mut dense);
+        rows.push(dense);
         Ok(())
-    }
-
-    fn reset_memory(&mut self) {
-        self.decision_records.fill(0.0);
-        self.decision_reference_details.fill(0.0);
-        self.decision_references.fill(0.0);
-        self.decision_members.fill(0.0);
     }
 }
 
@@ -252,7 +269,7 @@ impl PackedRows {
         obs: &Observation,
         config: &ObservationEncoderConfig,
     ) -> Result<(), ObservationEncodeError> {
-        let result = encode_rows(obs, config, self, None).and_then(|()| {
+        let result = encode_rows(obs, config, self).and_then(|()| {
             for table in self.tables.values() {
                 table
                     .counts
