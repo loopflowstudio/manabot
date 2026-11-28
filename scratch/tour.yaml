@@ -1,0 +1,13 @@
+at: 4e2a853518bd8ce6b1a631fc2f18c4ab9f14b779
+first:
+  - path: docs/engine-python.md
+    why: Live edit examples and the entry contract
+  - path: managym/src/flow/state_edit.rs
+    why: Replay variants, validation and the live decision transaction
+  - path: managym/src/flow/zones.rs
+    why: Shared departure knowledge and permanent installation
+  - path: managym/src/flow/state_edit/tests.rs
+    why: Quiet entry, Aura legality, knowledge and statistics
+  - path: managym/src/agent/env/state_edit_tests.rs
+    why: Refreshed combat offers and cold replay
+hide: []
