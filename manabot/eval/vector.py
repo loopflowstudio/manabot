@@ -23,7 +23,7 @@ import math
 from pathlib import Path
 import time
 from time import monotonic
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from uuid import uuid4
 
 from etude.eval.agents import ForwardError
@@ -145,6 +145,19 @@ class SlotState:
         return sum(self.decision_counts.values())
 
 
+def vector_layout_key(
+    space: ObservationSpace,
+) -> tuple[dict[str, tuple[int, ...]], Literal["error", "first-legal"], bool, bool]:
+    """The native layout and settings bound once for all slots."""
+    config = space.config
+    return (
+        space.shapes,
+        config.action_overflow,
+        config.max_decision_records > 0,
+        config.decision_memory_include_own,
+    )
+
+
 def admit_active_match(
     match: Match,
     agents: Sequence[object],
@@ -172,8 +185,12 @@ def admit_active_match(
     }
     # Pairing admission requires a checkpoint in the candidate seat.
     space = inputs["candidate"].space
-    if any(checkpoint.space.shapes != space.shapes for checkpoint in inputs.values()):
-        raise ValueError("players have different observation ABIs")
+    layout_key = vector_layout_key(space)
+    if any(
+        vector_layout_key(checkpoint.space) != layout_key
+        for checkpoint in inputs.values()
+    ):
+        raise ValueError("players have different vector observation layouts")
     if not space.one_token:
         raise ValueError("vector evaluation requires policy input v11")
 
@@ -305,13 +322,14 @@ def finalize_match(active_match: ActiveMatch) -> Result:
 def open_vector(
     num_envs: int, space: ObservationSpace
 ) -> tuple[RecordedVectorEnv, dict[str, np.ndarray]]:
+    _, action_overflow, decision_memory, include_own = vector_layout_key(space)
     vector = RecordedVectorEnv(
         num_envs=num_envs,
         seed=0,
         skip_trivial=True,
         player_policies=("agent", "agent"),
-        decision_memory=space.config.max_decision_records > 0,
-        decision_memory_include_own=space.config.decision_memory_include_own,
+        decision_memory=decision_memory,
+        decision_memory_include_own=include_own,
         record_fraction=1.0,
         record_in_memory=True,
         decision_events=True,
@@ -324,7 +342,7 @@ def open_vector(
     }
     vector.set_observation_layout(
         state_buffers,
-        space.config.action_overflow,
+        action_overflow,
         layout=space.layout,
     )
     return vector, state_buffers
@@ -494,7 +512,6 @@ async def play_pairings(
         nonlocal current_space, source_exhausted, legs_per_match_hint
         while not source_exhausted and len(pending_legs) < needed_legs:
             capacity = slots - max(len(deferred_matches), len(ready_errors))
-            # One failed forward can settle live and deferred deals at once.
             if capacity <= 0:
                 break
             missing = needed_legs - len(pending_legs)
@@ -521,7 +538,9 @@ async def play_pairings(
                 active_matches.add(active_match)
                 if current_space is None:
                     current_space = active_match.space
-                if active_match.space.config == current_space.config:
+                if vector_layout_key(active_match.space) == vector_layout_key(
+                    current_space
+                ):
                     pending_legs.extend(legs)
                 else:
                     deferred_matches.append((active_match, legs))
@@ -630,9 +649,10 @@ async def play_pairings(
                     current_space = pending_legs[0].active_match.space
                 elif deferred_matches:
                     current_space = deferred_matches[0][0].space
+                    layout_key = vector_layout_key(current_space)
                     for _ in range(len(deferred_matches)):
                         match, legs = deferred_matches.popleft()
-                        if match.space.config == current_space.config:
+                        if vector_layout_key(match.space) == layout_key:
                             pending_legs.extend(legs)
                         else:
                             deferred_matches.append((match, legs))
@@ -657,10 +677,13 @@ async def play_pairings(
                     + [0] * idle,
                 )
                 settle_openings(seated)
-                await backfill_free_slots()
                 continue
 
             assert state_buffers is not None and current_space is not None
+            # Deliver failures before asking Etude for replacements.
+            await backfill_free_slots()
+            if ready_errors or completed_matches:
+                continue
 
             # Check per-game command caps and active gameplay time before stepping.
             expired: dict[int, tuple[str, str]] = {}
@@ -690,7 +713,6 @@ async def play_pairings(
                             status="interrupted", reason=reason, digest=digests[slot]
                         ),
                     )
-                await backfill_free_slots()
                 continue
 
             if not any(slot_states):
@@ -789,7 +811,6 @@ async def play_pairings(
                     )
                     complete_leg(slot_state)
 
-            await backfill_free_slots()
     finally:
         if vector is not None:
             vector.close()

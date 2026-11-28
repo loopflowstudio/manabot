@@ -425,12 +425,15 @@ vector runner groups v11 observations by checkpoint key and prepares one
 host batch per checkpoint per round, including seats that blank decision
 memory. It awaits `Forward([prepared], rows=prepared.batch)`. The game worker
 reuses verified checkpoint metadata across deals.
-A checkpoint forward failure settles the affected matches as errors while
-unrelated slots continue. For a local Etude run, pass the generator and
-agent set to `active.play_many`. Each live decision round divides its elapsed
-time among the active slots. A game's budget and recorded execution time use
-its share. The Etude run deadline covers admission, replay and result delivery
-too.
+A checkpoint forward failure settles the affected matches as errors before
+the runner requests replacements for those slots. Unrelated games continue.
+Checkpoints in one deal must agree on the vector observation layout, action
+overflow and decision-memory capture. Compatible deals share the environment
+even when their seat-specific mana settings differ. For a local Etude run,
+pass the generator and agent set to `active.play_many`. Each live decision
+round divides its elapsed time among the active slots. A game's budget and
+recorded execution time use its share. The Etude run deadline covers
+admission, replay and result delivery too.
 
 `manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path` and
 prefers CUDA, followed by MLX, MPS, and CPU. MLX uses
@@ -461,9 +464,12 @@ Managed checkpoint registrations carry the declared precision's compute class
 and `numpy-pcg64-v1`. Float32 keeps `etude-policy-f32-auto-v1`. The paired
 arena uses the same player seeds across precision settings. Trophy
 `held_out_jobs(runs, precision=...)` sets the loader, tournament environment
-and per-deal precision from one declaration. `manabot.sim.execution` reads the
-retained `shared-eval-v1` and `shared-eval-v2` records. Standalone local evaluation and training monitoring retain scalar checkpoint
-play through bounded local children.
+and per-deal precision from one declaration. Float32 keeps the tournament name
+`tla-trophies-held-out-32`. BF16 and TF32 add their precision as a suffix.
+Pass the same precision to the trophy `report(precision=...)` to select its
+tournament. `manabot.sim.execution` reads the retained `shared-eval-v1` and
+`shared-eval-v2` records. Standalone local evaluation and training monitoring
+retain scalar checkpoint play through bounded local children.
 
 **Failure.** The game loop checks `game_seconds` between decisions and enforces
 `max_commands`. Scalar play fsyncs the pending Command before native execution.

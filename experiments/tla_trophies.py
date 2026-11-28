@@ -242,6 +242,10 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     return held_out_jobs([run for run in state.runs if run.launch == RAW_JOB])
 
 
+def benchmark_name(precision: EvalPrecision) -> str:
+    return BENCHMARK if precision == "float32" else f"{BENCHMARK}-{precision}"
+
+
 def held_out_jobs(
     runs: Sequence[TrainingRunSummary], *, precision: EvalPrecision = "float32"
 ) -> list[EvalJob]:
@@ -268,7 +272,7 @@ def held_out_jobs(
             agents=agents_for(precision),
             checkpoints=checkpoints,
             tournament=Benchmark(
-                name=BENCHMARK,
+                name=benchmark_name(precision),
                 environment=Environment(
                     name="tla-trophies",
                     # This file and pairing.py when the stored games were played.
@@ -289,8 +293,8 @@ def held_out_jobs(
     ]
 
 
-def report() -> Report:
-    matches = Matches(tournament=BENCHMARK)
+def report(*, precision: EvalPrecision = "float32") -> Report:
+    matches = Matches(tournament=benchmark_name(precision))
     return Report(
         clock="updates",
         score=Score(table="plays", value="score", reference=0.5),

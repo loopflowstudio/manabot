@@ -54,7 +54,7 @@ from manabot.sim.registration import EvalPrecision
 ARENA = "eval-throughput"
 DEALS = 32
 RANDOM_SEED = 1
-GAME_SECONDS = 600.0
+GAME_SECONDS = 120.0
 
 
 @dataclass
