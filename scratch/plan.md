@@ -105,22 +105,33 @@ the Etude binding and its deployment are evaluated separately.
 
 ## Review record
 
-The superseded 4-leg review (F1–F6 of the earlier page) is fully settled in
-passes 1–3. `scratch/concept-review.html` was rewritten at `c1df3f02c2`
-(after pass 5); every claim below was checked against the code. Placement:
+Earlier reviews (the 4-leg F1–F6, post-pass 5 F1–F5) are settled in passes
+1–7. `scratch/concept-review.html` was rewritten at `bf5bb9c70d` (after pass 7);
+its claims were spot-checked against HEAD. Placement, choices made headless
+and marked for review:
 
-- **Async seats, loader, game budget and ownership (F2–F5).** Pass 6 resolved
-  these findings. The vector runner uses one async sampler forward per
-  checkpoint, shares its preparation and sampling with scalar play, and keeps
-  checkpoint admission within the game worker. Managym owns slot record
-  detachment, seed continuity and opt-in decision events. Scalar and vector
-  runners share attempt retention. The trophy job threads one precision
-  through the loader, environment and pairing. CUDA profiling remains deferred.
-
-- **Host work and live frames (F1, Q1/Q2) -> deferred.** 1a changes stored
-  trace annotations and breaks the "same traces as serial play" acceptance
-  below, so it is not taken headless; the runner keeps live frames (1b).
-- **Q4 (transport).** Ship review moved the remaining input copies into Pass 7.
+- **F1 / Q1 -> pass 8, 1a (for review).** `held_out_jobs(precision="bf16"|"tf32")`
+  changes `Environment.config` and `Deal.precision` but keeps
+  `Benchmark(name=BENCHMARK)` (`experiments/tla_trophies.py:271`, and
+  `Matches(tournament=BENCHMARK)` at :293), so Etude raises
+  `tournament_conflict` beside stored float32 runs. Name non-float32
+  benchmarks `f"{BENCHMARK}-{precision}"`; float32 keeps its name. Passed
+  over 1b (callers pick a fresh experiment): it breaks the comparison use.
+  Irreversible once a non-float32 tournament is scored, so ship-review
+  surfaces it.
+- **F2 / Q3 -> pass 8, 3a (for review).** `admit_active_match` checks only
+  `space.shapes` (`manabot/eval/vector.py:175`) while slot reuse compares the
+  whole `space.config` (:524, :635). One `vector_layout_key(space)` = shapes,
+  `action_overflow`, `max_decision_records > 0`, `decision_memory_include_own`
+  (what `open_vector` binds, :313–327) serves both.
+- **F3 / Q4 -> pass 8, 4b (for review).** Drain `ready_errors` before
+  `backfill_free_slots()` so a large `ForwardError` burst does not idle freed
+  slots a round; set `experiments/eval_throughput.py:57` `GAME_SECONDS` to
+  120.0 like `tla_trophies`. Passed over 4a's extra per-slot wall ceiling: a
+  second budget beside the per-active-slot charge, while `max_commands` and
+  Etude's `max_hours` already bound a pathological slot.
+- **F4 / Q2 (host overhead) -> deferred**, below; Q2 (live frames) stays open.
+- **S1, S2, S3 -> deferred** (unchanged).
 
 ## Passes
 
@@ -135,7 +146,14 @@ see "What exists".
    the new checkpoint. All 512 Gate 1 games replayed with zero array copies.
    The MPS compilation probe favored eager execution. See `scratch/qa.html`
    and `experiments/reports/eval_throughput.md`.
-8. **Release (blocked on `etude-sdk 0.5.0` on PyPI; 0.4.7 on 2026-11-27).**
+8. **Review fixes (next).** F1 suffix non-float32 trophy benchmark names
+   (both `Benchmark` and `Matches`), with a test assembling float32 and bf16
+   jobs together; F2 `vector_layout_key` in admission and slot reuse, with a
+   test that a per-seat `mana_payment` difference reuses the env and an
+   `action_overflow` mismatch is refused; F3 error drain before backfill and
+   `GAME_SECONDS = 120.0`. Run `tests/eval/test_vector_eval.py`,
+   `tests/eval/test_experiment_files.py` and `scripts/public_api.py check`.
+9. **Release (blocked on `etude-sdk 0.5.0` on PyPI; 0.4.7 on 2026-11-27).**
    Update the three `etude-sdk` bounds and the `==0.4.7` play-runtime pin in
    `pyproject.toml`, run `uv lock --upgrade-package etude-sdk`, then a locked
    sync and the managed eval tests.
@@ -151,8 +169,12 @@ Managed loading, precision and Apple device selection are documented in
   `SlotLoad.fresh` (L4 fill 9.9–18.6 of 64 rows), replay and retention off the
   event loop, and the open trace choice: keep live viewer frames (1b, current)
   or record compact annotations verified at replay (1a, changes stored
-  traces). Host arena + replay is 72–89% of L4 wall. Needs a Task and the
-  trace decision.
+  traces). Host arena + replay is 72–89% of L4 wall, 56–67% on M4 Max
+  zero-copy Gate 1. Trace-preserving first: `RecordedVectorEnv._step`
+  (`managym/recording.py:1853–1886`) builds a second
+  `semantic_decision_frames_json` and calls `current_action_summaries()`
+  again each round; `finalize_match` runs replay on the event loop with 3×
+  `bind_record`. Needs a Task and the trace decision.
 - **L4 `w160l8` bf16 slower than float32** (forward 24.0 -> 40.5 s). Needs a
   CUDA profile on a rental.
 - **Scalar host overhead (S2)** in `scratch/questions.md`.
