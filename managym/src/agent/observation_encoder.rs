@@ -1687,8 +1687,7 @@ mod tests {
     };
 
     use super::{
-        action, fact, permanent, ObservationEncodeError, ObservationEncoderConfig, CARD_DIM,
-        ZONE_DIM,
+        action, card, fact, permanent, ObservationEncodeError, ObservationEncoderConfig, ZONE_DIM,
     };
     use crate::agent::observation_rows::InputRows;
 
@@ -2158,7 +2157,7 @@ mod tests {
 
         // Validity flags for populated card/permanent slots: the battlefield
         // object is its permanent row only.
-        assert_eq!(encoded.row("agent_cards", 0)[CARD_DIM - 1], 1.0);
+        assert_eq!(encoded.row("agent_cards", 0)[card::VALID], 1.0);
         assert_eq!(encoded.row("agent_permanents", 0)[permanent::VALID], 1.0);
 
         // Expected object indices with padding-aware ordering:
@@ -2334,7 +2333,7 @@ mod tests {
         let row = encoded.row("agent_cards", obs.agent_cards.len() + last);
         assert_eq!(row[..ZONE_DIM], [0.0; ZONE_DIM]);
         assert_eq!(row[37], 1.0);
-        assert_eq!(row[CARD_DIM - 1], 1.0);
+        assert_eq!(row[card::VALID], 1.0);
         for undersized in [
             ObservationEncoderConfig {
                 max_actions: 32,

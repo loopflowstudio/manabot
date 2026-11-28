@@ -56,7 +56,6 @@ from manabot.training.updates.health import (
 from manabot.training.updates.objective import damped_policy_loss
 from manabot.training.updates.selection import value_scale
 from manabot.verify.text_observation import priority_root
-import managym
 from tests.model.prepared_routes import device_input
 
 DEVICE = os.environ.get("MANABOT_NUMERICS_DEVICE", "cpu")
@@ -203,10 +202,7 @@ def test_forced_action_is_finite_with_exact_zero_gradient() -> None:
 
 def five_offers() -> ObservationSelection:
     """A real decision with exactly five legal offers, in a five-offer space."""
-    env = managym.Env(seed=0, skip_trivial=True)
-    env.reset(Match().to_rust())
-    for _ in range(6):
-        env.step(0)
+    env = priority_root(("Plains", "Island", "Swamp", "Mountain"), ())
     obs = env.observation_for_player(env.current_agent_index())
     assert len(obs.action_space.actions) == 5
     space = ObservationSpace(ObservationConfig(max_actions=5))

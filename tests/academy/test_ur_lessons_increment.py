@@ -2,7 +2,6 @@
 
 import random
 
-import numpy as np
 import pytest
 
 from manabot.env.env import Env
@@ -53,8 +52,10 @@ def test_match_config_candidate_finishes_with_complete_native_and_python_encodin
     obs, _ = env.reset(seed=seed)
     rng = random.Random(seed)
     for _ in range(5000):
-        actions = np.flatnonzero(obs["actions_valid"])
-        obs, _, terminal, truncated, info = env.step(int(rng.choice(actions)))
+        batch = managym.encode_observation_batch([obs], space.layout)
+        action_count = int(batch.action_counts[0])
+        assert action_count == len(obs.action_space.actions)
+        obs, _, terminal, truncated, info = env.step(rng.randrange(action_count))
         assert not truncated
         assert not info.get("action_truncated", False)
         if terminal:

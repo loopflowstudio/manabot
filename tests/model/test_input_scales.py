@@ -346,23 +346,7 @@ def sampled_maxima(configuration: str, *, legacy: bool) -> dict[str, float]:
     return maxima
 
 
-@pytest.mark.parametrize(
-    "configuration",
-    [
-        pytest.param(
-            name,
-            marks=pytest.mark.xfail(
-                strict=True,
-                raises=ValueError,
-                reason="native decision-memory details emit program tokens absent "
-                "from managym.record_vocabulary(); admission refuses them",
-            ),
-        )
-        if name == "memory"
-        else name
-        for name in CONFIGURATIONS
-    ],
-)
+@pytest.mark.parametrize("configuration", CONFIGURATIONS)
 def test_fresh_inputs_stay_within_the_bound(configuration: str) -> None:
     """Every float a fresh model's projections receive stays within |x| <= 4
     on sampled games; the fields a backend reads itself, and the few decoded by
