@@ -38,7 +38,6 @@ use crate::{
             RestrictedManaData, SideboardCardData, StackObjectData, StackObjectKindData,
             StackTargetData, StackTargetKindData, TurnData,
         },
-        structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
         vector_env::ObservationRead,
     },
     decision::Command as SemanticCommand,
@@ -204,6 +203,19 @@ pub(crate) fn map_encode_err(
         ObservationEncodeError::Capacity { .. } => ObservationCapacity::new_err(err.to_string()),
         _ => PyValueError::new_err(err.to_string()),
     }
+}
+
+#[cfg(feature = "python")]
+pub(super) fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
+    py.import_bound("warnings")?.call_method1(
+        "warn",
+        (
+            message,
+            py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
+            2,
+        ),
+    )?;
+    Ok(())
 }
 
 #[cfg(feature = "python")]
@@ -2062,6 +2074,10 @@ impl PyPermanent {
     #[getter]
     fn attacked_permanent(&self) -> Option<i32> {
         self.data.attacked_permanent
+    }
+    #[setter]
+    fn set_attacked_permanent(&mut self, value: Option<i32>) {
+        self.data.attacked_permanent = value;
     }
     #[getter]
     fn blocking(&self) -> Option<i32> {

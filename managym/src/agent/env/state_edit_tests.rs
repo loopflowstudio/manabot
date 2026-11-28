@@ -10,7 +10,7 @@ use crate::{
 };
 
 fn game(skip_trivial: bool) -> Env {
-    let mut env = Env::new(42, skip_trivial, false, false).with_decision_memory_include_own(true);
+    let mut env = Env::new(42, skip_trivial, false).with_decision_memory_include_own(true);
     let deck = [
         ("Mountain".into(), 28),
         ("Gray Ogre".into(), 8),

@@ -42,7 +42,6 @@ def test_matchup_loops_restore_decks_on_each_seat(probed, game_offset):
         num_games=4,
         seed=0,
         game_offset=game_offset,
-        backend=resolve("torch"),
         **kwargs,
     )
     if probed:

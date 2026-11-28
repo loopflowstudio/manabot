@@ -229,8 +229,9 @@ fn theorist_loyalty_is_paid_before_resolution_and_shared_across_abilities() {
     use managym::{
         agent::{
             observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_encoder::ObservationEncoderConfig,
             observation_layout::permanent,
+            observation_rows::InputRows,
         },
         flow::turn::StepKind,
         state::{game_object::PlayerId, permanent::CounterKind},
@@ -252,16 +253,10 @@ fn theorist_loyalty_is_paid_before_resolution_and_shared_across_abilities() {
         .iter()
         .position(|p| p.characteristics.name == name)
         .unwrap();
-    let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
-    let offset = row * permanent::WIDTH;
-    assert_eq!(
-        input.agent_permanents[offset + permanent::PRINTED_LOYALTY],
-        3.0
-    );
-    assert_eq!(
-        input.agent_permanents[offset + permanent::LOYALTY_ACTIVATED_THIS_TURN],
-        1.0
-    );
+    let input = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
+    let perm = input.row("agent_permanents", row);
+    assert_eq!(perm[permanent::PRINTED_LOYALTY], 3.0);
+    assert_eq!(perm[permanent::LOYALTY_ACTIVATED_THIS_TURN], 1.0);
     let restored: Observation = serde_json::from_str(&obs.to_json()).unwrap();
     assert_eq!(restored.to_json(), obs.to_json());
     s.advance_to_active_step(1, StepKind::Main);
@@ -674,7 +669,8 @@ fn proxy_protects_the_next_cast_and_plan_counts_only_noncreature_casts() {
     use managym::{
         agent::{
             observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_encoder::ObservationEncoderConfig,
+            observation_rows::InputRows,
         },
         state::{
             game_object::{PlayerId, Target},
@@ -710,7 +706,7 @@ fn proxy_protects_the_next_cast_and_plan_counts_only_noncreature_casts() {
         .as_deref()
         .unwrap()
         .contains("next spell you cast"));
-    encode(&waiting, &ObservationEncoderConfig::default()).unwrap();
+    InputRows::read(&waiting, &ObservationEncoderConfig::default()).unwrap();
     for expected in [ZoneType::Battlefield, ZoneType::Graveyard] {
         s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
         let ogre = cast_owned(&mut s, "Gray Ogre");
@@ -723,7 +719,7 @@ fn proxy_protects_the_next_cast_and_plan_counts_only_noncreature_casts() {
             .iter()
             .find(|effect| effect.effect.modification == "CantBeCountered");
         if expected == ZoneType::Battlefield {
-            encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+            InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
             assert_eq!(
                 protected.unwrap().members[0].target.object_id,
                 Some(obs.stack_objects[0].stack_object_id)
@@ -869,8 +865,9 @@ fn emblems_buff_only_their_controllers_creatures_after_the_walker_dies() {
     use managym::{
         agent::{
             observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_encoder::ObservationEncoderConfig,
             observation_layout::card,
+            observation_rows::InputRows,
         },
         cards::content_pack::default_content_pack,
         state::{
@@ -921,21 +918,22 @@ fn emblems_buff_only_their_controllers_creatures_after_the_walker_dies() {
                 .unwrap();
             assert_eq!(view.characteristics.keywords.indestructible, index > 0);
             let config = ObservationEncoderConfig::default();
-            let rows = encode(&obs, &config).unwrap();
-            let (card_rows, semantic_offset) = if seat == 0 {
-                (&rows.agent_cards, 0)
+            let rows = InputRows::read(&obs, &config).unwrap();
+            let card_table = if seat == 0 {
+                "agent_cards"
             } else {
-                (&rows.opponent_cards, config.max_cards_per_player)
+                "opponent_cards"
             };
-            let command_slots: Vec<_> = card_rows
-                .chunks_exact(config.card_dim())
+            let command_slots: Vec<_> = rows
+                .rows(card_table)
+                .iter()
                 .enumerate()
                 .filter(|(_, row)| row[card::ZONE_COMMAND] == 1.0)
                 .map(|(slot, _)| slot)
                 .collect();
             assert_eq!(command_slots.len(), index + 1);
             for (slot, emblem) in command_slots.into_iter().zip(&emblems) {
-                let joined = rows.semantic_cards[semantic_offset + slot];
+                let joined = rows.seat("semantic_cards", seat)[slot][0];
                 assert_eq!(joined, (emblem.registry_key + 1) as f32);
                 let def = default_content_pack()
                     .definition(CardDefId(emblem.registry_key as u32))
@@ -1490,8 +1488,9 @@ fn loyalty_activation_triggers_read_the_cost_paid() {
         agent::{
             action::Action,
             observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig, TURN_STATE_DIM},
+            observation_encoder::{ObservationEncoderConfig, TURN_STATE_DIM},
             observation_layout::turn_state,
+            observation_rows::InputRows,
         },
         flow::turn::StepKind,
         state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
@@ -1530,12 +1529,12 @@ fn loyalty_activation_triggers_read_the_cost_paid() {
         2
     );
     let obs = Observation::for_player(s.game(), PlayerId(0));
-    let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    let input = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
     assert_eq!(
-        input.player_turn_state[turn_state::LOYALTY_ABILITIES_ACTIVATED],
+        input.row("player_turn_state", 0)[turn_state::LOYALTY_ABILITIES_ACTIVATED],
         2.0
     );
-    assert_eq!(input.player_turn_state.len(), 2 * TURN_STATE_DIM);
+    assert_eq!(input.row("player_turn_state", 0).len(), TURN_STATE_DIM);
     for land in &lands {
         choose(
             &mut s,

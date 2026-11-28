@@ -61,8 +61,9 @@ fn confiscate_competes_with_later_control_and_releases_its_permanent() {
     use managym::{
         agent::{
             observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_encoder::ObservationEncoderConfig,
             observation_layout::permanent as columns,
+            observation_rows::InputRows,
         },
         state::{
             effect::{EffectDuration, Modification},
@@ -94,9 +95,9 @@ fn confiscate_competes_with_later_control_and_releases_its_permanent() {
             view.opponent_permanents[row].entry_controller_id,
             Some(view.agent.id)
         );
-        let encoded = encode(&view, &ObservationEncoderConfig::default()).unwrap();
+        let encoded = InputRows::read(&view, &ObservationEncoderConfig::default()).unwrap();
         assert_eq!(
-            encoded.opponent_permanents[row * columns::WIDTH + columns::CONTROL_DIFFERS_FROM_ENTRY],
+            encoded.row("opponent_permanents", row)[columns::CONTROL_DIFFERS_FROM_ENTRY],
             1.0
         );
         let affected = s.game().affected_permanent(ogre);

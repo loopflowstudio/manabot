@@ -42,3 +42,10 @@ been removed: `manabot.sim.search.flat`, `manabot.env.replay`,
 legacy `.pt` tracked-training saves (`learner.pt`/`optimizer.pt`/`ema.pt`) and
 `.pt` belief samplers (use portable `.safetensors` saves and samplers; published
 policy `.pt` checkpoint loading remains supported).
+
+The policy vocabulary splits runtime program tokens and decision-memory names
+out of `record_vocabulary()`: `record_vocabulary()` lists hashed fact and
+shared-effect names only, `runtime_tokens()` exposes runtime program symbols
+directly, and `decision_memory_names()` lists the hashed names used by policies
+with decision memory enabled. Existing checkpoints bind learned rows by key
+through the historical rename/retirement ledger.

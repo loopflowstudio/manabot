@@ -14,6 +14,7 @@ from tests.model.test_decision_memory import policy
 from tests.training.memory_chunks import (
     capacities,
     chunk_batch,
+    chunk_input,
     chunk_space,
     record,
 )

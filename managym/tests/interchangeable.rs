@@ -395,7 +395,7 @@ fn snapshot_and_game_over_preserve_and_clear_aliases() {
         mana_floats: [ManaFloats::All, ManaFloats::Off],
         ..GameSetup::from(vec![])
     };
-    let mut env = Env::new(487, true, false, false);
+    let mut env = Env::new(487, true, false);
     env.reset(setup).unwrap();
     // Keep both opening hands.
     env.step(0).unwrap();

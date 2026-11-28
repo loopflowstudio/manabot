@@ -9821,8 +9821,9 @@ fn abyssal_harvester_exiles_this_turns_graveyard_creature_copies_as_nightmare_an
         agent::{
             action::ActionSpaceKind,
             observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig, CARD_DIM},
+            observation_encoder::ObservationEncoderConfig,
             observation_layout::card as card_col,
+            observation_rows::InputRows,
         },
         state::{game_object::Target, player::ManaPayment},
     };
@@ -9866,13 +9867,13 @@ fn abyssal_harvester_exiles_this_turns_graveyard_creature_copies_as_nightmare_an
     assert!(obs.agent_cards[fresh_obs].put_into_graveyard_this_turn);
     assert!(!obs.agent_cards[fresh_obs].from_battlefield_this_turn);
     assert!(!obs.agent_cards[old_obs].put_into_graveyard_this_turn);
-    let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
     assert_eq!(
-        encoded.agent_cards[fresh_obs * CARD_DIM + card_col::PUT_INTO_GRAVEYARD_THIS_TURN],
+        encoded.row("agent_cards", fresh_obs)[card_col::PUT_INTO_GRAVEYARD_THIS_TURN],
         1.0
     );
     assert_eq!(
-        encoded.agent_cards[old_obs * CARD_DIM + card_col::PUT_INTO_GRAVEYARD_THIS_TURN],
+        encoded.row("agent_cards", old_obs)[card_col::PUT_INTO_GRAVEYARD_THIS_TURN],
         0.0
     );
 

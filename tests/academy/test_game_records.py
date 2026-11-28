@@ -78,7 +78,6 @@ def test_interrupted_record_import_is_closed_and_readable(
     capture.reset(env, players)
     capture.step(env, 0, annotation={"value": 0.31})
     capture.close()
-    live_sessions = set(server.SESSION_REGISTRY)
     selected = read_games(path)[0]
     imported = import_game(selected._record)
     assert imported["stop"] == "interrupted"

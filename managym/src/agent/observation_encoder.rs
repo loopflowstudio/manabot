@@ -472,9 +472,8 @@ pub fn encode_rows(
         out.write(Table::PlayerTurnState, 0, seat, &row)?;
         for (slot, card) in cards.iter().enumerate() {
             let mut row = [Cell::ZERO; CARD_DIM];
-            let row = &mut row[..config.card_dim()];
-            encode_card_features(card, mine, &context, config.layout, row);
-            out.write(card_table, 0, slot, row)?;
+            encode_card_features(card, mine, &context, &mut row);
+            out.write(card_table, 0, slot, &row)?;
             out.write(
                 Table::SemanticCards,
                 seat,
@@ -492,11 +491,10 @@ pub fn encode_rows(
             for (i, card) in obs.agent_sideboard.iter().enumerate() {
                 let slot = cards.len() + i;
                 let mut row = [Cell::ZERO; CARD_DIM];
-                let row = &mut row[..config.card_dim()];
                 for column in [card::IS_MINE, card::OUTSIDE, card::VALID] {
                     row[column] = Integer(1);
                 }
-                out.write(card_table, 0, slot, row)?;
+                out.write(card_table, 0, slot, &row)?;
                 out.write(
                     Table::SemanticCards,
                     seat,
@@ -776,13 +774,7 @@ struct CardContext {
     turn_number: u32,
 }
 
-fn encode_card_features(
-    card: &CardData,
-    is_mine: Cell,
-    context: &CardContext,
-    layout: InputLayout,
-    out: &mut [Cell],
-) {
+fn encode_card_features(card: &CardData, is_mine: Cell, context: &CardContext, out: &mut [Cell]) {
     let zone_index = (card.zone as i32 & 0xFF) as usize;
     if zone_index < ZONE_DIM {
         out[card::ZONE_LIBRARY + zone_index] = Integer(1);
@@ -848,10 +840,8 @@ fn encode_card_features(
         out[card::X] = Scalar(x as f32 / 10.0);
     }
     out[card::VALID] = Integer(1);
-    if layout == InputLayout::OneToken {
-        out[card::PUT_INTO_GRAVEYARD_THIS_TURN] = flag(card.put_into_graveyard_this_turn);
-        out[card::PRINTED_LOYALTY] = Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
-    }
+    out[card::PUT_INTO_GRAVEYARD_THIS_TURN] = flag(card.put_into_graveyard_this_turn);
+    out[card::PRINTED_LOYALTY] = Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
 }
 
 fn encode_permanent_features(permanent: &PermanentData, is_mine: Cell, out: &mut [Cell]) {
@@ -1105,11 +1095,7 @@ fn facts(obs: &Observation) -> Vec<Fact> {
                 );
             }
         }
-        if let Some(choice) = permanent
-            .chosen
-            .as_ref()
-            .filter(|_| layout == InputLayout::OneToken)
-        {
+        if let Some(choice) = permanent.chosen.as_ref() {
             use crate::state::permanent::EntryChoice;
             let fact = match choice {
                 EntryChoice::Color(c) => {

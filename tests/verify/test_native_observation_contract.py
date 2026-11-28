@@ -598,7 +598,7 @@ def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps() -> None:
     for key, value in reference.items():
         np.testing.assert_array_equal(rows[key][0], value, err_msg=key)
     actions = reference["actions"]
-    assert actions.shape[1] == 30
+    assert actions.shape[1] == 31
     np.testing.assert_array_equal(
         reference["action_focus"][0], reference["action_focus"][4]
     )

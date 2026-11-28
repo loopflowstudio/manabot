@@ -16,9 +16,9 @@ from manabot.env.observation import (
     FACT_DETAIL_INDEX,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
-    FACT_SET_NAME,
     FACT_SOURCE_INDEX,
     FACT_VALUE_INDEX,
+    NAME_ID_KINDS,
     ObservationSpace,
     column,
 )

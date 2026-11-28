@@ -220,8 +220,9 @@ fn spyglass_keeps_a_fixture_only_name_in_text_but_not_policy_input() {
     use managym::{
         agent::{
             observation::Observation,
-            observation_encoder::{encode, FactKind, ObservationEncoderConfig},
+            observation_encoder::{FactKind, ObservationEncoderConfig},
             observation_layout::fact,
+            observation_rows::InputRows,
         },
         cards::tokens::{name_value, TokenKind},
         state::{game_object::PlayerId, permanent::EntryChoice},
@@ -279,10 +280,10 @@ fn spyglass_keeps_a_fixture_only_name_in_text_but_not_policy_input() {
         .agent_permanents
         .iter()
         .any(|permanent| permanent.chosen.as_ref() == Some(&chosen)));
-    let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
     assert!(encoded
-        .facts
-        .chunks_exact(fact::WIDTH)
+        .rows("facts")
+        .iter()
         .all(|row| row[fact::KIND] != FactKind::ChosenName as u8 as f32));
 }
 

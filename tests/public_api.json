@@ -1260,7 +1260,13 @@
           "description": {
             "kind": "attribute"
           },
+          "division_amount": {
+            "kind": "attribute"
+          },
           "focus": {
+            "kind": "attribute"
+          },
+          "is_mana_ability": {
             "kind": "attribute"
           },
           "mode_index": {
@@ -1473,6 +1479,9 @@
           "owner_id": {
             "kind": "attribute"
           },
+          "put_into_graveyard_this_turn": {
+            "kind": "attribute"
+          },
           "registry_key": {
             "kind": "attribute"
           },
@@ -1658,6 +1667,9 @@
           "clause": {
             "kind": "attribute"
           },
+          "division": {
+            "kind": "attribute"
+          },
           "legal_at_resolution_start": {
             "kind": "attribute"
           },
@@ -1707,6 +1719,9 @@
             "kind": "attribute"
           },
           "delayed_frequency": {
+            "kind": "attribute"
+          },
+          "division_remaining": {
             "kind": "attribute"
           },
           "effect_execution": {
@@ -1784,6 +1799,9 @@
           "triggering_amount": {
             "kind": "attribute"
           },
+          "until_next_turn": {
+            "kind": "attribute"
+          },
           "waterbend": {
             "kind": "attribute"
           },
@@ -1857,6 +1875,15 @@
         "kind": "class",
         "members": {
           "to_json": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "DecisionSurface": {
+        "kind": "class",
+        "members": {
+          "projection_json": {
             "kind": "method",
             "signature": "(self)"
           }
@@ -2052,6 +2079,7 @@
             "signature": "(self)"
           },
           "combat_preview_json": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self, viewer, revision, fingerprint, plan_json)"
           },
@@ -2060,10 +2088,12 @@
             "signature": "(self, baseline)"
           },
           "compound_commands_json": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self, offers, submission_json)"
           },
           "compound_offers": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self)"
           },
@@ -2074,6 +2104,10 @@
           "current_agent_index": {
             "kind": "method",
             "signature": "(self)"
+          },
+          "decision": {
+            "kind": "method",
+            "signature": "(self, viewer=...)"
           },
           "decision_context_json": {
             "kind": "method",
@@ -2087,15 +2121,27 @@
             "kind": "method",
             "signature": "(self, viewer)"
           },
+          "decision_surface": {
+            "kind": "method",
+            "signature": "(self)"
+          },
           "determinize": {
             "kind": "method",
             "signature": "(self, seed, perspective=...)"
+          },
+          "edit_game_state": {
+            "kind": "method",
+            "signature": "(self, edits)"
           },
           "enable_card_capture": {
             "kind": "method",
             "signature": "(self)"
           },
           "enable_exposure_capture": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "enable_presentation": {
             "kind": "method",
             "signature": "(self)"
           },
@@ -2159,6 +2205,10 @@
             "kind": "method",
             "signature": "(self, viewer, revision, fingerprint, action_index)"
           },
+          "permanent_details_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
           "player_controls_json": {
             "kind": "method",
             "signature": "(self)"
@@ -2179,9 +2229,17 @@
             "kind": "method",
             "signature": "(self, viewer, expected_space_identity, max_batch_size)"
           },
+          "presentation_facts_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
           "presentation_subjects_json": {
             "kind": "method",
             "signature": "(self)"
+          },
+          "preview": {
+            "kind": "method",
+            "signature": "(self, choice, *, at=...)"
           },
           "public_schedule_json": {
             "kind": "method",
@@ -2276,18 +2334,30 @@
             "signature": "(self, action=...)"
           },
           "step_legacy_submission": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self, offers, submission_json)"
           },
           "step_structured": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self, offers, submission_json)"
           },
           "structured_offers": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self)"
           },
           "structured_search_offers": {
+            "deprecated": true,
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "submit": {
+            "kind": "method",
+            "signature": "(self, choice, *, at=...)"
+          },
+          "take_presentation_positions": {
             "kind": "method",
             "signature": "(self)"
           },
@@ -2468,6 +2538,31 @@
           }
         }
       },
+      "GameStateEdit": {
+        "kind": "class",
+        "members": {
+          "move_permanent": {
+            "kind": "staticmethod",
+            "signature": "(permanent, to=...)"
+          },
+          "set_counters": {
+            "kind": "staticmethod",
+            "signature": "(permanent, kind, count)"
+          },
+          "set_damage": {
+            "kind": "staticmethod",
+            "signature": "(permanent, damage)"
+          },
+          "set_life": {
+            "kind": "staticmethod",
+            "signature": "(player, life)"
+          },
+          "set_tapped": {
+            "kind": "staticmethod",
+            "signature": "(permanent, tapped)"
+          }
+        }
+      },
       "HandSnapshot": {
         "kind": "class",
         "members": {
@@ -2508,6 +2603,9 @@
       "Keywords": {
         "kind": "class",
         "members": {
+          "changeling": {
+            "kind": "attribute"
+          },
           "deathtouch": {
             "kind": "attribute"
           },
@@ -2793,6 +2891,9 @@
           "power": {
             "kind": "attribute"
           },
+          "printed_loyalty": {
+            "kind": "attribute"
+          },
           "text_box": {
             "kind": "attribute"
           },
@@ -2923,10 +3024,16 @@
           "attached_to": {
             "kind": "attribute"
           },
+          "attacked_permanent": {
+            "kind": "attribute"
+          },
           "attacked_this_turn": {
             "kind": "attribute"
           },
           "attacking": {
+            "kind": "attribute"
+          },
+          "blocked": {
             "kind": "attribute"
           },
           "blocking": {
@@ -2936,6 +3043,9 @@
             "kind": "attribute"
           },
           "characteristics": {
+            "kind": "attribute"
+          },
+          "chosen": {
             "kind": "attribute"
           },
           "colors": {
@@ -2971,6 +3081,9 @@
           "entered_this_turn": {
             "kind": "attribute"
           },
+          "entry_controller_id": {
+            "kind": "attribute"
+          },
           "exhausted_abilities": {
             "kind": "attribute"
           },
@@ -2987,6 +3100,9 @@
             "kind": "attribute"
           },
           "has_exile_link": {
+            "kind": "attribute"
+          },
+          "hexproof_from": {
             "kind": "attribute"
           },
           "id": {
@@ -3007,6 +3123,9 @@
           "keyword_counter_timestamps": {
             "kind": "attribute"
           },
+          "loyalty_activated_this_turn": {
+            "kind": "attribute"
+          },
           "mana_value": {
             "kind": "property"
           },
@@ -3023,6 +3142,9 @@
             "kind": "attribute"
           },
           "plus1_counters": {
+            "kind": "attribute"
+          },
+          "protection_from": {
             "kind": "attribute"
           },
           "registry_key": {
@@ -3092,6 +3214,9 @@
             "kind": "attribute"
           },
           "hand_only_until": {
+            "kind": "attribute"
+          },
+          "hexproof": {
             "kind": "attribute"
           },
           "id": {
@@ -3210,6 +3335,9 @@
           "life_lost": {
             "kind": "attribute"
           },
+          "loyalty_abilities_activated": {
+            "kind": "attribute"
+          },
           "mana_spent_casting": {
             "kind": "attribute"
           },
@@ -3265,6 +3393,9 @@
           "effect": {
             "kind": "attribute"
           },
+          "expiry": {
+            "kind": "attribute"
+          },
           "mana": {
             "kind": "attribute"
           },
@@ -3313,18 +3444,18 @@
           },
           "determinize": {
             "kind": "staticmethod",
-            "signature": "(viewer, seed, *, enable_decision_memory=..., forced_first_action=...)"
+            "signature": "(viewer, seed, *, enable_decision_memory=..., forced_first_action=..., game_state_edits=...)"
           },
           "exact": {
             "kind": "staticmethod",
-            "signature": "(*, reseed=..., enable_decision_memory=..., forced_first_action=...)"
+            "signature": "(*, reseed=..., enable_decision_memory=..., forced_first_action=..., game_state_edits=...)"
           },
           "forced_first_action": {
             "kind": "property"
           },
           "shuffle_libraries": {
             "kind": "staticmethod",
-            "signature": "(seed, *, enable_decision_memory=..., forced_first_action=...)"
+            "signature": "(seed, *, enable_decision_memory=..., forced_first_action=..., game_state_edits=...)"
           }
         }
       },
@@ -3751,6 +3882,7 @@
         }
       },
       "StructuredOfferSet": {
+        "deprecated": true,
         "kind": "class",
         "members": {
           "projection_json": {
@@ -4013,6 +4145,9 @@
             "value": 4
           }
         }
+      },
+      "__version__": {
+        "kind": "value"
       },
       "admit_decklists": {
         "kind": "function",

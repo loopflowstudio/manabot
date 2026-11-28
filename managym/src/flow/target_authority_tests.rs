@@ -1495,8 +1495,9 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
         agent::{
             action::{Action, ActionSpaceKind},
             observation::Observation,
-            observation_encoder::{encode, ObservationEncodeError, ObservationEncoderConfig},
+            observation_encoder::{ObservationEncodeError, ObservationEncoderConfig},
             observation_layout::{action, relation},
+            observation_rows::InputRows,
         },
         state::card::{ActivatedAbilityDefinition, LoyaltyCost},
     };
@@ -1570,12 +1571,12 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
         ..ObservationEncoderConfig::default()
     };
     assert_eq!(
-        encode(&x_obs, &tight),
-        Err(ObservationEncodeError::Capacity {
+        InputRows::read(&x_obs, &tight).unwrap_err(),
+        ObservationEncodeError::Capacity {
             field: "actions",
             capacity: 4,
             actual: 5,
-        })
+        }
     );
 
     // Announce X = 5 and target all three Beasts -> enters DivideAmount (remaining = 5).
@@ -1603,8 +1604,8 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
     assert_eq!(ann1.x, 5, "DivideAmount preserves real announced X");
     assert_eq!(ann1.division_remaining, 5);
     assert_eq!(div1.action_space.actions.len(), 3);
-    let enc1 = encode(&div1, &ObservationEncoderConfig::default()).unwrap();
-    let header1 = &enc1.relations[..relation::WIDTH];
+    let enc1 = InputRows::read(&div1, &ObservationEncoderConfig::default()).unwrap();
+    let header1 = enc1.row("relations", 0);
     assert_eq!(header1[relation::X], 5.0);
     assert_eq!(header1[relation::DIVISION], 5.0);
     for (idx, offer) in div1.action_space.actions.iter().enumerate() {
@@ -1614,7 +1615,7 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
             "division action must not alias announces_x"
         );
         assert_eq!(offer.division_amount, Some(amt));
-        let row = &enc1.actions[idx * action::WIDTH..(idx + 1) * action::WIDTH];
+        let row = enc1.row("actions", idx);
         assert_eq!(row[action::HAS_X], 0.0);
         assert_eq!(row[action::X], 0.0);
         assert_eq!(row[action::DIVISION], amt as f32);
@@ -1633,9 +1634,10 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
     assert_eq!(ann2.x, 5, "frame.x stays 5 after remaining drops to 3");
     assert_eq!(ann2.division_remaining, 3);
     assert_eq!(ann2.targets[0].division, 2);
-    let enc2 = encode(&div2, &ObservationEncoderConfig::default()).unwrap();
-    assert_eq!(enc2.relations[relation::X], 5.0);
-    assert_eq!(enc2.relations[relation::DIVISION], 3.0);
+    let enc2 = InputRows::read(&div2, &ObservationEncoderConfig::default()).unwrap();
+    let header2 = enc2.row("relations", 0);
+    assert_eq!(header2[relation::X], 5.0);
+    assert_eq!(header2[relation::DIVISION], 3.0);
 
     // Assign 1 to b2 -> b3 automatically receives 2; resolve stack.
     step_action(

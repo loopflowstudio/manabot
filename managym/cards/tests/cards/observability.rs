@@ -4441,9 +4441,12 @@ fn qualified_abilities_and_player_hexproof_reach_policy_rows() {
     s.force_permanent_on_battlefield(1, "Crystal Barricade");
     for viewer in 0..2 {
         let observation = encoded(&s, viewer);
-        assert_eq!(observation.agent_player[player::HEXPROOF], viewer as f32);
         assert_eq!(
-            observation.opponent_player[player::HEXPROOF],
+            observation.row("agent_player", 0)[player::HEXPROOF],
+            viewer as f32
+        );
+        assert_eq!(
+            observation.row("opponent_player", 0)[player::HEXPROOF],
             (1 - viewer) as f32
         );
         for (permanent, ability, quality) in [
@@ -6353,8 +6356,8 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
                 i64::from(expiry == DelayedExpiry::ThisTurn)
             );
             assert_eq!(
-                rows[RELATION_DIM + relation::UNTIL_NEXT_TURN],
-                f32::from(expiry == DelayedExpiry::UntilYourNextTurn)
+                rows[1][relation::UNTIL_NEXT_TURN],
+                i64::from(expiry == DelayedExpiry::UntilYourNextTurn)
             );
         }
     }

@@ -82,7 +82,9 @@ def test_stub_comments_mark_only_the_deprecated_declaration() -> None:
     assert not exports["KeepType"].members["active"].deprecated
 
     live = native_exports()
-    assert not any(symbol.deprecated for symbol in live.values())
+    assert {name for name, symbol in live.items() if symbol.deprecated} <= {
+        "StructuredOfferSet"
+    }
     assert not live["PlayerConfig"].members["deck"].deprecated
     assert not live["Observation"].members["validate"].deprecated
 
