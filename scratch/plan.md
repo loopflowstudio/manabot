@@ -1,188 +1,255 @@
-# MTG-497: GPU-batched evaluation through a vectorized, asynchronous match runner
+# MTG-507: why L4 bf16 evaluation slows trained w160l8 and speeds up w384l8
 
-## Direction
+Stacked on MTG-497 (`fb1580b472`); that Task's plan is in git history at this
+path. This plan replaces it for this branch.
 
-Jack Heart redirected the Task on 2026-11-26 (steer `ad0ea947`):
+## Outcome
 
-> "Not being ambitious enough feel like we should completely separate the play match API, make it fully asynchronous, and allow games to step in whatever way maximizes batching"
+`experiments/reports/eval_precision_profile.md` says where the bf16 forward
+time goes on an L4 for trained `w160l8` and seeded `w384l8`, names the cause
+of the `w160l8` slowdown, and ends in one of two things: a loader fix with
+before/after arena arms, or a stated width/batch threshold above which bf16
+wins on an L4. `docs/evaluation.md#etude-agents` carries the resulting advice.
+`float32` stays the evaluation default either way (nothing picks a precision
+from width or device, `manabot/backends/torch/learner.py:149`).
 
-The steer's own expansion: step 64–256+ eval games at once through
-`VectorEnv`/`RolloutPool` on the v11 CSR `ObservationBatch` -> `Prepared` path,
-backfill finished slots at once (no straggler tail), yield completed
-`(match, Result)` asynchronously, and share the bf16/MPS/overlap path with
-training (MTG-449, MTG-496). This replaces the earlier brief ("Build directly on
-Etude's `AGENTS` ... contract", steer `15f42691`) and the 4-leg synchronous
-driver planned from it; none of that driver was committed.
+## What the earlier numbers do and do not show
 
-Outcome: a managed evaluation on CUDA, Apple Silicon or CPU keeps its accelerator
-busy because one game process steps many matches' games together and sends one
-pre-collated `Prepared` per checkpoint per round; a report states games/hour and
-rows per forward for `w160l8` and a 34M model against CPU batch-1.
+From `experiments/reports/eval_throughput.md` and the receipts in
+`../manabot.mtg-497-support-gpu-batched/.runs/eval-throughput/l4-966e8ff296/`
+(one arm each, one worker):
 
-Jack Heart added MLX in steer `d440244b`: prefer CUDA, then MLX, then MPS,
-then CPU. Measure MLX against the same Apple Silicon MPS and CPU arms while
-the Etude binding and its deployment are evaluated separately.
+| Model | Calls | Rows/call | float32 ms/call | bf16 ms/call |
+| --- | ---: | ---: | ---: | ---: |
+| Trained `w160l8` | 603 | 18.6 | 39.7 | 67.2 |
+| Seeded `w384l8` | 677 | 9.9 | 43.6 | 18.6 |
 
-## Upstream state (checked 2026-11-27)
+- **The arms differ in width, weights, batches and saved readings.** Their
+  model settings differ only in `hidden_dim`. The trained checkpoint saves
+  narrower column prefixes and two smaller relation categories than a fresh
+  seeded model. The trained policy wins 113 of 128 over long games with 18.6
+  rows per forward. The seeded one loses quickly with 9.9.
+- **A fixed per-call cast cost cannot be the whole cause.** bf16 `w384l8`
+  takes 18.6 ms per call in total, less than the 27.5 ms bf16 adds per call at
+  `w160l8`. Whatever costs 27.5 ms is absent or much smaller in the seeded
+  games.
+- **Table attention shapes do not vary.** The loader calls
+  `load_checkpoint(str(path))` (`manabot/eval/agent_loader.py:113`):
+  `bucketed_shapes` and `live_tokens` are off, so object attention runs over
+  the full padded table every call. What varies per call is the batch and the
+  CSR inputs to the packed GRUs (facts, records, semantic cards), which run
+  float32 with autocast disabled (`manabot/backends/torch/packed_gru.py:55`).
+- **Autocast adds about 1,300 dispatched ops per forward at either width**
+  (measured locally with `torch.profiler` on 66 captured arena batches:
+  3,429 -> 4,754 ops per call at `w160l8`, 3,205 -> 4,492 at `w384l8`;
+  `aten::copy_` 100 -> 305 per call, mostly float32 weights and biases cast
+  again in every `linear`). This is host work, and the L4 host was slow: its
+  CPU forward cost 121 ms per row against 31 ms on the M4 Max.
+- **bf16 arms do not play the same games.** The trained bf16 arm matched 117
+  of 128 traces and served 11,252 rows against 11,209, so the two precisions
+  were timed on different batches.
+- **MPS did not settle it.** Three local 8-deal arena pairs on the M4 Max gave
+  bf16 forwards of 23.7, 23.8 and 11.2 s against float32 11.7, 14.9 and
+  11.4 s, with the machine at load 30-40 from other work. Replaying captured
+  batches outside the arena showed no bf16 penalty (23 ms per call either
+  way). The L4 penalty is not one noisy draw: MTG-317 reproduced it (below).
 
-- The dependency pin and latest published [etude-sdk on PyPI](https://pypi.org/project/etude-sdk/)
-  are `0.4.7` (verified 2026-11-27). That release has only synchronous
-  `EvalRun.play`. The pass 6 checks used the editable 6db832 checkout at
-  `154b8db`.
-- Etude EXP-77 (`~/src/etude.exp-77-saturate-the-gpu`) committed `play_many`
-  (`2469c00`) and merged `main` at `c5923cf` (clean tree, unreleased). Its
-  `docs/evaluation.md` states the contract: `EvalJob(play=...)` xor
-  `EvalJob(play_many=...)`; synchronous `play` is refused at declaration (so
-  every Manabot `play` callback becomes `async def`); `max_delay_seconds` is
-  gone (not used in our `Agents(...)` declarations; only frozen `EvalCompute`
-  models retain it); game side awaits `Forward(inputs, *, rows=...)` (pass
-  `rows=prepared.batch` for pre-collated inputs); `ForwardError` carries
-  `.checkpoint`, and catching it in `play_many` drops affected slots and yields
-  `(match, error)` while unrelated matches continue; `Matches` lives in
-  `etude.eval.game` with `await matches.take(n)` -> `(match, agents)` pairs;
-  yield `(match, tables | Result | Exception)` as each finishes; an uncaught
-  exception fails every held match; `run.should_stop` stops new grants.
-  Reference examples: `examples/vector_game.py` and `examples/vectorized.py`.
-- Etude `310ac1` (`~/src/etude.310ac1-enable-shared-gpu`, committed at
-  `de0c927`, unreleased) adds shared-GPU eval inference on Apple Silicon with
-  `ETUDE_EVAL_SHARED=0|1`.
-- `manabot` `origin/main` added three Academy/action-folding commits since our
-  base (`080ea64372`, `65dcf2340a`, `b611abb3d7`); none touch eval, batching,
-  or `SlotLoad`. (`57d4ea59b5` GRU bf16 fix is already in our base.)
-- Jack Heart redirected the release dependency in steer `44a4f9bb`
-  (2026-11-27). Build on editable EXP-77 (`c5923cf`) and
-  6db832 (`49b085a`) now, while keeping `pyproject.toml` and `uv.lock`
-  pinned. The merge gate is a published `etude-sdk 0.5.0`. At release, update
-  the dependency bounds and exact play-runtime pin, then run
-  `uv lock --upgrade-package etude-sdk` and check the locked environment.
+## Leading hypothesis (concept review, 2026-11-27)
 
-## What exists
+`w160l8` has `head_dim = 160 / 8 = 20`; `w256l8` and `w384l8` have 32 and 48.
+On CUDA, float32 memory-efficient SDPA accepts `head_dim % 4 == 0`, but bf16
+Flash and memory-efficient SDPA need `head_dim % 8 == 0`, so bf16 `w160l8`
+falls back to math attention and materializes `[B, 8, N, N]` scores in every
+layer (`nn.MultiheadAttention`, `manabot/backends/torch/policy.py:1387,1455`).
+`experiments/reports/cuda_precision.md` (MTG-317, same L4 and Torch
+2.15.0+cu132) already shows it: `w160l8` padded bf16 large calls 464 -> 719 ms
+and learner peak 5.3 -> 10.7 GB, repeats within 2%, while `w256l8`/`w384l8`
+sped up 1.95-2.7x and halved memory. The slowdown is therefore already
+reproduced; the L4 run's job is to name the mechanism, and the 160/256/384
+8-head grid alone cannot separate width from `head_dim % 8`.
 
-- **Loader & precision (`manabot/eval/agent_loader.py`, `manabot/eval/agents.py`,
-  `manabot/policy/batching.py`, `manabot/sim/registration.py`,
-  `manabot/backends/torch/learner.py`):** device order `cuda -> mlx -> mps -> cpu`
-  with `MANABOT_EVAL_DEVICE` override (out of identity), and MLX requires the
-  optional extra plus Metal; `load`/`load_tf32`/`load_bf16`
-  accept any-batch `Prepared` and return `[batch, A]` float32 masked logits;
-  `concatenate` rebases `MemoryRows` (rejects `fold is not None`); `AGENTS`,
-  `AGENTS_TF32`, `AGENTS_BF16`, `agents_for(precision)`, and
-  `etude_compute_class(precision)` (float32 keeps `etude-policy-f32-auto-v1`);
-  `tf32` device guard in `validate_precision`.
-- **Native & vector runner (`managym/`, `manabot/eval/vector.py`,
-  `manabot/eval/pairing.py`, `manabot/eval/match.py`,
-  `manabot/sim/native_game.py`):** seeded `SlotLoad.fresh(..., seed=)`,
-  `RecordedVectorEnv.record_in_memory`/`take_slot_record`, shared per-leg setup
-  (`resolve_game_match`, `game_runtime_identities`, `arena_source_sha256`,
-  `set_execution_limits`), shared pairing admission/finalization, and Torch-free
-  async `play_pairings` stepping up to `slots` legs on v11 CSR
-  `ObservationBatch -> Prepared` with immediate backfill and per-match yield.
-  `scripts/public_api.py check` and `tests/test_package_boundaries.py` pass.
-- **Apple Silicon measurement (`experiments/eval_throughput.py`,
-  `experiments/reports/eval_throughput.md`):** 12 arms on M4 Max across 32
-  held-out TLA trophy deals (128 games/arm, exact leg-for-leg outcome and
-  128/128 replay parity). MPS vector-64 reaches 1,989 games/hr on trained
-  `w160l8` (2.66× CPU batch-1; forward 362.5→39.6 s, 17.1% of wall) and 1,882
-  games/hr on seeded `w384l8` (2.41× CPU batch-1; forward 346.8→52.0 s, 21.3%);
-  single-process `other_arena` + `replay` take ~79–83% of wall time, confirming
-  multi-process game workers sharing a GPU agent (`play_many`) are needed to
-  scale past ~2,000 games/hr. MLX vector-64 (float32) matches MPS within
-  2% with 17–23% less forward time; managed `play_many` on MLX reaches
-  ~4,700–5,100 games/hr. RunPod L4 (`966e8ff296`): CUDA vector-64 3,380
-  (float32) and 3,908 (bf16) games/hr on `w384l8`, 17.3× CPU batch-1,
-  limited by `other_arena`.
+## Design
 
-## Design notes
+One standalone experiment CLI, `experiments/eval_precision_profile.py`, in the
+shape of `experiments/eval_throughput.py` (exploratory: no prediction, the
+report ends it). Three subcommands:
 
-- **Precision (confirmed in steer `44a4f9bb`):** declare the agent set
-  (`AGENTS`, `AGENTS_TF32`, `AGENTS_BF16`) and the tournament precision.
-  The float32 compute envelope and the paired seeds stay stable across
-  precision comparisons.
-- **Vector runner:** TLA trophies adapt Etude's `Matches` to
-  `play_pairings`, which passes `rows=prepared.batch` to the awaited forward
-  and isolates `ForwardError` to held matches drawing on that checkpoint.
-  Each decision round divides its elapsed time among live slots. The game
-  limit and recorded execution time use the same charge.
+1. `capture` plays the 32 held-out deals on the vector-64 runner under
+   float32 and writes, per model, (a) every multi-row host `Prepared` batch in
+   arena order, for exact same-checkpoint replay, and (b) the same decisions
+   as single-row `Prepared` inputs, for the grid. Grid calls of 1, 4, 16 and
+   64 rows are built with the existing `batching.concatenate`
+   (`manabot/policy/batching.py:24`); there is no split and none is written.
+   Batch sets: trained `w160l8`, seeded `w160l8` and seeded `w384l8`.
+2. `replay` loads one checkpoint under one variant and runs one batch set
+   through it, in order, with `torch.cuda.synchronize` between transfer,
+   forward and readback. It writes one row per call (rows, packed GRU rows,
+   first-touch or repeat, stage seconds), `torch.cuda.max_memory_allocated()`,
+   the max and exact-equality logit difference against shipped bf16, then a
+   `torch.profiler` pass. Buckets come from `record_function` scopes in the
+   harness (transfer, attention, packed GRU, readback) plus op classes
+   (casts and copies `aten::to`/`_to_copy`/`copy_`, linear/MLP, norm,
+   gather/index, unattributed host). Nested operations inherit their
+   enclosing bucket, and the attention bucket lists the
+   dispatched SDPA kernels (flash, mem-efficient, or math `bmm`+`_softmax`).
+   Feeding both precisions the same float32-captured batches removes the
+   diverging-trajectory confound.
+3. `render_report` reads the receipts and writes the tables.
 
-## Review record
+Cross-width replay: `admission.binding` dumps the whole `ModelConfig`
+(`manabot/policy/admission.py:110`), so `forward_distribution`
+(`policy.py:770`) rejects a `w160l8` batch on any other width although
+`Prepared` holds no width-dependent arrays. Chosen for review: the harness
+asserts equal `space.config`, readings and model settings apart from width
+and head count, then re-tags `Prepared.binding` with `dataclasses.replace`.
+The grid instantiates seeded controls from the trained checkpoint's settings
+and readings with `random_checkpoint(..., template=trained)`. Use the
+fresh-reading seeded `w384l8` checkpoint only on its own capture and in its
+arena repeats.
 
-Earlier reviews (the 4-leg F1–F6, post-pass 5 F1–F5) are settled in passes
-1–7. `scratch/concept-review.html` was rewritten at `bf5bb9c70d` (after pass 7);
-its claims were spot-checked against HEAD. Placement, choices made headless
-and marked for review:
+Variants:
 
-- **F1 / Q1 -> pass 8, 1a (for review).** `held_out_jobs(precision="bf16"|"tf32")`
-  changes `Environment.config` and `Deal.precision` but keeps
-  `Benchmark(name=BENCHMARK)` (`experiments/tla_trophies.py:271`, and
-  `Matches(tournament=BENCHMARK)` at :293), so Etude raises
-  `tournament_conflict` beside stored float32 runs. Name non-float32
-  benchmarks `f"{BENCHMARK}-{precision}"`; float32 keeps its name. Passed
-  over 1b (callers pick a fresh experiment): it breaks the comparison use.
-  Irreversible once a non-float32 tournament is scored, so ship-review
-  surfaces it.
-- **F2 / Q3 -> pass 8, 3a (for review).** `admit_active_match` checks only
-  `space.shapes` (`manabot/eval/vector.py:175`) while slot reuse compares the
-  whole `space.config` (:524, :635). One `vector_layout_key(space)` = shapes,
-  `action_overflow`, `max_decision_records > 0`, `decision_memory_include_own`
-  (what `open_vector` binds, :313–327) serves both.
-- **F3 / Q4 -> pass 8, 4b (for review).** Drain `ready_errors` before
-  `backfill_free_slots()` so a large `ForwardError` burst does not idle freed
-  slots a round; set `experiments/eval_throughput.py:57` `GAME_SECONDS` to
-  120.0 like `tla_trophies`. Passed over 4a's extra per-slot wall ceiling: a
-  second budget beside the per-active-slot charge, while `max_commands` and
-  Etude's `max_hours` already bound a pathological slot.
-- **F4 / Q2 (host overhead) -> deferred**, below; Q2 (live frames) stays open.
-- **S1, S2, S3 -> deferred** (unchanged).
+- `float32`, `tf32`, `bf16` as the loader ships them.
+- `bf16-linear-once`: after `cache_programs()`, cast only `nn.Linear` and
+  `nn.MultiheadAttention` projection weights and biases to bfloat16; leave
+  `LayerNorm`, `Embedding`, `nn.GRU` and bare `nn.Parameter`s
+  (`perspective`, `value_token`) float32, which autocast also keeps float32.
+  Forward still under autocast. The L4 GEMM change leaves broader parity
+  unverified (F6).
+
+Models (seeded unless trained; `random_checkpoint` gains a head count):
+
+| Model | head_dim | Separates |
+| --- | ---: | --- |
+| trained `w160l8` | 20 | the arena case |
+| seeded `w160l8` | 20 | trained weights vs width |
+| seeded `w160` 5 heads | 32 | alignment at narrow width |
+| seeded `w256l8` | 32 | threshold point |
+| seeded `w288l8` | 36 | misalignment at wide width |
+| seeded `w384l8` | 48 | the arena case |
+
+If `head_dim % 8` is the cause, `w160`/5-heads speeds up under bf16 and
+`w288l8` slows down. Trained vs seeded `w160l8` on the trained and seeded
+batch sets separates board density (packed GRU rows) from kernel dispatch.
+
+Arena replicates come after the replay pass and are sized by it: alternating
+float32/bf16 repeats of the existing `eval_throughput` vector-64 arm for
+trained `w160l8` and seeded `w384l8` (up to three each, about 2.2 minutes per
+arm), to state the spread and to verify any fix. The runner retains one
+`ForwardCall(rows, seconds)` per completed call. It writes `forwards.jsonl`
+and derives the `summary.json` aggregates after the run.
+
+Loader split, chosen for review: `agent_loader.py` gains
+`load_torch_policy(path, precision, device)` (validated, eval-mode, programs
+cached) and one per-call context helper (`apply_matmul_precision`,
+`torch.inference_mode`, `forward_precision`) that both `torch_logits` and
+`replay` use, with Torch and `ActorCritic` types under `TYPE_CHECKING` so
+`manabot.eval.agents` stays Torch-free
+(`tests/test_package_boundaries.py:260`). Passed over: leaving the loader
+untouched until pass 2 (replay would duplicate the per-call contract).
+
+Chosen for review: profile by replaying captured batches rather than
+instrumenting the live arena. Passed over: `torch.profiler` around the live
+arena (profiler overhead distorts the host stages that dominate there) and a
+synthetic fixed-shape microbenchmark.
+
+## Rental
+
+One RunPod L4 through Etude under `--max-usd 5`. Use the replay/profile pass
+first, then only the arena arms it calls for. Receipts go to
+`.runs/eval-precision-profile/l4-<rev>/`. Record the launcher's cost once and
+confirm the pod is gone.
+
+2026-11-27 availability check. `l4-etude` quoted USD 0.69/hour against its
+USD 0.60 ceiling. Existing `mtg324-l4-step` quoted the same price under its
+USD 0.70 ceiling, with zero of one in use. The replay and arena used that
+profile after rechecking availability. The report records the launcher cost
+and confirmed deletion. Inject RunPod from Doppler `etude/prd` and R2 from
+`manabot/prd` through nested `doppler run` for Etude launcher commands.
+
+## Acceptance check
+
+```bash
+uv run --no-sync python -m experiments.eval_precision_profile replay \
+  --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors \
+  --batches .runs/eval-precision-profile/trained-w160.batches \
+  --device cuda --variant bf16 --output-dir .runs/eval-precision-profile/l4-<rev>/w160-trained-bf16
+```
+
+prints per-call stage means, peak CUDA memory, the SDPA kernels dispatched,
+and a bucket table whose buckets sum to the synced forward time within 5%;
+the report's `w160l8` table accounts for the bf16-minus-float32 difference by
+bucket.
+
+A CPU smoke test (`tests/eval/test_eval_precision_profile.py`, one deal,
+float32) captures, replays and checks that replayed logits equal the logits
+the arena received, that a `concatenate`d grid call equals its single-row
+parts, and that the buckets cover the forward.
 
 ## Passes
 
-1–5. Done (`0286257840`, `dd11bd0a3f`, `08a854747f`/`7e79ad34ae`,
-`d2012147d4`/`c4924ee4ed`, `3d685ce0aa`/`966e8ff296`, `a27d8c0264`/`92a578b417`);
-see "What exists".
-6. Done (`bb911a150`). Refactored sampling, loading, slot budgets and retention with exact trace parity. Verified 104 focused Python tests, 28 debug vector tests, the rebuilt CPython 3.13 extension, the public API snapshot, and a local Etude MPS bf16 trophy deal with four complete records.
-7. Done (`f3b00a846`, `43d5ef0da`, `06389e498`). Made strided inputs contiguous,
-   separated batch preparation from seat sampling and reproduced and fixed a
-   negative grant after 10 failed matches filled a 9-slot runner's error queue.
-   Live Etude resume reused a stored named trophy benchmark row and played only
-   the new checkpoint. All 512 Gate 1 games replayed with zero array copies.
-   The MPS compilation probe favored eager execution. See `scratch/qa.html`
-   and `experiments/reports/eval_throughput.md`.
-8. Done (`0c9594273`). Precision-specific trophy names and reports, shared vector layout compatibility, error delivery before backfill, and a 120-second throughput game budget. All 42 focused tests and the API check passed with the rebuilt debug extension. The trained `w160l8` CPU smoke replayed all four legs with three slots.
-9. **Release (blocked on `etude-sdk 0.5.0`).** [PyPI](https://pypi.org/project/etude-sdk/)
-   still lists 0.4.7 on 2026-11-27. Once 0.5.0 publishes, update the three
-   `etude-sdk` bounds and the exact play-runtime pin in `pyproject.toml`, then
-   run `uv lock --upgrade-package etude-sdk`, a locked sync and the managed
-   eval tests.
+1. **Harness.** `f3863261e` added the capture, replay, report and arena receipts, with CPU and MPS smoke checks.
+2. **L4 diagnosis.** `75ae6a1d4` corrected CUDA trace admission. `e86b798d1` records 84 replay profiles, the even-head alignment control and three arena repeats per arm.
+3. **L4 guidance.** `e86b798d1` documents the head-width and batch-size crossovers. The `head_dim % 8` rule is now stated in `docs/evaluation.md#etude-agents` (realign, review F4).
+4. **Review fixes.** `5a7eff4be` reattributes the saved traces, removes cached-autocast, reports the pre-cast GEMM switch, scopes capture to the synchronous observer and applies matmul precision once per context. Both focused tests and the four-game CPU CLI run passed.
 
-## Docs
+## Absent and error states
 
-Managed loading, precision and Apple device selection are documented in
-`docs/evaluation.md#etude-agents`. The same section describes managed `play_many`.
+- `replay` refuses bf16 off CUDA/MPS through the existing
+  `validate_precision`, and refuses a batch file whose checkpoint input
+  binding differs from the model's.
+- A profiler pass with no CUDA activity (CPU run) reports host buckets only
+  and marks kernel time absent, not zero.
 
-## Deferred findings
+## Exclusions
 
-- **Vector host work (review F1).** Native per-slot heuristic policies in
-  `SlotLoad.fresh` (L4 fill 9.9–18.6 of 64 rows), replay and retention off the
-  event loop, and the open trace choice: keep live viewer frames (1b, current)
-  or record compact annotations verified at replay (1a, changes stored
-  traces). Host arena + replay is 72–89% of L4 wall, 56–67% on M4 Max
-  zero-copy Gate 1. Trace-preserving first: `RecordedVectorEnv._step`
-  (`managym/recording.py:1853–1886`) builds a second
-  `semantic_decision_frames_json` and calls `current_action_summaries()`
-  again each round; `finalize_match` runs replay on the event loop with 3×
-  `bind_record`. Needs a Task and the trace decision.
-- **L4 `w160l8` bf16 slower than float32** (forward 24.0 -> 40.5 s). Needs a
-  CUDA profile on a rental.
-- **Scalar host overhead (S2)** in `scratch/questions.md`.
-- **Etude (S3):** `etude-sdk 0.5.0` release (merge gate), Apple shared GPU
-  (`310ac1`, `de0c927`), never evicting the only checkpoint in
-  `Forwards._evict`.
+Training-side bf16, MPS and MLX precision, host arena and replay cost
+(MTG-497's deferred F1), `torch.compile`, bucketed or live-token evaluation
+forwards, and any change to the default precision or to compute class ids.
+
+## What goes
+
+The no-op cached-autocast variant and the throughput runner's observer
+argument were removed. The local probe scripts under `.runs/`
+(`probe_mps.sh`, `profile_forward.py`, `cold_warm.py`) are untracked
+scaffolding the experiment file replaces. `scratch/qa.html` records MTG-497's
+checks. `scratch/tour.yaml` gives the reading order for MTG-507.
 
 ## Done when
 
-- The runner plays paired deals with the same Commands and traces as serial
-  play under a row-pure forward, and every game replays.
-- One experiment file evaluates on NVIDIA, Apple Silicon and CPU hosts
-  without edits; a declared `bf16` shows in the players' compute class.
-- The report gives games/hour and rows per forward for w160l8 and the 34M
-  model on CUDA, MLX and MPS beside CPU batch-1, naming each arm's limiting stage.
-- `tests/test_package_boundaries.py` and `scripts/public_api.py check` pass.
+- The report shows, for trained `w160l8` and seeded `w384l8` on an L4, the
+  float32 and bf16 forward time split by bucket on identical batches, and the
+  spread of three arena repeats per arm.
+- It names the cause of the `w160l8` result (or shows the slowdown does not
+  reproduce), separating width from trained weights and batch composition.
+- Either the loader fix is in with before/after arena arms and unchanged
+  logits, or the docs give the `head_dim`, width and rows-per-call conditions
+  under which bf16 is faster on an L4.
+
+## Concept review dispositions
+
+Pre-build review (2026-11-27): head-dim grid, single-row capture with
+`concatenate`, `bf16-linear-once`, replay-first rental and the loader split
+were adopted (see Design).
+
+Post-implementation review (`scratch/concept-review.html`, at `178a551d7`):
+F1 cached-autocast removal and pre-cast evidence, F2 parent-first buckets
+(Q1a for review), and F3 synchronous capture (Q2a for review) landed in
+pass 4. The `w160l8` attention delta rounds to +48.13 ms/call. The review's
++48.14 equals the difference of the displayed values. F4's `head_dim % 8` doc rule
+landed in `16aaf72da6`. F5 and F6 are deferred below (Q3a for review).
+
+## Deferred findings
+
+- **F5 (file a Task at ship).** `BF16_MIN_HIDDEN_DIM = 256`
+  (`manabot/infra/config.py:347`, also MLX's default-precision rule) and
+  `docs/training.md:1147` state the L4 CUDA crossover by width alone. Separate
+  MLX's width rule from CUDA's `head_dim % 8 == 0` SDPA alignment and review
+  frontier head counts (MTG-317 training shows the same `w160l8` penalty).
+  Padding `head_dim` inside `GameObjectAttention` changes bf16 rounding and
+  needs a new compute class id.
+- **F6 (idea, not filed).** Pre-cast Linear/MHA projection weights for aligned
+  CUDA bf16 evaluation: worth 14.6% on L4 `w384l8`, but the GEMM kernel switch
+  means cross-GPU and cross-shape parity must be shown, or a new compute class
+  id taken, before `etude-policy-bf16-auto-v1` could use it. Worth it only
+  once wide-model GPU evaluation is forward-bound.

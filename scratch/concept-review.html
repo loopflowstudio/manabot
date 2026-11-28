@@ -1,0 +1,3234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept review: L4 bf16 evaluation profile (MTG-507)</title>
+<style>
+/* Default review page theme tokens (light and dark).
+ * Override per repository in `.lf/theme.css` (CSS custom properties only). */
+:root {
+  --lf-bg: #faf8f5;
+  --lf-surface: #fffdf9;
+  --lf-surface-muted: #f3eee7;
+  --lf-surface-element: #ece6dd;
+  --lf-border: #e6dfd6;
+  --lf-border-strong: #d6ccc0;
+  --lf-text: #2a2624;
+  --lf-text-secondary: #5f5752;
+  --lf-text-tertiary: #65605d;
+  --lf-accent: #722f37;
+  --lf-accent-hover: #5e2630;
+  --lf-accent-text: #faf8f5;
+  --lf-working-ink: #2f629f;
+  --lf-working-fill: #d5dde6;
+  --lf-warning-ink: #7f5a19;
+  --lf-warning-fill: #e4dccd;
+  --lf-failure-ink: #a64038;
+  --lf-failure-fill: #ecd9d5;
+  --lf-success-ink: #386c48;
+  --lf-success-fill: #d7dfd6;
+  --lf-highlight: rgba(114, 47, 55, 0.14);
+  --lf-highlight-active: rgba(114, 47, 55, 0.28);
+  --lf-highlight-line: rgba(114, 47, 55, 0.45);
+  --lf-shadow: 0 8px 26px rgba(42, 38, 36, 0.14);
+  --lf-shadow-sm: 0 3px 12px rgba(42, 38, 36, 0.08);
+  --lf-bubble-bg: #24201e;
+  --lf-bubble-text: #faf8f5;
+  --lf-bubble-border: #3a3430;
+  --lf-font-serif: "Old Standard TT", Georgia, "Times New Roman", serif;
+  --lf-font-sans: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --lf-font-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lf-bg: #181615;
+    --lf-surface: #201d1b;
+    --lf-surface-muted: #282422;
+    --lf-surface-element: #312c29;
+    --lf-border: #38322e;
+    --lf-border-strong: #4a423d;
+    --lf-text: #efeae4;
+    --lf-text-secondary: #b9afa6;
+    --lf-text-tertiary: #8f857d;
+    --lf-accent: #c96b76;
+    --lf-accent-hover: #d8838d;
+    --lf-accent-text: #181615;
+    --lf-working-ink: #7eb2f0;
+    --lf-working-fill: #203147;
+    --lf-warning-ink: #e0b25c;
+    --lf-warning-fill: #3d311c;
+    --lf-failure-ink: #e67c73;
+    --lf-failure-fill: #452422;
+    --lf-success-ink: #7cc490;
+    --lf-success-fill: #213828;
+    --lf-highlight: rgba(201, 107, 118, 0.22);
+    --lf-highlight-active: rgba(201, 107, 118, 0.38);
+    --lf-highlight-line: rgba(201, 107, 118, 0.65);
+    --lf-shadow: 0 10px 30px rgba(0, 0, 0, 0.44);
+    --lf-shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.30);
+    --lf-bubble-bg: #efeae4;
+    --lf-bubble-text: #181615;
+    --lf-bubble-border: #d6ccc0;
+  }
+}
+
+/* Base layout and component styles for compiled Loopflow review pages. */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+main.lf-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 44px 24px max(168px, var(--lf-dock-room, 0px));
+}
+
+h1 {
+  font-family: var(--lf-font-serif);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-variant-ligatures: no-common-ligatures;
+  margin: 0 0 12px;
+}
+
+h2 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 32px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--lf-border);
+}
+
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+}
+
+p { margin: 0 0 12px; }
+ul, ol { margin: 0 0 12px; padding-left: 22px; }
+li { margin-bottom: 4px; }
+
+code, pre {
+  font-family: var(--lf-font-mono);
+  font-size: 12.5px;
+}
+
+code {
+  background: var(--lf-surface-muted);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 16px;
+  font-size: 14px;
+}
+
+th, td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--lf-border);
+  vertical-align: top;
+}
+
+th {
+  color: var(--lf-text-secondary);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+/* Meta bar & server status banner */
+.lf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--lf-text-secondary);
+  font-size: 12.5px;
+  margin-bottom: 24px;
+}
+
+.lf-meta code { font-size: 12px; }
+
+.lf-banner {
+  background: var(--lf-warning-fill);
+  color: var(--lf-warning-ink);
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13.5px;
+}
+
+/* Diff and File blocks */
+.lf-codeblock {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  margin: 14px 0;
+  overflow: hidden;
+}
+
+.lf-codeblock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--lf-surface-muted);
+  border-bottom: 1px solid var(--lf-border);
+  font-size: 12.5px;
+}
+
+.lf-codeblock-path {
+  font-family: var(--lf-font-mono);
+  color: var(--lf-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lf-codeblock-scroll { overflow-x: auto; }
+
+.lf-code-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-family: var(--lf-font-mono);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.lf-code-table td {
+  border: 0;
+  padding: 0 8px;
+  white-space: pre;
+}
+
+.lf-code-table td.lf-ln {
+  width: 1%;
+  min-width: 38px;
+  text-align: right;
+  color: var(--lf-text-tertiary);
+  user-select: none;
+  border-right: 1px solid var(--lf-border);
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+
+.lf-code-table tr.lf-code-row td.lf-ln { cursor: pointer; }
+
+.lf-code-table tr.lf-code-row td.lf-ln-old,
+.lf-code-table tr.lf-code-row td.lf-ln-single {
+  min-width: 52px;
+  padding-left: 24px;
+}
+
+.lf-code-table .lf-gutter-plus {
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border-radius: 4px;
+  border: none;
+  background: var(--lf-accent);
+  color: var(--lf-accent-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.lf-code-table tr.lf-code-row:hover .lf-gutter-plus,
+.lf-code-table .lf-gutter-plus:focus-visible {
+  opacity: 1;
+}
+
+/* A noted row keeps its diff tint; only the gutter carries the note. */
+.lf-code-table tr.lf-code-row.lf-row-has-note td.lf-ln { background: var(--lf-highlight-active); }
+
+.lf-code-table tr.lf-code-row.lf-row-has-note td.lf-ln:first-child {
+  box-shadow: inset 3px 0 0 var(--lf-accent);
+}
+
+.lf-code-table tr.lf-code-row.lf-row-selecting td { background: var(--lf-working-fill); }
+
+.lf-code-table td.lf-sign {
+  width: 18px;
+  text-align: center;
+  user-select: none;
+  padding: 0 2px;
+}
+
+.lf-code-table tr.lf-add { background: var(--lf-success-fill); }
+.lf-code-table tr.lf-add td.lf-sign { color: var(--lf-success-ink); }
+.lf-code-table tr.lf-del { background: var(--lf-failure-fill); }
+.lf-code-table tr.lf-del td.lf-sign { color: var(--lf-failure-ink); }
+.lf-code-table tr.lf-hunk td {
+  background: var(--lf-surface-muted);
+  color: var(--lf-text-secondary);
+  padding: 3px 10px;
+}
+
+.lf-code-table tr.lf-line-note td {
+  white-space: normal;
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  background: var(--lf-surface-element);
+  color: var(--lf-text);
+  padding: 6px 12px;
+  border-top: 1px solid var(--lf-border);
+  border-bottom: 1px solid var(--lf-border);
+}
+
+.lf-codeblock.lf-notes-hidden tr.lf-line-note { display: none; }
+
+/* Builtin components */
+.lf-decision {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+
+.lf-decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lf-decision-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.lf-decision-rec {
+  font-size: 12px;
+  color: var(--lf-text-secondary);
+}
+
+.lf-before-after {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.lf-before-after-pane {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  padding: 12px 14px;
+}
+
+.lf-before-after-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lf-text-secondary);
+  margin-bottom: 8px;
+}
+
+/* Controls: choices, questions, direct actions */
+[data-choice], [data-multiselect] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Draw `data-label` as a heading only when the control has no selectable prompt child;
+   a decision card shows its title instead. */
+:is([data-choice], [data-multiselect], [data-question])[data-label]:not(:has(> p, > label, > h3, > h4, > legend))::before {
+  content: attr(data-label);
+  display: block;
+  flex-basis: 100%;
+  margin: 10px 0 2px;
+  font-weight: 600;
+}
+
+:is([data-choice], [data-multiselect]) > :is(p, label, h3, h4, legend) {
+  flex-basis: 100%;
+  margin: 10px 0 2px;
+}
+
+.lf-decision [data-choice][data-label]::before { content: none; }
+
+button {
+  appearance: none;
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 6px 11px;
+  border-radius: 4px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  cursor: pointer;
+}
+
+button:hover { background: var(--lf-surface-muted); }
+
+button.is-selected,
+button[aria-pressed="true"],
+button.lf-btn-accent {
+  background: var(--lf-accent);
+  border-color: var(--lf-accent);
+  color: var(--lf-accent-text);
+}
+
+button.lf-btn-accent:hover {
+  background: var(--lf-accent-hover);
+  border-color: var(--lf-accent-hover);
+}
+
+button.lf-btn-quiet {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-color: var(--lf-border);
+  color: var(--lf-text-secondary);
+}
+
+button.lf-btn-quiet.is-selected,
+button.lf-btn-quiet[aria-pressed="true"] {
+  background: var(--lf-accent);
+  border-color: var(--lf-accent);
+  color: var(--lf-accent-text);
+}
+
+[data-question] { margin: 14px 0; }
+
+[data-question] textarea, [data-question] input[type="text"] {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 4px;
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 14px;
+  resize: vertical;
+}
+
+/* Direct action confirmation & receipt */
+.lf-action-confirm,
+.lf-action-receipt,
+.lf-action-error {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  border-radius: 4px;
+}
+
+.lf-action-confirm,
+.lf-action-error {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lf-action-confirm {
+  padding: 6px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 6px;
+  background: var(--lf-surface-muted);
+}
+
+.lf-action-summary {
+  font-family: var(--lf-font-mono);
+  font-size: 12px;
+  color: var(--lf-text-secondary);
+}
+
+.lf-action-receipt {
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--lf-success-fill);
+  color: var(--lf-success-ink);
+  font-weight: 600;
+}
+
+.lf-action-error {
+  padding: 5px 10px;
+  background: var(--lf-failure-fill);
+  color: var(--lf-failure-ink);
+}
+
+/* Warm-underlined cross-element note highlights */
+.lf-hl {
+  background: var(--lf-highlight);
+  border-bottom: 2px solid var(--lf-highlight-line, var(--lf-accent));
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.lf-hl:hover { background: var(--lf-highlight-active, var(--lf-highlight)); }
+
+.lf-pulse-ring {
+  outline: 2px solid var(--lf-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Notion-style floating selection bubble */
+.lf-float-pill {
+  position: fixed;
+  z-index: 960;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px;
+  border-radius: 8px;
+  background: var(--lf-bubble-bg, var(--lf-text));
+  color: var(--lf-bubble-text, var(--lf-bg));
+  border: 1px solid var(--lf-bubble-border, var(--lf-border-strong));
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.2));
+  font-size: 12px;
+}
+
+.lf-float-pill button {
+  background: transparent;
+  border: none;
+  color: var(--lf-bubble-text, var(--lf-bg));
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lf-float-pill button:hover { background: rgba(128, 128, 128, 0.24); }
+
+.lf-float-pill-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(128, 128, 128, 0.35);
+}
+
+/* Floating comment composer & hover cards */
+.lf-float-composer,
+.lf-hover-card {
+  position: fixed;
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border-strong);
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.18));
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.lf-float-composer {
+  z-index: 970;
+  width: min(320px, calc(100vw - 16px));
+  padding: 10px;
+  border-radius: 9px;
+}
+
+.lf-hover-card {
+  z-index: 950;
+  width: min(290px, calc(100vw - 16px));
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.lf-anchor-quote {
+  font-size: 11.5px;
+  color: var(--lf-text-secondary);
+  border-left: 2px solid var(--lf-border-strong);
+  padding-left: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lf-card-body {
+  color: var(--lf-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lf-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.lf-float-composer textarea,
+.lf-sidebar-item textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 5px;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  resize: vertical;
+}
+
+.lf-sidebar-item textarea { background: var(--lf-surface); }
+
+/* Top-right Comments toggle + collapsible slide-over sidebar */
+.lf-comments-toggle {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 920;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: var(--lf-shadow-sm, 0 3px 12px rgba(0, 0, 0, 0.08));
+}
+
+.lf-comments-toggle.has-notes { border-color: var(--lf-accent); }
+
+.lf-comments-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--lf-accent);
+  color: var(--lf-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.lf-comments-count[hidden] { display: none; }
+
+.lf-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(340px, 92vw);
+  z-index: 940;
+  background: var(--lf-surface);
+  border-left: 1px solid var(--lf-border-strong);
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.18));
+  display: flex;
+  flex-direction: column;
+  transform: translateX(104%);
+  transition: transform 0.18s ease;
+}
+
+.lf-sidebar.is-open { transform: translateX(0); }
+
+.lf-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--lf-border);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.lf-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lf-sidebar-empty {
+  font-size: 13px;
+  color: var(--lf-text-tertiary);
+  padding: 6px 2px;
+}
+
+.lf-sidebar-item {
+  padding: 9px 11px;
+  border: 1px solid var(--lf-border);
+  border-radius: 7px;
+  background: var(--lf-bg);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lf-sidebar-item:hover { border-color: var(--lf-accent); }
+
+/* Fixed T3 Code-style attached-chip composer dock (hidden in Loopflow Desktop) */
+.lf-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: min(820px, calc(100vw - 24px));
+  padding: 9px 12px;
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 11px;
+  box-shadow: var(--lf-shadow, 0 8px 28px rgba(0, 0, 0, 0.16));
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lf-dock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-height: 92px;
+  overflow-y: auto;
+}
+
+.lf-dock[hidden],
+.lf-dock-chips[hidden] { display: none; }
+
+.lf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-bg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lf-chip:hover { border-color: var(--lf-accent); }
+
+.lf-chip-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--lf-surface-element);
+  color: var(--lf-text-secondary);
+  flex-shrink: 0;
+}
+
+.lf-chip-tag.tag-note { background: var(--lf-highlight); color: var(--lf-accent); }
+.lf-chip-tag.tag-lines { background: var(--lf-working-fill); color: var(--lf-working-ink); }
+.lf-chip-tag.tag-choice { background: var(--lf-success-fill); color: var(--lf-success-ink); }
+.lf-chip-tag.tag-answer { background: var(--lf-warning-fill); color: var(--lf-warning-ink); }
+.lf-chip-tag.tag-run { background: var(--lf-failure-fill); color: var(--lf-failure-ink); }
+
+.lf-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.lf-chip-x {
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--lf-text-tertiary);
+}
+
+.lf-chip-x:hover {
+  background: transparent;
+  color: var(--lf-failure-ink);
+}
+
+.lf-dock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lf-dock-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 6px;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13.5px;
+}
+
+.lf-dock-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.lf-dock-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.lf-dock-preview {
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: var(--lf-bg);
+  border: 1px solid var(--lf-border);
+  font-family: var(--lf-font-mono);
+  font-size: 11.5px;
+  color: var(--lf-text-secondary);
+  word-break: break-word;
+  max-height: 84px;
+  overflow-y: auto;
+}
+
+.lf-dock-status {
+  font-size: 12.5px;
+  color: var(--lf-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lf-dock-status.is-error { color: var(--lf-failure-ink); }
+.lf-dock-status.is-ok { color: var(--lf-success-ink); }
+
+</style>
+</head>
+<body>
+<main class="lf-page">
+<h1>Concept review: L4 bf16 evaluation profile (MTG-507)</h1>
+
+<p>
+  <strong>Area reviewed:</strong> Post-implementation review of the CUDA evaluation precision path,
+  batch-capture and profiling harness, precision report, and caller guidance across
+  <code>manabot/eval/agent_loader.py</code>, <code>manabot/eval/vector.py</code>,
+  <code>experiments/eval_precision_profile.py</code>, <code>experiments/eval_throughput.py</code>,
+  <code>experiments/reports/eval_precision_profile.md</code>, and
+  <code>docs/evaluation.md#etude-agents</code>, reviewed as a whole against base
+  <code>659dd138fe</code> (at <code>HEAD</code> <code>178a551d79</code>).
+</p>
+
+<p>
+  <strong>Sync check against <code>origin/main</code>:</strong> Freshly fetched
+  <code>origin/main</code> (<code>606e79e90a</code>, MTG-500 manual mana payments) is one commit
+  ahead of MTG-507's base. It touches only Rust <code>managym</code> mana-payment logic,
+  conformance fixtures, and <code>docs/engine.md</code>. Nothing in <code>manabot/eval/</code>,
+  <code>manabot/backends/torch/</code>, <code>experiments/eval_*</code>, or
+  <code>docs/evaluation.md</code> has moved on <code>origin/main</code>.
+</p>
+
+<h2>Do the domain concepts and the code concepts line up?</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Domain concept</th>
+      <th>Code concept</th>
+      <th>Aligned?</th>
+      <th>What is wrong</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Diagnostic variant: "keep PyTorch's autocast weight cache across calls"</strong></td>
+      <td><code>bf16-cached-autocast</code> / <code>cached_context()</code> in <code>experiments/eval_precision_profile.py:557-576</code> wrapping <code>run_call</code> (which enters <code>torch.inference_mode()</code>)</td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>A concept the code claims to test and never exercises.</strong>
+        PyTorch disables autocast weight caching under <code>torch.inference_mode()</code> (and
+        <code>torch.no_grad()</code>). The retained L4 <code>profile.json</code> traces prove
+        <code>bf16-cached-autocast</code> ran the exact same cast op counts as uncached
+        <code>bf16</code> (<code>1,094</code> vs <code>1,094</code> <code>aten::copy_</code> and
+        <code>1,793</code> vs <code>1,793</code> <code>to</code>/<code>_to_copy</code> on
+        <code>w384l8</code>; <code>1,261</code> and <code>2,188</code> on <code>w160l8</code>)
+        and identical peak VRAM (<code>670,990,336</code> / <code>747,497,472</code> bytes).
+        Meanwhile <code>bf16-linear-once</code> actually eliminated those casts
+        (<code>1,094 → 556</code> <code>aten::copy_</code>, <code>1,793 → 669</code>
+        <code>to</code>/<code>_to_copy</code>), sped up <code>w384l8</code> by
+        <strong>14.6%</strong> (<code>18.12 → 15.48 ms/call</code>), and cut peak VRAM by
+        <strong>54 MiB</strong> (<code>640.0 → 585.9 MiB</code>) with <code>0.0</code> logit diff.
+        <code>eval_precision_profile.md:67-70</code> falsely credits <code>bf16-cached-autocast</code>
+        with keeping the weight cache and omits <code>bf16-linear-once</code>'s <code>w384l8</code> win.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Forward time breakdown: "attention work" vs "cast and copy overhead"</strong></td>
+      <td><code>op_bucket(name, parent)</code> in <code>experiments/eval_precision_profile.py:333-356</code></td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>One bucket name for two causes.</strong>
+        <code>op_bucket</code> classifies <code>aten::to</code>, <code>aten::_to_copy</code>, and
+        <code>aten::copy_</code> as <code>casts_and_copies</code> <em>before</em> checking
+        <code>parent != "other"</code>. In <code>trained-w160-bf16/profile.json</code>,
+        <strong>49.96 ms of 52.81 ms (94.6%)</strong> of GPU <code>casts_and_copies</code> time
+        happened <em>inside</em> <code>policy.attention</code> (math SDPA's internal fp32/bf16
+        conversions; unchanged at <code>50.15 ms</code> under <code>bf16-linear-once</code>).
+        The report's delta row (<code>+36.40 ms</code> attention, <code>+13.30 ms</code> casts and
+        copies) steals <strong>12.1 ms/call</strong> from attention and makes external cast overhead
+        look ~10× larger than it is. Respecting parent scopes on the exact same traces gives
+        <code>+48.14 ms</code> attention (<code>36.41 → 84.55 ms</code>) and
+        <code>+0.20 ms</code> outside-scope casts.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Capturing arena batches and single-row inputs from the vector runner</strong></td>
+      <td><code>ObservePrepared</code> / <code>observe_prepared</code> threaded through <code>manabot/eval/vector.py</code> (<code>play_pairings</code>, <code>step_round</code>), <code>experiments/eval_throughput.py</code> (<code>run_vector</code>), and correlated via <code>nonlocal pending</code> in <code>experiments/eval_precision_profile.py:127-179</code></td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>One action split across two callbacks via a mutable side-channel, leaking internal handles onto library APIs.</strong>
+        <code>manabot.eval.vector.play_pairings</code> now exposes internal
+        <code>ObservationSelection</code> (holding live native <code>ObservationBatch</code>
+        coordinates) and <code>Spec</code> across three call layers for one experiment script.
+        <code>capture()</code> stashes them in <code>nonlocal pending</code> and matches them by
+        object identity (<code>inputs[0] is pending[0]</code>) inside <code>local_forward(record)</code>.
+        Because <code>step_round:421</code> prepares all checkpoint groups before
+        <code>asyncio.gather</code> invokes forwards, any two-checkpoint match trips
+        <code>assert pending is None</code>, and <code>ObservationSelection</code> escapes
+        <code>prepare_group</code>.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>L4 precision rule ("when should I use bf16 vs float32?")</strong></td>
+      <td><code>docs/evaluation.md:450-456</code> vs <code>experiments/reports/eval_precision_profile.md:101-109</code> vs <code>BF16_MIN_HIDDEN_DIM = 256</code> (<code>manabot/infra/config.py:347</code>)</td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>The structural rule is missing from caller docs, and training/MLX still encode width-only <code>256</code>.</strong>
+        <code>eval_precision_profile.md:101</code> identifies the divisibility-by-8 head-width
+        rule, but <code>docs/evaluation.md:450-456</code> only lists the five tested head widths
+        (20, 36 vs 32, 40, 48) without stating <code>head_dim = hidden_dim // num_attention_heads</code>
+        divisible by 8—leaving untested shapes like <code>w192l8</code> (24) or <code>w224l8</code>
+        (28) ambiguous. Separately, <code>BF16_MIN_HIDDEN_DIM = 256</code> and
+        <code>docs/training.md:1147</code> still describe the L4 threshold by <code>hidden_dim</code> alone.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Shared Torch evaluation loading and precision execution</strong></td>
+      <td><code>load_torch_policy</code> and <code>torch_forward_context</code> in <code>manabot/eval/agent_loader.py:97-159</code></td>
+      <td><strong>Yes</strong></td>
+      <td>
+        Clean single owner for validation, eval mode, <code>cache_programs()</code>, and per-call
+        precision context while keeping Torch lazy under <code>TYPE_CHECKING</code> so
+        <code>manabot.eval.agents</code> and <code>manabot.eval.vector</code> remain Torch-free.
+        (Minor note: <code>load_torch_policy:133</code> calls <code>apply_matmul_precision</code>
+        once outside and again inside <code>torch_forward_context:136</code>.)
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Same-batch replay, cross-width binding, and buffered arena forward receipts</strong></td>
+      <td><code>BatchContract.bind</code>, <code>CapturedCall</code>, <code>profile_inputs</code> (<code>experiments/eval_precision_profile.py:73-107,205-221,492-513</code>) and <code>ForwardTiming.forwards</code> (<code>experiments/eval_throughput.py:60-92,300-303</code>)</td>
+      <td><strong>Yes</strong></td>
+      <td>
+        Arena replay enforces exact checkpoint SHA-256; cross-width grid replay re-tags
+        <code>Prepared.binding</code> only after checking identical observation config, readings,
+        and non-width model fields; grid batches reuse production <code>concatenate</code>; and
+        <code>forwards.jsonl</code> writes once after timed arena play.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Biggest mismatch: profiler attribution &amp; diagnostic honesty in the L4 evidence</h2>
+
+<p>
+  MTG-507's L4 measurement settled the root cause cleanly: <code>w160l8</code>'s
+  <code>head_dim = 20</code> (and <code>w288l8</code>'s <code>36</code>) falls back from
+  native float32 MHA to <code>aten::_scaled_dot_product_attention_math</code> under CUDA bf16
+  autocast, whereas 8-aligned heads (<code>32</code>, <code>40</code>, <code>48</code>) dispatch
+  <code>aten::_scaled_dot_product_efficient_attention</code>.
+</p>
+
+<p>
+  Two mismatches in <code>experiments/eval_precision_profile.py</code> distort the secondary numbers
+  drawn from those exact traces:
+</p>
+
+<ol>
+  <li>
+    <strong><code>op_bucket</code> steals math-SDPA conversions out of <code>attention</code>:</strong>
+    checking <code>casts_and_copies</code> before <code>parent != "other"</code> moves
+    <code>49.96 ms</code> of GPU time inside <code>policy.attention</code> (94.6% of
+    <code>trained-w160-bf16</code>'s GPU cast bucket) out of <code>attention</code> and into
+    <code>casts_and_copies</code>.
+  </li>
+  <li>
+    <strong><code>bf16-cached-autocast</code> never cached weights:</strong>
+    nesting <code>torch_forward_context</code> (which enters <code>torch.inference_mode()</code>)
+    inside <code>cached_context()</code> hits PyTorch's rule that autocast weight caching is
+    disabled outside grad mode. Both <code>w160l8</code> and <code>w384l8</code> traces show
+    bit-for-bit identical cast op counts and peak CUDA memory between <code>bf16</code> and
+    <code>bf16-cached-autocast</code>—while <code>bf16-linear-once</code> actually removed
+    <code>&gt;400</code> cast ops/call and cut <code>w384l8</code> forward time by
+    <strong>14.6%</strong> (<code>18.12 → 15.48 ms</code>) and peak VRAM by
+    <strong>54 MiB</strong> (<code>640.0 → 585.9 MiB</code>) with <code>0.0</code> logit diff.
+  </li>
+</ol>
+
+<div class="lf-codeblock" data-path="experiments/eval_precision_profile.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/eval_precision_profile.py:333-356</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,849 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="333"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">333</td><td class="lf-sign">+</td><td>def op_bucket(name: str, parent: str) -&gt; str:</td></tr>
+<tr class="lf-add lf-code-row" data-line="334"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">334</td><td class="lf-sign">+</td><td>    if name in {&quot;aten::to&quot;, &quot;aten::_to_copy&quot;, &quot;aten::copy_&quot;}:</td></tr>
+<tr class="lf-add lf-code-row" data-line="335"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">335</td><td class="lf-sign">+</td><td>        return &quot;casts_and_copies&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="336"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">336</td><td class="lf-sign">+</td><td>    if name in {ATTENTION, GRU}:</td></tr>
+<tr class="lf-add lf-code-row" data-line="337"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">337</td><td class="lf-sign">+</td><td>        return name.removeprefix(&quot;policy.&quot;)</td></tr>
+<tr class="lf-add lf-code-row" data-line="338"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">338</td><td class="lf-sign">+</td><td>    if parent != &quot;other&quot;:</td></tr>
+<tr class="lf-add lf-code-row" data-line="339"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">339</td><td class="lf-sign">+</td><td>        return parent</td></tr>
+<tr class="lf-add lf-code-row" data-line="340"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">340</td><td class="lf-sign">+</td><td>    if name in {</td></tr>
+<tr class="lf-add lf-code-row" data-line="341"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">341</td><td class="lf-sign">+</td><td>        &quot;aten::linear&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="342"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">342</td><td class="lf-sign">+</td><td>        &quot;aten::addmm&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="343"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">343</td><td class="lf-sign">+</td><td>        &quot;aten::mm&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="344"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">344</td><td class="lf-sign">+</td><td>        &quot;aten::matmul&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="345"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">345</td><td class="lf-sign">+</td><td>        &quot;aten::relu&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="346"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">346</td><td class="lf-sign">+</td><td>        &quot;aten::gelu&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="347"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">347</td><td class="lf-sign">+</td><td>        &quot;aten::silu&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="348"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">348</td><td class="lf-sign">+</td><td>    }:</td></tr>
+<tr class="lf-add lf-code-row" data-line="349"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">349</td><td class="lf-sign">+</td><td>        return &quot;linear_and_mlp&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="350"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">350</td><td class="lf-sign">+</td><td>    if &quot;norm&quot; in name:</td></tr>
+<tr class="lf-add lf-code-row" data-line="351"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">351</td><td class="lf-sign">+</td><td>        return &quot;normalization&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="352"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">352</td><td class="lf-sign">+</td><td>    if name.startswith(</td></tr>
+<tr class="lf-add lf-code-row" data-line="353"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">353</td><td class="lf-sign">+</td><td>        (&quot;aten::index&quot;, &quot;aten::gather&quot;, &quot;aten::embedding&quot;, &quot;aten::scatter&quot;)</td></tr>
+<tr class="lf-add lf-code-row" data-line="354"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">354</td><td class="lf-sign">+</td><td>    ):</td></tr>
+<tr class="lf-add lf-code-row" data-line="355"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">355</td><td class="lf-sign">+</td><td>        return &quot;gather_and_index&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="356"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">356</td><td class="lf-sign">+</td><td>    return &quot;other&quot;</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="experiments/eval_precision_profile.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/eval_precision_profile.py:551-578</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,849 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="551"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">551</td><td class="lf-sign">+</td><td>    policy = load_torch_policy(checkpoint, precision, device)</td></tr>
+<tr class="lf-add lf-code-row" data-line="552"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">552</td><td class="lf-sign">+</td><td>    if variant == &quot;bf16-linear-once&quot;:</td></tr>
+<tr class="lf-add lf-code-row" data-line="553"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">553</td><td class="lf-sign">+</td><td>        linear_weights_bf16(policy)</td></tr>
+<tr class="lf-add lf-code-row" data-line="554"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">554</td><td class="lf-sign">+</td><td>    if device.type == &quot;cuda&quot;:</td></tr>
+<tr class="lf-add lf-code-row" data-line="555"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">555</td><td class="lf-sign">+</td><td>        torch.cuda.reset_peak_memory_stats(device)</td></tr>
+<tr class="lf-add lf-code-row" data-line="556"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">556</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="557"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">557</td><td class="lf-sign">+</td><td>    def cached_context() -&gt; AbstractContextManager[object]:</td></tr>
+<tr class="lf-add lf-code-row" data-line="558"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">558</td><td class="lf-sign">+</td><td>        return (</td></tr>
+<tr class="lf-add lf-code-row" data-line="559"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">559</td><td class="lf-sign">+</td><td>            forward_precision(precision, device)</td></tr>
+<tr class="lf-add lf-code-row" data-line="560"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">560</td><td class="lf-sign">+</td><td>            if variant == &quot;bf16-cached-autocast&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="561"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">561</td><td class="lf-sign">+</td><td>            else nullcontext()</td></tr>
+<tr class="lf-add lf-code-row" data-line="562"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">562</td><td class="lf-sign">+</td><td>        )</td></tr>
+<tr class="lf-add lf-code-row" data-line="563"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">563</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="564"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">564</td><td class="lf-sign">+</td><td>    calls: list[CallTiming] = []</td></tr>
+<tr class="lf-add lf-code-row" data-line="565"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">565</td><td class="lf-sign">+</td><td>    sample: list[tuple[int, HostBatch]] = []</td></tr>
+<tr class="lf-add lf-code-row" data-line="566"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">566</td><td class="lf-sign">+</td><td>    compare_bf16 = variant != &quot;bf16&quot; and device.type != &quot;cpu&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="567"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">567</td><td class="lf-sign">+</td><td>    first_logits: list[np.ndarray] = []</td></tr>
+<tr class="lf-add lf-code-row" data-line="568"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">568</td><td class="lf-sign">+</td><td>    exact = True</td></tr>
+<tr class="lf-add lf-code-row" data-line="569"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">569</td><td class="lf-sign">+</td><td>    difference = 0.0</td></tr>
+<tr class="lf-add lf-code-row" data-line="570"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">570</td><td class="lf-sign">+</td><td>    rng = Random(1)</td></tr>
+<tr class="lf-add lf-code-row" data-line="571"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">571</td><td class="lf-sign">+</td><td>    with (out / &quot;calls.jsonl&quot;).open(&quot;w&quot;) as receipt, cached_context():</td></tr>
+<tr class="lf-add lf-code-row" data-line="572"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">572</td><td class="lf-sign">+</td><td>        for repeat in range(repeats + 1):</td></tr>
+<tr class="lf-add lf-code-row" data-line="573"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">573</td><td class="lf-sign">+</td><td>            for index, batch in enumerate(inputs(policy)):</td></tr>
+<tr class="lf-add lf-code-row" data-line="574"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">574</td><td class="lf-sign">+</td><td>                logits, timing = run_call(</td></tr>
+<tr class="lf-add lf-code-row" data-line="575"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">575</td><td class="lf-sign">+</td><td>                    policy, batch, precision, device, sync, repeat</td></tr>
+<tr class="lf-add lf-code-row" data-line="576"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">576</td><td class="lf-sign">+</td><td>                )</td></tr>
+<tr class="lf-add lf-code-row" data-line="577"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">577</td><td class="lf-sign">+</td><td>                calls.append(timing)</td></tr>
+<tr class="lf-add lf-code-row" data-line="578"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">578</td><td class="lf-sign">+</td><td>                receipt.write(json.dumps({&quot;call&quot;: index, **asdict(timing)}) + &quot;\n&quot;)</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="experiments/reports/eval_precision_profile.md"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/reports/eval_precision_profile.md:57-77</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,204 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="57"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">57</td><td class="lf-sign">+</td><td>| Checkpoint and precision | Attention | Casts and copies | Linear and MLP | Normalization | Gather and index | Packed GRU | Other | Total (ms/call) |</td></tr>
+<tr class="lf-add lf-code-row" data-line="58"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">58</td><td class="lf-sign">+</td><td>| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |</td></tr>
+<tr class="lf-add lf-code-row" data-line="59"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">59</td><td class="lf-sign">+</td><td>| Trained `w160l8` float32 | 36.07 | 0.79 | 15.56 | 1.46 | 0.61 | 0.61 | 4.35 | 59.45 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="60"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">60</td><td class="lf-sign">+</td><td>| Trained `w160l8` bf16 | 72.47 | 14.09 | 5.70 | 1.40 | 0.74 | 0.77 | 5.61 | 100.77 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="61"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">61</td><td class="lf-sign">+</td><td>| Trained `w160l8` bf16 minus float32 | **+36.40** | +13.30 | −9.87 | −0.07 | +0.13 | +0.16 | +1.25 | **+41.31** |</td></tr>
+<tr class="lf-add lf-code-row" data-line="62"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">62</td><td class="lf-sign">+</td><td>| Seeded `w384l8` float32 | 33.05 | 1.45 | 41.39 | 1.41 | 0.92 | 0.51 | 7.75 | 86.48 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="63"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">63</td><td class="lf-sign">+</td><td>| Seeded `w384l8` bf16 | 7.66 | 4.29 | 9.51 | 1.25 | 0.82 | 0.39 | 6.47 | 30.40 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="64"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">64</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="65"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">65</td><td class="lf-sign">+</td><td>On trained `w160l8`, casting projection weights once preserved all legal</td></tr>
+<tr class="lf-add lf-code-row" data-line="66"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">66</td><td class="lf-sign">+</td><td>bf16 logits exactly and moved the full-capture mean from 66.32 to 65.23 ms.</td></tr>
+<tr class="lf-add lf-code-row" data-line="67"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">67</td><td class="lf-sign">+</td><td>Keeping the autocast weight cache across calls also preserved the logits</td></tr>
+<tr class="lf-add lf-code-row" data-line="68"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">68</td><td class="lf-sign">+</td><td>and measured 65.76 ms. Both variants kept the math backend. Cast and copy</td></tr>
+<tr class="lf-add lf-code-row" data-line="69"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">69</td><td class="lf-sign">+</td><td>time includes tensor conversions inside attention that persist when the</td></tr>
+<tr class="lf-add lf-code-row" data-line="70"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">70</td><td class="lf-sign">+</td><td>weights are cached.</td></tr>
+<tr class="lf-add lf-code-row" data-line="71"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">71</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="72"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">72</td><td class="lf-sign">+</td><td>| Diagnostic variant | Trained `w160l8` (ms/call) | Seeded `w384l8` (ms/call) |</td></tr>
+<tr class="lf-add lf-code-row" data-line="73"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">73</td><td class="lf-sign">+</td><td>| --- | ---: | ---: |</td></tr>
+<tr class="lf-add lf-code-row" data-line="74"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">74</td><td class="lf-sign">+</td><td>| TF32 | 34.94 | 30.36 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="75"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">75</td><td class="lf-sign">+</td><td>| bf16, cast projections once | 65.23 | 15.48 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="76"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">76</td><td class="lf-sign">+</td><td>| bf16, keep autocast cache | 65.76 | 17.71 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="77"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">77</td><td class="lf-sign">+</td><td></td></tr>
+</tbody></table></div></div>
+
+<div class="lf-before-after">
+  <div class="lf-before-after-pane">
+    <div class="lf-before-after-label">Before</div>
+
+    <h4>Current implementation (<code>178a551d79</code>)</h4>
+    <ul>
+      <li><strong><code>op_bucket</code>:</strong> <code>casts_and_copies</code> preempts <code>policy.attention</code> and <code>policy.packed_gru</code>. Report shows <code>w160l8</code> delta as <code>+36.40 ms</code> attention, <code>+13.30 ms</code> casts/copies, <code>−9.87 ms</code> MLP.</li>
+      <li><strong><code>bf16-cached-autocast</code>:</strong> Stays in CLI and report as "keep autocast cache" (<code>65.76 ms</code> / <code>17.71 ms</code>) even though <code>profile.json</code> proves zero weight casts were cached (<code>1,094</code> vs <code>1,094</code> <code>aten::copy_</code> on <code>w384l8</code>).</li>
+      <li><strong><code>bf16-linear-once</code>:</strong> Dismissed after <code>w160l8</code> stays slow; its <code>14.6%</code> speedup and <code>54 MiB</code> VRAM reduction on <code>w384l8</code> (plus GEMM kernel switch from <code>cutlass_80_wmma_32x32</code> to <code>ampere_bf16_s1688gemm_128x128</code>) go unmentioned.</li>
+      <li><strong>Capture hook:</strong> <code>ObservePrepared</code> leaks <code>ObservationSelection</code> and <code>Spec</code> through <code>vector.py</code> and <code>eval_throughput.py</code> into <code>nonlocal pending</code>.</li>
+      <li><strong>Docs:</strong> <code>docs/evaluation.md:450-456</code> lists tested head widths (<code>20, 36</code> vs <code>32, 40, 48</code>) without stating the <code>head_dim % 8 == 0</code> rule.</li>
+    </ul>
+
+  </div>
+  <div class="lf-before-after-pane">
+    <div class="lf-before-after-label">After</div>
+
+    <h4>Recommended design (no new L4 rental needed)</h4>
+    <ul>
+      <li><strong><code>op_bucket</code>:</strong> Respect <code>ATTENTION</code>/<code>GRU</code> and <code>parent != "other"</code> before <code>casts_and_copies</code>, then recompute the bucket table offline from the retained <code>profile.json</code> traces: <code>w160l8</code> delta becomes <code>+48.14 ms</code> attention (<code>36.41 → 84.55 ms</code>), <code>+0.20 ms</code> outside casts, <code>−8.64 ms</code> MLP.</li>
+      <li><strong>Remove <code>bf16-cached-autocast</code>:</strong> Delete the no-op variant from <code>eval_precision_profile.py</code> and state in the report why PyTorch autocast does not cache weights under <code>torch.inference_mode()</code>; let <code>bf16-linear-once</code> be the sole cast-elimination measurement.</li>
+      <li><strong>Report <code>bf16-linear-once</code> completely:</strong> Note both that it leaves <code>w160l8</code> slow (math SDPA dominates) and that it cuts <code>w384l8</code> forward time by 14.6% and VRAM by 54 MiB with 0.0 logit diff on L4, while noting the GEMM kernel change as the reason to defer loader adoption to a cross-GPU parity Task.</li>
+      <li><strong>Tighten capture boundary:</strong> Remove <code>observe_prepared</code> from <code>eval_throughput.run_vector</code> (call <code>play_pairings</code> directly in <code>capture</code>), prepare <code>singles</code> synchronously inside the callback so <code>ObservationSelection</code> never escapes <code>prepare_group</code>, and key by <code>id(prepared)</code> instead of <code>nonlocal pending</code>.</li>
+      <li><strong>State the rule in docs:</strong> Update <code>docs/evaluation.md:450-456</code> to name <code>head_dim = hidden_dim // num_attention_heads</code> divisible by 8 directly alongside the tested shapes and batch thresholds.</li>
+    </ul>
+
+  </div>
+</div>
+
+
+<h2>Capture boundary &amp; caller guidance excerpts</h2>
+
+<div class="lf-codeblock" data-path="manabot/eval/vector.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/eval/vector.py:338-355</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -337,8 +338,16 @@ class PlayedRound:</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="337" data-line="338"><td class="lf-ln lf-ln-old">337</td><td class="lf-ln lf-ln-new">338</td><td class="lf-sign"> </td><td>    errors: dict[str, ForwardError]</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="338" data-line="339"><td class="lf-ln lf-ln-old">338</td><td class="lf-ln lf-ln-new">339</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="339" data-line="340"><td class="lf-ln lf-ln-old">339</td><td class="lf-ln lf-ln-new">340</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="341"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">341</td><td class="lf-sign">+</td><td>type ObservePrepared = Callable[</td></tr>
+<tr class="lf-add lf-code-row" data-line="342"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">342</td><td class="lf-sign">+</td><td>    [Prepared[np.ndarray], ObservationSelection, Spec], None</td></tr>
+<tr class="lf-add lf-code-row" data-line="343"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">343</td><td class="lf-sign">+</td><td>]</td></tr>
+<tr class="lf-add lf-code-row" data-line="344"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">344</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="345"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">345</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="340" data-line="346"><td class="lf-ln lf-ln-old">340</td><td class="lf-ln lf-ln-new">346</td><td class="lf-sign"> </td><td>async def step_round(</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="341"><td class="lf-ln lf-ln-old">341</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>    vector: RecordedVectorEnv, states: list[SlotState | None], space: ObservationSpace</td></tr>
+<tr class="lf-add lf-code-row" data-line="347"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">347</td><td class="lf-sign">+</td><td>    vector: RecordedVectorEnv,</td></tr>
+<tr class="lf-add lf-code-row" data-line="348"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">348</td><td class="lf-sign">+</td><td>    states: list[SlotState | None],</td></tr>
+<tr class="lf-add lf-code-row" data-line="349"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">349</td><td class="lf-sign">+</td><td>    space: ObservationSpace,</td></tr>
+<tr class="lf-add lf-code-row" data-line="350"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">350</td><td class="lf-sign">+</td><td>    observe_prepared: ObservePrepared | None = None,</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="342" data-line="351"><td class="lf-ln lf-ln-old">342</td><td class="lf-ln lf-ln-new">351</td><td class="lf-sign"> </td><td>) -&gt; PlayedRound:</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="343" data-line="352"><td class="lf-ln lf-ln-old">343</td><td class="lf-ln lf-ln-new">352</td><td class="lf-sign"> </td><td>    &quot;&quot;&quot;Choose once per live slot, omitting matches whose checkpoint failed.&quot;&quot;&quot;</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="344" data-line="353"><td class="lf-ln lf-ln-old">344</td><td class="lf-ln lf-ln-new">353</td><td class="lf-sign"> </td><td>    started = monotonic()</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="manabot/eval/vector.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/eval/vector.py:396-405</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -387,7 +396,11 @@ async def step_round(</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="387" data-line="396"><td class="lf-ln lf-ln-old">387</td><td class="lf-ln lf-ln-new">396</td><td class="lf-sign"> </td><td>                        blank[batch] = batch.blank_decision_memory()</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="388" data-line="397"><td class="lf-ln lf-ln-old">388</td><td class="lf-ln lf-ln-new">397</td><td class="lf-sign"> </td><td>                    batch = blank[batch]</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="389" data-line="398"><td class="lf-ln lf-ln-old">389</td><td class="lf-ln lf-ln-new">398</td><td class="lf-sign"> </td><td>                coords.append((batch, index))</td></tr>
+<tr class="lf-add lf-code-row" data-line="399"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">399</td><td class="lf-sign">+</td><td>            selection = ObservationSelection(spec.space, tuple(coords))</td></tr>
+<tr class="lf-add lf-code-row" data-line="400"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">400</td><td class="lf-sign">+</td><td>            prepared = prepare_batch(selection, spec)</td></tr>
+<tr class="lf-add lf-code-row" data-line="401"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">401</td><td class="lf-sign">+</td><td>            if observe_prepared is not None:</td></tr>
+<tr class="lf-add lf-code-row" data-line="402"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">402</td><td class="lf-sign">+</td><td>                observe_prepared(prepared, selection, spec)</td></tr>
+<tr class="lf-add lf-code-row" data-line="403"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">403</td><td class="lf-sign">+</td><td>            return prepared</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="391" data-line="404"><td class="lf-ln lf-ln-old">391</td><td class="lf-ln lf-ln-new">404</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="392" data-line="405"><td class="lf-ln lf-ln-old">392</td><td class="lf-ln lf-ln-new">405</td><td class="lf-sign"> </td><td>        async def sample_group(</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="experiments/eval_precision_profile.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/eval_precision_profile.py:127-179</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,849 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="127"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">127</td><td class="lf-sign">+</td><td>    pending: tuple[HostBatch, ObservationSelection, Spec] | None = None</td></tr>
+<tr class="lf-add lf-code-row" data-line="128"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">128</td><td class="lf-sign">+</td><td>    count = 0</td></tr>
+<tr class="lf-add lf-code-row" data-line="129"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">129</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="130"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">130</td><td class="lf-sign">+</td><td>    def observe(batch: HostBatch, selection: ObservationSelection, spec: Spec) -&gt; None:</td></tr>
+<tr class="lf-add lf-code-row" data-line="131"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">131</td><td class="lf-sign">+</td><td>        nonlocal pending</td></tr>
+<tr class="lf-add lf-code-row" data-line="132"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">132</td><td class="lf-sign">+</td><td>        assert pending is None, &quot;capture expects one checkpoint per round&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="133"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">133</td><td class="lf-sign">+</td><td>        pending = batch, selection, spec</td></tr>
+<tr class="lf-add lf-code-row" data-line="134"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">134</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="135"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">135</td><td class="lf-sign">+</td><td>    with NamedTemporaryFile(dir=batches.parent, suffix=&quot;.partial&quot;) as partial:</td></tr>
+<tr class="lf-add lf-code-row" data-line="136"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">136</td><td class="lf-sign">+</td><td>        with gzip.GzipFile(fileobj=partial, mode=&quot;wb&quot;, compresslevel=1) as stream:</td></tr>
+<tr class="lf-add lf-code-row" data-line="137"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">137</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="138"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">138</td><td class="lf-sign">+</td><td>            def record(inputs: list[object]) -&gt; list[object]:</td></tr>
+<tr class="lf-add lf-code-row" data-line="139"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">139</td><td class="lf-sign">+</td><td>                nonlocal pending, count</td></tr>
+<tr class="lf-add lf-code-row" data-line="140"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">140</td><td class="lf-sign">+</td><td>                assert (</td></tr>
+<tr class="lf-add lf-code-row" data-line="141"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">141</td><td class="lf-sign">+</td><td>                    pending is not None and len(inputs) == 1 and inputs[0] is pending[0]</td></tr>
+<tr class="lf-add lf-code-row" data-line="142"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">142</td><td class="lf-sign">+</td><td>                )</td></tr>
+<tr class="lf-add lf-code-row" data-line="143"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">143</td><td class="lf-sign">+</td><td>                batch, selection, spec = pending</td></tr>
+<tr class="lf-add lf-code-row" data-line="144"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">144</td><td class="lf-sign">+</td><td>                pending = None</td></tr>
+<tr class="lf-add lf-code-row" data-line="145"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">145</td><td class="lf-sign">+</td><td>                if count == 0:</td></tr>
+<tr class="lf-add lf-code-row" data-line="146"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">146</td><td class="lf-sign">+</td><td>                    pickle.dump(</td></tr>
+<tr class="lf-add lf-code-row" data-line="147"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">147</td><td class="lf-sign">+</td><td>                        (</td></tr>
+<tr class="lf-add lf-code-row" data-line="148"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">148</td><td class="lf-sign">+</td><td>                            ref.artifact.sha256,</td></tr>
+<tr class="lf-add lf-code-row" data-line="149"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">149</td><td class="lf-sign">+</td><td>                            spec.model,</td></tr>
+<tr class="lf-add lf-code-row" data-line="150"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">150</td><td class="lf-sign">+</td><td>                            spec.space.config,</td></tr>
+<tr class="lf-add lf-code-row" data-line="151"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">151</td><td class="lf-sign">+</td><td>                            dict(spec.tables.layout.readings),</td></tr>
+<tr class="lf-add lf-code-row" data-line="152"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">152</td><td class="lf-sign">+</td><td>                        ),</td></tr>
+<tr class="lf-add lf-code-row" data-line="153"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">153</td><td class="lf-sign">+</td><td>                        stream,</td></tr>
+<tr class="lf-add lf-code-row" data-line="154"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">154</td><td class="lf-sign">+</td><td>                        protocol=5,</td></tr>
+<tr class="lf-add lf-code-row" data-line="155"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">155</td><td class="lf-sign">+</td><td>                    )</td></tr>
+<tr class="lf-add lf-code-row" data-line="156"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">156</td><td class="lf-sign">+</td><td>                outputs = forward(inputs)</td></tr>
+<tr class="lf-add lf-code-row" data-line="157"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">157</td><td class="lf-sign">+</td><td>                singles = (</td></tr>
+<tr class="lf-add lf-code-row" data-line="158"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">158</td><td class="lf-sign">+</td><td>                    (batch,)</td></tr>
+<tr class="lf-add lf-code-row" data-line="159"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">159</td><td class="lf-sign">+</td><td>                    if batch.batch == 1</td></tr>
+<tr class="lf-add lf-code-row" data-line="160"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">160</td><td class="lf-sign">+</td><td>                    else tuple(</td></tr>
+<tr class="lf-add lf-code-row" data-line="161"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">161</td><td class="lf-sign">+</td><td>                        prepare_batch(</td></tr>
+<tr class="lf-add lf-code-row" data-line="162"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">162</td><td class="lf-sign">+</td><td>                            ObservationSelection(selection.space, (coordinate,)), spec</td></tr>
+<tr class="lf-add lf-code-row" data-line="163"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">163</td><td class="lf-sign">+</td><td>                        )</td></tr>
+<tr class="lf-add lf-code-row" data-line="164"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">164</td><td class="lf-sign">+</td><td>                        for coordinate in selection.coordinates</td></tr>
+<tr class="lf-add lf-code-row" data-line="165"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">165</td><td class="lf-sign">+</td><td>                    )</td></tr>
+<tr class="lf-add lf-code-row" data-line="166"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">166</td><td class="lf-sign">+</td><td>                )</td></tr>
+<tr class="lf-add lf-code-row" data-line="167"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">167</td><td class="lf-sign">+</td><td>                pickle.dump(</td></tr>
+<tr class="lf-add lf-code-row" data-line="168"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">168</td><td class="lf-sign">+</td><td>                    (batch, singles, checked_logits(outputs, batch)),</td></tr>
+<tr class="lf-add lf-code-row" data-line="169"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">169</td><td class="lf-sign">+</td><td>                    stream,</td></tr>
+<tr class="lf-add lf-code-row" data-line="170"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">170</td><td class="lf-sign">+</td><td>                    protocol=5,</td></tr>
+<tr class="lf-add lf-code-row" data-line="171"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">171</td><td class="lf-sign">+</td><td>                )</td></tr>
+<tr class="lf-add lf-code-row" data-line="172"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">172</td><td class="lf-sign">+</td><td>                count += 1</td></tr>
+<tr class="lf-add lf-code-row" data-line="173"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">173</td><td class="lf-sign">+</td><td>                return outputs</td></tr>
+<tr class="lf-add lf-code-row" data-line="174"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">174</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="175"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">175</td><td class="lf-sign">+</td><td>            agents = (local_forward(record), build(heuristic, {}))</td></tr>
+<tr class="lf-add lf-code-row" data-line="176"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">176</td><td class="lf-sign">+</td><td>            source = LocalMatches([(match, agents) for match in matches])</td></tr>
+<tr class="lf-add lf-code-row" data-line="177"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">177</td><td class="lf-sign">+</td><td>            games = asyncio.run(</td></tr>
+<tr class="lf-add lf-code-row" data-line="178"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">178</td><td class="lf-sign">+</td><td>                run_vector(source, specs, slots, out, observe_prepared=observe)</td></tr>
+<tr class="lf-add lf-code-row" data-line="179"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">179</td><td class="lf-sign">+</td><td>            )</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="docs/evaluation.md"><div class="lf-codeblock-header"><span class="lf-codeblock-path">docs/evaluation.md:447-458</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -447,6 +447,14 @@ it never selects an action. `build(player, leaves)` creates the heuristic or</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="447" data-line="447"><td class="lf-ln lf-ln-old">447</td><td class="lf-ln lf-ln-new">447</td><td class="lf-sign"> </td><td>checkpoint sampler without importing Torch. Each decision&#39;s recorded seed</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="448" data-line="448"><td class="lf-ln lf-ln-old">448</td><td class="lf-ln lf-ln-new">448</td><td class="lf-sign"> </td><td>controls NumPy PCG64 sampling in the game process.</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="449" data-line="449"><td class="lf-ln lf-ln-old">449</td><td class="lf-ln lf-ln-new">449</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="450"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">450</td><td class="lf-sign">+</td><td>For padded TLA evaluation on an NVIDIA L4 with Torch 2.15.0+cu132, keep</td></tr>
+<tr class="lf-add lf-code-row" data-line="451"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">451</td><td class="lf-sign">+</td><td>float32 for 20- or 36-wide attention heads. Those bf16 shapes used the</td></tr>
+<tr class="lf-add lf-code-row" data-line="452"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">452</td><td class="lf-sign">+</td><td>SDPA math backend. Bfloat16 used memory-efficient attention with 32-,</td></tr>
+<tr class="lf-add lf-code-row" data-line="453"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">453</td><td class="lf-sign">+</td><td>40- and 48-wide heads. It was faster at 4, 16 and 64 rows per call for</td></tr>
+<tr class="lf-add lf-code-row" data-line="454"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">454</td><td class="lf-sign">+</td><td>`w256l8` and `w384l8`, and at 16 and 64 rows for the aligned 160-wide</td></tr>
+<tr class="lf-add lf-code-row" data-line="455"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">455</td><td class="lf-sign">+</td><td>four- and five-head controls. See the</td></tr>
+<tr class="lf-add lf-code-row" data-line="456"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">456</td><td class="lf-sign">+</td><td>[L4 evaluation precision profile](../experiments/reports/eval_precision_profile.md).</td></tr>
+<tr class="lf-add lf-code-row" data-line="457"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">457</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="450" data-line="458"><td class="lf-ln lf-ln-old">450</td><td class="lf-ln lf-ln-new">458</td><td class="lf-sign"> </td><td>A checkpoint with a decision-memory encoder has its log prepared with the</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="451" data-line="459"><td class="lf-ln lf-ln-old">451</td><td class="lf-ln lf-ln-new">459</td><td class="lf-sign"> </td><td>observation. The loader joins these memory rows and rebuilds their packed</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="452" data-line="460"><td class="lf-ln lf-ln-old">452</td><td class="lf-ln lf-ln-new">460</td><td class="lf-sign"> </td><td>sequence schedule when Etude sends multiple inputs. A seat whose</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="manabot/infra/config.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/infra/config.py:341-348</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="341"><td class="lf-ln lf-ln-single">341</td><td># The narrowest `ModelConfig.hidden_dim` whose MLX forwards default to</td></tr>
+<tr class="lf-code-row" data-line="342"><td class="lf-ln lf-ln-single">342</td><td># bfloat16 (`manabot.backends.mlx.arrays.default_precision`); torch settings</td></tr>
+<tr class="lf-code-row" data-line="343"><td class="lf-ln lf-ln-single">343</td><td># state their precision. BF16 learner updates were</td></tr>
+<tr class="lf-code-row" data-line="344"><td class="lf-ln lf-ln-single">344</td><td># first faster than float32 at this width on an L4 with bucketed shapes</td></tr>
+<tr class="lf-code-row" data-line="345"><td class="lf-ln lf-ln-single">345</td><td># (experiments/reports/cuda_precision.md); learning evidence at w384l8 is in</td></tr>
+<tr class="lf-code-row" data-line="346"><td class="lf-ln lf-ln-single">346</td><td># experiments/reports/bf16_behavior_logs.md. Narrower models and CPU stay float32.</td></tr>
+<tr class="lf-code-row" data-line="347"><td class="lf-ln lf-ln-single">347</td><td>BF16_MIN_HIDDEN_DIM = 256</td></tr>
+<tr class="lf-code-row" data-line="348"><td class="lf-ln lf-ln-single">348</td><td></td></tr>
+</tbody></table></div></div>
+
+<h2>Walking one interaction: normal, failure, recovery, and counterexamples</h2>
+
+<h3>Normal path: capturing and auditing an L4 profile</h3>
+<ol>
+  <li><strong>Capture:</strong> <code>capture()</code> runs <code>play_pairings</code> on 32 deals in float32. Inside <code>observe</code>, 1-row <code>singles</code> are prepared immediately while <code>selection</code> is live and stored under <code>id(prepared)</code>; <code>record</code> pops them, runs <code>forward</code>, and streams <code>(batch, singles, logits)</code> to a temp gzip file linked atomically on completion.</li>
+  <li><strong>Replay &amp; bucket attribution:</strong> <code>replay()</code> runs uninstrumented repeats through <code>load_torch_policy</code> + <code>torch_forward_context</code>, profiles 4 deterministic calls with <code>profile_modules</code>, and partitions trace time with parent-first <code>op_bucket</code> so every scoped module owns its internal casts.</li>
+  <li><strong>Caller decision:</strong> An engineer reading <code>docs/evaluation.md#etude-agents</code> checks <code>head_dim % 8 == 0</code> and expected rows/call before picking <code>AGENTS_BF16</code> vs default float32.</li>
+</ol>
+
+<h3>Failure, recovery, and counterexamples tested</h3>
+<ul>
+  <li><strong>Multi-checkpoint capture failure:</strong> Today, passing two checkpoints to <code>capture()</code> fires <code>observe_prepared</code> twice inside <code>step_round:421</code> before <code>record()</code> runs once, crashing <code>assert pending is None</code>. Keying by <code>id(prepared)</code> and preparing <code>singles</code> inside <code>observe</code> handles multiple checkpoints and ensures <code>ObservationSelection</code> never survives past <code>step_round</code>.</li>
+  <li><strong>Offline trace recomputation:</strong> Fixing <code>op_bucket</code> requires zero new L4 spend because the full Chrome traces live in <code>.runs/eval-precision-profile/l4-a468879a7a/*/profile.json</code>. Running the parent-first classifier across the four arena traces already reproduces exact totals (<code>59.45</code>, <code>100.77</code>, <code>86.48</code>, <code>30.40 ms/call</code>) with attention rising from <code>+36.40</code> to <code>+48.14 ms/call</code> on <code>w160l8</code>.</li>
+  <li><strong>Counterexample on <code>bf16-linear-once</code> parity:</strong> Although <code>max_abs_difference_from_bf16 == 0.0</code> on L4 for both <code>w160l8</code> and <code>w384l8</code>, the L4 trace shows 16 attention GEMMs changed from <code>cutlass_80_wmma_tensorop_bf16_32x32</code> to <code>ampere_bf16_s1688gemm_128x128</code>. On another GPU architecture (A40, H100) or batch size, different tile reduction order can change bf16 rounding—so shipping it inside <code>etude-policy-bf16-auto-v1</code> without cross-GPU verification risks breaking compute-class identity (irreversible once scored). Deferring it to its own Task is therefore the right call.</li>
+  <li><strong>Counterexample on <code>w160</code> 4-head / 5-head speedups:</strong> Note that <code>GameObjectAttention</code> sets <code>feedforward_dim = num_heads * embedding_dim</code> (<code>manabot/backends/torch/policy.py:1462</code>), so 4-head and 5-head controls also have narrower MLPs than 8-head <code>w160l8</code>. The report correctly compares their <em>bf16/float32 ratios</em> (within each fixed model) rather than raw milliseconds across head counts, so the MLP-width difference does not confound the SDPA backend proof.</li>
+</ul>
+
+<h2>Findings</h2>
+
+<div class="lf-decision" data-decision-id="f1">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F1: Remove the no-op bf16-cached-autocast variant and fix the report&#39;s cache and linear-once findings</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p>
+    <strong>Scope: This work (no new L4 rental).</strong>
+    Under <code>torch.inference_mode()</code>, PyTorch's autocast weight cache is disabled; the L4
+    <code>profile.json</code> traces confirm <code>bf16-cached-autocast</code> ran the exact same
+    <code>aten::copy_</code> and <code>aten::_to_copy</code> counts and peak VRAM as shipped
+    <code>bf16</code>. Delete <code>bf16-cached-autocast</code> from
+    <code>experiments/eval_precision_profile.py</code>, correct
+    <code>experiments/reports/eval_precision_profile.md:67-77</code> so it does not claim weights
+    were cached, and report <code>bf16-linear-once</code>'s measured <code>w384l8</code> speedup
+    (<code>18.12 → 15.48 ms/call</code>, −14.6%, −54 MiB VRAM, <code>0.0</code> diff on L4)
+    alongside the GEMM kernel switch that keeps it out of <code>agent_loader.py</code> here.
+  </p>
+</div>
+  <div data-choice="f1" data-label="F1: Remove the no-op bf16-cached-autocast variant and fix the report&#39;s cache and linear-once findings">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f2">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F2: Make op_bucket respect parent scopes and regenerate the report&#39;s bucket table from retained L4 traces</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p>
+    <strong>Scope: This work (offline recomputation from retained traces).</strong>
+    In <code>experiments/eval_precision_profile.py:333-339</code>, move the
+    <code>casts_and_copies</code> check below <code>ATTENTION</code>/<code>GRU</code> and
+    <code>if parent != "other": return parent</code> so math-SDPA's internal fp32/bf16 conversions
+    (<code>49.96 ms</code> of <code>52.81 ms</code> GPU cast time in
+    <code>trained-w160-bf16/profile.json</code>) stay in <code>attention</code>. Add a unit check
+    in <code>tests/eval/test_eval_precision_profile.py</code> (a nested <code>aten::to</code> inside
+    <code>policy.attention</code> charges to <code>attention</code>) and update the bucket table in
+    <code>experiments/reports/eval_precision_profile.md:57-64</code> from the saved traces
+    (<code>+48.14 ms</code> attention, <code>+0.20 ms</code> outside casts, <code>−8.64 ms</code> MLP).
+  </p>
+</div>
+  <div data-choice="f2" data-label="F2: Make op_bucket respect parent scopes and regenerate the report&#39;s bucket table from retained L4 traces">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f3">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F3: Tighten the capture boundary (remove observe_prepared from eval_throughput and eliminate nonlocal pending)</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p>
+    <strong>Scope: This work.</strong>
+    Stop threading <code>observe_prepared</code> through <code>experiments/eval_throughput.py:run_vector</code>
+    (let <code>capture</code> iterate <code>play_pairings</code> directly). Inside
+    <code>experiments/eval_precision_profile.py:capture</code>, prepare <code>singles</code>
+    synchronously inside the observer while <code>ObservationSelection</code> is live and correlate
+    with <code>record</code> via a dict keyed by <code>id(prepared)</code> rather than
+    <code>nonlocal pending</code>. Document in <code>manabot/eval/vector.py</code> that
+    <code>ObservationSelection</code> is valid only during the synchronous callback—or remove
+    <code>observe_prepared</code> from <code>vector.py</code> entirely if single-row captures are
+    taken via a separate 1-slot run.
+  </p>
+</div>
+  <div data-choice="f3" data-label="F3: Tighten the capture boundary (remove observe_prepared from eval_throughput and eliminate nonlocal pending)">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f4">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F4: State the head_dim % 8 == 0 rule explicitly in docs/evaluation.md</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p>
+    <strong>Scope: This work.</strong>
+    <code>docs/evaluation.md:450-456</code> currently enumerates only the five tested head widths
+    (<code>20, 36</code> vs <code>32, 40, 48</code>). Name the structural condition established by
+    the profile—<code>head_dim = hidden_dim // num_attention_heads</code> must be a multiple of 8
+    to hit memory-efficient bf16 SDPA on L4 / Torch 2.15—before listing the tested batch-size
+    crossovers.
+  </p>
+</div>
+  <div data-choice="f4" data-label="F4: State the head_dim % 8 == 0 rule explicitly in docs/evaluation.md">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f5">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F5: Revisit BF16_MIN_HIDDEN_DIM and training precision guidance for head_dim % 8 alignment</span>
+    <span class="lf-decision-rec">Recommended: File Task</span>
+  </div>
+  <div class="lf-decision-body">
+  <p>
+    <strong>Scope: Separate outcome (deferred in <code>scratch/plan.md:245-250</code>, now confirmed by L4 evidence).</strong>
+    <code>manabot/infra/config.py:347</code> (<code>BF16_MIN_HIDDEN_DIM = 256</code>, also used by
+    MLX default precision) and <code>docs/training.md:1147</code> still frame the L4 CUDA crossover
+    strictly in terms of <code>hidden_dim</code>. File a separate Task to separate MLX's width rule
+    from CUDA's <code>head_dim % 8 == 0</code> SDPA alignment rule and review frontier model head
+    counts (e.g., 4-head <code>w160</code> vs <code>w192l8</code>).
+  </p>
+</div>
+  <div data-choice="f5" data-label="F5: Revisit BF16_MIN_HIDDEN_DIM and training precision guidance for head_dim % 8 alignment">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f6">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F6: Evaluate pre-casting Linear/MHA projection weights for aligned CUDA bf16 evaluation</span>
+    <span class="lf-decision-rec">Recommended: File Task</span>
+  </div>
+  <div class="lf-decision-body">
+  <p>
+    <strong>Scope: Separate outcome (irreversible compute-class choice if rounding differs across GPUs).</strong>
+    On L4, <code>bf16-linear-once</code> cut <code>seeded w384l8</code> forward time by 14.6%
+    (<code>18.12 → 15.48 ms/call</code>) and peak VRAM by 54 MiB with <code>0.0</code> logit diff,
+    but switched 16 attention GEMMs from <code>cutlass_80_wmma_32x32</code> to
+    <code>ampere_bf16_s1688gemm_128x128</code>. File a separate Task if worth pursuing to verify
+    cross-GPU / multi-shape parity or introduce a new compute class id.
+  </p>
+</div>
+  <div data-choice="f6" data-label="F6: Evaluate pre-casting Linear/MHA projection weights for aligned CUDA bf16 evaluation">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<h2>Questions</h2>
+
+<div data-choice="q1" data-label="Q1: Bucket attribution for casts inside Linear/MLP">
+  <p><strong>1. In F2, how should <code>op_bucket</code> classify <code>aten::to</code>/<code>copy_</code> inside <code>policy.attention</code> vs inside <code>aten::linear</code>?</strong></p>
+  <button data-value="1a">1a. Parent-first for all buckets: every bucket (<code>attention</code>, <code>linear_and_mlp</code>, <code>packed_gru</code>) owns its internal casts; <code>bf16-linear-once</code> measures weight-cast cost directly (Recommended)</button>
+  <button data-value="1b">1b. Module-scope-first only: <code>attention</code> and <code>packed_gru</code> own their internal casts, while <code>casts_and_copies</code> still captures <code>aten::linear</code> weight casts</button>
+</div>
+
+<div data-choice="q2" data-label="Q2: Vector runner capture seam">
+  <p><strong>2. In F3, should <code>observe_prepared</code> remain on <code>manabot.eval.vector.play_pairings</code>?</strong></p>
+  <button data-value="2a">2a. Keep <code>observe_prepared</code> on <code>vector.py</code> with a documented synchronous-only contract, drop it from <code>eval_throughput.run_vector</code>, and prepare <code>singles</code> inside the callback keyed by <code>id(prepared)</code> (Recommended)</button>
+  <button data-value="2b">2b. Remove <code>observe_prepared</code> from <code>manabot/eval/vector.py</code> altogether and capture grid single-rows in a separate 1-slot pass</button>
+</div>
+
+<div data-choice="q3" data-label="Q3: Follow-up Tasks">
+  <p><strong>3. Which follow-up Tasks should be filed from the L4 profile?</strong></p>
+  <button data-value="3a">3a. File F5 (<code>BF16_MIN_HIDDEN_DIM</code> / training <code>head_dim % 8</code> guidance) now; keep F6 (<code>bf16-linear-once</code> for wide models) as an optional idea until wide-model GPU eval becomes forward-bound (Recommended)</button>
+  <button data-value="3b">3b. File both F5 and F6</button>
+  <button data-value="3c">3c. File neither; keep the findings in the report</button>
+</div>
+</main>
+<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-507"},"directory":"/Users/jack/src/manabot.mtg-507-profile-why-l4","base":"659dd138fe1304368c65cf07a8ca31239b08fbdd","head":"178a551d79","path":"scratch/concept-review.html","build_id":"5e75647f0d30f605","protocol":{"revision":11,"min_revision":10}}</script>
+<script>
+(function () {
+  "use strict";
+
+  const stampEl = document.getElementById("lf-page");
+  if (!stampEl) return;
+  let stamp;
+  try {
+    stamp = JSON.parse(stampEl.textContent || "{}");
+  } catch (_) {
+    return;
+  }
+
+  const pagePath = String(stamp.path || "scratch/page.html");
+  const buildId = String(stamp.build_id || "0");
+  const work = stamp.work || { kind: "repository" };
+  const directory = String(stamp.directory || "");
+  const protocol =
+    stamp.protocol && typeof stamp.protocol === "object" ? stamp.protocol : null;
+  const protocolRevision = Number(protocol && protocol.revision);
+  const protocolMinRevision = Number(protocol && protocol.min_revision);
+  const storageKey = "lf-page:" + pagePath + ":" + buildId;
+  const mainEl =
+    document.querySelector("main.lf-page") || document.querySelector("main") || document.body;
+
+  const desktopHandler =
+    window.webkit &&
+    window.webkit.messageHandlers &&
+    window.webkit.messageHandlers.loopflow;
+
+  let hostMode = desktopHandler ? "desktop" : "clipboard";
+  let socket = null;
+  let nextReqId = 1;
+  const pending = new Map();
+  const cancelledAction = Symbol("cancelled action");
+  let serverDisconnected = false;
+  let sendingReply = false;
+
+  // Draft & receipt state.
+  // Notes (prose & diff/file lines), choices, multiselects, questions, offline actions,
+  // and optional browser overall direction enter the reply queue.
+  // Executed direct `data-lf` receipts stay separate and only ride as a suffix on ⌘↩.
+  function emptyState() {
+    return {
+      notes: [],
+      choices: {},
+      multiselects: {},
+      questions: {},
+      offlineActions: [],
+      overall: "",
+      receipts: [],
+    };
+  }
+
+  let state = emptyState();
+
+  function oneLine(text) {
+    return String(text || "")
+      .replace(/[\r\n\t\x00-\x1f]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function buttonValue(btn) {
+    return btn.getAttribute("data-value") || oneLine(btn.textContent);
+  }
+
+  function resultTaskId(result) {
+    return result && ((result.task && result.task.identifier) || result.identifier);
+  }
+
+  function errorMessage(err) {
+    return String(err && err.message ? err.message : err);
+  }
+
+  function el(tag, opts, ...children) {
+    const node = document.createElement(tag);
+    if (typeof opts === "string") {
+      if (opts) node.className = opts;
+    } else if (opts) {
+      for (const [k, v] of Object.entries(opts)) {
+        if (v == null || v === false) continue;
+        if (k === "cls") node.className = v;
+        else if (k === "text") node.textContent = v;
+        else if (k === "on") {
+          for (const [ev, fn] of Object.entries(v)) node.addEventListener(ev, fn);
+        } else if (k === "attrs") {
+          for (const [ak, av] of Object.entries(v)) node.setAttribute(ak, av);
+        } else {
+          node[k] = v;
+        }
+      }
+    }
+    for (const child of children) {
+      if (child != null && child !== false) node.append(child);
+    }
+    return node;
+  }
+
+  function makeButton(label, onClick, className) {
+    return el("button", { type: "button", cls: className || "", text: label, on: { click: onClick } });
+  }
+
+  function setPressed(btn, active) {
+    btn.classList.toggle("is-selected", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+
+  function focusEnd(ta) {
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
+  function clearSelection() {
+    try {
+      window.getSelection().removeAllRanges();
+    } catch (_) {}
+  }
+
+  function randomId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    return "lf-" + Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+  }
+
+  function shortPath(path) {
+    const parts = String(path || "").split("/");
+    return parts[parts.length - 1] || path;
+  }
+
+  function truncate(text, max) {
+    const s = oneLine(text);
+    return s.length > max ? s.slice(0, max - 1) + "…" : s;
+  }
+
+  function nearestSection(node) {
+    let cur = node && node.nodeType === 1 ? node : node && node.parentElement;
+    while (cur && cur !== document.body) {
+      let prev = cur.previousElementSibling;
+      while (prev) {
+        if (/^H[1-4]$/.test(prev.tagName)) return oneLine(prev.textContent);
+        prev = prev.previousElementSibling;
+      }
+      cur = cur.parentElement;
+    }
+    const h1 = document.querySelector("h1");
+    return h1 ? oneLine(h1.textContent) : "Top";
+  }
+
+  function formatLineSpan(note) {
+    const start = Number(note.lineStart);
+    const end = Number(note.lineEnd || note.lineStart);
+    const span = start === end ? String(start) : start + "–" + end;
+    return note.side === "old" ? "old:" + span : span;
+  }
+
+  function formatLineAnchor(note) {
+    return oneLine(note.path) + ":" + formatLineSpan(note);
+  }
+
+  function formatNoteAnchorLabel(note) {
+    if (note.kind === "line") return formatLineAnchor(note);
+    return "§ " + oneLine(note.section) + ' · "' + truncate(note.quote, 46) + '"';
+  }
+
+  function pulseElement(target) {
+    if (!target) return;
+    try {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (_) {}
+    target.classList.add("lf-pulse-ring");
+    setTimeout(() => target.classList.remove("lf-pulse-ring"), 950);
+  }
+
+  function rowsForLineNote(note) {
+    const matched = [];
+    const attr = note.side === "old" ? "data-old-line" : "data-line";
+    const start = Number(note.lineStart);
+    const end = Number(note.lineEnd || note.lineStart);
+    for (const block of mainEl.querySelectorAll(".lf-codeblock[data-path]")) {
+      if (block.getAttribute("data-path") !== note.path) continue;
+      block.querySelectorAll("tr.lf-code-row[" + attr + "]").forEach((tr) => {
+        const ln = Number(tr.getAttribute(attr));
+        if (ln >= start && ln <= end) matched.push(tr);
+      });
+    }
+    return matched;
+  }
+
+  function noteAnchorElement(note) {
+    if (note.kind === "line") return rowsForLineNote(note)[0] || null;
+    return mainEl.querySelector('.lf-hl[data-lf-note-id="' + CSS.escape(note.id) + '"]');
+  }
+
+  function notesInDocumentOrder() {
+    if (state.notes.length <= 1) return state.notes.slice();
+    return state.notes
+      .map((note, idx) => ({ note, idx, el: noteAnchorElement(note) }))
+      .sort((a, b) => {
+        if (a.el && b.el && a.el !== b.el) {
+          const pos = a.el.compareDocumentPosition(b.el);
+          if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+          if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+        }
+        if (a.el !== b.el) return a.el ? -1 : 1;
+        return a.idx - b.idx;
+      })
+      .map((entry) => entry.note);
+  }
+
+  function deleteNote(id) {
+    state.notes = state.notes.filter((n) => n.id !== id);
+    if (sidebarEditingId === id) sidebarEditingId = null;
+    hideHoverCard();
+    refresh(true);
+  }
+
+  function editNote(id, text) {
+    state.notes = state.notes.map((note) => note.id === id ? { ...note, text } : note);
+    sidebarEditingId = null;
+    refresh(true);
+  }
+
+  function queueEntries() {
+    const entries = [];
+    for (const note of notesInDocumentOrder()) {
+      const text = oneLine(note.text);
+      const jump = () => pulseElement(noteAnchorElement(note));
+      const remove = () => deleteNote(note.id);
+      if (note.kind === "line") {
+        const anchor = formatLineAnchor(note);
+        entries.push({
+          tag: "lines",
+          summary: shortPath(note.path) + ":" + formatLineSpan(note) + " — " + text,
+          title: anchor + " — " + text,
+          ref: "`" + pagePath + "` § " + anchor + " — " + text,
+          jump,
+          remove,
+        });
+      } else {
+        const section = oneLine(note.section);
+        const quote = oneLine(note.quote);
+        entries.push({
+          tag: "note",
+          summary: '"' + truncate(quote, 26) + '" — ' + text,
+          title: section + ' › "' + quote + '" — ' + text,
+          ref: "`" + pagePath + "` § " + section + ' › "' + quote + '" ' + text,
+          jump,
+          remove,
+        });
+      }
+    }
+
+    function pushControl(tag, attr, key, label, val, remove) {
+      const summary = label + ": " + val;
+      entries.push({
+        tag,
+        summary,
+        title: summary,
+        ref: "`" + pagePath + "` § " + summary,
+        jump: () => pulseElement(document.querySelector("[" + attr + '="' + CSS.escape(key) + '"]')),
+        remove: () => {
+          remove();
+          refresh(true);
+        },
+      });
+    }
+
+    for (const [group, entry] of Object.entries(state.choices)) {
+      if (!entry || !entry.value) continue;
+      pushControl(
+        "choice",
+        "data-choice",
+        group,
+        oneLine(entry.label || group),
+        oneLine(entry.value),
+        () => delete state.choices[group]
+      );
+    }
+    for (const [group, entry] of Object.entries(state.multiselects)) {
+      if (!entry || !Array.isArray(entry.values) || entry.values.length === 0) continue;
+      pushControl(
+        "choice",
+        "data-multiselect",
+        group,
+        oneLine(entry.label || group),
+        entry.values.map(oneLine).join(", "),
+        () => delete state.multiselects[group]
+      );
+    }
+    for (const [qid, entry] of Object.entries(state.questions)) {
+      const ans = entry && oneLine(entry.answer);
+      if (!ans) continue;
+      pushControl(
+        "answer",
+        "data-question",
+        qid,
+        oneLine(entry.label || qid),
+        ans,
+        () => delete state.questions[qid]
+      );
+    }
+    for (const act of state.offlineActions) {
+      const summary = oneLine(act.summary);
+      entries.push({
+        tag: "run",
+        summary,
+        title: "Run: " + summary,
+        ref: "`" + pagePath + "` Run: " + summary,
+        jump: () => {
+          const found = actions.find((a) => a.key === act.key);
+          if (found) pulseElement(found.slot);
+        },
+        remove: () => {
+          state.offlineActions = state.offlineActions.filter((a) => a.id !== act.id);
+          refresh(true);
+        },
+      });
+    }
+    return entries;
+  }
+
+  function queueItems(entries) {
+    const items = (entries || queueEntries()).map((e) => e.ref);
+    const overall = oneLine(state.overall);
+    if (!desktopHandler && overall) {
+      items.push("`" + pagePath + "` Overall: " + overall);
+    }
+    return items;
+  }
+
+  function formatReplyMessage(items) {
+    if (!items.length) return "";
+    let message = items.map((ref, idx) => "(" + (idx + 1) + ") " + oneLine(ref)).join(" ");
+    const unreported = state.receipts.filter((r) => !r.reported);
+    if (unreported.length > 0) {
+      const ran = unreported
+        .map((r) => oneLine(r.kind + (r.summary ? " → " + r.summary : "")))
+        .join("; ");
+      message += " [already ran: " + ran + "]";
+    }
+    return oneLine(message);
+  }
+
+  function saveState() {
+    if (desktopHandler) {
+      try {
+        desktopHandler.postMessage({
+          type: "sync",
+          build_id: buildId,
+          state,
+          items: queueItems(),
+        });
+      } catch (_) {}
+      return;
+    }
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(state));
+    } catch (_) {}
+  }
+
+  function loadBrowserState() {
+    if (desktopHandler) return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") applyState(parsed);
+    } catch (_) {}
+  }
+
+  // `persist` marks an edit: the last send's sentence no longer describes the queue.
+  function refresh(persist) {
+    if (persist) setStatus("", "");
+    syncControlsFromState();
+    renderHighlights();
+    renderSidebar();
+    if (persist) saveState();
+    renderDock();
+  }
+
+  function applyState(loaded) {
+    if (!loaded || typeof loaded !== "object") {
+      state = emptyState();
+    } else {
+      state = {
+        notes: Array.isArray(loaded.notes) ? loaded.notes : [],
+        choices: loaded.choices && typeof loaded.choices === "object" ? loaded.choices : {},
+        multiselects:
+          loaded.multiselects && typeof loaded.multiselects === "object" ? loaded.multiselects : {},
+        questions: loaded.questions && typeof loaded.questions === "object" ? loaded.questions : {},
+        offlineActions: Array.isArray(loaded.offlineActions) ? loaded.offlineActions : [],
+        overall: typeof loaded.overall === "string" ? loaded.overall : "",
+        receipts: Array.isArray(loaded.receipts) ? loaded.receipts : [],
+      };
+    }
+    refresh(false);
+  }
+
+  // Desktop calls this with `null` after `ReviewComments.insert(into:)` sends the page's items;
+  // Swift has already updated its stored page state, so don't echo a redundant `sync` back.
+  window.__lfDesktopApplyState = function (loaded) {
+    if (loaded) applyState(loaded);
+    else clearDrafts({ markReported: true, persist: false });
+  };
+
+  // --- Loopback WebSocket carrier ---
+
+  function loopbackWsUrl() {
+    if (window.location.protocol !== "http:" || window.location.hostname !== "127.0.0.1") return null;
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    if (parts.length < 3 || parts[1] !== "f" || !/^[A-Za-z0-9_-]{43}$/.test(parts[0])) return null;
+    return "ws://" + window.location.host + "/" + parts[0] + "/machine";
+  }
+
+  function markDisconnected(reason) {
+    hostMode = "clipboard";
+    serverDisconnected = true;
+    showBanner(reason || "Loopflow server disconnected — run lf page open " + pagePath);
+    renderDock();
+  }
+
+  function connectLoopback() {
+    if (desktopHandler) return;
+    const url = loopbackWsUrl();
+    if (!url) return;
+    if (!Number.isInteger(protocolRevision) || !Number.isInteger(protocolMinRevision)) {
+      markDisconnected("Review page is missing server protocol version — rebuild with lf page build");
+      return;
+    }
+    let ws;
+    try {
+      ws = new WebSocket(url);
+    } catch (_) {
+      markDisconnected("");
+      return;
+    }
+    let handshakeError = "";
+    let closingForUnload = false;
+    ws.addEventListener("open", () => {
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          revision: protocolRevision,
+          min_revision: protocolMinRevision,
+          client: { kind: "page", platform: "browser", name: "review-page", version: "1" },
+        })
+      );
+    });
+    ws.addEventListener("message", (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch (_) {
+        return;
+      }
+      if (msg.type === "welcome") {
+        socket = ws;
+        hostMode = "loopback";
+        serverDisconnected = false;
+        hideBanner();
+        renderDock();
+        return;
+      }
+      if (msg.type === "error" && !msg.id) {
+        handshakeError = msg.message || msg.code || "Loopflow server rejected connection";
+        showBanner(handshakeError);
+        return;
+      }
+      if ((msg.type === "response" || msg.type === "error") && msg.id && pending.has(msg.id)) {
+        const entry = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.type === "response") entry.resolve(msg.result);
+        else entry.reject(new Error(msg.message || msg.code || "Server error"));
+      }
+    });
+    ws.addEventListener("close", () => {
+      if (socket === ws) socket = null;
+      for (const [, entry] of pending) entry.reject(new Error("Connection closed"));
+      pending.clear();
+      if (!closingForUnload) markDisconnected(handshakeError);
+    });
+    window.addEventListener("pagehide", () => {
+      closingForUnload = true;
+      try {
+        ws.close();
+      } catch (_) {}
+    });
+  }
+
+  function sendOperation(operation, requestId) {
+    if (desktopHandler) {
+      try {
+        return Promise.resolve(
+          desktopHandler.postMessage({
+            type: "operation",
+            operation,
+            request_id: requestId || null,
+          })
+        ).then((result) => {
+          if (result && result.error) throw new Error(result.error);
+          if (result && result.cancelled) return cancelledAction;
+          return result && result.result !== undefined ? result.result : result;
+        });
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error("Loopflow server is not connected"));
+    }
+    return new Promise((resolve, reject) => {
+      const id = "req-" + nextReqId++;
+      pending.set(id, { resolve, reject });
+      try {
+        socket.send(JSON.stringify({
+          type: "request",
+          id,
+          operation,
+          select: null,
+          sender: null,
+          request_id: requestId || null,
+        }));
+      } catch (error) {
+        pending.delete(id);
+        reject(error);
+      }
+    });
+  }
+
+  // --- Banner ---
+
+  let bannerEl = null;
+  function showBanner(text) {
+    if (!bannerEl) {
+      bannerEl = el("div", "lf-banner");
+      mainEl.insertBefore(bannerEl, mainEl.firstChild);
+    }
+    bannerEl.textContent = text;
+    bannerEl.hidden = false;
+  }
+
+  function hideBanner() {
+    if (bannerEl) bannerEl.hidden = true;
+  }
+
+  // --- Controls & direct `data-lf` actions ---
+
+  // Each `data-lf` button and the element now standing in its place.
+  const actions = [];
+
+  function showInSlot(action, node) {
+    if (action.slot !== node) action.slot.replaceWith(node);
+    action.slot = node;
+  }
+
+  function wireControls() {
+    document.querySelectorAll("[data-notes-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const block = btn.closest(".lf-codeblock");
+        if (!block) return;
+        const hidden = block.classList.toggle("lf-notes-hidden");
+        btn.textContent = hidden ? "Show line notes" : "Hide line notes";
+      });
+    });
+
+    document.querySelectorAll("[data-choice]").forEach((groupEl) => {
+      const group = groupEl.getAttribute("data-choice");
+      const label = groupEl.getAttribute("data-label") || group;
+      groupEl.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const value = buttonValue(btn);
+          if (state.choices[group] && state.choices[group].value === value) {
+            delete state.choices[group];
+          } else {
+            state.choices[group] = { label, value };
+          }
+          refresh(true);
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-multiselect]").forEach((groupEl) => {
+      const group = groupEl.getAttribute("data-multiselect");
+      const label = groupEl.getAttribute("data-label") || group;
+      groupEl.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const value = buttonValue(btn);
+          const current = (state.multiselects[group] && state.multiselects[group].values) || [];
+          const next = current.includes(value)
+            ? current.filter((v) => v !== value)
+            : current.concat([value]);
+          if (next.length === 0) delete state.multiselects[group];
+          else state.multiselects[group] = { label, values: next };
+          refresh(true);
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-question]").forEach((box) => {
+      const qid = box.getAttribute("data-question");
+      const label = box.getAttribute("data-label") || qid;
+      let input = box.querySelector("textarea, input");
+      if (!input) {
+        input = el("textarea", { rows: 2 });
+        box.append(input);
+      }
+      input.addEventListener("input", () => {
+        const answer = input.value;
+        if (!oneLine(answer)) delete state.questions[qid];
+        else state.questions[qid] = { label, answer };
+        setStatus("", "");
+        saveState();
+        renderDock();
+      });
+    });
+
+    document.querySelectorAll("[data-lf]").forEach((btn, idx) => {
+      let template;
+      try {
+        template = JSON.parse(btn.getAttribute("data-lf") || "{}");
+      } catch (_) {
+        return;
+      }
+      const action = {
+        key: btn.getAttribute("data-lf-id") || "action-" + idx,
+        btn,
+        template,
+        slot: btn,
+      };
+      actions.push(action);
+      btn.addEventListener("click", (event) => {
+        if (event.isTrusted) openActionConfirm(action);
+      });
+    });
+  }
+
+  // Receipts and offline-queued actions outlive reloads; an action with neither shows its button.
+  function syncActionsFromState() {
+    for (const action of actions) {
+      const receipt = state.receipts.find((r) => r.key === action.key);
+      const offline = state.offlineActions.find((a) => a.key === action.key);
+      if (receipt) {
+        showInSlot(action, el("span", { cls: "lf-action-receipt", text: receipt.text || receipt.summary }));
+      } else if (offline) {
+        showInSlot(action, el("span", { cls: "lf-action-summary", text: "Offline — added to reply" }));
+      } else if (
+        action.slot.classList.contains("lf-action-receipt") ||
+        action.slot.classList.contains("lf-action-summary")
+      ) {
+        showInSlot(action, action.btn);
+      }
+    }
+  }
+
+  function syncControlsFromState() {
+    syncActionsFromState();
+    document.querySelectorAll("[data-choice]").forEach((groupEl) => {
+      const selected =
+        state.choices[groupEl.getAttribute("data-choice")] &&
+        state.choices[groupEl.getAttribute("data-choice")].value;
+      groupEl.querySelectorAll("button").forEach((btn) => setPressed(btn, selected === buttonValue(btn)));
+    });
+    document.querySelectorAll("[data-multiselect]").forEach((groupEl) => {
+      const entry = state.multiselects[groupEl.getAttribute("data-multiselect")];
+      const values = (entry && entry.values) || [];
+      groupEl.querySelectorAll("button").forEach((btn) => setPressed(btn, values.includes(buttonValue(btn))));
+    });
+    document.querySelectorAll("[data-question]").forEach((box) => {
+      let input = box.querySelector("textarea, input");
+      if (!input) {
+        input = el("textarea", { rows: 2 });
+        box.append(input);
+      }
+      const entry = state.questions[box.getAttribute("data-question")];
+      const saved = entry ? entry.answer : "";
+      if (input.value !== saved) input.value = saved;
+    });
+  }
+
+  function summarizeOperation(op) {
+    const parts = [op.kind || "operation"];
+    for (const [k, v] of Object.entries(op)) {
+      if (k === "kind" || k === "directory" || k === "request_id" || v === null || v === false || v === "") {
+        continue;
+      }
+      if (Array.isArray(v) && v.length === 0) continue;
+      parts.push(k + "=" + (typeof v === "string" ? v : JSON.stringify(v)));
+    }
+    return parts.join(" ");
+  }
+
+  function materializeOperation(template, requestId) {
+    const copy = JSON.parse(JSON.stringify(template));
+    if (copy.request_id === "__LF_REQUEST_ID__") copy.request_id = requestId;
+    return copy;
+  }
+
+  function formatReceipt(kind, result) {
+    if (result && typeof result === "object") {
+      const taskId = resultTaskId(result);
+      if (kind === "task.create" && taskId) return "Filed " + taskId;
+      if (result.delivery && result.delivery.sentence) return result.delivery.sentence;
+      if (taskId) return kind + " → " + taskId;
+      if (result.sentence) return result.sentence;
+    }
+    return "Ran " + kind;
+  }
+
+  function openActionConfirm(action) {
+    const template = action.template;
+    if (hostMode === "clipboard") {
+      state.offlineActions.push({ id: randomId(), key: action.key, summary: summarizeOperation(template) });
+      refresh(true);
+      return;
+    }
+
+    const requestId = randomId();
+    if (desktopHandler) execute();
+    else {
+      showInSlot(action, el(
+        "span",
+        "lf-action-confirm",
+        el("span", { cls: "lf-action-summary", text: summarizeOperation(template) }),
+        makeButton("Run", execute, "lf-btn-accent"),
+        makeButton("Cancel", () => showInSlot(action, action.btn))
+      ));
+    }
+
+    function execute(event) {
+      if (event && !event.isTrusted) return;
+      showInSlot(action, el("span", { cls: "lf-action-confirm", text: "Running…" }));
+      const op = materializeOperation(template, requestId);
+      sendOperation(op, requestId).then(
+        (result) => {
+          if (result === cancelledAction) {
+            showInSlot(action, action.btn);
+            return;
+          }
+          const text = formatReceipt(op.kind, result);
+          state.receipts.push({ key: action.key, kind: op.kind, summary: resultTaskId(result) || text, text });
+          refresh(true);
+        },
+        (err) => {
+          showInSlot(
+            action,
+            el("span", "lf-action-error", el("span", { text: errorMessage(err) }), makeButton("Retry", execute))
+          );
+        }
+      );
+    }
+  }
+
+  // --- Cross-element prose highlight anchoring ---
+
+  const EXCLUDED_TEXT_SELECTOR =
+    "button, textarea, input, script, style, .lf-gutter-plus, .lf-ln, .lf-sign, " +
+    ".lf-float-pill, .lf-float-composer, .lf-hover-card, .lf-sidebar, .lf-dock, " +
+    ".lf-comments-toggle, .lf-banner, .lf-action-confirm, .lf-action-receipt, .lf-action-error";
+
+  const BLOCK_TAGS = new Set([
+    "P", "DIV", "LI", "TR", "TD", "TH", "H1", "H2", "H3", "H4", "H5", "H6",
+    "PRE", "BLOCKQUOTE", "SECTION", "ARTICLE", "ASIDE", "HEADER", "FOOTER", "DT", "DD",
+  ]);
+
+  function nearestBlock(node) {
+    let cur = node && node.nodeType === 1 ? node : node && node.parentElement;
+    while (cur && cur !== mainEl) {
+      if (BLOCK_TAGS.has(cur.tagName)) return cur;
+      cur = cur.parentElement;
+    }
+    return mainEl;
+  }
+
+  function isExcludedTextNode(node) {
+    const parent = node.parentElement;
+    return (
+      !parent ||
+      Boolean(parent.closest(EXCLUDED_TEXT_SELECTOR)) ||
+      Boolean(parent.closest("[hidden]")) ||
+      Boolean(parent.closest(".lf-notes-hidden .lf-line-note"))
+    );
+  }
+
+  function buildNormalizedIndex(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let flat = "";
+    const positions = [];
+    let lastWasSpace = true;
+    let lastBlock = null;
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue || isExcludedTextNode(node)) continue;
+      const block = nearestBlock(node);
+      if (lastBlock && block !== lastBlock && !lastWasSpace) {
+        flat += " ";
+        positions.push(null);
+        lastWasSpace = true;
+      }
+      lastBlock = block;
+      const val = node.nodeValue;
+      for (let i = 0; i < val.length; i++) {
+        const ch = val[i];
+        if (/\s/.test(ch)) {
+          if (!lastWasSpace) {
+            flat += " ";
+            positions.push({ node, offset: i });
+            lastWasSpace = true;
+          }
+        } else {
+          flat += ch;
+          positions.push({ node, offset: i });
+          lastWasSpace = false;
+        }
+      }
+    }
+    if (flat.endsWith(" ")) {
+      flat = flat.slice(0, -1);
+      positions.pop();
+    }
+    return { flat, positions };
+  }
+
+  function findOccurrenceForRange(range, needle) {
+    if (!needle) return 0;
+    const index = buildNormalizedIndex(mainEl);
+    let rangeFlatPos = -1;
+    for (let i = 0; i < index.positions.length; i++) {
+      const p = index.positions[i];
+      if (!p) continue;
+      try {
+        if (range.comparePoint(p.node, p.offset) === 0) {
+          rangeFlatPos = i;
+          break;
+        }
+      } catch (_) {}
+    }
+    if (rangeFlatPos < 0) return 0;
+    let count = 0;
+    let from = 0;
+    while (from < rangeFlatPos) {
+      const hit = index.flat.indexOf(needle, from);
+      if (hit < 0 || hit >= rangeFlatPos) break;
+      count++;
+      from = hit + 1;
+    }
+    return count;
+  }
+
+  function findNormalizedRange(needle, occurrence) {
+    if (!needle) return null;
+    const index = buildNormalizedIndex(mainEl);
+    let hit = -1;
+    let from = 0;
+    const targetOcc = Math.max(0, Number(occurrence) || 0);
+    for (let occ = 0; occ <= targetOcc; occ++) {
+      const next = index.flat.indexOf(needle, from);
+      if (next < 0) break;
+      hit = next;
+      from = next + 1;
+    }
+    if (hit < 0) return null;
+    let s = hit;
+    let e = hit + needle.length - 1;
+    while (s <= e && !index.positions[s]) s++;
+    while (e >= s && !index.positions[e]) e--;
+    if (s > e || !index.positions[s] || !index.positions[e]) return null;
+    try {
+      const range = document.createRange();
+      range.setStart(index.positions[s].node, index.positions[s].offset);
+      range.setEnd(index.positions[e].node, index.positions[e].offset + 1);
+      return range;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function wrapRange(range, noteId) {
+    const walker = document.createTreeWalker(mainEl, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue || isExcludedTextNode(node)) continue;
+      try {
+        if (!range.intersectsNode(node)) continue;
+      } catch (_) {
+        continue;
+      }
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.nodeValue.length;
+      if (end > start && node.nodeValue.slice(start, end).trim()) {
+        hits.push({ node, start, end });
+      }
+    }
+    for (let i = hits.length - 1; i >= 0; i--) {
+      const { node: tn, start, end } = hits[i];
+      const text = tn.nodeValue;
+      const frag = document.createDocumentFragment();
+      if (start > 0) frag.append(text.slice(0, start));
+      frag.append(el("span", { cls: "lf-hl", text: text.slice(start, end), attrs: { "data-lf-note-id": noteId } }));
+      if (end < text.length) frag.append(text.slice(end));
+      if (tn.parentNode) tn.parentNode.replaceChild(frag, tn);
+    }
+  }
+
+  function unwrapAllHighlights() {
+    const spans = Array.from(mainEl.querySelectorAll("span.lf-hl[data-lf-note-id]"));
+    const parents = new Set();
+    for (let i = spans.length - 1; i >= 0; i--) {
+      const span = spans[i];
+      const parent = span.parentNode;
+      if (!parent) continue;
+      parents.add(parent);
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    }
+    for (const parent of parents) {
+      if (parent.isConnected) parent.normalize();
+    }
+  }
+
+  let lastHighlightSig = "";
+
+  function renderHighlights() {
+    const sig = JSON.stringify(
+      state.notes.map((n) =>
+        n.kind === "line"
+          ? [n.id, "line", n.path, n.side, n.lineStart, n.lineEnd]
+          : [n.id, "prose", n.match || n.quote, n.occurrence || 0]
+      )
+    );
+    if (sig === lastHighlightSig) return;
+    lastHighlightSig = sig;
+
+    unwrapAllHighlights();
+    mainEl.querySelectorAll("tr.lf-code-row.lf-row-has-note").forEach((tr) => {
+      tr.classList.remove("lf-row-has-note");
+      tr.removeAttribute("data-lf-line-note-ids");
+    });
+
+    for (const note of state.notes) {
+      if (note.kind === "line") {
+        for (const tr of rowsForLineNote(note)) {
+          tr.classList.add("lf-row-has-note");
+          const existing = tr.getAttribute("data-lf-line-note-ids");
+          const list = existing ? existing.split(",") : [];
+          if (!list.includes(note.id)) list.push(note.id);
+          tr.setAttribute("data-lf-line-note-ids", list.join(","));
+        }
+      } else {
+        const range = findNormalizedRange(oneLine(note.match || note.quote), note.occurrence || 0);
+        if (range) wrapRange(range, note.id);
+      }
+    }
+  }
+
+  // --- Floating selection pill, composer, and hover cards (1c) ---
+
+  let floatPill = null;
+  let floatComposer = null;
+  let pendingSelection = null; // { range, rect, section, quote, match }
+  let hoverCardEl = null;
+  let hoverHideTimer = null;
+
+  function dismissFloatPill() {
+    if (floatPill) {
+      floatPill.remove();
+      floatPill = null;
+    }
+  }
+
+  function clearPendingSelection() {
+    pendingSelection = null;
+    dismissFloatPill();
+  }
+
+  function dismissFloatComposer() {
+    if (floatComposer) {
+      floatComposer.remove();
+      floatComposer = null;
+    }
+    mainEl.querySelectorAll("tr.lf-code-row.lf-row-selecting").forEach((tr) => {
+      tr.classList.remove("lf-row-selecting");
+    });
+  }
+
+  function dismissFloats() {
+    dismissFloatPill();
+    dismissFloatComposer();
+  }
+
+  function hideHoverCard() {
+    clearTimeout(hoverHideTimer);
+    if (hoverCardEl) {
+      hoverCardEl.remove();
+      hoverCardEl = null;
+    }
+  }
+
+  function clampFixedBox(box, rect, preferAbove) {
+    const w = box.offsetWidth;
+    const h = box.offsetHeight;
+    const dockAllowance = desktopHandler ? 12 : 96;
+    let top;
+    if (preferAbove) {
+      top = rect.top - h - 8;
+      if (top < 8) top = Math.min(window.innerHeight - h - dockAllowance, rect.bottom + 8);
+    } else {
+      top = rect.bottom + 8;
+      if (top + h > window.innerHeight - dockAllowance) {
+        top = Math.max(8, rect.top - h - 8);
+      }
+    }
+    top = Math.max(8, Math.min(window.innerHeight - h - 8, top));
+    const centered = preferAbove ? rect.left + rect.width / 2 - w / 2 : rect.left;
+    const left = Math.max(8, Math.min(window.innerWidth - w - 8, centered));
+    box.style.top = top + "px";
+    box.style.left = left + "px";
+  }
+
+  function buildNoteEditor({ initialText, placeholder, rows, onSave, onCancel, stopProp }) {
+    const ta = el("textarea", { rows: rows || 2, placeholder, value: initialText || "" });
+    const commit = () => {
+      const val = oneLine(ta.value);
+      if (val) onSave(val);
+    };
+    ta.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        commit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel();
+      }
+    });
+    const wrap = (fn) => (e) => {
+      if (stopProp) e.stopPropagation();
+      fn();
+    };
+    const actionsEl = el(
+      "div",
+      "lf-card-actions",
+      makeButton("Cancel", wrap(onCancel), "lf-btn-quiet"),
+      makeButton("Save ⌘↩", wrap(commit), "lf-btn-accent")
+    );
+    return { ta, actionsEl };
+  }
+
+  function showFloatPill(rect, buttons) {
+    dismissFloatPill();
+    floatPill = el("div", "lf-float-pill");
+    buttons.forEach((b, idx) => {
+      if (idx > 0) floatPill.append(el("span", "lf-float-pill-sep"));
+      floatPill.append(
+        el("button", {
+          type: "button",
+          text: b.label,
+          on: {
+            mousedown: (e) => e.preventDefault(),
+            click: () => {
+              dismissFloatPill();
+              b.onClick();
+            },
+          },
+        })
+      );
+    });
+    document.body.append(floatPill);
+    clampFixedBox(floatPill, rect, true);
+  }
+
+  function saveProseNote(selInfo, text) {
+    const needle = selInfo.match;
+    state.notes.push({
+      id: randomId(),
+      kind: "prose",
+      section: selInfo.section,
+      quote: selInfo.quote.slice(0, 140),
+      match: needle,
+      occurrence: findOccurrenceForRange(selInfo.range, needle),
+      text: oneLine(text),
+    });
+    pendingSelection = null;
+    clearSelection();
+    refresh(true);
+  }
+
+  function openProseComposer(selInfo) {
+    openFloatingComposer(selInfo.rect, {
+      anchorLabel: formatNoteAnchorLabel({ kind: "prose", section: selInfo.section, quote: selInfo.quote }),
+      onSave: (val) => saveProseNote(selInfo, val),
+    });
+  }
+
+  function openFloatingComposer(rect, opts) {
+    dismissFloats();
+    hideHoverCard();
+
+    if (opts.selectedRows) {
+      for (const tr of opts.selectedRows) tr.classList.add("lf-row-selecting");
+    }
+
+    const { ta, actionsEl } = buildNoteEditor({
+      initialText: opts.initialText,
+      placeholder: opts.placeholder || "Add comment… (⌘↩ to save)",
+      onSave: (val) => {
+        dismissFloatComposer();
+        opts.onSave(val);
+      },
+      onCancel: dismissFloatComposer,
+    });
+
+    floatComposer = el(
+      "div",
+      "lf-float-composer",
+      el("div", { cls: "lf-anchor-quote", text: opts.anchorLabel }),
+      ta,
+      actionsEl
+    );
+    document.body.append(floatComposer);
+    clampFixedBox(floatComposer, rect, false);
+    focusEnd(ta);
+  }
+
+  function showHoverCard(targetEl, note) {
+    if (floatComposer) return;
+    hideHoverCard();
+
+    const editBtn = makeButton("Edit", () => {
+      const r = targetEl.getBoundingClientRect();
+      hideHoverCard();
+      openFloatingComposer(r, {
+        anchorLabel: formatNoteAnchorLabel(note),
+        initialText: note.text,
+        onSave: (val) => editNote(note.id, val),
+      });
+    }, "lf-btn-quiet");
+
+    hoverCardEl = el(
+      "div",
+      {
+        cls: "lf-hover-card",
+        on: {
+          mouseenter: () => clearTimeout(hoverHideTimer),
+          mouseleave: () => {
+            hoverHideTimer = setTimeout(hideHoverCard, 200);
+          },
+        },
+      },
+      el("div", { cls: "lf-anchor-quote", text: formatNoteAnchorLabel(note) }),
+      el("div", { cls: "lf-card-body", text: note.text }),
+      el("div", "lf-card-actions", editBtn, makeButton("Delete", () => deleteNote(note.id), "lf-btn-quiet"))
+    );
+    document.body.append(hoverCardEl);
+    clampFixedBox(hoverCardEl, targetEl.getBoundingClientRect(), false);
+  }
+
+  function wireSelectionNotes() {
+    document.addEventListener("mouseup", (event) => {
+      if (
+        event.target.closest(
+          ".lf-float-pill, .lf-float-composer, .lf-hover-card, .lf-sidebar, .lf-dock, .lf-comments-toggle, button, textarea, input, .lf-action-confirm, td.lf-ln"
+        )
+      ) {
+        return;
+      }
+
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) return clearPendingSelection();
+      const quote = oneLine(sel.toString());
+      if (!quote) return clearPendingSelection();
+
+      const range = sel.getRangeAt(0).cloneRange();
+      const containerEl =
+        range.commonAncestorContainer.nodeType === 1
+          ? range.commonAncestorContainer
+          : range.commonAncestorContainer.parentElement;
+      if (!containerEl || !mainEl.contains(containerEl)) return clearPendingSelection();
+
+      const selInfo = {
+        range,
+        rect: range.getBoundingClientRect(),
+        section: nearestSection(containerEl),
+        quote: quote.slice(0, 140),
+        match: quote.slice(0, 240),
+      };
+      pendingSelection = selInfo;
+
+      showFloatPill(selInfo.rect, [
+        { label: "Comment (c)", onClick: () => openProseComposer(selInfo) },
+        { label: "Flag", onClick: () => saveProseNote(selInfo, "Flagged for follow-up") },
+        {
+          label: "Copy",
+          onClick: () => {
+            copyText(quote).catch(() => {});
+            pendingSelection = null;
+            clearSelection();
+          },
+        },
+      ]);
+    });
+
+    document.addEventListener("mousedown", (event) => {
+      if (
+        floatComposer &&
+        !floatComposer.contains(event.target) &&
+        !event.target.closest(".lf-float-pill, .lf-gutter-plus, td.lf-ln")
+      ) {
+        dismissFloatComposer();
+      }
+    });
+
+    mainEl.addEventListener("mouseover", (event) => {
+      const hl = event.target.closest(".lf-hl[data-lf-note-id]");
+      if (hl) {
+        const note = state.notes.find((n) => n.id === hl.getAttribute("data-lf-note-id"));
+        if (note) showHoverCard(hl, note);
+        return;
+      }
+      const lnCell = event.target.closest("tr.lf-code-row.lf-row-has-note td.lf-ln");
+      if (lnCell) {
+        const tr = lnCell.closest("tr.lf-code-row");
+        const firstId = (tr.getAttribute("data-lf-line-note-ids") || "").split(",")[0];
+        const note = firstId ? state.notes.find((n) => n.id === firstId) : null;
+        if (note) showHoverCard(lnCell, note);
+      }
+    });
+
+    mainEl.addEventListener("mouseout", (event) => {
+      if (event.target.closest(".lf-hl[data-lf-note-id], tr.lf-code-row.lf-row-has-note td.lf-ln")) {
+        hoverHideTimer = setTimeout(hideHoverCard, 220);
+      }
+    });
+
+    mainEl.addEventListener("click", (event) => {
+      const hl = event.target.closest(".lf-hl[data-lf-note-id]");
+      if (!hl) return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      openSidebar(hl.getAttribute("data-lf-note-id"));
+    });
+  }
+
+  // --- Diff & file gutter `+` and Shift+click line ranges (2a) ---
+
+  let lastGutterAnchor = null; // { block, newLine, oldLine }
+
+  function rowLineInfo(tr) {
+    const n = tr.getAttribute("data-line");
+    const o = tr.getAttribute("data-old-line");
+    const newLine = n !== null && n !== "" ? Number(n) : null;
+    const oldLine = o !== null && o !== "" ? Number(o) : null;
+    return newLine !== null || oldLine !== null ? { newLine, oldLine } : null;
+  }
+
+  function wireCodeBlocks() {
+    mainEl.querySelectorAll(".lf-codeblock[data-path]").forEach((block) => {
+      const path = block.getAttribute("data-path") || "";
+      if (!path) return;
+
+      block.querySelectorAll("tr.lf-code-row").forEach((tr) => {
+        const info = rowLineInfo(tr);
+        if (!info) return;
+        const firstLn = tr.querySelector("td.lf-ln");
+        if (!firstLn || firstLn.querySelector(".lf-gutter-plus")) return;
+        const label = info.newLine !== null ? "line " + info.newLine : "old line " + info.oldLine;
+        firstLn.insertBefore(
+          el("button", {
+            type: "button",
+            cls: "lf-gutter-plus",
+            text: "+",
+            title: "Comment on " + label + " (Shift+click for range)",
+            attrs: { "aria-label": "Comment on " + path + " " + label },
+          }),
+          firstLn.firstChild
+        );
+      });
+
+      block.addEventListener("mousedown", (event) => {
+        if (event.shiftKey && event.target.closest("td.lf-ln")) event.preventDefault();
+      });
+
+      block.addEventListener("click", (event) => {
+        const trigger = event.target.closest(".lf-gutter-plus, td.lf-ln");
+        if (!trigger) return;
+        const tr = trigger.closest("tr.lf-code-row");
+        const info = tr && rowLineInfo(tr);
+        if (!info) return;
+        event.preventDefault();
+        dismissFloatPill();
+        hideHoverCard();
+
+        let rangeSide = info.newLine !== null ? "new" : "old";
+        let lineStart = info.newLine !== null ? info.newLine : info.oldLine;
+        let lineEnd = lineStart;
+
+        if (event.shiftKey && lastGutterAnchor && lastGutterAnchor.block === block) {
+          if (lastGutterAnchor.newLine !== null && info.newLine !== null) {
+            rangeSide = "new";
+            lineStart = Math.min(lastGutterAnchor.newLine, info.newLine);
+            lineEnd = Math.max(lastGutterAnchor.newLine, info.newLine);
+          } else if (lastGutterAnchor.oldLine !== null && info.oldLine !== null) {
+            rangeSide = "old";
+            lineStart = Math.min(lastGutterAnchor.oldLine, info.oldLine);
+            lineEnd = Math.max(lastGutterAnchor.oldLine, info.oldLine);
+          }
+        }
+        lastGutterAnchor = { block, newLine: info.newLine, oldLine: info.oldLine };
+
+        const previewNote = { kind: "line", path, side: rangeSide, lineStart, lineEnd };
+        const selectedRows = rowsForLineNote(previewNote);
+        // Span the whole range so a composer that flips above it never covers it.
+        const firstRect = (selectedRows[0] || tr).getBoundingClientRect();
+        const anchorRow = selectedRows[selectedRows.length - 1] || tr;
+        const rowRect = anchorRow.getBoundingClientRect();
+        const codeCell = anchorRow.lastElementChild;
+        const codeLeft = codeCell ? codeCell.getBoundingClientRect().left : rowRect.left + 110;
+        const composerRect = {
+          top: firstRect.top,
+          bottom: rowRect.bottom,
+          left: codeLeft + 12,
+          right: rowRect.right,
+          width: Math.max(0, rowRect.right - codeLeft - 12),
+        };
+
+        openFloatingComposer(composerRect, {
+          anchorLabel: formatLineAnchor(previewNote),
+          placeholder:
+            lineStart === lineEnd
+              ? "Add comment… (Shift+click another line for range, ⌘↩ to save)"
+              : "Add comment… (⌘↩ to save)",
+          selectedRows: selectedRows.length ? selectedRows : [tr],
+          onSave: (val) => {
+            state.notes.push({
+              id: randomId(),
+              kind: "line",
+              path,
+              side: rangeSide,
+              lineStart,
+              lineEnd,
+              text: val,
+            });
+            refresh(true);
+          },
+        });
+      });
+    });
+  }
+
+  // --- Collapsible slide-over Comments sidebar (1c) ---
+
+  let commentsToggleBtn = null;
+  let commentsCountEl = null;
+  let sidebarEl = null;
+  let sidebarTitleEl = null;
+  let sidebarListEl = null;
+  let sidebarOpen = false;
+  let sidebarEditingId = null;
+
+  function closeSidebar() {
+    sidebarOpen = false;
+    sidebarEditingId = null;
+    renderSidebar();
+  }
+
+  function ensureSidebar() {
+    if (sidebarEl) return;
+
+    commentsCountEl = el("span", { cls: "lf-comments-count", hidden: true });
+    commentsToggleBtn = el(
+      "button",
+      {
+        type: "button",
+        cls: "lf-comments-toggle",
+        on: {
+          click: () => {
+            sidebarOpen = !sidebarOpen;
+            renderSidebar();
+          },
+        },
+      },
+      el("span", { text: "Comments" }),
+      commentsCountEl
+    );
+
+    sidebarTitleEl = el("span");
+    sidebarListEl = el("div", "lf-sidebar-list");
+    sidebarEl = el(
+      "aside",
+      { cls: "lf-sidebar", attrs: { "aria-label": "Comments sidebar" } },
+      el("div", "lf-sidebar-head", sidebarTitleEl, makeButton("Close", closeSidebar, "lf-btn-quiet")),
+      sidebarListEl
+    );
+    document.body.append(commentsToggleBtn, sidebarEl);
+  }
+
+  function openSidebar(focusNoteId) {
+    ensureSidebar();
+    sidebarOpen = true;
+    renderSidebar();
+    if (focusNoteId && sidebarListEl) {
+      const card = sidebarListEl.querySelector('[data-lf-sidebar-note="' + CSS.escape(focusNoteId) + '"]');
+      if (card) pulseElement(card);
+    }
+  }
+
+  function renderSidebar() {
+    ensureSidebar();
+    const ordered = notesInDocumentOrder();
+    const count = ordered.length;
+
+    commentsCountEl.textContent = String(count);
+    commentsCountEl.hidden = count === 0;
+    commentsToggleBtn.classList.toggle("has-notes", count > 0);
+    commentsToggleBtn.setAttribute("aria-expanded", sidebarOpen ? "true" : "false");
+
+    sidebarEl.classList.toggle("is-open", sidebarOpen);
+    sidebarTitleEl.textContent = count > 0 ? "Comments (" + count + ")" : "Comments";
+
+    sidebarListEl.innerHTML = "";
+    if (!count) {
+      sidebarListEl.append(
+        el("div", {
+          cls: "lf-sidebar-empty",
+          text: "No comments yet. Drag across text or click + on a code line to leave one.",
+        })
+      );
+      return;
+    }
+
+    for (const note of ordered) {
+      const item = el(
+        "div",
+        {
+          cls: "lf-sidebar-item",
+          attrs: { "data-lf-sidebar-note": note.id },
+          on: {
+            click: (e) => {
+              if (!e.target.closest("button, textarea")) pulseElement(noteAnchorElement(note));
+            },
+          },
+        },
+        el("div", { cls: "lf-anchor-quote", text: formatNoteAnchorLabel(note) })
+      );
+
+      if (sidebarEditingId === note.id) {
+        const { ta, actionsEl } = buildNoteEditor({
+          initialText: note.text,
+          placeholder: "Edit comment… (⌘↩ to save)",
+          stopProp: true,
+          onSave: (val) => editNote(note.id, val),
+          onCancel: () => {
+            sidebarEditingId = null;
+            renderSidebar();
+          },
+        });
+        item.append(ta, actionsEl);
+        setTimeout(() => focusEnd(ta), 0);
+      } else {
+        item.append(
+          el("div", { cls: "lf-card-body", text: note.text }),
+          el(
+            "div",
+            "lf-card-actions",
+            makeButton(
+              "Edit",
+              (e) => {
+                e.stopPropagation();
+                sidebarEditingId = note.id;
+                renderSidebar();
+              },
+              "lf-btn-quiet"
+            ),
+            makeButton(
+              "Delete",
+              (e) => {
+                e.stopPropagation();
+                deleteNote(note.id);
+              },
+              "lf-btn-quiet"
+            )
+          )
+        );
+      }
+      sidebarListEl.append(item);
+    }
+  }
+
+  // --- Browser T3 Code attached-chip composer dock (3b; hidden in Desktop) ---
+
+  let dockEl = null;
+  let dockChipsEl = null;
+  let dockPreviewEl = null;
+  let dockStatusEl = null;
+  let dockOverallInput = null;
+  let dockPreviewBtn = null;
+  let dockClearBtn = null;
+  let dockSendBtn = null;
+  let dockPreviewOpen = false;
+  let statusText = "";
+  let statusKind = "";
+
+  function setStatus(text, kind) {
+    statusText = text;
+    statusKind = kind || "";
+  }
+
+  function steerTargetLabel() {
+    if (work.kind === "task" && work.issue) return work.issue;
+    if (work.kind === "wave" && work.wave) return "wave " + work.wave;
+    if (work.kind === "session" && work.session) return "session";
+    return "repository";
+  }
+
+  function buildSteerOperation(message) {
+    if (work.kind === "task" && work.issue) {
+      return { kind: "task.steer", directory, issue: work.issue, message };
+    }
+    return {
+      kind: "session.steer",
+      directory,
+      session: work.kind === "session" ? work.session || null : null,
+      wave: work.kind === "wave" ? work.wave || null : null,
+      message,
+    };
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+      const ta = el("textarea", { value: text });
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.append(ta);
+      ta.select();
+      try {
+        if (document.execCommand("copy")) resolve();
+        else reject(new Error("Clipboard is unavailable"));
+      } catch (err) {
+        reject(err);
+      } finally {
+        ta.remove();
+      }
+    });
+  }
+
+  // Drop unsent drafts while keeping rendered receipts; mark receipts reported only after a reply is sent.
+  function clearDrafts(options) {
+    const markReported = Boolean(options && options.markReported);
+    const persist = !options || options.persist !== false;
+    const receipts = markReported
+      ? state.receipts.map((r) => Object.assign({}, r, { reported: true }))
+      : state.receipts.slice();
+    state = emptyState();
+    state.receipts = receipts;
+    sidebarEditingId = null;
+    hideHoverCard();
+    refresh(persist);
+  }
+
+  function submitReply() {
+    if (desktopHandler || sendingReply) return;
+    const items = queueItems();
+    if (!items.length) return;
+    const message = formatReplyMessage(items);
+
+    if (hostMode === "loopback") {
+      // Retain edits made after the send, including receipts from actions
+      // that finish while the steer is in flight.
+      const sent = {
+        notes: new Set(state.notes),
+        choices: { ...state.choices },
+        multiselects: { ...state.multiselects },
+        questions: { ...state.questions },
+        offlineActions: new Set(state.offlineActions),
+        overall: state.overall,
+        receipts: new Set(state.receipts),
+      };
+      sendingReply = true;
+      setStatus("Sending…", "");
+      renderDock();
+      sendOperation(buildSteerOperation(message), randomId()).then(
+        (result) => {
+          sendingReply = false;
+          state.notes = state.notes.filter((note) => !sent.notes.has(note));
+          state.offlineActions = state.offlineActions.filter((action) => !sent.offlineActions.has(action));
+          for (const group of ["choices", "multiselects", "questions"]) {
+            for (const [key, value] of Object.entries(sent[group])) {
+              if (state[group][key] === value) delete state[group][key];
+            }
+          }
+          if (state.overall === sent.overall) state.overall = "";
+          for (const receipt of state.receipts) {
+            if (sent.receipts.has(receipt)) receipt.reported = true;
+          }
+          setStatus(result?.delivery?.sentence || "Steer saved.", "ok");
+          saveState();
+          refresh(false);
+        },
+        (err) => {
+          sendingReply = false;
+          setStatus(errorMessage(err), "error");
+          renderDock();
+        }
+      );
+      return;
+    }
+
+    copyText(message).then(
+      () => {
+        setStatus(serverDisconnected ? "Copied reply (server disconnected)" : "Copied reply", "ok");
+        renderDock();
+      },
+      (err) => {
+        setStatus("Copy failed: " + errorMessage(err), "error");
+        renderDock();
+      }
+    );
+  }
+
+  function ensureDock() {
+    if (desktopHandler || dockEl) return;
+
+    dockChipsEl = el("div", "lf-dock-chips");
+    dockPreviewEl = el("div", { cls: "lf-dock-preview", hidden: true });
+    dockStatusEl = el("div", { cls: "lf-dock-status", hidden: true });
+
+    dockOverallInput = el("input", {
+      type: "text",
+      cls: "lf-dock-input",
+      placeholder: "Overall direction (optional)…",
+      attrs: { "aria-label": "Overall direction" },
+      on: {
+        input: () => {
+          state.overall = dockOverallInput.value;
+          setStatus("", "");
+          saveState();
+          updateDockMeta();
+        },
+      },
+    });
+
+    dockPreviewBtn = makeButton("Preview", () => {
+      dockPreviewOpen = !dockPreviewOpen;
+      updateDockMeta();
+    }, "lf-btn-quiet");
+    dockClearBtn = makeButton("Clear", () => clearDrafts({ markReported: false }), "lf-btn-quiet");
+    dockSendBtn = makeButton("", submitReply, "lf-btn-accent");
+
+    dockEl = el(
+      "div",
+      "lf-dock",
+      dockChipsEl,
+      dockPreviewEl,
+      dockStatusEl,
+      el("div", "lf-dock-row", dockOverallInput, el("div", "lf-dock-actions", dockPreviewBtn, dockClearBtn, dockSendBtn))
+    );
+    document.body.append(dockEl);
+    // Reserve the dock's height below the page so the last control stays reachable.
+    new ResizeObserver(() => {
+      document.documentElement.style.setProperty("--lf-dock-room", dockEl.offsetHeight + 40 + "px");
+    }).observe(dockEl);
+  }
+
+  function updateDockMeta(entries) {
+    if (desktopHandler || !dockEl) return;
+    const items = queueItems(entries);
+    const hasItems = items.length > 0;
+
+    if (dockOverallInput.value !== state.overall) dockOverallInput.value = state.overall;
+
+    dockPreviewBtn.hidden = !hasItems;
+    setPressed(dockPreviewBtn, dockPreviewOpen && hasItems);
+    dockClearBtn.hidden = !hasItems;
+
+    dockSendBtn.disabled = !hasItems || sendingReply;
+    dockSendBtn.textContent =
+      hostMode === "loopback" ? "Steer " + steerTargetLabel() + " ⌘↩" : "Copy reply ⌘↩";
+
+    dockPreviewEl.hidden = !(dockPreviewOpen && hasItems);
+    if (dockPreviewOpen && hasItems) dockPreviewEl.textContent = formatReplyMessage(items);
+
+    dockStatusEl.hidden = !statusText;
+    if (statusText) {
+      dockStatusEl.textContent = statusText;
+      dockStatusEl.className =
+        "lf-dock-status" + (statusKind === "error" ? " is-error" : statusKind === "ok" ? " is-ok" : "");
+    }
+  }
+
+  function renderDock() {
+    if (desktopHandler) return;
+    ensureDock();
+
+    const entries = queueEntries();
+    dockChipsEl.innerHTML = "";
+    dockChipsEl.hidden = entries.length === 0;
+    for (const entry of entries) {
+      dockChipsEl.append(
+        el(
+          "span",
+          { cls: "lf-chip", title: entry.title, on: { click: () => entry.jump() } },
+          el("span", { cls: "lf-chip-tag tag-" + entry.tag, text: entry.tag[0].toUpperCase() + entry.tag.slice(1) }),
+          el("span", { cls: "lf-chip-text", text: entry.summary }),
+          el("button", {
+            type: "button",
+            cls: "lf-chip-x",
+            text: "×",
+            title: "Remove",
+            attrs: { "aria-label": "Remove " + entry.tag },
+            on: {
+              click: (e) => {
+                e.stopPropagation();
+                entry.remove();
+              },
+            },
+          })
+        )
+      );
+    }
+
+    updateDockMeta(entries);
+  }
+
+  // --- Global keyboard shortcuts ---
+
+  document.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      if (floatComposer && floatComposer.contains(document.activeElement)) return;
+      if (sidebarEl && sidebarEl.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA") {
+        return;
+      }
+      if (!desktopHandler && queueItems().length > 0) {
+        event.preventDefault();
+        submitReply();
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (floatComposer || floatPill || hoverCardEl) {
+        dismissFloats();
+        hideHoverCard();
+      } else if (sidebarOpen) {
+        closeSidebar();
+      }
+      return;
+    }
+
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      event.key.toLowerCase() === "c" &&
+      pendingSelection &&
+      !(document.activeElement && document.activeElement.closest("input, textarea"))
+    ) {
+      event.preventDefault();
+      const selInfo = pendingSelection;
+      dismissFloatPill();
+      openProseComposer(selInfo);
+    }
+  });
+
+  wireControls();
+  wireCodeBlocks();
+  wireSelectionNotes();
+  renderSidebar();
+
+  if (desktopHandler) {
+    try {
+      const reply = desktopHandler.postMessage({
+        type: "ready",
+        build_id: buildId,
+      });
+      if (reply && typeof reply.then === "function") {
+        reply.then((loaded) => applyState(loaded), () => {});
+      }
+    } catch (_) {}
+  } else {
+    renderDock();
+    loadBrowserState();
+    connectLoopback();
+  }
+})();
+
+</script>
+</body>
+</html>

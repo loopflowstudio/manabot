@@ -60,6 +60,7 @@ from manabot.eval.pairing import (
     pairing_result,
 )
 from manabot.infra.config import MatchConfig
+from manabot.policy.admission import Spec
 from manabot.policy.prepare import Prepared
 from manabot.policy.spans import BatchRow, ObservationSelection
 from manabot.sim.evaluation_records import (
@@ -356,8 +357,16 @@ class PlayedRound:
     errors: dict[str, ForwardError]
 
 
+type ObservePrepared = Callable[
+    [Prepared[np.ndarray], ObservationSelection, Spec], None
+]
+
+
 async def step_round(
-    vector: RecordedVectorEnv, states: list[SlotState | None], space: ObservationSpace
+    vector: RecordedVectorEnv,
+    states: list[SlotState | None],
+    space: ObservationSpace,
+    observe_prepared: ObservePrepared | None = None,
 ) -> PlayedRound:
     """Choose once per live slot, omitting matches whose checkpoint failed."""
     started = monotonic()
@@ -406,7 +415,11 @@ async def step_round(
                         blank[batch] = batch.blank_decision_memory()
                     batch = blank[batch]
                 coords.append((batch, index))
-            return prepare_batch(ObservationSelection(spec.space, tuple(coords)), spec)
+            selection = ObservationSelection(spec.space, tuple(coords))
+            prepared = prepare_batch(selection, spec)
+            if observe_prepared is not None:
+                observe_prepared(prepared, selection, spec)
+            return prepared
 
         async def sample_group(
             members: list[tuple[SlotState, Sampler]], prepared: Prepared[np.ndarray]
@@ -479,6 +492,7 @@ async def play_pairings(
     *,
     slots: int = 64,
     output_dir: Path | None = None,
+    observe_prepared: ObservePrepared | None = None,
 ) -> AsyncGenerator[tuple[Match, Result | Exception], None]:
     """Step paired-deal legs across one `RecordedVectorEnv` and yield settled matches.
 
@@ -487,6 +501,9 @@ async def play_pairings(
     slots backfill immediately so no slot sits idle while legs are pending.
     Admission, checkpoint forward and finalization errors yield `(match, exc)`
     for the affected matches while other slots continue.
+
+    `observe_prepared` runs synchronously before forward dispatch. Its
+    `ObservationSelection` is valid only during the callback.
     """
     if slots < 1:
         raise ValueError("slots must be at least 1")
@@ -722,7 +739,9 @@ async def play_pairings(
                 current_space = None
                 continue
 
-            round_result = await step_round(vector, slot_states, current_space)
+            round_result = await step_round(
+                vector, slot_states, current_space, observe_prepared
+            )
             gameplay_seconds += round_result.seconds_per_slot
             if round_result.errors:
                 for match in list(held):

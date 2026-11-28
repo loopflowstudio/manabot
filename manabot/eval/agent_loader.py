@@ -8,11 +8,14 @@ batches of any positive batch size and returns float32 masked logits of shape
 and process allocation.
 """
 
-from collections.abc import Callable
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import platform
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from etude.checkpoints import CheckpointRef
 import numpy as np
@@ -21,6 +24,11 @@ from manabot.backends import resolve
 from manabot.policy.batching import concatenate
 from manabot.policy.prepare import Prepared
 from manabot.sim.registration import EvalPrecision
+
+if TYPE_CHECKING:
+    import torch
+
+    from manabot.backends.torch.policy import ActorCritic
 
 EvalTarget = Literal["cuda", "mlx", "mps", "cpu"]
 EVAL_DEVICES: tuple[EvalTarget, ...] = ("cuda", "mlx", "mps", "cpu")
@@ -86,22 +94,31 @@ def mlx_logits(path: Path, precision: EvalPrecision) -> Logits:
     return model.evaluate_logits
 
 
-def torch_logits(
-    path: Path,
-    precision: EvalPrecision,
-    device_name: Literal["cuda", "mps", "cpu"],
-) -> Logits:
+@contextmanager
+def torch_forward_context(
+    precision: EvalPrecision, device: torch.device
+) -> Iterator[None]:
     import torch
 
-    from manabot.backends.torch.arrays import on_device
-    from manabot.backends.torch.checkpoint import load_checkpoint
-    from manabot.backends.torch.learner import (
-        apply_matmul_precision,
-        forward_precision,
-        validate_precision,
-    )
+    from manabot.backends.torch.learner import apply_matmul_precision, forward_precision
 
-    device = torch.device(device_name)
+    if device.type == "cuda":
+        apply_matmul_precision(precision)
+    with torch.inference_mode(), forward_precision(precision, device):
+        yield
+
+
+def load_torch_policy(
+    path: Path,
+    precision: EvalPrecision,
+    device: torch.device,
+) -> ActorCritic:
+    """Load the padded evaluation policy and cache its catalog under the declared precision."""
+    import torch
+
+    from manabot.backends.torch.checkpoint import load_checkpoint
+    from manabot.backends.torch.learner import validate_precision
+
     validate_precision(precision, device)
     if precision == "bf16":
         if device.type == "cuda" and not torch.cuda.is_bf16_supported():
@@ -110,16 +127,27 @@ def torch_logits(
             raise ValueError("precision bf16 on MPS requires macOS 14.0 or newer")
 
     torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", "1")))
-    apply_matmul_precision(precision)
     model, _ = load_checkpoint(str(path))
     model.to(device).eval()
-    with torch.inference_mode(), forward_precision(precision, device):
+    with torch_forward_context(precision, device):
         model.cache_programs()
+    return model
+
+
+def torch_logits(
+    path: Path,
+    precision: EvalPrecision,
+    device_name: Literal["cuda", "mps", "cpu"],
+) -> Logits:
+    import torch
+
+    from manabot.backends.torch.arrays import on_device
+
+    device = torch.device(device_name)
+    model = load_torch_policy(path, precision, device)
 
     def logits(batch: Prepared[np.ndarray]) -> np.ndarray:
-        if device.type == "cuda":
-            apply_matmul_precision(precision)
-        with torch.inference_mode(), forward_precision(precision, device):
+        with torch_forward_context(precision, device):
             scores, _ = model(on_device(batch, device))
         return scores.float().cpu().numpy()
 

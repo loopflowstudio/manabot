@@ -1,0 +1,319 @@
+<h1>Concept review: L4 bf16 evaluation profile (MTG-507)</h1>
+
+<p>
+  <strong>Area reviewed:</strong> Post-implementation review of the CUDA evaluation precision path,
+  batch-capture and profiling harness, precision report, and caller guidance across
+  <code>manabot/eval/agent_loader.py</code>, <code>manabot/eval/vector.py</code>,
+  <code>experiments/eval_precision_profile.py</code>, <code>experiments/eval_throughput.py</code>,
+  <code>experiments/reports/eval_precision_profile.md</code>, and
+  <code>docs/evaluation.md#etude-agents</code>, reviewed as a whole against base
+  <code>659dd138fe</code> (at <code>HEAD</code> <code>178a551d79</code>).
+</p>
+
+<p>
+  <strong>Sync check against <code>origin/main</code>:</strong> Freshly fetched
+  <code>origin/main</code> (<code>606e79e90a</code>, MTG-500 manual mana payments) is one commit
+  ahead of MTG-507's base. It touches only Rust <code>managym</code> mana-payment logic,
+  conformance fixtures, and <code>docs/engine.md</code>. Nothing in <code>manabot/eval/</code>,
+  <code>manabot/backends/torch/</code>, <code>experiments/eval_*</code>, or
+  <code>docs/evaluation.md</code> has moved on <code>origin/main</code>.
+</p>
+
+<h2>Do the domain concepts and the code concepts line up?</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Domain concept</th>
+      <th>Code concept</th>
+      <th>Aligned?</th>
+      <th>What is wrong</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Diagnostic variant: "keep PyTorch's autocast weight cache across calls"</strong></td>
+      <td><code>bf16-cached-autocast</code> / <code>cached_context()</code> in <code>experiments/eval_precision_profile.py:557-576</code> wrapping <code>run_call</code> (which enters <code>torch.inference_mode()</code>)</td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>A concept the code claims to test and never exercises.</strong>
+        PyTorch disables autocast weight caching under <code>torch.inference_mode()</code> (and
+        <code>torch.no_grad()</code>). The retained L4 <code>profile.json</code> traces prove
+        <code>bf16-cached-autocast</code> ran the exact same cast op counts as uncached
+        <code>bf16</code> (<code>1,094</code> vs <code>1,094</code> <code>aten::copy_</code> and
+        <code>1,793</code> vs <code>1,793</code> <code>to</code>/<code>_to_copy</code> on
+        <code>w384l8</code>; <code>1,261</code> and <code>2,188</code> on <code>w160l8</code>)
+        and identical peak VRAM (<code>670,990,336</code> / <code>747,497,472</code> bytes).
+        Meanwhile <code>bf16-linear-once</code> actually eliminated those casts
+        (<code>1,094 → 556</code> <code>aten::copy_</code>, <code>1,793 → 669</code>
+        <code>to</code>/<code>_to_copy</code>), sped up <code>w384l8</code> by
+        <strong>14.6%</strong> (<code>18.12 → 15.48 ms/call</code>), and cut peak VRAM by
+        <strong>54 MiB</strong> (<code>640.0 → 585.9 MiB</code>) with <code>0.0</code> logit diff.
+        <code>eval_precision_profile.md:67-70</code> falsely credits <code>bf16-cached-autocast</code>
+        with keeping the weight cache and omits <code>bf16-linear-once</code>'s <code>w384l8</code> win.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Forward time breakdown: "attention work" vs "cast and copy overhead"</strong></td>
+      <td><code>op_bucket(name, parent)</code> in <code>experiments/eval_precision_profile.py:333-356</code></td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>One bucket name for two causes.</strong>
+        <code>op_bucket</code> classifies <code>aten::to</code>, <code>aten::_to_copy</code>, and
+        <code>aten::copy_</code> as <code>casts_and_copies</code> <em>before</em> checking
+        <code>parent != "other"</code>. In <code>trained-w160-bf16/profile.json</code>,
+        <strong>49.96 ms of 52.81 ms (94.6%)</strong> of GPU <code>casts_and_copies</code> time
+        happened <em>inside</em> <code>policy.attention</code> (math SDPA's internal fp32/bf16
+        conversions; unchanged at <code>50.15 ms</code> under <code>bf16-linear-once</code>).
+        The report's delta row (<code>+36.40 ms</code> attention, <code>+13.30 ms</code> casts and
+        copies) steals <strong>12.1 ms/call</strong> from attention and makes external cast overhead
+        look ~10× larger than it is. Respecting parent scopes on the exact same traces gives
+        <code>+48.14 ms</code> attention (<code>36.41 → 84.55 ms</code>) and
+        <code>+0.20 ms</code> outside-scope casts.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Capturing arena batches and single-row inputs from the vector runner</strong></td>
+      <td><code>ObservePrepared</code> / <code>observe_prepared</code> threaded through <code>manabot/eval/vector.py</code> (<code>play_pairings</code>, <code>step_round</code>), <code>experiments/eval_throughput.py</code> (<code>run_vector</code>), and correlated via <code>nonlocal pending</code> in <code>experiments/eval_precision_profile.py:127-179</code></td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>One action split across two callbacks via a mutable side-channel, leaking internal handles onto library APIs.</strong>
+        <code>manabot.eval.vector.play_pairings</code> now exposes internal
+        <code>ObservationSelection</code> (holding live native <code>ObservationBatch</code>
+        coordinates) and <code>Spec</code> across three call layers for one experiment script.
+        <code>capture()</code> stashes them in <code>nonlocal pending</code> and matches them by
+        object identity (<code>inputs[0] is pending[0]</code>) inside <code>local_forward(record)</code>.
+        Because <code>step_round:421</code> prepares all checkpoint groups before
+        <code>asyncio.gather</code> invokes forwards, any two-checkpoint match trips
+        <code>assert pending is None</code>, and <code>ObservationSelection</code> escapes
+        <code>prepare_group</code>.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>L4 precision rule ("when should I use bf16 vs float32?")</strong></td>
+      <td><code>docs/evaluation.md:450-456</code> vs <code>experiments/reports/eval_precision_profile.md:101-109</code> vs <code>BF16_MIN_HIDDEN_DIM = 256</code> (<code>manabot/infra/config.py:347</code>)</td>
+      <td><strong>No</strong></td>
+      <td>
+        <strong>The structural rule is missing from caller docs, and training/MLX still encode width-only <code>256</code>.</strong>
+        <code>eval_precision_profile.md:101</code> identifies the divisibility-by-8 head-width
+        rule, but <code>docs/evaluation.md:450-456</code> only lists the five tested head widths
+        (20, 36 vs 32, 40, 48) without stating <code>head_dim = hidden_dim // num_attention_heads</code>
+        divisible by 8—leaving untested shapes like <code>w192l8</code> (24) or <code>w224l8</code>
+        (28) ambiguous. Separately, <code>BF16_MIN_HIDDEN_DIM = 256</code> and
+        <code>docs/training.md:1147</code> still describe the L4 threshold by <code>hidden_dim</code> alone.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Shared Torch evaluation loading and precision execution</strong></td>
+      <td><code>load_torch_policy</code> and <code>torch_forward_context</code> in <code>manabot/eval/agent_loader.py:97-159</code></td>
+      <td><strong>Yes</strong></td>
+      <td>
+        Clean single owner for validation, eval mode, <code>cache_programs()</code>, and per-call
+        precision context while keeping Torch lazy under <code>TYPE_CHECKING</code> so
+        <code>manabot.eval.agents</code> and <code>manabot.eval.vector</code> remain Torch-free.
+        (Minor note: <code>load_torch_policy:133</code> calls <code>apply_matmul_precision</code>
+        once outside and again inside <code>torch_forward_context:136</code>.)
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Same-batch replay, cross-width binding, and buffered arena forward receipts</strong></td>
+      <td><code>BatchContract.bind</code>, <code>CapturedCall</code>, <code>profile_inputs</code> (<code>experiments/eval_precision_profile.py:73-107,205-221,492-513</code>) and <code>ForwardTiming.forwards</code> (<code>experiments/eval_throughput.py:60-92,300-303</code>)</td>
+      <td><strong>Yes</strong></td>
+      <td>
+        Arena replay enforces exact checkpoint SHA-256; cross-width grid replay re-tags
+        <code>Prepared.binding</code> only after checking identical observation config, readings,
+        and non-width model fields; grid batches reuse production <code>concatenate</code>; and
+        <code>forwards.jsonl</code> writes once after timed arena play.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Biggest mismatch: profiler attribution &amp; diagnostic honesty in the L4 evidence</h2>
+
+<p>
+  MTG-507's L4 measurement settled the root cause cleanly: <code>w160l8</code>'s
+  <code>head_dim = 20</code> (and <code>w288l8</code>'s <code>36</code>) falls back from
+  native float32 MHA to <code>aten::_scaled_dot_product_attention_math</code> under CUDA bf16
+  autocast, whereas 8-aligned heads (<code>32</code>, <code>40</code>, <code>48</code>) dispatch
+  <code>aten::_scaled_dot_product_efficient_attention</code>.
+</p>
+
+<p>
+  Two mismatches in <code>experiments/eval_precision_profile.py</code> distort the secondary numbers
+  drawn from those exact traces:
+</p>
+
+<ol>
+  <li>
+    <strong><code>op_bucket</code> steals math-SDPA conversions out of <code>attention</code>:</strong>
+    checking <code>casts_and_copies</code> before <code>parent != "other"</code> moves
+    <code>49.96 ms</code> of GPU time inside <code>policy.attention</code> (94.6% of
+    <code>trained-w160-bf16</code>'s GPU cast bucket) out of <code>attention</code> and into
+    <code>casts_and_copies</code>.
+  </li>
+  <li>
+    <strong><code>bf16-cached-autocast</code> never cached weights:</strong>
+    nesting <code>torch_forward_context</code> (which enters <code>torch.inference_mode()</code>)
+    inside <code>cached_context()</code> hits PyTorch's rule that autocast weight caching is
+    disabled outside grad mode. Both <code>w160l8</code> and <code>w384l8</code> traces show
+    bit-for-bit identical cast op counts and peak CUDA memory between <code>bf16</code> and
+    <code>bf16-cached-autocast</code>—while <code>bf16-linear-once</code> actually removed
+    <code>&gt;400</code> cast ops/call and cut <code>w384l8</code> forward time by
+    <strong>14.6%</strong> (<code>18.12 → 15.48 ms</code>) and peak VRAM by
+    <strong>54 MiB</strong> (<code>640.0 → 585.9 MiB</code>) with <code>0.0</code> logit diff.
+  </li>
+</ol>
+
+<lf-diff path="experiments/eval_precision_profile.py" lines="333-356"></lf-diff>
+<lf-diff path="experiments/eval_precision_profile.py" lines="551-578"></lf-diff>
+<lf-diff path="experiments/reports/eval_precision_profile.md" lines="57-77"></lf-diff>
+
+<lf-component name="before-after">
+  <div slot="before">
+    <h4>Current implementation (<code>178a551d79</code>)</h4>
+    <ul>
+      <li><strong><code>op_bucket</code>:</strong> <code>casts_and_copies</code> preempts <code>policy.attention</code> and <code>policy.packed_gru</code>. Report shows <code>w160l8</code> delta as <code>+36.40 ms</code> attention, <code>+13.30 ms</code> casts/copies, <code>−9.87 ms</code> MLP.</li>
+      <li><strong><code>bf16-cached-autocast</code>:</strong> Stays in CLI and report as "keep autocast cache" (<code>65.76 ms</code> / <code>17.71 ms</code>) even though <code>profile.json</code> proves zero weight casts were cached (<code>1,094</code> vs <code>1,094</code> <code>aten::copy_</code> on <code>w384l8</code>).</li>
+      <li><strong><code>bf16-linear-once</code>:</strong> Dismissed after <code>w160l8</code> stays slow; its <code>14.6%</code> speedup and <code>54 MiB</code> VRAM reduction on <code>w384l8</code> (plus GEMM kernel switch from <code>cutlass_80_wmma_32x32</code> to <code>ampere_bf16_s1688gemm_128x128</code>) go unmentioned.</li>
+      <li><strong>Capture hook:</strong> <code>ObservePrepared</code> leaks <code>ObservationSelection</code> and <code>Spec</code> through <code>vector.py</code> and <code>eval_throughput.py</code> into <code>nonlocal pending</code>.</li>
+      <li><strong>Docs:</strong> <code>docs/evaluation.md:450-456</code> lists tested head widths (<code>20, 36</code> vs <code>32, 40, 48</code>) without stating the <code>head_dim % 8 == 0</code> rule.</li>
+    </ul>
+  </div>
+  <div slot="after">
+    <h4>Recommended design (no new L4 rental needed)</h4>
+    <ul>
+      <li><strong><code>op_bucket</code>:</strong> Respect <code>ATTENTION</code>/<code>GRU</code> and <code>parent != "other"</code> before <code>casts_and_copies</code>, then recompute the bucket table offline from the retained <code>profile.json</code> traces: <code>w160l8</code> delta becomes <code>+48.14 ms</code> attention (<code>36.41 → 84.55 ms</code>), <code>+0.20 ms</code> outside casts, <code>−8.64 ms</code> MLP.</li>
+      <li><strong>Remove <code>bf16-cached-autocast</code>:</strong> Delete the no-op variant from <code>eval_precision_profile.py</code> and state in the report why PyTorch autocast does not cache weights under <code>torch.inference_mode()</code>; let <code>bf16-linear-once</code> be the sole cast-elimination measurement.</li>
+      <li><strong>Report <code>bf16-linear-once</code> completely:</strong> Note both that it leaves <code>w160l8</code> slow (math SDPA dominates) and that it cuts <code>w384l8</code> forward time by 14.6% and VRAM by 54 MiB with 0.0 logit diff on L4, while noting the GEMM kernel change as the reason to defer loader adoption to a cross-GPU parity Task.</li>
+      <li><strong>Tighten capture boundary:</strong> Remove <code>observe_prepared</code> from <code>eval_throughput.run_vector</code> (call <code>play_pairings</code> directly in <code>capture</code>), prepare <code>singles</code> synchronously inside the callback so <code>ObservationSelection</code> never escapes <code>prepare_group</code>, and key by <code>id(prepared)</code> instead of <code>nonlocal pending</code>.</li>
+      <li><strong>State the rule in docs:</strong> Update <code>docs/evaluation.md:450-456</code> to name <code>head_dim = hidden_dim // num_attention_heads</code> divisible by 8 directly alongside the tested shapes and batch thresholds.</li>
+    </ul>
+  </div>
+</lf-component>
+
+<h2>Capture boundary &amp; caller guidance excerpts</h2>
+
+<lf-diff path="manabot/eval/vector.py" lines="338-355"></lf-diff>
+<lf-diff path="manabot/eval/vector.py" lines="396-405"></lf-diff>
+<lf-diff path="experiments/eval_precision_profile.py" lines="127-179"></lf-diff>
+<lf-diff path="docs/evaluation.md" lines="447-458"></lf-diff>
+<lf-file path="manabot/infra/config.py" lines="341-348"></lf-file>
+
+<h2>Walking one interaction: normal, failure, recovery, and counterexamples</h2>
+
+<h3>Normal path: capturing and auditing an L4 profile</h3>
+<ol>
+  <li><strong>Capture:</strong> <code>capture()</code> runs <code>play_pairings</code> on 32 deals in float32. Inside <code>observe</code>, 1-row <code>singles</code> are prepared immediately while <code>selection</code> is live and stored under <code>id(prepared)</code>; <code>record</code> pops them, runs <code>forward</code>, and streams <code>(batch, singles, logits)</code> to a temp gzip file linked atomically on completion.</li>
+  <li><strong>Replay &amp; bucket attribution:</strong> <code>replay()</code> runs uninstrumented repeats through <code>load_torch_policy</code> + <code>torch_forward_context</code>, profiles 4 deterministic calls with <code>profile_modules</code>, and partitions trace time with parent-first <code>op_bucket</code> so every scoped module owns its internal casts.</li>
+  <li><strong>Caller decision:</strong> An engineer reading <code>docs/evaluation.md#etude-agents</code> checks <code>head_dim % 8 == 0</code> and expected rows/call before picking <code>AGENTS_BF16</code> vs default float32.</li>
+</ol>
+
+<h3>Failure, recovery, and counterexamples tested</h3>
+<ul>
+  <li><strong>Multi-checkpoint capture failure:</strong> Today, passing two checkpoints to <code>capture()</code> fires <code>observe_prepared</code> twice inside <code>step_round:421</code> before <code>record()</code> runs once, crashing <code>assert pending is None</code>. Keying by <code>id(prepared)</code> and preparing <code>singles</code> inside <code>observe</code> handles multiple checkpoints and ensures <code>ObservationSelection</code> never survives past <code>step_round</code>.</li>
+  <li><strong>Offline trace recomputation:</strong> Fixing <code>op_bucket</code> requires zero new L4 spend because the full Chrome traces live in <code>.runs/eval-precision-profile/l4-a468879a7a/*/profile.json</code>. Running the parent-first classifier across the four arena traces already reproduces exact totals (<code>59.45</code>, <code>100.77</code>, <code>86.48</code>, <code>30.40 ms/call</code>) with attention rising from <code>+36.40</code> to <code>+48.14 ms/call</code> on <code>w160l8</code>.</li>
+  <li><strong>Counterexample on <code>bf16-linear-once</code> parity:</strong> Although <code>max_abs_difference_from_bf16 == 0.0</code> on L4 for both <code>w160l8</code> and <code>w384l8</code>, the L4 trace shows 16 attention GEMMs changed from <code>cutlass_80_wmma_tensorop_bf16_32x32</code> to <code>ampere_bf16_s1688gemm_128x128</code>. On another GPU architecture (A40, H100) or batch size, different tile reduction order can change bf16 rounding—so shipping it inside <code>etude-policy-bf16-auto-v1</code> without cross-GPU verification risks breaking compute-class identity (irreversible once scored). Deferring it to its own Task is therefore the right call.</li>
+  <li><strong>Counterexample on <code>w160</code> 4-head / 5-head speedups:</strong> Note that <code>GameObjectAttention</code> sets <code>feedforward_dim = num_heads * embedding_dim</code> (<code>manabot/backends/torch/policy.py:1462</code>), so 4-head and 5-head controls also have narrower MLPs than 8-head <code>w160l8</code>. The report correctly compares their <em>bf16/float32 ratios</em> (within each fixed model) rather than raw milliseconds across head counts, so the MLP-width difference does not confound the SDPA backend proof.</li>
+</ul>
+
+<h2>Findings</h2>
+
+<lf-component name="decision" id="f1" title="F1: Remove the no-op bf16-cached-autocast variant and fix the report's cache and linear-once findings" recommendation="Fix here">
+  <p>
+    <strong>Scope: This work (no new L4 rental).</strong>
+    Under <code>torch.inference_mode()</code>, PyTorch's autocast weight cache is disabled; the L4
+    <code>profile.json</code> traces confirm <code>bf16-cached-autocast</code> ran the exact same
+    <code>aten::copy_</code> and <code>aten::_to_copy</code> counts and peak VRAM as shipped
+    <code>bf16</code>. Delete <code>bf16-cached-autocast</code> from
+    <code>experiments/eval_precision_profile.py</code>, correct
+    <code>experiments/reports/eval_precision_profile.md:67-77</code> so it does not claim weights
+    were cached, and report <code>bf16-linear-once</code>'s measured <code>w384l8</code> speedup
+    (<code>18.12 → 15.48 ms/call</code>, −14.6%, −54 MiB VRAM, <code>0.0</code> diff on L4)
+    alongside the GEMM kernel switch that keeps it out of <code>agent_loader.py</code> here.
+  </p>
+</lf-component>
+
+<lf-component name="decision" id="f2" title="F2: Make op_bucket respect parent scopes and regenerate the report's bucket table from retained L4 traces" recommendation="Fix here">
+  <p>
+    <strong>Scope: This work (offline recomputation from retained traces).</strong>
+    In <code>experiments/eval_precision_profile.py:333-339</code>, move the
+    <code>casts_and_copies</code> check below <code>ATTENTION</code>/<code>GRU</code> and
+    <code>if parent != "other": return parent</code> so math-SDPA's internal fp32/bf16 conversions
+    (<code>49.96 ms</code> of <code>52.81 ms</code> GPU cast time in
+    <code>trained-w160-bf16/profile.json</code>) stay in <code>attention</code>. Add a unit check
+    in <code>tests/eval/test_eval_precision_profile.py</code> (a nested <code>aten::to</code> inside
+    <code>policy.attention</code> charges to <code>attention</code>) and update the bucket table in
+    <code>experiments/reports/eval_precision_profile.md:57-64</code> from the saved traces
+    (<code>+48.14 ms</code> attention, <code>+0.20 ms</code> outside casts, <code>−8.64 ms</code> MLP).
+  </p>
+</lf-component>
+
+<lf-component name="decision" id="f3" title="F3: Tighten the capture boundary (remove observe_prepared from eval_throughput and eliminate nonlocal pending)" recommendation="Fix here">
+  <p>
+    <strong>Scope: This work.</strong>
+    Stop threading <code>observe_prepared</code> through <code>experiments/eval_throughput.py:run_vector</code>
+    (let <code>capture</code> iterate <code>play_pairings</code> directly). Inside
+    <code>experiments/eval_precision_profile.py:capture</code>, prepare <code>singles</code>
+    synchronously inside the observer while <code>ObservationSelection</code> is live and correlate
+    with <code>record</code> via a dict keyed by <code>id(prepared)</code> rather than
+    <code>nonlocal pending</code>. Document in <code>manabot/eval/vector.py</code> that
+    <code>ObservationSelection</code> is valid only during the synchronous callback—or remove
+    <code>observe_prepared</code> from <code>vector.py</code> entirely if single-row captures are
+    taken via a separate 1-slot run.
+  </p>
+</lf-component>
+
+<lf-component name="decision" id="f4" title="F4: State the head_dim % 8 == 0 rule explicitly in docs/evaluation.md" recommendation="Fix here">
+  <p>
+    <strong>Scope: This work.</strong>
+    <code>docs/evaluation.md:450-456</code> currently enumerates only the five tested head widths
+    (<code>20, 36</code> vs <code>32, 40, 48</code>). Name the structural condition established by
+    the profile—<code>head_dim = hidden_dim // num_attention_heads</code> must be a multiple of 8
+    to hit memory-efficient bf16 SDPA on L4 / Torch 2.15—before listing the tested batch-size
+    crossovers.
+  </p>
+</lf-component>
+
+<lf-component name="decision" id="f5" title="F5: Revisit BF16_MIN_HIDDEN_DIM and training precision guidance for head_dim % 8 alignment" recommendation="File Task">
+  <p>
+    <strong>Scope: Separate outcome (deferred in <code>scratch/plan.md:245-250</code>, now confirmed by L4 evidence).</strong>
+    <code>manabot/infra/config.py:347</code> (<code>BF16_MIN_HIDDEN_DIM = 256</code>, also used by
+    MLX default precision) and <code>docs/training.md:1147</code> still frame the L4 CUDA crossover
+    strictly in terms of <code>hidden_dim</code>. File a separate Task to separate MLX's width rule
+    from CUDA's <code>head_dim % 8 == 0</code> SDPA alignment rule and review frontier model head
+    counts (e.g., 4-head <code>w160</code> vs <code>w192l8</code>).
+  </p>
+</lf-component>
+
+<lf-component name="decision" id="f6" title="F6: Evaluate pre-casting Linear/MHA projection weights for aligned CUDA bf16 evaluation" recommendation="File Task">
+  <p>
+    <strong>Scope: Separate outcome (irreversible compute-class choice if rounding differs across GPUs).</strong>
+    On L4, <code>bf16-linear-once</code> cut <code>seeded w384l8</code> forward time by 14.6%
+    (<code>18.12 → 15.48 ms/call</code>) and peak VRAM by 54 MiB with <code>0.0</code> logit diff,
+    but switched 16 attention GEMMs from <code>cutlass_80_wmma_32x32</code> to
+    <code>ampere_bf16_s1688gemm_128x128</code>. File a separate Task if worth pursuing to verify
+    cross-GPU / multi-shape parity or introduce a new compute class id.
+  </p>
+</lf-component>
+
+<h2>Questions</h2>
+
+<div data-choice="q1" data-label="Q1: Bucket attribution for casts inside Linear/MLP">
+  <p><strong>1. In F2, how should <code>op_bucket</code> classify <code>aten::to</code>/<code>copy_</code> inside <code>policy.attention</code> vs inside <code>aten::linear</code>?</strong></p>
+  <button data-value="1a">1a. Parent-first for all buckets: every bucket (<code>attention</code>, <code>linear_and_mlp</code>, <code>packed_gru</code>) owns its internal casts; <code>bf16-linear-once</code> measures weight-cast cost directly (Recommended)</button>
+  <button data-value="1b">1b. Module-scope-first only: <code>attention</code> and <code>packed_gru</code> own their internal casts, while <code>casts_and_copies</code> still captures <code>aten::linear</code> weight casts</button>
+</div>
+
+<div data-choice="q2" data-label="Q2: Vector runner capture seam">
+  <p><strong>2. In F3, should <code>observe_prepared</code> remain on <code>manabot.eval.vector.play_pairings</code>?</strong></p>
+  <button data-value="2a">2a. Keep <code>observe_prepared</code> on <code>vector.py</code> with a documented synchronous-only contract, drop it from <code>eval_throughput.run_vector</code>, and prepare <code>singles</code> inside the callback keyed by <code>id(prepared)</code> (Recommended)</button>
+  <button data-value="2b">2b. Remove <code>observe_prepared</code> from <code>manabot/eval/vector.py</code> altogether and capture grid single-rows in a separate 1-slot pass</button>
+</div>
+
+<div data-choice="q3" data-label="Q3: Follow-up Tasks">
+  <p><strong>3. Which follow-up Tasks should be filed from the L4 profile?</strong></p>
+  <button data-value="3a">3a. File F5 (<code>BF16_MIN_HIDDEN_DIM</code> / training <code>head_dim % 8</code> guidance) now; keep F6 (<code>bf16-linear-once</code> for wide models) as an optional idea until wide-model GPU eval becomes forward-bound (Recommended)</button>
+  <button data-value="3b">3b. File both F5 and F6</button>
+  <button data-value="3c">3c. File neither; keep the findings in the report</button>
+</div>
