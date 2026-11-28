@@ -400,7 +400,19 @@ fn snapshot(
             .iter()
             .map(|trigger| trigger.ability.clone())
             .collect();
-        printed.activated_abilities = view.activated_abilities.clone();
+        printed.activated_abilities = view
+            .activated_abilities
+            .iter()
+            .cloned()
+            .map(|mut ability| {
+                // `layers` stamps activation pricing context and grantor storage
+                // provenance onto live battlefield views; printed snapshots carry
+                // neither.
+                ability.mana_cost.purpose = crate::state::mana::SpendingContext::Resolving;
+                ability.granted_by = None;
+                ability
+            })
+            .collect();
         if !tapped {
             for ability in &view.mana_abilities {
                 mana.push(ability.mana.mana.map(u32::from));
@@ -1699,5 +1711,70 @@ mod tests {
             .expect("leaf entry choice is recorded");
         assert_eq!(captured.record.choice.kind.as_deref(), Some("ChooseMode"));
         assert_eq!(captured.record.choice.mode, Some(target_row as u32));
+    }
+
+    #[test]
+    fn activated_ability_snapshot_strips_runtime_purpose_and_grantor() {
+        use crate::state::{
+            card::AbilityGrant,
+            effect::{EffectDuration, Modification},
+            mana::SpendingContext,
+        };
+        let players: Vec<PlayerConfig> = (0..2)
+            .map(|seat| {
+                PlayerConfig::new(
+                    format!("seat{seat}"),
+                    [("Kyoshi Village".into(), 20), ("Mountain".into(), 20)].into(),
+                )
+            })
+            .collect();
+        let mut game = Game::new(players, 111, true);
+        game.keep_opening_hands();
+        game.decision_memory_enabled = true;
+        let land = game
+            .state
+            .latest_objects()
+            .find(|(_, data)| data.owner == PlayerId(0) && data.name == "Kyoshi Village")
+            .unwrap()
+            .0;
+        let grantor = game
+            .state
+            .latest_objects()
+            .find(|(_, data)| data.owner == PlayerId(0) && data.name == "Mountain")
+            .unwrap()
+            .0;
+        let land = game.move_object(land, ZoneType::Battlefield);
+        let grantor = game.move_object(grantor, ZoneType::Battlefield);
+        let land_perm = game.state.permanent_of(land).unwrap();
+        assert!(game
+            .characteristics(land_perm)
+            .activated_abilities
+            .iter()
+            .all(|ability| matches!(ability.mana_cost.purpose, SpendingContext::Activate { .. })));
+
+        let unmodified = snapshot(&game, land, PlayerId(0), true);
+        assert!(crate::agent::record_vocabulary::missing_program_tokens(&unmodified.program).is_empty());
+        assert!(!unmodified.description.contains("SpendingObject"));
+
+        let affected_land = game.affected_permanent(land_perm).unwrap();
+        let mut granted = game.characteristics(land_perm).activated_abilities[0].clone();
+        granted.granted_by = Some(AbilityGrant { grantor, index: 0 });
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_land],
+            Modification::GrantActivated(Box::new(granted)),
+            EffectDuration::Indefinite,
+        );
+        let view = game.characteristics(land_perm);
+        assert!(view
+            .activated_abilities
+            .iter()
+            .any(|ability| ability.granted_by.is_some()));
+
+        let reference = snapshot(&game, land, PlayerId(0), true);
+        assert!(crate::agent::record_vocabulary::missing_program_tokens(&reference.program).is_empty());
+        assert!(!reference.description.contains("SpendingObject"));
+        assert!(!reference.description.contains("AbilityGrant"));
     }
 }

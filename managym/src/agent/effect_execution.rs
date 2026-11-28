@@ -33,6 +33,7 @@ use crate::{
         game_object::{CopiableValues, ObjectId, ObjectLki, PlayerId, Target},
         mana::Mana,
         payment::{Contribution, How, PaymentReceipt, SpentMana, Toward},
+        permanent::EntryChoice,
         stack_object::SpellLki,
     },
 };
@@ -92,6 +93,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "attacked defender",
     "entering card",
     "entering definition",
+    "enters attached to",
     "enters back face up",
     "enters face down",
     "enters tapped",
@@ -277,6 +279,11 @@ impl<'a> Projection<'a> {
     /// fact opens the occurrence with a marker that separates it from the
     /// frame's captured program, which shares the fact id.
     fn field<T: Serialize + std::fmt::Debug>(&mut self, name: &str, value: &T) {
+        self.field_tokens(name, value);
+        self.note(|| format!("{name}: {value:?}"));
+    }
+
+    fn field_tokens<T: Serialize>(&mut self, name: &str, value: &T) {
         debug_assert!(
             EXECUTION_TEXT.contains(&name),
             "unregistered execution field: {name}"
@@ -285,7 +292,6 @@ impl<'a> Projection<'a> {
             self.started = true;
             self.field("effect execution", &true);
         }
-        self.note(|| format!("{name}: {value:?}"));
         self.tokens
             .append_rules(&name)
             .and_then(|_| self.tokens.append_rules(value))
@@ -868,8 +874,11 @@ impl<'a> Projection<'a> {
         // preserving the same defaults instead of repeating six zero values
         // for every member of a simultaneous token group.
         if let Some(choice) = &entry.chosen {
-            self.field("chosen on entry", choice);
-            self.note(|| format!("Chosen on entry: {choice:?}"));
+            self.field_tokens("chosen on entry", choice);
+            self.note(|| match choice {
+                EntryChoice::CardName(name) => format!("chosen on entry: {name}"),
+                _ => format!("chosen on entry: {choice:?}"),
+            });
         }
         if let Some(cause) = entry.discard {
             use crate::flow::proposed_event::{DiscardCause, EventCause};
@@ -1761,7 +1770,16 @@ pub(crate) fn project_decision(
             name,
             remaining,
             ..
-        } => out.field("named search", &(owner, name, remaining)),
+        } => {
+            let known = default_content_pack().catalog_name(name);
+            out.field_tokens("named search", &(owner, known, remaining));
+            out.note(|| {
+                format!(
+                    "named search: {name} (seat {}, up to {remaining})",
+                    owner.0 + 1
+                )
+            });
+        }
         Decision::SearchDistinctNames {
             predicate,
             remaining,
@@ -1966,7 +1984,22 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::state::{player::PlayerConfig, zone::ZoneType};
+    use crate::{
+        cards::tokens::{name_value, TokenKind},
+        state::{player::PlayerConfig, zone::ZoneType},
+    };
+
+    fn mountain_game(seed: u64) -> Game {
+        let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
+        Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            seed,
+            false,
+        )
+    }
 
     fn entry_notes(game: &Game, face: EntryFace) -> Vec<String> {
         let mut out = Projection::new(game, PlayerId(0), true);
@@ -1977,20 +2010,81 @@ mod tests {
         out.text.expect("text projection").notes
     }
 
+    #[test]
+    fn suspended_exile_named_retains_only_catalog_names_in_tokens() {
+        let viewer = PlayerId(0);
+        for (name, token) in [
+            ("Mountain", (TokenKind::Text as u16, name_value("Mountain"))),
+            ("70,000 Light-Years from Home", (TokenKind::Null as u16, 0)),
+        ] {
+            let mut game = mountain_game(0);
+            game.keep_opening_hands();
+            let effects = vec![
+                Effect::Scry { count: 1 },
+                Effect::ExileNamed {
+                    name: name.into(),
+                    count: 1,
+                },
+            ];
+            game.run_frame(EffectFrame {
+                program: effects.clone(),
+                ..EffectFrame::new(viewer, effects)
+            });
+            game.publish_action_space(game.suspended_decision_action_space().unwrap());
+            let mut frames = game.continuation_frames(viewer);
+            game.describe_effect_execution(viewer, &mut frames);
+            let frame = frames
+                .iter()
+                .find(|frame| frame.kind == 5)
+                .expect("suspended scry");
+            let payload = [
+                (TokenKind::Variant as u16, name_value("Effect::ExileNamed")),
+                (TokenKind::Field as u16, name_value("name")),
+                token,
+            ];
+            for tokens in [&frame.program, &frame.effect_execution] {
+                assert!(tokens.windows(payload.len()).any(|part| part == payload));
+            }
+            assert!(frame.program_description.as_deref().unwrap().contains(name));
+            assert!(frame
+                .effect_execution_summary
+                .iter()
+                .any(|line| line.contains(name)));
+        }
+    }
+
+    #[test]
+    fn entry_attachment_uses_a_visible_reference() {
+        let viewer = PlayerId(0);
+        let mut game = mountain_game(3034);
+        let permanent = game
+            .scenario_force_battlefield(viewer, "Mountain", true)
+            .unwrap();
+        let object = game.state.permanents[permanent].as_ref().unwrap().object;
+        let mut projection = Projection::new(&game, viewer, false);
+        projection.entry(&ZoneEntry {
+            attached_to: Some(object),
+            ..Default::default()
+        });
+        let mut frame = ContinuationFrame::default();
+        projection.finish(&mut frame);
+        let label = (TokenKind::Text as u16, name_value("enters attached to"));
+        assert!(frame
+            .effect_execution
+            .windows(2)
+            .any(|pair| pair == [label, (TokenKind::Integer as u16, 1)]));
+        assert_eq!(
+            frame.effect_execution_references[0],
+            game.visible_reference(object, viewer)
+        );
+    }
+
     /// A modal back face entering is not a transformation (CR 712.11,
     /// 712.14), and each entry form records only its own historical key:
     /// `manifested`, `transformed`, `modal_back` or the `meld` pair.
     #[test]
     fn an_entry_face_reads_and_records_only_its_own_form() {
-        let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
-        let game = Game::new(
-            vec![
-                PlayerConfig::new("p0", deck.clone()),
-                PlayerConfig::new("p1", deck),
-            ],
-            712_11,
-            false,
-        );
+        let game = mountain_game(712_11);
         let modal = entry_notes(&game, EntryFace::ModalBack);
         assert!(modal.iter().any(|note| note == "enters back face up: true"));
         assert!(!modal
