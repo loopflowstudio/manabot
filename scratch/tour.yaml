@@ -1,51 +1,51 @@
-at: 708ce8e777a47d63575b9c85e8882bcc85149c57
+at: f9fc0ee7f40b6e55d38c76e9012b72de0e3836c5
 first:
   - path: experiments/reports/eval_throughput.md
-    why: Apple and L4 throughput, replay parity and profiling
+    why: Throughput and replay parity on Apple and L4
   - path: docs/evaluation.md
-    why: Heuristic versions, compact traces and background replay
+    why: Heuristic versions, decision evidence and replay scheduling
   - path: docs/engine-python.md
-    why: Seat policies, per-slot failures and verified replay
+    why: Per-slot policies and isolated failure receipts
   - path: managym/__init__.pyi
     why: Vector seating and inspection API
   - path: managym/src/agent/player_policy.rs
-    why: Seat policy encoding and legal action cap
-  - path: managym/src/agent/vector_env/slots.rs
-    why: Per-slot policies and snapshot restoration
-  - path: managym/src/agent/vector_env.rs
-    why: Per-slot construction, settlement and step isolation
+    why: Recorded seat names and heuristic action caps
   - path: managym/src/agent/env.rs
-    why: Admitted deal inputs outlive failed construction
+    why: Setup admission and native opening settlement
+  - path: managym/src/agent/vector_env.rs
+    why: Per-slot opening and step isolation
+  - path: managym/src/agent/vector_env/slots.rs
+    why: Replacement policies and snapshot restoration
+  - path: manabot/sim/evaluation_records.py
+    why: Decision identity, annotations and derived audit commands
   - path: managym/recording.py
-    why: Shared reset and step evidence for each slot
+    why: Reset and step evidence belongs to each slot
   - path: managym/replay.py
-    why: Verified prefixes and whole-record diagnostic replay
+    why: Verified prefixes and per-slot failure diagnostics
   - path: manabot/eval/agents.py
-    why: Heuristic version and code player lifecycle
+    why: Checkpoint samplers and per-game code players
   - path: manabot/eval/pairing.py
     why: Version checks at paired-deal admission
   - path: manabot/eval/vector.py
-    why: Batched play, crash attribution and replay workers
-  - path: manabot/sim/evaluation_records.py
-    why: Shared decision identity and derived audit commands
+    why: Seat assignment, batched decisions and background replay
+  - path: manabot/sim/native_game.py
+    why: Scalar decision evidence and settled capture metadata
   - path: manabot/sim/replay.py
     why: Actor checks and optional viewer evidence
-  - path: manabot/infra/provenance.py
-    why: Process fingerprints and per-game setup identity
-  - path: manabot/sim/native_game.py
-    why: Scalar capture context at setup and close
   - path: manabot/sim/card_evidence.py
-    why: Card evidence reads setup and ending directly
+    why: Card evidence reads setup and outcome directly
+  - path: manabot/infra/provenance.py
+    why: Process fingerprints and per-game identities
   - path: managym/src/python/bindings.rs
-    why: Scalar native calls release the GIL
+    why: Scalar replay releases the GIL
   - path: experiments/eval_throughput.py
-    why: Concurrent replay time and wall-clock stages
+    why: Wall time and background replay measurements
   - path: tests/eval/test_vector_eval.py
-    why: Parity, version refusal, chooser errors and replay capacity
-  - path: tests/eval/test_evaluation_match.py
-    why: Fingerprint reuse, durable capture and replay projection
+    why: Paired-game parity, crash isolation and replay capacity
   - path: tests/env/test_record_reducers.py
-    why: Later-slot failures and verified card exposure
+    why: Verified card exposure and mixed-slot failure records
+  - path: tests/eval/test_evaluation_match.py
+    why: Scalar capture, audit projection and fingerprint reuse
 hide:
   - path: tests/public_api.json
     why: Generated additive signatures
