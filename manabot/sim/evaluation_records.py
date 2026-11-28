@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from copy import deepcopy
+from dataclasses import dataclass
+import json
 from typing import TYPE_CHECKING, Any
 
 from manabot.infra.identity import canonical_sha256
@@ -75,6 +77,32 @@ def finalize_game(game: dict[str, Any]) -> None:
         game["game_trace_sha256"] = canonical_sha256(game)
 
 
+@dataclass(frozen=True)
+class DecisionIdentity:
+    """The runner's identity and sampling coordinates for one decision."""
+
+    actor: int
+    revision: int
+    player_id: str
+    player_seed: int
+    ordinal: int
+
+    @property
+    def policy_seed(self) -> int:
+        return (self.player_seed + self.ordinal) % (2**63)
+
+    def evidence(self, elapsed: float) -> dict[str, Any]:
+        return {
+            "actor": self.actor,
+            "revision": self.revision,
+            "player_id": self.player_id,
+            "player_seed": self.player_seed,
+            "player_decision_ordinal": self.ordinal,
+            "policy_rng_seed": self.policy_seed,
+            "latency_seconds": elapsed,
+        }
+
+
 def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, Any]:
     """Derive a retained-trace-shaped view carrying its canonical ``record``.
 
@@ -116,12 +144,20 @@ def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, 
         if annotation is None or "evaluation" not in annotation["extra"]:
             raise ValueError("evaluation record lacks decision audit metadata")
         decision = deepcopy(annotation["extra"]["evaluation"])
+        action = inputs["actions"][index]
+        offer_id = (
+            decision["chosen_offer"]["id"]
+            if "chosen_offer" in decision
+            else action
+            if isinstance(action, int)
+            else json.loads(action)["offer_id"]
+        )
         command = {
             "command_id": f"{game['match_id']}:{index}",
             "match_id": game["match_id"],
             "expected_revision": index,
             "prompt_id": index,
-            "offer_id": decision["chosen_offer"]["id"],
+            "offer_id": offer_id,
             "answers": [],
         }
         decision["command"] = command

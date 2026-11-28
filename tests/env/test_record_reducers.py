@@ -59,6 +59,38 @@ def test_live_reducers_equal_replayed_tables(tmp_path: Path) -> None:
     assert custom == [decisions]
 
 
+def test_integer_replay_restores_verified_cards_after_divergent_step(
+    tmp_path: Path,
+) -> None:
+    env = managym.Env(seed=7)
+    env.enable_exposure_capture()
+    path = tmp_path / "game.jsonl"
+    capture = ScalarCapture(seed=7, games_path=path)
+    capture.reset(
+        env,
+        [
+            managym.PlayerConfig(name=str(i), decklist={"Mountain": 12})
+            for i in range(2)
+        ],
+    )
+    capture.step(env, 0)
+    expected_digest = env.state_digest()
+    expected_cards = json.loads(env.card_capture_json())
+    capture.step(env, 0)
+    capture.step(env, 0)
+    capture.close()
+    record = read_record(path)
+    record.games[0].digests[2] = "0" * 64
+
+    replay = walk(record, capture_cards=True)
+    assert [decision.index for decision in replay] == [0]
+    assert replay.stop is not None and replay.stop.status == "diverged"
+    assert replay.stop.index == 1
+    assert replay.env.state_digest() == expected_digest
+    assert json.loads(replay.env.card_capture_json()) == expected_cards
+    assert len(replay.cards().capture.exposure.choices) == 1
+
+
 def test_original_command_and_preconditions_survive_live_and_replayed_reducers(
     tmp_path: Path,
 ) -> None:

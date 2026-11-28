@@ -225,9 +225,10 @@ def main() -> None:
     )
     stages = {
         "forward": timing.seconds,
-        "replay": replay_seconds,
-        "other_arena": seconds - timing.seconds - replay_seconds,
     }
+    if args.runner == "scalar":
+        stages["replay"] = replay_seconds
+    stages["other_arena"] = seconds - sum(stages.values())
     summary = {
         "platform": platform.platform(),
         "torch": torch.__version__,
@@ -251,6 +252,9 @@ def main() -> None:
         "stage_seconds": stages,
         "largest_stage": max(stages, key=stages.__getitem__),
     }
+    if args.runner == "vector":
+        # Worker durations can overlap both gameplay and one another.
+        summary["background_replay_seconds"] = replay_seconds
     if args.device == "mlx":
         summary["mlx"] = version("mlx")
     if args.device == "cuda":

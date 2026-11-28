@@ -33,6 +33,7 @@ from manabot.infra.provenance import (
 from manabot.policy.protocol import BackendName, SimulationBackend
 from manabot.sim.agent import GamePlayer
 from manabot.sim.evaluation_records import (
+    DecisionIdentity,
     bind_record,
     decision_annotation,
     evaluation_metadata,
@@ -155,23 +156,12 @@ class ArenaDecision:
     """A live viewer frame and the sampling identity of its acting player."""
 
     frame: dict[str, Any]
-    player_id: str
-    player_seed: int
-    ordinal: int
-
-    @property
-    def policy_seed(self) -> int:
-        return (self.player_seed + self.ordinal) % (2**63)
+    identity: DecisionIdentity
 
     def evidence(self, offer: dict[str, Any], elapsed: float) -> dict[str, Any]:
         return {
+            **self.identity.evidence(elapsed),
             **offer_evidence(self.frame, offer),
-            "revision": self.frame["revision"],
-            "player_id": self.player_id,
-            "player_seed": self.player_seed,
-            "player_decision_ordinal": self.ordinal,
-            "policy_rng_seed": self.policy_seed,
-            "latency_seconds": elapsed,
         }
 
 
@@ -191,9 +181,17 @@ def arena_decision(
     if frame["projection"]["opponent"].get("hand"):
         game["integrity"]["private_exposures"] += 1
         raise RuntimeError("viewer frame exposes a private hand")
-    player_id = game["seat_players"][int(raw.agent.player_index)]
+    actor = int(raw.agent.player_index)
+    player_id = game["seat_players"][actor]
     return ArenaDecision(
-        frame, player_id, game["player_seeds"][player_id], counts[player_id]
+        frame,
+        DecisionIdentity(
+            actor,
+            revision,
+            player_id,
+            game["player_seeds"][player_id],
+            counts[player_id],
+        ),
     )
 
 
@@ -318,12 +316,12 @@ def execute_game(
             actor = int(raw.agent.player_index)
             frame_started = time.monotonic()
             turn = arena_decision(game, raw, revision, decision_counts)
-            player_id = turn.player_id
+            player_id = turn.identity.player_id
             perf.record("frame_projection", frame_started)
             pre_digest = env._engine.state_digest()
             responsible = player_id
             send(("phase", player_id))
-            policy_seed = turn.policy_seed
+            policy_seed = turn.identity.policy_seed
             if agents is None and registrations[actor].runner_kind == "checkpoint":
                 in_child.seed(policy_seed)
             started = time.perf_counter()

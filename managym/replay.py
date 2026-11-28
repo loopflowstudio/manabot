@@ -148,24 +148,27 @@ class RecordWalker:
         self.game = record.games[0]
         if not self.game.players:
             raise ValueError("record setup unavailable")
-        self.env = managym.Env(
+        self._capture_cards = capture_cards
+        self.env, self.observation = self._open()
+        self.stop: ReplayStop | None = None
+        self._used = False
+
+    def _open(self) -> tuple[managym.Env, managym.Observation]:
+        env = managym.Env(
             seed=self.game.seed,
-            skip_trivial=record.skip_trivial,
+            skip_trivial=self.record.skip_trivial,
             # A rejected opening has no committed decisions. The diagnostic
             # failure replay runs its settling policies, while the prefix walker
             # retains only the deal before the failed settlement.
             player_policies=("agent", "agent")
-            if record.failed_opening(self.game)
-            else record.policies_for(self.game),
+            if self.record.failed_opening(self.game)
+            else self.record.policies_for(self.game),
             decision_memory=self.game.decision_memory,
             decision_memory_include_own=self.game.decision_memory_include_own,
         )
-        self._capture_cards = capture_cards
-        if capture_cards:
-            self.env.enable_exposure_capture()
-        self.observation = self.env.reset(self.game.setup())[0]
-        self.stop: ReplayStop | None = None
-        self._used = False
+        if self._capture_cards:
+            env.enable_exposure_capture()
+        return env, env.reset(self.game.setup())[0]
 
     def cards(self) -> CapturedCards:
         """Private facts strictly through the last verified commitment."""
@@ -201,11 +204,21 @@ class RecordWalker:
             count = max(0, count - 1)
         boundaries = interventions_by_offset(game)
         remaining_frames = set(game.object_candidate_frames)
+        actions = game.actions[:count]
+        # In an integer-only trajectory each checked post-state is the next
+        # decision's pre-state. Semantic and consumer paths may bind more state.
+        direct = (
+            apply is None
+            and not boundaries
+            and not remaining_frames
+            and all(isinstance(action, int) for action in actions)
+        )
 
         index = 0
+        unverified_step = False
         try:
             # The final boundary can contain interventions after the last action.
-            for index, action in enumerate(chain(game.actions[:count], (None,))):
+            for index, action in enumerate(chain(actions, (None,))):
                 operations = boundaries.get(index, ())
                 apply_boundary(self.env, operations, remaining_frames)
                 if operations:
@@ -215,7 +228,8 @@ class RecordWalker:
                 if action is None:
                     break
                 if (
-                    index < len(game.digests)
+                    (not direct or index == 0)
+                    and index < len(game.digests)
                     and self.env.state_digest() != game.digests[index]
                 ):
                     raise ValueError("pre-decision digest differs")
@@ -252,11 +266,6 @@ class RecordWalker:
                     frame,
                     tuple(operations),
                 )
-                # Check the transition on a search fork before committing it to
-                # the Env owning the retained card facts or consumer presentation.
-                # A divergent action must contribute to neither history nor rows.
-                target = self.env.clone_env()
-                decision.apply(target)
                 after = (
                     game.digests[index + 1]
                     if index + 1 < count and index + 1 < len(game.digests)
@@ -264,6 +273,18 @@ class RecordWalker:
                     if index + 1 == count and game.end is not None
                     else None
                 )
+                if direct:
+                    unverified_step = True
+                    self.observation = decision.apply(self.env)
+                    if after is not None and self.env.state_digest() != after:
+                        raise ValueError("transition digest differs")
+                    unverified_step = False
+                    yield decision
+                    continue
+                # On a semantic or consumer path, verify on a search fork
+                # before committing the transition to the live timeline.
+                target = self.env.clone_env()
+                decision.apply(target)
                 # Compare the consumer immediately after its action. The retained
                 # next digest includes any interventions before the next decision.
                 expected = target.state_digest() if apply is not None else None
@@ -290,7 +311,8 @@ class RecordWalker:
                 raise ValueError("snapshot object candidate frame missing")
             end = game.end
             if (
-                end is not None
+                (not direct or count == 0)
+                and end is not None
                 and end.digest is not None
                 and self.env.state_digest() != end.digest
             ):
@@ -313,6 +335,12 @@ class RecordWalker:
             SemanticContractError,
             managym.AgentError,
         ) as error:
+            if unverified_step:
+                # Restore the verified position and exposure on divergence.
+                self.env, self.observation = self._open()
+                for action in actions[:index]:
+                    assert isinstance(action, int)
+                    self.observation = self.env.step(action)[0]
             self.stop = ReplayStop("diverged", index, f"{error}; {self.builds}")
 
 

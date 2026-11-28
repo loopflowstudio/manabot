@@ -5,10 +5,9 @@ CSR `ObservationBatch` -> `Prepared` path. In each round, every active slot
 needing the same checkpoint is gathered into one pre-collated `Prepared` input
 for one awaited forward. The native engine settles built-in opponents between
 checkpoint choices, while registered code seats choose from detached native
-observations. Finished or natively-failed legs free their slot
-and backfill immediately via seeded `SlotLoad.fresh(..., seed=)`. Once all legs
-of a match finish, the match is replayed, card-evidenced, retained to disk and
-yielded as `(match, Result)`.
+observations. Finished or natively-failed legs free their slot for backfill via
+seeded `SlotLoad.fresh(..., seed=)`. Replay workers verify and retain each
+finished match while the runner continues stepping other matches.
 
 This module is Torch-free (`tests/test_package_boundaries.py`).
 """
@@ -18,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict, deque
 from collections.abc import AsyncGenerator, Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from itertools import islice
 import math
@@ -66,15 +66,13 @@ from manabot.policy.prepare import Prepared
 from manabot.policy.spans import BatchRow, ObservationSelection
 from manabot.sim.agent import GameChoice
 from manabot.sim.evaluation_records import (
+    DecisionIdentity,
     bind_record,
     decision_annotation,
     set_execution_limits,
 )
 from manabot.sim.native_game import (
-    ArenaDecision,
-    arena_decision,
     arena_source_sha256,
-    chosen_offer,
     game_runtime_identities,
     resolve_game_match,
 )
@@ -235,6 +233,8 @@ def admit_active_match(
     legs: deque[PendingLeg] = deque()
     for item in plan.work:
         game = item.game
+        # Vector capture has no viewer projection to audit.
+        del game["integrity"]["private_exposures"]
         registrations = item.registrations
         match_config = MatchConfig.model_validate(game["match_hypers"])
         require_open_decklists(match_config.decklists, registrations)
@@ -388,29 +388,29 @@ async def step_round(
     started = monotonic()
     active = [state is not None for state in states]
     actors = vector.current_agent_indices()
-    observations = vector.decision_observations(active)
-    turns: dict[int, ArenaDecision] = {}
+    turns: dict[int, DecisionIdentity] = {}
     groups: dict[str, list[tuple[SlotState, Sampler]]] = defaultdict(list)
-    code: list[tuple[SlotState, GameChoice, managym.Observation]] = []
+    code: dict[int, GameChoice] = {}
     for state in states:
         if state is None:
             continue
         slot = state.slot
-        raw = observations[slot]
-        assert raw is not None
-        if actors[slot] != int(raw.agent.player_index):
-            raise RuntimeError(
-                f"vector actor {actors[slot]} differs from observation actor {raw.agent.player_index}"
-            )
-        turn = arena_decision(
-            state.leg.game, raw, state.revision, state.decision_counts
+        actor = actors[slot]
+        assert actor in (0, 1)
+        game = state.leg.game
+        player_id = game["seat_players"][actor]
+        turns[slot] = DecisionIdentity(
+            actor,
+            state.revision,
+            player_id,
+            game["player_seeds"][player_id],
+            state.decision_counts[player_id],
         )
-        turns[slot] = turn
-        seat = state.leg.active_match.admitted.agents[turn.player_id]
+        seat = state.leg.active_match.admitted.agents[player_id]
         if isinstance(seat, Sampler):
             groups[seat.checkpoint_key].append((state, seat))
         else:
-            code.append((state, state.leg.code_choices[turn.player_id], raw))
+            code[slot] = state.leg.code_choices[player_id]
 
     chosen: dict[int, tuple[int, float]] = {}
     errors: dict[str, ForwardError] = {}
@@ -462,14 +462,25 @@ async def step_round(
         for state in states:
             if state is not None and state.leg.active_match.forward_error(errors):
                 active[state.slot] = False
-    for state, seat, raw in code:
-        if active[state.slot]:
-            chosen[state.slot] = choose_code_action(
-                seat,
-                CodeDecisionEnv(raw, vector, state.slot),
-                seed=turns[state.slot].policy_seed,
+    code_active = [on and slot in code for slot, on in enumerate(active)]
+    if any(code_active):
+        observations = vector.decision_observations(code_active)
+        for slot, raw in enumerate(observations):
+            if not code_active[slot]:
+                continue
+            assert raw is not None and int(raw.agent.player_index) == actors[slot]
+            action, elapsed = choose_code_action(
+                code[slot],
+                CodeDecisionEnv(raw, vector, slot),
+                seed=turns[slot].policy_seed,
                 space=space,
             )
+            if not 0 <= action < len(raw.action_space.actions):
+                state = states[slot]
+                assert state is not None
+                state.leg.game["integrity"]["illegal_actions"] += 1
+                raise RuntimeError(f"illegal offer {action}")
+            chosen[slot] = action, elapsed
     players = {slot: turn.player_id for slot, turn in turns.items() if active[slot]}
     if not players:
         return PlayedRound(players, 0.0, errors)
@@ -485,10 +496,7 @@ async def step_round(
         state = states[slot]
         assert state is not None
         actions[slot], elapsed = chosen[slot]
-        turn = turns[slot]
-        offer = chosen_offer(state.leg.game, turn, actions[slot])
-        # Replay derives the bound Command from the recorded offer and revision.
-        annotations[slot] = decision_annotation(turn.evidence(offer, elapsed))
+        annotations[slot] = decision_annotation(turns[slot].evidence(elapsed))
         if summaries is not None:
             count, kind = summaries[slot]
             state.cutoffs.record(
@@ -512,7 +520,7 @@ async def play_pairings(
 
     Every active slot needing the same checkpoint in a round is collated into
     one `Prepared` batch for one awaited forward. Finished or natively-failed
-    slots backfill immediately so no slot sits idle while legs are pending.
+    slots backfill while fewer than `slots` settled matches await replay.
     Admission, checkpoint forward and finalization errors yield `(match, exc)`
     for the affected matches while other slots continue.
     """
@@ -524,7 +532,9 @@ async def play_pairings(
     # A held deal owns its unseated legs until its last slot finishes or fails.
     held: dict[ActiveMatch, deque[PendingLeg]] = {}
     ready_errors: deque[tuple[Match, Exception]] = deque()
-    completed_matches: deque[ActiveMatch] = deque()
+    replay_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="eval-replay")
+    loop = asyncio.get_running_loop()
+    replays: dict[asyncio.Future[Result], Match] = {}
     current_space: ObservationSpace | None = None
     source_exhausted = False
     legs_per_match_hint = 4
@@ -607,7 +617,8 @@ async def play_pairings(
         slot_states[slot] = None
         if active_match.finished_games == len(active_match.plan.work):
             del held[active_match]
-            completed_matches.append(active_match)
+            future = loop.run_in_executor(replay_pool, finalize_match, active_match)
+            replays[future] = active_match.match
 
     def complete_failed_leg(slot_state: SlotState, info: dict[str, Any]) -> None:
         game = slot_state.leg.game
@@ -677,7 +688,9 @@ async def play_pairings(
 
     async def backfill_free_slots() -> None:
         assert vector is not None and current_space is not None
-        while free := [i for i, state in enumerate(slot_states) if state is None]:
+        while len(replays) < slots and (
+            free := [i for i, state in enumerate(slot_states) if state is None]
+        ):
             seated = seat_legs(free, await take_legs(len(free), current_space))
             if not seated:
                 break
@@ -693,27 +706,32 @@ async def play_pairings(
                 ],
                 isolated=True,
             )
-            if not settle_openings(seated) or ready_errors or completed_matches:
+            if not settle_openings(seated) or ready_errors:
                 break
 
     try:
         while True:
-            while completed_matches:
-                done = completed_matches.popleft()
-                try:
-                    result = finalize_match(done)
-                except Exception as exc:
-                    yield done.match, exc
-                else:
-                    yield done.match, result
             while ready_errors:
                 yield ready_errors.popleft()
+            for future in [future for future in replays if future.done()]:
+                match = replays.pop(future)
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    yield match, exc
+                else:
+                    yield match, result
 
             if vector is None:
+                if len(replays) >= slots:
+                    await asyncio.wait(replays, return_when=asyncio.FIRST_COMPLETED)
+                    continue
                 legs = await take_legs(slots, None)
                 if not legs:
-                    if source_exhausted and not ready_errors:
-                        break
+                    if not ready_errors and source_exhausted:
+                        if not replays:
+                            break
+                        await asyncio.wait(replays, return_when=asyncio.FIRST_COMPLETED)
                     continue
 
                 current_space = legs[0].active_match.space
@@ -740,7 +758,7 @@ async def play_pairings(
             assert state_buffers is not None and current_space is not None
             # Deliver failures before asking Etude for replacements.
             await backfill_free_slots()
-            if ready_errors or completed_matches:
+            if ready_errors:
                 continue
 
             # Check per-game command caps and active gameplay time before stepping.
@@ -838,5 +856,13 @@ async def play_pairings(
                     complete_leg(slot_state)
 
     finally:
-        if vector is not None:
-            vector.close()
+        try:
+            if vector is not None:
+                vector.close()
+        finally:
+            try:
+                # Collect errors even if the consumer closes before reading them.
+                if replays:
+                    await asyncio.gather(*replays, return_exceptions=True)
+            finally:
+                replay_pool.shutdown()

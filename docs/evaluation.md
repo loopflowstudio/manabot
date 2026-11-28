@@ -473,10 +473,13 @@ uv run --no-sync python -m experiments.eval_throughput \
 ```
 
 It prints a JSON summary with `games`, `mean_rows_per_forward`, `largest_stage`,
-and separate timings for main-loop stages and background replay. Each live
-decision round divides its elapsed time among the active slots. A game's budget
-and recorded execution time use its share. The Etude run deadline covers
-admission, replay and result delivery too.
+and separate timings for wall-clock stages and background replay. In vector
+runs, `background_replay_seconds` sums replay durations across workers, which
+can overlap each other and gameplay. The wall-clock `other_arena` stage
+includes any wait for replay. Each live decision round divides its elapsed
+time among the active slots. A game's budget and recorded execution time use
+its share. The Etude run deadline covers admission, replay and result delivery
+too.
 
 Vector games record compact decision annotations carrying only runner-owned
 facts: actor, revision, `player_id`, `player_seed`, `player_decision_ordinal`,

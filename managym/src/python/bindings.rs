@@ -4214,13 +4214,14 @@ impl PyEnv {
         py: Python<'_>,
         player_configs: Bound<'_, PyAny>,
     ) -> PyResult<(PyObservation, PyObject)> {
-        let mut env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-
         let configs = game_setup(&player_configs)?;
-        let (obs, info) = env.reset(configs).map_err(map_agent_err)?;
+        let (obs, info) = py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .reset(configs)
+                .map_err(map_agent_err)
+        })?;
 
         let py_dict = info_dict_to_pydict(py, &info);
         Ok((PyObservation::from(obs), py_dict.into_any().unbind()))
@@ -4308,13 +4309,13 @@ impl PyEnv {
         action: Option<i64>,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject)> {
         self.reject_guarded_mutation("Env.step(index)")?;
-        let mut env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-
-        let (obs, reward, terminated, truncated, info) =
-            env.step(action.unwrap_or(-1)).map_err(map_agent_err)?;
+        let (obs, reward, terminated, truncated, info) = py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .step(action.unwrap_or(-1))
+                .map_err(map_agent_err)
+        })?;
         let py_dict = info_dict_to_pydict(py, &info);
         Ok((
             PyObservation::from(obs),
@@ -4500,12 +4501,14 @@ impl PyEnv {
     }
 
     /// Canonical full-engine digest for exact differential assertions.
-    fn state_digest(&self) -> PyResult<String> {
-        let env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        env.state_digest().map_err(map_agent_err)
+    fn state_digest(&self, py: Python<'_>) -> PyResult<String> {
+        py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .state_digest()
+                .map_err(map_agent_err)
+        })
     }
 
     fn info(&self, py: Python<'_>) -> PyResult<PyObject> {

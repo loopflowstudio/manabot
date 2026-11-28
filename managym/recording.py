@@ -1945,6 +1945,17 @@ class RecordedVectorEnv(_Capture):
             on and self._selected(game)
             for on, game in zip(enabled, self.games, strict=True)
         ]
+        reducing = bool(self._reductions) and self._reduction.error is None
+        retained_annotations = (
+            [None] * len(self.games)
+            if annotations is None
+            else [
+                DecisionAnnotation.model_validate(annotation)
+                if annotation is not None and (reducing or selected_games[index])
+                else None
+                for index, annotation in enumerate(annotations)
+            ]
+        )
         if self._recording:
             self.native.record_games(selected_games)
         digests = (
@@ -1953,18 +1964,23 @@ class RecordedVectorEnv(_Capture):
             else [None] * len(self.games)
         )
         actors = self.native.current_agent_indices()
-        frames = self.native.semantic_decision_frames_json(active)
+        # Isolated native failures return the attempted frame in their receipt.
+        needs_frames = (
+            not isolated
+            or self._game_journal is not None
+            or any(
+                annotation is not None and annotation.probabilities is not None
+                for annotation in retained_annotations
+            )
+        )
+        frames = (
+            self.native.semantic_decision_frames_json(active)
+            if needs_frames
+            else [None] * len(self.games)
+        )
         summaries = (
             self.native.current_action_summaries() if self._action_cutoff else []
         )
-        hook_annotations: list[DecisionAnnotation | None] = []
-        if self._reductions and self._reduction.error is None:
-            hook_annotations = [
-                None
-                if annotation is None
-                else DecisionAnnotation.model_validate(annotation)
-                for annotation in (annotations or [None] * len(self.games))
-            ]
         hook_observations = (
             self.native.decision_observations(
                 [
@@ -1972,7 +1988,7 @@ class RecordedVectorEnv(_Capture):
                     for on, active in zip(enabled, self._analysis_active, strict=True)
                 ]
             )
-            if hook_annotations
+            if reducing
             else []
         )
         attempted = []
@@ -1989,12 +2005,7 @@ class RecordedVectorEnv(_Capture):
                     digest = digests[index]
                     assert digest is not None
                     game.digests.append(digest)
-                    annotation = annotations[index] if annotations is not None else None
-                    retained = (
-                        None
-                        if annotation is None
-                        else DecisionAnnotation.model_validate(annotation)
-                    )
+                    retained = retained_annotations[index]
                     if retained is not None:
                         if retained.probabilities is not None and frame is not None:
                             offers = json.loads(frame)["offers"]
@@ -2059,6 +2070,8 @@ class RecordedVectorEnv(_Capture):
             if not on:
                 continue
             if infos and infos[index].get("game_error"):
+                if not needs_frames:
+                    game.frame = infos[index].get("game_error_frame")
                 if self._reductions:
                     self._analysis_active[index] = False
                 self._write_game(
@@ -2089,7 +2102,7 @@ class RecordedVectorEnv(_Capture):
                             self._analysis_indices[index],
                             observation,
                             int(actions[index]),
-                            hook_annotations[index],
+                            retained_annotations[index],
                         )
                     )
                     self._analysis_indices[index] += 1

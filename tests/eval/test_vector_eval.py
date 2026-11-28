@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Iterator, Sequence
+from copy import deepcopy
 import json
 from pathlib import Path
+from threading import Event
 from typing import Any, Literal
 
 from etude.checkpoints import CheckpointRef
@@ -38,14 +40,17 @@ from manabot.eval.evaluate import registration_source_paths, source_digest
 from manabot.eval.pairing import PairingSpec, admit_pairing, play_pairing
 from manabot.eval.vector import LocalMatches, play_pairings
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.infra.identity import file_sha256
+from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.policy.prepare import Prepared
+from manabot.sim.frames import build_viewer_frame
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 from manabot.sim.replay import read_trace, replay_failure, replay_game
 import managym
+from managym.experience import UNVERSIONED_CONTENT_HASH
 from managym.recording import GameRecord, RecordedVectorEnv, read_record
-from managym.replay import replay_failure_inputs
+from managym.replay import replay_failure_inputs, walk
 
 
 @pytest.fixture
@@ -140,9 +145,19 @@ def play_local(
 
 
 def _canonical_decisions(game: dict[str, Any]) -> list[dict[str, Any]]:
-    """Deterministic per-decision fields independent of wall-clock latency."""
+    """Deterministic evidence shared by the scalar and vector runners."""
     return [
-        {k: v for k, v in decision.items() if k != "latency_seconds"}
+        {
+            k: v
+            for k, v in decision.items()
+            if k
+            not in {
+                "latency_seconds",
+                "frame_sha256",
+                "chosen_offer",
+                "action_space_kind",
+            }
+        }
         for decision in game["decisions"]
     ]
 
@@ -363,6 +378,8 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         elapsed_per_round = 0.1
         previous_forwards = 0
         original_step = RecordedVectorEnv.step_isolated_into_buffers
+        replay_started = Event()
+        stepped_during_replay = Event()
 
         def spy_step(
             self: RecordedVectorEnv,
@@ -385,22 +402,33 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
                 recover_capacity,
                 annotations=annotations,
             )
+            if replay_started.is_set():
+                stepped_during_replay.set()
 
         monkeypatch.setattr(RecordedVectorEnv, "step_isolated_into_buffers", spy_step)
-        finalize = vector_runner.finalize_match
-        replay_pause = 0.0
-        steps_at_settlement: list[int] = []
 
-        def delayed_finalize(active_match: vector_runner.ActiveMatch) -> Result:
-            nonlocal replay_pause
-            replay_pause += 90.0
-            steps_at_settlement.append(len(observed_active_counts))
-            return finalize(active_match)
+        def unexpected_projection(
+            self: RecordedVectorEnv, active: list[bool]
+        ) -> list[managym.Observation | None]:
+            pytest.fail(
+                "checkpoint and native seats must not request detached observations"
+            )
 
-        # The first completed deal's replay takes longer than the game budget.
-        # Other live legs should continue once the coordinator resumes stepping.
-        monkeypatch.setattr(vector_runner, "monotonic", lambda: clock + replay_pause)
-        monkeypatch.setattr(vector_runner, "finalize_match", delayed_finalize)
+        monkeypatch.setattr(
+            RecordedVectorEnv,
+            "decision_observations",
+            unexpected_projection,
+            raising=False,
+        )
+        verify = vector_runner.finalize_settled_cell
+
+        def overlapping_replay(*args: Any, **kwargs: Any) -> Any:
+            replay_started.set()
+            assert stepped_during_replay.wait(timeout=10), "stepping waited for replay"
+            return verify(*args, **kwargs)
+
+        monkeypatch.setattr(vector_runner, "monotonic", lambda: clock)
+        monkeypatch.setattr(vector_runner, "finalize_settled_cell", overlapping_replay)
         reads = 0
         read_checkpoint = agent_module.read_checkpoint_inputs
 
@@ -438,7 +466,7 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
             output_dir=vector_root,
         )
         assert len(yielded) == 2
-        assert steps_at_settlement[0] < len(observed_active_counts)
+        assert stepped_during_replay.is_set()
 
         vector_results: dict[str, Result] = {}
         for match, outcome in yielded:
@@ -490,6 +518,35 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
             assert native["end"] == scalar["end"]
             assert v_game["winner"] == s_game["winner"]
             assert all(d["player_id"] == "candidate" for d in v_game["decisions"])
+            expected_fields = {
+                "actor",
+                "revision",
+                "player_id",
+                "player_seed",
+                "player_decision_ordinal",
+                "policy_rng_seed",
+                "latency_seconds",
+            }
+            for index, decision in zip(
+                indices, walk(GameRecord.model_validate(v_game["record"])), strict=True
+            ):
+                assert decision.annotation is not None
+                assert decision.annotation.extra["evaluation"].keys() == expected_fields
+                assert (
+                    v_game["decisions"][decision.index]["command"]["offer_id"]
+                    == decision.chosen
+                )
+                frame = build_viewer_frame(
+                    decision.observation,
+                    match_id=s_game["match_id"],
+                    revision=index,
+                    content_hash=UNVERSIONED_CONTENT_HASH,
+                    asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
+                )
+                assert (
+                    canonical_sha256(frame)
+                    == s_game["decisions"][index]["frame_sha256"]
+                )
             expected_policies = [
                 "agent" if player == "candidate" else "heuristic:64"
                 for player in v_game["seat_players"]
@@ -513,6 +570,13 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
     assert charged_seconds == pytest.approx(
         len(observed_active_counts) * elapsed_per_round
     )
+
+    altered = deepcopy(vector_games[0]["record"])
+    first = altered["games"][0]["annotations"][0]["extra"]["evaluation"]
+    first["actor"] = 1 - first["actor"]
+    first["frame_sha256"] = "0" * 64
+    receipt, _ = replay_game(altered)
+    assert receipt.actor_mismatches == receipt.frame_mismatches == 1
 
     with card_db("vector-parity", track_vector) as db:
         data = card_data(db, CardSelection(experiment="vector-parity"))
@@ -751,6 +815,7 @@ def test_vector_runner_isolates_native_crash_and_keeps_other_legs_valid(
     )
     failed_leg = next(g for g in crashed_games if g["leg"] == 1)
     assert failed_leg["failure"] is not None
+    assert failed_leg["record"]["games"][0]["frame"] is not None
     assert (
         vector_root
         / "arena"
@@ -875,6 +940,71 @@ def test_vector_runner_isolates_admission_and_checkpoint_failures(
             slots=4,
             output_dir=tmp_path / "explode",
         )
+
+
+def test_vector_runner_yields_replay_error_and_joins_running_replay_on_close(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cpu_eval: None
+) -> None:
+    checkpoint = _fixture_checkpoint(tmp_path, 57, ObservationSpace())
+    heuristic = Code(name="heuristic")
+    matches = [
+        Match(
+            players=(checkpoint_player(checkpoint), heuristic),
+            games=4,
+            config={"deal": i},
+        )
+        for i in (1, 2)
+    ]
+    matchup = _allies_lessons_matchup()
+    error = OSError("cannot retain replay evidence")
+    release = Event()
+    finished = Event()
+    finalize = vector_runner.finalize_match
+
+    def spec_for(match: Match) -> PairingSpec:
+        return PairingSpec(
+            matchup=matchup,
+            deal=int(match.config["deal"]),
+            matchup_mode="cross",
+            game_seconds=60,
+            max_commands=1,
+            arena="fixture-replay-close",
+        )
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        replaying = asyncio.Event()
+
+        def finalize_one(active_match: vector_runner.ActiveMatch) -> Result:
+            if active_match.match == matches[0]:
+                raise error
+            loop.call_soon_threadsafe(replaying.set)
+            assert release.wait(timeout=10), "replay was never released"
+            result = finalize(active_match)
+            finished.set()
+            return result
+
+        monkeypatch.setattr(vector_runner, "finalize_match", finalize_one)
+        source = LocalMatches(
+            [(match, [uniform_logits, build(heuristic, {})]) for match in matches]
+        )
+        stream = play_pairings(source, spec_for, slots=8, output_dir=tmp_path)
+        closing: asyncio.Future[None] | None = None
+        try:
+            assert await anext(stream) == (matches[0], error)
+            await asyncio.wait_for(replaying.wait(), timeout=10)
+            closing = asyncio.ensure_future(stream.aclose())
+            await asyncio.sleep(0)
+            assert not closing.done()
+        finally:
+            release.set()
+            if closing is None:
+                await stream.aclose()
+            else:
+                await closing
+
+    asyncio.run(run())
+    assert finished.is_set()
 
 
 def test_vector_runner_bounds_deferred_layouts_before_play(

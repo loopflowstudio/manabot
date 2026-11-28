@@ -248,30 +248,37 @@ def _replay_record(
         reduction.start(walker.game.players)
     for decision in walker:
         expected = game["decisions"][decision.index]
-        frame = build_viewer_frame(
-            decision.observation,
-            match_id=game["match_id"],
-            revision=decision.index,
-            content_hash=UNVERSIONED_CONTENT_HASH,
-            asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
-        )
-        if canonical_sha256(frame) != expected["frame_sha256"]:
-            counts["frame_mismatches"] += 1
-        if frame["projection"]["opponent"].get("hand"):
-            counts["private_exposures"] += 1
-        if build_command(frame, decision.chosen) != expected["command"]:
-            counts["command_mismatches"] += 1
+        if {"frame_sha256", "chosen_offer", "action_space_kind"} & expected.keys():
+            frame = build_viewer_frame(
+                decision.observation,
+                match_id=game["match_id"],
+                revision=decision.index,
+                content_hash=UNVERSIONED_CONTENT_HASH,
+                asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
+            )
+            if (
+                "frame_sha256" in expected
+                and canonical_sha256(frame) != expected["frame_sha256"]
+            ):
+                counts["frame_mismatches"] += 1
+            if frame["projection"]["opponent"].get("hand"):
+                counts["private_exposures"] += 1
+            if build_command(frame, decision.chosen) != expected["command"]:
+                counts["command_mismatches"] += 1
+            if (
+                "chosen_offer" in expected
+                and frame["offers"][decision.chosen] != expected["chosen_offer"]
+            ) or (
+                "action_space_kind" in expected
+                and frame["action_space"] != expected["action_space_kind"]
+            ):
+                counts["offer_mismatches"] += 1
         actor = int(decision.observation.agent.player_index)
         if (
             actor != expected["actor"]
             or game["seat_players"][actor] != expected["player_id"]
         ):
             counts["actor_mismatches"] += 1
-        if (
-            frame["offers"][decision.chosen] != expected["chosen_offer"]
-            or frame["action_space"] != expected["action_space_kind"]
-        ):
-            counts["offer_mismatches"] += 1
         counts["decisions"] += 1
         if reduction is not None:
             reduction.decision(decision)
