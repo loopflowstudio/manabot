@@ -94,8 +94,10 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
   pass prints "nothing to play" for every stored tournament.
   `tournament_conflict` means an environment identity moved (compare
   `stored_runs(...).tournaments[name].tournament.environment` with the
-  declaration's). Check `tla_trophies_colab`, `tla_trophies_floor` and
-  `tla_frontier_snapshots`. `tla_trophies` already conflicts on `main`.
+  declaration's). Check `tla_trophies_floor`, `tla_frontier_snapshots` and
+  `experiments/tla_trophies_colab.py` under its stored experiment name
+  `tla_trophies_colab_500k_v2` (about 129 tournaments, all "nothing to
+  play"); the file's own name has no stored runs and plans 64 new matches. `tla_trophies` already conflicts on `main`.
 - To verify live resume, run a named `Benchmark` with one
   `CheckpointSlot` seating through `uv run --no-sync etude eval FILE --source DIR`.
   Add a distinct checkpoint to the same declaration and rerun. Expect one new

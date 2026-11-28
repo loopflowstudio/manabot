@@ -150,13 +150,15 @@ def main() -> None:
     parser.add_argument("--runner", choices=("scalar", "vector"), required=True)
     parser.add_argument("--precision", choices=("float32", "bf16"), default="float32")
     parser.add_argument("--slots", type=int, default=64, help="vector slots")
-    parser.add_argument("--deals", type=int, default=DEALS, choices=range(1, DEALS + 1))
+    parser.add_argument("--deals", type=int, default=DEALS, help=f"1 to {DEALS}")
     policy = parser.add_mutually_exclusive_group()
     policy.add_argument("--checkpoint", type=Path, help="local v11 policy")
     policy.add_argument("--random-width", type=int, choices=(160, 384), default=384)
     args = parser.parse_args()
     if args.slots < 1:
         parser.error("--slots must be positive")
+    if not 1 <= args.deals <= DEALS:
+        parser.error(f"--deals must be between 1 and {DEALS}")
     if not device_available(args.device):
         parser.error(f"--device {args.device} is unavailable on this host")
     if args.checkpoint is not None and not args.checkpoint.is_file():
