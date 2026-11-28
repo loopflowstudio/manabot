@@ -1250,6 +1250,13 @@ impl<'a> ReferenceCensus<'a> {
                 self.walk_effect_frame(frame);
             }
             FrameCompletion::Decision(caller) => self.walk_suspended(caller, false),
+            FrameCompletion::ManaOutput(output) => {
+                self.mark_opt_object(output.source);
+                self.walk_effect_frame(&output.caller);
+                if let Some(resume) = &output.resume {
+                    self.walk_decision(resume, false);
+                }
+            }
             FrameCompletion::Spell { object, attach_to } => {
                 self.mark_object(*object);
                 self.mark_opt_object(*attach_to);
@@ -1511,11 +1518,7 @@ impl<'a> ReferenceCensus<'a> {
                 }
             }
             Decision::ManaUpfront {
-                player: _,
-                permanent,
-                ability_index: _,
-                tap_remaining: _,
-                resume,
+                permanent, resume, ..
             } => {
                 self.mark_permanent(*permanent);
                 if let Some(resume) = resume.as_deref() {
@@ -1535,6 +1538,7 @@ impl<'a> ReferenceCensus<'a> {
                         tapped,
                         produced: _,
                         pending,
+                        commit_start: _,
                     } => {
                         self.mark_object(*source);
                         self.mark_object(*tapped);

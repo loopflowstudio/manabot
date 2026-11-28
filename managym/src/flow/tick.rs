@@ -52,20 +52,20 @@ impl Game {
         if let Some(choice) = exposure {
             self.commit_capture_choice(choice);
         }
-        Ok(self.finish_action_step())
+        self.finish_action_step()
     }
 
     /// Finish one externally committed action after its complete declaration
     /// has been applied. Structured commands reuse this boundary so an atomic
     /// cast-plus-target has the same SBA, priority, tracking, and consistency
     /// behavior as the legacy positional path.
-    pub(crate) fn finish_action_step(&mut self) -> bool {
+    pub(crate) fn finish_action_step(&mut self) -> Result<bool, AgentError> {
         self.state.priority_mut().sba_done = false;
 
-        let game_over = self.tick();
+        let game_over = self.tick()?;
         self.assert_stack_consistent();
 
-        game_over
+        Ok(game_over)
     }
 
     /// Fold indistinguishable object offers and publish the resulting external
@@ -105,30 +105,36 @@ impl Game {
         });
     }
 
-    pub fn play(&mut self) {
+    pub fn play(&mut self) -> Result<(), AgentError> {
         while !self.is_game_over() {
-            let _ = self.step(0);
+            self.step(0)?;
         }
+        Ok(())
     }
 
     pub fn drain_events(&mut self) -> Vec<GameEvent> {
         self.state.events_mut().take()
     }
 
-    pub(crate) fn tick(&mut self) -> bool {
+    pub(crate) fn tick(&mut self) -> Result<bool, AgentError> {
         loop {
             let action_space = self.opening_actions().or_else(|| self.turn_tick());
             if self.is_game_over() {
                 self.finish_combat_capture();
                 self.publish_folded_action_space(ActionSpace::game_over(), None);
-                return true;
+                return Ok(true);
             }
 
             if let Some(space) = action_space {
                 let (space, aliases) = self.fold_action_space(space);
-                if let Some(action) = self.automatic_payment_action(&space) {
-                    self.execute_action(&action)
-                        .expect("automatic payment witness executes");
+                if space.actions.is_empty() {
+                    return Err(AgentError(format!(
+                        "empty non-terminal action space: {:?}",
+                        space.kind
+                    )));
+                }
+                if let Some(action) = self.automatic_payment_action(&space)? {
+                    self.execute_action(&action)?;
                     self.skip_trivial_count += 1;
                     continue;
                 }
@@ -138,15 +144,10 @@ impl Game {
                         self.state.priority_mut().clear_loop_watch();
                     }
                     self.publish_folded_action_space(space, aliases);
-                    return false;
+                    return Ok(false);
                 }
+                self.execute_action(&space.actions[0])?;
                 self.skip_trivial_count += 1;
-                if let Some(action) = space.actions.first() {
-                    if self.execute_action(action).is_err() {
-                        return true;
-                    }
-                }
-                continue;
             }
         }
     }

@@ -146,6 +146,33 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   activating a waterbend ability is named by the payment, and a spell on the
   stack names its target. To explain one, cast Bolt on an `env.clone_env()` at
   each step and watch when the copy stops sharing a target offer's aliases.
+- Manual mana payment (`mana_payment=("manual", "manual")`): a fresh
+  `uv venv --python 3.13 .runs/venv`, `uv pip install maturin numpy`, then a
+  debug `maturin build -m managym/Cargo.toml -o .runs/wheels` with
+  `CARGO_TARGET_DIR=.runs/target` (about a minute warm) installed into that
+  venv; run scripts from `.runs/` with `-I` so the checkout's `managym/` (no
+  `.so`) does not shadow the wheel. Build constructed positions as
+  `scratch/repro_mana_payment.py` does and walk every payment order on
+  `env.clone_env()` children until `Priority` with a stack object or game over.
+  Space kinds print as `ActionSpaceEnum.Priority` / `PayOrNot` / `Modal`
+  (CamelCase): an upper-case comparison never matches and the walk plays the
+  whole game. With skipping on, a finished payment can run through forced
+  passes into the opponent's turn, so read the payer's result through
+  `env.observation_for_player(0)`. For collection, `VectorEnv` with
+  `set_observation_layout({"rewards", "terminated", "truncated"} buffers,
+  managym.ObservationLayout())`, `reset_all_into_buffers(setup)`, random
+  actions from `current_action_summaries()`, `step_isolated_into_buffers`,
+  slot errors from `get_last_info()[i]["game_error_class"]`, and
+  `load_slots_into_buffers([SlotLoad.fresh(i)])` for finished or errored
+  slots (plain `VectorEnv.step` does not reset and raises on a terminal slot).
+  Run it in a child process whose parent `sample`s and kills it if no step
+  finishes within a minute. The authored `ur-lessons-vs-gw-allies` decks with two
+  basics swapped for Tarnished Citadel, Sunbaked Canyon, Fabled Passage and
+  Airship Engine Room or Treetop Village, plus Heartbeat of Spring and The
+  Great Henge, gave about 30 games a minute at 32 slots in debug.
+  Snapshots from the 0.2.6 wheel are refused with `card_digest mismatch` on
+  any later main (card definitions moved); a cross-version replay check needs
+  a replay written by the base revision.
 - Counterfactual state edits (`GameStateEdit`, `Env.edit_game_state`,
   `RestoreOptions(game_state_edits=)`): play an authored game
   (`authored_deck_setup("elemental-world-v2", "elemental_gr")` vs `_gw`, seed 7,

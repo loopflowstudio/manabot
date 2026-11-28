@@ -5703,7 +5703,7 @@ fn prepared_seed_sutures() -> (Game, [ObjectId; 2], [ObjectId; 2]) {
     let id = game.state.id_gen.next_id();
     let unrelated = game.create_spell_copy(game.state[sources[0]].clone(), id, player);
     let unrelated = game.move_object(unrelated, ZoneType::Exile);
-    game.finish_action_step();
+    game.finish_action_step().unwrap();
     assert_eq!(game.state.zones.zone_of(unrelated), None);
     let copies = sources.map(|source| {
         let copy = game.prepared_copy(source).unwrap();
@@ -5896,7 +5896,7 @@ fn transferred_seed_suture_keeps_owner_and_follows_source_controller() {
         crate::state::effect::Modification::Control,
         crate::state::effect::EffectDuration::Indefinite,
     );
-    game.finish_action_step();
+    game.finish_action_step().unwrap();
     assert!(cast_offer(&game, copies[0]).is_none());
     assert!(cast_offer(&game, copies[1]).is_some());
     assert!(game.live_grants(owner, fixed_spell).next().is_none());
@@ -5907,7 +5907,7 @@ fn transferred_seed_suture_keeps_owner_and_follows_source_controller() {
     game.state.players[owner.0].mana_pool = Mana::parse("UU").into();
     game.scenario_force_card_in_hand(owner, "Counterspell")
         .unwrap();
-    game.finish_action_step();
+    game.finish_action_step().unwrap();
     assert!(game.state.stack_objects.is_empty());
     assert!(game.live_grants(caster, fixed_spell).next().is_none());
     assert!(cast_offer(&game, copies[1]).is_none());
@@ -5971,7 +5971,7 @@ fn returning_prepared_angel_rejects_departed_object_at_current_revision() {
     game.scenario_force_card_in_hand(player, "Lightning Bolt")
         .unwrap();
     game.state.players[player.0].mana_pool = crate::state::mana::Mana::parse("WR").into();
-    game.finish_action_step();
+    game.finish_action_step().unwrap();
     let address = |game: &Game, object| {
         game.semantic_decision_frame()
             .unwrap()
@@ -5985,7 +5985,7 @@ fn returning_prepared_angel_rejects_departed_object_at_current_revision() {
     let departed = address(&game, sources[0]);
     let exiled = game.move_object(sources[0], ZoneType::Exile);
     let returned = game.move_object(exiled, ZoneType::Battlefield);
-    game.finish_action_step();
+    game.finish_action_step().unwrap();
     assert_ne!(sources[0], returned);
     assert!(cast_offer(&game, copies[0]).is_none());
     let fresh = game
