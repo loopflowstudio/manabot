@@ -1,4 +1,6 @@
 //! Constructed positions for manual mana activations, their callers and their costs.
+mod coupled_boards;
+
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
@@ -77,7 +79,11 @@ fn step_action(game: &mut Game, action: Action) -> Result<bool, AgentError> {
     game.step(action_index(game, action))
 }
 
-fn cast_only_card(game: &mut Game, player: PlayerId, name: &str) {
+fn only_card_in_main(
+    game: &mut Game,
+    player: PlayerId,
+    name: &str,
+) -> crate::state::game_object::ObjectId {
     game.scenario_clear_hand(player);
     game.scenario_force_card_in_hand(player, name).unwrap();
     let spell = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
@@ -90,6 +96,11 @@ fn cast_only_card(game: &mut Game, player: PlayerId, name: &str) {
         step_action(game, Action::PassPriority { player: holder }).unwrap();
     }
     assert_eq!(game.state.turn.current_step_kind(), StepKind::Main);
+    spell
+}
+
+fn cast_only_card(game: &mut Game, player: PlayerId, name: &str) {
+    let spell = only_card_in_main(game, player, name);
     let cast = game
         .action_space()
         .unwrap()
@@ -425,6 +436,34 @@ fn coupled_payment_memoizes_citadel_orders() {
     assert_eq!(cache.coupled_searches, 1);
     assert!(cache.coupled_states > 0);
     assert!(cache.coupled_memo_hits > 0);
+}
+
+#[test]
+fn coupled_payment_bounds_rejection_with_ten_forests() {
+    let player = PlayerId(0);
+    let mut game = payment_game(
+        351,
+        [
+            ("Forest", 36),
+            ("Tarnished Citadel", 2),
+            ("Angel of Vitality", 1),
+            ("Raucous Audience", 1),
+        ],
+    );
+    game.keep_opening_hands();
+    game.scenario_set_life(player, 28);
+    for name in ["Forest"; 10].into_iter().chain([
+        "Tarnished Citadel",
+        "Tarnished Citadel",
+        "Angel of Vitality",
+        "Raucous Audience",
+    ]) {
+        game.scenario_force_battlefield(player, name, true).unwrap();
+    }
+    assert!(!game.can_pay_with_mana_abilities(player, &ManaCost::parse("15"), None));
+    let cache = game.payment_cache.borrow();
+    assert_eq!(cache.coupled_searches, 1);
+    assert_eq!(cache.coupled_states, 207);
 }
 
 #[test]

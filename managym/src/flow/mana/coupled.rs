@@ -25,7 +25,6 @@ pub(super) enum PaymentCandidate {
     CountedTap(PermanentId),
     HelpTap(PermanentId),
     Mode(usize),
-    UpfrontFee,
     Spend(ManaSpendChoice),
 }
 
@@ -212,11 +211,26 @@ impl<'a> CoupledPayment<'a> {
             *current = ManaPool::default();
             current.add(&pool, None);
         }
+        let automatic_prefix = policy == SourcePolicy::AutomaticPrefix;
         let mut search = CoupledSearch {
             payment: self,
-            policy,
+            policy: if automatic_prefix {
+                SourcePolicy::All
+            } else {
+                policy
+            },
+            prefix_taps: None,
             failed: FastHashSet::default(),
         };
+        if automatic_prefix {
+            // A tap can change later outputs, so the frozen supply cannot
+            // bound the shortfall. Try the fewest exact taps before the fee.
+            let taps = fork.iter_battlefield_permanents(self.player).count();
+            return (0..=taps).find_map(|budget| {
+                search.prefix_taps = Some(budget);
+                search.run(fork.clone(), obligations.clone(), delve, None)
+            });
+        }
         search.run(fork, obligations, delve, candidate)
     }
 }
@@ -237,10 +251,17 @@ struct CoupledMemoKey {
     obligations: Vec<Obligation>,
     continuation: Option<Box<SuspendedResolution>>,
     delve: bool,
+    prefix_taps: Option<usize>,
 }
 
 impl CoupledMemoKey {
-    fn new(game: &Game, player: PlayerId, obligations: &[Obligation], delve: bool) -> Self {
+    fn new(
+        game: &Game,
+        player: PlayerId,
+        obligations: &[Obligation],
+        delve: bool,
+        prefix_taps: Option<usize>,
+    ) -> Self {
         let state = &game.state;
         let zones = [ZoneType::Graveyard, ZoneType::Exile].map(|zone| {
             [PlayerId(0), PlayerId(1)].map(|seat| {
@@ -273,6 +294,7 @@ impl CoupledMemoKey {
             obligations: obligations.to_vec(),
             continuation: state.suspended_decision.clone().map(Box::new),
             delve,
+            prefix_taps,
         }
     }
 }
@@ -299,12 +321,16 @@ impl std::hash::Hash for CoupledMemoKey {
         self.pool.hash(hash);
         self.obligations.hash(hash);
         self.delve.hash(hash);
+        self.prefix_taps.hash(hash);
     }
 }
 
 struct CoupledSearch<'a, 'game> {
     payment: &'a CoupledPayment<'game>,
     policy: SourcePolicy,
+    /// Remaining exact taps before the initial fee. Its callers may use
+    /// any legal production once that fee is spent.
+    prefix_taps: Option<usize>,
     failed: FastHashSet<CoupledMemoKey>,
 }
 
@@ -368,10 +394,6 @@ impl CoupledSearch<'_, '_> {
                         _ => return None,
                     }
                 }
-                PaymentCandidate::UpfrontFee => {
-                    let caller = game.state.suspended_decision_mut().take()?;
-                    return self.fund_upfront(game, caller, obligations, delve);
-                }
                 PaymentCandidate::Spend(choice) => {
                     let caller = game.state.suspended_decision_mut().take()?;
                     let Decision::ManaSpend {
@@ -411,7 +433,13 @@ impl CoupledSearch<'_, '_> {
         ) {
             *game.state.suspended_decision_mut() = None;
         }
-        let key = CoupledMemoKey::new(&game, self.payment.player, &obligations, delve.is_some());
+        let key = CoupledMemoKey::new(
+            &game,
+            self.payment.player,
+            &obligations,
+            delve.is_some(),
+            self.prefix_taps,
+        );
         if self.failed.contains(&key) {
             #[cfg(test)]
             {
@@ -453,6 +481,17 @@ impl CoupledSearch<'_, '_> {
         let mut funding = false;
         let mut fee_purpose: &[SpendingContext] = &[];
         if let Some(suspended) = &game.state.suspended_decision {
+            if self.prefix_taps.is_some()
+                && !matches!(
+                    suspended.decision,
+                    Decision::ManaUpfront {
+                        tap_remaining: 0,
+                        ..
+                    }
+                )
+            {
+                return None;
+            }
             match &suspended.decision {
                 Decision::ManaChoice { choices, .. } => {
                     if self.policy == SourcePolicy::FixedOnly {
@@ -523,7 +562,7 @@ impl CoupledSearch<'_, '_> {
                             return Some(path);
                         }
                     }
-                    if activation.mana_cost.mana_value == 0 {
+                    if activation.mana_cost.mana_value == 0 || self.prefix_taps == Some(0) {
                         return None;
                     }
                     fee_purpose = std::slice::from_ref(&activation.mana_cost.purpose);
@@ -594,7 +633,8 @@ impl CoupledSearch<'_, '_> {
         let tap_sets =
             model.tap_candidate_sets(concrete.iter().filter_map(Obligation::tap_candidates));
         let mut invariant_tried = Vec::new();
-        let all_sources = self.policy == SourcePolicy::All;
+        let prefix_taps = self.prefix_taps;
+        let all_sources = self.policy == SourcePolicy::All && prefix_taps.is_none();
         let production_allowed = funding
             || matches!(concrete.first(), Some(Obligation::Pay { cost, .. }) if cost.mana_value > 0)
             || obligations.is_empty() && delve.is_some_and(|delve| delve.cost.mana_value > 0);
@@ -641,12 +681,15 @@ impl CoupledSearch<'_, '_> {
                 if role == PaymentCoupling::Invariant && !funding {
                     continue;
                 }
-                if let Some(path) = self.run(
+                self.prefix_taps = prefix_taps.map(|budget| budget - 1);
+                let path = self.run(
                     game.clone(),
                     obligations.clone(),
                     delve,
                     Some(PaymentCandidate::Produce(step.clone())),
-                ) {
+                );
+                self.prefix_taps = prefix_taps;
+                if let Some(path) = path {
                     return Some(prepend(step, path));
                 }
             }
@@ -774,6 +817,7 @@ impl CoupledSearch<'_, '_> {
         let life_cost = activation.life_cost;
         let mut game = game;
         *game.state.suspended_decision_mut() = None;
+        let prefix_taps = self.prefix_taps.take();
         let path = self.spend(
             game,
             activation.mana_cost.clone(),
@@ -784,8 +828,9 @@ impl CoupledSearch<'_, '_> {
                 game.complete_mana_upfront(caller.clone());
                 search.visit(game, obligations.clone(), delve)
             },
-        )?;
-        Some(prepend(PaymentStep::Spend, path))
+        );
+        self.prefix_taps = prefix_taps;
+        path.map(|path| prepend(PaymentStep::Spend, path))
     }
 
     fn spend<F>(&mut self, game: Game, cost: ManaCost, finish: &mut F) -> Option<Vec<PaymentStep>>

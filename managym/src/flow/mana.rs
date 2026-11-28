@@ -4739,6 +4739,27 @@ impl Game {
         self.mana_choice_payable(player, &model, choices, mode)
     }
 
+    /// An already-open replacement order needs a native transition even if
+    /// the activation that opened it has spent its source.
+    pub(super) fn replacement_order_payable(&self, player: PlayerId, mode: usize) -> bool {
+        let obligations = self.payment_obligations(player);
+        if obligations.is_empty() {
+            return true;
+        }
+        let model = self.payment_model(player, None);
+        model
+            .coupled
+            .as_ref()
+            .expect("live payment model")
+            .plan(
+                self.pooled_mana(player),
+                obligations,
+                SourcePolicy::All,
+                Some(PaymentCandidate::Mode(mode)),
+            )
+            .is_some()
+    }
+
     fn mana_choice_payable(
         &self,
         player: PlayerId,
@@ -5202,20 +5223,7 @@ impl Game {
         let model = self.payment_model(player, None);
         let pool = self.pooled_mana(player);
         let obligations = self.payment_obligations(player);
-        let path = if let Some(coupled) = model.coupled() {
-            if !matches!(obligations.first(), Some(Obligation::Pay { cost, .. }) if pool.can_pay(cost))
-            {
-                return None;
-            }
-            coupled.plan(
-                pool,
-                obligations,
-                SourcePolicy::All,
-                Some(PaymentCandidate::UpfrontFee),
-            )?
-        } else {
-            model.plan(pool, obligations, SourcePolicy::AutomaticPrefix)?
-        };
+        let path = model.plan(pool, obligations, SourcePolicy::AutomaticPrefix)?;
         path.iter()
             .take_while(|step| !matches!(step, PaymentStep::Spend))
             .all(|step| matches!(step, PaymentStep::Fixed(_)))

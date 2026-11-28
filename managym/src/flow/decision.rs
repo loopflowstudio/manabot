@@ -1950,6 +1950,7 @@ impl Game {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
                 actions: (0..candidates.len())
+                    .filter(|&mode| self.replacement_order_payable(*player, mode))
                     .map(|mode| Action::ChooseMode {
                         player: *player,
                         mode,
@@ -2618,6 +2619,20 @@ impl Game {
 
         // Validate while the full continuation is still attached, so the
         // payment model sees every reserved source and remaining obligation.
+        if let (
+            Decision::OrderReplacement { player, candidates },
+            Action::ChooseMode { mode, .. },
+        ) = (&suspended.decision, action)
+        {
+            if candidates.get(*mode).is_none() {
+                return Err(AgentError("illegal replacement".into()));
+            }
+            if !self.replacement_order_payable(*player, *mode) {
+                return Err(AgentError(
+                    "replacement order cannot complete the payment".into(),
+                ));
+            }
+        }
         if let (
             Decision::ManaChoice {
                 player, choices, ..
