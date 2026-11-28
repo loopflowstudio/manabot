@@ -2,6 +2,8 @@
 
 import json
 from pathlib import Path
+import subprocess
+import sys
 from typing import Any, Never
 
 import pytest
@@ -17,7 +19,13 @@ from managym.recording import (
     read_record,
     read_records,
 )
-from managym.replay import RecordedDecision, ReplayStop, replay_failure_inputs, walk
+from managym.replay import (
+    RecordedDecision,
+    ReplayStop,
+    main,
+    replay_failure_inputs,
+    walk,
+)
 from managym.statistics import Behaviour, CardPerformance, Reducer, Totals, reduce
 from tests.fixtures.recorded_commands import record_until_object_candidate
 
@@ -35,7 +43,10 @@ class Choices(Reducer[int]):
 
 @pytest.mark.parametrize("load_slots", [False, True])
 def test_isolated_opening_failure_is_recorded_at_reset(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, load_slots: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    load_slots: bool,
 ) -> None:
     games_path = tmp_path / "games.jsonl"
     journal = tmp_path / "journal.jsonl"
@@ -64,12 +75,12 @@ def test_isolated_opening_failure_is_recorded_at_reset(
 
         def get_last_info(self) -> list[dict[str, object]]:
             return [
+                {},
                 {
                     "game_error": "stalled opening",
                     "game_error_class": "AgentError",
                     "game_error_trace": "opening stack",
                 },
-                {},
             ]
 
     try:
@@ -78,28 +89,33 @@ def test_isolated_opening_failure_is_recorded_at_reset(
         monkeypatch.setattr(vector, "native", FailedOpeningReceipt())
         if load_slots:
             vector.load_slots_into_buffers(
-                [managym.SlotLoad.fresh(0, setup, seed=30, player_policies=policies)],
+                [managym.SlotLoad.fresh(1, setup, seed=30, player_policies=policies)],
                 isolated=True,
             )
         else:
             vector.reset_each_into_buffers(
                 [setup, setup],
-                seeds=[30, 31],
-                player_policies=[policies, ("agent", "agent")],
+                seeds=[31, 30],
+                player_policies=[("agent", "agent"), policies],
                 isolated=True,
             )
-        assert vector._analysis_active == [False, True]
+        assert vector._analysis_active == [True, False]
         snapshot = vector.snapshot()
-        assert snapshot.failed_opening(snapshot.games[0])
-        assert not snapshot.failed_opening(snapshot.games[1])
+        assert snapshot.needs_reproduction
+        assert not snapshot.failed_opening(snapshot.games[0])
+        assert snapshot.failed_opening(snapshot.games[1])
+        failure = snapshot.games[1].failure
+        assert failure is not None and failure.operation == "reset"
+        assert failure.traceback == "opening stack"
         [written] = [
             record
             for record in read_records(games_path)
             if record.failed_opening(record.games[0])
         ]
-        projected, sibling = read_records(journal)
+        sibling, projected = read_records(journal)
         assert not sibling.failed_opening(sibling.games[0])
-        detached = vector.take_slot_record(0)
+        assert not sibling.needs_reproduction
+        detached = vector.take_slot_record(1)
         for record in (written, projected, detached):
             assert record.operation == "reset" and record.execution_outcome == "failed"
             assert record.error_class == "AgentError"
@@ -107,6 +123,7 @@ def test_isolated_opening_failure_is_recorded_at_reset(
             assert record.player_policies == policies
             [failed] = record.games
             assert failed.seed == 30 and failed.actions == [] and failed.committed == 0
+            assert failed.failure is None
             replay = walk(record, capture_cards=True)
             assert list(replay) == []
             assert replay.stop == ReplayStop("interrupted", 0, "stalled opening")
@@ -123,10 +140,105 @@ def test_isolated_opening_failure_is_recorded_at_reset(
         def reset_all(self, setup: managym.GameSetup) -> Never:
             raise managym.AgentError("stalled opening")
 
-    monkeypatch.setattr(managym, "VectorEnv", ReproducedOpening)
+    def open_vector(
+        *, seed: int, **kwargs: Any
+    ) -> managym.VectorEnv | ReproducedOpening:
+        if seed == 30:
+            return ReproducedOpening(**kwargs)
+        return native_type(seed=seed, **kwargs)
+
+    native_type = managym.VectorEnv
+    monkeypatch.setattr(managym, "VectorEnv", open_vector)
     [reproduced] = replay_failure_inputs(projected)
     assert reproduced["status"] == "failed" and reproduced["phase"] == "reset"
     assert reproduced["at_retained_failure"] and reproduced["matches_error"]
+
+    monkeypatch.setattr(sys, "argv", ["replay", str(journal), "--worker"])
+    main()
+    healthy, failed = json.loads(capsys.readouterr().out)["results"]
+    assert healthy["stream"] == 0 and healthy["status"] == "advanced"
+    assert failed["stream"] == 1 and failed["phase"] == "reset"
+    assert failed["at_retained_failure"] and failed["matches_error"]
+
+
+@pytest.mark.parametrize("record_fraction", [0.0, 1.0])
+def test_isolated_step_failure_retains_slot_evidence(
+    tmp_path: Path, record_fraction: float
+) -> None:
+    games_path = tmp_path / "games.jsonl"
+    journal = tmp_path / "journal.jsonl"
+    vector = RecordedVectorEnv(
+        num_envs=2,
+        seed=7,
+        games_path=games_path,
+        journal_path=journal,
+        record_fraction=record_fraction,
+    )
+    vector.set_observation_layout(step_buffers(2), layout=ObservationSpace().layout)
+    setup = managym.GameSetup(
+        [
+            managym.PlayerConfig(name=str(seat), decklist={"Mountain": 12})
+            for seat in (0, 1)
+        ]
+    )
+    try:
+        vector.reset_each_into_buffers([setup, setup])
+        vector.step_isolated_into_buffers([0, 0])
+        vector.step_isolated_into_buffers([0, 999_999])
+        info = vector.get_last_info()[1]
+        assert info["game_error_trace"]
+        vector.step_isolated_into_buffers([0, 0], active=[True, False])
+        for evidence in (vector.snapshot(), read_record(journal)):
+            assert evidence.needs_reproduction
+            assert evidence.games[0].failure is None
+            game = evidence.games[1]
+            assert game.end is not None and game.end.status == "failed"
+            assert game.failure is not None and game.failure.operation == "step"
+            assert game.failure.error_class == info["game_error_class"]
+            assert game.failure.traceback == info["game_error_trace"]
+            assert game.frame == info["game_error_frame"]
+            assert game.actions == [0, 999_999] and game.committed == 1
+        sibling, projected = read_records(journal)
+        assert not sibling.needs_reproduction
+        detached = vector.take_slot_record(1)
+        records = [projected, detached]
+        if record_fraction:
+            records.append(read_record(games_path))
+        else:
+            assert not games_path.exists()
+        for record in records:
+            assert record.operation == "step" and record.execution_outcome == "failed"
+            assert record.needs_reproduction
+            assert (
+                record.error_class == "AgentError"
+                and record.error == info["game_error"]
+            )
+            assert record.traceback == info["game_error_trace"]
+            [game] = record.games
+            assert game.failure is None
+            assert game.frame == info["game_error_frame"]
+            replay = walk(record)
+            assert [decision.chosen for decision in replay] == [0]
+            assert replay.stop == ReplayStop("interrupted", 1, record.error)
+            [reproduced] = replay_failure_inputs(record)
+            assert reproduced["at_retained_failure"] and reproduced["matches_error"]
+            assert reproduced["matches_binding"]
+    finally:
+        vector.close()
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "managym.replay", str(journal), "--seconds", "10"],
+        text=True,
+        capture_output=True,
+        timeout=15,
+        check=True,
+    )
+    healthy, failed = json.loads(completed.stdout.splitlines()[-1])["results"]
+    assert healthy["stream"] == 0 and healthy["actions"] == 3
+    assert not healthy["at_retained_failure"]
+    assert failed["stream"] == 1 and failed["status"] == "failed"
+    assert failed["action_index"] == 1 and failed["at_retained_failure"]
+    assert failed["matches_binding"] and failed["matches_error"]
 
 
 def test_failed_scalar_reset_walks_an_empty_prefix(tmp_path: Path) -> None:

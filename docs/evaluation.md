@@ -543,9 +543,10 @@ The vector runner holds live records in memory and retains settled diagnostics
 when a deal completes. Native `AgentError` and PyO3 `PanicException` during
 construction, opening settlement or stepping isolate to the failing leg and
 poison only that slot. The invalid score-null row names the acting seat when
-the native receipt supplies one (`game_error_seat`). A native error while a
-registered code player chooses an action invalidates its leg and names that
-player. Both paths retain failure evidence and other games continue.
+the native receipt supplies one (`game_error_seat`). If a registered code
+player hits a native error while choosing an action, the runner records a crash
+for that player and ends the game at the last committed action. The failure
+details live in evaluation metadata. In both cases, other games continue.
 Replay checks the recorded Commands against the reconstructed game. Invalid rows never become forfeits.
 Other Python exceptions fail the match. Elemental also fails a match with no
 valid replayed games, preserving its evidence, so an all-invalid smoke cannot

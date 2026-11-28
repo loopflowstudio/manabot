@@ -30,8 +30,8 @@ from managym.recording import (
     GameInputs,
     GameRecord,
     Intervention,
-    read_record,
-    read_records,
+    _games_from_snapshot,
+    _read_snapshots,
     runtime_identities,
     semantic_frame_sha256,
 )
@@ -483,7 +483,7 @@ def replay_failure_inputs(
     }
     results: list[dict[str, object]] = []
     for index, game in enumerate(retained.games):
-        if evidence.failed_opening(game):
+        if game.failure is not None or evidence.failed_opening(game):
             result = _replay_game_inputs(evidence, game, statistics=statistics)
             results.append({**result, **coordinates})
             continue
@@ -570,9 +570,10 @@ def _replay_game_inputs(
     evidence: GameRecord, game: GameInputs, *, statistics: bool = False
 ) -> dict[str, object]:
     """Reconstruct one stream; keep binding divergence out of native failures."""
-    failed_opening = evidence.failed_opening(game)
-    if failed_opening:
+    if game.failure is not None:
         evidence = evidence.for_game(game)
+        [game] = evidence.games
+    failed_opening = evidence.failed_opening(game)
     # A strict vector exception records the batch outcome, without proving
     # which individual streams advanced. Replay cannot fill in that history.
     agreement = ReplayAgreement(
@@ -774,8 +775,8 @@ def main() -> None:
     if not args.worker:
         run_bounded_replay("managym.replay", args.seconds)
     try:
-        records = read_records(args.path)
-        evidence = next(records)
+        snapshots = _read_snapshots(args.path)
+        first = next(snapshots)
     except StopIteration:
         if not args.path.is_dir():
             parser.error(f"cannot read journal {args.path}: no game records")
@@ -785,48 +786,42 @@ def main() -> None:
         )
     except (OSError, ValueError) as error:
         parser.error(f"cannot read journal {args.path}: {error}")
-    if not evidence.needs_reproduction:
-        results = []
-        for record in chain((evidence,), records):
-            try:
-                replay = walk(record, capture_cards=args.statistics)
-            except ValueError as error:
-                parser.error(f"cannot replay {args.path}: {error}")
-            for _ in replay:
-                pass
-            assert replay.stop is not None
-            result = {**asdict(replay.stop), "build_differs": replay.build_differs}
-            if args.statistics:
-                result["statistics"] = {
-                    "terminal": replay.stop.status == "complete",
-                    "winner": replay.stop.winner,
-                    "cards": [
-                        row.model_dump(mode="json")
-                        for row in reduce_cards(replay.cards())
-                    ],
-                }
-            results.append(result)
-        print(json.dumps({"status": "replayed", "results": results}))
-        return
-    # Reproduction needs every stream and its original batch boundary.
-    evidence = read_record(args.path)
+    results: list[dict[str, object]] = []
     try:
-        require_replay_runtime(
-            evidence.identities,
-            allow_changed_runtime=args.allow_changed_runtime,
-            require_source=True,
-        )
-    except ValueError as error:
-        parser.error(str(error))
-    print(
-        json.dumps(
-            {
-                "status": "replayed",
-                "results": replay_failure_inputs(evidence, statistics=args.statistics),
-                "original_outcome": evidence.execution_outcome,
-            }
-        )
-    )
+        for index, evidence in enumerate(chain((first,), snapshots)):
+            if evidence.needs_reproduction:
+                # Reproduction needs the full record and its batch boundary.
+                require_replay_runtime(
+                    evidence.identities,
+                    allow_changed_runtime=args.allow_changed_runtime,
+                    require_source=True,
+                )
+                results.extend(
+                    replay_failure_inputs(evidence, statistics=args.statistics)
+                )
+                continue
+            for record in _games_from_snapshot(evidence):
+                replay = walk(record, capture_cards=args.statistics)
+                for _ in replay:
+                    pass
+                assert replay.stop is not None
+                result = {**asdict(replay.stop), "build_differs": replay.build_differs}
+                if args.statistics:
+                    result["statistics"] = {
+                        "terminal": replay.stop.status == "complete",
+                        "winner": replay.stop.winner,
+                        "cards": [
+                            row.model_dump(mode="json")
+                            for row in reduce_cards(replay.cards())
+                        ],
+                    }
+                results.append(result)
+    except (OSError, ValueError) as error:
+        parser.error(f"cannot replay {args.path}: {error}")
+    output: dict[str, object] = {"status": "replayed", "results": results}
+    if index == 0 and first.needs_reproduction:
+        output["original_outcome"] = first.execution_outcome
+    print(json.dumps(output))
 
 
 if __name__ == "__main__":

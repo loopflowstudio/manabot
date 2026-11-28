@@ -126,9 +126,10 @@ class DecisionAnnotation(BaseModel):
     extra: dict[str, object] = {}
 
 
-class OpeningFailure(BaseModel):
-    """A reset error owned by one game in a vector snapshot or journal."""
+class GameFailure(BaseModel):
+    """A native error owned by one game in a vector snapshot or journal."""
 
+    operation: Literal["reset", "step"]
     error_class: str
     traceback: str | None = None
 
@@ -139,7 +140,7 @@ class GameEnd(BaseModel):
     winner_retained: bool = True
     reason: str | None = None
     digest: str | None = None
-    opening_failure: OpeningFailure | None = Field(
+    failure: GameFailure | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
 
@@ -253,6 +254,10 @@ class GameInputs(BaseModel):
     end: GameEnd | None = None
     actor: int | None = None
     frame: str | None = None
+
+    @property
+    def failure(self) -> GameFailure | None:
+        return self.end.failure if self.end is not None else None
 
     @model_validator(mode="after")
     def validate_boundaries(self) -> "GameInputs":
@@ -373,6 +378,7 @@ class GameRecord(BaseModel):
             or self.error_class is not None
             or self.execution_outcome == "failed"
             or self.mode == "search"
+            or any(game.failure is not None for game in self.games)
             or (self.boundary is not None and self.boundary.phase != "ready")
             or (
                 self.boundary is None
@@ -401,8 +407,8 @@ class GameRecord(BaseModel):
         return game.player_policies or self.resolved_player_policies
 
     def failed_opening(self, game: GameInputs) -> bool:
-        if game.end is not None and game.end.opening_failure is not None:
-            return True
+        if (failure := game.failure) is not None:
+            return failure.operation == "reset"
         return (
             self.operation == "reset"
             and self.execution_outcome == "failed"
@@ -416,18 +422,24 @@ class GameRecord(BaseModel):
     def for_game(
         self, game: GameInputs, boundary: NativeBoundary | None = None
     ) -> "GameRecord":
-        fields: dict[str, object] = {"games": [game], "boundary": boundary}
+        fields: dict[str, object] = {"boundary": boundary}
+        game_fields: dict[str, object] = {}
         if game.player_policies is not None:
             fields["player_policies"] = game.player_policies
-            fields["games"] = [game.model_copy(update={"player_policies": None})]
-        if game.end is not None and (failure := game.end.opening_failure) is not None:
+            game_fields["player_policies"] = None
+        if game.end is not None and (failure := game.end.failure) is not None:
+            # This slot's observed failure owns its call, even after the
+            # vector journal advances to a different batch boundary.
             fields.update(
-                operation="reset",
+                boundary=None,
+                operation=failure.operation,
                 execution_outcome="failed",
                 error=game.end.reason,
                 error_class=failure.error_class,
                 traceback=failure.traceback,
             )
+            game_fields["end"] = game.end.model_copy(update={"failure": None})
+        fields["games"] = [game.model_copy(update=game_fields) if game_fields else game]
         return self.model_copy(update=fields)
 
 
@@ -558,7 +570,8 @@ class _GameJournal:
             )
             if not executing:
                 for game in retained.games:
-                    game.frame = None
+                    if game.failure is None:
+                        game.frame = None
             self.sequence = 0
             row = JournalCheckpoint(sequence=0, evidence=retained)
             self.checkpoint_bytes = self.writer.replace(
@@ -572,7 +585,7 @@ class _GameJournal:
             zip(evidence.games, self.evidence.games, strict=True)
         ):
             count = len(game.actions) if counts is None else counts[index]
-            frame = game.frame if executing else None
+            frame = game.frame if executing or game.failure is not None else None
             if (
                 self.actions[index] is not game.actions
                 or game.seed != old.seed
@@ -1616,26 +1629,18 @@ class RecordedVectorEnv(_Capture):
         slot: int,
         *,
         end: GameEnd | None = None,
-        info: dict[str, Any] | None = None,
     ) -> GameRecord:
         """Detach an in-memory game's record before reusing its slot.
 
-        Opening failures are already retained. A runner may supply another
-        ending or error details from a failed decision.
+        A runner may supply an ending for its own stop. Native failures
+        already carry their ending and attempted inputs.
         """
         game = self.games[slot]
         record = self._record_of(game)
-        if record.operation != "reset":
+        if record.execution_outcome != "failed":
             if end is not None:
                 record.games[0].end = end
-            if info is not None and info.get("game_error"):
-                record.execution_outcome = "failed"
-                record.error_class = str(info.get("game_error_class", "AgentError"))
-                record.error = str(info["game_error"])
-                if info.get("game_error_trace"):
-                    record.traceback = str(info["game_error_trace"])
-            else:
-                record.execution_outcome = "last_command_succeeded"
+            record.execution_outcome = "last_command_succeeded"
         self.games[slot] = GameInputs(
             stream=game.stream,
             seed=game.seed,
@@ -1878,18 +1883,8 @@ class RecordedVectorEnv(_Capture):
                 continue
             game.decision_memory = self.decision_memory
             game.players = _retain_players(players[index], seeds[index])
-            if infos and (error := infos[index].get("game_error")):
-                info = infos[index]
-                end = GameEnd(
-                    status="failed",
-                    reason=error,
-                    opening_failure=OpeningFailure(
-                        error_class=info["game_error_class"],
-                        traceback=info.get("game_error_trace"),
-                    ),
-                )
-                self._write_game(game, end)
-                game.end = end
+            if infos and infos[index].get("game_error"):
+                self._record_game_failure(game, "reset", infos[index])
                 continue
             if self._reductions and self._reduction.error is None:
                 self._analysis_indices[index] = 0
@@ -1898,6 +1893,25 @@ class RecordedVectorEnv(_Capture):
                 if self._reductions[index].error is not None:
                     self._reduction.fail(self._reductions[index].error)
         self._publish_ready()
+
+    def _record_game_failure(
+        self,
+        game: GameInputs,
+        operation: Literal["reset", "step"],
+        info: dict[str, Any],
+    ) -> None:
+        end = GameEnd(
+            status="failed",
+            reason=info["game_error"],
+            failure=GameFailure(
+                operation=operation,
+                error_class=info["game_error_class"],
+                traceback=info.get("game_error_trace"),
+            ),
+        )
+        self._write_game(game, end)
+        # Diagnostic snapshots retain failed slots even without game sampling.
+        game.end = end
 
     def _publish_ready(self) -> None:
         if self._game_journal is not None:
@@ -2112,9 +2126,7 @@ class RecordedVectorEnv(_Capture):
                     game.frame = infos[index].get("game_error_frame")
                 if self._reductions:
                     self._analysis_active[index] = False
-                self._write_game(
-                    game, GameEnd(status="failed", reason=infos[index]["game_error"])
-                )
+                self._record_game_failure(game, "step", infos[index])
                 if self._branch_roots[index] is not None:
                     self.games[index] = self.game_inputs(index)
                 continue

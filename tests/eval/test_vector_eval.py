@@ -683,10 +683,24 @@ def test_registered_code_opens_once_per_leg_in_both_runners(
     [failed] = [game for game in games if game["failure"]]
     assert failed["failed_player_id"] == "opponent"
     record = GameRecord.model_validate(failed["record"])
+    assert (
+        record.error is None and record.error_class is None and record.traceback is None
+    )
     assert record.operation == "step"
-    assert record.execution_outcome == "failed"
-    assert record.games[0].end is not None and record.games[0].end.status == "failed"
-    assert record.games[0].committed == len(record.games[0].actions)
+    assert record.execution_outcome == "last_command_succeeded"
+    assert not record.needs_reproduction
+    metadata = record.context["evaluation"]
+    assert isinstance(metadata, dict)
+    assert metadata["termination_reason"] == "crash"
+    assert metadata["failed_player_id"] == "opponent"
+    assert metadata["failure"].startswith(f"{metadata['error_class']}: ")
+    assert metadata["failure_trace"]
+    [inputs] = record.games
+    end = inputs.end
+    assert end is not None and end.status == "interrupted" and end.reason == "crash"
+    assert end.digest is not None and end.failure is None
+    assert "terminated" not in metadata and "winner" not in metadata
+    assert inputs.committed == len(inputs.actions)
     assert replay_game(failed)[0].passed
 
     def broken_code_choice(

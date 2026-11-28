@@ -607,11 +607,10 @@ async def play_pairings(
         slot_state: SlotState,
         *,
         end: GameEnd | None = None,
-        info: dict[str, Any] | None = None,
     ) -> None:
         assert vector is not None
         slot = slot_state.slot
-        record = vector.take_slot_record(slot, end=end, info=info)
+        record = vector.take_slot_record(slot, end=end)
         settle_leg(
             slot_state, record, vector, gameplay_seconds - slot_state.gameplay_started
         )
@@ -623,9 +622,7 @@ async def play_pairings(
             future = loop.run_in_executor(replay_pool, finalize_match, active_match)
             replays[future] = active_match.match
 
-    def complete_failed_leg(
-        slot_state: SlotState, info: dict[str, Any], *, end: GameEnd | None = None
-    ) -> None:
+    def complete_failed_leg(slot_state: SlotState, info: dict[str, Any]) -> None:
         game = slot_state.leg.game
         error_class = str(info.get("game_error_class", "AgentError"))
         if error_class == "ObservationCapacity":
@@ -644,7 +641,7 @@ async def play_pairings(
                 f"{error_class}: {info['game_error']}",
                 game["seat_players"][seat] if seat is not None else None,
             )
-        complete_leg(slot_state, info=info, end=end)
+        complete_leg(slot_state)
 
     def seat_legs(free: Sequence[int], legs: list[PendingLeg]) -> list[SlotState]:
         seated = []
@@ -823,18 +820,19 @@ async def play_pairings(
                 for slot, error in round_result.code_errors.items():
                     slot_state = slot_states[slot]
                     assert slot_state is not None
-                    complete_failed_leg(
+                    game = slot_state.leg.game
+                    game["error_class"] = type(error).__name__
+                    game["failure_trace"] = "".join(traceback.format_exception(error))
+                    failure_record(
+                        game,
+                        "crash",
+                        f"{type(error).__name__}: {error}",
+                        game["seat_players"][actors[slot]],
+                    )
+                    complete_leg(
                         slot_state,
-                        {
-                            "game_error": str(error),
-                            "game_error_class": type(error).__name__,
-                            "game_error_trace": "".join(
-                                traceback.format_exception(error)
-                            ),
-                            "game_error_seat": actors[slot],
-                        },
                         end=GameEnd(
-                            status="failed", reason=str(error), digest=digests[slot]
+                            status="interrupted", reason="crash", digest=digests[slot]
                         ),
                     )
             if not round_result.players:

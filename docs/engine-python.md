@@ -254,6 +254,14 @@ different policy pairs, each stream's `GameInputs` records `player_policies`
 whenever it differs from the record's default, and single-game records written
 from a slot carry that slot's pair.
 
+An isolated native failure ends its own slot. In a vector snapshot or journal,
+that game's ending carries a `failure` with the operation (`reset` or `step`),
+error class and any native traceback. Failed steps also retain the attempted
+action and its frame. Diagnostic snapshots keep failures even for games
+outside the recording sample. Single-game rows, including those returned by
+`take_slot_record(slot)`, put the operation, error and traceback at the top
+level of the record.
+
 `capture.close()` writes each selected game still in progress as
 **interrupted**, with the reason, and syncs the file. Rows written at game end
 are flushed but not synced, so a process that is killed can lose its most
@@ -293,9 +301,11 @@ threads. It ends with a typed
 | `interrupted` | The recording ended before the game did. The decisions before it are verified; there is no winner. |
 | `diverged` | At this index the digest differed, the recorded action was not offered, or the engine raised. Nothing after it is produced. |
 
-A failed reset walks an empty verified prefix and stops at index zero.
-Diagnostic replay through `replay_failure_inputs` attempts the reset with the
-recorded seat policies.
+A failed reset walks an empty verified prefix and stops at index zero. A
+failed step walks up to the last committed action. Diagnostic replay through
+`replay_failure_inputs` attempts the failed call with the recorded seat
+policies. The command-line replay checks the whole record for failed or pending
+calls, including failures in later slots of a vector journal.
 
 Statistics, the Arena-style export and Academy read games through `walk`, so
 they agree on where a game stops. The bounded command-line replay also uses
