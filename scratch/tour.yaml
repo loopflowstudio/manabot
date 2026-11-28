@@ -1,17 +1,17 @@
-at: e86b798d10e1bb090bcf0da2abe0e921132e1d30
+at: 5a7eff4be5075086e18f55d6b6d053623a37b56d
 first:
   - path: experiments/reports/eval_precision_profile.md
-    why: L4 dispatch, same-batch timings and arena repeats
+    why: L4 dispatch, corrected bucket attribution and arena repeats
   - path: docs/evaluation.md
-    why: Precision guidance for padded evaluation on an L4
-  - path: experiments/eval_precision_profile.py
-    why: Captures, replay timings, profiler attribution and offline tables
+    why: Head width and batch guidance for padded L4 evaluation
+  - path: manabot/eval/vector.py
+    why: Synchronous observation selection at the forward boundary
   - path: manabot/eval/agent_loader.py
     why: Shared Torch loading and forward precision context
-  - path: manabot/eval/vector.py
-    why: Prepared observation coordinates at the arena boundary
+  - path: experiments/eval_precision_profile.py
+    why: Capture, identical-input replay and scoped trace attribution
   - path: experiments/eval_throughput.py
-    why: Paired arena timing receipts and seeded checkpoint controls
+    why: Paired arena timings and seeded checkpoint controls
   - path: tests/eval/test_eval_precision_profile.py
-    why: Real game replay equality and CUDA trace accounting
+    why: Exact replay logits, grid batching and nested cast attribution
 hide: []

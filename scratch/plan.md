@@ -88,8 +88,9 @@ report ends it). Three subcommands:
    the max and exact-equality logit difference against shipped bf16, then a
    `torch.profiler` pass. Buckets come from `record_function` scopes in the
    harness (transfer, attention, packed GRU, readback) plus op classes
-   (autocast casts `aten::to`/`_to_copy`/`copy_`, linear/MLP, norm,
-   gather/index, unattributed host), and the attention bucket lists the
+   (casts and copies `aten::to`/`_to_copy`/`copy_`, linear/MLP, norm,
+   gather/index, unattributed host). Nested operations inherit their
+   enclosing bucket, and the attention bucket lists the
    dispatched SDPA kernels (flash, mem-efficient, or math `bmm`+`_softmax`).
    Feeding both precisions the same float32-captured batches removes the
    diverging-trajectory confound.
@@ -113,11 +114,8 @@ Variants:
   `nn.MultiheadAttention` projection weights and biases to bfloat16; leave
   `LayerNorm`, `Embedding`, `nn.GRU` and bare `nn.Parameter`s
   (`perspective`, `value_token`) float32, which autocast also keeps float32.
-  Forward still under autocast. Candidate production fix if bit-identical.
-- `bf16-cached-autocast` (diagnostic only): one `torch.autocast` context held
-  open across replayed calls, so PyTorch's own weight-cast cache survives;
-  the upper bound of removing per-call casts. Not a production shape: a
-  thread-local autocast context would leak into other Torch work.
+  Forward still under autocast. The L4 GEMM change leaves broader parity
+  unverified (F6).
 
 Models (seeded unless trained; `random_checkpoint` gains a head count):
 
@@ -194,13 +192,7 @@ parts, and that the buckets cover the forward.
 1. **Harness.** `f3863261e` added the capture, replay, report and arena receipts, with CPU and MPS smoke checks.
 2. **L4 diagnosis.** `75ae6a1d4` corrected CUDA trace admission. `e86b798d1` records 84 replay profiles, the even-head alignment control and three arena repeats per arm.
 3. **L4 guidance.** `e86b798d1` documents the head-width and batch-size crossovers. The `head_dim % 8` rule is now stated in `docs/evaluation.md#etude-agents` (realign, review F4).
-4. **Review fix pass (next, no rental).** From the post-implementation review (`scratch/concept-review.html`, at `178a551d7`):
-   - *Bucket attribution (F2, Q1a for review).* In `op_bucket` (`experiments/eval_precision_profile.py:333`) check `ATTENTION`/`GRU` and `parent != "other"` before `casts_and_copies`, so every scope owns its internal casts. Add a unit check (nested `aten::to` under `policy.attention` charges to attention) in `tests/eval/test_eval_precision_profile.py`. Recompute the report's bucket table (`experiments/reports/eval_precision_profile.md:57-64`) offline from `.runs/eval-precision-profile/l4-a468879a7a/*/profile.json`; review reports totals unchanged (59.45, 100.77, 86.48, 30.40 ms/call) and `w160l8` delta +48.14 ms attention (36.41 -> 84.55), +0.20 ms outside casts, -8.64 ms MLP. Verify those numbers yourself.
-   - *Delete `bf16-cached-autocast` (F1).* Autocast does not cache weight casts under `torch.inference_mode()`; the L4 traces show identical cast counts (1,094 `copy_` on `w384l8`) and peak memory to `bf16`. Remove the variant, `cached_context` and its CLI choice; the report says why it was dropped, not that it cached weights.
-   - *Report `bf16-linear-once` fully (F1).* State that it leaves `w160l8` slow (math SDPA dominates) and that on `w384l8` it cut 18.12 -> 15.48 ms/call and about 54 MiB peak memory with 0.0 logit difference, while switching 16 attention GEMMs (`cutlass_80_wmma_tensorop_bf16_32x32` -> `ampere_bf16_s1688gemm_128x128`); that kernel change is why the loader does not adopt it here.
-   - *Capture boundary (F3, Q2a for review).* Drop `observe_prepared` from `experiments/eval_throughput.run_vector`; `capture` calls `play_pairings` directly. Prepare single rows inside the observer while the `ObservationSelection` is live and correlate with `record` by `id(prepared)`, replacing `nonlocal pending` and its one-checkpoint assert. Keep `observe_prepared` on `manabot/eval/vector.py` with a docstring saying the selection is valid only during the synchronous call. Passed over: removing it from `vector.py` and capturing singles in a separate one-slot run (Q2b), which would replay different games.
-   - Minor: `load_torch_policy` (`manabot/eval/agent_loader.py:133`) applies matmul precision both itself and through `torch_forward_context`; keep one.
-   - Rerun the CPU smoke test and the bucket unit check; refresh `scratch/tour.yaml`.
+4. **Review fixes.** `5a7eff4be` reattributes the saved traces, removes cached-autocast, reports the pre-cast GEMM switch, scopes capture to the synchronous observer and applies matmul precision once per context. Both focused tests and the four-game CPU CLI run passed.
 
 ## Absent and error states
 
@@ -218,7 +210,8 @@ forwards, and any change to the default precision or to compute class ids.
 
 ## What goes
 
-Nothing existing is removed. The local probe scripts under `.runs/`
+The no-op cached-autocast variant and the throughput runner's observer
+argument were removed. The local probe scripts under `.runs/`
 (`probe_mps.sh`, `profile_forward.py`, `cold_warm.py`) are untracked
 scaffolding the experiment file replaces. `scratch/qa.html` records MTG-497's
 checks. `scratch/tour.yaml` gives the reading order for MTG-507.
@@ -241,9 +234,11 @@ Pre-build review (2026-11-27): head-dim grid, single-row capture with
 were adopted (see Design).
 
 Post-implementation review (`scratch/concept-review.html`, at `178a551d7`):
-F1 cached-autocast no-op and linear-once reporting, F2 parent-first buckets,
-F3 capture boundary -> pass 4; F4 `head_dim % 8` doc rule fixed in realign;
-F5 and F6 deferred below (Q3a, for review: file F5, keep F6 as an idea).
+F1 cached-autocast removal and pre-cast evidence, F2 parent-first buckets
+(Q1a for review), and F3 synchronous capture (Q2a for review) landed in
+pass 4. The `w160l8` attention delta rounds to +48.13 ms/call. The review's
++48.14 equals the difference of the displayed values. F4's `head_dim % 8` doc rule
+landed in `16aaf72da6`. F5 and F6 are deferred below (Q3a for review).
 
 ## Deferred findings
 

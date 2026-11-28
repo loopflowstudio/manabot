@@ -11,8 +11,9 @@ Each is reversible.
   asserting equal observation config, readings and decision memory
   (concept review, 2026-11-27). Alternative: prepare per width from raw
   observations.
-- **`bf16-linear-once` is the only candidate production fix**;
-  `bf16-cached-autocast` is diagnostic (review Q2a).
+- **Keep `bf16-linear-once` in the experiment.** The L4 trace showed a
+  change in attention GEMMs despite identical logits on the captured batches.
+  The cached-autocast diagnostic had identical cast counts to bf16 and was removed.
 - **`agent_loader.py` gains `load_torch_policy` and a shared per-call
   context helper now** (review Q4a), Torch types under `TYPE_CHECKING`.
 - **One L4 rental under `--max-usd 5`**, no CPU baseline arms.
@@ -25,7 +26,8 @@ Each is reversible.
   evidence; only the op counts are used.
 - The MTG-497 sync keeps one shared `prepare_batch` for both arena batches and
   captured single rows. The capture hook receives the selected coordinates
-  after per-seat memory ablation.
+  after per-seat memory ablation and prepares the singles synchronously (Q2a
+  for review).
 - The first L4 trace showed that even-head float32 uses native MHA. Add a
   seeded 160-wide, four-head grid control so the aligned narrow comparison
   can retain that float32 path. The planned five-head control keeps its
