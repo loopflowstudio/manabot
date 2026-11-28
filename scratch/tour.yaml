@@ -1,19 +1,23 @@
-at: b97d43c7c3974cfa80aaa72090a3a043e8188b05
+at: 2192a34b3c27edf94f36751a36e4ad804b92733d
 first:
   - path: experiments/reports/eval_throughput.md
     why: Throughput and replay parity on Apple and L4
   - path: docs/evaluation.md
     why: Heuristic versions, decision evidence and replay scheduling
   - path: docs/engine-python.md
-    why: Per-slot policies and isolated failure receipts
+    why: Per-slot policies, isolated failures and native choice capture
   - path: docs/academy.md
     why: Open vector evaluation games in Replay
   - path: managym/__init__.pyi
-    why: Vector seating and inspection API
+    why: Vector seating and scalar choice inspection APIs
   - path: managym/src/agent/player_policy.rs
     why: Recorded seat names and heuristic action caps
   - path: managym/src/agent/env.rs
-    why: Setup admission and native opening settlement
+    why: Setup admission, native opening settlement and choice capture
+  - path: managym/src/flow/tick.rs
+    why: Record published choices after reaching the next boundary
+  - path: managym/src/agent/decision_surface.rs
+    why: Semantic Commands use the same choice recording hook
   - path: managym/src/agent/vector_env.rs
     why: Per-slot opening and step isolation
   - path: managym/src/agent/vector_env/slots.rs
@@ -23,7 +27,7 @@ first:
   - path: managym/recording.py
     why: Reset and step evidence belongs to each slot
   - path: managym/replay.py
-    why: Verified prefixes and per-slot failure diagnostics
+    why: Restore choice logs on divergence and diagnose failures
   - path: manabot/eval/agents.py
     why: Checkpoint samplers and per-game code players
   - path: manabot/eval/pairing.py
@@ -41,7 +45,7 @@ first:
   - path: managym/src/python/bindings.rs
     why: Scalar replay releases the GIL
   - path: managym/academy/watch.py
-    why: Expand verified native choices into acting-view Commands
+    why: Expand native choices, mark branches and index stops
   - path: managym/academy/server.py
     why: Reproduce random draws at recorded commitment
   - path: managym/academy/launch.py
@@ -57,7 +61,7 @@ first:
   - path: tests/academy/test_configured_launch.py
     why: File launch and reimport preserve source identity
   - path: tests/academy/test_game_records.py
-    why: Swapped seats, viewer safety and divergence coverage
+    why: Edited positions, forced choices, viewer safety and divergence
 hide:
   - path: tests/public_api.json
     why: Generated additive signatures

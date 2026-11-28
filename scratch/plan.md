@@ -316,38 +316,7 @@ Recorded verbatim in `scratch/ship-review-notes.md`:
 
 7. **Academy Watch native-seat import** (`b97d43c7c`, choice `3b`) verified retained games with their original seat policies and projected both seats through Academy Commands. Four retained MPS legs imported and Chromium followed both choosers.
 
-8. **Replay import fixes from the Pass 7 concept review** (`8cd847466d`,
-   all three findings "Fix here"; Q1 answer 1a adopted for review). One pass:
-   - **Committed-choice log, not card capture (Q1 1a, for review).**
-     `import_record` (`managym/academy/watch.py:490`) walks with
-     `capture_cards=native_seats` and `project_native_record` (`:651`) reads
-     `replay.cards().capture.exposure.choices`. `CapturedCards`
-     (`managym/card_capture.py:153-182`) validates physical-card conservation,
-     so a native-seat record with `determinize` or
-     `GameStateEdit.move_permanent` fails import with `ValidationError`
-     while the same edits import on `("agent", "agent")`. Add an opt-in
-     native log of committed `(actor, selected)` choices on `Env`, enabled by
-     `RecordWalker` and rebuilt on its cold-prefix divergence path; read it
-     with `capture_cards=False`. Passed over: 1b, reading raw
-     `card_capture_json()` without validation (no Rust change, keeps the
-     coupling and the full exposure serialization).
-   - **Stop index in Replay coordinates.** Store
-     `replace(stop, index=len(session.canonical_decisions))` in
-     `RecordingImport` (`watch.py:563-565`); the Replay banner
-     (`academy/ui/src/routes/replay/+page.svelte:301`) shows it. Reviewed
-     repro: corrupting `digests[2]` on a `("heuristic:64", "agent")` record
-     imports 3 decisions but reports stop 1; corrupting `end.winner`, 37 vs 21.
-     `RecordWalker.stop` keeps external-action coordinates.
-   - **Branching markers across `ForceAction`.** `project_recorded_choice`
-     takes explicit `branched`; `project_native_record`'s `restore()`
-     accumulates branching ops and attaches them to the next projected choice
-     (forced, settled or external), so `[Reseed, ForceAction]` marks the
-     forced choice and a trailing `ForceAction` keeps its marker.
-   - Tests in `tests/academy/test_game_records.py`: native-seat import with
-     `determinize` and with `move_permanent`; diverged native-seat import
-     asserts `recording_import["stop"]["index"] == imported["count"]`;
-     reseed/determinize plus `ForceAction` marks the forced choice. Rebuild
-     the cp313 extension after the Rust change; debug Rust tests for the log.
+8. **Replay import fixes** (`2192a34b3c`, review Q1 1a) added a native committed-choice log, stored the stop in Academy decision coordinates, and marked the first affected choice across `ForceAction` boundaries. Nine cases failed before the fix. After rebuilding cp313, 19 Academy record tests, two card reducer tests, five package-boundary tests, the focused debug Rust test and the public API check passed. The four retained MPS legs imported through Academy HTTP with both acting seats and 92, 362, 251 and 444 choices.
 
 ## Deferred findings
 

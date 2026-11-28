@@ -219,3 +219,8 @@ checkpoint actions. Chromium followed both native seats with **Show both hands**
 off. Source bytes matched after launch. The earlier `.runs/eval-throughput/mtg506/w160-mps-matched`
 sample diverged at the first digest in the standard verifier on this engine
 build. Its original measurement evidence remains tied to its recorded build.
+
+Pass 8 used a debug cp313 wheel for the import checks. The checkout's local
+environment lacked dependencies, so the Academy tests used a uv overlay. The
+public API, reducer and package-boundary checks used Etude SDK source archived
+from `d2dd820a` with the installed CPython 3.13 dependencies from MTG-507.
