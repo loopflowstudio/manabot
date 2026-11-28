@@ -1,5 +1,7 @@
-at: 4071284d29e013cd556cd9b514ff749dea37ddfd
+at: 7fcec510fb2c01a1a637f8ceb4daf836ad8ada99
 first:
+  - path: experiments/reports/eval_throughput.md
+    why: Apple and L4 throughput, replay parity and profiling
   - path: docs/evaluation.md
     why: Native seating, compact traces and background replay
   - path: docs/engine-python.md
@@ -20,6 +22,12 @@ first:
     why: Shared decision identity and derived audit commands
   - path: manabot/sim/replay.py
     why: Actor checks and optional viewer evidence
+  - path: manabot/infra/provenance.py
+    why: Process fingerprints and per-game setup identity
+  - path: manabot/sim/native_game.py
+    why: Scalar capture context at setup and close
+  - path: manabot/sim/card_evidence.py
+    why: Card evidence reads setup and ending directly
   - path: managym/replay.py
     why: Indexed replay and verified prefix recovery
   - path: managym/src/python/bindings.rs
@@ -28,6 +36,8 @@ first:
     why: Concurrent replay time and wall-clock stages
   - path: tests/eval/test_vector_eval.py
     why: Scalar parity, native failures and overlapping replay
+  - path: tests/eval/test_evaluation_match.py
+    why: Fingerprint reuse, durable capture and replay projection
   - path: tests/env/test_record_reducers.py
     why: Divergence preserves verified card exposure
 hide:
