@@ -1,0 +1,3130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-508 Concept Review · Coupled mana payments, fixed-tap choices, and owned activations</title>
+<style>
+/* Default review page theme tokens (light and dark).
+ * Override per repository in `.lf/theme.css` (CSS custom properties only). */
+:root {
+  --lf-bg: #faf8f5;
+  --lf-surface: #fffdf9;
+  --lf-surface-muted: #f3eee7;
+  --lf-surface-element: #ece6dd;
+  --lf-border: #e6dfd6;
+  --lf-border-strong: #d6ccc0;
+  --lf-text: #2a2624;
+  --lf-text-secondary: #5f5752;
+  --lf-text-tertiary: #65605d;
+  --lf-accent: #722f37;
+  --lf-accent-hover: #5e2630;
+  --lf-accent-text: #faf8f5;
+  --lf-working-ink: #2f629f;
+  --lf-working-fill: #d5dde6;
+  --lf-warning-ink: #7f5a19;
+  --lf-warning-fill: #e4dccd;
+  --lf-failure-ink: #a64038;
+  --lf-failure-fill: #ecd9d5;
+  --lf-success-ink: #386c48;
+  --lf-success-fill: #d7dfd6;
+  --lf-highlight: rgba(114, 47, 55, 0.14);
+  --lf-highlight-active: rgba(114, 47, 55, 0.28);
+  --lf-highlight-line: rgba(114, 47, 55, 0.45);
+  --lf-shadow: 0 8px 26px rgba(42, 38, 36, 0.14);
+  --lf-shadow-sm: 0 3px 12px rgba(42, 38, 36, 0.08);
+  --lf-bubble-bg: #24201e;
+  --lf-bubble-text: #faf8f5;
+  --lf-bubble-border: #3a3430;
+  --lf-font-serif: "Old Standard TT", Georgia, "Times New Roman", serif;
+  --lf-font-sans: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --lf-font-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lf-bg: #181615;
+    --lf-surface: #201d1b;
+    --lf-surface-muted: #282422;
+    --lf-surface-element: #312c29;
+    --lf-border: #38322e;
+    --lf-border-strong: #4a423d;
+    --lf-text: #efeae4;
+    --lf-text-secondary: #b9afa6;
+    --lf-text-tertiary: #8f857d;
+    --lf-accent: #c96b76;
+    --lf-accent-hover: #d8838d;
+    --lf-accent-text: #181615;
+    --lf-working-ink: #7eb2f0;
+    --lf-working-fill: #203147;
+    --lf-warning-ink: #e0b25c;
+    --lf-warning-fill: #3d311c;
+    --lf-failure-ink: #e67c73;
+    --lf-failure-fill: #452422;
+    --lf-success-ink: #7cc490;
+    --lf-success-fill: #213828;
+    --lf-highlight: rgba(201, 107, 118, 0.22);
+    --lf-highlight-active: rgba(201, 107, 118, 0.38);
+    --lf-highlight-line: rgba(201, 107, 118, 0.65);
+    --lf-shadow: 0 10px 30px rgba(0, 0, 0, 0.44);
+    --lf-shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.30);
+    --lf-bubble-bg: #efeae4;
+    --lf-bubble-text: #181615;
+    --lf-bubble-border: #d6ccc0;
+  }
+}
+
+/* Base layout and component styles for compiled Loopflow review pages. */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+main.lf-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 44px 24px max(168px, var(--lf-dock-room, 0px));
+}
+
+h1 {
+  font-family: var(--lf-font-serif);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-variant-ligatures: no-common-ligatures;
+  margin: 0 0 12px;
+}
+
+h2 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 32px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--lf-border);
+}
+
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+}
+
+p { margin: 0 0 12px; }
+ul, ol { margin: 0 0 12px; padding-left: 22px; }
+li { margin-bottom: 4px; }
+
+code, pre {
+  font-family: var(--lf-font-mono);
+  font-size: 12.5px;
+}
+
+code {
+  background: var(--lf-surface-muted);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 16px;
+  font-size: 14px;
+}
+
+th, td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--lf-border);
+  vertical-align: top;
+}
+
+th {
+  color: var(--lf-text-secondary);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+/* Meta bar & server status banner */
+.lf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--lf-text-secondary);
+  font-size: 12.5px;
+  margin-bottom: 24px;
+}
+
+.lf-meta code { font-size: 12px; }
+
+.lf-banner {
+  background: var(--lf-warning-fill);
+  color: var(--lf-warning-ink);
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13.5px;
+}
+
+/* Diff and File blocks */
+.lf-codeblock {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  margin: 14px 0;
+  overflow: hidden;
+}
+
+.lf-codeblock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--lf-surface-muted);
+  border-bottom: 1px solid var(--lf-border);
+  font-size: 12.5px;
+}
+
+.lf-codeblock-path {
+  font-family: var(--lf-font-mono);
+  color: var(--lf-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lf-codeblock-scroll { overflow-x: auto; }
+
+.lf-code-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-family: var(--lf-font-mono);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.lf-code-table td {
+  border: 0;
+  padding: 0 8px;
+  white-space: pre;
+}
+
+.lf-code-table td.lf-ln {
+  width: 1%;
+  min-width: 38px;
+  text-align: right;
+  color: var(--lf-text-tertiary);
+  user-select: none;
+  border-right: 1px solid var(--lf-border);
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+
+.lf-code-table tr.lf-code-row td.lf-ln { cursor: pointer; }
+
+.lf-code-table tr.lf-code-row td.lf-ln-old,
+.lf-code-table tr.lf-code-row td.lf-ln-single {
+  min-width: 52px;
+  padding-left: 24px;
+}
+
+.lf-code-table .lf-gutter-plus {
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border-radius: 4px;
+  border: none;
+  background: var(--lf-accent);
+  color: var(--lf-accent-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.lf-code-table tr.lf-code-row:hover .lf-gutter-plus,
+.lf-code-table .lf-gutter-plus:focus-visible {
+  opacity: 1;
+}
+
+/* A noted row keeps its diff tint; only the gutter carries the note. */
+.lf-code-table tr.lf-code-row.lf-row-has-note td.lf-ln { background: var(--lf-highlight-active); }
+
+.lf-code-table tr.lf-code-row.lf-row-has-note td.lf-ln:first-child {
+  box-shadow: inset 3px 0 0 var(--lf-accent);
+}
+
+.lf-code-table tr.lf-code-row.lf-row-selecting td { background: var(--lf-working-fill); }
+
+.lf-code-table td.lf-sign {
+  width: 18px;
+  text-align: center;
+  user-select: none;
+  padding: 0 2px;
+}
+
+.lf-code-table tr.lf-add { background: var(--lf-success-fill); }
+.lf-code-table tr.lf-add td.lf-sign { color: var(--lf-success-ink); }
+.lf-code-table tr.lf-del { background: var(--lf-failure-fill); }
+.lf-code-table tr.lf-del td.lf-sign { color: var(--lf-failure-ink); }
+.lf-code-table tr.lf-hunk td {
+  background: var(--lf-surface-muted);
+  color: var(--lf-text-secondary);
+  padding: 3px 10px;
+}
+
+.lf-code-table tr.lf-line-note td {
+  white-space: normal;
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  background: var(--lf-surface-element);
+  color: var(--lf-text);
+  padding: 6px 12px;
+  border-top: 1px solid var(--lf-border);
+  border-bottom: 1px solid var(--lf-border);
+}
+
+.lf-codeblock.lf-notes-hidden tr.lf-line-note { display: none; }
+
+/* Builtin components */
+.lf-decision {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+
+.lf-decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lf-decision-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.lf-decision-rec {
+  font-size: 12px;
+  color: var(--lf-text-secondary);
+}
+
+.lf-before-after {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.lf-before-after-pane {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  padding: 12px 14px;
+}
+
+.lf-before-after-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lf-text-secondary);
+  margin-bottom: 8px;
+}
+
+/* Controls: choices, questions, direct actions */
+[data-choice], [data-multiselect] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Draw `data-label` as a heading only when the control has no selectable prompt child;
+   a decision card shows its title instead. */
+:is([data-choice], [data-multiselect], [data-question])[data-label]:not(:has(> p, > label, > h3, > h4, > legend))::before {
+  content: attr(data-label);
+  display: block;
+  flex-basis: 100%;
+  margin: 10px 0 2px;
+  font-weight: 600;
+}
+
+:is([data-choice], [data-multiselect]) > :is(p, label, h3, h4, legend) {
+  flex-basis: 100%;
+  margin: 10px 0 2px;
+}
+
+.lf-decision [data-choice][data-label]::before { content: none; }
+
+button {
+  appearance: none;
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 6px 11px;
+  border-radius: 4px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  cursor: pointer;
+}
+
+button:hover { background: var(--lf-surface-muted); }
+
+button.is-selected,
+button[aria-pressed="true"],
+button.lf-btn-accent {
+  background: var(--lf-accent);
+  border-color: var(--lf-accent);
+  color: var(--lf-accent-text);
+}
+
+button.lf-btn-accent:hover {
+  background: var(--lf-accent-hover);
+  border-color: var(--lf-accent-hover);
+}
+
+button.lf-btn-quiet {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-color: var(--lf-border);
+  color: var(--lf-text-secondary);
+}
+
+button.lf-btn-quiet.is-selected,
+button.lf-btn-quiet[aria-pressed="true"] {
+  background: var(--lf-accent);
+  border-color: var(--lf-accent);
+  color: var(--lf-accent-text);
+}
+
+[data-question] { margin: 14px 0; }
+
+[data-question] textarea, [data-question] input[type="text"] {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 4px;
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 14px;
+  resize: vertical;
+}
+
+/* Direct action confirmation & receipt */
+.lf-action-confirm,
+.lf-action-receipt,
+.lf-action-error {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  border-radius: 4px;
+}
+
+.lf-action-confirm,
+.lf-action-error {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lf-action-confirm {
+  padding: 6px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 6px;
+  background: var(--lf-surface-muted);
+}
+
+.lf-action-summary {
+  font-family: var(--lf-font-mono);
+  font-size: 12px;
+  color: var(--lf-text-secondary);
+}
+
+.lf-action-receipt {
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--lf-success-fill);
+  color: var(--lf-success-ink);
+  font-weight: 600;
+}
+
+.lf-action-error {
+  padding: 5px 10px;
+  background: var(--lf-failure-fill);
+  color: var(--lf-failure-ink);
+}
+
+/* Warm-underlined cross-element note highlights */
+.lf-hl {
+  background: var(--lf-highlight);
+  border-bottom: 2px solid var(--lf-highlight-line, var(--lf-accent));
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.lf-hl:hover { background: var(--lf-highlight-active, var(--lf-highlight)); }
+
+.lf-pulse-ring {
+  outline: 2px solid var(--lf-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Notion-style floating selection bubble */
+.lf-float-pill {
+  position: fixed;
+  z-index: 960;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px;
+  border-radius: 8px;
+  background: var(--lf-bubble-bg, var(--lf-text));
+  color: var(--lf-bubble-text, var(--lf-bg));
+  border: 1px solid var(--lf-bubble-border, var(--lf-border-strong));
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.2));
+  font-size: 12px;
+}
+
+.lf-float-pill button {
+  background: transparent;
+  border: none;
+  color: var(--lf-bubble-text, var(--lf-bg));
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lf-float-pill button:hover { background: rgba(128, 128, 128, 0.24); }
+
+.lf-float-pill-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(128, 128, 128, 0.35);
+}
+
+/* Floating comment composer & hover cards */
+.lf-float-composer,
+.lf-hover-card {
+  position: fixed;
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border-strong);
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.18));
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.lf-float-composer {
+  z-index: 970;
+  width: min(320px, calc(100vw - 16px));
+  padding: 10px;
+  border-radius: 9px;
+}
+
+.lf-hover-card {
+  z-index: 950;
+  width: min(290px, calc(100vw - 16px));
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.lf-anchor-quote {
+  font-size: 11.5px;
+  color: var(--lf-text-secondary);
+  border-left: 2px solid var(--lf-border-strong);
+  padding-left: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lf-card-body {
+  color: var(--lf-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lf-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.lf-float-composer textarea,
+.lf-sidebar-item textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 5px;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  resize: vertical;
+}
+
+.lf-sidebar-item textarea { background: var(--lf-surface); }
+
+/* Top-right Comments toggle + collapsible slide-over sidebar */
+.lf-comments-toggle {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 920;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: var(--lf-shadow-sm, 0 3px 12px rgba(0, 0, 0, 0.08));
+}
+
+.lf-comments-toggle.has-notes { border-color: var(--lf-accent); }
+
+.lf-comments-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--lf-accent);
+  color: var(--lf-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.lf-comments-count[hidden] { display: none; }
+
+.lf-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(340px, 92vw);
+  z-index: 940;
+  background: var(--lf-surface);
+  border-left: 1px solid var(--lf-border-strong);
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.18));
+  display: flex;
+  flex-direction: column;
+  transform: translateX(104%);
+  transition: transform 0.18s ease;
+}
+
+.lf-sidebar.is-open { transform: translateX(0); }
+
+.lf-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--lf-border);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.lf-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lf-sidebar-empty {
+  font-size: 13px;
+  color: var(--lf-text-tertiary);
+  padding: 6px 2px;
+}
+
+.lf-sidebar-item {
+  padding: 9px 11px;
+  border: 1px solid var(--lf-border);
+  border-radius: 7px;
+  background: var(--lf-bg);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lf-sidebar-item:hover { border-color: var(--lf-accent); }
+
+/* Fixed T3 Code-style attached-chip composer dock (hidden in Loopflow Desktop) */
+.lf-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: min(820px, calc(100vw - 24px));
+  padding: 9px 12px;
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 11px;
+  box-shadow: var(--lf-shadow, 0 8px 28px rgba(0, 0, 0, 0.16));
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lf-dock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-height: 92px;
+  overflow-y: auto;
+}
+
+.lf-dock[hidden],
+.lf-dock-chips[hidden] { display: none; }
+
+.lf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-bg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lf-chip:hover { border-color: var(--lf-accent); }
+
+.lf-chip-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--lf-surface-element);
+  color: var(--lf-text-secondary);
+  flex-shrink: 0;
+}
+
+.lf-chip-tag.tag-note { background: var(--lf-highlight); color: var(--lf-accent); }
+.lf-chip-tag.tag-lines { background: var(--lf-working-fill); color: var(--lf-working-ink); }
+.lf-chip-tag.tag-choice { background: var(--lf-success-fill); color: var(--lf-success-ink); }
+.lf-chip-tag.tag-answer { background: var(--lf-warning-fill); color: var(--lf-warning-ink); }
+.lf-chip-tag.tag-run { background: var(--lf-failure-fill); color: var(--lf-failure-ink); }
+
+.lf-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.lf-chip-x {
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--lf-text-tertiary);
+}
+
+.lf-chip-x:hover {
+  background: transparent;
+  color: var(--lf-failure-ink);
+}
+
+.lf-dock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lf-dock-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 6px;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13.5px;
+}
+
+.lf-dock-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.lf-dock-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.lf-dock-preview {
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: var(--lf-bg);
+  border: 1px solid var(--lf-border);
+  font-family: var(--lf-font-mono);
+  font-size: 11.5px;
+  color: var(--lf-text-secondary);
+  word-break: break-word;
+  max-height: 84px;
+  overflow-y: auto;
+}
+
+.lf-dock-status {
+  font-size: 12.5px;
+  color: var(--lf-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lf-dock-status.is-error { color: var(--lf-failure-ink); }
+.lf-dock-status.is-ok { color: var(--lf-success-ink); }
+
+</style>
+</head>
+<body>
+<main class="lf-page">
+<h1>MTG-508 Concept Review · Coupled mana payments, fixed-tap choices, and owned activations</h1>
+
+<p><strong>Area reviewed:</strong> Mana payment feasibility, execution, and announced activation lifecycle across
+  <code>managym/src/flow/mana.rs</code> (with <code>mana/{help,preview,autotapper,interchangeable}.rs</code>),
+  <code>flow/decision.rs</code>, <code>flow/payment.rs</code>, <code>flow/play.rs</code>,
+  <code>flow/action.rs</code>, and <code>flow/{layers,statics}.rs</code>.
+  This is a pre-implementation review of <code>scratch/plan.md</code> at <code>4a25a7a28f</code> (stacked on MTG-500 <code>5e9156a791</code>;
+  freshly fetched <code>origin/main</code> at <code>23212c88f5</code> is already an ancestor, with <code>MATCH_STATE_HASH_VERSION = 34</code> on <code>origin/main</code> and <code>35</code> on this branch).
+</p>
+
+<p><strong>Verdict on the first slice:</strong> Pass 1 (fixed taps suspending on a bonus choice) is the right first slice—Pass 2's native fork stepping hits the existing <code>perform_automatic_tap</code> panic without it—but its representation (<code>FixedOutput::{Exact, Choice}</code>) splits one concept across ~38 sites and misses <code>PaymentPreview</code>. Pass 2's plan has three structural defects that would fail its own committed fixtures if built as written:
+  (1) smuggling <code>&amp;Game</code> behind <code>cached_plan</code> while callers still pre-mutate frozen <code>PaymentModel</code> snapshots;
+  (2) dropping <code>Sensitive</code> sources from fork branching; and
+  (3) memoizing on <code>deterministic_hash()</code>, which hashes the full chronological event ledger and never deduplicates transpositions.
+</p>
+
+<h2>Domain concepts vs. code concepts</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Domain concept (player / CR)</th>
+      <th>Planned code concept</th>
+      <th>Aligned?</th>
+      <th>What is wrong</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Payment feasibility from a position (or after taking candidate step X)</strong>: does some legal sequence of mana taps, activations, help taps, delve exiles, and replacement orders complete every owed cost?</td>
+      <td><code>PaymentModel</code> (frozen <code>Arc&lt;Vec&lt;ManaSource&gt;&gt;</code> + <code>LifeBudget</code>) with <code>&amp;Game</code> bolted on behind <code>cached_plan</code>; callers still flatten candidate first steps (<code>activation_payable</code>, <code>after_tap</code>, <code>with_tapped</code>, <code>after_mana_choice</code>), reservations, convoke/improvise, and delve into pure <code>PaymentModel</code> mutations before calling <code>cached_plan</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Biggest mismatch.</strong> An action's legality has no single coupled owner: callers mutate the frozen source list instead of stepping the fork, fast paths (<code>fixed_sufficient</code>, <code>PaymentCache</code>, <code>determined_source_counts</code>, <code>equivalent_mana_choices</code>, <code>automatic_units_within</code>) bypass <code>cached_plan</code>, and <code>help_obligations</code> pre-subtracts delve at the root and discards <code>help.delve</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Coupling roles</strong>: steps that change coupled board state (<em>Mutator</em>), steps whose output/cost/triggers depend on it (<em>Sensitive</em>), and independent steps (<em>Invariant</em>).</td>
+      <td><code>BoardArithmeticProfile</code> + <code>PaymentCoupling::{Invariant, Sensitive, Mutator}</code> in classifier, but Pass 2 search branches only on Mutators (treating Sensitive like Invariant) and deduplicates via <code>same_payment_profile</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>One concept dropped mid-flight.</strong> Not branching on <code>Sensitive</code> sources breaks <code>34092c814</code> (Audience before Citadel/Canyon), <code>a90fd7109</code> (Mountain tap before counter removal), and <code>PreventAll</code> before Citadel. <code>same_payment_profile</code> ignores <code>tap_candidates</code> membership. <code>BoardArithmeticProfile</code> also misses <code>Modification::{ExileIfWouldDie, ExileIfWouldLeave}</code> in <code>state.effects</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Equivalent payment states reached in different orders</strong> (memoization / transposition).</td>
+      <td>Memo key = <code>fork.state.deterministic_hash()</code> + separate abstract <code>pool</code> + obligations + reservations.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Wrong concept for the key, and two pools.</strong> <code>deterministic_hash()</code> hashes <code>events</code>, <code>pending_events</code>, <code>observation_events</code>, <code>pending_triggers</code>, <code>id_gen</code>, and <code>mana_pool</code> in chronological order—it is a path-history digest, not a state equivalence key. Two orders of commutative Mutators never hit the memo table, while paying full JSON+BLAKE3 serialization of the match's <code>EventLedger</code> at every node. Keeping a separate abstract <code>pool</code> also diverges from <code>fork.state.players[p].mana_pool</code>, breaking <code>Condition::UnspentManaAtLeast</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>In-flight mana activation</strong> waiting on its mana fee, counter/sacrifice replacements, or bonus choices.</td>
+      <td><code>fork</code> clears <code>suspended_decision</code>; <code>payment_obligations</code> collapses <code>ManaUpfront</code> / <code>ManaOutput</code> into pure <code>Obligation::Output { choices, life_cost, life_delta }</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Lifecycle flattened into arithmetic.</strong> Drops <code>ManaUpfrontActivation</code> and any suspended <code>OrderReplacement</code> / <code>PendingManaOutput</code> frame. A suspended <code>ManaUpfront</code> whose grant already ended (Pass 3 fixture) cannot be completed natively on <code>fork</code>, and an in-flight <code>OrderReplacement</code> (Caradora + Doubling Season) cannot be stepped once <code>suspended_decision</code> is cleared.</td>
+    </tr>
+    <tr>
+      <td><strong>Tapping a fixed-mana permanent whose triggered bonus needs a color choice</strong> (CR 106.12a / 605.4a).</td>
+      <td><code>ManaSource.fixed: Option&lt;FixedOutput&gt;</code> with <code>FixedOutput::{Exact(Mana), Choice(ManaChoices)}</code> across ~38 <code>.fixed</code> sites; <code>preview_tap</code> left assuming exact taps.</td>
+      <td><strong>No</strong></td>
+      <td><strong>One field for two ideas.</strong> <code>source.fixed</code> meant "one deterministic automatic output." Splitting it into an enum duplicates multi-output choice logic already in <code>ManaActivation</code> across bounds, witness search, floats, and taps, and misses <code>PaymentPreview::preview_tap</code> (called directly when hovering <code>Action::TapForMana</code>) and <code>producible_mana</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Announced non-mana activation</strong> keeping its priced cost and rules text until it reaches the stack (CR 602.2b).</td>
+      <td>Owned <code>(priced_cost, unfinalized ActivatedAbilityDefinition)</code> on <code>ActivatedTargeting</code> and <code>Operation::Activation</code>; <code>PendingChoice::ActivationX</code> left re-indexing live <code>characteristics</code>; priority scans construct owned <code>Operation::Activation</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Rule unfinished on one stage, redundant fields elsewhere.</strong> Leaves <code>PendingChoice::ActivationX</code> re-reading <code>activated_abilities[ability_index]</code>. Non-mana abilities have no dynamic mana output, so one finalized <code>ActivatedAbilityDefinition</code> already holds both priced cost and text. Cloning it on every priority scan adds unnecessary heap churn. Also, <code>Operation::Activation</code> is already inside <code>GameState.suspended_decision</code> (hashed directly by <code>deterministic_hash</code>), not only <code>PendingChoice</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Payer's replacement ordering during a payment</strong> (CR 616.1): only orders that complete the enclosing payment are legal; opponent orders are never filtered.</td>
+      <td>Filter <code>Decision::OrderReplacement</code> offers and admission when <code>has_enclosing_payment(chooser)</code>; payer OR / opponent AND in search.</td>
+      <td><strong>Yes</strong></td>
+      <td>Matches CR 616.1 and the no-stranding contract once backed by live fork transitions (Findings 1 and 4) rather than clearing <code>suspended_decision</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Concrete interaction walk: where the current plan breaks</h2>
+
+<p>Walk <code>fixed_mana_suffix_reads_life_through_damage_replacement</code> (<code>0d7bb6743</code>: 4 life, Henge <code>+2</code>, Citadel <code>-3 - life_gained_this_turn</code>, owing <code>{G}{G}{R}</code> + 2 life) and <code>a90fd7109</code> (Mountain tap + trample-counter removal beside trample-reading Heartbeat, owing <code>{G}{R}{R}</code>) through Pass 2 as written:</p>
+
+<ol>
+  <li><strong>Offer check:</strong> <code>mana_ability_actions_with</code> checks whether Henge-first (<code>0d7bb6743</code>) or counter-first (<code>a90fd7109</code>) is legal by calling <code>PaymentModel::activation_payable</code> (<code>mana.rs:1741</code>).</li>
+  <li><strong>Failure in the planned boundary:</strong> <code>activation_payable</code> clones the frozen <code>PaymentModel</code>, removes the tap/counter from <code>model.sources</code>, prepends a pure <code>Obligation::Output { choices, life_cost, life_delta }</code>, and calls <code>model.payable(...)</code>. It <em>never executes Henge or removes Mountain's trample counter on <code>fork</code></em>.</li>
+  <li><strong>Resulting wrong answer:</strong> When <code>cached_plan</code> forks <code>self.game</code>, <code>fork.state.turn.history[0].life_gained</code> is still <code>0</code> (in <code>0d7bb6743</code>) and Mountain still has its trample counter (in <code>a90fd7109</code>). Stepping Citadel on <code>fork</code> still deals 3 damage instead of 5; tapping Mountain still triggers Heartbeat for <code>{R}{R}</code>. Both stranding actions are still offered and still crash with <code>AgentError("empty non-terminal action space")</code>.</li>
+  <li><strong>Same failure on Delve + sacrifice (Pass 3):</strong> <code>help_obligations</code> (<code>mana/help.rs:73</code>) reads <code>self.graveyard_payers(player, spell).len()</code> at the root (= 0) and discards <code>help.delve</code> before calling <code>model.payable</code>. Sacrificing a non-token creature on <code>fork</code> adds a card to the graveyard that the coupled search does not even know can pay generic delve mana.</li>
+  <li><strong>Same failure on <code>34092c814</code>:</strong> At 25 life (after Citadel #1, with Citadel #2 and Raucous Audience untapped, casting Solemn Simulacrum <code>{4}</code>), Citadel #2 has <code>mana_cost = {0}</code>. Pass 2's rule branches on Sensitive sources "only as far as funding a Mutator's own mana cost needs," so it never tries Audience (<code>Sensitive</code>) before Citadel #2 (<code>Mutator</code>), and wrongly reports the cast unpayable.</li>
+  <li><strong>Recovery / simpler model:</strong> Make the coupled authority accept a <em>structured payment query</em> (reservations, <code>Help</code>, pending live activations, and an optional candidate first step—activate, tap, mana choice, or replacement order—executed natively on the fork before searching). Branch on both <code>Mutator</code> and <code>Sensitive</code> sources; sync <code>fork</code>'s real mana pool with the search; memoize on a payment-state fingerprint that excludes event logs.</li>
+</ol>
+
+<h2>Biggest mismatch: frozen <code>PaymentModel</code> mutations vs. live coupled transitions</h2>
+
+<p>Existing code in <code>managym/src/flow/mana.rs</code> and <code>managym/src/flow/mana/help.rs</code> shows why intercepting <code>cached_plan</code> alone cannot catch coupled transitions—callers already flattened the candidate action, delve count, reservations, and fast paths before <code>cached_plan</code> is ever reached:</p>
+
+<div class="lf-codeblock" data-path="managym/src/flow/mana.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana.rs:1741-1765</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="1741"><td class="lf-ln lf-ln-single">1741</td><td>    fn activation_payable(</td></tr>
+<tr class="lf-code-row" data-line="1742"><td class="lf-ln lf-ln-single">1742</td><td>        &amp;self,</td></tr>
+<tr class="lf-code-row" data-line="1743"><td class="lf-ln lf-ln-single">1743</td><td>        source_index: usize,</td></tr>
+<tr class="lf-code-row" data-line="1744"><td class="lf-ln lf-ln-single">1744</td><td>        ability_pos: usize,</td></tr>
+<tr class="lf-code-row" data-line="1745"><td class="lf-ln lf-ln-single">1745</td><td>        pool: &amp;Mana,</td></tr>
+<tr class="lf-code-row" data-line="1746"><td class="lf-ln lf-ln-single">1746</td><td>        pending_obligations: &amp;[Obligation],</td></tr>
+<tr class="lf-code-row" data-line="1747"><td class="lf-ln lf-ln-single">1747</td><td>    ) -&gt; bool {</td></tr>
+<tr class="lf-code-row" data-line="1748"><td class="lf-ln lf-ln-single">1748</td><td>        let source = &amp;self.sources[source_index];</td></tr>
+<tr class="lf-code-row" data-line="1749"><td class="lf-ln lf-ln-single">1749</td><td>        let ability = &amp;source.abilities[ability_pos];</td></tr>
+<tr class="lf-code-row" data-line="1750"><td class="lf-ln lf-ln-single">1750</td><td>        let mut model = self.clone();</td></tr>
+<tr class="lf-code-row" data-line="1751"><td class="lf-ln lf-ln-single">1751</td><td>        model.reserve_mana_activation(</td></tr>
+<tr class="lf-code-row" data-line="1752"><td class="lf-ln lf-ln-single">1752</td><td>            source.permanent,</td></tr>
+<tr class="lf-code-row" data-line="1753"><td class="lf-ln lf-ln-single">1753</td><td>            ability.tap_source,</td></tr>
+<tr class="lf-code-row" data-line="1754"><td class="lf-ln lf-ln-single">1754</td><td>            ability.sacrifice_source,</td></tr>
+<tr class="lf-code-row" data-line="1755"><td class="lf-ln lf-ln-single">1755</td><td>            ability.counter_cost.map(|cost| (cost.kind, cost.amount)),</td></tr>
+<tr class="lf-code-row" data-line="1756"><td class="lf-ln lf-ln-single">1756</td><td>        );</td></tr>
+<tr class="lf-code-row" data-line="1757"><td class="lf-ln lf-ln-single">1757</td><td>        if ability.limited {</td></tr>
+<tr class="lf-code-row" data-line="1758"><td class="lf-ln lf-ln-single">1758</td><td>            Arc::make_mut(&amp;mut model.sources)[source_index]</td></tr>
+<tr class="lf-code-row" data-line="1759"><td class="lf-ln lf-ln-single">1759</td><td>                .abilities</td></tr>
+<tr class="lf-code-row" data-line="1760"><td class="lf-ln lf-ln-single">1760</td><td>                .retain(|a| a.ability_index != ability.ability_index);</td></tr>
+<tr class="lf-code-row" data-line="1761"><td class="lf-ln lf-ln-single">1761</td><td>        }</td></tr>
+<tr class="lf-code-row" data-line="1762"><td class="lf-ln lf-ln-single">1762</td><td>        let mut obligations = PaymentModel::activation_obligations(ability);</td></tr>
+<tr class="lf-code-row" data-line="1763"><td class="lf-ln lf-ln-single">1763</td><td>        obligations.extend_from_slice(pending_obligations);</td></tr>
+<tr class="lf-code-row" data-line="1764"><td class="lf-ln lf-ln-single">1764</td><td>        model.payable(pool.clone(), obligations, SourcePolicy::All)</td></tr>
+<tr class="lf-code-row" data-line="1765"><td class="lf-ln lf-ln-single">1765</td><td>    }</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="managym/src/flow/mana.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana.rs:2684-2702</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="2684"><td class="lf-ln lf-ln-single">2684</td><td>    fn payable(&amp;self, pool: Mana, obligations: Vec&lt;Obligation&gt;, policy: SourcePolicy) -&gt; bool {</td></tr>
+<tr class="lf-code-row" data-line="2685"><td class="lf-ln lf-ln-single">2685</td><td>        if let Some(direct) = self.direct(&amp;obligations, policy) {</td></tr>
+<tr class="lf-code-row" data-line="2686"><td class="lf-ln lf-ln-single">2686</td><td>            let payable = self.direct_payable(&amp;pool, &amp;direct);</td></tr>
+<tr class="lf-code-row" data-line="2687"><td class="lf-ln lf-ln-single">2687</td><td>            debug_assert_eq!(</td></tr>
+<tr class="lf-code-row" data-line="2688"><td class="lf-ln lf-ln-single">2688</td><td>                payable,</td></tr>
+<tr class="lf-code-row" data-line="2689"><td class="lf-ln lf-ln-single">2689</td><td>                self.search(pool, obligations.clone(), policy).is_some(),</td></tr>
+<tr class="lf-code-row" data-line="2690"><td class="lf-ln lf-ln-single">2690</td><td>                &quot;direct payment answer differs from the search&quot;</td></tr>
+<tr class="lf-code-row" data-line="2691"><td class="lf-ln lf-ln-single">2691</td><td>            );</td></tr>
+<tr class="lf-code-row" data-line="2692"><td class="lf-ln lf-ln-single">2692</td><td>            return payable;</td></tr>
+<tr class="lf-code-row" data-line="2693"><td class="lf-ln lf-ln-single">2693</td><td>        }</td></tr>
+<tr class="lf-code-row" data-line="2694"><td class="lf-ln lf-ln-single">2694</td><td>        if policy == SourcePolicy::All &amp;&amp; self.fixed_sufficient(&amp;pool, self.life, &amp;obligations) {</td></tr>
+<tr class="lf-code-row" data-line="2695"><td class="lf-ln lf-ln-single">2695</td><td>            debug_assert!(</td></tr>
+<tr class="lf-code-row" data-line="2696"><td class="lf-ln lf-ln-single">2696</td><td>                self.search(pool, obligations.clone(), policy).is_some(),</td></tr>
+<tr class="lf-code-row" data-line="2697"><td class="lf-ln lf-ln-single">2697</td><td>                &quot;fixed-sufficient payment fast-path differed from the search&quot;</td></tr>
+<tr class="lf-code-row" data-line="2698"><td class="lf-ln lf-ln-single">2698</td><td>            );</td></tr>
+<tr class="lf-code-row" data-line="2699"><td class="lf-ln lf-ln-single">2699</td><td>            return true;</td></tr>
+<tr class="lf-code-row" data-line="2700"><td class="lf-ln lf-ln-single">2700</td><td>        }</td></tr>
+<tr class="lf-code-row" data-line="2701"><td class="lf-ln lf-ln-single">2701</td><td>        self.plan(pool, obligations, policy).is_some()</td></tr>
+<tr class="lf-code-row" data-line="2702"><td class="lf-ln lf-ln-single">2702</td><td>    }</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="managym/src/flow/mana/help.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/help.rs:66-89</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="66"><td class="lf-ln lf-ln-single">66</td><td>    fn help_obligations(</td></tr>
+<tr class="lf-code-row" data-line="67"><td class="lf-ln lf-ln-single">67</td><td>        &amp;self,</td></tr>
+<tr class="lf-code-row" data-line="68"><td class="lf-ln lf-ln-single">68</td><td>        player: PlayerId,</td></tr>
+<tr class="lf-code-row" data-line="69"><td class="lf-ln lf-ln-single">69</td><td>        cost: &amp;ManaCost,</td></tr>
+<tr class="lf-code-row" data-line="70"><td class="lf-ln lf-ln-single">70</td><td>        permissions: CostPermissionContext,</td></tr>
+<tr class="lf-code-row" data-line="71"><td class="lf-ln lf-ln-single">71</td><td>        life: u32,</td></tr>
+<tr class="lf-code-row" data-line="72"><td class="lf-ln lf-ln-single">72</td><td>    ) -&gt; Vec&lt;Obligation&gt; {</td></tr>
+<tr class="lf-code-row" data-line="73"><td class="lf-ln lf-ln-single">73</td><td>        let cost = match permissions.help.delve {</td></tr>
+<tr class="lf-code-row" data-line="74"><td class="lf-ln lf-ln-single">74</td><td>            Some(spell) =&gt; {</td></tr>
+<tr class="lf-code-row" data-line="75"><td class="lf-ln lf-ln-single">75</td><td>                let cards = self.graveyard_payers(player, spell).len();</td></tr>
+<tr class="lf-code-row" data-line="76"><td class="lf-ln lf-ln-single">76</td><td>                cost.reduced_generic(cards.min(usize::from(u8::MAX)) as u8)</td></tr>
+<tr class="lf-code-row" data-line="77"><td class="lf-ln lf-ln-single">77</td><td>            }</td></tr>
+<tr class="lf-code-row" data-line="78"><td class="lf-ln lf-ln-single">78</td><td>            None =&gt; cost.clone(),</td></tr>
+<tr class="lf-code-row" data-line="79"><td class="lf-ln lf-ln-single">79</td><td>        };</td></tr>
+<tr class="lf-code-row" data-line="80"><td class="lf-ln lf-ln-single">80</td><td>        let waterbend = permissions.waterbend.min(cost.generic());</td></tr>
+<tr class="lf-code-row" data-line="81"><td class="lf-ln lf-ln-single">81</td><td>        let keyword = if permissions.help.convoke || permissions.help.improvise {</td></tr>
+<tr class="lf-code-row" data-line="82"><td class="lf-ln lf-ln-single">82</td><td>            cost.generic() - waterbend</td></tr>
+<tr class="lf-code-row" data-line="83"><td class="lf-ln lf-ln-single">83</td><td>        } else {</td></tr>
+<tr class="lf-code-row" data-line="84"><td class="lf-ln lf-ln-single">84</td><td>            0</td></tr>
+<tr class="lf-code-row" data-line="85"><td class="lf-ln lf-ln-single">85</td><td>        };</td></tr>
+<tr class="lf-code-row" data-line="86"><td class="lf-ln lf-ln-single">86</td><td>        let mut obligations = tap_obligations(&amp;cost, keyword, waterbend, permissions.help.convoke);</td></tr>
+<tr class="lf-code-row" data-line="87"><td class="lf-ln lf-ln-single">87</td><td>        obligations.extend(Obligation::life(life));</td></tr>
+<tr class="lf-code-row" data-line="88"><td class="lf-ln lf-ln-single">88</td><td>        obligations</td></tr>
+<tr class="lf-code-row" data-line="89"><td class="lf-ln lf-ln-single">89</td><td>    }</td></tr>
+</tbody></table></div></div>
+
+<div class="lf-before-after">
+  <div class="lf-before-after-pane">
+    <div class="lf-before-after-label">Before</div>
+    
+    <h4>Planned (in <code>scratch/plan.md</code>)</h4>
+    <ul>
+      <li><code>PaymentModel</code> gains <code>&amp;Game</code> + <code>payer</code>, and intercepts only <code>cached_plan</code>.</li>
+      <li>Callers still mutate frozen <code>PaymentModel</code> before querying:
+        <ul>
+          <li><code>activation_payable</code> strips resources and prepends pure <code>Obligation::Output</code> without executing the activation on <code>fork</code>.</li>
+          <li><code>after_tap</code> / <code>payable_after_tap</code> / <code>with_tapped</code> / <code>plan_after_tap</code> strip <code>untapped</code> without tapping on <code>fork</code>.</li>
+          <li><code>after_mana_choice</code> edits an abstract <code>pool</code> without updating <code>fork</code>'s pool.</li>
+          <li><code>help_obligations</code> pre-reduces delve at root and discards <code>Help</code>; <code>reserve</code> discards reservation records.</li>
+        </ul>
+      </li>
+      <li><code>PaymentModel::payable</code> hits <code>direct()</code> and <code>fixed_sufficient()</code> before <code>cached_plan</code>; <code>PaymentCache</code> keys only on <code>(sources, life, pool, obligations, policy, tap)</code>.</li>
+      <li>Search branches only on Mutators, clears <code>suspended_decision</code> (losing suspended <code>ManaUpfront</code> / <code>OrderReplacement</code>), and hashes <code>deterministic_hash()</code> (the full <code>EventLedger</code>).</li>
+    </ul>
+  
+  </div>
+  <div class="lf-before-after-pane">
+    <div class="lf-before-after-label">After</div>
+    
+    <h4>Proposed redesign (for this Task)</h4>
+    <ul>
+      <li>Keep pure <code>PaymentModel</code> intact for uncoupled boards (zero overhead on TLA / ordinary boards), and record the structured <strong>query context</strong> alongside it:
+        <ul>
+          <li><code>reservations: Vec&lt;SourceReservation&gt;</code> + counter reservations,</li>
+          <li><code>help: Help</code> (<code>convoke</code>, <code>improvise</code>, <code>delve: Option&lt;ObjectId&gt;</code>) so delve and help taps re-evaluate on every fork step,</li>
+          <li><code>pending_upfront: Vec&lt;PendingUpfrontObligation&gt;</code> retaining the owned <code>ManaUpfrontActivation</code> (and any active <code>OrderReplacement</code> frame for the first step).</li>
+        </ul>
+      </li>
+      <li>Route every candidate-step check (<code>activation_payable</code>, <code>tap_payable</code> / <code>plan_after_tap</code> / <code>with_tapped</code>, <code>mana_choice_completes_payment</code>, and <code>OrderReplacement</code> candidate) through one <code>PaymentAuthority</code> entry that:
+        <ul>
+          <li>takes the fast pure <code>PaymentModel</code> + <code>PaymentCache</code> path whenever the question has no <code>Mutator</code> (and no active coupled <code>OrderReplacement</code>);</li>
+          <li>otherwise steps the candidate action <strong>natively on <code>fork</code></strong>, syncs <code>fork</code>'s real <code>mana_pool</code>, rebuilds sources + reservations + help + coupling, and runs the coupled fork search.</li>
+        </ul>
+      </li>
+      <li>Coupled search tries pure handoff (Mutators removed, only when no pending coupled <code>ManaUpfront</code>/<code>OrderReplacement</code> remains), otherwise branches on every <code>Mutator</code> and every <code>Sensitive</code> source (plus one representative per <code>sources_equivalent</code> class of <code>Invariant</code> sources only while funding a pending upfront mana fee), memoized on a <strong>payment-state fingerprint</strong> (permanents, life, turn histories, graveyard/exile contents, pool, obligations, reservations—never <code>events</code> or <code>id_gen</code>).</li>
+    </ul>
+  
+  </div>
+</div>
+
+
+<h2>Findings</h2>
+
+<div class="lf-decision" data-decision-id="f1">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F1 · Route candidate-step checks, reservations, delve/help, and fast paths through one coupled query boundary (This work)</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>Scope:</strong> This work (Pass 2 &amp; Pass 3). Fixing this is required for the plan's own committed fixtures (<code>0d7bb6743</code>, <code>a90fd7109</code>, <code>34092c814</code>, delve + non-token sacrifice) to pass.</p>
+  <p><strong>What breaks:</strong></p>
+  <ul>
+    <li><code>activation_payable</code> (<code>mana.rs:1741</code>), <code>after_tap</code>/<code>payable_after_tap</code> (<code>mana.rs:2652</code>), <code>plan_after_tap</code> (<code>mana.rs:2502</code>), <code>with_tapped</code> (<code>mana/help.rs:228</code>), and <code>after_mana_choice</code> (<code>mana.rs:4778</code>) encode candidate first steps as frozen <code>PaymentModel</code> edits instead of native fork steps.</li>
+    <li><code>PaymentModel</code> does not retain its applied <code>SourceReservation</code>s, counter reservations, or <code>Help</code> (<code>convoke</code>, <code>improvise</code>, <code>delve</code>), and <code>help_obligations</code> pre-subtracts delve at the root and throws <code>help.delve</code> away (<code>mana/help.rs:73-79</code>).</li>
+    <li>Uncoupled shortcuts missed by Pass 2's list: <code>PaymentModel::fixed_sufficient</code> (<code>mana.rs:2694</code>), <code>PaymentCache</code> lookup (<code>mana.rs:2609</code>—its key omits coupled game state), <code>determined_source_counts</code> (<code>mana/interchangeable.rs:55</code>), <code>automatic_units_within</code> (<code>mana.rs:4141</code>), and <code>equivalent_mana_choices</code> (<code>mana.rs:4560</code>). All must defer to the coupled authority when a Mutator is present.</li>
+  </ul>
+  <p><strong>Recommendation:</strong> Store <code>reservations</code>, <code>counter_reservations</code>, and <code>help</code> on the payment query context; add explicit candidate-step entry points (activate, tap-for-mana, tap-for-cost, mana-choice, order-replacement) that run the candidate step natively on <code>fork</code> when coupled and delegate to existing pure methods when uncoupled. Bypass <code>PaymentCache</code>, <code>direct</code>, <code>fixed_sufficient</code>, <code>determined_source_counts</code>, <code>automatic_units_within</code>, and <code>equivalent_mana_choices</code> whenever the question is coupled.</p>
+  <p><strong>Passed over:</strong> Intercepting only <code>cached_plan</code> (fails all four coupled fixtures and delve-from-sacrifice).</p>
+</div>
+  <div data-choice="f1" data-label="F1 · Route candidate-step checks, reservations, delve/help, and fast paths through one coupled query boundary (This work)">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f2">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F2 · Branch on Sensitive sources in coupled search, deduplicate with sources_equivalent, and scan EffectRecords in BoardArithmeticProfile (This work)</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>Scope:</strong> This work (Pass 2).</p>
+  <p><strong>What breaks:</strong></p>
+  <ul>
+    <li><code>scratch/plan.md</code> line 44 collapses <code>Sensitive</code> into <code>Invariant</code> ("branch on each Mutator, and on Sensitive/Invariant sources only as far as funding a Mutator's own mana cost needs"), contradicting <code>7cb3655f1</code> design 1 ("branch only on coupled mutators and affected sources"). Whenever a Mutator has mana cost <code>{0}</code> and degrades a Sensitive source (Audience before Citadel/Canyon in <code>34092c814</code>; Mountain tap before trample counter in <code>a90fd7109</code>; <code>PreventAll</code> before Citadel at 3 life), the search never tries the Sensitive source first and falsely reports unpayable.</li>
+    <li>Deduplicating Invariant funders with <code>same_payment_profile</code> (<code>mana.rs:748</code>) ignores <code>tap_candidates</code> membership—two sources with identical mana output can differ in whether a counted-tap ability (e.g. Food) can tap them. Use <code>PurposeProjection::sources_equivalent</code> (<code>mana.rs:432</code>) with <code>tap_candidate_sets</code> instead.</li>
+    <li><code>BoardArithmeticProfile</code> scanning only <code>SourceSeed</code>s and <code>functioning_command_objects(None)</code> misses resolved <code>EffectRecords</code> in <code>game.state.effects</code> carrying <code>Modification::ExileIfWouldDie</code> / <code>Modification::ExileIfWouldLeave</code> (<code>state/src/effect.rs:110,117</code>), which redirect a sacrificed non-token creature to exile instead of the graveyard (affecting delve and graveyard-conditional mana).</li>
+  </ul>
+  <p><strong>Recommendation:</strong> Branch on every <code>Mutator</code> and every <code>Sensitive</code> source; keep <code>Invariant</code> sources (one representative per <code>sources_equivalent</code> class) solely for funding a Mutator's or Sensitive source's upfront mana cost, leaving all other Invariant use to the pure handoff. Include <code>state.effects</code> replacement modifications in <code>BoardArithmeticProfile</code>.</p>
+  <p><strong>Passed over:</strong> Branching on Invariant sources too (blows up the 10-Forest <code>{15}</code> board); branching on Mutators only (fails <code>34092c814</code> and <code>a90fd7109</code>).</p>
+</div>
+  <div data-choice="f2" data-label="F2 · Branch on Sensitive sources in coupled search, deduplicate with sources_equivalent, and scan EffectRecords in BoardArithmeticProfile (This work)">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f3">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F3 · Replace deterministic_hash() memo key with a payment-state fingerprint and keep one mana pool on the fork (This work)</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>Scope:</strong> This work (Pass 2).</p>
+  <p><strong>What breaks:</strong> <code>GameState::deterministic_hash()</code> serializes the entire match's chronological <code>events</code>, <code>pending_events</code>, <code>observation_events</code>, <code>pending_triggers</code>, <code>id_gen</code> watermark, and <code>mana_pool</code> unit origins into JSON and hashes with BLAKE3:</p>
+  <div class="lf-codeblock" data-path="managym/src/state/hash.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/state/hash.rs:234-261</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="234"><td class="lf-ln lf-ln-single">234</td><td>    players: &amp;&#39;a [crate::state::player::Player; 2],</td></tr>
+<tr class="lf-code-row" data-line="235"><td class="lf-ln lf-ln-single">235</td><td>    zones: &amp;&#39;a crate::state::zone::ZoneManager,</td></tr>
+<tr class="lf-code-row" data-line="236"><td class="lf-ln lf-ln-single">236</td><td>    turn: CanonicalTurn&lt;&#39;a&gt;,</td></tr>
+<tr class="lf-code-row" data-line="237"><td class="lf-ln lf-ln-single">237</td><td>    priority: &amp;&#39;a crate::flow::priority::PriorityState,</td></tr>
+<tr class="lf-code-row" data-line="238"><td class="lf-ln lf-ln-single">238</td><td>    stack_objects: &amp;&#39;a [crate::state::stack_object::StackObject],</td></tr>
+<tr class="lf-code-row" data-line="239"><td class="lf-ln lf-ln-single">239</td><td>    combat: Option&lt;CanonicalCombat&gt;,</td></tr>
+<tr class="lf-code-row" data-line="240"><td class="lf-ln lf-ln-single">240</td><td>    events: &amp;&#39;a crate::flow::event::EventLedger,</td></tr>
+<tr class="lf-code-row" data-line="241"><td class="lf-ln lf-ln-single">241</td><td>    pending_events: &amp;&#39;a [crate::flow::event::GameEvent],</td></tr>
+<tr class="lf-code-row" data-line="242"><td class="lf-ln lf-ln-single">242</td><td>    observation_events: &amp;&#39;a [crate::flow::event::GameEvent],</td></tr>
+<tr class="lf-code-row" data-line="243"><td class="lf-ln lf-ln-single">243</td><td>    pending_triggers: &amp;&#39;a [crate::flow::trigger::PendingTrigger],</td></tr>
+<tr class="lf-code-row" data-line="244"><td class="lf-ln lf-ln-single">244</td><td>    trigger_placement: Option&lt;&amp;&#39;a crate::flow::trigger::TriggerPlacement&gt;,</td></tr>
+<tr class="lf-code-row" data-line="245"><td class="lf-ln lf-ln-single">245</td><td>    delayed_triggers: &amp;&#39;a [crate::flow::trigger::DelayedTrigger],</td></tr>
+<tr class="lf-code-row" data-line="246"><td class="lf-ln lf-ln-single">246</td><td>    exile_links: &amp;&#39;a [crate::flow::trigger::ExileLink],</td></tr>
+<tr class="lf-code-row" data-line="247"><td class="lf-ln lf-ln-single">247</td><td>    /// Omitted when empty, keeping hashes of states without them unchanged.</td></tr>
+<tr class="lf-code-row" data-line="248"><td class="lf-ln lf-ln-single">248</td><td>    #[serde(skip_serializing_if = &quot;Vec::is_empty&quot;)]</td></tr>
+<tr class="lf-code-row" data-line="249"><td class="lf-ln lf-ln-single">249</td><td>    #[serde(serialize_with = &quot;crate::state::game_object::exact&quot;)]</td></tr>
+<tr class="lf-code-row" data-line="250"><td class="lf-ln lf-ln-single">250</td><td>    object_counters: Vec&lt;(ObjectId, &amp;&#39;a crate::state::permanent::Counters)&gt;,</td></tr>
+<tr class="lf-code-row" data-line="251"><td class="lf-ln lf-ln-single">251</td><td>    effects: &amp;&#39;a [crate::state::effect::ContinuousEffect],</td></tr>
+<tr class="lf-code-row" data-line="252"><td class="lf-ln lf-ln-single">252</td><td>    /// Omitted when empty, keeping hashes of states without grants unchanged.</td></tr>
+<tr class="lf-code-row" data-line="253"><td class="lf-ln lf-ln-single">253</td><td>    #[serde(skip_serializing_if = &quot;crate::flow::cast_permission::CastPermissions::is_empty&quot;)]</td></tr>
+<tr class="lf-code-row" data-line="254"><td class="lf-ln lf-ln-single">254</td><td>    cast_permissions: &amp;&#39;a crate::flow::cast_permission::CastPermissions,</td></tr>
+<tr class="lf-code-row" data-line="255"><td class="lf-ln lf-ln-single">255</td><td>    suspended_decision: &amp;&#39;a Option&lt;crate::flow::decision::SuspendedResolution&gt;,</td></tr>
+<tr class="lf-code-row" data-line="256"><td class="lf-ln lf-ln-single">256</td><td>    #[serde(skip_serializing_if = &quot;Option::is_none&quot;)]</td></tr>
+<tr class="lf-code-row" data-line="257"><td class="lf-ln lf-ln-single">257</td><td>    cast_caller: Option&lt;&amp;&#39;a crate::flow::decision::SuspendedResolution&gt;,</td></tr>
+<tr class="lf-code-row" data-line="258"><td class="lf-ln lf-ln-single">258</td><td>    trigger_enqueue_counter: u64,</td></tr>
+<tr class="lf-code-row" data-line="259"><td class="lf-ln lf-ln-single">259</td><td>    rng_probe: [u64; 8],</td></tr>
+<tr class="lf-code-row" data-line="260"><td class="lf-ln lf-ln-single">260</td><td>    allocation_watermark: u32,</td></tr>
+<tr class="lf-code-row" data-line="261"><td class="lf-ln lf-ln-single">261</td><td>}</td></tr>
+</tbody></table></div></div>
+  <p>Two orders of commutative activations (<code>Citadel #1 → Citadel #2</code> vs. <code>Citadel #2 → Citadel #1</code>) emit events in different order, so their <code>deterministic_hash()</code> values never match—giving <strong>zero transposition hits</strong> while serializing the entire match history at every node. Separately, maintaining an abstract <code>pool</code> alongside <code>fork.state.players[player].mana_pool</code> lets them diverge, breaking <code>Condition::UnspentManaAtLeast</code> (<code>state/src/ability.rs:441</code>, <code>flow/layers.rs:620</code>).</p>
+  <p><strong>Recommendation:</strong> Keep one mana pool by keeping <code>fork.state.players[player].mana_pool</code> synchronized with the search's pool (note <code>mana_pool_mut</code> invalidates <code>LayerBoard</code> only when <code>reads.mana</code> is set), and memoize on a compact structural <code>CoupledMemoKey</code> hashed directly with <code>FastHasher</code>: per-permanent <code>(present, tapped, counters, activations_used)</code>, player life totals, turn histories (<code>life_gained</code>, <code>life_lost</code>, <code>permanents_sacrificed</code>, <code>permanents_left</code>, <code>nonlands_left</code>, <code>graveyard_arrivals</code>, <code>damage_pairs</code>), graveyard/exile card sets, abstract <code>Mana</code> pool, obligations, and reservations—excluding event logs, priority, and allocation watermarks.</p>
+  <p><strong>Passed over:</strong> <code>deterministic_hash()</code> (zero transposition hits + O(match-length) JSON serialization per node); <code>loop_fingerprint()</code> (still allocates a full JSON <code>serde_json::Value</code> tree and saturates counts).</p>
+</div>
+  <div data-choice="f3" data-label="F3 · Replace deterministic_hash() memo key with a payment-state fingerprint and keep one mana pool on the fork (This work)">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f4">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F4 · Preserve owned ManaUpfrontActivation and active OrderReplacement frames in coupled search (This work)</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>Scope:</strong> This work (Pass 2 &amp; Pass 3).</p>
+  <p><strong>What breaks:</strong> Clearing <code>suspended_decision</code> on <code>fork</code> and representing a pending <code>Decision::ManaUpfront</code> as <code>Obligation::Output { choices, life_cost, life_delta }</code> drops the owned <code>ManaUpfrontActivation</code> (<code>output: Effect</code>, <code>suffix</code>, <code>remove_counters</code>, <code>add_counters</code>, <code>sacrifice_source</code>, <code>tap_source</code>). On Pass 3's own acceptance board—a suspended <code>ManaUpfront</code> whose static grant already ended—<code>fork</code> can neither look up the ability on <code>characteristics</code> nor run its costs/suffix/dynamic output through <code>complete_mana_upfront</code>. Similarly, while suspended on <code>Decision::OrderReplacement</code> inside a counter/sacrifice batch (Caradora + Doubling Season) or suffix, clearing <code>suspended_decision</code> drops the in-flight <code>EffectFrame</code> and <code>FrameCompletion::ManaOutput</code>.</p>
+  <p><strong>Recommendation:</strong> Give the coupled search an explicit <code>CoupledObligation::CompleteUpfront { permanent, activation: Box&lt;ManaUpfrontActivation&gt; }</code> (for every suspended or newly opened Mutator/Sensitive <code>ManaUpfront</code>) so it completes natively via <code>complete_mana_upfront</code> even after the grant ends, and step an in-flight <code>OrderReplacement</code> directly on the fork (via <code>choose_replacement</code> + <code>run_payment_frame</code>) until that activation finishes before stripping enclosing decisions.</p>
+  <p><strong>Passed over:</strong> Re-indexing <code>characteristics(permanent)</code> during search (fails when the grant ended); evaluating dynamic outputs and suffixes only at root (fails when an intervening activation changes counters, life, or replacements).</p>
+</div>
+  <div data-choice="f4" data-label="F4 · Preserve owned ManaUpfrontActivation and active OrderReplacement frames in coupled search (This work)">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f5">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F5 · Keep ManaSource.fixed strictly for exact automatic taps; unify choice-bonus fixed taps into ManaActivation and handle TapForMana preview (This work)</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>Scope:</strong> This work (Pass 1).</p>
+  <p><strong>What breaks:</strong> Replacing <code>ManaSource.fixed: Option&lt;Mana&gt;</code> with <code>Option&lt;FixedOutput&gt;</code> splits one field into two meanings across ~38 sites (<code>autotapper.rs</code>, <code>direct</code>, <code>fixed_sufficient</code>, <code>fixed_total</code>, <code>SourceSupply</code>, <code>color_set_bound</code>, <code>useful_payment_taps</code>, <code>append_mana_floats</code>, <code>determined_source_counts</code>, <code>producible_mana</code>) and duplicates multi-output choice handling that <code>ManaActivation</code> already implements. Meanwhile, <code>PaymentPreview</code> calls <code>preview_tap</code> → <code>perform_automatic_tap</code> directly when hovering <code>Action::TapForMana</code>, even outside automatic batches:</p>
+  <div class="lf-codeblock" data-path="managym/src/flow/mana/preview.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/preview.rs:283-295</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="283"><td class="lf-ln lf-ln-single">283</td><td>            Action::PayCost { .. } | Action::TapForMana { .. } =&gt; match &amp;self.pending_choice {</td></tr>
+<tr class="lf-code-row" data-line="284"><td class="lf-ln lf-ln-single">284</td><td>                Some(PendingChoice::Pay { payment, .. }) if owes_a_choice(&amp;payment.owed) =&gt; {</td></tr>
+<tr class="lf-code-row" data-line="285"><td class="lf-ln lf-ln-single">285</td><td>                    return Ok(PaymentPreview::needs_additional_cost());</td></tr>
+<tr class="lf-code-row" data-line="286"><td class="lf-ln lf-ln-single">286</td><td>                }</td></tr>
+<tr class="lf-code-row" data-line="287"><td class="lf-ln lf-ln-single">287</td><td>                Some(PendingChoice::Pay { payment, .. }) =&gt; {</td></tr>
+<tr class="lf-code-row" data-line="288"><td class="lf-ln lf-ln-single">288</td><td>                    helped = keyword_help(&amp;payment.owed);</td></tr>
+<tr class="lf-code-row" data-line="289"><td class="lf-ln lf-ln-single">289</td><td>                    sources</td></tr>
+<tr class="lf-code-row" data-line="290"><td class="lf-ln lf-ln-single">290</td><td>                        .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));</td></tr>
+<tr class="lf-code-row" data-line="291"><td class="lf-ln lf-ln-single">291</td><td>                    if payment.waterbends() {</td></tr>
+<tr class="lf-code-row" data-line="292"><td class="lf-ln lf-ln-single">292</td><td>                        position.to_mut().pending_choice = None;</td></tr>
+<tr class="lf-code-row" data-line="293"><td class="lf-ln lf-ln-single">293</td><td>                    }</td></tr>
+<tr class="lf-code-row" data-line="294"><td class="lf-ln lf-ln-single">294</td><td>                    Some(payment.mana().0.clone())</td></tr>
+<tr class="lf-code-row" data-line="295"><td class="lf-ln lf-ln-single">295</td><td>                }</td></tr>
+</tbody></table></div></div>
+  <div class="lf-codeblock" data-path="managym/src/flow/mana/preview.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/preview.rs:414-430</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="414"><td class="lf-ln lf-ln-single">414</td><td>    fn preview_tap(&amp;mut self, player: PlayerId, tap: AutomaticTap) -&gt; PaymentSourcePreview {</td></tr>
+<tr class="lf-code-row" data-line="415"><td class="lf-ln lf-ln-single">415</td><td>        let permanent = tap.permanent;</td></tr>
+<tr class="lf-code-row" data-line="416"><td class="lf-ln lf-ln-single">416</td><td>        let object = self.permanent_object(permanent).expect(&quot;planned source&quot;);</td></tr>
+<tr class="lf-code-row" data-line="417"><td class="lf-ln lf-ln-single">417</td><td>        let source = SubjectRef::Object {</td></tr>
+<tr class="lf-code-row" data-line="418"><td class="lf-ln lf-ln-single">418</td><td>            id: self</td></tr>
+<tr class="lf-code-row" data-line="419"><td class="lf-ln lf-ln-single">419</td><td>                .object_event_ref(object)</td></tr>
+<tr class="lf-code-row" data-line="420"><td class="lf-ln lf-ln-single">420</td><td>                .expect(&quot;planned source&quot;)</td></tr>
+<tr class="lf-code-row" data-line="421"><td class="lf-ln lf-ln-single">421</td><td>                .into(),</td></tr>
+<tr class="lf-code-row" data-line="422"><td class="lf-ln lf-ln-single">422</td><td>        };</td></tr>
+<tr class="lf-code-row" data-line="423"><td class="lf-ln lf-ln-single">423</td><td>        let label = self.observed_object_name(object);</td></tr>
+<tr class="lf-code-row" data-line="424"><td class="lf-ln lf-ln-single">424</td><td>        let before = self.pooled_mana(player);</td></tr>
+<tr class="lf-code-row" data-line="425"><td class="lf-ln lf-ln-single">425</td><td>        self.perform_automatic_tap(player, tap);</td></tr>
+<tr class="lf-code-row" data-line="426"><td class="lf-ln lf-ln-single">426</td><td>        let after = self.pooled_mana(player);</td></tr>
+<tr class="lf-code-row" data-line="427"><td class="lf-ln lf-ln-single">427</td><td>        let mut output = Mana {</td></tr>
+<tr class="lf-code-row" data-line="428"><td class="lf-ln lf-ln-single">428</td><td>            mana: std::array::from_fn(|i| after.mana[i] - before.mana[i]),</td></tr>
+<tr class="lf-code-row" data-line="429"><td class="lf-ln lf-ln-single">429</td><td>            ..Mana::default()</td></tr>
+<tr class="lf-code-row" data-line="430"><td class="lf-ln lf-ln-single">430</td><td>        };</td></tr>
+</tbody></table></div></div>
+  <p><strong>Recommendation:</strong> Keep <code>ManaSource.fixed: Option&lt;Mana&gt;</code> strictly for deterministic single-output taps (zero changes to <code>autotapper.rs</code>, <code>direct</code>, <code>fixed_sufficient</code>, <code>fixed_total</code>, or automatic prefixes). Represent a fixed tap whose triggered bonuses require a choice as a <code>ManaActivation</code> with <code>kind: ManaActivationKind::{FixedTap, Activated(usize)}</code> and <code>automatic: false</code> (emitting <code>PaymentStep::Fixed(permanent)</code> / <code>Action::TapForMana</code>, and included by <code>append_mana_floats</code> for priority floats). In <code>preview.rs</code>, when hovering a <code>TapForMana</code> whose source has no exact <code>fixed</code> output, return <code>PaymentPreviewState::NeedsChoice</code> instead of calling <code>preview_tap</code>. Keep <code>tap_bonuses</code> evaluating <code>CardPredicate.tapped</code> as satisfied, and have <code>tap_for_mana_action</code> pass the caller frame and <code>commit_start</code> into <code>resolve_mana_bonuses</code> so <code>ManaChoice</code> resumes cleanly (and never runs <code>commit_produced_mana</code> prematurely when suspended).</p>
+  <p><strong>Passed over:</strong> <code>FixedOutput::{Exact, Choice}</code> (touches ~38 exact-tap sites and duplicates <code>ManaActivation</code>'s multi-output search/bound logic).</p>
+</div>
+  <div data-choice="f5" data-label="F5 · Keep ManaSource.fixed strictly for exact automatic taps; unify choice-bonus fixed taps into ManaActivation and handle TapForMana preview (This work)">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f6">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F6 · Finish owned non-mana activations across ActivationX, drop the redundant cost/unfinalized pair, avoid priority-scan clones, and document the true hash surface (This work)</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>Scope:</strong> This work (Pass 4).</p>
+  <p><strong>What breaks:</strong></p>
+  <ul>
+    <li><code>PendingChoice::ActivationX</code> (<code>flow/play.rs:1760, 1851, 1871</code>) is omitted from Pass 4 and still indexes <code>self.characteristics(permanent).activated_abilities[ability_index]</code>—leaving the announcement-ownership rule unfinished on the first stage of the activation pipeline.</li>
+    <li>Pass 4 proposes storing both "the priced cost and the unfinalized <code>ActivatedAbilityDefinition</code>" by analogy with <code>ManaUpfrontActivation</code>. Inspecting <code>finalize_characteristics</code> (<code>flow/statics.rs:926-947</code>) shows that for non-mana abilities, finalization <em>only</em> prices <code>mana_cost</code> (non-mana abilities never have dynamic mana output). One finalized <code>Box&lt;ActivatedAbilityDefinition&gt;</code> already owns both the priced cost and the rules text.</li>
+    <li>Constructing owned <code>Operation::Activation</code> inside <code>priority_activate_ability_actions</code> (<code>flow/action.rs:820, 931</code>) clones an entire <code>ActivatedAbilityDefinition</code> for every permanent's activated abilities on every priority tick. Pass a borrowed <code>&amp;ActivatedAbilityDefinition</code> (or <code>Cow</code> / lightweight preview query) for hypothetical priority checks instead.</li>
+    <li>In <code>prepare_card_activated_ability</code> (<code>flow/play.rs:2441</code>), dropping <code>card_ability_in_zone</code> must still explicitly verify the card remains in <code>ability.zone</code> so <code>"activation source left its zone"</code> keeps holding.</li>
+    <li><strong>Hash version (irreversible once released):</strong> <code>Operation::Activation</code> is serialized not only inside <code>PendingChoice::Pay</code> (<code>state_digest</code>) but directly inside <code>GameState.suspended_decision</code> (<code>SpendCompletion::Announced</code>, <code>FrameCompletion::DiscardPayment</code>, <code>FrameCompletion::Paid</code>), which is hashed by <code>GameState::deterministic_hash()</code>. <code>origin/main</code> is at <code>v34</code>; PR #639 (MTG-500, open/unreleased) bumped to <code>v35</code>. Bumping to <code>v36</code> keeps <code>main</code> patch-releasable between PR #639 and MTG-508; reusing <code>v35</code> is sound only if both PRs never ship in separate releases.</li>
+  </ul>
+  <div class="lf-codeblock" data-path="managym/src/flow/play.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/play.rs:1756-1766</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="1756"><td class="lf-ln lf-ln-single">1756</td><td>        if ability.announces_x() {</td></tr>
+<tr class="lf-code-row" data-line="1757"><td class="lf-ln lf-ln-single">1757</td><td>            if !self.has_legal_activation_x(player, permanent_id, ability_index, &amp;ability) {</td></tr>
+<tr class="lf-code-row" data-line="1758"><td class="lf-ln lf-ln-single">1758</td><td>                return Err(AgentError(&quot;no payable value of X&quot;.into()));</td></tr>
+<tr class="lf-code-row" data-line="1759"><td class="lf-ln lf-ln-single">1759</td><td>            }</td></tr>
+<tr class="lf-code-row" data-line="1760"><td class="lf-ln lf-ln-single">1760</td><td>            self.pending_choice = Some(PendingChoice::ActivationX {</td></tr>
+<tr class="lf-code-row" data-line="1761"><td class="lf-ln lf-ln-single">1761</td><td>                player,</td></tr>
+<tr class="lf-code-row" data-line="1762"><td class="lf-ln lf-ln-single">1762</td><td>                permanent: permanent_id,</td></tr>
+<tr class="lf-code-row" data-line="1763"><td class="lf-ln lf-ln-single">1763</td><td>                ability_index,</td></tr>
+<tr class="lf-code-row" data-line="1764"><td class="lf-ln lf-ln-single">1764</td><td>            });</td></tr>
+<tr class="lf-code-row" data-line="1765"><td class="lf-ln lf-ln-single">1765</td><td>            return Ok(());</td></tr>
+<tr class="lf-code-row" data-line="1766"><td class="lf-ln lf-ln-single">1766</td><td>        }</td></tr>
+</tbody></table></div></div>
+  <div class="lf-codeblock" data-path="managym/src/flow/play.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/play.rs:1857-1886</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="1857"><td class="lf-ln lf-ln-single">1857</td><td>    pub(crate) fn choose_activation_x_action(</td></tr>
+<tr class="lf-code-row" data-line="1858"><td class="lf-ln lf-ln-single">1858</td><td>        &amp;mut self,</td></tr>
+<tr class="lf-code-row" data-line="1859"><td class="lf-ln lf-ln-single">1859</td><td>        player: PlayerId,</td></tr>
+<tr class="lf-code-row" data-line="1860"><td class="lf-ln lf-ln-single">1860</td><td>        x: usize,</td></tr>
+<tr class="lf-code-row" data-line="1861"><td class="lf-ln lf-ln-single">1861</td><td>    ) -&gt; Result&lt;(), AgentError&gt; {</td></tr>
+<tr class="lf-code-row" data-line="1862"><td class="lf-ln lf-ln-single">1862</td><td>        let Some(PendingChoice::ActivationX {</td></tr>
+<tr class="lf-code-row" data-line="1863"><td class="lf-ln lf-ln-single">1863</td><td>            player: chooser,</td></tr>
+<tr class="lf-code-row" data-line="1864"><td class="lf-ln lf-ln-single">1864</td><td>            permanent,</td></tr>
+<tr class="lf-code-row" data-line="1865"><td class="lf-ln lf-ln-single">1865</td><td>            ability_index,</td></tr>
+<tr class="lf-code-row" data-line="1866"><td class="lf-ln lf-ln-single">1866</td><td>        }) = self.pending_choice</td></tr>
+<tr class="lf-code-row" data-line="1867"><td class="lf-ln lf-ln-single">1867</td><td>        else {</td></tr>
+<tr class="lf-code-row" data-line="1868"><td class="lf-ln lf-ln-single">1868</td><td>            return Err(AgentError(&quot;no value of X is pending&quot;.into()));</td></tr>
+<tr class="lf-code-row" data-line="1869"><td class="lf-ln lf-ln-single">1869</td><td>        };</td></tr>
+<tr class="lf-code-row" data-line="1870"><td class="lf-ln lf-ln-single">1870</td><td>        let x = i32::try_from(x).map_err(|_| AgentError(&quot;illegal value of X&quot;.into()))?;</td></tr>
+<tr class="lf-code-row" data-line="1871"><td class="lf-ln lf-ln-single">1871</td><td>        let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();</td></tr>
+<tr class="lf-code-row" data-line="1872"><td class="lf-ln lf-ln-single">1872</td><td>        let source = ActivationSource::Permanent(permanent);</td></tr>
+<tr class="lf-code-row" data-line="1873"><td class="lf-ln lf-ln-single">1873</td><td>        let legal = chooser == player</td></tr>
+<tr class="lf-code-row" data-line="1874"><td class="lf-ln lf-ln-single">1874</td><td>            &amp;&amp; self</td></tr>
+<tr class="lf-code-row" data-line="1875"><td class="lf-ln lf-ln-single">1875</td><td>                .activation_x_bounds(player, permanent, ability_index, &amp;ability)</td></tr>
+<tr class="lf-code-row" data-line="1876"><td class="lf-ln lf-ln-single">1876</td><td>                .contains(&amp;x)</td></tr>
+<tr class="lf-code-row" data-line="1877"><td class="lf-ln lf-ln-single">1877</td><td>            &amp;&amp; (ability.mana_cost.x == 0</td></tr>
+<tr class="lf-code-row" data-line="1878"><td class="lf-ln lf-ln-single">1878</td><td>                || self.activation_x_payable(player, permanent, ability_index, x as u8))</td></tr>
+<tr class="lf-code-row" data-line="1879"><td class="lf-ln lf-ln-single">1879</td><td>            &amp;&amp; (ability.target_requirements().is_empty()</td></tr>
+<tr class="lf-code-row" data-line="1880"><td class="lf-ln lf-ln-single">1880</td><td>                || self.activation_targets_available(player, source, ability_index, &amp;ability, x));</td></tr>
+<tr class="lf-code-row" data-line="1881"><td class="lf-ln lf-ln-single">1881</td><td>        if !legal {</td></tr>
+<tr class="lf-code-row" data-line="1882"><td class="lf-ln lf-ln-single">1882</td><td>            return Err(AgentError(&quot;illegal value of X&quot;.into()));</td></tr>
+<tr class="lf-code-row" data-line="1883"><td class="lf-ln lf-ln-single">1883</td><td>        }</td></tr>
+<tr class="lf-code-row" data-line="1884"><td class="lf-ln lf-ln-single">1884</td><td>        self.pending_choice = None;</td></tr>
+<tr class="lf-code-row" data-line="1885"><td class="lf-ln lf-ln-single">1885</td><td>        self.begin_activation_targets(player, source, ability_index, &amp;ability, x)</td></tr>
+<tr class="lf-code-row" data-line="1886"><td class="lf-ln lf-ln-single">1886</td><td>    }</td></tr>
+</tbody></table></div></div>
+  <p><strong>Recommendation:</strong> Capture one finalized <code>Box&lt;ActivatedAbilityDefinition&gt;</code> at announcement in <code>PendingChoice::ActivationX</code>, <code>ActivatedTargeting</code>, and <code>Operation::Activation</code>; keep priority feasibility checks borrow-only (no <code>ActivatedAbilityDefinition</code> clone per priority tick); retain the explicit zone check for card activations; bump <code>MATCH_STATE_HASH_VERSION</code> 35 → 36.</p>
+  <p><strong>Passed over:</strong> Leaving <code>ActivationX</code> unowned (unfinished rule); storing both priced cost and unfinalized definition (redundant for non-mana abilities); reusing <code>v35</code> (breaks if MTG-500 releases before MTG-508).</p>
+</div>
+  <div data-choice="f6" data-label="F6 · Finish owned non-mana activations across ActivationX, drop the redundant cost/unfinalized pair, avoid priority-scan clones, and document the true hash surface (This work)">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<h2>Questions</h2>
+
+<div data-choice="q1" data-label="1 · Coupled authority boundary">
+  <h3>1. How should candidate-step checks and reservations reach the coupled search?</h3>
+  <button data-value="1a">1a · (Recommended) Structured query context (reservations, Help/delve, pending upfront activations) + native candidate-step entry points that bypass pure shortcuts/cache when coupled</button>
+  <button data-value="1b">1b · Keep intercepting cached_plan only, and encode candidate steps as extra Obligation variants</button>
+</div>
+
+<div data-choice="q2" data-label="2 · Coupled search memo key and pool">
+  <h3>2. How should the coupled fork search track the mana pool and memoize visited states?</h3>
+  <button data-value="2a">2a · (Recommended) Sync fork's real mana_pool with search steps and memoize on a structural payment-state key (excluding event logs and id_gen)</button>
+  <button data-value="2b">2b · Keep fork.state.deterministic_hash() as memo key and clear event logs on the fork before hashing</button>
+</div>
+
+<div data-choice="q3" data-label="3 · Choice-bonus fixed mana taps (Pass 1)">
+  <h3>3. How should ManaSource represent a fixed tap whose triggered bonuses open a choice?</h3>
+  <button data-value="3a">3a · (Recommended) Keep source.fixed: Option&lt;Mana&gt; strictly for exact automatic taps; model choice-bonus fixed taps as ManaActivation with kind FixedTap (automatic: false) and return NeedsChoice in PaymentPreview</button>
+  <button data-value="3b">3b · Replace source.fixed with Option&lt;FixedOutput::{Exact, Choice}&gt; across all ~38 callers</button>
+</div>
+
+<div data-choice="q4" data-label="4 · Owned non-mana activation shape (Pass 4)">
+  <h3>4. Should owned non-mana activations include ActivationX and store one finalized definition?</h3>
+  <button data-value="4a">4a · (Recommended) Capture one finalized Box&lt;ActivatedAbilityDefinition&gt; across ActivationX, ActivatedTargeting, and Operation::Activation; keep priority scans borrow-only</button>
+  <button data-value="4b">4b · Keep plan's (priced_cost, unfinalized ActivatedAbilityDefinition) on ActivatedTargeting and Operation::Activation only</button>
+</div>
+
+<div data-choice="q5" data-label="5 · Match-state hash version (irreversible once released)">
+  <h3>5. Match-state hash version for owned non-mana activations (origin/main is v34; open PR #639 is v35; irreversible once shipped):</h3>
+  <button data-value="5a">5a · (Recommended) Bump MATCH_STATE_HASH_VERSION 35 → 36 so PR #639 can release independently</button>
+  <button data-value="5b">5b · Reuse unreleased v35 (requires MTG-500 and MTG-508 to ship in the same release)</button>
+</div>
+</main>
+<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-508"},"directory":"/Users/jack/src/manabot.mtg-508-support-coupled-mana","base":"5e9156a79104b367fea21562806b47cd4059a1eb","head":"4a25a7a28f","path":"scratch/concept-review.html","build_id":"9e82cd1a277f1181","protocol":{"revision":11,"min_revision":10}}</script>
+<script>
+(function () {
+  "use strict";
+
+  const stampEl = document.getElementById("lf-page");
+  if (!stampEl) return;
+  let stamp;
+  try {
+    stamp = JSON.parse(stampEl.textContent || "{}");
+  } catch (_) {
+    return;
+  }
+
+  const pagePath = String(stamp.path || "scratch/page.html");
+  const buildId = String(stamp.build_id || "0");
+  const work = stamp.work || { kind: "repository" };
+  const directory = String(stamp.directory || "");
+  const protocol =
+    stamp.protocol && typeof stamp.protocol === "object" ? stamp.protocol : null;
+  const protocolRevision = Number(protocol && protocol.revision);
+  const protocolMinRevision = Number(protocol && protocol.min_revision);
+  const storageKey = "lf-page:" + pagePath + ":" + buildId;
+  const mainEl =
+    document.querySelector("main.lf-page") || document.querySelector("main") || document.body;
+
+  const desktopHandler =
+    window.webkit &&
+    window.webkit.messageHandlers &&
+    window.webkit.messageHandlers.loopflow;
+
+  let hostMode = desktopHandler ? "desktop" : "clipboard";
+  let socket = null;
+  let nextReqId = 1;
+  const pending = new Map();
+  const cancelledAction = Symbol("cancelled action");
+  let serverDisconnected = false;
+  let sendingReply = false;
+
+  // Draft & receipt state.
+  // Notes (prose & diff/file lines), choices, multiselects, questions, offline actions,
+  // and optional browser overall direction enter the reply queue.
+  // Executed direct `data-lf` receipts stay separate and only ride as a suffix on ⌘↩.
+  function emptyState() {
+    return {
+      notes: [],
+      choices: {},
+      multiselects: {},
+      questions: {},
+      offlineActions: [],
+      overall: "",
+      receipts: [],
+    };
+  }
+
+  let state = emptyState();
+
+  function oneLine(text) {
+    return String(text || "")
+      .replace(/[\r\n\t\x00-\x1f]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function buttonValue(btn) {
+    return btn.getAttribute("data-value") || oneLine(btn.textContent);
+  }
+
+  function resultTaskId(result) {
+    return result && ((result.task && result.task.identifier) || result.identifier);
+  }
+
+  function errorMessage(err) {
+    return String(err && err.message ? err.message : err);
+  }
+
+  function el(tag, opts, ...children) {
+    const node = document.createElement(tag);
+    if (typeof opts === "string") {
+      if (opts) node.className = opts;
+    } else if (opts) {
+      for (const [k, v] of Object.entries(opts)) {
+        if (v == null || v === false) continue;
+        if (k === "cls") node.className = v;
+        else if (k === "text") node.textContent = v;
+        else if (k === "on") {
+          for (const [ev, fn] of Object.entries(v)) node.addEventListener(ev, fn);
+        } else if (k === "attrs") {
+          for (const [ak, av] of Object.entries(v)) node.setAttribute(ak, av);
+        } else {
+          node[k] = v;
+        }
+      }
+    }
+    for (const child of children) {
+      if (child != null && child !== false) node.append(child);
+    }
+    return node;
+  }
+
+  function makeButton(label, onClick, className) {
+    return el("button", { type: "button", cls: className || "", text: label, on: { click: onClick } });
+  }
+
+  function setPressed(btn, active) {
+    btn.classList.toggle("is-selected", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+
+  function focusEnd(ta) {
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
+  function clearSelection() {
+    try {
+      window.getSelection().removeAllRanges();
+    } catch (_) {}
+  }
+
+  function randomId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    return "lf-" + Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+  }
+
+  function shortPath(path) {
+    const parts = String(path || "").split("/");
+    return parts[parts.length - 1] || path;
+  }
+
+  function truncate(text, max) {
+    const s = oneLine(text);
+    return s.length > max ? s.slice(0, max - 1) + "…" : s;
+  }
+
+  function nearestSection(node) {
+    let cur = node && node.nodeType === 1 ? node : node && node.parentElement;
+    while (cur && cur !== document.body) {
+      let prev = cur.previousElementSibling;
+      while (prev) {
+        if (/^H[1-4]$/.test(prev.tagName)) return oneLine(prev.textContent);
+        prev = prev.previousElementSibling;
+      }
+      cur = cur.parentElement;
+    }
+    const h1 = document.querySelector("h1");
+    return h1 ? oneLine(h1.textContent) : "Top";
+  }
+
+  function formatLineSpan(note) {
+    const start = Number(note.lineStart);
+    const end = Number(note.lineEnd || note.lineStart);
+    const span = start === end ? String(start) : start + "–" + end;
+    return note.side === "old" ? "old:" + span : span;
+  }
+
+  function formatLineAnchor(note) {
+    return oneLine(note.path) + ":" + formatLineSpan(note);
+  }
+
+  function formatNoteAnchorLabel(note) {
+    if (note.kind === "line") return formatLineAnchor(note);
+    return "§ " + oneLine(note.section) + ' · "' + truncate(note.quote, 46) + '"';
+  }
+
+  function pulseElement(target) {
+    if (!target) return;
+    try {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (_) {}
+    target.classList.add("lf-pulse-ring");
+    setTimeout(() => target.classList.remove("lf-pulse-ring"), 950);
+  }
+
+  function rowsForLineNote(note) {
+    const matched = [];
+    const attr = note.side === "old" ? "data-old-line" : "data-line";
+    const start = Number(note.lineStart);
+    const end = Number(note.lineEnd || note.lineStart);
+    for (const block of mainEl.querySelectorAll(".lf-codeblock[data-path]")) {
+      if (block.getAttribute("data-path") !== note.path) continue;
+      block.querySelectorAll("tr.lf-code-row[" + attr + "]").forEach((tr) => {
+        const ln = Number(tr.getAttribute(attr));
+        if (ln >= start && ln <= end) matched.push(tr);
+      });
+    }
+    return matched;
+  }
+
+  function noteAnchorElement(note) {
+    if (note.kind === "line") return rowsForLineNote(note)[0] || null;
+    return mainEl.querySelector('.lf-hl[data-lf-note-id="' + CSS.escape(note.id) + '"]');
+  }
+
+  function notesInDocumentOrder() {
+    if (state.notes.length <= 1) return state.notes.slice();
+    return state.notes
+      .map((note, idx) => ({ note, idx, el: noteAnchorElement(note) }))
+      .sort((a, b) => {
+        if (a.el && b.el && a.el !== b.el) {
+          const pos = a.el.compareDocumentPosition(b.el);
+          if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+          if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+        }
+        if (a.el !== b.el) return a.el ? -1 : 1;
+        return a.idx - b.idx;
+      })
+      .map((entry) => entry.note);
+  }
+
+  function deleteNote(id) {
+    state.notes = state.notes.filter((n) => n.id !== id);
+    if (sidebarEditingId === id) sidebarEditingId = null;
+    hideHoverCard();
+    refresh(true);
+  }
+
+  function editNote(id, text) {
+    state.notes = state.notes.map((note) => note.id === id ? { ...note, text } : note);
+    sidebarEditingId = null;
+    refresh(true);
+  }
+
+  function queueEntries() {
+    const entries = [];
+    for (const note of notesInDocumentOrder()) {
+      const text = oneLine(note.text);
+      const jump = () => pulseElement(noteAnchorElement(note));
+      const remove = () => deleteNote(note.id);
+      if (note.kind === "line") {
+        const anchor = formatLineAnchor(note);
+        entries.push({
+          tag: "lines",
+          summary: shortPath(note.path) + ":" + formatLineSpan(note) + " — " + text,
+          title: anchor + " — " + text,
+          ref: "`" + pagePath + "` § " + anchor + " — " + text,
+          jump,
+          remove,
+        });
+      } else {
+        const section = oneLine(note.section);
+        const quote = oneLine(note.quote);
+        entries.push({
+          tag: "note",
+          summary: '"' + truncate(quote, 26) + '" — ' + text,
+          title: section + ' › "' + quote + '" — ' + text,
+          ref: "`" + pagePath + "` § " + section + ' › "' + quote + '" ' + text,
+          jump,
+          remove,
+        });
+      }
+    }
+
+    function pushControl(tag, attr, key, label, val, remove) {
+      const summary = label + ": " + val;
+      entries.push({
+        tag,
+        summary,
+        title: summary,
+        ref: "`" + pagePath + "` § " + summary,
+        jump: () => pulseElement(document.querySelector("[" + attr + '="' + CSS.escape(key) + '"]')),
+        remove: () => {
+          remove();
+          refresh(true);
+        },
+      });
+    }
+
+    for (const [group, entry] of Object.entries(state.choices)) {
+      if (!entry || !entry.value) continue;
+      pushControl(
+        "choice",
+        "data-choice",
+        group,
+        oneLine(entry.label || group),
+        oneLine(entry.value),
+        () => delete state.choices[group]
+      );
+    }
+    for (const [group, entry] of Object.entries(state.multiselects)) {
+      if (!entry || !Array.isArray(entry.values) || entry.values.length === 0) continue;
+      pushControl(
+        "choice",
+        "data-multiselect",
+        group,
+        oneLine(entry.label || group),
+        entry.values.map(oneLine).join(", "),
+        () => delete state.multiselects[group]
+      );
+    }
+    for (const [qid, entry] of Object.entries(state.questions)) {
+      const ans = entry && oneLine(entry.answer);
+      if (!ans) continue;
+      pushControl(
+        "answer",
+        "data-question",
+        qid,
+        oneLine(entry.label || qid),
+        ans,
+        () => delete state.questions[qid]
+      );
+    }
+    for (const act of state.offlineActions) {
+      const summary = oneLine(act.summary);
+      entries.push({
+        tag: "run",
+        summary,
+        title: "Run: " + summary,
+        ref: "`" + pagePath + "` Run: " + summary,
+        jump: () => {
+          const found = actions.find((a) => a.key === act.key);
+          if (found) pulseElement(found.slot);
+        },
+        remove: () => {
+          state.offlineActions = state.offlineActions.filter((a) => a.id !== act.id);
+          refresh(true);
+        },
+      });
+    }
+    return entries;
+  }
+
+  function queueItems(entries) {
+    const items = (entries || queueEntries()).map((e) => e.ref);
+    const overall = oneLine(state.overall);
+    if (!desktopHandler && overall) {
+      items.push("`" + pagePath + "` Overall: " + overall);
+    }
+    return items;
+  }
+
+  function formatReplyMessage(items) {
+    if (!items.length) return "";
+    let message = items.map((ref, idx) => "(" + (idx + 1) + ") " + oneLine(ref)).join(" ");
+    const unreported = state.receipts.filter((r) => !r.reported);
+    if (unreported.length > 0) {
+      const ran = unreported
+        .map((r) => oneLine(r.kind + (r.summary ? " → " + r.summary : "")))
+        .join("; ");
+      message += " [already ran: " + ran + "]";
+    }
+    return oneLine(message);
+  }
+
+  function saveState() {
+    if (desktopHandler) {
+      try {
+        desktopHandler.postMessage({
+          type: "sync",
+          build_id: buildId,
+          state,
+          items: queueItems(),
+        });
+      } catch (_) {}
+      return;
+    }
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(state));
+    } catch (_) {}
+  }
+
+  function loadBrowserState() {
+    if (desktopHandler) return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") applyState(parsed);
+    } catch (_) {}
+  }
+
+  // `persist` marks an edit: the last send's sentence no longer describes the queue.
+  function refresh(persist) {
+    if (persist) setStatus("", "");
+    syncControlsFromState();
+    renderHighlights();
+    renderSidebar();
+    if (persist) saveState();
+    renderDock();
+  }
+
+  function applyState(loaded) {
+    if (!loaded || typeof loaded !== "object") {
+      state = emptyState();
+    } else {
+      state = {
+        notes: Array.isArray(loaded.notes) ? loaded.notes : [],
+        choices: loaded.choices && typeof loaded.choices === "object" ? loaded.choices : {},
+        multiselects:
+          loaded.multiselects && typeof loaded.multiselects === "object" ? loaded.multiselects : {},
+        questions: loaded.questions && typeof loaded.questions === "object" ? loaded.questions : {},
+        offlineActions: Array.isArray(loaded.offlineActions) ? loaded.offlineActions : [],
+        overall: typeof loaded.overall === "string" ? loaded.overall : "",
+        receipts: Array.isArray(loaded.receipts) ? loaded.receipts : [],
+      };
+    }
+    refresh(false);
+  }
+
+  // Desktop calls this with `null` after `ReviewComments.insert(into:)` sends the page's items;
+  // Swift has already updated its stored page state, so don't echo a redundant `sync` back.
+  window.__lfDesktopApplyState = function (loaded) {
+    if (loaded) applyState(loaded);
+    else clearDrafts({ markReported: true, persist: false });
+  };
+
+  // --- Loopback WebSocket carrier ---
+
+  function loopbackWsUrl() {
+    if (window.location.protocol !== "http:" || window.location.hostname !== "127.0.0.1") return null;
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    if (parts.length < 3 || parts[1] !== "f" || !/^[A-Za-z0-9_-]{43}$/.test(parts[0])) return null;
+    return "ws://" + window.location.host + "/" + parts[0] + "/machine";
+  }
+
+  function markDisconnected(reason) {
+    hostMode = "clipboard";
+    serverDisconnected = true;
+    showBanner(reason || "Loopflow server disconnected — run lf page open " + pagePath);
+    renderDock();
+  }
+
+  function connectLoopback() {
+    if (desktopHandler) return;
+    const url = loopbackWsUrl();
+    if (!url) return;
+    if (!Number.isInteger(protocolRevision) || !Number.isInteger(protocolMinRevision)) {
+      markDisconnected("Review page is missing server protocol version — rebuild with lf page build");
+      return;
+    }
+    let ws;
+    try {
+      ws = new WebSocket(url);
+    } catch (_) {
+      markDisconnected("");
+      return;
+    }
+    let handshakeError = "";
+    let closingForUnload = false;
+    ws.addEventListener("open", () => {
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          revision: protocolRevision,
+          min_revision: protocolMinRevision,
+          client: { kind: "page", platform: "browser", name: "review-page", version: "1" },
+        })
+      );
+    });
+    ws.addEventListener("message", (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch (_) {
+        return;
+      }
+      if (msg.type === "welcome") {
+        socket = ws;
+        hostMode = "loopback";
+        serverDisconnected = false;
+        hideBanner();
+        renderDock();
+        return;
+      }
+      if (msg.type === "error" && !msg.id) {
+        handshakeError = msg.message || msg.code || "Loopflow server rejected connection";
+        showBanner(handshakeError);
+        return;
+      }
+      if ((msg.type === "response" || msg.type === "error") && msg.id && pending.has(msg.id)) {
+        const entry = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.type === "response") entry.resolve(msg.result);
+        else entry.reject(new Error(msg.message || msg.code || "Server error"));
+      }
+    });
+    ws.addEventListener("close", () => {
+      if (socket === ws) socket = null;
+      for (const [, entry] of pending) entry.reject(new Error("Connection closed"));
+      pending.clear();
+      if (!closingForUnload) markDisconnected(handshakeError);
+    });
+    window.addEventListener("pagehide", () => {
+      closingForUnload = true;
+      try {
+        ws.close();
+      } catch (_) {}
+    });
+  }
+
+  function sendOperation(operation, requestId) {
+    if (desktopHandler) {
+      try {
+        return Promise.resolve(
+          desktopHandler.postMessage({
+            type: "operation",
+            operation,
+            request_id: requestId || null,
+          })
+        ).then((result) => {
+          if (result && result.error) throw new Error(result.error);
+          if (result && result.cancelled) return cancelledAction;
+          return result && result.result !== undefined ? result.result : result;
+        });
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error("Loopflow server is not connected"));
+    }
+    return new Promise((resolve, reject) => {
+      const id = "req-" + nextReqId++;
+      pending.set(id, { resolve, reject });
+      try {
+        socket.send(JSON.stringify({
+          type: "request",
+          id,
+          operation,
+          select: null,
+          sender: null,
+          request_id: requestId || null,
+        }));
+      } catch (error) {
+        pending.delete(id);
+        reject(error);
+      }
+    });
+  }
+
+  // --- Banner ---
+
+  let bannerEl = null;
+  function showBanner(text) {
+    if (!bannerEl) {
+      bannerEl = el("div", "lf-banner");
+      mainEl.insertBefore(bannerEl, mainEl.firstChild);
+    }
+    bannerEl.textContent = text;
+    bannerEl.hidden = false;
+  }
+
+  function hideBanner() {
+    if (bannerEl) bannerEl.hidden = true;
+  }
+
+  // --- Controls & direct `data-lf` actions ---
+
+  // Each `data-lf` button and the element now standing in its place.
+  const actions = [];
+
+  function showInSlot(action, node) {
+    if (action.slot !== node) action.slot.replaceWith(node);
+    action.slot = node;
+  }
+
+  function wireControls() {
+    document.querySelectorAll("[data-notes-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const block = btn.closest(".lf-codeblock");
+        if (!block) return;
+        const hidden = block.classList.toggle("lf-notes-hidden");
+        btn.textContent = hidden ? "Show line notes" : "Hide line notes";
+      });
+    });
+
+    document.querySelectorAll("[data-choice]").forEach((groupEl) => {
+      const group = groupEl.getAttribute("data-choice");
+      const label = groupEl.getAttribute("data-label") || group;
+      groupEl.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const value = buttonValue(btn);
+          if (state.choices[group] && state.choices[group].value === value) {
+            delete state.choices[group];
+          } else {
+            state.choices[group] = { label, value };
+          }
+          refresh(true);
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-multiselect]").forEach((groupEl) => {
+      const group = groupEl.getAttribute("data-multiselect");
+      const label = groupEl.getAttribute("data-label") || group;
+      groupEl.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const value = buttonValue(btn);
+          const current = (state.multiselects[group] && state.multiselects[group].values) || [];
+          const next = current.includes(value)
+            ? current.filter((v) => v !== value)
+            : current.concat([value]);
+          if (next.length === 0) delete state.multiselects[group];
+          else state.multiselects[group] = { label, values: next };
+          refresh(true);
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-question]").forEach((box) => {
+      const qid = box.getAttribute("data-question");
+      const label = box.getAttribute("data-label") || qid;
+      let input = box.querySelector("textarea, input");
+      if (!input) {
+        input = el("textarea", { rows: 2 });
+        box.append(input);
+      }
+      input.addEventListener("input", () => {
+        const answer = input.value;
+        if (!oneLine(answer)) delete state.questions[qid];
+        else state.questions[qid] = { label, answer };
+        setStatus("", "");
+        saveState();
+        renderDock();
+      });
+    });
+
+    document.querySelectorAll("[data-lf]").forEach((btn, idx) => {
+      let template;
+      try {
+        template = JSON.parse(btn.getAttribute("data-lf") || "{}");
+      } catch (_) {
+        return;
+      }
+      const action = {
+        key: btn.getAttribute("data-lf-id") || "action-" + idx,
+        btn,
+        template,
+        slot: btn,
+      };
+      actions.push(action);
+      btn.addEventListener("click", (event) => {
+        if (event.isTrusted) openActionConfirm(action);
+      });
+    });
+  }
+
+  // Receipts and offline-queued actions outlive reloads; an action with neither shows its button.
+  function syncActionsFromState() {
+    for (const action of actions) {
+      const receipt = state.receipts.find((r) => r.key === action.key);
+      const offline = state.offlineActions.find((a) => a.key === action.key);
+      if (receipt) {
+        showInSlot(action, el("span", { cls: "lf-action-receipt", text: receipt.text || receipt.summary }));
+      } else if (offline) {
+        showInSlot(action, el("span", { cls: "lf-action-summary", text: "Offline — added to reply" }));
+      } else if (
+        action.slot.classList.contains("lf-action-receipt") ||
+        action.slot.classList.contains("lf-action-summary")
+      ) {
+        showInSlot(action, action.btn);
+      }
+    }
+  }
+
+  function syncControlsFromState() {
+    syncActionsFromState();
+    document.querySelectorAll("[data-choice]").forEach((groupEl) => {
+      const selected =
+        state.choices[groupEl.getAttribute("data-choice")] &&
+        state.choices[groupEl.getAttribute("data-choice")].value;
+      groupEl.querySelectorAll("button").forEach((btn) => setPressed(btn, selected === buttonValue(btn)));
+    });
+    document.querySelectorAll("[data-multiselect]").forEach((groupEl) => {
+      const entry = state.multiselects[groupEl.getAttribute("data-multiselect")];
+      const values = (entry && entry.values) || [];
+      groupEl.querySelectorAll("button").forEach((btn) => setPressed(btn, values.includes(buttonValue(btn))));
+    });
+    document.querySelectorAll("[data-question]").forEach((box) => {
+      let input = box.querySelector("textarea, input");
+      if (!input) {
+        input = el("textarea", { rows: 2 });
+        box.append(input);
+      }
+      const entry = state.questions[box.getAttribute("data-question")];
+      const saved = entry ? entry.answer : "";
+      if (input.value !== saved) input.value = saved;
+    });
+  }
+
+  function summarizeOperation(op) {
+    const parts = [op.kind || "operation"];
+    for (const [k, v] of Object.entries(op)) {
+      if (k === "kind" || k === "directory" || k === "request_id" || v === null || v === false || v === "") {
+        continue;
+      }
+      if (Array.isArray(v) && v.length === 0) continue;
+      parts.push(k + "=" + (typeof v === "string" ? v : JSON.stringify(v)));
+    }
+    return parts.join(" ");
+  }
+
+  function materializeOperation(template, requestId) {
+    const copy = JSON.parse(JSON.stringify(template));
+    if (copy.request_id === "__LF_REQUEST_ID__") copy.request_id = requestId;
+    return copy;
+  }
+
+  function formatReceipt(kind, result) {
+    if (result && typeof result === "object") {
+      const taskId = resultTaskId(result);
+      if (kind === "task.create" && taskId) return "Filed " + taskId;
+      if (result.delivery && result.delivery.sentence) return result.delivery.sentence;
+      if (taskId) return kind + " → " + taskId;
+      if (result.sentence) return result.sentence;
+    }
+    return "Ran " + kind;
+  }
+
+  function openActionConfirm(action) {
+    const template = action.template;
+    if (hostMode === "clipboard") {
+      state.offlineActions.push({ id: randomId(), key: action.key, summary: summarizeOperation(template) });
+      refresh(true);
+      return;
+    }
+
+    const requestId = randomId();
+    if (desktopHandler) execute();
+    else {
+      showInSlot(action, el(
+        "span",
+        "lf-action-confirm",
+        el("span", { cls: "lf-action-summary", text: summarizeOperation(template) }),
+        makeButton("Run", execute, "lf-btn-accent"),
+        makeButton("Cancel", () => showInSlot(action, action.btn))
+      ));
+    }
+
+    function execute(event) {
+      if (event && !event.isTrusted) return;
+      showInSlot(action, el("span", { cls: "lf-action-confirm", text: "Running…" }));
+      const op = materializeOperation(template, requestId);
+      sendOperation(op, requestId).then(
+        (result) => {
+          if (result === cancelledAction) {
+            showInSlot(action, action.btn);
+            return;
+          }
+          const text = formatReceipt(op.kind, result);
+          state.receipts.push({ key: action.key, kind: op.kind, summary: resultTaskId(result) || text, text });
+          refresh(true);
+        },
+        (err) => {
+          showInSlot(
+            action,
+            el("span", "lf-action-error", el("span", { text: errorMessage(err) }), makeButton("Retry", execute))
+          );
+        }
+      );
+    }
+  }
+
+  // --- Cross-element prose highlight anchoring ---
+
+  const EXCLUDED_TEXT_SELECTOR =
+    "button, textarea, input, script, style, .lf-gutter-plus, .lf-ln, .lf-sign, " +
+    ".lf-float-pill, .lf-float-composer, .lf-hover-card, .lf-sidebar, .lf-dock, " +
+    ".lf-comments-toggle, .lf-banner, .lf-action-confirm, .lf-action-receipt, .lf-action-error";
+
+  const BLOCK_TAGS = new Set([
+    "P", "DIV", "LI", "TR", "TD", "TH", "H1", "H2", "H3", "H4", "H5", "H6",
+    "PRE", "BLOCKQUOTE", "SECTION", "ARTICLE", "ASIDE", "HEADER", "FOOTER", "DT", "DD",
+  ]);
+
+  function nearestBlock(node) {
+    let cur = node && node.nodeType === 1 ? node : node && node.parentElement;
+    while (cur && cur !== mainEl) {
+      if (BLOCK_TAGS.has(cur.tagName)) return cur;
+      cur = cur.parentElement;
+    }
+    return mainEl;
+  }
+
+  function isExcludedTextNode(node) {
+    const parent = node.parentElement;
+    return (
+      !parent ||
+      Boolean(parent.closest(EXCLUDED_TEXT_SELECTOR)) ||
+      Boolean(parent.closest("[hidden]")) ||
+      Boolean(parent.closest(".lf-notes-hidden .lf-line-note"))
+    );
+  }
+
+  function buildNormalizedIndex(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let flat = "";
+    const positions = [];
+    let lastWasSpace = true;
+    let lastBlock = null;
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue || isExcludedTextNode(node)) continue;
+      const block = nearestBlock(node);
+      if (lastBlock && block !== lastBlock && !lastWasSpace) {
+        flat += " ";
+        positions.push(null);
+        lastWasSpace = true;
+      }
+      lastBlock = block;
+      const val = node.nodeValue;
+      for (let i = 0; i < val.length; i++) {
+        const ch = val[i];
+        if (/\s/.test(ch)) {
+          if (!lastWasSpace) {
+            flat += " ";
+            positions.push({ node, offset: i });
+            lastWasSpace = true;
+          }
+        } else {
+          flat += ch;
+          positions.push({ node, offset: i });
+          lastWasSpace = false;
+        }
+      }
+    }
+    if (flat.endsWith(" ")) {
+      flat = flat.slice(0, -1);
+      positions.pop();
+    }
+    return { flat, positions };
+  }
+
+  function findOccurrenceForRange(range, needle) {
+    if (!needle) return 0;
+    const index = buildNormalizedIndex(mainEl);
+    let rangeFlatPos = -1;
+    for (let i = 0; i < index.positions.length; i++) {
+      const p = index.positions[i];
+      if (!p) continue;
+      try {
+        if (range.comparePoint(p.node, p.offset) === 0) {
+          rangeFlatPos = i;
+          break;
+        }
+      } catch (_) {}
+    }
+    if (rangeFlatPos < 0) return 0;
+    let count = 0;
+    let from = 0;
+    while (from < rangeFlatPos) {
+      const hit = index.flat.indexOf(needle, from);
+      if (hit < 0 || hit >= rangeFlatPos) break;
+      count++;
+      from = hit + 1;
+    }
+    return count;
+  }
+
+  function findNormalizedRange(needle, occurrence) {
+    if (!needle) return null;
+    const index = buildNormalizedIndex(mainEl);
+    let hit = -1;
+    let from = 0;
+    const targetOcc = Math.max(0, Number(occurrence) || 0);
+    for (let occ = 0; occ <= targetOcc; occ++) {
+      const next = index.flat.indexOf(needle, from);
+      if (next < 0) break;
+      hit = next;
+      from = next + 1;
+    }
+    if (hit < 0) return null;
+    let s = hit;
+    let e = hit + needle.length - 1;
+    while (s <= e && !index.positions[s]) s++;
+    while (e >= s && !index.positions[e]) e--;
+    if (s > e || !index.positions[s] || !index.positions[e]) return null;
+    try {
+      const range = document.createRange();
+      range.setStart(index.positions[s].node, index.positions[s].offset);
+      range.setEnd(index.positions[e].node, index.positions[e].offset + 1);
+      return range;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function wrapRange(range, noteId) {
+    const walker = document.createTreeWalker(mainEl, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue || isExcludedTextNode(node)) continue;
+      try {
+        if (!range.intersectsNode(node)) continue;
+      } catch (_) {
+        continue;
+      }
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.nodeValue.length;
+      if (end > start && node.nodeValue.slice(start, end).trim()) {
+        hits.push({ node, start, end });
+      }
+    }
+    for (let i = hits.length - 1; i >= 0; i--) {
+      const { node: tn, start, end } = hits[i];
+      const text = tn.nodeValue;
+      const frag = document.createDocumentFragment();
+      if (start > 0) frag.append(text.slice(0, start));
+      frag.append(el("span", { cls: "lf-hl", text: text.slice(start, end), attrs: { "data-lf-note-id": noteId } }));
+      if (end < text.length) frag.append(text.slice(end));
+      if (tn.parentNode) tn.parentNode.replaceChild(frag, tn);
+    }
+  }
+
+  function unwrapAllHighlights() {
+    const spans = Array.from(mainEl.querySelectorAll("span.lf-hl[data-lf-note-id]"));
+    const parents = new Set();
+    for (let i = spans.length - 1; i >= 0; i--) {
+      const span = spans[i];
+      const parent = span.parentNode;
+      if (!parent) continue;
+      parents.add(parent);
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    }
+    for (const parent of parents) {
+      if (parent.isConnected) parent.normalize();
+    }
+  }
+
+  let lastHighlightSig = "";
+
+  function renderHighlights() {
+    const sig = JSON.stringify(
+      state.notes.map((n) =>
+        n.kind === "line"
+          ? [n.id, "line", n.path, n.side, n.lineStart, n.lineEnd]
+          : [n.id, "prose", n.match || n.quote, n.occurrence || 0]
+      )
+    );
+    if (sig === lastHighlightSig) return;
+    lastHighlightSig = sig;
+
+    unwrapAllHighlights();
+    mainEl.querySelectorAll("tr.lf-code-row.lf-row-has-note").forEach((tr) => {
+      tr.classList.remove("lf-row-has-note");
+      tr.removeAttribute("data-lf-line-note-ids");
+    });
+
+    for (const note of state.notes) {
+      if (note.kind === "line") {
+        for (const tr of rowsForLineNote(note)) {
+          tr.classList.add("lf-row-has-note");
+          const existing = tr.getAttribute("data-lf-line-note-ids");
+          const list = existing ? existing.split(",") : [];
+          if (!list.includes(note.id)) list.push(note.id);
+          tr.setAttribute("data-lf-line-note-ids", list.join(","));
+        }
+      } else {
+        const range = findNormalizedRange(oneLine(note.match || note.quote), note.occurrence || 0);
+        if (range) wrapRange(range, note.id);
+      }
+    }
+  }
+
+  // --- Floating selection pill, composer, and hover cards (1c) ---
+
+  let floatPill = null;
+  let floatComposer = null;
+  let pendingSelection = null; // { range, rect, section, quote, match }
+  let hoverCardEl = null;
+  let hoverHideTimer = null;
+
+  function dismissFloatPill() {
+    if (floatPill) {
+      floatPill.remove();
+      floatPill = null;
+    }
+  }
+
+  function clearPendingSelection() {
+    pendingSelection = null;
+    dismissFloatPill();
+  }
+
+  function dismissFloatComposer() {
+    if (floatComposer) {
+      floatComposer.remove();
+      floatComposer = null;
+    }
+    mainEl.querySelectorAll("tr.lf-code-row.lf-row-selecting").forEach((tr) => {
+      tr.classList.remove("lf-row-selecting");
+    });
+  }
+
+  function dismissFloats() {
+    dismissFloatPill();
+    dismissFloatComposer();
+  }
+
+  function hideHoverCard() {
+    clearTimeout(hoverHideTimer);
+    if (hoverCardEl) {
+      hoverCardEl.remove();
+      hoverCardEl = null;
+    }
+  }
+
+  function clampFixedBox(box, rect, preferAbove) {
+    const w = box.offsetWidth;
+    const h = box.offsetHeight;
+    const dockAllowance = desktopHandler ? 12 : 96;
+    let top;
+    if (preferAbove) {
+      top = rect.top - h - 8;
+      if (top < 8) top = Math.min(window.innerHeight - h - dockAllowance, rect.bottom + 8);
+    } else {
+      top = rect.bottom + 8;
+      if (top + h > window.innerHeight - dockAllowance) {
+        top = Math.max(8, rect.top - h - 8);
+      }
+    }
+    top = Math.max(8, Math.min(window.innerHeight - h - 8, top));
+    const centered = preferAbove ? rect.left + rect.width / 2 - w / 2 : rect.left;
+    const left = Math.max(8, Math.min(window.innerWidth - w - 8, centered));
+    box.style.top = top + "px";
+    box.style.left = left + "px";
+  }
+
+  function buildNoteEditor({ initialText, placeholder, rows, onSave, onCancel, stopProp }) {
+    const ta = el("textarea", { rows: rows || 2, placeholder, value: initialText || "" });
+    const commit = () => {
+      const val = oneLine(ta.value);
+      if (val) onSave(val);
+    };
+    ta.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        commit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel();
+      }
+    });
+    const wrap = (fn) => (e) => {
+      if (stopProp) e.stopPropagation();
+      fn();
+    };
+    const actionsEl = el(
+      "div",
+      "lf-card-actions",
+      makeButton("Cancel", wrap(onCancel), "lf-btn-quiet"),
+      makeButton("Save ⌘↩", wrap(commit), "lf-btn-accent")
+    );
+    return { ta, actionsEl };
+  }
+
+  function showFloatPill(rect, buttons) {
+    dismissFloatPill();
+    floatPill = el("div", "lf-float-pill");
+    buttons.forEach((b, idx) => {
+      if (idx > 0) floatPill.append(el("span", "lf-float-pill-sep"));
+      floatPill.append(
+        el("button", {
+          type: "button",
+          text: b.label,
+          on: {
+            mousedown: (e) => e.preventDefault(),
+            click: () => {
+              dismissFloatPill();
+              b.onClick();
+            },
+          },
+        })
+      );
+    });
+    document.body.append(floatPill);
+    clampFixedBox(floatPill, rect, true);
+  }
+
+  function saveProseNote(selInfo, text) {
+    const needle = selInfo.match;
+    state.notes.push({
+      id: randomId(),
+      kind: "prose",
+      section: selInfo.section,
+      quote: selInfo.quote.slice(0, 140),
+      match: needle,
+      occurrence: findOccurrenceForRange(selInfo.range, needle),
+      text: oneLine(text),
+    });
+    pendingSelection = null;
+    clearSelection();
+    refresh(true);
+  }
+
+  function openProseComposer(selInfo) {
+    openFloatingComposer(selInfo.rect, {
+      anchorLabel: formatNoteAnchorLabel({ kind: "prose", section: selInfo.section, quote: selInfo.quote }),
+      onSave: (val) => saveProseNote(selInfo, val),
+    });
+  }
+
+  function openFloatingComposer(rect, opts) {
+    dismissFloats();
+    hideHoverCard();
+
+    if (opts.selectedRows) {
+      for (const tr of opts.selectedRows) tr.classList.add("lf-row-selecting");
+    }
+
+    const { ta, actionsEl } = buildNoteEditor({
+      initialText: opts.initialText,
+      placeholder: opts.placeholder || "Add comment… (⌘↩ to save)",
+      onSave: (val) => {
+        dismissFloatComposer();
+        opts.onSave(val);
+      },
+      onCancel: dismissFloatComposer,
+    });
+
+    floatComposer = el(
+      "div",
+      "lf-float-composer",
+      el("div", { cls: "lf-anchor-quote", text: opts.anchorLabel }),
+      ta,
+      actionsEl
+    );
+    document.body.append(floatComposer);
+    clampFixedBox(floatComposer, rect, false);
+    focusEnd(ta);
+  }
+
+  function showHoverCard(targetEl, note) {
+    if (floatComposer) return;
+    hideHoverCard();
+
+    const editBtn = makeButton("Edit", () => {
+      const r = targetEl.getBoundingClientRect();
+      hideHoverCard();
+      openFloatingComposer(r, {
+        anchorLabel: formatNoteAnchorLabel(note),
+        initialText: note.text,
+        onSave: (val) => editNote(note.id, val),
+      });
+    }, "lf-btn-quiet");
+
+    hoverCardEl = el(
+      "div",
+      {
+        cls: "lf-hover-card",
+        on: {
+          mouseenter: () => clearTimeout(hoverHideTimer),
+          mouseleave: () => {
+            hoverHideTimer = setTimeout(hideHoverCard, 200);
+          },
+        },
+      },
+      el("div", { cls: "lf-anchor-quote", text: formatNoteAnchorLabel(note) }),
+      el("div", { cls: "lf-card-body", text: note.text }),
+      el("div", "lf-card-actions", editBtn, makeButton("Delete", () => deleteNote(note.id), "lf-btn-quiet"))
+    );
+    document.body.append(hoverCardEl);
+    clampFixedBox(hoverCardEl, targetEl.getBoundingClientRect(), false);
+  }
+
+  function wireSelectionNotes() {
+    document.addEventListener("mouseup", (event) => {
+      if (
+        event.target.closest(
+          ".lf-float-pill, .lf-float-composer, .lf-hover-card, .lf-sidebar, .lf-dock, .lf-comments-toggle, button, textarea, input, .lf-action-confirm, td.lf-ln"
+        )
+      ) {
+        return;
+      }
+
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) return clearPendingSelection();
+      const quote = oneLine(sel.toString());
+      if (!quote) return clearPendingSelection();
+
+      const range = sel.getRangeAt(0).cloneRange();
+      const containerEl =
+        range.commonAncestorContainer.nodeType === 1
+          ? range.commonAncestorContainer
+          : range.commonAncestorContainer.parentElement;
+      if (!containerEl || !mainEl.contains(containerEl)) return clearPendingSelection();
+
+      const selInfo = {
+        range,
+        rect: range.getBoundingClientRect(),
+        section: nearestSection(containerEl),
+        quote: quote.slice(0, 140),
+        match: quote.slice(0, 240),
+      };
+      pendingSelection = selInfo;
+
+      showFloatPill(selInfo.rect, [
+        { label: "Comment (c)", onClick: () => openProseComposer(selInfo) },
+        { label: "Flag", onClick: () => saveProseNote(selInfo, "Flagged for follow-up") },
+        {
+          label: "Copy",
+          onClick: () => {
+            copyText(quote).catch(() => {});
+            pendingSelection = null;
+            clearSelection();
+          },
+        },
+      ]);
+    });
+
+    document.addEventListener("mousedown", (event) => {
+      if (
+        floatComposer &&
+        !floatComposer.contains(event.target) &&
+        !event.target.closest(".lf-float-pill, .lf-gutter-plus, td.lf-ln")
+      ) {
+        dismissFloatComposer();
+      }
+    });
+
+    mainEl.addEventListener("mouseover", (event) => {
+      const hl = event.target.closest(".lf-hl[data-lf-note-id]");
+      if (hl) {
+        const note = state.notes.find((n) => n.id === hl.getAttribute("data-lf-note-id"));
+        if (note) showHoverCard(hl, note);
+        return;
+      }
+      const lnCell = event.target.closest("tr.lf-code-row.lf-row-has-note td.lf-ln");
+      if (lnCell) {
+        const tr = lnCell.closest("tr.lf-code-row");
+        const firstId = (tr.getAttribute("data-lf-line-note-ids") || "").split(",")[0];
+        const note = firstId ? state.notes.find((n) => n.id === firstId) : null;
+        if (note) showHoverCard(lnCell, note);
+      }
+    });
+
+    mainEl.addEventListener("mouseout", (event) => {
+      if (event.target.closest(".lf-hl[data-lf-note-id], tr.lf-code-row.lf-row-has-note td.lf-ln")) {
+        hoverHideTimer = setTimeout(hideHoverCard, 220);
+      }
+    });
+
+    mainEl.addEventListener("click", (event) => {
+      const hl = event.target.closest(".lf-hl[data-lf-note-id]");
+      if (!hl) return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      openSidebar(hl.getAttribute("data-lf-note-id"));
+    });
+  }
+
+  // --- Diff & file gutter `+` and Shift+click line ranges (2a) ---
+
+  let lastGutterAnchor = null; // { block, newLine, oldLine }
+
+  function rowLineInfo(tr) {
+    const n = tr.getAttribute("data-line");
+    const o = tr.getAttribute("data-old-line");
+    const newLine = n !== null && n !== "" ? Number(n) : null;
+    const oldLine = o !== null && o !== "" ? Number(o) : null;
+    return newLine !== null || oldLine !== null ? { newLine, oldLine } : null;
+  }
+
+  function wireCodeBlocks() {
+    mainEl.querySelectorAll(".lf-codeblock[data-path]").forEach((block) => {
+      const path = block.getAttribute("data-path") || "";
+      if (!path) return;
+
+      block.querySelectorAll("tr.lf-code-row").forEach((tr) => {
+        const info = rowLineInfo(tr);
+        if (!info) return;
+        const firstLn = tr.querySelector("td.lf-ln");
+        if (!firstLn || firstLn.querySelector(".lf-gutter-plus")) return;
+        const label = info.newLine !== null ? "line " + info.newLine : "old line " + info.oldLine;
+        firstLn.insertBefore(
+          el("button", {
+            type: "button",
+            cls: "lf-gutter-plus",
+            text: "+",
+            title: "Comment on " + label + " (Shift+click for range)",
+            attrs: { "aria-label": "Comment on " + path + " " + label },
+          }),
+          firstLn.firstChild
+        );
+      });
+
+      block.addEventListener("mousedown", (event) => {
+        if (event.shiftKey && event.target.closest("td.lf-ln")) event.preventDefault();
+      });
+
+      block.addEventListener("click", (event) => {
+        const trigger = event.target.closest(".lf-gutter-plus, td.lf-ln");
+        if (!trigger) return;
+        const tr = trigger.closest("tr.lf-code-row");
+        const info = tr && rowLineInfo(tr);
+        if (!info) return;
+        event.preventDefault();
+        dismissFloatPill();
+        hideHoverCard();
+
+        let rangeSide = info.newLine !== null ? "new" : "old";
+        let lineStart = info.newLine !== null ? info.newLine : info.oldLine;
+        let lineEnd = lineStart;
+
+        if (event.shiftKey && lastGutterAnchor && lastGutterAnchor.block === block) {
+          if (lastGutterAnchor.newLine !== null && info.newLine !== null) {
+            rangeSide = "new";
+            lineStart = Math.min(lastGutterAnchor.newLine, info.newLine);
+            lineEnd = Math.max(lastGutterAnchor.newLine, info.newLine);
+          } else if (lastGutterAnchor.oldLine !== null && info.oldLine !== null) {
+            rangeSide = "old";
+            lineStart = Math.min(lastGutterAnchor.oldLine, info.oldLine);
+            lineEnd = Math.max(lastGutterAnchor.oldLine, info.oldLine);
+          }
+        }
+        lastGutterAnchor = { block, newLine: info.newLine, oldLine: info.oldLine };
+
+        const previewNote = { kind: "line", path, side: rangeSide, lineStart, lineEnd };
+        const selectedRows = rowsForLineNote(previewNote);
+        // Span the whole range so a composer that flips above it never covers it.
+        const firstRect = (selectedRows[0] || tr).getBoundingClientRect();
+        const anchorRow = selectedRows[selectedRows.length - 1] || tr;
+        const rowRect = anchorRow.getBoundingClientRect();
+        const codeCell = anchorRow.lastElementChild;
+        const codeLeft = codeCell ? codeCell.getBoundingClientRect().left : rowRect.left + 110;
+        const composerRect = {
+          top: firstRect.top,
+          bottom: rowRect.bottom,
+          left: codeLeft + 12,
+          right: rowRect.right,
+          width: Math.max(0, rowRect.right - codeLeft - 12),
+        };
+
+        openFloatingComposer(composerRect, {
+          anchorLabel: formatLineAnchor(previewNote),
+          placeholder:
+            lineStart === lineEnd
+              ? "Add comment… (Shift+click another line for range, ⌘↩ to save)"
+              : "Add comment… (⌘↩ to save)",
+          selectedRows: selectedRows.length ? selectedRows : [tr],
+          onSave: (val) => {
+            state.notes.push({
+              id: randomId(),
+              kind: "line",
+              path,
+              side: rangeSide,
+              lineStart,
+              lineEnd,
+              text: val,
+            });
+            refresh(true);
+          },
+        });
+      });
+    });
+  }
+
+  // --- Collapsible slide-over Comments sidebar (1c) ---
+
+  let commentsToggleBtn = null;
+  let commentsCountEl = null;
+  let sidebarEl = null;
+  let sidebarTitleEl = null;
+  let sidebarListEl = null;
+  let sidebarOpen = false;
+  let sidebarEditingId = null;
+
+  function closeSidebar() {
+    sidebarOpen = false;
+    sidebarEditingId = null;
+    renderSidebar();
+  }
+
+  function ensureSidebar() {
+    if (sidebarEl) return;
+
+    commentsCountEl = el("span", { cls: "lf-comments-count", hidden: true });
+    commentsToggleBtn = el(
+      "button",
+      {
+        type: "button",
+        cls: "lf-comments-toggle",
+        on: {
+          click: () => {
+            sidebarOpen = !sidebarOpen;
+            renderSidebar();
+          },
+        },
+      },
+      el("span", { text: "Comments" }),
+      commentsCountEl
+    );
+
+    sidebarTitleEl = el("span");
+    sidebarListEl = el("div", "lf-sidebar-list");
+    sidebarEl = el(
+      "aside",
+      { cls: "lf-sidebar", attrs: { "aria-label": "Comments sidebar" } },
+      el("div", "lf-sidebar-head", sidebarTitleEl, makeButton("Close", closeSidebar, "lf-btn-quiet")),
+      sidebarListEl
+    );
+    document.body.append(commentsToggleBtn, sidebarEl);
+  }
+
+  function openSidebar(focusNoteId) {
+    ensureSidebar();
+    sidebarOpen = true;
+    renderSidebar();
+    if (focusNoteId && sidebarListEl) {
+      const card = sidebarListEl.querySelector('[data-lf-sidebar-note="' + CSS.escape(focusNoteId) + '"]');
+      if (card) pulseElement(card);
+    }
+  }
+
+  function renderSidebar() {
+    ensureSidebar();
+    const ordered = notesInDocumentOrder();
+    const count = ordered.length;
+
+    commentsCountEl.textContent = String(count);
+    commentsCountEl.hidden = count === 0;
+    commentsToggleBtn.classList.toggle("has-notes", count > 0);
+    commentsToggleBtn.setAttribute("aria-expanded", sidebarOpen ? "true" : "false");
+
+    sidebarEl.classList.toggle("is-open", sidebarOpen);
+    sidebarTitleEl.textContent = count > 0 ? "Comments (" + count + ")" : "Comments";
+
+    sidebarListEl.innerHTML = "";
+    if (!count) {
+      sidebarListEl.append(
+        el("div", {
+          cls: "lf-sidebar-empty",
+          text: "No comments yet. Drag across text or click + on a code line to leave one.",
+        })
+      );
+      return;
+    }
+
+    for (const note of ordered) {
+      const item = el(
+        "div",
+        {
+          cls: "lf-sidebar-item",
+          attrs: { "data-lf-sidebar-note": note.id },
+          on: {
+            click: (e) => {
+              if (!e.target.closest("button, textarea")) pulseElement(noteAnchorElement(note));
+            },
+          },
+        },
+        el("div", { cls: "lf-anchor-quote", text: formatNoteAnchorLabel(note) })
+      );
+
+      if (sidebarEditingId === note.id) {
+        const { ta, actionsEl } = buildNoteEditor({
+          initialText: note.text,
+          placeholder: "Edit comment… (⌘↩ to save)",
+          stopProp: true,
+          onSave: (val) => editNote(note.id, val),
+          onCancel: () => {
+            sidebarEditingId = null;
+            renderSidebar();
+          },
+        });
+        item.append(ta, actionsEl);
+        setTimeout(() => focusEnd(ta), 0);
+      } else {
+        item.append(
+          el("div", { cls: "lf-card-body", text: note.text }),
+          el(
+            "div",
+            "lf-card-actions",
+            makeButton(
+              "Edit",
+              (e) => {
+                e.stopPropagation();
+                sidebarEditingId = note.id;
+                renderSidebar();
+              },
+              "lf-btn-quiet"
+            ),
+            makeButton(
+              "Delete",
+              (e) => {
+                e.stopPropagation();
+                deleteNote(note.id);
+              },
+              "lf-btn-quiet"
+            )
+          )
+        );
+      }
+      sidebarListEl.append(item);
+    }
+  }
+
+  // --- Browser T3 Code attached-chip composer dock (3b; hidden in Desktop) ---
+
+  let dockEl = null;
+  let dockChipsEl = null;
+  let dockPreviewEl = null;
+  let dockStatusEl = null;
+  let dockOverallInput = null;
+  let dockPreviewBtn = null;
+  let dockClearBtn = null;
+  let dockSendBtn = null;
+  let dockPreviewOpen = false;
+  let statusText = "";
+  let statusKind = "";
+
+  function setStatus(text, kind) {
+    statusText = text;
+    statusKind = kind || "";
+  }
+
+  function steerTargetLabel() {
+    if (work.kind === "task" && work.issue) return work.issue;
+    if (work.kind === "wave" && work.wave) return "wave " + work.wave;
+    if (work.kind === "session" && work.session) return "session";
+    return "repository";
+  }
+
+  function buildSteerOperation(message) {
+    if (work.kind === "task" && work.issue) {
+      return { kind: "task.steer", directory, issue: work.issue, message };
+    }
+    return {
+      kind: "session.steer",
+      directory,
+      session: work.kind === "session" ? work.session || null : null,
+      wave: work.kind === "wave" ? work.wave || null : null,
+      message,
+    };
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+      const ta = el("textarea", { value: text });
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.append(ta);
+      ta.select();
+      try {
+        if (document.execCommand("copy")) resolve();
+        else reject(new Error("Clipboard is unavailable"));
+      } catch (err) {
+        reject(err);
+      } finally {
+        ta.remove();
+      }
+    });
+  }
+
+  // Drop unsent drafts while keeping rendered receipts; mark receipts reported only after a reply is sent.
+  function clearDrafts(options) {
+    const markReported = Boolean(options && options.markReported);
+    const persist = !options || options.persist !== false;
+    const receipts = markReported
+      ? state.receipts.map((r) => Object.assign({}, r, { reported: true }))
+      : state.receipts.slice();
+    state = emptyState();
+    state.receipts = receipts;
+    sidebarEditingId = null;
+    hideHoverCard();
+    refresh(persist);
+  }
+
+  function submitReply() {
+    if (desktopHandler || sendingReply) return;
+    const items = queueItems();
+    if (!items.length) return;
+    const message = formatReplyMessage(items);
+
+    if (hostMode === "loopback") {
+      // Retain edits made after the send, including receipts from actions
+      // that finish while the steer is in flight.
+      const sent = {
+        notes: new Set(state.notes),
+        choices: { ...state.choices },
+        multiselects: { ...state.multiselects },
+        questions: { ...state.questions },
+        offlineActions: new Set(state.offlineActions),
+        overall: state.overall,
+        receipts: new Set(state.receipts),
+      };
+      sendingReply = true;
+      setStatus("Sending…", "");
+      renderDock();
+      sendOperation(buildSteerOperation(message), randomId()).then(
+        (result) => {
+          sendingReply = false;
+          state.notes = state.notes.filter((note) => !sent.notes.has(note));
+          state.offlineActions = state.offlineActions.filter((action) => !sent.offlineActions.has(action));
+          for (const group of ["choices", "multiselects", "questions"]) {
+            for (const [key, value] of Object.entries(sent[group])) {
+              if (state[group][key] === value) delete state[group][key];
+            }
+          }
+          if (state.overall === sent.overall) state.overall = "";
+          for (const receipt of state.receipts) {
+            if (sent.receipts.has(receipt)) receipt.reported = true;
+          }
+          setStatus(result?.delivery?.sentence || "Steer saved.", "ok");
+          saveState();
+          refresh(false);
+        },
+        (err) => {
+          sendingReply = false;
+          setStatus(errorMessage(err), "error");
+          renderDock();
+        }
+      );
+      return;
+    }
+
+    copyText(message).then(
+      () => {
+        setStatus(serverDisconnected ? "Copied reply (server disconnected)" : "Copied reply", "ok");
+        renderDock();
+      },
+      (err) => {
+        setStatus("Copy failed: " + errorMessage(err), "error");
+        renderDock();
+      }
+    );
+  }
+
+  function ensureDock() {
+    if (desktopHandler || dockEl) return;
+
+    dockChipsEl = el("div", "lf-dock-chips");
+    dockPreviewEl = el("div", { cls: "lf-dock-preview", hidden: true });
+    dockStatusEl = el("div", { cls: "lf-dock-status", hidden: true });
+
+    dockOverallInput = el("input", {
+      type: "text",
+      cls: "lf-dock-input",
+      placeholder: "Overall direction (optional)…",
+      attrs: { "aria-label": "Overall direction" },
+      on: {
+        input: () => {
+          state.overall = dockOverallInput.value;
+          setStatus("", "");
+          saveState();
+          updateDockMeta();
+        },
+      },
+    });
+
+    dockPreviewBtn = makeButton("Preview", () => {
+      dockPreviewOpen = !dockPreviewOpen;
+      updateDockMeta();
+    }, "lf-btn-quiet");
+    dockClearBtn = makeButton("Clear", () => clearDrafts({ markReported: false }), "lf-btn-quiet");
+    dockSendBtn = makeButton("", submitReply, "lf-btn-accent");
+
+    dockEl = el(
+      "div",
+      "lf-dock",
+      dockChipsEl,
+      dockPreviewEl,
+      dockStatusEl,
+      el("div", "lf-dock-row", dockOverallInput, el("div", "lf-dock-actions", dockPreviewBtn, dockClearBtn, dockSendBtn))
+    );
+    document.body.append(dockEl);
+    // Reserve the dock's height below the page so the last control stays reachable.
+    new ResizeObserver(() => {
+      document.documentElement.style.setProperty("--lf-dock-room", dockEl.offsetHeight + 40 + "px");
+    }).observe(dockEl);
+  }
+
+  function updateDockMeta(entries) {
+    if (desktopHandler || !dockEl) return;
+    const items = queueItems(entries);
+    const hasItems = items.length > 0;
+
+    if (dockOverallInput.value !== state.overall) dockOverallInput.value = state.overall;
+
+    dockPreviewBtn.hidden = !hasItems;
+    setPressed(dockPreviewBtn, dockPreviewOpen && hasItems);
+    dockClearBtn.hidden = !hasItems;
+
+    dockSendBtn.disabled = !hasItems || sendingReply;
+    dockSendBtn.textContent =
+      hostMode === "loopback" ? "Steer " + steerTargetLabel() + " ⌘↩" : "Copy reply ⌘↩";
+
+    dockPreviewEl.hidden = !(dockPreviewOpen && hasItems);
+    if (dockPreviewOpen && hasItems) dockPreviewEl.textContent = formatReplyMessage(items);
+
+    dockStatusEl.hidden = !statusText;
+    if (statusText) {
+      dockStatusEl.textContent = statusText;
+      dockStatusEl.className =
+        "lf-dock-status" + (statusKind === "error" ? " is-error" : statusKind === "ok" ? " is-ok" : "");
+    }
+  }
+
+  function renderDock() {
+    if (desktopHandler) return;
+    ensureDock();
+
+    const entries = queueEntries();
+    dockChipsEl.innerHTML = "";
+    dockChipsEl.hidden = entries.length === 0;
+    for (const entry of entries) {
+      dockChipsEl.append(
+        el(
+          "span",
+          { cls: "lf-chip", title: entry.title, on: { click: () => entry.jump() } },
+          el("span", { cls: "lf-chip-tag tag-" + entry.tag, text: entry.tag[0].toUpperCase() + entry.tag.slice(1) }),
+          el("span", { cls: "lf-chip-text", text: entry.summary }),
+          el("button", {
+            type: "button",
+            cls: "lf-chip-x",
+            text: "×",
+            title: "Remove",
+            attrs: { "aria-label": "Remove " + entry.tag },
+            on: {
+              click: (e) => {
+                e.stopPropagation();
+                entry.remove();
+              },
+            },
+          })
+        )
+      );
+    }
+
+    updateDockMeta(entries);
+  }
+
+  // --- Global keyboard shortcuts ---
+
+  document.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      if (floatComposer && floatComposer.contains(document.activeElement)) return;
+      if (sidebarEl && sidebarEl.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA") {
+        return;
+      }
+      if (!desktopHandler && queueItems().length > 0) {
+        event.preventDefault();
+        submitReply();
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (floatComposer || floatPill || hoverCardEl) {
+        dismissFloats();
+        hideHoverCard();
+      } else if (sidebarOpen) {
+        closeSidebar();
+      }
+      return;
+    }
+
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      event.key.toLowerCase() === "c" &&
+      pendingSelection &&
+      !(document.activeElement && document.activeElement.closest("input, textarea"))
+    ) {
+      event.preventDefault();
+      const selInfo = pendingSelection;
+      dismissFloatPill();
+      openProseComposer(selInfo);
+    }
+  });
+
+  wireControls();
+  wireCodeBlocks();
+  wireSelectionNotes();
+  renderSidebar();
+
+  if (desktopHandler) {
+    try {
+      const reply = desktopHandler.postMessage({
+        type: "ready",
+        build_id: buildId,
+      });
+      if (reply && typeof reply.then === "function") {
+        reply.then((loaded) => applyState(loaded), () => {});
+      }
+    } catch (_) {}
+  } else {
+    renderDock();
+    loadBrowserState();
+    connectLoopback();
+  }
+})();
+
+</script>
+</body>
+</html>

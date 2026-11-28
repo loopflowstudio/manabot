@@ -1,0 +1,230 @@
+<h1>MTG-508 Concept Review · Coupled mana payments, fixed-tap choices, and owned activations</h1>
+
+<p><strong>Area reviewed:</strong> Mana payment feasibility, execution, and announced activation lifecycle across
+  <code>managym/src/flow/mana.rs</code> (with <code>mana/{help,preview,autotapper,interchangeable}.rs</code>),
+  <code>flow/decision.rs</code>, <code>flow/payment.rs</code>, <code>flow/play.rs</code>,
+  <code>flow/action.rs</code>, and <code>flow/{layers,statics}.rs</code>.
+  This is a pre-implementation review of <code>scratch/plan.md</code> at <code>4a25a7a28f</code> (stacked on MTG-500 <code>5e9156a791</code>;
+  freshly fetched <code>origin/main</code> at <code>23212c88f5</code> is already an ancestor, with <code>MATCH_STATE_HASH_VERSION = 34</code> on <code>origin/main</code> and <code>35</code> on this branch).
+</p>
+
+<p><strong>Verdict on the first slice:</strong> Pass 1 (fixed taps suspending on a bonus choice) is the right first slice—Pass 2's native fork stepping hits the existing <code>perform_automatic_tap</code> panic without it—but its representation (<code>FixedOutput::{Exact, Choice}</code>) splits one concept across ~38 sites and misses <code>PaymentPreview</code>. Pass 2's plan has three structural defects that would fail its own committed fixtures if built as written:
+  (1) smuggling <code>&amp;Game</code> behind <code>cached_plan</code> while callers still pre-mutate frozen <code>PaymentModel</code> snapshots;
+  (2) dropping <code>Sensitive</code> sources from fork branching; and
+  (3) memoizing on <code>deterministic_hash()</code>, which hashes the full chronological event ledger and never deduplicates transpositions.
+</p>
+
+<h2>Domain concepts vs. code concepts</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Domain concept (player / CR)</th>
+      <th>Planned code concept</th>
+      <th>Aligned?</th>
+      <th>What is wrong</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Payment feasibility from a position (or after taking candidate step X)</strong>: does some legal sequence of mana taps, activations, help taps, delve exiles, and replacement orders complete every owed cost?</td>
+      <td><code>PaymentModel</code> (frozen <code>Arc&lt;Vec&lt;ManaSource&gt;&gt;</code> + <code>LifeBudget</code>) with <code>&amp;Game</code> bolted on behind <code>cached_plan</code>; callers still flatten candidate first steps (<code>activation_payable</code>, <code>after_tap</code>, <code>with_tapped</code>, <code>after_mana_choice</code>), reservations, convoke/improvise, and delve into pure <code>PaymentModel</code> mutations before calling <code>cached_plan</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Biggest mismatch.</strong> An action's legality has no single coupled owner: callers mutate the frozen source list instead of stepping the fork, fast paths (<code>fixed_sufficient</code>, <code>PaymentCache</code>, <code>determined_source_counts</code>, <code>equivalent_mana_choices</code>, <code>automatic_units_within</code>) bypass <code>cached_plan</code>, and <code>help_obligations</code> pre-subtracts delve at the root and discards <code>help.delve</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Coupling roles</strong>: steps that change coupled board state (<em>Mutator</em>), steps whose output/cost/triggers depend on it (<em>Sensitive</em>), and independent steps (<em>Invariant</em>).</td>
+      <td><code>BoardArithmeticProfile</code> + <code>PaymentCoupling::{Invariant, Sensitive, Mutator}</code> in classifier, but Pass 2 search branches only on Mutators (treating Sensitive like Invariant) and deduplicates via <code>same_payment_profile</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>One concept dropped mid-flight.</strong> Not branching on <code>Sensitive</code> sources breaks <code>34092c814</code> (Audience before Citadel/Canyon), <code>a90fd7109</code> (Mountain tap before counter removal), and <code>PreventAll</code> before Citadel. <code>same_payment_profile</code> ignores <code>tap_candidates</code> membership. <code>BoardArithmeticProfile</code> also misses <code>Modification::{ExileIfWouldDie, ExileIfWouldLeave}</code> in <code>state.effects</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Equivalent payment states reached in different orders</strong> (memoization / transposition).</td>
+      <td>Memo key = <code>fork.state.deterministic_hash()</code> + separate abstract <code>pool</code> + obligations + reservations.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Wrong concept for the key, and two pools.</strong> <code>deterministic_hash()</code> hashes <code>events</code>, <code>pending_events</code>, <code>observation_events</code>, <code>pending_triggers</code>, <code>id_gen</code>, and <code>mana_pool</code> in chronological order—it is a path-history digest, not a state equivalence key. Two orders of commutative Mutators never hit the memo table, while paying full JSON+BLAKE3 serialization of the match's <code>EventLedger</code> at every node. Keeping a separate abstract <code>pool</code> also diverges from <code>fork.state.players[p].mana_pool</code>, breaking <code>Condition::UnspentManaAtLeast</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>In-flight mana activation</strong> waiting on its mana fee, counter/sacrifice replacements, or bonus choices.</td>
+      <td><code>fork</code> clears <code>suspended_decision</code>; <code>payment_obligations</code> collapses <code>ManaUpfront</code> / <code>ManaOutput</code> into pure <code>Obligation::Output { choices, life_cost, life_delta }</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Lifecycle flattened into arithmetic.</strong> Drops <code>ManaUpfrontActivation</code> and any suspended <code>OrderReplacement</code> / <code>PendingManaOutput</code> frame. A suspended <code>ManaUpfront</code> whose grant already ended (Pass 3 fixture) cannot be completed natively on <code>fork</code>, and an in-flight <code>OrderReplacement</code> (Caradora + Doubling Season) cannot be stepped once <code>suspended_decision</code> is cleared.</td>
+    </tr>
+    <tr>
+      <td><strong>Tapping a fixed-mana permanent whose triggered bonus needs a color choice</strong> (CR 106.12a / 605.4a).</td>
+      <td><code>ManaSource.fixed: Option&lt;FixedOutput&gt;</code> with <code>FixedOutput::{Exact(Mana), Choice(ManaChoices)}</code> across ~38 <code>.fixed</code> sites; <code>preview_tap</code> left assuming exact taps.</td>
+      <td><strong>No</strong></td>
+      <td><strong>One field for two ideas.</strong> <code>source.fixed</code> meant "one deterministic automatic output." Splitting it into an enum duplicates multi-output choice logic already in <code>ManaActivation</code> across bounds, witness search, floats, and taps, and misses <code>PaymentPreview::preview_tap</code> (called directly when hovering <code>Action::TapForMana</code>) and <code>producible_mana</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Announced non-mana activation</strong> keeping its priced cost and rules text until it reaches the stack (CR 602.2b).</td>
+      <td>Owned <code>(priced_cost, unfinalized ActivatedAbilityDefinition)</code> on <code>ActivatedTargeting</code> and <code>Operation::Activation</code>; <code>PendingChoice::ActivationX</code> left re-indexing live <code>characteristics</code>; priority scans construct owned <code>Operation::Activation</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Rule unfinished on one stage, redundant fields elsewhere.</strong> Leaves <code>PendingChoice::ActivationX</code> re-reading <code>activated_abilities[ability_index]</code>. Non-mana abilities have no dynamic mana output, so one finalized <code>ActivatedAbilityDefinition</code> already holds both priced cost and text. Cloning it on every priority scan adds unnecessary heap churn. Also, <code>Operation::Activation</code> is already inside <code>GameState.suspended_decision</code> (hashed directly by <code>deterministic_hash</code>), not only <code>PendingChoice</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Payer's replacement ordering during a payment</strong> (CR 616.1): only orders that complete the enclosing payment are legal; opponent orders are never filtered.</td>
+      <td>Filter <code>Decision::OrderReplacement</code> offers and admission when <code>has_enclosing_payment(chooser)</code>; payer OR / opponent AND in search.</td>
+      <td><strong>Yes</strong></td>
+      <td>Matches CR 616.1 and the no-stranding contract once backed by live fork transitions (Findings 1 and 4) rather than clearing <code>suspended_decision</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Concrete interaction walk: where the current plan breaks</h2>
+
+<p>Walk <code>fixed_mana_suffix_reads_life_through_damage_replacement</code> (<code>0d7bb6743</code>: 4 life, Henge <code>+2</code>, Citadel <code>-3 - life_gained_this_turn</code>, owing <code>{G}{G}{R}</code> + 2 life) and <code>a90fd7109</code> (Mountain tap + trample-counter removal beside trample-reading Heartbeat, owing <code>{G}{R}{R}</code>) through Pass 2 as written:</p>
+
+<ol>
+  <li><strong>Offer check:</strong> <code>mana_ability_actions_with</code> checks whether Henge-first (<code>0d7bb6743</code>) or counter-first (<code>a90fd7109</code>) is legal by calling <code>PaymentModel::activation_payable</code> (<code>mana.rs:1741</code>).</li>
+  <li><strong>Failure in the planned boundary:</strong> <code>activation_payable</code> clones the frozen <code>PaymentModel</code>, removes the tap/counter from <code>model.sources</code>, prepends a pure <code>Obligation::Output { choices, life_cost, life_delta }</code>, and calls <code>model.payable(...)</code>. It <em>never executes Henge or removes Mountain's trample counter on <code>fork</code></em>.</li>
+  <li><strong>Resulting wrong answer:</strong> When <code>cached_plan</code> forks <code>self.game</code>, <code>fork.state.turn.history[0].life_gained</code> is still <code>0</code> (in <code>0d7bb6743</code>) and Mountain still has its trample counter (in <code>a90fd7109</code>). Stepping Citadel on <code>fork</code> still deals 3 damage instead of 5; tapping Mountain still triggers Heartbeat for <code>{R}{R}</code>. Both stranding actions are still offered and still crash with <code>AgentError("empty non-terminal action space")</code>.</li>
+  <li><strong>Same failure on Delve + sacrifice (Pass 3):</strong> <code>help_obligations</code> (<code>mana/help.rs:73</code>) reads <code>self.graveyard_payers(player, spell).len()</code> at the root (= 0) and discards <code>help.delve</code> before calling <code>model.payable</code>. Sacrificing a non-token creature on <code>fork</code> adds a card to the graveyard that the coupled search does not even know can pay generic delve mana.</li>
+  <li><strong>Same failure on <code>34092c814</code>:</strong> At 25 life (after Citadel #1, with Citadel #2 and Raucous Audience untapped, casting Solemn Simulacrum <code>{4}</code>), Citadel #2 has <code>mana_cost = {0}</code>. Pass 2's rule branches on Sensitive sources "only as far as funding a Mutator's own mana cost needs," so it never tries Audience (<code>Sensitive</code>) before Citadel #2 (<code>Mutator</code>), and wrongly reports the cast unpayable.</li>
+  <li><strong>Recovery / simpler model:</strong> Make the coupled authority accept a <em>structured payment query</em> (reservations, <code>Help</code>, pending live activations, and an optional candidate first step—activate, tap, mana choice, or replacement order—executed natively on the fork before searching). Branch on both <code>Mutator</code> and <code>Sensitive</code> sources; sync <code>fork</code>'s real mana pool with the search; memoize on a payment-state fingerprint that excludes event logs.</li>
+</ol>
+
+<h2>Biggest mismatch: frozen <code>PaymentModel</code> mutations vs. live coupled transitions</h2>
+
+<p>Existing code in <code>managym/src/flow/mana.rs</code> and <code>managym/src/flow/mana/help.rs</code> shows why intercepting <code>cached_plan</code> alone cannot catch coupled transitions—callers already flattened the candidate action, delve count, reservations, and fast paths before <code>cached_plan</code> is ever reached:</p>
+
+<lf-file path="managym/src/flow/mana.rs" lines="1741-1765"></lf-file>
+<lf-file path="managym/src/flow/mana.rs" lines="2684-2702"></lf-file>
+<lf-file path="managym/src/flow/mana/help.rs" lines="66-89"></lf-file>
+
+<lf-component name="before-after">
+  <div slot="before">
+    <h4>Planned (in <code>scratch/plan.md</code>)</h4>
+    <ul>
+      <li><code>PaymentModel</code> gains <code>&amp;Game</code> + <code>payer</code>, and intercepts only <code>cached_plan</code>.</li>
+      <li>Callers still mutate frozen <code>PaymentModel</code> before querying:
+        <ul>
+          <li><code>activation_payable</code> strips resources and prepends pure <code>Obligation::Output</code> without executing the activation on <code>fork</code>.</li>
+          <li><code>after_tap</code> / <code>payable_after_tap</code> / <code>with_tapped</code> / <code>plan_after_tap</code> strip <code>untapped</code> without tapping on <code>fork</code>.</li>
+          <li><code>after_mana_choice</code> edits an abstract <code>pool</code> without updating <code>fork</code>'s pool.</li>
+          <li><code>help_obligations</code> pre-reduces delve at root and discards <code>Help</code>; <code>reserve</code> discards reservation records.</li>
+        </ul>
+      </li>
+      <li><code>PaymentModel::payable</code> hits <code>direct()</code> and <code>fixed_sufficient()</code> before <code>cached_plan</code>; <code>PaymentCache</code> keys only on <code>(sources, life, pool, obligations, policy, tap)</code>.</li>
+      <li>Search branches only on Mutators, clears <code>suspended_decision</code> (losing suspended <code>ManaUpfront</code> / <code>OrderReplacement</code>), and hashes <code>deterministic_hash()</code> (the full <code>EventLedger</code>).</li>
+    </ul>
+  </div>
+  <div slot="after">
+    <h4>Proposed redesign (for this Task)</h4>
+    <ul>
+      <li>Keep pure <code>PaymentModel</code> intact for uncoupled boards (zero overhead on TLA / ordinary boards), and record the structured <strong>query context</strong> alongside it:
+        <ul>
+          <li><code>reservations: Vec&lt;SourceReservation&gt;</code> + counter reservations,</li>
+          <li><code>help: Help</code> (<code>convoke</code>, <code>improvise</code>, <code>delve: Option&lt;ObjectId&gt;</code>) so delve and help taps re-evaluate on every fork step,</li>
+          <li><code>pending_upfront: Vec&lt;PendingUpfrontObligation&gt;</code> retaining the owned <code>ManaUpfrontActivation</code> (and any active <code>OrderReplacement</code> frame for the first step).</li>
+        </ul>
+      </li>
+      <li>Route every candidate-step check (<code>activation_payable</code>, <code>tap_payable</code> / <code>plan_after_tap</code> / <code>with_tapped</code>, <code>mana_choice_completes_payment</code>, and <code>OrderReplacement</code> candidate) through one <code>PaymentAuthority</code> entry that:
+        <ul>
+          <li>takes the fast pure <code>PaymentModel</code> + <code>PaymentCache</code> path whenever the question has no <code>Mutator</code> (and no active coupled <code>OrderReplacement</code>);</li>
+          <li>otherwise steps the candidate action <strong>natively on <code>fork</code></strong>, syncs <code>fork</code>'s real <code>mana_pool</code>, rebuilds sources + reservations + help + coupling, and runs the coupled fork search.</li>
+        </ul>
+      </li>
+      <li>Coupled search tries pure handoff (Mutators removed, only when no pending coupled <code>ManaUpfront</code>/<code>OrderReplacement</code> remains), otherwise branches on every <code>Mutator</code> and every <code>Sensitive</code> source (plus one representative per <code>sources_equivalent</code> class of <code>Invariant</code> sources only while funding a pending upfront mana fee), memoized on a <strong>payment-state fingerprint</strong> (permanents, life, turn histories, graveyard/exile contents, pool, obligations, reservations—never <code>events</code> or <code>id_gen</code>).</li>
+    </ul>
+  </div>
+</lf-component>
+
+<h2>Findings</h2>
+
+<lf-component name="decision" id="f1" title="F1 · Route candidate-step checks, reservations, delve/help, and fast paths through one coupled query boundary (This work)" recommendation="Fix here">
+  <p><strong>Scope:</strong> This work (Pass 2 &amp; Pass 3). Fixing this is required for the plan's own committed fixtures (<code>0d7bb6743</code>, <code>a90fd7109</code>, <code>34092c814</code>, delve + non-token sacrifice) to pass.</p>
+  <p><strong>What breaks:</strong></p>
+  <ul>
+    <li><code>activation_payable</code> (<code>mana.rs:1741</code>), <code>after_tap</code>/<code>payable_after_tap</code> (<code>mana.rs:2652</code>), <code>plan_after_tap</code> (<code>mana.rs:2502</code>), <code>with_tapped</code> (<code>mana/help.rs:228</code>), and <code>after_mana_choice</code> (<code>mana.rs:4778</code>) encode candidate first steps as frozen <code>PaymentModel</code> edits instead of native fork steps.</li>
+    <li><code>PaymentModel</code> does not retain its applied <code>SourceReservation</code>s, counter reservations, or <code>Help</code> (<code>convoke</code>, <code>improvise</code>, <code>delve</code>), and <code>help_obligations</code> pre-subtracts delve at the root and throws <code>help.delve</code> away (<code>mana/help.rs:73-79</code>).</li>
+    <li>Uncoupled shortcuts missed by Pass 2's list: <code>PaymentModel::fixed_sufficient</code> (<code>mana.rs:2694</code>), <code>PaymentCache</code> lookup (<code>mana.rs:2609</code>—its key omits coupled game state), <code>determined_source_counts</code> (<code>mana/interchangeable.rs:55</code>), <code>automatic_units_within</code> (<code>mana.rs:4141</code>), and <code>equivalent_mana_choices</code> (<code>mana.rs:4560</code>). All must defer to the coupled authority when a Mutator is present.</li>
+  </ul>
+  <p><strong>Recommendation:</strong> Store <code>reservations</code>, <code>counter_reservations</code>, and <code>help</code> on the payment query context; add explicit candidate-step entry points (activate, tap-for-mana, tap-for-cost, mana-choice, order-replacement) that run the candidate step natively on <code>fork</code> when coupled and delegate to existing pure methods when uncoupled. Bypass <code>PaymentCache</code>, <code>direct</code>, <code>fixed_sufficient</code>, <code>determined_source_counts</code>, <code>automatic_units_within</code>, and <code>equivalent_mana_choices</code> whenever the question is coupled.</p>
+  <p><strong>Passed over:</strong> Intercepting only <code>cached_plan</code> (fails all four coupled fixtures and delve-from-sacrifice).</p>
+</lf-component>
+
+<lf-component name="decision" id="f2" title="F2 · Branch on Sensitive sources in coupled search, deduplicate with sources_equivalent, and scan EffectRecords in BoardArithmeticProfile (This work)" recommendation="Fix here">
+  <p><strong>Scope:</strong> This work (Pass 2).</p>
+  <p><strong>What breaks:</strong></p>
+  <ul>
+    <li><code>scratch/plan.md</code> line 44 collapses <code>Sensitive</code> into <code>Invariant</code> ("branch on each Mutator, and on Sensitive/Invariant sources only as far as funding a Mutator's own mana cost needs"), contradicting <code>7cb3655f1</code> design 1 ("branch only on coupled mutators and affected sources"). Whenever a Mutator has mana cost <code>{0}</code> and degrades a Sensitive source (Audience before Citadel/Canyon in <code>34092c814</code>; Mountain tap before trample counter in <code>a90fd7109</code>; <code>PreventAll</code> before Citadel at 3 life), the search never tries the Sensitive source first and falsely reports unpayable.</li>
+    <li>Deduplicating Invariant funders with <code>same_payment_profile</code> (<code>mana.rs:748</code>) ignores <code>tap_candidates</code> membership—two sources with identical mana output can differ in whether a counted-tap ability (e.g. Food) can tap them. Use <code>PurposeProjection::sources_equivalent</code> (<code>mana.rs:432</code>) with <code>tap_candidate_sets</code> instead.</li>
+    <li><code>BoardArithmeticProfile</code> scanning only <code>SourceSeed</code>s and <code>functioning_command_objects(None)</code> misses resolved <code>EffectRecords</code> in <code>game.state.effects</code> carrying <code>Modification::ExileIfWouldDie</code> / <code>Modification::ExileIfWouldLeave</code> (<code>state/src/effect.rs:110,117</code>), which redirect a sacrificed non-token creature to exile instead of the graveyard (affecting delve and graveyard-conditional mana).</li>
+  </ul>
+  <p><strong>Recommendation:</strong> Branch on every <code>Mutator</code> and every <code>Sensitive</code> source; keep <code>Invariant</code> sources (one representative per <code>sources_equivalent</code> class) solely for funding a Mutator's or Sensitive source's upfront mana cost, leaving all other Invariant use to the pure handoff. Include <code>state.effects</code> replacement modifications in <code>BoardArithmeticProfile</code>.</p>
+  <p><strong>Passed over:</strong> Branching on Invariant sources too (blows up the 10-Forest <code>{15}</code> board); branching on Mutators only (fails <code>34092c814</code> and <code>a90fd7109</code>).</p>
+</lf-component>
+
+<lf-component name="decision" id="f3" title="F3 · Replace deterministic_hash() memo key with a payment-state fingerprint and keep one mana pool on the fork (This work)" recommendation="Fix here">
+  <p><strong>Scope:</strong> This work (Pass 2).</p>
+  <p><strong>What breaks:</strong> <code>GameState::deterministic_hash()</code> serializes the entire match's chronological <code>events</code>, <code>pending_events</code>, <code>observation_events</code>, <code>pending_triggers</code>, <code>id_gen</code> watermark, and <code>mana_pool</code> unit origins into JSON and hashes with BLAKE3:</p>
+  <lf-file path="managym/src/state/hash.rs" lines="234-261"></lf-file>
+  <p>Two orders of commutative activations (<code>Citadel #1 → Citadel #2</code> vs. <code>Citadel #2 → Citadel #1</code>) emit events in different order, so their <code>deterministic_hash()</code> values never match—giving <strong>zero transposition hits</strong> while serializing the entire match history at every node. Separately, maintaining an abstract <code>pool</code> alongside <code>fork.state.players[player].mana_pool</code> lets them diverge, breaking <code>Condition::UnspentManaAtLeast</code> (<code>state/src/ability.rs:441</code>, <code>flow/layers.rs:620</code>).</p>
+  <p><strong>Recommendation:</strong> Keep one mana pool by keeping <code>fork.state.players[player].mana_pool</code> synchronized with the search's pool (note <code>mana_pool_mut</code> invalidates <code>LayerBoard</code> only when <code>reads.mana</code> is set), and memoize on a compact structural <code>CoupledMemoKey</code> hashed directly with <code>FastHasher</code>: per-permanent <code>(present, tapped, counters, activations_used)</code>, player life totals, turn histories (<code>life_gained</code>, <code>life_lost</code>, <code>permanents_sacrificed</code>, <code>permanents_left</code>, <code>nonlands_left</code>, <code>graveyard_arrivals</code>, <code>damage_pairs</code>), graveyard/exile card sets, abstract <code>Mana</code> pool, obligations, and reservations—excluding event logs, priority, and allocation watermarks.</p>
+  <p><strong>Passed over:</strong> <code>deterministic_hash()</code> (zero transposition hits + O(match-length) JSON serialization per node); <code>loop_fingerprint()</code> (still allocates a full JSON <code>serde_json::Value</code> tree and saturates counts).</p>
+</lf-component>
+
+<lf-component name="decision" id="f4" title="F4 · Preserve owned ManaUpfrontActivation and active OrderReplacement frames in coupled search (This work)" recommendation="Fix here">
+  <p><strong>Scope:</strong> This work (Pass 2 &amp; Pass 3).</p>
+  <p><strong>What breaks:</strong> Clearing <code>suspended_decision</code> on <code>fork</code> and representing a pending <code>Decision::ManaUpfront</code> as <code>Obligation::Output { choices, life_cost, life_delta }</code> drops the owned <code>ManaUpfrontActivation</code> (<code>output: Effect</code>, <code>suffix</code>, <code>remove_counters</code>, <code>add_counters</code>, <code>sacrifice_source</code>, <code>tap_source</code>). On Pass 3's own acceptance board—a suspended <code>ManaUpfront</code> whose static grant already ended—<code>fork</code> can neither look up the ability on <code>characteristics</code> nor run its costs/suffix/dynamic output through <code>complete_mana_upfront</code>. Similarly, while suspended on <code>Decision::OrderReplacement</code> inside a counter/sacrifice batch (Caradora + Doubling Season) or suffix, clearing <code>suspended_decision</code> drops the in-flight <code>EffectFrame</code> and <code>FrameCompletion::ManaOutput</code>.</p>
+  <p><strong>Recommendation:</strong> Give the coupled search an explicit <code>CoupledObligation::CompleteUpfront { permanent, activation: Box&lt;ManaUpfrontActivation&gt; }</code> (for every suspended or newly opened Mutator/Sensitive <code>ManaUpfront</code>) so it completes natively via <code>complete_mana_upfront</code> even after the grant ends, and step an in-flight <code>OrderReplacement</code> directly on the fork (via <code>choose_replacement</code> + <code>run_payment_frame</code>) until that activation finishes before stripping enclosing decisions.</p>
+  <p><strong>Passed over:</strong> Re-indexing <code>characteristics(permanent)</code> during search (fails when the grant ended); evaluating dynamic outputs and suffixes only at root (fails when an intervening activation changes counters, life, or replacements).</p>
+</lf-component>
+
+<lf-component name="decision" id="f5" title="F5 · Keep ManaSource.fixed strictly for exact automatic taps; unify choice-bonus fixed taps into ManaActivation and handle TapForMana preview (This work)" recommendation="Fix here">
+  <p><strong>Scope:</strong> This work (Pass 1).</p>
+  <p><strong>What breaks:</strong> Replacing <code>ManaSource.fixed: Option&lt;Mana&gt;</code> with <code>Option&lt;FixedOutput&gt;</code> splits one field into two meanings across ~38 sites (<code>autotapper.rs</code>, <code>direct</code>, <code>fixed_sufficient</code>, <code>fixed_total</code>, <code>SourceSupply</code>, <code>color_set_bound</code>, <code>useful_payment_taps</code>, <code>append_mana_floats</code>, <code>determined_source_counts</code>, <code>producible_mana</code>) and duplicates multi-output choice handling that <code>ManaActivation</code> already implements. Meanwhile, <code>PaymentPreview</code> calls <code>preview_tap</code> → <code>perform_automatic_tap</code> directly when hovering <code>Action::TapForMana</code>, even outside automatic batches:</p>
+  <lf-file path="managym/src/flow/mana/preview.rs" lines="283-295"></lf-file>
+  <lf-file path="managym/src/flow/mana/preview.rs" lines="414-430"></lf-file>
+  <p><strong>Recommendation:</strong> Keep <code>ManaSource.fixed: Option&lt;Mana&gt;</code> strictly for deterministic single-output taps (zero changes to <code>autotapper.rs</code>, <code>direct</code>, <code>fixed_sufficient</code>, <code>fixed_total</code>, or automatic prefixes). Represent a fixed tap whose triggered bonuses require a choice as a <code>ManaActivation</code> with <code>kind: ManaActivationKind::{FixedTap, Activated(usize)}</code> and <code>automatic: false</code> (emitting <code>PaymentStep::Fixed(permanent)</code> / <code>Action::TapForMana</code>, and included by <code>append_mana_floats</code> for priority floats). In <code>preview.rs</code>, when hovering a <code>TapForMana</code> whose source has no exact <code>fixed</code> output, return <code>PaymentPreviewState::NeedsChoice</code> instead of calling <code>preview_tap</code>. Keep <code>tap_bonuses</code> evaluating <code>CardPredicate.tapped</code> as satisfied, and have <code>tap_for_mana_action</code> pass the caller frame and <code>commit_start</code> into <code>resolve_mana_bonuses</code> so <code>ManaChoice</code> resumes cleanly (and never runs <code>commit_produced_mana</code> prematurely when suspended).</p>
+  <p><strong>Passed over:</strong> <code>FixedOutput::{Exact, Choice}</code> (touches ~38 exact-tap sites and duplicates <code>ManaActivation</code>'s multi-output search/bound logic).</p>
+</lf-component>
+
+<lf-component name="decision" id="f6" title="F6 · Finish owned non-mana activations across ActivationX, drop the redundant cost/unfinalized pair, avoid priority-scan clones, and document the true hash surface (This work)" recommendation="Fix here">
+  <p><strong>Scope:</strong> This work (Pass 4).</p>
+  <p><strong>What breaks:</strong></p>
+  <ul>
+    <li><code>PendingChoice::ActivationX</code> (<code>flow/play.rs:1760, 1851, 1871</code>) is omitted from Pass 4 and still indexes <code>self.characteristics(permanent).activated_abilities[ability_index]</code>—leaving the announcement-ownership rule unfinished on the first stage of the activation pipeline.</li>
+    <li>Pass 4 proposes storing both "the priced cost and the unfinalized <code>ActivatedAbilityDefinition</code>" by analogy with <code>ManaUpfrontActivation</code>. Inspecting <code>finalize_characteristics</code> (<code>flow/statics.rs:926-947</code>) shows that for non-mana abilities, finalization <em>only</em> prices <code>mana_cost</code> (non-mana abilities never have dynamic mana output). One finalized <code>Box&lt;ActivatedAbilityDefinition&gt;</code> already owns both the priced cost and the rules text.</li>
+    <li>Constructing owned <code>Operation::Activation</code> inside <code>priority_activate_ability_actions</code> (<code>flow/action.rs:820, 931</code>) clones an entire <code>ActivatedAbilityDefinition</code> for every permanent's activated abilities on every priority tick. Pass a borrowed <code>&amp;ActivatedAbilityDefinition</code> (or <code>Cow</code> / lightweight preview query) for hypothetical priority checks instead.</li>
+    <li>In <code>prepare_card_activated_ability</code> (<code>flow/play.rs:2441</code>), dropping <code>card_ability_in_zone</code> must still explicitly verify the card remains in <code>ability.zone</code> so <code>"activation source left its zone"</code> keeps holding.</li>
+    <li><strong>Hash version (irreversible once released):</strong> <code>Operation::Activation</code> is serialized not only inside <code>PendingChoice::Pay</code> (<code>state_digest</code>) but directly inside <code>GameState.suspended_decision</code> (<code>SpendCompletion::Announced</code>, <code>FrameCompletion::DiscardPayment</code>, <code>FrameCompletion::Paid</code>), which is hashed by <code>GameState::deterministic_hash()</code>. <code>origin/main</code> is at <code>v34</code>; PR #639 (MTG-500, open/unreleased) bumped to <code>v35</code>. Bumping to <code>v36</code> keeps <code>main</code> patch-releasable between PR #639 and MTG-508; reusing <code>v35</code> is sound only if both PRs never ship in separate releases.</li>
+  </ul>
+  <lf-file path="managym/src/flow/play.rs" lines="1756-1766"></lf-file>
+  <lf-file path="managym/src/flow/play.rs" lines="1857-1886"></lf-file>
+  <p><strong>Recommendation:</strong> Capture one finalized <code>Box&lt;ActivatedAbilityDefinition&gt;</code> at announcement in <code>PendingChoice::ActivationX</code>, <code>ActivatedTargeting</code>, and <code>Operation::Activation</code>; keep priority feasibility checks borrow-only (no <code>ActivatedAbilityDefinition</code> clone per priority tick); retain the explicit zone check for card activations; bump <code>MATCH_STATE_HASH_VERSION</code> 35 → 36.</p>
+  <p><strong>Passed over:</strong> Leaving <code>ActivationX</code> unowned (unfinished rule); storing both priced cost and unfinalized definition (redundant for non-mana abilities); reusing <code>v35</code> (breaks if MTG-500 releases before MTG-508).</p>
+</lf-component>
+
+<h2>Questions</h2>
+
+<div data-choice="q1" data-label="1 · Coupled authority boundary">
+  <h3>1. How should candidate-step checks and reservations reach the coupled search?</h3>
+  <button data-value="1a">1a · (Recommended) Structured query context (reservations, Help/delve, pending upfront activations) + native candidate-step entry points that bypass pure shortcuts/cache when coupled</button>
+  <button data-value="1b">1b · Keep intercepting cached_plan only, and encode candidate steps as extra Obligation variants</button>
+</div>
+
+<div data-choice="q2" data-label="2 · Coupled search memo key and pool">
+  <h3>2. How should the coupled fork search track the mana pool and memoize visited states?</h3>
+  <button data-value="2a">2a · (Recommended) Sync fork's real mana_pool with search steps and memoize on a structural payment-state key (excluding event logs and id_gen)</button>
+  <button data-value="2b">2b · Keep fork.state.deterministic_hash() as memo key and clear event logs on the fork before hashing</button>
+</div>
+
+<div data-choice="q3" data-label="3 · Choice-bonus fixed mana taps (Pass 1)">
+  <h3>3. How should ManaSource represent a fixed tap whose triggered bonuses open a choice?</h3>
+  <button data-value="3a">3a · (Recommended) Keep source.fixed: Option&lt;Mana&gt; strictly for exact automatic taps; model choice-bonus fixed taps as ManaActivation with kind FixedTap (automatic: false) and return NeedsChoice in PaymentPreview</button>
+  <button data-value="3b">3b · Replace source.fixed with Option&lt;FixedOutput::{Exact, Choice}&gt; across all ~38 callers</button>
+</div>
+
+<div data-choice="q4" data-label="4 · Owned non-mana activation shape (Pass 4)">
+  <h3>4. Should owned non-mana activations include ActivationX and store one finalized definition?</h3>
+  <button data-value="4a">4a · (Recommended) Capture one finalized Box&lt;ActivatedAbilityDefinition&gt; across ActivationX, ActivatedTargeting, and Operation::Activation; keep priority scans borrow-only</button>
+  <button data-value="4b">4b · Keep plan's (priced_cost, unfinalized ActivatedAbilityDefinition) on ActivatedTargeting and Operation::Activation only</button>
+</div>
+
+<div data-choice="q5" data-label="5 · Match-state hash version (irreversible once released)">
+  <h3>5. Match-state hash version for owned non-mana activations (origin/main is v34; open PR #639 is v35; irreversible once shipped):</h3>
+  <button data-value="5a">5a · (Recommended) Bump MATCH_STATE_HASH_VERSION 35 → 36 so PR #639 can release independently</button>
+  <button data-value="5b">5b · Reuse unreleased v35 (requires MTG-500 and MTG-508 to ship in the same release)</button>
+</div>
