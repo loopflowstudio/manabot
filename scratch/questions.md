@@ -3,13 +3,18 @@
 Choices taken headless (planning and the realign after concept review,
 2026-11-27). Each is marked for review in `scratch/plan.md`.
 
-- **Heuristic identity (irreversible once published; review Q2, 2a taken).**
+- **Heuristic identity (review Q2, local v3 taken).**
   Fixing per-game turn state changes 16 of 7,155 heuristic choices in 10 of
   64 profiled games. The plan adds `player_policy.rs` to
-  `heuristic_source_paths()` and bumps the anchor to `native-v3`, which
-  changes the `Code` player key and `anchor_cohort_sha256`, hence every seed
-  against the heuristic. Should stored heuristic baselines (TLA trophies) be
-  replayed against the corrected opponent? Confirm before the PR merges.
+  `heuristic_source_paths()` and bumps the Manabot anchor to `native-v3`.
+  The Manabot registration changes the cohort and its derived seeds. Etude
+  keeps the same `Code.key` and trophy `Seating.definition` when only source
+  bytes change. Setting `config.version` to `native-v3` changes both, so the
+  standalone probe uses that config. Existing trophy declarations and report
+  selections still use the stored tournament identities. Resuming under those
+  identities could mix opponents, and changing the existing seatings in place
+  would cause a seating conflict. Review the new tournament names and which
+  baselines to rerun before publishing shared evaluations.
 - **Native heuristic decisions leave the record.** Replay recomputes them; no
   per-decision heuristic latency or chosen offer is stored.
 - **Compact vector annotations (review Q1, 1a)** drop `frame_sha256`,
@@ -20,6 +25,11 @@ Choices taken headless (planning and the realign after concept review,
 - **Replay uses two worker threads** with the GIL released in `PyEnv`.
 - **Scalar records keep live frames.**
 - **L4 arms run on one rental under `--max-usd 5`.**
+- **L4 arms run on one rental under `--max-usd 5`.**
+- **Opening failures use opt-in isolation.** The coordinator asks for
+  `isolated=True` on reset and slot loads. The engine reports the actual
+  failing seat. An opening failure has an empty commitment prefix and its
+  diagnostic replay runs the retained native policies.
 
 Ideas outside this Task:
 

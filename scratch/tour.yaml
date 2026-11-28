@@ -1,39 +1,21 @@
-at: 89b7f9d99cf02889acba729d3587b4e3b7ccb762
+at: bc03df8508f2d6b348d34414fecd8e9a136c493d
 first:
   - path: docs/evaluation.md
-    why: Managed callbacks, runtime targets, precision and game budgets
-  - path: experiments/reports/eval_throughput.md
-    why: Throughput, zero-copy Gate 1 and MPS compilation
-  - path: scratch/qa.html
-    why: Live benchmark resume, interruption and accelerator checks
-  - path: experiments/tla_trophies.py
-    why: Streams trophy deals and preserves float32 tournament identity
-  - path: experiments/tla_trophies_floor.py
-    why: Reuses the stored floor and colab environment identity
-  - path: manabot/eval/pairing.py
-    why: Shared paired deal specification and admission
-  - path: manabot/eval/agents.py
-    why: Checkpoint metadata, host preparation and seeded sampling
-  - path: manabot/policy/prepare.py
-    why: Contiguous host lookup columns for in-process forwarding
-  - path: manabot/eval/agent_loader.py
-    why: Runtime selection and batched inference
-  - path: manabot/sim/native_game.py
-    why: Viewer frames and decision evidence shared across runners
-  - path: manabot/eval/vector.py
-    why: One decision round, slot backfill and failure isolation
-  - path: managym/__init__.pyi
-    why: Public seeded slot loads and opt-in decision events
-  - path: managym/recording.py
-    why: Detaches records before slot reuse
+    why: Native heuristic behavior and tournament identity
+  - path: managym/src/agent/player_policy.rs
+    why: Seat policy encoding and legal action cap
   - path: managym/src/agent/vector_env/slots.rs
-    why: Explicit deals preserve the automatic seed sequence
-  - path: manabot/eval/match.py
-    why: Replays and retains settled deals
+    why: Per-slot policies and snapshot restoration
+  - path: managym/src/agent/vector_env.rs
+    why: Opening and step failure isolation
+  - path: managym/recording.py
+    why: Policies retained with each game's replay inputs
+  - path: manabot/eval/agents.py
+    why: Built-in and registered code player lifecycle
+  - path: manabot/eval/vector.py
+    why: Native seating and settled leg coordination
   - path: tests/eval/test_vector_eval.py
-    why: Trace parity, backfill and mixed-layout checkpoint failures
-  - path: tests/model/test_prepare_rows.py
-    why: Contiguous compact attention and shared-effect inputs
+    why: Scalar parity, backfill, registered opponents and failure replay
 hide:
   - path: tests/public_api.json
-    why: Generated snapshot of optional native arguments
+    why: Generated additive signatures

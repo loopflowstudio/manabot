@@ -137,15 +137,13 @@ review.
    (`open_game(seed)` returning the game's player) used by both runners, for
    every code player. `heuristic_source_paths()` adds
    `managym/src/agent/player_policy.rs` (the native seat's code) and the
-   anchor version moves to `native-v3`, so the corrected heuristic gets a new
-   Etude identity. **Irreversible once published to shared tournaments:** the
-   source digest feeds the `Code` player key and
-   `EvaluationKey.anchor_cohort_sha256`, hence `derive_seed` for every game
-   against it. Build checks how `tla_trophies*.py` read their stored
-   tournaments with the new opponent and records the answer; frozen literals
-   stay. Passed over: 2b (keep identity, mix changed play into stored
-   benchmarks), 2c (reset per decision; permanently differs from training's
-   opponent).
+   anchor version moves to `native-v3`. Manabot's registration feeds
+   `EvaluationKey.anchor_cohort_sha256` and changes the derived game seeds.
+   Etude treats source as provenance, so the standalone probe uses an explicit
+   `Code.config.version` to change its player key. The stored trophy tournament
+   declarations keep their identities. Review the new tournament names and
+   which baselines to rerun before publishing shared evaluations. See
+   `scratch/questions.md` for the seating compatibility check.
 3. **Compact vector annotations carry only runner-owned facts. (for review;
    review Q1, 1a)** A surfaced vector decision records actor, revision,
    `player_id`, `player_seed`, `player_decision_ordinal`, `policy_rng_seed`
@@ -224,17 +222,6 @@ evidence, `Play` counts and any viewer frame derive from walking it.
   - `docs/evaluation.md` (`#anchors-and-ratings`, `#etude-agents`, `#ownership`)
   - `docs/academy.md` (`#open-a-replay-directly`, `#watch-a-game-from-an-evaluation`)
 
-## Open design questions from `write-docs`
-
-- **Opening-settlement isolation API (`isolated: bool = False` vs unconditional):**
-  Should `VectorEnv.reset_each_into_buffers` and `load_slots_into_buffers`
-  isolate native `AgentError`/panic failures during opening settlement only when
-  `isolated=True` is passed (matching `step_isolated_into_buffers` and
-  `managym`'s opt-in isolation contract, preserving strict transactional
-  rejection by default), or unconditionally? The docs provisionally specify
-  opt-in `isolated=True`, producing `SlotLoadResult(acting_player=None,
-  terminal=False)` and `game_error` / `game_error_seat` in `get_last_info()[slot]`.
-
 ## Absent and error states
 
 - A record without `frame_sha256`, `chosen_offer` or `action_space_kind` is
@@ -273,29 +260,28 @@ evidence, `Play` counts and any viewer frame derive from walking it.
 
 ## Passes
 
-0. **Sync with `origin/main` first.** `23212c88f5` (MTG-502, `GameStateEdit`)
-   edited `vector_env/slots.rs`, `vector_env_bindings.rs`,
-   `managym/recording.py`, `managym/__init__.pyi`, `tests/public_api.json`
-   and made `RestoreOptions` `Clone`. Take it (via the stack parent or
-   `lf sync`) before Pass 1 touches those files.
-1. **Native heuristic seats (could prove the plan wrong).** Design 1, 2 and 4:
-   string-encoded capped `PlayerPolicy`, per-slot pairs on `SlotLoad`,
-   `reset_each_into_buffers` and `GameInputs`, `NativeHeuristic`/`CodeSeat`
-   and `GamePlayer.open_game`, identity change, `game_error_seat` and
-   isolated opening settlement. Shows: on four trophy deals vector and scalar
-   agree leg for leg on checkpoint actions, winner, score and final digest;
-   every vector record replays; a swapped-seat multi-slot failure snapshot
-   replays; a seat-0 heuristic error fails one leg; rows per forward against
-   MTG-497's 15.8. Stops the plan if replay of natively stepped records is not
-   deterministic or the runners disagree.
+0. **Sync with main** (`6a48ef1c68`) brought in MTG-502 while keeping the MTG-497 stack.
+1. **Native heuristic seats** (`bc03df8508`) added capped policies, per-game code players, replayable slot policies and isolation for failed openings.
 2. **Compact evidence and background replay.** Design 3 and 5. Shows: a test
    reconstructing a vector record's frames matches the scalar record's
-   `frame_sha256` at each checkpoint decision; `cards()` invariant holds on
-   divergence; stepping continues while a deal replays.
+   `frame_sha256` at each checkpoint decision using the scalar revision.
+   Native settlement makes the vector's surfaced revision count shorter.
+   `cards()` excludes the diverged step, and stepping continues while a deal replays.
 3. **Leftovers and measurement.** Design 6, a re-profile, then the panel:
    Apple arms (CPU scalar, MPS-64, MLX-64) for both checkpoints on the M4 Max,
    CUDA-64 float32 and bf16 on one L4 rental under `--max-usd 5`. Report and
    docs updated.
+
+### Pass 1 evidence
+
+The M4 Max MPS probe replayed all 64 vector legs across 16 trophy deals.
+The four matching scalar deals agreed on all 1,585 checkpoint action indices,
+pre-decision digests, winners, scores and final digests across 16 legs.
+The vector reached 6,889 games/hour and 21.2 mean rows per forward with a peak
+of 64. Forwards were the largest stage at 17.66 of 33.44 seconds. The mean
+includes the drain after the last deal was seated. The earlier 15.8-row
+reference used 32 deals and the prior heuristic seed cohort.
+Receipts are in `/tmp/mtg506-pass1.W3eFkt`. The full Apple and L4 panel is Pass 3.
 
 ## Deferred findings
 
@@ -319,12 +305,9 @@ gives the same winners, scores and checkpoint forward rows.
 
 ## Build notes
 
-- This checkout has no `.venv`. MTG-497's
-  (`~/src/manabot.mtg-497-support-gpu-batched`) has the editable EXP-77 Etude
-  SDK; this one needs the same (`docs/evaluation.md#etude-agents`), and
-  `uv run --no-sync`.
-- `managym/_managym.cpython-313-darwin.so` here was copied from MTG-497 for
-  the profile and is stale after the first Rust edit.
+- This checkout has a CPython 3.13 `.venv` that reads MTG-497's dependencies
+  and the editable EXP-77 Etude source. Use `uv run --no-sync`.
+- The cp313 native extension was rebuilt for Pass 1. Rebuild after changing Rust.
 - Rust tests run in debug with `CARGO_BUILD_JOBS=2`.
 
 ## Done when
