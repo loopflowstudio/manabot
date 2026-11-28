@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from importlib.metadata import version
 import json
 import os
@@ -43,7 +43,7 @@ from manabot.eval.agent_loader import (
 )
 from manabot.eval.agents import build, local_forward
 from manabot.eval.pairing import PairingSpec, play_pairing
-from manabot.eval.vector import LocalMatches, play_pairings
+from manabot.eval.vector import LocalMatches, ObservePrepared, play_pairings
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.policy.checkpoint import read_container
@@ -58,6 +58,12 @@ GAME_SECONDS = 600.0
 
 
 @dataclass
+class ForwardCall:
+    rows: int
+    seconds: float
+
+
+@dataclass
 class ForwardTiming:
     """Counts and wall time at the synchronous loader boundary."""
 
@@ -65,6 +71,7 @@ class ForwardTiming:
     rows: int = 0
     max_rows: int = 0
     seconds: float = 0.0
+    forwards: list[ForwardCall] = field(default_factory=list)
 
 
 def timed_forward(
@@ -74,7 +81,9 @@ def timed_forward(
         rows = sum(item.batch for item in inputs if isinstance(item, Prepared))
         start = time.perf_counter()
         output = forward(inputs)
-        timing.seconds += time.perf_counter() - start
+        elapsed = time.perf_counter() - start
+        timing.forwards.append(ForwardCall(rows, elapsed))
+        timing.seconds += elapsed
         timing.calls += 1
         timing.rows += rows
         timing.max_rows = max(timing.max_rows, rows)
@@ -83,13 +92,38 @@ def timed_forward(
     return call
 
 
-def random_checkpoint(path: Path, width: int) -> None:
+def random_checkpoint(
+    path: Path, width: int, heads: int = 8, *, template: Path | None = None
+) -> None:
+    """Generate seeded weights, optionally keeping another policy's input contract."""
     torch.manual_seed(RANDOM_SEED)
-    space = ObservationSpace(OBSERVATION)
+    source = read_container(template) if template is not None else None
+    space = source.space if source is not None else ObservationSpace(OBSERVATION)
+    config = source.model if source is not None else model("w160l8")
     policy = ActorCritic(
-        space, model("w160l8").model_copy(update={"hidden_dim": width})
+        space,
+        config.model_copy(update={"hidden_dim": width, "num_attention_heads": heads}),
+        readings=source.readings if source is not None else None,
     )
     save_checkpoint(policy, space, path, player_configs=None)
+
+
+def checkpoint_ref(path: Path, experiment: str) -> CheckpointRef:
+    path = path.resolve(strict=True)
+    digest = file_sha256(path)
+    return CheckpointRef(
+        experiment=experiment,
+        job="policy",
+        name=digest,
+        artifact=ArtifactRef(
+            uri=path.as_uri(), sha256=digest, size_bytes=path.stat().st_size
+        ),
+    )
+
+
+def trophy_corpus_path() -> Path:
+    inputs = os.environ.get("ETUDE_INPUTS_DIR")
+    return Path(inputs) / "pools.json" if inputs else ROOT / POOLS
 
 
 def trophy_deals(
@@ -135,11 +169,20 @@ def completed_games(match: Match, result: Result) -> int:
 
 
 async def run_vector(
-    matches: LocalMatches, specs: dict[str, PairingSpec], slots: int, out: Path
+    matches: LocalMatches,
+    specs: dict[str, PairingSpec],
+    slots: int,
+    out: Path,
+    *,
+    observe_prepared: ObservePrepared | None = None,
 ) -> int:
     games = 0
     async for match, outcome in play_pairings(
-        matches, lambda match: specs[match.key], slots=slots, output_dir=out
+        matches,
+        lambda match: specs[match.key],
+        slots=slots,
+        output_dir=out,
+        observe_prepared=observe_prepared,
     ):
         if isinstance(outcome, Exception):
             raise RuntimeError(f"deal {match.key} failed") from outcome
@@ -178,16 +221,8 @@ def main() -> None:
     if path is None:
         path = out / f"w{args.random_width}l8.safetensors"
         random_checkpoint(path, args.random_width)
-    path = path.resolve(strict=True)
-    digest = file_sha256(path)
-    ref = CheckpointRef(
-        experiment=ARENA,
-        job="policy",
-        name=digest,
-        artifact=ArtifactRef(
-            uri=path.as_uri(), sha256=digest, size_bytes=path.stat().st_size
-        ),
-    )
+    ref = checkpoint_ref(path, ARENA)
+    digest = ref.artifact.sha256
     checkpoint = read_container(path)
     if not checkpoint.space.one_token:
         raise ValueError("the throughput comparison requires a v11 checkpoint")
@@ -195,10 +230,8 @@ def main() -> None:
     parameters = sum(int(value.size) for value in checkpoint.parameters.values())
     del checkpoint
 
-    inputs = os.environ.get("ETUDE_INPUTS_DIR")
-    corpus_path = Path(inputs) / "pools.json" if inputs else ROOT / POOLS
     heuristic, specs, matches = trophy_deals(
-        ref, args.deals, corpus_path, args.precision
+        ref, args.deals, trophy_corpus_path(), args.precision
     )
     timing = ForwardTiming()
     forward = timed_forward(load_with_precision(ref, args.precision), timing)
@@ -264,6 +297,9 @@ def main() -> None:
     if args.device == "cuda":
         summary["gpu"] = torch.cuda.get_device_name()
         summary["cuda"] = torch.version.cuda
+    with (out / "forwards.jsonl").open("w") as receipt:
+        for call in timing.forwards:
+            receipt.write(json.dumps(asdict(call)) + "\n")
     atomic_json(out / "summary.json", summary)
     print(json.dumps(summary, indent=2))
 

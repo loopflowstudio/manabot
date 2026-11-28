@@ -59,6 +59,7 @@ from manabot.eval.pairing import (
     pairing_result,
 )
 from manabot.infra.config import MatchConfig
+from manabot.policy.admission import Spec
 from manabot.policy.prepare import Prepared
 from manabot.policy.spans import BatchRow, ObservationSelection
 from manabot.sim.evaluation_records import (
@@ -336,8 +337,16 @@ class PlayedRound:
     errors: dict[str, ForwardError]
 
 
+type ObservePrepared = Callable[
+    [Prepared[np.ndarray], ObservationSelection, Sampler, Spec], None
+]
+
+
 async def step_round(
-    vector: RecordedVectorEnv, states: list[SlotState | None], space: ObservationSpace
+    vector: RecordedVectorEnv,
+    states: list[SlotState | None],
+    space: ObservationSpace,
+    observe_prepared: ObservePrepared | None = None,
 ) -> PlayedRound:
     """Choose once per live slot, omitting matches whose checkpoint failed."""
     started = monotonic()
@@ -386,9 +395,11 @@ async def step_round(
                         blank[batch] = batch.blank_decision_memory()
                     batch = blank[batch]
                 coords.append((batch, index))
-            return sampler.prepare(
-                ObservationSelection(spec.space, tuple(coords)), spec
-            )
+            selection = ObservationSelection(spec.space, tuple(coords))
+            prepared = sampler.prepare(selection, spec)
+            if observe_prepared is not None:
+                observe_prepared(prepared, selection, sampler, spec)
+            return prepared
 
         async def sample_group(
             members: list[tuple[SlotState, Sampler]], prepared: Prepared[np.ndarray]
@@ -461,6 +472,7 @@ async def play_pairings(
     *,
     slots: int = 64,
     output_dir: Path | None = None,
+    observe_prepared: ObservePrepared | None = None,
 ) -> AsyncGenerator[tuple[Match, Result | Exception], None]:
     """Step paired-deal legs across one `RecordedVectorEnv` and yield settled matches.
 
@@ -701,7 +713,9 @@ async def play_pairings(
                 current_space = None
                 continue
 
-            round_result = await step_round(vector, slot_states, current_space)
+            round_result = await step_round(
+                vector, slot_states, current_space, observe_prepared
+            )
             gameplay_seconds += round_result.seconds_per_slot
             if round_result.errors:
                 failed = {
