@@ -57,6 +57,10 @@ impl Statistics {
             .drawn_copies += u64::from(draw);
     }
 
+    pub(super) fn register(&mut self, card: &CardSnapshot) {
+        self.row(card.owner, card.definition, &card.name);
+    }
+
     pub fn choice(&mut self, choice: &ExposureChoice) {
         self.choice_objects(
             choice.actor,

@@ -94,6 +94,20 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
             count: 2,
         },
         GameStateEdit::SetLife { player: 1, life: 5 },
+        GameStateEdit::CreateToken {
+            key: "token.spirit".into(),
+            controller: owner.0,
+            ready: true,
+            tapped: false,
+        },
+        GameStateEdit::AddFromLibrary {
+            player: (1 - owner.0),
+            name: "Hill Giant".into(),
+            controller: Some(owner.0),
+            ready: false,
+            tapped: false,
+            attached_to: None,
+        },
     ]
     .into();
     let original = root.snapshot().unwrap();
@@ -104,7 +118,7 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
         root.observation_for_player(original_frame.actor as usize)
             .unwrap()
     );
-    let invalid = [edits[0], edits[0]];
+    let invalid = [edits[0].clone(), edits[0].clone()];
     assert!(root.edit_game_state(invalid).is_err());
     assert_eq!(
         root.snapshot().unwrap().to_replay_json().unwrap(),
@@ -144,6 +158,21 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
         if !matches!(mode, BranchMode::Determinize { .. }) {
             assert_eq!(bottom, game.state.object_of(bottom_card));
         }
+        let remaining = &game.state.combat.as_ref().unwrap().attackers_to_declare;
+        let spirit = game
+            .iter_battlefield_permanents(owner)
+            .find(|id| game.characteristics(*id).name == "Spirit")
+            .unwrap();
+        assert!(remaining.contains(&spirit));
+        let giant = game
+            .state
+            .permanents
+            .iter()
+            .rposition(|p| p.is_some())
+            .unwrap();
+        let giant = PermanentId(giant);
+        assert_eq!(game.characteristics(giant).name, "Hill Giant");
+        assert!(!remaining.contains(&giant));
         assert_ne!(branch.state_digest().unwrap(), original.state_digest());
         assert!(branch
             .execute_semantic_command(&command(&original_frame))
@@ -158,6 +187,11 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
         let json: serde_json::Value = serde_json::from_str(&raw).unwrap();
         assert_eq!(json["interventions"][0]["op"], "game_state_edits");
         assert_eq!(json["interventions"][0]["edits"][1]["counter"], "stun");
+        assert_eq!(json["interventions"][0]["edits"][3]["key"], "token.spirit");
+        assert_eq!(
+            json["interventions"][0]["edits"][4]["kind"],
+            "add_from_library"
+        );
         let rebuilt = GameSnapshot::from_replay_json(&raw).unwrap();
         assert_eq!(rebuilt.state_digest(), snapshot.state_digest());
         let mut cold = rebuilt.restore(Default::default()).unwrap();
@@ -186,7 +220,7 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
 fn game_state_edits_refresh_priority_without_running_sbas() {
     let mut env = game(true);
     let edit = [GameStateEdit::SetLife { player: 0, life: 0 }];
-    assert!(env.edit_game_state(edit).is_err());
+    assert!(env.edit_game_state(edit.clone()).is_err());
     while env.game.as_ref().unwrap().state.opening().is_some() {
         env.step(0).unwrap();
     }
@@ -268,7 +302,13 @@ fn game_state_edits_keep_the_focal_blocker_and_only_prompt_new_declarers() {
     let before = env.snapshot().unwrap().to_replay_json().unwrap();
     let error = env
         .edit_game_state([
-            move_attacker,
+            move_attacker.clone(),
+            GameStateEdit::CreateToken {
+                key: "token.spirit".into(),
+                controller: defender.0,
+                ready: true,
+                tapped: false,
+            },
             GameStateEdit::SetTapped {
                 permanent: focal_id,
                 tapped: true,

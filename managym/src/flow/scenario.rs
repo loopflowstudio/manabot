@@ -17,10 +17,9 @@ use std::{
 use crate::{
     agent::action::{ActionSpaceKind, AgentError},
     cards::names::{NameCandidate, NameVocabulary},
-    flow::{decision::Decision, game::Game},
+    flow::{decision::Decision, game::Game, proposed_event::ZoneEntry},
     state::{
         game_object::{ObjectId, PermanentId, PlayerId},
-        permanent::Permanent,
         zone::ZoneType,
     },
 };
@@ -181,24 +180,7 @@ impl Game {
         self.state
             .place_object(object_id, player, ZoneType::Battlefield);
 
-        let permanent_id = PermanentId(self.state.permanents.len());
-        let mut permanent = Permanent::new(
-            self.state.id_gen_mut().next_id(),
-            object_id,
-            &self.state[object_id],
-        );
-        if ready {
-            permanent.summoning_sick = false;
-            permanent.tapped = false;
-        }
-        self.state.permanents.push(Some(permanent));
-        if self.state.object_to_permanent.len() <= object_id.slot() {
-            self.state
-                .object_to_permanent
-                .resize(object_id.slot() + 1, None);
-        }
-        self.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
-        Ok(permanent_id)
+        Ok(self.install_permanent(object_id, player, ZoneEntry::default(), 0, !ready))
     }
 
     /// Recompute the current priority action space after state injection.
