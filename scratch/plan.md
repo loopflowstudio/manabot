@@ -14,7 +14,7 @@ The designs come from MTG-500's ten concept reviews, revised by this Task's conc
 | Angel of Vitality + Raucous Audience + two Citadels at 28 / Henge at 22 / Canyon + Island at 25, casting Solemn Simulacrum (`tarnished_citadel_and_the_great_henge_change_another_mana_source`, `34092c814`) | Legal cast pruned, or a stranding order offered | Castable exactly when some order pays; only completing first steps offered |
 | Non-mana activation whose static grant ends while its mana is paid (new) | `invalid ability index`, or a different ability resolves | The announced ability goes on the stack |
 
-Ordinary boards, TLA Limited included, see no change in offers, order, digests of non-activation states, or speed.
+Ordinary boards, TLA Limited included, keep their offers and order and stay on the pure solver. The hash version changes all digests.
 
 ## Source of truth
 
@@ -44,14 +44,7 @@ All five questions were answered headless with the review's recommended option, 
 
 ## Pass 4 · Owned non-mana activations
 
-- Capture one finalized `Box<ActivatedAbilityDefinition>` at announcement (`activate_ability_action` / `begin_activation_targets`, `flow/play.rs` ≈1696, ≈2030) on `PendingChoice::ActivationX` (≈1760, ≈1862), `ActivatedTargeting` (`flow/game.rs:404`) and `Operation::Activation` (`flow/payment.rs:68`).
-- Every later read uses the capture instead of `characteristics(..).activated_abilities.get(ability_index)`: ActivationX resume, `activation_target_requirement` and callers (`play.rs` ≈2103–2318), `cost_components` / `begin_payment` (`payment.rs` ≈811, ≈899), completion (≈1402 → `prepare_activated_ability`, `play.rs` ≈2358, taking the ability), `owed_reservation` / `announced_model` (`mana.rs` ≈3155, ≈3504), `action.rs` ≈1090/≈1259, `flow/interchangeable.rs` ≈943/≈1050, `agent/continuation.rs` ≈1188, `agent/effect_execution.rs` ≈656. `ability_index` stays for the stack object, use-limit record and observation frame.
-- `prepare_card_activated_ability` (`play.rs` ≈2441) keeps an explicit check that the card is still in `ability.zone` ("activation source left its zone").
-- Hypothetical feasibility checks in priority scans (`action.rs` ≈820/≈931, `mana.rs` ≈4483, `mana/preview.rs` ≈318) borrow `&ActivatedAbilityDefinition`; no clone per priority tick.
-- `Operation::Activation` is hashed both through `PendingChoice` (`agent/env/snapshot.rs` ≈342) and inside `GameState.suspended_decision` (`SpendCompletion::Announced`, `FrameCompletion::{DiscardPayment, Paid}`). `MATCH_STATE_HASH_VERSION` 35 → 36.
-- Regression: an activation granted by a static that depends on a mana source's state; paying its mana ends the grant; the announced ability reaches the stack with its targets; with a second ability on the source the right one resolves; same for an X activation. Checked live and through cold snapshot restore of a recorded object-bound Command.
-
-Then: verify the drafted docs (`managym/README.md`, `docs/engine.md`) against the final implementation, `uv run --extra dev python scripts/refresh_academy_fixtures.py`, conformance fixtures, Engine Budget (`scripts/engine_budget.py record --reason` only if the digest moves for the version bump alone).
+`478bfe336` carries the finalized ability through X, targeting and payment, including acquired grant keys in hash v36. The live grant-loss cases, object-bound cold snapshot restore, 28 existing manual-payment tests and nested life-fee test passed.
 
 ## Docs
 
@@ -62,7 +55,7 @@ Drafted in place before implementation (read these when building and reviewing):
 
 ## Next
 
-Pass 4 is next. Capture the finalized non-mana activation in `flow/game.rs`, `flow/play.rs` and `flow/payment.rs`, then follow the owned definition through the consumers listed above. The full debug suites, Engine Budget, fixture refresh and cold replay verification remain.
+Review the four implementation passes. Refresh Academy fixtures with `uv run --extra dev python scripts/refresh_academy_fixtures.py` and verify conformance receipts. Run the full debug suites and Engine Budget in delivery. Record an Engine Budget baseline for the v36 digest change only after verifying the budget result.
 
 ## Acceptance check
 

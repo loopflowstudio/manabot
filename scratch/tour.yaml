@@ -1,7 +1,15 @@
-at: 588a2333a9670e3a7328288010f42f4c9e0bb447
+at: 478bfe336681349ce574834a377304c905412a81
 first:
   - path: managym/README.md
     why: Rules and offers the player will see
+  - path: docs/engine.md
+    why: State hash and snapshot replay compatibility
+  - path: managym/src/flow/game.rs
+    why: What an announced activation carries
+  - path: managym/src/flow/play.rs
+    why: Announcement, X selection, targeting and stack preparation
+  - path: managym/src/flow/payment.rs
+    why: Fixed costs and completion from the announced ability
   - path: managym/src/flow/mana/profile.rs
     why: Board facts that make source order matter
   - path: managym/src/flow/mana.rs
@@ -13,7 +21,9 @@ first:
   - path: managym/src/flow/mana/tests/manual_payment/coupled_boards.rs
     why: Live replacement decisions and order-sensitive payment boards
   - path: managym/src/flow/mana/tests/manual_payment.rs
-    why: Regression positions and memoization checks
+    why: Live grant loss and payment regressions
+  - path: managym/src/agent/env/snapshot.rs
+    why: Object-bound Command replay through a pending activation
   - path: managym/cards/tests/cards/ody.rs
     why: Casts with life-dependent sources and offers
 hide: []
