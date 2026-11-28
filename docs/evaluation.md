@@ -111,9 +111,12 @@ registration and validation hash the same paths and bytes as a checkout.
 Results recorded against earlier heuristic versions (`native-v2` and the Python
 heuristic) retain their original identity.
 A changed anchor identity needs a new version, never a relabeling of old games.
-Etude keys a `Code` player by name and config. The throughput probe includes
-`version="native-v3"` in its player config, and the source digest is recorded
-as provenance. A benchmark using that player needs its own seating identities.
+Etude keys a `Code` player by name and config. Set `config={"version":
+"native-v3", "max_actions": 64}` for a new built-in heuristic tournament with
+a 64-action cap. The builder and paired-deal admission reject a missing or
+different version. The throughput probe declares this version and size. Run
+the current heuristic under new tournament and seating identities. Use the
+revision that wrote an existing tournament to resume it.
 The code anchors `scripted_greedy` and `random`
 (`manabot.sim.anchors`, frozen v1 sources) remain admissible for compatibility
 and diagnostics, not as working anchors; `fit_population` still places
@@ -459,9 +462,10 @@ mana settings differ. Finished deals verify on two background replay threads
 (with `managym.Env` releasing the GIL during `reset`, `step`, and `state_digest`)
 while the main loop continues stepping active slots. The runner yields each
 `(match, Result)` as its replay completes and pauses new leg seating while
-`slots` settled deals wait in replay. A checkpoint forward failure settles the
-affected matches as errors before the runner requests replacement legs. Unrelated
-games continue.
+`slots` settled deals wait in replay. If all live legs finish at that limit,
+the runner keeps the idle vector open until a replay completes. A checkpoint
+forward failure settles the affected matches as errors before the runner
+requests replacement legs. Unrelated games continue.
 For a local Etude run, pass the generator and agent set to `active.play_many`,
 or run the local throughput probe on held-out trophy deals:
 
@@ -536,11 +540,12 @@ retain scalar checkpoint play through bounded local children.
 **Failure.** The game loop checks `game_seconds` between decisions and enforces
 `max_commands`. Scalar play fsyncs the pending Command before native execution.
 The vector runner holds live records in memory and retains settled diagnostics
-when a deal completes. Native `AgentError` and PyO3 `PanicException` during stepping or opening
-settlement (such as a seat-0 built-in heuristic's opening turns) isolate to the
-failing leg, poison only that slot, produce an invalid score-null row attributed
-to the acting seat (`game_error_seat`), and retain failure evidence. Later games
-continue.
+when a deal completes. Native `AgentError` and PyO3 `PanicException` during
+construction, opening settlement or stepping isolate to the failing leg and
+poison only that slot. The invalid score-null row names the acting seat when
+the native receipt supplies one (`game_error_seat`). A native error while a
+registered code player chooses an action invalidates its leg and names that
+player. Both paths retain failure evidence and other games continue.
 Replay checks the recorded Commands against the reconstructed game. Invalid rows never become forfeits.
 Other Python exceptions fail the match. Elemental also fails a match with no
 valid replayed games, preserving its evidence, so an all-invalid smoke cannot

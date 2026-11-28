@@ -293,6 +293,10 @@ threads. It ends with a typed
 | `interrupted` | The recording ended before the game did. The decisions before it are verified; there is no winner. |
 | `diverged` | At this index the digest differed, the recorded action was not offered, or the engine raised. Nothing after it is produced. |
 
+A failed reset walks an empty verified prefix and stops at index zero.
+Diagnostic replay through `replay_failure_inputs` attempts the reset with the
+recorded seat policies.
+
 Statistics, the Arena-style export and Academy read games through `walk`, so
 they agree on where a game stops. The bounded command-line replay also uses
 this walker for game history:
@@ -580,7 +584,8 @@ and poisoned slots.
   the setup so the roster can draw the decks. Supply `player_policies` (for
   example `("heuristic:64", "agent")`) to override the `VectorEnv`'s policy pair
   for that game; omitting it uses the `VectorEnv`'s default pair, never the
-  slot's previous occupant.
+  slot's previous occupant. Read the pairs for all slots with
+  `current_player_policies()` in native seat order.
 - `SlotLoad.snapshot(slot, snapshot, options=None)` restores a branch along
   with the snapshot's own policy pair.
   Replacing an untouched fresh opening with a snapshot refunds that opening's
@@ -598,10 +603,14 @@ When a slot uses a seat-0 built-in policy, resetting or loading it settles that
 seat's opening turns immediately. A built-in opening can finish the game before
 seat 1 acts, producing `terminal=True` and `acting_player=None`. Pass
 `isolated=True` to `reset_each_into_buffers` or `load_slots_into_buffers` to
-isolate native `AgentError` and panic failures during opening settlement per
-slot: the failing slot becomes poisoned (`acting_player=None`, `terminal=False`)
-with `game_error` and `game_error_seat` in `get_last_info()[slot]`, while the
-other slots load normally. Isolated step receipts from
+isolate native `AgentError` and panic failures during construction and
+opening settlement per slot. The failing slot becomes poisoned
+(`acting_player=None`, `terminal=False`) and `get_last_info()[slot]` carries
+`game_error` plus `game_error_seat` when a chooser was acting. The other slots
+load normally. Setup and deck validation still reject invalid requests.
+`RecordedVectorEnv` retains the attempted setup as a failed opening in its
+snapshot and writes it immediately when the game is selected for file recording.
+Isolated step receipts from
 `step_isolated_into_buffers` report `game_error_seat` the same way, naming the
 acting seat when a mid-game built-in turn fails.
 

@@ -43,6 +43,7 @@ from manabot.policy.decision_memory import MemoryFold
 from manabot.policy.prepare import Prepared, prepare
 from manabot.sim.agent import GamePlayer
 from manabot.sim.card_evidence import EvidenceRef
+from manabot.sim.heuristic import HEURISTIC_VERSION
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import (
     ETUDE_COMPUTE_CLASS,
@@ -670,7 +671,9 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(
     registrations["heuristic"] = register_anchor(
         registrations["tap-on"], "heuristic", player_id="heuristic"
     )
-    agents["heuristic"] = build(Code(name="heuristic"), {})
+    agents["heuristic"] = build(
+        Code(name="heuristic", config={"version": HEURISTIC_VERSION}), {}
+    )
     for opponent in ("tap-off", "heuristic"):
         rows, trace, receipt = play_cell(
             key=key,

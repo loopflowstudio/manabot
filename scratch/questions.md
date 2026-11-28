@@ -36,9 +36,12 @@ Choices taken headless (planning and the realign after concept review,
   `tla_frontier`) are left unversioned, so they refuse rather than mix.
   Open: which of them get a new `native-v3` tournament name, and which
   baselines rerun. Irreversible once scored.
-- **Post-build review Q2 (2a, for review).** Any failed reset record walks
-  the deal under `("agent", "agent")` and stops at index 0; failure replay
-  reruns the recorded policies.
+- **Post-build review Q2 (2a, for review).** A failed reset walks an empty
+  prefix at index 0. MTG-500 can fail before even an agent-only opening
+  reaches a position, so ordinary walking skips reset entirely. Diagnostic
+  replay runs the recorded policies. In a mixed vector snapshot, the opening
+  error is stored on the failed game's ending and projects to a reset failure
+  when the stream is read on its own.
 
 Ideas outside this Task:
 

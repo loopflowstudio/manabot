@@ -22,7 +22,7 @@ from typing import Literal, Never, Protocol
 import numpy as np
 
 import managym
-from managym.card_capture import CapturedCards, captured_cards
+from managym.card_capture import CapturedCards, NativeCapture, captured_cards
 from managym.decision import Command, DecisionFrame, SemanticContractError
 from managym.recording import (
     BufferSpec,
@@ -146,26 +146,24 @@ class RecordWalker:
         )
         self.record = record
         self.game = record.games[0]
-        if not self.game.players:
+        self._failed_opening = record.failed_opening(self.game)
+        if not self.game.players and not self._failed_opening:
             raise ValueError("record setup unavailable")
         self._capture_cards = capture_cards
         self.env, self.observation = self._open()
         self.stop: ReplayStop | None = None
         self._used = False
 
-    def _open(self) -> tuple[managym.Env, managym.Observation]:
+    def _open(self) -> tuple[managym.Env, managym.Observation | None]:
         env = managym.Env(
             seed=self.game.seed,
             skip_trivial=self.record.skip_trivial,
-            # A rejected opening has no committed decisions. The diagnostic
-            # failure replay runs its settling policies, while the prefix walker
-            # retains only the deal before the failed settlement.
-            player_policies=("agent", "agent")
-            if self.record.failed_opening(self.game)
-            else self.record.policies_for(self.game),
+            player_policies=self.record.policies_for(self.game),
             decision_memory=self.game.decision_memory,
             decision_memory_include_own=self.game.decision_memory_include_own,
         )
+        if self._failed_opening:
+            return env, None
         if self._capture_cards:
             env.enable_exposure_capture()
         return env, env.reset(self.game.setup())[0]
@@ -176,6 +174,18 @@ class RecordWalker:
             raise ValueError("walk requires capture_cards=True to collect card facts")
         if self.stop is None:
             raise ValueError("card facts require a finished verified traversal")
+        if self._failed_opening:
+            return CapturedCards(
+                capture=NativeCapture(
+                    version=1,
+                    content_digest=managym.world_identity()["card_digest"],
+                    initial=(),
+                    opening=((), ()),
+                    moves=(),
+                ),
+                final_cards=(),
+                turn=0,
+            )
         return captured_cards(self.env)
 
     def __iter__(self) -> Iterator[RecordedDecision]:
@@ -189,6 +199,12 @@ class RecordWalker:
             raise ValueError("a record walker can only be consumed once")
         self._used = True
         game = self.game
+        if self._failed_opening:
+            reason = self.record.error or (
+                game.end.reason if game.end is not None else None
+            )
+            self.stop = ReplayStop("interrupted", 0, reason)
+            return
         count = len(game.actions) if game.committed is None else game.committed
         boundary = self.record.boundary
         if boundary is not None and boundary.phase != "ready":
@@ -234,6 +250,7 @@ class RecordWalker:
                 ):
                     raise ValueError("pre-decision digest differs")
                 observation = self.observation
+                assert observation is not None
                 frame = None
                 commitment: int | Command = (
                     action if isinstance(action, int) else Command(**json.loads(action))
@@ -458,8 +475,18 @@ def replay_failure_inputs(
     # Journal reset inputs describe the prior game, not the proposed new root.
     # Only an active step row with its exact pre-action frame binds an attempt.
     retained.operation = "step"
+    coordinates = {
+        "boundary_operation": boundary.operation,
+        "boundary_phase": boundary.phase,
+        "native_returned": boundary.returned,
+        "setup_known": boundary.setup_known,
+    }
     results: list[dict[str, object]] = []
     for index, game in enumerate(retained.games):
+        if evidence.failed_opening(game):
+            result = _replay_game_inputs(evidence, game, statistics=statistics)
+            results.append({**result, **coordinates})
+            continue
         bound_step = (
             boundary.phase == "executing"
             and boundary.operation in {"step", "step_isolated", "command"}
@@ -480,17 +507,14 @@ def replay_failure_inputs(
             ):
                 game.actions = game.actions[: boundary.committed_counts[index]]
         if not game.players:
-            result: dict[str, object] = {
+            result = {
                 "stream": game.stream,
                 "status": "setup_unavailable",
             }
         else:
             result = _replay_game_inputs(retained, game, statistics=statistics)
         result.update(
-            boundary_operation=boundary.operation,
-            boundary_phase=boundary.phase,
-            native_returned=boundary.returned,
-            setup_known=boundary.setup_known,
+            coordinates,
             original_outcome=(
                 "failed"
                 if evidence.mode != "vector" and evidence.execution_outcome == "failed"
@@ -546,11 +570,14 @@ def _replay_game_inputs(
     evidence: GameRecord, game: GameInputs, *, statistics: bool = False
 ) -> dict[str, object]:
     """Reconstruct one stream; keep binding divergence out of native failures."""
+    failed_opening = evidence.failed_opening(game)
+    if failed_opening:
+        evidence = evidence.for_game(game)
     # A strict vector exception records the batch outcome, without proving
     # which individual streams advanced. Replay cannot fill in that history.
     agreement = ReplayAgreement(
         "execution_outcome_unknown"
-        if evidence.mode == "vector"
+        if evidence.mode == "vector" and not failed_opening
         else evidence.execution_outcome
     )
     # A reset/search failure has a different boundary from a rejected game

@@ -126,12 +126,22 @@ class DecisionAnnotation(BaseModel):
     extra: dict[str, object] = {}
 
 
+class OpeningFailure(BaseModel):
+    """A reset error owned by one game in a vector snapshot or journal."""
+
+    error_class: str
+    traceback: str | None = None
+
+
 class GameEnd(BaseModel):
     status: Literal["complete", "interrupted", "failed"]
     winner: int | None = None
     winner_retained: bool = True
     reason: str | None = None
     digest: str | None = None
+    opening_failure: OpeningFailure | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class BoundaryIntervention(BaseModel):
@@ -391,13 +401,16 @@ class GameRecord(BaseModel):
         return game.player_policies or self.resolved_player_policies
 
     def failed_opening(self, game: GameInputs) -> bool:
+        if game.end is not None and game.end.opening_failure is not None:
+            return True
         return (
-            self.mode == "vector"
-            and self.operation == "reset"
+            self.operation == "reset"
             and self.execution_outcome == "failed"
             and not game.actions
-            and game.end is not None
-            and game.end.status == "failed"
+            and (
+                self.mode == "scalar"
+                or (game.end is not None and game.end.status == "failed")
+            )
         )
 
     def for_game(
@@ -407,6 +420,14 @@ class GameRecord(BaseModel):
         if game.player_policies is not None:
             fields["player_policies"] = game.player_policies
             fields["games"] = [game.model_copy(update={"player_policies": None})]
+        if game.end is not None and (failure := game.end.opening_failure) is not None:
+            fields.update(
+                operation="reset",
+                execution_outcome="failed",
+                error=game.end.reason,
+                error_class=failure.error_class,
+                traceback=failure.traceback,
+            )
         return self.model_copy(update=fields)
 
 
@@ -1066,10 +1087,12 @@ class ScalarCapture(_Capture):
                 self._publish(self._snapshot("reset"), "ready")
             return result
 
-    def _snapshot(self, operation: Literal["reset", "step"] = "step") -> GameRecord:
+    def _snapshot(
+        self, operation: Literal["reset", "step"] | None = None
+    ) -> GameRecord:
         return self._evidence(
             mode="scalar",
-            operation=operation,
+            operation=operation or (self._raised.operation if self._raised else "step"),
             games=[self.inputs],
             skip_trivial=self.skip_trivial,
         )
@@ -1277,6 +1300,7 @@ _VECTOR_READS = frozenset(
         "observations_for_players",
         "current_matchup_indices",
         "current_player_configs",
+        "current_player_policies",
         "get_last_info",
         "semantic_decision_frames_json",
         "skip_trivial_counts",
@@ -1596,26 +1620,22 @@ class RecordedVectorEnv(_Capture):
     ) -> GameRecord:
         """Detach an in-memory game's record before reusing its slot.
 
-        A runner may settle an opening terminal or impose its own stop. Native
-        isolated failures supply their error metadata in the step receipt.
+        Opening failures are already retained. A runner may supply another
+        ending or error details from a failed decision.
         """
         game = self.games[slot]
         record = self._record_of(game)
-        if end is not None:
-            record.games[0].end = end
-        if info is not None and info.get("game_error"):
-            if not game.actions:
-                record.operation = "reset"
-                record.games[0].end = GameEnd(
-                    status="failed", reason=str(info["game_error"])
-                )
-            record.execution_outcome = "failed"
-            record.error_class = str(info.get("game_error_class", "AgentError"))
-            record.error = str(info["game_error"])
-            if info.get("game_error_trace"):
-                record.traceback = str(info["game_error_trace"])
-        else:
-            record.execution_outcome = "last_command_succeeded"
+        if record.operation != "reset":
+            if end is not None:
+                record.games[0].end = end
+            if info is not None and info.get("game_error"):
+                record.execution_outcome = "failed"
+                record.error_class = str(info.get("game_error_class", "AgentError"))
+                record.error = str(info["game_error"])
+                if info.get("game_error_trace"):
+                    record.traceback = str(info["game_error_trace"])
+            else:
+                record.execution_outcome = "last_command_succeeded"
         self.games[slot] = GameInputs(
             stream=game.stream,
             seed=game.seed,
@@ -1718,6 +1738,7 @@ class RecordedVectorEnv(_Capture):
                 players, seeds=seeds, player_policies=player_policies, isolated=isolated
             ),
             player_policies=player_policies,
+            isolated=isolated,
         )
 
     def reset_all(self, players: managym.GameSetup) -> Any:
@@ -1734,6 +1755,7 @@ class RecordedVectorEnv(_Capture):
         call: Callable[[], Any],
         *,
         player_policies: list[tuple[str, str]] | None = None,
+        isolated: bool = False,
     ) -> Any:
         if len(players) != len(self.games) or len(seeds) != len(self.games):
             raise ValueError("expected one setup and seed per stream")
@@ -1768,7 +1790,7 @@ class RecordedVectorEnv(_Capture):
             self._executing()
             result = call()
         self._returned()
-        self._record_roots(dict.fromkeys(range(len(players))))
+        self._record_roots(dict.fromkeys(range(len(players))), isolated=isolated)
         return result
 
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
@@ -1824,7 +1846,9 @@ class RecordedVectorEnv(_Capture):
             ]
             self._end_current_analysis(mask, infos)
 
-    def _record_roots(self, roots: dict[int, BranchRoot | None]) -> None:
+    def _record_roots(
+        self, roots: dict[int, BranchRoot | None], *, isolated: bool = False
+    ) -> None:
         """Bind replay inputs and reducers to admitted replacement games."""
         self._flush_statistics()
         self.next_seeds = self.native.next_fresh_seeds()
@@ -1836,7 +1860,8 @@ class RecordedVectorEnv(_Capture):
         # when a fresh root is installed.
         players = self.native.current_player_configs() if None in roots.values() else []
         seeds = self.native.current_game_seeds()
-        policies = self.native._current_player_policies()
+        policies = self.native.current_player_policies()
+        infos = self.native.get_last_info() if isolated else []
         for index, root in sorted(roots.items()):
             game = self.games[index]
             self._branch_roots[index] = root
@@ -1853,6 +1878,19 @@ class RecordedVectorEnv(_Capture):
                 continue
             game.decision_memory = self.decision_memory
             game.players = _retain_players(players[index], seeds[index])
+            if infos and (error := infos[index].get("game_error")):
+                info = infos[index]
+                end = GameEnd(
+                    status="failed",
+                    reason=error,
+                    opening_failure=OpeningFailure(
+                        error_class=info["game_error_class"],
+                        traceback=info.get("game_error_trace"),
+                    ),
+                )
+                self._write_game(game, end)
+                game.end = end
+                continue
             if self._reductions and self._reduction.error is None:
                 self._analysis_indices[index] = 0
                 self._analysis_active[index] = True
@@ -2167,7 +2205,7 @@ def load_recorded_slots(
                 vector._write_game(
                     game, GameEnd(status="interrupted", reason="root replaced")
                 )
-        vector._record_roots(roots)
+        vector._record_roots(roots, isolated=isolated)
     return loaded
 
 

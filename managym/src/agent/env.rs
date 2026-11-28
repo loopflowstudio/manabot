@@ -312,16 +312,17 @@ impl Env {
         &mut self,
         player_configs: impl Into<GameSetup>,
     ) -> Result<(Observation, InfoDict), AgentError> {
-        let observation = self.reset_root(player_configs.into(), self.player_policies)?;
+        self.prepare_root(player_configs.into(), self.player_policies)?;
+        let observation = self.construct_root()?;
         self.settle_opening(observation)
     }
 
-    pub(super) fn reset_root(
+    /// Admit the setup and retire the previous game before attempting gameplay.
+    pub(super) fn prepare_root(
         &mut self,
-        player_configs: GameSetup,
+        mut player_configs: GameSetup,
         player_policies: [PlayerPolicy; 2],
-    ) -> Result<Observation, AgentError> {
-        let mut player_configs = player_configs;
+    ) -> Result<(), AgentError> {
         if player_configs.len() != 2 {
             return Err(AgentError(format!(
                 "expected exactly 2 player configs, got {}",
@@ -351,25 +352,35 @@ impl Env {
                 }
             }
         }
-        let _scope = self.profiler.track("env_reset");
         let evidence = self.current_recording()?;
+        self.retained_exposure.extend(evidence.exposure);
+        self.retained_statistics.extend(evidence.statistics);
+        self.capture_generation = GAME_GENERATION.fetch_add(1, Ordering::Relaxed);
+        self.reset_seed = self.seed;
+        self.reset_setup = Some(Arc::new(player_configs));
+        self.player_policies = player_policies;
+        self.game = None;
+        self.provenance = None;
+        self.heuristics = [None, None];
+        self.gameplay_seat = None;
+        Ok(())
+    }
+
+    pub(super) fn construct_root(&mut self) -> Result<Observation, AgentError> {
+        let _scope = self.profiler.track("env_reset");
+        let setup = self.reset_setup.as_ref().expect("admitted reset setup");
         let mut game = Game::construct(
-            &player_configs,
+            setup,
             self.seed,
             self.skip_trivial,
             self.capture,
             self.collect_statistics,
         )?;
-        self.retained_exposure.extend(evidence.exposure);
-        self.retained_statistics.extend(evidence.statistics);
         game.decision_memory_enabled =
             self.decision_memory_enabled || self.decision_memory_include_own;
         game.decision_memory_include_own = self.decision_memory_include_own;
-        let setup = Arc::new(player_configs);
-        self.reset_setup = Some(setup.clone());
-        self.player_policies = player_policies;
         self.provenance = Some(GameProvenance {
-            setup,
+            setup: setup.clone(),
             skip_trivial: self.skip_trivial,
             player_policies: self.player_policies,
             decision_memory: game.decision_memory_enabled,
@@ -379,11 +390,7 @@ impl Env {
         });
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
-        self.capture_generation = GAME_GENERATION.fetch_add(1, Ordering::Relaxed);
-        self.reset_seed = self.seed;
         self.game = Some(game);
-        self.heuristics = [None, None];
-        self.gameplay_seat = None;
         drop(_scope);
         self.remember_heuristic_events(&observation);
         Ok(observation)
@@ -552,21 +559,23 @@ impl Env {
 
     /// The current game's resolved disclosure; open before the first reset.
     pub fn decklists(&self) -> DecklistDisclosure {
-        self.game
-            .as_ref()
-            .map_or(Default::default(), |game| game.state.disclosure)
+        self.reset_setup
+            .as_deref()
+            .map_or_else(DecklistDisclosure::default, |setup| {
+                setup.decklists.resolve(self.reset_seed)
+            })
     }
 
     pub fn mana_payment(&self) -> [ManaPayment; 2] {
-        self.game
-            .as_ref()
-            .map_or([ManaPayment::Manual; 2], |game| game.mana_payment)
+        self.reset_setup
+            .as_deref()
+            .map_or([ManaPayment::Manual; 2], |setup| setup.mana_payment)
     }
 
     pub fn mana_floats(&self) -> [ManaFloats; 2] {
-        self.game
-            .as_ref()
-            .map_or([ManaFloats::Off; 2], |game| game.mana_floats)
+        self.reset_setup
+            .as_deref()
+            .map_or([ManaFloats::Off; 2], |setup| setup.mana_floats)
     }
 
     /// Setups this game was reset with; empty before the first reset.
@@ -629,6 +638,7 @@ impl Env {
         self
     }
 
+    #[cfg(any(feature = "python", test))]
     pub(super) fn player_policies(&self) -> [PlayerPolicy; 2] {
         self.player_policies
     }

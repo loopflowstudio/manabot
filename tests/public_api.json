@@ -4056,6 +4056,10 @@
             "kind": "method",
             "signature": "(self)"
           },
+          "current_player_policies": {
+            "kind": "method",
+            "signature": "(self)"
+          },
           "decision_memory_counts": {
             "kind": "method",
             "signature": "(self)"

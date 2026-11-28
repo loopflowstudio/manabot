@@ -1066,11 +1066,15 @@ impl VectorEnv {
                 mana_payment: player_configs.mana_payment,
             }
         };
-        let obs = env.reset_root(configs, policies)?;
+        env.prepare_root(configs, policies)?;
+        let mut open = || {
+            let obs = env.construct_root()?;
+            env.settle_opening(obs)
+        };
         if !isolated {
-            return env.settle_opening(obs).map(|(obs, info)| (Some(obs), info));
+            return open().map(|(obs, info)| (Some(obs), info));
         }
-        Ok(match isolate_gameplay(|| env.settle_opening(obs)) {
+        Ok(match isolate_gameplay(open) {
             Ok((obs, info)) => (Some(obs), info),
             Err(mut info) => {
                 record_failure_seat(&mut info, env);
@@ -1099,6 +1103,7 @@ mod tests {
             player_policy::PlayerPolicy,
             vector_env::{SlotLoad, VectorEnv},
         },
+        flow::setup::FAIL_CONSTRUCTION,
         infra::profiler::InfoValue,
         state::{
             game_object::PlayerId,
@@ -1114,6 +1119,69 @@ mod tests {
                 |_, _, _| Ok(()),
             )
             .unwrap();
+    }
+
+    #[test]
+    fn isolated_construction_error_retains_the_attempted_opening() {
+        let mut vector = VectorEnv::new(2, 10, true, [PlayerPolicy::Agent; 2]);
+        let setup: GameSetup = sample_player_configs().into();
+        vector.reset_all(setup.clone()).unwrap();
+        let mut replacement = setup.clone();
+        replacement.players[0].name = "replacement".into();
+        let policies = [PlayerPolicy::Random, PlayerPolicy::Agent];
+        FAIL_CONSTRUCTION.set(Some(40));
+        let info = vector
+            .reset_with_writer(
+                vec![replacement.clone(), setup.clone()],
+                Some(vec![40, 41]),
+                Some(vec![policies, [PlayerPolicy::Agent; 2]]),
+                true,
+                |slot, obs, _| {
+                    assert_eq!(obs.is_none(), slot == 0);
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            info[0]["game_error"],
+            InfoValue::String("stalled opening".into())
+        );
+        assert!(!info[0].contains_key("game_error_seat"));
+        assert!(!info[1].contains_key("game_error"));
+        assert_eq!(vector.current_agent_indices(), [-1, 0]);
+        assert_eq!(vector.current_game_seeds(), [40, 41]);
+        assert_eq!(vector.current_player_configs()[0], replacement.players);
+        assert_eq!(vector.current_player_policies()[0], policies);
+
+        FAIL_CONSTRUCTION.set(Some(50));
+        let prepared = vector
+            .prepare_slots(
+                &[
+                    SlotLoad::Fresh(0, None, Some(50), Some(policies)),
+                    SlotLoad::Fresh(1, None, Some(51), None),
+                ],
+                true,
+                |_, _| Ok(()),
+            )
+            .unwrap();
+        let loaded = vector.publish_slots(prepared, |_, _, _| Ok(())).unwrap();
+        assert_eq!(loaded[0].0.seed, 50);
+        assert!(loaded[0].1.contains_key("game_error"));
+        assert!(!loaded[1].1.contains_key("game_error"));
+        assert_eq!(vector.current_agent_indices(), [-1, 0]);
+
+        let mut invalid = setup;
+        invalid.players[0]
+            .deck
+            .main
+            .insert("Unknown card".into(), 1);
+        let rejected = vector.prepare_slots(
+            &[SlotLoad::Fresh(1, Some(invalid), Some(60), None)],
+            true,
+            |_, _| panic!("invalid deck reached the writer"),
+        );
+        assert!(rejected.is_err());
+        assert_eq!(vector.current_game_seeds(), [50, 51]);
     }
 
     #[test]

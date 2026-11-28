@@ -50,7 +50,8 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
   returning `play_pairing(...)` with `AuthoredMatchup("ur-lessons-vs-gw-allies",
   "ur_lessons", "gw_allies", world=managym.WORLD_SETUP)`), and `NAME.py`
   importing it, whose `eval_jobs` seats each run's last checkpoint against
-  `Code(name="heuristic")` in a `Benchmark` with a literal
+  `Code(name="heuristic", config={"version": "native-v3"})` in a new
+  `Benchmark` with a literal
   `Environment(name="fixture", files="0"*64)` (ignored files cannot be digested). A callback
   defined in the discovered file itself is `<run_path>` and cannot be
   imported. `uv run --extra evaluation etude eval NAME.py --source "$ETUDE_HOME/track"`

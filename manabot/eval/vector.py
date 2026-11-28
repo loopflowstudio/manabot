@@ -24,6 +24,7 @@ import math
 from pathlib import Path
 import time
 from time import monotonic
+import traceback
 from typing import Any, Literal, NamedTuple, Protocol
 from uuid import uuid4
 
@@ -77,7 +78,7 @@ from manabot.sim.native_game import (
 )
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import require_open_decklists
-from manabot.sim.supervision import failure_record, settle_record
+from manabot.sim.supervision import failure_record, is_game_error, settle_record
 import managym
 from managym.recording import GameEnd, RecordedVectorEnv
 
@@ -375,6 +376,7 @@ class PlayedRound:
     players: dict[int, str]
     seconds_per_slot: float
     errors: dict[str, ForwardError]
+    code_errors: dict[int, BaseException]
 
 
 async def step_round(
@@ -458,6 +460,7 @@ async def step_round(
         for state in states:
             if state is not None and state.leg.active_match.forward_error(errors):
                 active[state.slot] = False
+    code_errors: dict[int, BaseException] = {}
     code_active = [on and slot in code for slot, on in enumerate(active)]
     if any(code_active):
         observations = vector.decision_observations(code_active)
@@ -465,21 +468,25 @@ async def step_round(
             if not code_active[slot]:
                 continue
             assert raw is not None and int(raw.agent.player_index) == actors[slot]
-            action, elapsed = choose_code_action(
-                code[slot],
-                CodeDecisionEnv(raw, vector, slot),
-                seed=turns[slot].policy_seed,
-                space=space,
-            )
+            try:
+                action, elapsed = choose_code_action(
+                    code[slot],
+                    CodeDecisionEnv(raw, vector, slot),
+                    seed=turns[slot].policy_seed,
+                    space=space,
+                )
+            except BaseException as error:
+                if not is_game_error(error):
+                    raise
+                code_errors[slot] = error
+                active[slot] = False
+                continue
             if not 0 <= action < len(raw.action_space.actions):
-                state = states[slot]
-                assert state is not None
-                state.leg.game["integrity"]["illegal_actions"] += 1
                 raise RuntimeError(f"illegal offer {action}")
             chosen[slot] = action, elapsed
     players = {slot: turn.player_id for slot, turn in turns.items() if active[slot]}
     if not players:
-        return PlayedRound(players, 0.0, errors)
+        return PlayedRound(players, 0.0, errors, code_errors)
 
     summaries = (
         vector.current_action_summaries()
@@ -502,7 +509,9 @@ async def step_round(
     vector.step_isolated_into_buffers(
         actions, active, recover_capacity=True, annotations=annotations
     )
-    return PlayedRound(players, (monotonic() - started) / len(players), errors)
+    return PlayedRound(
+        players, (monotonic() - started) / len(players), errors, code_errors
+    )
 
 
 async def play_pairings(
@@ -614,7 +623,9 @@ async def play_pairings(
             future = loop.run_in_executor(replay_pool, finalize_match, active_match)
             replays[future] = active_match.match
 
-    def complete_failed_leg(slot_state: SlotState, info: dict[str, Any]) -> None:
+    def complete_failed_leg(
+        slot_state: SlotState, info: dict[str, Any], *, end: GameEnd | None = None
+    ) -> None:
         game = slot_state.leg.game
         error_class = str(info.get("game_error_class", "AgentError"))
         if error_class == "ObservationCapacity":
@@ -633,7 +644,7 @@ async def play_pairings(
                 f"{error_class}: {info['game_error']}",
                 game["seat_players"][seat] if seat is not None else None,
             )
-        complete_leg(slot_state, info=info)
+        complete_leg(slot_state, info=info, end=end)
 
     def seat_legs(free: Sequence[int], legs: list[PendingLeg]) -> list[SlotState]:
         seated = []
@@ -716,10 +727,11 @@ async def play_pairings(
                 else:
                     yield match, result
 
+            if len(replays) >= slots and not any(slot_states):
+                await asyncio.wait(replays, return_when=asyncio.FIRST_COMPLETED)
+                continue
+
             if vector is None:
-                if len(replays) >= slots:
-                    await asyncio.wait(replays, return_when=asyncio.FIRST_COMPLETED)
-                    continue
                 legs = await take_legs(slots, None)
                 if not legs:
                     if not ready_errors and source_exhausted:
@@ -803,8 +815,30 @@ async def play_pairings(
                 for slot, state in enumerate(slot_states):
                     if state is not None and state.leg.active_match not in held:
                         slot_states[slot] = None
-                if not round_result.players:
-                    continue
+            if round_result.code_errors:
+                actors = vector.current_agent_indices()
+                digests = vector.state_digests(
+                    [i in round_result.code_errors for i in range(len(slot_states))]
+                )
+                for slot, error in round_result.code_errors.items():
+                    slot_state = slot_states[slot]
+                    assert slot_state is not None
+                    complete_failed_leg(
+                        slot_state,
+                        {
+                            "game_error": str(error),
+                            "game_error_class": type(error).__name__,
+                            "game_error_trace": "".join(
+                                traceback.format_exception(error)
+                            ),
+                            "game_error_seat": actors[slot],
+                        },
+                        end=GameEnd(
+                            status="failed", reason=str(error), digest=digests[slot]
+                        ),
+                    )
+            if not round_result.players:
+                continue
 
             infos = vector.get_last_info()
             terminated = state_buffers["terminated"]

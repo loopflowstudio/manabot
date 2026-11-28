@@ -33,7 +33,7 @@ from manabot.policy.checkpoint import read_container
 from manabot.policy.prepare import Layout, Prepared, Tables, prepare
 from manabot.policy.spans import ObservationSelection
 from manabot.sim.agent import GameChoice, GamePlayer
-from manabot.sim.heuristic import HeuristicPlayer
+from manabot.sim.heuristic import HEURISTIC_VERSION, HeuristicPlayer
 from manabot.sim.players import CodePlayer, build_code_player
 from manabot.sim.registration import (
     ETUDE_SAMPLER_SPEC,
@@ -255,6 +255,16 @@ def blank_decision_memory(player: CheckpointPlayer) -> bool:
 type Seat = Sampler | CodeSeat | NativeHeuristic
 
 
+def require_heuristic_version(player: Code) -> None:
+    """Bind the built-in heuristic's behavior to the Etude player key."""
+    version = player.config.get("version")
+    if version != HEURISTIC_VERSION:
+        raise ValueError(
+            f"built-in heuristic requires version {HEURISTIC_VERSION!r}; "
+            f"got {version!r}. Use a new tournament for the current version"
+        )
+
+
 def build(player: object, leaves: Mapping[str, Forward]) -> Seat:
     if isinstance(player, CheckpointPlayer):
         registration = player.config.get("registration", {})
@@ -278,6 +288,7 @@ def build(player: object, leaves: Mapping[str, Forward]) -> Seat:
             return CodeSeat(lambda seed: build_code_player(registration, seed=seed))
         if player.name != "heuristic":
             raise TypeError(f"Code player {player.name} has no Manabot builder")
+        require_heuristic_version(player)
         return NativeHeuristic(player.config.get("max_actions"))
     raise TypeError(f"unsupported Manabot player {type(player).__name__}")
 

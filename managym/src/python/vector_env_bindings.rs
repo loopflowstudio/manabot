@@ -641,7 +641,8 @@ impl PyVectorEnv {
             .collect()
     }
 
-    fn _current_player_policies(&self) -> Vec<(String, String)> {
+    /// Each game's native policies, in seat order.
+    fn current_player_policies(&self) -> Vec<(String, String)> {
         self.inner
             .current_player_policies()
             .into_iter()

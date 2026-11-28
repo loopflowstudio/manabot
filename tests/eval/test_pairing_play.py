@@ -34,7 +34,7 @@ from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.match import derive_seed
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
-from manabot.sim.heuristic import heuristic_source_paths
+from manabot.sim.heuristic import HEURISTIC_VERSION, heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 import managym
 
@@ -213,7 +213,9 @@ def test_pairing_plays_a_checkpoint_against_the_heuristic(
     assert matchup.match().decklists == "closed"
     ref = fixture_checkpoint(tmp_path, 19, ObservationSpace(ObservationConfig()))
     heuristic = Code(
-        name="heuristic", source=heuristic_source_paths(), config={"max_actions": 64}
+        name="heuristic",
+        source=heuristic_source_paths(),
+        config={"max_actions": 64, "version": HEURISTIC_VERSION},
     )
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path))
     benchmark = Benchmark(

@@ -28,6 +28,7 @@ from manabot.eval.agents import (
     checkpoint_reader,
     local_scalar_sampler,
     registration,
+    require_heuristic_version,
 )
 from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.card_evaluation import trace_card_tables
@@ -101,6 +102,7 @@ def admit_pairing[Seat](
                     raise ValueError("code pairing registration must name the opponent")
                 validate_registration_source(opponent)
             elif player.name == "heuristic":
+                require_heuristic_version(player)
                 opponent = register_anchor(
                     players[0],
                     "heuristic",

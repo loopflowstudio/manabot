@@ -2,14 +2,22 @@
 
 import json
 from pathlib import Path
+from typing import Any, Never
 
 import pytest
 
+from manabot.env.observation import ObservationSpace, step_buffers
 import managym
 from managym.card_capture import CapturedCards
 from managym.decision import Command, DecisionFrame
-from managym.recording import PlayerSetup, ScalarCapture, read_record, read_records
-from managym.replay import RecordedDecision, ReplayStop, walk
+from managym.recording import (
+    PlayerSetup,
+    RecordedVectorEnv,
+    ScalarCapture,
+    read_record,
+    read_records,
+)
+from managym.replay import RecordedDecision, ReplayStop, replay_failure_inputs, walk
 from managym.statistics import Behaviour, CardPerformance, Reducer, Totals, reduce
 from tests.fixtures.recorded_commands import record_until_object_candidate
 
@@ -23,6 +31,125 @@ class Choices(Reducer[int]):
 
     def end(self, result: ReplayStop, capture: CapturedCards) -> list[int]:
         return [self.count]
+
+
+@pytest.mark.parametrize("load_slots", [False, True])
+def test_isolated_opening_failure_is_recorded_at_reset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, load_slots: bool
+) -> None:
+    games_path = tmp_path / "games.jsonl"
+    journal = tmp_path / "journal.jsonl"
+    vector = RecordedVectorEnv(
+        num_envs=2,
+        seed=7,
+        games_path=games_path,
+        journal_path=journal,
+        reducers=[Choices()],
+    )
+    vector.set_observation_layout(step_buffers(2), layout=ObservationSpace().layout)
+    native = vector.native
+    setup = managym.GameSetup(
+        [
+            managym.PlayerConfig(name=str(seat), decklist={"Mountain": 12})
+            for seat in (0, 1)
+        ]
+    )
+    policies = ("heuristic:64", "agent")
+
+    class FailedOpeningReceipt:
+        # The native test injects a real construction error. Exercise receipt
+        # consumer behavior without exposing failure injection in the binding.
+        def __getattr__(self, name: str) -> Any:
+            return getattr(native, name)
+
+        def get_last_info(self) -> list[dict[str, object]]:
+            return [
+                {
+                    "game_error": "stalled opening",
+                    "game_error_class": "AgentError",
+                    "game_error_trace": "opening stack",
+                },
+                {},
+            ]
+
+    try:
+        if load_slots:
+            vector.reset_each_into_buffers([setup, setup])
+        monkeypatch.setattr(vector, "native", FailedOpeningReceipt())
+        if load_slots:
+            vector.load_slots_into_buffers(
+                [managym.SlotLoad.fresh(0, setup, seed=30, player_policies=policies)],
+                isolated=True,
+            )
+        else:
+            vector.reset_each_into_buffers(
+                [setup, setup],
+                seeds=[30, 31],
+                player_policies=[policies, ("agent", "agent")],
+                isolated=True,
+            )
+        assert vector._analysis_active == [False, True]
+        snapshot = vector.snapshot()
+        assert snapshot.failed_opening(snapshot.games[0])
+        assert not snapshot.failed_opening(snapshot.games[1])
+        [written] = [
+            record
+            for record in read_records(games_path)
+            if record.failed_opening(record.games[0])
+        ]
+        projected, sibling = read_records(journal)
+        assert not sibling.failed_opening(sibling.games[0])
+        detached = vector.take_slot_record(0)
+        for record in (written, projected, detached):
+            assert record.operation == "reset" and record.execution_outcome == "failed"
+            assert record.error_class == "AgentError"
+            assert record.traceback == "opening stack"
+            assert record.player_policies == policies
+            [failed] = record.games
+            assert failed.seed == 30 and failed.actions == [] and failed.committed == 0
+            replay = walk(record, capture_cards=True)
+            assert list(replay) == []
+            assert replay.stop == ReplayStop("interrupted", 0, "stalled opening")
+            assert replay.cards().final_cards == ()
+    finally:
+        vector.close()
+
+    class ReproducedOpening:
+        def __init__(
+            self, *, player_policies: tuple[str, str], **kwargs: object
+        ) -> None:
+            assert player_policies == policies
+
+        def reset_all(self, setup: managym.GameSetup) -> Never:
+            raise managym.AgentError("stalled opening")
+
+    monkeypatch.setattr(managym, "VectorEnv", ReproducedOpening)
+    [reproduced] = replay_failure_inputs(projected)
+    assert reproduced["status"] == "failed" and reproduced["phase"] == "reset"
+    assert reproduced["at_retained_failure"] and reproduced["matches_error"]
+
+
+def test_failed_scalar_reset_walks_an_empty_prefix(tmp_path: Path) -> None:
+    path = tmp_path / "games.jsonl"
+    capture = ScalarCapture(seed=7, games_path=path, failure_directory=tmp_path)
+    setup = managym.GameSetup(
+        [
+            managym.PlayerConfig(name="bad", decklist={"Unknown card": 12}),
+            managym.PlayerConfig(name="good", decklist={"Mountain": 12}),
+        ]
+    )
+    with pytest.raises(managym.AgentError, match="Unknown card"):
+        capture.reset(managym.Env(seed=7), setup)
+    snapshot = capture.snapshot()
+    capture.close()
+    for record in (snapshot, read_record(path)):
+        assert record.failed_opening(record.games[0])
+        replay = walk(record)
+        assert list(replay) == []
+        assert replay.stop == ReplayStop("interrupted", 0, record.error)
+        [reproduced] = replay_failure_inputs(record)
+        assert reproduced["status"] == "failed" and reproduced["phase"] == "reset"
+        assert reproduced["at_retained_failure"] and reproduced["matches_error"]
 
 
 def test_live_reducers_equal_replayed_tables(tmp_path: Path) -> None:

@@ -489,6 +489,7 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
         vector.set_buffers(allocate_vector_buffers(space, 3), layout=space.layout)
         seeds = [701, 49, 33]
         vector.reset_each_into_buffers([setup] * 3, seeds=seeds)
+        assert vector.current_player_policies() == [("agent", "agent")] * 3
         generations = vector.current_game_generations()
         with pytest.raises(ValueError, match="native seed must fit uint64"):
             vector.reset_each_into_buffers([setup] * 3, seeds=[800, 900, -1])
