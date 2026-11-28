@@ -326,6 +326,7 @@ class ForwardProfile(TypedDict):
     wall_buckets_seconds: dict[str, float]
     cuda_buckets_seconds: dict[str, float] | None
     sdpa_dispatches: dict[str, int]
+    native_mha_dispatches: int
     cuda_attention_kernels: dict[str, int] | None
 
 
@@ -355,6 +356,15 @@ def op_bucket(name: str, parent: str) -> str:
     return "other"
 
 
+def forward_scopes(events: list[TraceEvent]) -> list[TraceEvent]:
+    # Kineto also mirrors these annotations onto the GPU timeline.
+    return [
+        event
+        for event in events
+        if event["cat"] == "user_annotation" and event["name"] == FORWARD
+    ]
+
+
 def bucket_trace(
     events: list[TraceEvent],
 ) -> tuple[dict[str, float], dict[str, float], dict[str, int]]:
@@ -364,8 +374,7 @@ def bucket_trace(
     by_launch: dict[int, str] = {}
     by_op: dict[int, str] = {}
     attention_kernels: defaultdict[str, int] = defaultdict(int)
-    roots = [event for event in events if event["name"] == FORWARD]
-    for root in roots:
+    for root in forward_scopes(events):
         start, end = root["ts"], root["ts"] + root["dur"]
         cpu = sorted(
             (
@@ -453,21 +462,27 @@ def profile_forward(
         if event.get("ph") == "X" and event["dur"] > 0
     ]
     buckets, device_buckets, attention_kernels = bucket_trace(events)
-    elapsed = sum(event["dur"] / 1e6 for event in events if event["name"] == FORWARD)
+    elapsed = sum(event["dur"] / 1e6 for event in forward_scopes(events))
     if not elapsed or abs(sum(buckets.values()) - elapsed) > elapsed * 0.05:
         raise ValueError("profile buckets do not cover the recorded forward scopes")
     if device.type == "cuda" and not device_buckets:
         raise ValueError("CUDA trace has no kernels linked to the recorded forwards")
     dispatches: defaultdict[str, int] = defaultdict(int)
+    native_mha_dispatches = 0
     for event in events:
-        if event["cat"] == "cpu_op" and "scaled_dot_product" in event["name"]:
+        if event["cat"] != "cpu_op":
+            continue
+        if "scaled_dot_product" in event["name"]:
             dispatches[event["name"]] += 1
+        elif event["name"] == "aten::_native_multi_head_attention":
+            native_mha_dispatches += 1
     return {
         "calls": len(batches),
         "profiled_forward_seconds": elapsed,
         "wall_buckets_seconds": buckets,
         "cuda_buckets_seconds": device_buckets if device.type == "cuda" else None,
         "sdpa_dispatches": dict(dispatches),
+        "native_mha_dispatches": native_mha_dispatches,
         "cuda_attention_kernels": dict(attention_kernels)
         if device.type == "cuda"
         else None,
@@ -669,13 +684,15 @@ def render_report(receipts: Path, output: Path) -> None:
         "Bucket estimates apply the profiled wall-time shares to the same calls' uninstrumented mean.",
         "GPU work owns intervals that overlap with host dispatch.",
         "",
-        "| Replay arm | Head width | Rows/call | Packed GRU rows/call | Transfer (ms) | Forward (ms) | Readback (ms) | CUDA peak (MiB) | SDPA operators | Exact bf16 logits |",
+        "| Replay arm | Head width | Rows/call | Packed GRU rows/call | Transfer (ms) | Forward (ms) | Readback (ms) | CUDA peak (MiB) | Attention operators | Exact bf16 logits |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
     ]
     for arm, row in profiles:
         stages = cast(dict[str, float], row["repeat_stage_means"])
         dispatches = cast(dict[str, int], row["sdpa_dispatches"])
-        kernels = ", ".join(name.removeprefix("aten::") for name in dispatches)
+        operators = [name.removeprefix("aten::") for name in dispatches]
+        if row.get("native_mha_dispatches"):
+            operators.append("_native_multi_head_attention")
         peak = cast(int | None, row["peak_cuda_bytes"])
         peak_mib = f"{peak / 2**20:.1f}" if peak is not None else "—"
         transfer, forward, readback = (
@@ -686,7 +703,7 @@ def render_report(receipts: Path, output: Path) -> None:
         lines.append(
             f"| {arm} | {row['head_dim']} | {row['mean_rows']:.2f} | {row['mean_packed_gru_rows']:.1f} | "
             f"{transfer:.3f} | {forward:.3f} | {readback:.3f} | "
-            f"{peak_mib} | {kernels or '—'} | {exact if exact is not None else '—'} |"
+            f"{peak_mib} | {', '.join(operators) or '—'} | {exact if exact is not None else '—'} |"
         )
     columns = sorted(
         {

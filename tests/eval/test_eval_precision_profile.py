@@ -44,12 +44,15 @@ def test_cuda_trace_charges_kernel_overlap_once() -> None:
 
     events = [
         event(experiment.FORWARD, 0, 100, "user_annotation"),
+        event(experiment.FORWARD, 30, 50, "gpu_user_annotation", gpu=True),
         event(experiment.ATTENTION, 10, 25, "user_annotation"),
         event("cudaLaunchKernel", 20, 2, "cuda_runtime", correlation=7),
         event("attention_kernel", 30, 50, "kernel", gpu=True, correlation=7),
         event("outside_forward", 110, 10, "kernel", gpu=True, correlation=8),
     ]
     wall, cuda, kernels = experiment.bucket_trace(events)
+    elapsed = sum(scope["dur"] for scope in experiment.forward_scopes(events)) / 1e6
+    assert sum(wall.values()) == pytest.approx(elapsed)
     assert wall == pytest.approx({"other": 30e-6, "attention": 70e-6})
     assert cuda == pytest.approx({"attention": 50e-6})
     assert kernels == {"attention_kernel": 1}
