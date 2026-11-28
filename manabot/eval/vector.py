@@ -501,6 +501,9 @@ async def play_pairings(
     slots backfill immediately so no slot sits idle while legs are pending.
     Admission, checkpoint forward and finalization errors yield `(match, exc)`
     for the affected matches while other slots continue.
+
+    `observe_prepared` runs synchronously before forward dispatch. Its
+    `ObservationSelection` is valid only during the callback.
     """
     if slots < 1:
         raise ValueError("slots must be at least 1")

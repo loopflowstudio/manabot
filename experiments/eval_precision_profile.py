@@ -11,7 +11,7 @@ import argparse
 import asyncio
 from collections import defaultdict
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import AbstractContextManager, ExitStack, contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import asdict, dataclass, replace
 import gzip
 import heapq
@@ -34,12 +34,11 @@ from torch.profiler import ProfilerActivity, profile, record_function
 from experiments.eval_throughput import (
     DEALS,
     checkpoint_ref,
+    completed_games,
     random_checkpoint,
-    run_vector,
     trophy_deals,
 )
 from manabot.backends.torch.arrays import on_device
-from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic
 from manabot.eval.agent_loader import (
     device_available,
@@ -48,7 +47,7 @@ from manabot.eval.agent_loader import (
     torch_forward_context,
 )
 from manabot.eval.agents import build, checked_logits, local_forward, prepare_batch
-from manabot.eval.vector import LocalMatches
+from manabot.eval.vector import LocalMatches, play_pairings
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.files import atomic_json
 from manabot.policy.admission import Spec, binding
@@ -59,7 +58,7 @@ from manabot.policy.spans import ObservationSelection
 from manabot.sim.registration import EvalPrecision
 
 ARENA = "eval-precision-profile"
-VARIANTS = ("float32", "tf32", "bf16", "bf16-linear-once", "bf16-cached-autocast")
+VARIANTS = ("float32", "tf32", "bf16", "bf16-linear-once")
 GRID_ROWS = (1, 4, 16, 64)
 FORWARD = "policy.forward"
 ATTENTION = "policy.attention"
@@ -121,24 +120,30 @@ def capture(
     os.environ["MANABOT_EVAL_DEVICE"] = device
     os.environ["OMP_NUM_THREADS"] = "1"
     forward = load_with_precision(ref, "float32")
-    pending: tuple[HostBatch, ObservationSelection, Spec] | None = None
+    observed: dict[int, tuple[tuple[HostBatch, ...], Spec]] = {}
     count = 0
 
     def observe(batch: HostBatch, selection: ObservationSelection, spec: Spec) -> None:
-        nonlocal pending
-        assert pending is None, "capture expects one checkpoint per round"
-        pending = batch, selection, spec
+        singles = (
+            (batch,)
+            if batch.batch == 1
+            else tuple(
+                prepare_batch(
+                    ObservationSelection(selection.space, (coordinate,)), spec
+                )
+                for coordinate in selection.coordinates
+            )
+        )
+        observed[id(batch)] = singles, spec
 
     with NamedTemporaryFile(dir=batches.parent, suffix=".partial") as partial:
         with gzip.GzipFile(fileobj=partial, mode="wb", compresslevel=1) as stream:
 
             def record(inputs: list[object]) -> list[object]:
-                nonlocal pending, count
-                assert (
-                    pending is not None and len(inputs) == 1 and inputs[0] is pending[0]
-                )
-                batch, selection, spec = pending
-                pending = None
+                nonlocal count
+                (batch,) = inputs
+                assert isinstance(batch, Prepared)
+                singles, spec = observed.pop(id(batch))
                 if count == 0:
                     pickle.dump(
                         (
@@ -151,16 +156,6 @@ def capture(
                         protocol=5,
                     )
                 outputs = forward(inputs)
-                singles = (
-                    (batch,)
-                    if batch.batch == 1
-                    else tuple(
-                        prepare_batch(
-                            ObservationSelection(selection.space, (coordinate,)), spec
-                        )
-                        for coordinate in selection.coordinates
-                    )
-                )
                 pickle.dump(
                     (batch, singles, checked_logits(outputs, batch)),
                     stream,
@@ -171,9 +166,22 @@ def capture(
 
             agents = (local_forward(record), build(heuristic, {}))
             source = LocalMatches([(match, agents) for match in matches])
-            games = asyncio.run(
-                run_vector(source, specs, slots, out, observe_prepared=observe)
-            )
+
+            async def collect() -> int:
+                games = 0
+                async for match, outcome in play_pairings(
+                    source,
+                    lambda match: specs[match.key],
+                    slots=slots,
+                    output_dir=out,
+                    observe_prepared=observe,
+                ):
+                    if isinstance(outcome, Exception):
+                        raise RuntimeError(f"deal {match.key} failed") from outcome
+                    games += completed_games(match, outcome)
+                return games
+
+            games = asyncio.run(collect())
             if games != deals * 4 or not count:
                 raise ValueError(
                     f"capture completed {games} games and {count} forwards"
@@ -328,12 +336,12 @@ class ForwardProfile(TypedDict):
 
 
 def op_bucket(name: str, parent: str) -> str:
-    if name in {"aten::to", "aten::_to_copy", "aten::copy_"}:
-        return "casts_and_copies"
     if name in {ATTENTION, GRU}:
         return name.removeprefix("policy.")
     if parent != "other":
         return parent
+    if name in {"aten::to", "aten::_to_copy", "aten::copy_"}:
+        return "casts_and_copies"
     if name in {
         "aten::linear",
         "aten::addmm",
@@ -551,13 +559,6 @@ def replay(
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
 
-    def cached_context() -> AbstractContextManager[object]:
-        return (
-            forward_precision(precision, device)
-            if variant == "bf16-cached-autocast"
-            else nullcontext()
-        )
-
     calls: list[CallTiming] = []
     sample: list[tuple[int, HostBatch]] = []
     compare_bf16 = variant != "bf16" and device.type != "cpu"
@@ -565,7 +566,7 @@ def replay(
     exact = True
     difference = 0.0
     rng = Random(1)
-    with (out / "calls.jsonl").open("w") as receipt, cached_context():
+    with (out / "calls.jsonl").open("w") as receipt:
         for repeat in range(repeats + 1):
             for index, batch in enumerate(inputs(policy)):
                 logits, timing = run_call(
@@ -596,17 +597,15 @@ def replay(
         for stage in stages
     }
     sample.sort()
-    with cached_context():
-        # Prime this separate profiling context without recording a cold cast.
-        run_call(policy, sample[0][1], precision, device, sync, 0)
-        breakdown = profile_forward(
-            policy,
-            [batch for _, batch in sample],
-            precision,
-            device,
-            sync,
-            out / "profile.json",
-        )
+    run_call(policy, sample[0][1], precision, device, sync, 0)
+    breakdown = profile_forward(
+        policy,
+        [batch for _, batch in sample],
+        precision,
+        device,
+        sync,
+        out / "profile.json",
+    )
     selected_indices = {index for index, _ in sample}
     calls_per_repeat = len(calls) // (repeats + 1)
     sample_mean = mean(

@@ -42,7 +42,7 @@ from manabot.eval.agent_loader import (
 )
 from manabot.eval.agents import build, local_forward
 from manabot.eval.pairing import PairingSpec, play_pairing
-from manabot.eval.vector import LocalMatches, ObservePrepared, play_pairings
+from manabot.eval.vector import LocalMatches, play_pairings
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.policy.checkpoint import read_container
@@ -162,8 +162,6 @@ async def run_vector(
     specs: dict[str, PairingSpec],
     slots: int,
     out: Path,
-    *,
-    observe_prepared: ObservePrepared | None = None,
 ) -> int:
     games = 0
     async for match, outcome in play_pairings(
@@ -171,7 +169,6 @@ async def run_vector(
         lambda match: specs[match.key],
         slots=slots,
         output_dir=out,
-        observe_prepared=observe_prepared,
     ):
         if isinstance(outcome, Exception):
             raise RuntimeError(f"deal {match.key} failed") from outcome

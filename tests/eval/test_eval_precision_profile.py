@@ -22,7 +22,7 @@ from manabot.sim.registration import EvalPrecision
 import managym
 
 
-def test_cuda_trace_charges_kernel_overlap_once() -> None:
+def test_cuda_trace_charges_nested_casts_to_attention_and_kernel_overlap_once() -> None:
     def event(
         name: str,
         start: float,
@@ -45,7 +45,9 @@ def test_cuda_trace_charges_kernel_overlap_once() -> None:
     events = [
         event(experiment.FORWARD, 0, 100, "user_annotation"),
         event(experiment.FORWARD, 30, 50, "gpu_user_annotation", gpu=True),
+        event("aten::to", 2, 5, "cpu_op"),
         event(experiment.ATTENTION, 10, 25, "user_annotation"),
+        event("aten::to", 15, 10, "cpu_op"),
         event("cudaLaunchKernel", 20, 2, "cuda_runtime", correlation=7),
         event("attention_kernel", 30, 50, "kernel", gpu=True, correlation=7),
         event("outside_forward", 110, 10, "kernel", gpu=True, correlation=8),
@@ -53,7 +55,9 @@ def test_cuda_trace_charges_kernel_overlap_once() -> None:
     wall, cuda, kernels = experiment.bucket_trace(events)
     elapsed = sum(scope["dur"] for scope in experiment.forward_scopes(events)) / 1e6
     assert sum(wall.values()) == pytest.approx(elapsed)
-    assert wall == pytest.approx({"other": 30e-6, "attention": 70e-6})
+    assert wall == pytest.approx(
+        {"other": 25e-6, "casts_and_copies": 5e-6, "attention": 70e-6}
+    )
     assert cuda == pytest.approx({"attention": 50e-6})
     assert kernels == {"attention_kernel": 1}
 

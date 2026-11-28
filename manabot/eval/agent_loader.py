@@ -117,10 +117,7 @@ def load_torch_policy(
     import torch
 
     from manabot.backends.torch.checkpoint import load_checkpoint
-    from manabot.backends.torch.learner import (
-        apply_matmul_precision,
-        validate_precision,
-    )
+    from manabot.backends.torch.learner import validate_precision
 
     validate_precision(precision, device)
     if precision == "bf16":
@@ -130,7 +127,6 @@ def load_torch_policy(
             raise ValueError("precision bf16 on MPS requires macOS 14.0 or newer")
 
     torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", "1")))
-    apply_matmul_precision(precision)
     model, _ = load_checkpoint(str(path))
     model.to(device).eval()
     with torch_forward_context(precision, device):

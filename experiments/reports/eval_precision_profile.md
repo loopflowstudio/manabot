@@ -53,27 +53,38 @@ estimates below. The estimates sum to the synchronized, uninstrumented
 mean of those four calls, which were larger than the full-capture average.
 The traces' CPU forward durations were 1.03–1.11× their uninstrumented
 means, and the correlated buckets covered the complete forward scopes.
+The table was recomputed from the saved Chrome traces. Each operation and
+its linked kernels inherit the enclosing bucket, so the casts and copies
+column counts only operations outside the other buckets. Deltas use the
+unrounded values.
 
 | Checkpoint and precision | Attention | Casts and copies | Linear and MLP | Normalization | Gather and index | Packed GRU | Other | Total (ms/call) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Trained `w160l8` float32 | 36.07 | 0.79 | 15.56 | 1.46 | 0.61 | 0.61 | 4.35 | 59.45 |
-| Trained `w160l8` bf16 | 72.47 | 14.09 | 5.70 | 1.40 | 0.74 | 0.77 | 5.61 | 100.77 |
-| Trained `w160l8` bf16 minus float32 | **+36.40** | +13.30 | −9.87 | −0.07 | +0.13 | +0.16 | +1.25 | **+41.31** |
-| Seeded `w384l8` float32 | 33.05 | 1.45 | 41.39 | 1.41 | 0.92 | 0.51 | 7.75 | 86.48 |
-| Seeded `w384l8` bf16 | 7.66 | 4.29 | 9.51 | 1.25 | 0.82 | 0.39 | 6.47 | 30.40 |
+| Trained `w160l8` float32 | 36.41 | 0.32 | 15.59 | 1.46 | 0.70 | 0.61 | 4.35 | 59.45 |
+| Trained `w160l8` bf16 | 84.55 | 0.52 | 6.95 | 1.53 | 0.85 | 0.77 | 5.61 | 100.77 |
+| Trained `w160l8` bf16 minus float32 | **+48.13** | +0.20 | −8.64 | +0.07 | +0.15 | +0.16 | +1.25 | **+41.31** |
+| Seeded `w384l8` float32 | 33.65 | 0.46 | 41.48 | 1.41 | 1.22 | 0.51 | 7.75 | 86.48 |
+| Seeded `w384l8` bf16 | 9.27 | 0.47 | 11.39 | 1.25 | 1.16 | 0.39 | 6.47 | 30.40 |
 
-On trained `w160l8`, casting projection weights once preserved all legal
-bf16 logits exactly and moved the full-capture mean from 66.32 to 65.23 ms.
-Keeping the autocast weight cache across calls also preserved the logits
-and measured 65.76 ms. Both variants kept the math backend. Cast and copy
-time includes tensor conversions inside attention that persist when the
-weights are cached.
+Casting projection weights once preserved every legal bf16 logit exactly on
+both checkpoints. Math SDPA still dominated trained `w160l8` and its mean
+moved from 66.32 to 65.23 ms/call. On seeded `w384l8` the mean fell from
+18.12 to 15.48 ms/call (14.6%) and peak allocation fell from 639.9 to
+585.9 MiB. Sixteen profiled attention GEMMs switched from the CUTLASS
+32×32 bf16 WMMA kernel (`cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_32x1_tn_align8`)
+to `ampere_bf16_s1688gemm_bf16_128x128_ldg8_f2f_tn`. The kernel switch
+makes numeric parity across GPUs and batch shapes unverified, so pre-casting
+remains an experiment variant.
+
+The cached-autocast diagnostic was dropped because PyTorch bypasses the
+autocast weight cache under `torch.inference_mode()`. Holding autocast open
+across forwards yielded identical cast counts and peak allocation to bf16,
+including 1,094 `aten::copy_` calls in each `w384l8` trace.
 
 | Diagnostic variant | Trained `w160l8` (ms/call) | Seeded `w384l8` (ms/call) |
 | --- | ---: | ---: |
 | TF32 | 34.94 | 30.36 |
 | bf16, cast projections once | 65.23 | 15.48 |
-| bf16, keep autocast cache | 65.76 | 17.71 |
 
 ## Head width and batch size
 
@@ -193,8 +204,8 @@ Capture the seeded `w160` control with `--checkpoint` too. For the grid,
 replay the trained capture on all seven checkpoints and the seeded
 `w160l8` capture on the two `w160l8` checkpoints. Pass `--grid-rows 1`,
 `4`, `16` or `64`, with `--limit 12 --skip-rows 2048 --profile-calls 3`
-for each precision. The supported variants are `float32`, `tf32`, `bf16`,
-`bf16-linear-once` and `bf16-cached-autocast`. Run arena repeats with
+for each precision. The supported variants are `float32`, `tf32`, `bf16`
+and `bf16-linear-once`. Run arena repeats with
 `experiments.eval_throughput` and put their outputs alongside the replay
 receipts before rendering tables.
 
