@@ -1,0 +1,51 @@
+<h1>MTG-508 QA · coupled mana payments through the real Python env</h1>
+<p>Debug wheel of this branch (<code>maturin build</code> without <code>--release</code>, <code>debug_assert!</code> live) installed in <code>.runs/venv</code>; every script ran with <code>-I</code> from <code>.runs/</code> so the wheel, not the checkout, loaded. No code was changed by this pass.</p>
+
+<h2>1 · Real-card coupled boards, every payment order walked</h2>
+<p>Forced the board, cast the spell, then stepped every offered action on <code>env.clone_env()</code> children until the spell was on the stack or the game ended. An empty action space or <code>AgentError</code> would be a stranded offer.</p>
+<pre>
+2xTarnished Citadel+Audience+Angel @28: complete=103 empty=0 error=0
+   completing first steps: PayCost, Activate Raucous Audience, Activate Tarnished Citadel, TapForCost Citadel
+   final lives: [22, 25, 28]
+2xTarnished Citadel+Audience+Angel @27: complete=53 empty=0 error=0
+   completing first steps: PayCost, Activate Raucous Audience, TapForCost Citadel   (colored Citadel-first withheld: 3 damage drops Angel below 25)
+1xThe Great Henge+Audience+Angel @22: complete=1 empty=0 error=0
+   completing first steps: Activate The Great Henge   final lives: [25]
+1xThe Great Henge+Audience+Angel @21: cast never offered   (Henge's 2+1 life reaches only 24)
+1xSunbaked Canyon+Audience+Angel @25: complete=6 empty=0 error=0
+   completing first steps: Activate Raucous Audience, TapForCost Island   final lives: [24]
+</pre>
+<p>The original report's boards (Citadel + Airship Engine Room or Sunbaked Canyon + Heartbeat of Spring, casting Sokka):</p>
+<pre>
+Citadel+Airship Engine Room+Heartbeat @2: complete=0 empty=0 error=0 left_turn=4  (every order: game_over=True life=-1)
+Citadel+Airship Engine Room+Heartbeat @3: complete=0 empty=0 error=0 left_turn=4  (every order: game_over=True life=0)
+Citadel+Sunbaked Canyon+Heartbeat @3:     complete=0 empty=0 error=0 left_turn=1  (game_over=True life=-1)
+Citadel+Sunbaked Canyon+Heartbeat @5:     complete=2 empty=0 error=0   final lives: [1]
+</pre>
+<p>At 2–3 life the cast is still offered and every order kills the payer. That is the plan's stated behavior (signed <code>LifeBudget</code>: reaching zero life is a legal payment), not a stranded decision.</p>
+
+<h2>2 · Random games with the coupled card mix</h2>
+<p>Both decks: Citadel ×3, Canyon ×2, Airship Engine Room ×2, Heartbeat ×2, Henge ×2, Audience ×3, Angel ×3, Solemn ×3, Sokka ×3, Gray Ogre, Lightning Bolt, basics; random policy preferring non-pass actions.</p>
+<pre>
+manual: 400 games in 87s: {'done': 400}       (48k decisions, 10k PayOrNot, 5k Modal)
+manual: 150 games in 40s: {'done': 150}       slowest step 121 ms
+auto:   150 games in 30s: {'done': 150}       slowest step 305 ms (seed 1002 step 119)
+</pre>
+<p>The slowest step is a cast on a two-Heartbeat, Henge, Citadel, Angel board with 18 lands: 308 ms in debug, roughly 30 ms in release. The first auto run took 7 minutes, with one 5.8 s step, while the shared machine's load average was about 27. <code>sample</code> showed it in <code>CoupledSearch::visit/fund_upfront</code>. The same decisions replayed in 30 s twice at load 9, and the 5.8 s step replays in milliseconds, so I attribute the outlier to contention. I didn't measure it in release.</p>
+
+<h2>3 · Authored decks (ordinary boards, non-mana activations)</h2>
+<pre>
+manual {'done': 120} activations taken: elemental 927, ur-lessons-vs-gw-allies 1170   slowest 31 ms
+auto   {'done': 120} activations taken: elemental 956, ur-lessons-vs-gw-allies 643    slowest 25 ms
+</pre>
+
+<h2>4 · Mid-payment snapshot round trip (hash v36)</h2>
+<p>At every third PayOrNot/Modal decision across 40 coupled manual games: <code>snapshot().to_replay_json()</code> → <code>GameSnapshot.from_replay_json(..).restore()</code>, then compared <code>state_digest()</code>, which includes the current action space.</p>
+<pre>mid-payment snapshots checked 537 mismatches 0</pre>
+
+<h2>What works, what I couldn't reach, what's still wrong</h2>
+<ul>
+<li><b>Works:</b> every real-card board in the plan's table pays in some order or the cast is withheld. Across 1,090 random games in both payment modes there were no empty decisions, errors or debug panics. Mid-payment snapshots restore exactly.</li>
+<li><b>Unreachable with real cards:</b> a fixed tap that opens a Heartbeat bonus choice needs a fixed multi-color land, and the catalog has none (only <code>CC</code>, <code>RRRR</code>). A static grant that ends while its activation is paid has no real card either. Only the Rust fixtures (<code>fixed_mana_tap_can_open_a_bonus_choice</code>, <code>owned_activation_keeps_its_targets_and_effect_when_mana_ends_the_grant</code>) reach them, and so does the hover-preview <code>needs_choice</code> path. Academy itself wasn't driven, because the plan changes no Academy surface.</li>
+<li><b>Still wrong:</b> nothing found. Watch item: debug steps on large coupled boards reach ~300 ms. Engine Budget (release) remains the check for that.</li>
+</ul>

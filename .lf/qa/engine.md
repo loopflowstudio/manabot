@@ -170,6 +170,18 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   basics swapped for Tarnished Citadel, Sunbaked Canyon, Fabled Passage and
   Airship Engine Room or Treetop Village, plus Heartbeat of Spring and The
   Great Henge, gave about 30 games a minute at 32 slots in debug.
+  Coupled boards from real cards (MTG-508): force Tarnished Citadel ×2 /
+  The Great Henge / Sunbaked Canyon + Island beside Raucous Audience and
+  Angel of Vitality at 28/27, 22/21 and 25 life, cast Solemn Simulacrum and
+  walk every order; Citadel + Airship Engine Room or Sunbaked Canyon +
+  Heartbeat of Spring with Sokka is the original report. At 2-3 life the only
+  orders kill the payer (`game_over`, legal), not an empty decision. Fixed taps
+  that open a bonus choice and grants that end mid-payment have no real card;
+  only the Rust fixtures reach them. Under a shared load average near 27 a
+  debug run of 150 games took 7 minutes instead of 30 s with a 5.8 s outlier
+  step; check `uptime` and rerun before calling a step slow. The slowest real
+  step seen (two Heartbeats, Henge, Citadel, Angel, 18 lands) was ~300 ms in
+  debug.
   Snapshots from the 0.2.6 wheel are refused with `card_digest mismatch` on
   any later main (card definitions moved); a cross-version replay check needs
   a replay written by the base revision.
