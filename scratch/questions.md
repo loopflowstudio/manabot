@@ -1,3 +1,34 @@
+# MTG-506 open questions and assumptions
+
+Choices taken during planning (headless, 2026-11-27). Each is reversible and
+marked for review in `scratch/plan.md`.
+
+- **The built-in heuristic steps natively and its decisions leave the
+  record.** Replay recomputes them. Is losing per-decision heuristic evidence
+  (latency, chosen offer) acceptable for managed evaluation?
+- **The heuristic keeps its turn state for a game.** Today both runners, and
+  `main`, rebuild it at every decision, which changes 16 of 7,155 choices in
+  10 of 64 profiled games. Fixing it changes heuristic results relative to
+  stored tournaments and gives the heuristic a new Etude identity. Should
+  stored heuristic baselines (TLA trophies) be replayed against the corrected
+  opponent?
+- **Vector records drop `frame_sha256` and the per-decision private-hand
+  check** (the MTG-497 open choice 1a). Frames are rebuilt from the record
+  when wanted.
+- **Replay uses two worker threads**, not child processes.
+- **Scalar records keep live frames**; only the metadata deep copy is cut
+  there.
+- **L4 arms run on one rental under `--max-usd 5`**, as MTG-497's did.
+
+Ideas outside this Task:
+
+- Managed scalar evaluation (`play_scalar`) could seat the heuristic natively
+  too, with the same record shape.
+- `state_digest` costs 0.41 ms on a scalar `Env` against 0.18 ms per slot on
+  the vector; nobody has looked at why.
+
+---
+
 # MTG-497 open questions and assumptions
 
 Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
