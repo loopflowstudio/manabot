@@ -55,8 +55,9 @@ Drafted in place before implementation (read these when building and reviewing):
 
 ## Post-implementation concept reviews
 
-- At `b0cd922864`: four findings, all closed by Pass 5. Questions 1a/2a/3a adopted headless, **made for review, not settled** (passed over: 1b every ability Sensitive, breaks the 207-state `{15}` bound; 2b leave Delve unchecked; 3b per-call recompute).
-- At `52fb812008` (`scratch/concept-review.html`): everything aligned except helped costs inside `CoupledSearch` (F1 → Pass 6). F2 (hash v36 and all headless choices) needs no code; question 2a ("confirm v36 and the implemented model") is adopted headless for review and belongs to `ship-review`. Question 1a adopted headless for review; passed over 1b (patch `try_help_taps` to scan every `Obligation::Pay` and keep `DelveCost`), which keeps the dual representation and its `paying_delve_cost` / `saved_delve` flags.
+- At `b0cd922864`: four findings, closed by Pass 5. Questions 1a/2a/3a adopted headless, **made for review, not settled** (passed over: 1b every ability Sensitive, breaks the 207-state `{15}` bound; 2b leave Delve unchecked; 3b per-call recompute).
+- At `52fb812008`: helped costs inside `CoupledSearch` (closed by Pass 6). Question 1a adopted headless for review; passed over 1b (patch `try_help_taps` and keep `DelveCost`), which kept the dual representation.
+- At `f3779cb5b2` (`scratch/concept-review.html`): every domain concept aligned, no code finding. Its only finding, F1 ("Confirm hash v36 and headless design choices before merge"), needs human sign-off rather than code; question 1a (confirm v36 and the implemented model) is adopted headless for review and belongs to `ship-review`. No remaining pass.
 
 ## Pass 5 · Close the coupled authority's gaps
 
