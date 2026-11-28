@@ -1,21 +1,27 @@
-at: 7fcec510fb2c01a1a637f8ceb4daf836ad8ada99
+at: 5ddf49e6cc316b0c5663246fd4427113f9c7f5af
 first:
   - path: experiments/reports/eval_throughput.md
     why: Apple and L4 throughput, replay parity and profiling
   - path: docs/evaluation.md
-    why: Native seating, compact traces and background replay
+    why: Heuristic versions, compact traces and background replay
   - path: docs/engine-python.md
-    why: Per-slot policies and verified record traversal
+    why: Seat policies, failed openings and verified replay
+  - path: managym/__init__.pyi
+    why: Vector seating and inspection API
   - path: managym/src/agent/player_policy.rs
     why: Seat policy encoding and legal action cap
   - path: managym/src/agent/vector_env/slots.rs
     why: Per-slot policies and snapshot restoration
   - path: managym/src/agent/vector_env.rs
-    why: Opening and step failure isolation
+    why: Per-slot construction, settlement and step isolation
+  - path: managym/src/agent/env.rs
+    why: Admitted deal inputs outlive failed construction
   - path: managym/recording.py
-    why: Replay inputs and isolated failure frames
+    why: Stream-local reset evidence and isolated failure frames
   - path: manabot/eval/agents.py
-    why: Built-in and registered code player lifecycle
+    why: Heuristic version and code player lifecycle
+  - path: manabot/eval/pairing.py
+    why: Version checks at paired-deal admission
   - path: manabot/eval/vector.py
     why: Match-owned queues, sampling and replay workers
   - path: manabot/sim/evaluation_records.py
@@ -29,17 +35,17 @@ first:
   - path: manabot/sim/card_evidence.py
     why: Card evidence reads setup and ending directly
   - path: managym/replay.py
-    why: Indexed replay and verified prefix recovery
+    why: Verified prefixes and diagnostic reset replay
   - path: managym/src/python/bindings.rs
     why: Scalar native calls release the GIL
   - path: experiments/eval_throughput.py
     why: Concurrent replay time and wall-clock stages
   - path: tests/eval/test_vector_eval.py
-    why: Scalar parity, native failures and overlapping replay
+    why: Parity, version refusal, chooser errors and replay capacity
   - path: tests/eval/test_evaluation_match.py
     why: Fingerprint reuse, durable capture and replay projection
   - path: tests/env/test_record_reducers.py
-    why: Divergence preserves verified card exposure
+    why: Failed reset records and verified card exposure
 hide:
   - path: tests/public_api.json
     why: Generated additive signatures

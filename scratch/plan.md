@@ -278,44 +278,18 @@ fingerprinting from 1.782 to 0.027 seconds across 80 calls and preserved the
 5,964 recorded checkpoint actions. The profiled total wall time rose from
 24.7 to 28.6 seconds. The broad Rust suite is deferred to CI.
 
-4. **Post-build review fixes (next).** From `scratch/concept-review.html` at
-   `aca4c41ad6`; `sync` first brings in MTG-500 (`606e79e90a`). One pass:
-   - **Heuristic version is enforced where it is built (review Q1, 1a, for
-     review).** `agents.py:build` and `pairing.py:admit_pairing` refuse a
-     built-in heuristic `Code` whose `config["version"]` is missing or differs
-     from `HEURISTIC_VERSION`, so a stored `native-v2` tournament can never
-     silently receive `native-v3` games and seeds. Declarations that already
-     name stored tournaments (`tla_trophies*`, `opponent_memory`,
-     `mana_taps`, `tla_frontier`) stay unversioned and therefore refuse to
-     resume on this branch; giving any of them a `native-v3` tournament is a
-     naming decision left in `scratch/questions.md`. Tests that build the
-     heuristic declare the version. Passed over: 1b (silent mixing), 1c
-     (keeping a `native-v2` stateless dispatch alive).
-   - **Opening failures have one owner (review Q2, 2a, for review).**
-     `RecordedVectorEnv._record_roots` reads `get_last_info()` when isolated,
-     writes `GameEnd(status="failed")`, writes the failed opening to
-     `games_path`/`snapshot()` and leaves live reducers inactive on the
-     poisoned slot, mirroring `_step`. `take_slot_record` drops its
-     `if not game.actions` guess. `GameRecord.failed_opening()` covers any
-     failed `operation == "reset"` record, scalar included, so `walk` stops at
-     index 0 and `replay_failure_inputs` reruns `policies_for(game)`.
-   - **MTG-500 sync:** `Game::construct` can now return a gameplay
-     `AgentError` for a stalled opening; `VectorEnv::deal_fresh_game`
-     (`managym/src/agent/vector_env.rs`) isolates it per slot while setup and
-     deck validation stay strict.
-   - **CodeSeat native errors isolate per leg.** `vector.py:step_round`
-     catches `is_game_error` around `choose_code_action` and fails only that
-     leg, attributed to the acting `player_id`, like scalar `execute_game`.
-     Drop the `illegal_actions` increment on a leg about to be discarded.
-   - **`VectorEnv.current_player_policies()`** loses its underscore, joins
-     `_VECTOR_READS`; `managym/__init__.pyi` and `tests/public_api.json`
-     (plain `record`) follow.
-   - Small: when `play_pairings` holds `slots` settled replays and all slots
-     drain, wait for one replay rather than closing and reopening the vector.
-   - Done when: directed tests fail on the old behavior for each item;
-     targeted Python tests, debug Rust tests for the touched native code,
-     `scripts/public_api.py check` and `tests/test_package_boundaries.py`
-     pass. No new measurement: none of these touch the measured path's cost.
+4. **Post-build review fixes** (`5ddf49e6c`, after MTG-500 sync `793880c852`) enforced the heuristic version, retained isolated openings, isolated registered code failures, exposed per-slot policies, and kept the idle vector while replay was full.
+
+Pass 4 passed 32 debug Rust vector tests, 16 focused Python tests,
+42 package-boundary tests and the public API check. The four historical
+tournament-declaration tests passed with Etude source from `1f7496e9^`.
+The editable SDK at `d2dd820a` instead fails collection because Etude
+`1f7496e9` renamed `etude.eval.game.Matches` to `MatchStream`.
+MTG-497 owns SDK 0.5.0 admission and the trophy callback import. After
+that lands, run `lf sync` and repeat
+`uv run --no-sync python -m pytest tests/eval/test_experiment_files.py -k 'trophy or frontier_eval_jobs or opponent_memory_evaluation'`
+with the released SDK. Ship review is next. The broad Rust suite remains
+with CI.
 
 ## Deferred findings
 
@@ -340,7 +314,7 @@ forward rows.
 
 ## Build notes
 
-- This checkout has a CPython 3.13 `.venv` with editable Etude 6db832. Use
+- This checkout has a CPython 3.13 `.venv` with editable Etude. Use
   `uv run --no-sync`. The corpus is in `/tmp/mtg497-probe/inputs` and the
   trained checkpoint is `/tmp/mtg497-local-policy/00002000-raw.safetensors`.
 - The cp313 extension was rebuilt in release for the Pass 3 measurements.
