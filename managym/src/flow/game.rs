@@ -4,6 +4,7 @@
 use crate::state::card::SpellProfile;
 use crate::state::player::{ManaFloats, ManaPayment};
 use std::{
+    borrow::Borrow,
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     ops::{Deref, DerefMut},
@@ -26,6 +27,7 @@ use crate::{
         turn::{DamageHistory, TurnState},
     },
     state::{
+        ability::{GrantKey, TargetRequirement},
         card::{ActivatedAbilityDefinition, CardDefId},
         game_object::{
             CardId, CardVec, IdGenerator, ObjectId, ObjectLkiLog, ObjectLookupError, ObjectVec,
@@ -398,13 +400,18 @@ pub struct CastChoices {
     pub resolving: bool,
 }
 
-/// An activation between announcement and payment. Its controller and X
-/// stay fixed while either player chooses targets for successive clauses.
+/// An activation between announcement and payment. Its finalized ability,
+/// controller and X stay fixed while targets are chosen for each clause.
 #[derive(Clone, Debug, serde::Serialize)]
-pub struct ActivatedTargeting {
+pub struct ActivatedTargeting<A = Box<ActivatedAbilityDefinition>> {
     pub player: PlayerId,
     pub source: ActivationSource,
     pub ability_index: usize,
+    #[serde(
+        serialize_with = "serialize_announced_ability",
+        bound(serialize = "A: Borrow<ActivatedAbilityDefinition>")
+    )]
+    pub ability: A,
     pub chosen: Vec<Target>,
     /// The clause of each chosen target; empty while every target is clause
     /// 0. Clauses are chosen in order, but an optional clause can be left
@@ -501,7 +508,24 @@ impl DivisionParent {
     }
 }
 
-impl ActivatedTargeting {
+impl<A: Borrow<ActivatedAbilityDefinition>> ActivatedTargeting<A> {
+    pub(crate) fn target_requirement(&self) -> Option<TargetRequirement> {
+        self.ability
+            .borrow()
+            .target_requirements()
+            .into_iter()
+            .nth(self.requirement)
+    }
+
+    /// Who chooses this clause of the activation (CR 602.2b).
+    pub(crate) fn chooser(&self, clause: &TargetRequirement) -> PlayerId {
+        if clause.opponent_chooses {
+            PlayerId(1 - self.player.0)
+        } else {
+            self.player
+        }
+    }
+
     /// Add `target` to clause `requirement`, the clause now being chosen.
     pub fn choose(&mut self, target: Target, requirement: usize) {
         self.chosen.push(target);
@@ -523,6 +547,28 @@ impl ActivatedTargeting {
     pub fn clause_targets(&self, requirement: usize) -> impl Iterator<Item = Target> + Clone + '_ {
         self.clause_slots(requirement).map(|slot| self.chosen[slot])
     }
+}
+
+/// The catalog definition omits its acquired grant key. A live announcement
+/// keeps it because it identifies which linked abilities resolve together.
+pub(super) fn serialize_announced_ability<S: serde::Serializer>(
+    ability: &impl Borrow<ActivatedAbilityDefinition>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    #[derive(serde::Serialize)]
+    struct AnnouncedAbility<'a> {
+        definition: &'a ActivatedAbilityDefinition,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        acquired: Option<GrantKey>,
+    }
+    let definition = ability.borrow();
+    serde::Serialize::serialize(
+        &AnnouncedAbility {
+            definition,
+            acquired: definition.acquired,
+        },
+        serializer,
+    )
 }
 
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
@@ -555,11 +601,13 @@ pub enum PendingChoice {
         cast: CastChoices,
     },
     /// Announcing the value of X for an activated ability (CR 602.2b,
-    /// 601.2b) before its waterbend cost is paid.
+    /// 601.2b), with the finalized ability already fixed.
     ActivationX {
         player: PlayerId,
         permanent: PermanentId,
         ability_index: usize,
+        #[serde(serialize_with = "serialize_announced_ability")]
+        ability: Box<ActivatedAbilityDefinition>,
     },
     SpellMode {
         player: PlayerId,

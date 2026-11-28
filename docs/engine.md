@@ -224,8 +224,8 @@ records the remaining count in its resolution frame. Version 34 adds
 `CombatState.declined_attackers` and `declined_blockers` (for combat symmetry
 breaking across indistinguishable creatures) and `TurnState.graveyard_arrivals`.
 Version 35 stores pending announced mana activations, and version 36 stores
-announced non-mana activated ability definitions across X selection, targeting
-and payment.
+announced non-mana activated ability definitions and their acquired grant keys
+across X selection, targeting and payment.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.

@@ -50,10 +50,10 @@ impl Game {
         }
     }
 
-    pub(super) fn announced_obligations(
+    pub(super) fn announced_obligations<A>(
         &self,
         player: PlayerId,
-        payment: &Payment,
+        payment: &Payment<A>,
     ) -> Vec<Obligation> {
         self.help_obligations(
             player,

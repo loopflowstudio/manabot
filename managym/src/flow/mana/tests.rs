@@ -104,6 +104,7 @@ fn announced_payment_owes_life_after_mana_across_nested_callers() {
     let operation = Operation::Activation {
         source: ActivationSource::Permanent(source),
         ability_index: 0,
+        ability: Box::new(game.characteristics(source).activated_abilities[0].clone()),
         targets: vec![],
         target_req_indices: vec![],
         target_divisions: vec![],

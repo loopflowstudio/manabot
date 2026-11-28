@@ -28,7 +28,7 @@ use profile::ActivationFacts;
 pub(super) use profile::BoardArithmeticProfile;
 
 use crate::state::player::{ManaFloats, ManaPayment};
-use std::{cell::RefCell, collections::VecDeque, num::NonZeroUsize, sync::Arc};
+use std::{borrow::Borrow, cell::RefCell, collections::VecDeque, num::NonZeroUsize, sync::Arc};
 
 use crate::{
     agent::action::{Action, ActionSpace, AgentError},
@@ -58,6 +58,7 @@ use crate::{
         },
         payment::{How, ManaOrigin, PaymentReceipt, SpentMana},
         permanent::{CounterKind, EntryChoice},
+        predicate::CardPredicate,
         zone::ZoneType,
     },
 };
@@ -3323,13 +3324,12 @@ impl Game {
     pub(crate) fn price_activation(
         &self,
         controller: PlayerId,
-        ability: &mut ActivatedAbilityDefinition,
+        cost: &mut ManaCost,
+        reduction_per: Option<&CardPredicate>,
     ) {
-        if let Some(predicate) = &ability.cost_reduction_per {
+        if let Some(predicate) = reduction_per {
             let count = self.count_battlefield_matching(controller, predicate);
-            ability.mana_cost = ability
-                .mana_cost
-                .reduced_generic(u8::try_from(count).unwrap_or(u8::MAX));
+            *cost = cost.reduced_generic(u8::try_from(count).unwrap_or(u8::MAX));
         }
     }
 
@@ -3620,21 +3620,19 @@ impl Game {
     fn announced_model(
         &self,
         player: PlayerId,
-        operation: &Operation,
+        operation: &Operation<impl Borrow<ActivatedAbilityDefinition>>,
     ) -> Option<(PaymentModel<'_>, u32)> {
         let mut model = self.payment_model(player, None);
         if let Some((_, payment, _)) = self.paying() {
             return Some((model, payment.life()));
         }
         let Operation::Activation {
-            source,
-            ability_index,
-            ..
+            source, ability, ..
         } = operation
         else {
             return None;
         };
-        let ability = self.activation_ability(*source, *ability_index)?;
+        let ability = ability.borrow();
         // Hold the source's own tap/leave cost while considering activation;
         // once announced, `owed_reservation` reads its cost.
         if let ActivationSource::Permanent(permanent) = source {
@@ -4653,7 +4651,7 @@ impl Game {
     pub(crate) fn tap_activation_payment_possible(
         &self,
         player: PlayerId,
-        payment: &Payment,
+        payment: &Payment<impl Borrow<ActivatedAbilityDefinition>>,
         selected: Option<PermanentId>,
     ) -> bool {
         let Some((tap, toward)) = payment.owed.iter().find_map(|component| match component {
@@ -4685,16 +4683,15 @@ impl Game {
         player: PlayerId,
         permanent: PermanentId,
         ability_index: usize,
+        ability: &ActivatedAbilityDefinition,
         x: u8,
     ) -> bool {
-        let operation = Operation::Activation {
-            source: ActivationSource::Permanent(permanent),
+        let operation = Operation::activation(
+            ActivationSource::Permanent(permanent),
             ability_index,
-            targets: Vec::new(),
-            target_req_indices: Vec::new(),
-            target_divisions: Vec::new(),
-            x: i32::from(x),
-        };
+            ability,
+            i32::from(x),
+        );
         let Some((model, _)) = self.announced_model(player, &operation) else {
             return false;
         };
@@ -4713,7 +4710,7 @@ impl Game {
         &self,
         player: PlayerId,
         cost: &ManaCost,
-        operation: &Operation,
+        operation: &Operation<impl Borrow<ActivatedAbilityDefinition>>,
         sacrifice: Option<PermanentId>,
     ) -> bool {
         let Some((mut model, life)) = self.announced_model(player, operation) else {

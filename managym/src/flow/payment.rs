@@ -6,20 +6,22 @@
 // life steps; a new cost kind is one `CostComponent` variant, its line in
 // `Game::cost_components` and its arms here.
 
+use std::borrow::Borrow;
+
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
         cast_permission::PlayRoute,
         decision::{Decision, EffectFrame, FrameCompletion, ResolutionRef, SpendCompletion},
-        game::{ActivationSource, CastChoices, Game, PendingChoice},
+        game::{serialize_announced_ability, ActivationSource, CastChoices, Game, PendingChoice},
         proposed_event::{
-            CounterProvenance, DiscardCause, EventBinding, EventCause, ProposedEvent,
+            CounterProvenance, DiscardCause, EventBatch, EventBinding, EventCause, ProposedEvent,
         },
         turn::OnceEachTurnKey,
     },
     state::{
         ability::{Effect, PaymentCost},
-        card::{CardType, SacrificeCost, TapCost},
+        card::{ActivatedAbilityDefinition, CardType, SacrificeCost, TapCost},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost},
         payment::{How, PaymentReceipt, Toward},
@@ -62,12 +64,18 @@ impl AnnouncedSpell {
 }
 
 /// A fully announced spell or activation (CR 601.2a-e, 602.2).
+/// Live activations own the finalized definition. Feasibility probes borrow it.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum Operation {
+pub enum Operation<A = Box<ActivatedAbilityDefinition>> {
     Spell(AnnouncedSpell),
     Activation {
         source: ActivationSource,
         ability_index: usize,
+        #[serde(
+            serialize_with = "serialize_announced_ability",
+            bound(serialize = "A: Borrow<ActivatedAbilityDefinition>")
+        )]
+        ability: A,
         targets: Vec<Target>,
         /// The clause of each target (`ActivatedTargeting::target_req_indices`).
         #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -81,7 +89,24 @@ pub enum Operation {
     },
 }
 
-impl Operation {
+impl<A> Operation<A> {
+    pub(crate) fn activation(
+        source: ActivationSource,
+        ability_index: usize,
+        ability: A,
+        x: i32,
+    ) -> Self {
+        Self::Activation {
+            source,
+            ability_index,
+            ability,
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+            target_divisions: Vec::new(),
+            x,
+        }
+    }
+
     /// The spell being cast, if this is a cast.
     pub fn spell(&self) -> Option<ObjectId> {
         match self {
@@ -321,14 +346,15 @@ impl TapPayment {
 /// definition again. There is exactly one `Mana` component: it stays until
 /// the mana is spent, and what follows it is paid as the payment completes.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct Payment {
-    pub operation: Operation,
+pub struct Payment<A = Box<ActivatedAbilityDefinition>> {
+    #[serde(bound(serialize = "A: Borrow<ActivatedAbilityDefinition>"))]
+    pub operation: Operation<A>,
     pub owed: Vec<CostComponent>,
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
     pub receipt: PaymentReceipt,
 }
 
-impl Payment {
+impl<A> Payment<A> {
     fn mana_component(&self) -> (&ManaCost, Help) {
         self.owed
             .iter()
@@ -568,10 +594,10 @@ impl Game {
 }
 
 impl Game {
-    pub(crate) fn payment_candidates(
+    pub(crate) fn payment_candidates<A>(
         &self,
         player: PlayerId,
-        operation: &Operation,
+        operation: &Operation<A>,
         cost: &SacrificeCost,
     ) -> Vec<PermanentId> {
         self.sacrifice_candidates(player, &cost.predicate)
@@ -762,7 +788,7 @@ impl Game {
     pub(crate) fn cost_components(
         &self,
         player: PlayerId,
-        operation: &Operation,
+        operation: &Operation<impl Borrow<ActivatedAbilityDefinition>>,
     ) -> Vec<CostComponent> {
         let mut owed = Vec::new();
         match operation {
@@ -808,15 +834,8 @@ impl Game {
                     owed.push(CostComponent::Life(life));
                 }
             }
-            Operation::Activation {
-                source,
-                ability_index,
-                x,
-                ..
-            } => {
-                let ability = self
-                    .activation_ability(*source, *ability_index)
-                    .expect("announced activation source");
+            Operation::Activation { ability, x, .. } => {
+                let ability = ability.borrow();
                 if let Some((power, toward)) = ability.tap_power().filter(|(power, _)| *power > 0) {
                     owed.push(CostComponent::TapPower { power, toward });
                 }
@@ -826,11 +845,11 @@ impl Game {
                 if ability.discard_card {
                     owed.push(CostComponent::Discard);
                 }
-                if let Some(cost) = ability.sacrifice {
-                    owed.push(CostComponent::Sacrifice(cost, Toward::Printed));
+                if let Some(cost) = &ability.sacrifice {
+                    owed.push(CostComponent::Sacrifice(cost.clone(), Toward::Printed));
                 }
                 let cost = if ability.mana_cost.x == 0 {
-                    ability.mana_cost
+                    ability.mana_cost.clone()
                 } else {
                     ability
                         .mana_cost
@@ -896,16 +915,6 @@ impl Game {
         player: PlayerId,
         operation: Operation,
     ) -> Result<(), AgentError> {
-        if let Operation::Activation {
-            source,
-            ability_index,
-            ..
-        } = &operation
-        {
-            if self.activation_ability(*source, *ability_index).is_none() {
-                return Err(AgentError("missing source".into()));
-            }
-        }
         let owed = self.cost_components(player, &operation);
         self.advance_payment(
             player,
@@ -1040,10 +1049,10 @@ impl Game {
     /// The untapped permanents `player` controls that can pay a `Tap`
     /// component of `operation`. Station taps another creature than its
     /// source, whatever its power.
-    pub(crate) fn tap_component_candidates(
+    pub(crate) fn tap_component_candidates<A>(
         &self,
         player: PlayerId,
-        operation: &Operation,
+        operation: &Operation<A>,
         cost: &TapCost,
         toward: Toward,
     ) -> Vec<PermanentId> {
@@ -1384,7 +1393,7 @@ impl Game {
     /// The whole announced cost is paid: pay what `owed` holds after the
     /// mana (life and the source's own costs), sacrifice what was chosen or
     /// is owed, then cast the spell or put the ability on the stack with the
-    /// receipt. The ability is captured before its source taps or leaves.
+    /// receipt.
     pub(crate) fn complete_announced_payment(
         &mut self,
         player: PlayerId,
@@ -1395,36 +1404,44 @@ impl Game {
         }
         let life = payment.life();
         self.pay_life_cost(player, life, &mut payment.receipt);
-        // The source's own discard or exile; its sacrifice is on the receipt.
-        let mut source_costs = Vec::new();
-        let activated = match &payment.operation {
-            Operation::Spell(_) => None,
+        let tap = payment.owes(&CostComponent::Source(How::Tapped));
+        let mut frame = EffectFrame::new(player, Vec::new());
+        frame.completion = match payment.operation {
+            operation @ Operation::Spell(_) => {
+                frame.batch = Some(self.announced_cost_batch(&payment.receipt, []));
+                FrameCompletion::Paid {
+                    player,
+                    payment: Payment {
+                        operation,
+                        ..payment
+                    },
+                }
+            }
             Operation::Activation {
                 source,
                 ability_index,
+                ability,
                 targets,
                 target_req_indices,
                 target_divisions,
                 x,
             } => {
-                let mut ability = match *source {
+                let mut ability = match source {
                     ActivationSource::Permanent(permanent) => self.prepare_activated_ability(
                         player,
                         permanent,
-                        *ability_index,
-                        targets.clone(),
-                        *x,
-                        payment.owes(&CostComponent::Source(How::Tapped)),
+                        ability_index,
+                        *ability,
+                        x,
+                        tap,
                     )?,
-                    ActivationSource::Card(card) => self.prepare_card_activated_ability(
-                        player,
-                        card,
-                        *ability_index,
-                        targets.clone(),
-                    )?,
+                    ActivationSource::Card(card) => {
+                        self.prepare_card_activated_ability(player, card, ability_index, *ability)?
+                    }
                 };
-                ability.target_req_indices = target_req_indices.clone();
-                ability.target_divisions = target_divisions.clone();
+                ability.targets = targets;
+                ability.target_req_indices = target_req_indices;
+                ability.target_divisions = target_divisions;
                 let source_object = ability.source_object;
                 let counter_cost = |kind, delta| ProposedEvent::CounterChange {
                     provenance: CounterProvenance::new(EventCause::Cost),
@@ -1433,6 +1450,8 @@ impl Game {
                     delta,
                     by: Some(player),
                 };
+                // The source's own sacrifice is on the receipt.
+                let mut source_costs = Vec::new();
                 for component in &payment.owed {
                     match *component {
                         CostComponent::RemoveSourceCounters(kind, count) => {
@@ -1493,20 +1512,7 @@ impl Game {
                         _ => {}
                     }
                 }
-                Some((ability, *source))
-            }
-        };
-        let events = payment
-            .receipt
-            .paid_as(How::Sacrificed)
-            .filter(|object| self.state.permanent_of(*object).is_some())
-            .map(|target| ProposedEvent::Sacrifice { target })
-            .chain(source_costs);
-        let mut frame = EffectFrame::new(player, Vec::new());
-        frame.batch = Some(self.event_batch(EventBinding::None, events));
-        frame.completion = match activated {
-            None => FrameCompletion::Paid { player, payment },
-            Some((mut ability, source)) => {
+                frame.batch = Some(self.announced_cost_batch(&payment.receipt, source_costs));
                 ability.paid = payment.receipt;
                 FrameCompletion::Activated {
                     ability,
@@ -1519,6 +1525,18 @@ impl Game {
         };
         self.run_frame(frame);
         Ok(())
+    }
+
+    fn announced_cost_batch(
+        &self,
+        receipt: &PaymentReceipt,
+        source_costs: impl IntoIterator<Item = ProposedEvent>,
+    ) -> EventBatch {
+        let sacrifices = receipt
+            .paid_as(How::Sacrificed)
+            .filter(|object| self.state.permanent_of(*object).is_some())
+            .map(|target| ProposedEvent::Sacrifice { target });
+        self.event_batch(EventBinding::None, sacrifices.chain(source_costs))
     }
 
     /// Other untapped creatures `player` controls that can help crew

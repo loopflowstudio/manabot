@@ -311,7 +311,10 @@ impl Game {
         effects: &[crate::state::ability::Effect],
     ) -> bool {
         let definition = if let Some(grant) = grant {
-            self.state[grant.grantor].attached_grants().nth(grant.index)
+            self.state
+                .object(grant.grantor)
+                .ok()
+                .and_then(|source| source.attached_grants().nth(grant.index))
         } else {
             self.source_face(object, face).and_then(|source| {
                 source.activated_abilities.get(index).or_else(|| {
@@ -1192,6 +1195,7 @@ impl Game {
                 target_req_indices,
                 target_divisions,
                 x,
+                ..
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);

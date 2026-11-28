@@ -956,7 +956,11 @@ impl Game {
             if ability.reduce_by_source_power {
                 ability.mana_cost = ability.mana_cost.reduced_generic(power);
             }
-            self.price_activation(permanent.controller, ability);
+            self.price_activation(
+                permanent.controller,
+                &mut ability.mana_cost,
+                ability.cost_reduction_per.as_ref(),
+            );
             let floor = ability.mana_cost.mana_value.saturating_sub(1);
             ability.mana_cost = ability.mana_cost.reduced_generic(reduction.min(floor));
         }

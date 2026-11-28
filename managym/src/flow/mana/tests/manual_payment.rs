@@ -13,13 +13,15 @@ use crate::{
         turn::StepKind,
     },
     state::{
-        ability::{Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector},
+        ability::{
+            Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec,
+        },
         card::{
             ActivatedAbilityDefinition, CardType, DamageRecipient, DamageSource, DamageTransform,
             Keyword, ManaAbility, ReplacementEffect, StaticAbility, StaticScope,
         },
         effect::{EffectDuration, Modification},
-        game_object::{PermanentId, PlayerId},
+        game_object::{PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost},
         permanent::{CounterKind, EntryChoice},
         player::{ManaFloats, ManaPayment, PlayerConfig},
@@ -51,6 +53,7 @@ fn announce_activation(game: &mut Game, player: PlayerId, source: PermanentId) {
     let operation = Operation::Activation {
         source: ActivationSource::Permanent(source),
         ability_index: 0,
+        ability: Box::new(game.characteristics(source).activated_abilities[0].clone()),
         targets: vec![],
         target_req_indices: vec![],
         target_divisions: vec![],
@@ -109,6 +112,125 @@ fn cast_only_card(game: &mut Game, player: PlayerId, name: &str) {
         .position(|action| matches!(action, Action::CastSpell { object, .. } if *object == spell))
         .unwrap_or_else(|| panic!("missing cast for {name}"));
     game.step(cast).unwrap();
+}
+
+#[test]
+fn owned_activation_keeps_its_targets_and_effect_when_mana_ends_the_grant() {
+    let player = PlayerId(0);
+    let opponent = PlayerId(1);
+    for (announces_x, other_grant) in [(false, false), (false, true), (true, true)] {
+        let mut game = payment_game(343, [("Island", 38), ("Mountain", 1), ("Gray Ogre", 1)]);
+        game.keep_opening_hands();
+        game.mana_floats[player.0] = ManaFloats::All;
+        let source = game
+            .scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        let mountain = game
+            .scenario_force_battlefield(player, "Mountain", true)
+            .unwrap();
+        game.scenario_force_battlefield(player, "Island", true)
+            .unwrap();
+        let damage = Effect::deal_damage(
+            if announces_x {
+                EffectValue::X
+            } else {
+                2.into()
+            },
+            ObjectSelector::Target(TargetSpec::Player),
+        );
+        let scope = StaticScope::YouControl(CardPredicate {
+            named: Some("Gray Ogre".into()),
+            ..Default::default()
+        });
+        let grant = |condition, ability| {
+            StaticAbility::continuous(
+                scope.clone(),
+                condition,
+                vec![Modification::GrantActivated(Box::new(ability))],
+            )
+        };
+        let mut grants = vec![grant(
+            Some(Condition::Not(Box::new(Condition::SourceTapped))),
+            ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse(if announces_x { "{X}{R}" } else { "{R}" }),
+                effects: vec![damage.clone()],
+                ..Default::default()
+            },
+        )];
+        if other_grant {
+            grants.push(grant(
+                None,
+                ActivatedAbilityDefinition {
+                    effects: vec![Effect::gain_life(5)],
+                    ..Default::default()
+                },
+            ));
+        }
+        let mountain_object = game.permanent_object(mountain).unwrap();
+        game.state[mountain_object].statics = grants;
+        if announces_x {
+            game.state
+                .mana_pool_mut(player)
+                .add(&Mana::parse("1"), None);
+        }
+        game.tick().unwrap();
+        assert_eq!(
+            game.characteristics(source).activated_abilities[0]
+                .effects
+                .as_slice(),
+            std::slice::from_ref(&damage)
+        );
+        step_action(
+            &mut game,
+            Action::ActivateAbility {
+                player,
+                permanent: source,
+                ability_index: 0,
+            },
+        )
+        .unwrap();
+        if announces_x {
+            step_action(&mut game, Action::ChooseMode { player, mode: 1 }).unwrap();
+        }
+        let target = Target::Player(opponent);
+        step_action(&mut game, Action::ChooseTarget { player, target }).unwrap();
+        step_action(
+            &mut game,
+            Action::TapForMana {
+                player,
+                permanent: mountain,
+            },
+        )
+        .unwrap();
+        let view = game.characteristics(source);
+        if other_grant {
+            assert_eq!(view.activated_abilities[0].effects, [Effect::gain_life(5)]);
+        } else {
+            assert!(view.activated_abilities.is_empty());
+        }
+        if matches!(game.pending_choice, Some(PendingChoice::Pay { .. })) {
+            step_action(&mut game, Action::PayCost { player }).unwrap();
+        }
+        let Some(StackObject::ActivatedAbility(ability)) = game.state.stack_objects.last() else {
+            panic!(
+                "the announced ability must reach the stack with announces_x={announces_x}, +                 other_grant={other_grant}: {:?}",
+                game.action_space()
+            );
+        };
+        assert_eq!(ability.ability_index, 0);
+        assert_eq!(ability.effects, [damage]);
+        assert_eq!(ability.targets, [target]);
+        assert_eq!(ability.x, i32::from(announces_x));
+        for _ in 0..2 {
+            let holder = game.action_space().unwrap().player.unwrap();
+            step_action(&mut game, Action::PassPriority { player: holder }).unwrap();
+        }
+        assert_eq!(game.state.players[player.0].life, 20);
+        assert_eq!(
+            game.state.players[opponent.0].life,
+            if announces_x { 19 } else { 18 }
+        );
+    }
 }
 
 #[test]

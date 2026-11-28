@@ -118,18 +118,16 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> Vec<CostComponent> {
-        self.cost_components(
-            player,
-            &Operation::Spell(AnnouncedSpell {
-                object,
-                cast,
-                mode: None,
-                targets: Vec::new(),
-                target_req_indices: Vec::new(),
-                target_divisions: Vec::new(),
-                target_shares: Vec::new(),
-            }),
-        )
+        let operation: Operation = Operation::Spell(AnnouncedSpell {
+            object,
+            cast,
+            mode: None,
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+            target_divisions: Vec::new(),
+            target_shares: Vec::new(),
+        });
+        self.cost_components(player, &operation)
     }
 
     /// Query one legal action at its exact semantic authority address.
@@ -338,14 +336,8 @@ impl Game {
                         "No automatic activation fee preview.",
                     ));
                 }
-                let operation = Operation::Activation {
-                    source: ActivationSource::Permanent(*permanent),
-                    ability_index: *ability_index,
-                    targets: Vec::new(),
-                    target_req_indices: Vec::new(),
-                    target_divisions: Vec::new(),
-                    x: 0,
-                };
+                let source = ActivationSource::Permanent(*permanent);
+                let operation = Operation::activation(source, *ability_index, ability, 0);
                 let owed = self.cost_components(player, &operation);
                 if ability.mana_cost.x > 0 || will_owe_a_choice(&owed) {
                     return Ok(PaymentPreview::message(
@@ -358,7 +350,12 @@ impl Game {
                     player,
                     payment: Box::new(Payment {
                         owed,
-                        operation,
+                        operation: Operation::activation(
+                            source,
+                            *ability_index,
+                            Box::new(ability.clone()),
+                            0,
+                        ),
                         receipt: Default::default(),
                     }),
                 });

@@ -19,7 +19,7 @@ use crate::{
     },
     state::{
         ability::Effect,
-        card::{ActivationZone, CastOption},
+        card::{ActivatedAbilityDefinition, ActivationZone, CastOption},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
         mana::{Color, Mana, ManaCost},
         payment::Toward,
@@ -704,36 +704,41 @@ impl Game {
 
     /// Inspect costs only for actions already admitted in this priority window.
     fn activation_spends_mana(&self, action: &Action) -> bool {
-        let ability = match *action {
-            Action::ActivateAbility {
-                permanent,
-                ability_index,
-                ..
-            } => self.activation_ability(ActivationSource::Permanent(permanent), ability_index),
-            Action::ActivateCardAbility {
-                object,
-                ability_index,
-                ..
-            } => self.state.card_id(object).and_then(|card| {
-                self.activation_ability(ActivationSource::Card(card), ability_index)
-            }),
-            Action::TurnFaceUp { object, .. } => {
-                return self
-                    .manifest_cost(object)
-                    .is_some_and(|cost| cost.mana_value > 0)
-            }
-            Action::Foretell { .. } => return true,
-            _ => return false,
-        };
-        ability.is_some_and(|ability| {
-            ability.mana_cost.mana_value > 0
-                || ability.mana_cost.x > 0
+        let spends = |ability: &ActivatedAbilityDefinition, cost: &ManaCost| {
+            cost.mana_value > 0
+                || cost.x > 0
                 || ability
                     .sacrifice
                     .as_ref()
                     .and_then(|sac| sac.or_mana.as_ref())
                     .is_some_and(|cost| cost.mana_value > 0)
-        })
+        };
+        match *action {
+            Action::ActivateAbility {
+                permanent,
+                ability_index,
+                ..
+            } => self
+                .characteristics(permanent)
+                .activated_abilities
+                .get(ability_index)
+                .is_some_and(|ability| spends(ability, &ability.mana_cost)),
+            Action::ActivateCardAbility {
+                object,
+                ability_index,
+                player,
+            } => self.state.card_id(object).is_some_and(|card| {
+                self.card_ability_in_zone(player, card, ability_index)
+                    .is_some_and(|ability| {
+                        spends(ability, &self.card_activation_cost(player, card, ability))
+                    })
+            }),
+            Action::TurnFaceUp { object, .. } => self
+                .manifest_cost(object)
+                .is_some_and(|cost| cost.mana_value > 0),
+            Action::Foretell { .. } => true,
+            _ => false,
+        }
     }
 
     fn manifest_cost(&self, object: ObjectId) -> Option<&ManaCost> {
@@ -817,14 +822,7 @@ impl Game {
                     }
                     continue;
                 }
-                let operation = Operation::Activation {
-                    source,
-                    ability_index,
-                    targets: Vec::new(),
-                    target_req_indices: Vec::new(),
-                    target_divisions: Vec::new(),
-                    x: 0,
-                };
+                let operation = Operation::activation(source, ability_index, ability, 0);
                 if let Some(cost) = &ability.sacrifice {
                     if !self
                         .payment_candidates(player, &operation, cost)
@@ -876,7 +874,13 @@ impl Game {
                 } else if ability.announces_x() {
                     self.has_legal_activation_x(player, permanent_id, ability_index, ability)
                 } else if ability.waterbend {
-                    self.activation_x_payable(player, permanent_id, ability_index, ability.x_min)
+                    self.activation_x_payable(
+                        player,
+                        permanent_id,
+                        ability_index,
+                        ability,
+                        ability.x_min,
+                    )
                 } else {
                     self.can_pay_announced_activation(player, &ability.mana_cost, &operation, None)
                 };
@@ -917,28 +921,21 @@ impl Game {
                         continue;
                     };
                     let source = ActivationSource::Card(card);
-                    if self.check_activation_terms(player, &ability).is_err()
+                    if self.check_activation_terms(player, ability).is_err()
                         || !self.activation_targets_available(
                             player,
                             source,
                             ability_index,
-                            &ability,
+                            ability,
                             0,
                         )
                     {
                         continue;
                     }
-                    let operation = Operation::Activation {
-                        source,
-                        ability_index,
-                        targets: Vec::new(),
-                        target_req_indices: Vec::new(),
-                        target_divisions: Vec::new(),
-                        x: 0,
-                    };
+                    let operation = Operation::activation(source, ability_index, ability, 0);
                     if self.can_pay_announced_activation(
                         player,
-                        &ability.mana_cost,
+                        &self.card_activation_cost(player, card, ability),
                         &operation,
                         None,
                     ) {
@@ -1042,7 +1039,7 @@ impl Game {
                 ))
             .then_some(0);
         };
-        let operation = Operation::Spell(AnnouncedSpell {
+        let operation: Operation = Operation::Spell(AnnouncedSpell {
             object,
             cast,
             mode: None,
@@ -1069,15 +1066,8 @@ impl Game {
                 Some(self.payment_action_space(*player, payment))
             }
             PendingChoice::ActivatedTarget(targeting) => {
-                let crate::flow::game::ActivatedTargeting {
-                    player,
-                    source,
-                    ability_index,
-                    requirement,
-                    ..
-                } = targeting;
-                let chooser =
-                    self.activation_target_chooser(*player, *source, *ability_index, *requirement);
+                let clause = targeting.target_requirement()?;
+                let chooser = targeting.chooser(&clause);
                 let mut actions: Vec<_> = self
                     .activated_ability_targets(targeting)
                     .into_iter()
@@ -1086,9 +1076,7 @@ impl Game {
                         target,
                     })
                     .collect();
-                let clause =
-                    self.activation_target_requirement(*source, *ability_index, *requirement)?;
-                let in_clause = targeting.clause_slots(*requirement).count();
+                let in_clause = targeting.clause_slots(targeting.requirement).count();
                 if in_clause >= clause.min_for(targeting.x, false) {
                     actions.push(Action::Decline { player: chooser });
                 }
@@ -1150,9 +1138,10 @@ impl Game {
                 player,
                 permanent,
                 ability_index,
+                ability,
             } => Some(x_action_space(
                 *player,
-                self.legal_activation_x_values(*player, *permanent, *ability_index),
+                self.legal_activation_x_values(*player, *permanent, *ability_index, ability),
                 self.state.permanents[*permanent]
                     .as_ref()
                     .map(|perm| vec![perm.id])
