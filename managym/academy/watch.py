@@ -32,6 +32,10 @@ from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy, player_fields
 from .work import Work
 
 
+class NativeSeatRecord(ValueError):
+    """A record in which a seat stepped natively, so its turns were never surfaced."""
+
+
 class WatchCreated(TypedDict):
     id: str
     finished: bool
@@ -487,8 +491,10 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
         "agent",
         "agent",
     ):
-        raise ValueError(
-            "Academy requires both seats' surfaced decisions; native-seat records are not yet viewable"
+        raise NativeSeatRecord(
+            "Academy requires both seats' surfaced decisions; native-seat records "
+            "(such as an evaluation against the built-in heuristic) are not yet "
+            "viewable. Verify the game with `uv run python -m managym.replay <file>`."
         )
     replay = walk(record)
     source = record.sha256

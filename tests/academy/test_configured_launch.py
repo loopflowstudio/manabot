@@ -672,3 +672,34 @@ def test_cli_search_specs_reach_the_shared_python_launch_api(
     query = parse_qs(urlparse(targets[-1]).query)
     assert json.loads(query["search"][0]) == [config["mirror"], None]
     assert "removed in 0.3.0" not in capsys.readouterr().err
+
+
+def test_native_seat_record_names_the_replay_command(
+    academy: Academy, tmp_path: Path
+) -> None:
+    import managym
+    from managym.recording import ScalarCapture
+
+    games = tmp_path / "games.jsonl"
+    game = managym.Env(seed=7)
+    capture = ScalarCapture(seed=7, games_path=games)
+    capture.reset(
+        game,
+        [
+            managym.authored_deck_setup("tla-baseline-v1", key)
+            for key in ("tla_red", "tla_white")
+        ],
+    )
+    for _ in range(3):
+        capture.step(game, 0)
+    capture.close()
+    # Watch refuses on the declared seats alone, before walking the game.
+    row = json.loads(games.read_text().splitlines()[-1])
+    row["player_policies"] = ["agent", "heuristic:64"]
+    games.write_text(json.dumps(row) + "\n")
+    with pytest.raises(AcademyLaunchError) as error:
+        academy.replay(games)
+    assert error.value.code == "replay.rejected"
+    assert "native-seat records" in error.value.message
+    assert "uv run python -m managym.replay" in error.value.message
+    assert "revision that wrote it" not in error.value.message

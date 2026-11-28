@@ -163,6 +163,12 @@ def main() -> None:
         parser.error(f"--device {args.device} is unavailable on this host")
     if args.checkpoint is not None and not args.checkpoint.is_file():
         parser.error(f"--checkpoint {args.checkpoint} is not a file")
+    if not corpus_path().is_file():
+        parser.error(
+            f"the trophy corpus {corpus_path()} is missing; fetch it with "
+            "`uv run python -m manabot.data fetch "
+            "experiments/data/mtg409/pools-v2/corpus.json`"
+        )
     out = args.output_dir.resolve()
     if out.exists():
         parser.error(f"--output-dir {out} exists; each arm needs a fresh directory")

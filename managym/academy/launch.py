@@ -557,7 +557,7 @@ class Academy:
         from fastapi import HTTPException
 
         from managym.academy.attempts import AttemptStore
-        from managym.academy.watch import import_game
+        from managym.academy.watch import NativeSeatRecord, import_game
 
         if isinstance(source, Path):
             selected = _select_game(source, game)
@@ -570,6 +570,8 @@ class Academy:
                         "Install the matching manabot release: uv pip install --only-binary :all: --torch-backend cpu manabot",
                     ) from exc
                 raise AcademyLaunchError("replay.rejected", str(exc.detail)) from exc
+            except NativeSeatRecord as exc:
+                raise AcademyLaunchError("replay.rejected", str(exc)) from exc
             except Exception as exc:
                 raise AcademyLaunchError(
                     "replay.rejected",

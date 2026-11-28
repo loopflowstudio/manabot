@@ -1,0 +1,68 @@
+<h1>QA: native heuristic seats and background replay (MTG-506)</h1>
+<p>M4 Max, 2026-11-27, at <code>d753a07d0a</code> plus this QA's fixes. Debug build of the native extension, rebuilt because the last compress commit changed <code>env.rs</code>/<code>vector_env.rs</code>. Etude from a clean archive of <code data-no-check>1f7496e9^</code>, since the shared editable checkout has moved past the <code>Matches</code> name this tree imports. Trained <code>w160l8</code> (<code data-no-check>26ff27b7</code>). The timings are from a debug build and say nothing about throughput; Pass 3's release panel is the throughput evidence.</p>
+
+<h2>What works now</h2>
+<ul>
+<li>The throughput CLI gives the same game on every leg across CPU scalar, CPU vector with 3 slots (backfill) and MPS vector-64: checkpoint actions, digests, policy seeds, endings and scores (16 of 16 shared legs per arm).</li>
+<li>Every new record replays. Built-in heuristic legs record <code>("agent", "heuristic:64")</code> or the swapped pair; the bounded <code>managym.replay</code> CLI reports <code>complete</code> with statistics.</li>
+<li>A registered custom code opponent (random) and the built-in heuristic play together in one <code>play_pairings</code> vector run. All 16 games replay, and the custom-code legs record <code>("agent", "agent")</code>.</li>
+<li>A custom-code evaluation record opens and steps in Academy Replay.</li>
+<li>A stored heuristic seating with no version gets a clear refusal: <code>built-in heuristic requires version 'native-v3'; got None. Use a new tournament for the current version</code>.</li>
+</ul>
+
+<h2>Scenario 1: throughput CLI, three arms</h2>
+<table>
+<tr><th>Arm</th><th>Deals</th><th>Games</th><th>Mean rows/forward</th><th>Legs identical to CPU scalar</th></tr>
+<tr><td>CPU scalar</td><td>4</td><td>16</td><td>1.0</td><td>reference</td></tr>
+<tr><td>CPU vector, 3 slots</td><td>4</td><td>16</td><td>2.85</td><td>16/16</td></tr>
+<tr><td>MPS vector, 64 slots</td><td>8</td><td>32</td><td>10.6 (32 games fill at most 32 slots)</td><td>16/16 shared</td></tr>
+</table>
+<pre>{"arm": "cpu-v3", "baseline": "cpu-scalar", "games": 16, "shared": 16, "matching": {"deck_labels": 16, "seats": 16, "seeds": 16, "actions": 16, "digests": 16, "policy_seeds": 16, "end": 16, "score": 16}, "scores": [14, 0, 2], "changed_legs": []}
+{"arm": "mps-v64", "baseline": "cpu-scalar", "games": 32, "shared": 16, "matching": {... all 16 ...}, "changed_legs": []}</pre>
+<p>One CPU vector run took 303 s wall time for 57 s of measured play. Power logs show the display sleeping and the system idling at that time, and a 1-deal rerun took 24 s, so I'm treating it as the laptop sleeping, not the code. The QA note now says to wrap runs in <code>caffeinate -i</code>.</p>
+
+<h2>Scenario 2: returning user with Pass 3 records</h2>
+<p>Pass 3's 32-deal records (<code>.runs/eval-throughput/mtg506/w160-mps-vector</code>) match today's games on actions, seats, seeds and scores, but not on digests or endings. Replay stops them at index 0:</p>
+<pre>{"status": "diverged", "index": 0, "reason": "pre-decision digest differs; recorded managym 0.2.6 cards 869c59… engine 9e2831…; running managym 0.2.6 cards 869c59… engine c7f493…", "build_differs": true}</pre>
+<p>The cause is main's MTG-500 (<code>606e79e90a</code>, merged here at <code>793880c852</code>), which moved the match-state digest from v34 to v35. That PR documents it. Old records open with the revision that wrote them, and the message names both engines.</p>
+
+<h2>Scenario 3: custom code opponent beside the built-in heuristic</h2>
+<pre>heuristic [(1.0, True), (1.0, True), (1.0, True), (0.0, True)]
+random [(1.0, True), (1.0, True), (1.0, True), (1.0, True)]
+heuristic [(1.0, True), (1.0, True), (1.0, True), (1.0, True)]
+random [(1.0, True), (1.0, True), (1.0, True), (1.0, True)]
+6cfe4e8f ['agent', 'heuristic:64'] 66 True
+6cfe4e8f ['heuristic:64', 'agent'] 101 True
+7369de7f ['agent', 'agent'] 168 True
+…  (16 games, all replay_game passed)</pre>
+<p>My first driver registered the random anchor against deal 0's pairing, and both random deals failed with <code>player is not bound to the selected matchup</code>. That was my mistake, not the code's: the error was correct and isolated to those two deals, and the heuristic deals finished. The driver now registers per deal, and the QA note describes how.</p>
+
+<h2>Scenario 4: Academy with evaluation records</h2>
+<p>Custom-code record, opened in Replay at 1280×800, with no console errors:</p>
+<img src="qa-custom-replay.png" alt="Academy Replay of a custom-code evaluation game" style="max-width:100%">
+<p><strong>Fixed:</strong> a native-seat record (the common case now, any evaluation against the built-in heuristic) was refused with advice that does not work:</p>
+<lf-component name="before-after">
+<div slot="before"><pre>replay.rejected: Academy requires both seats' surfaced decisions; native-seat records are not yet viewable; open the trace with the revision that wrote it.</pre></div>
+<div slot="after"><pre>replay.rejected: Academy requires both seats' surfaced decisions; native-seat records (such as an evaluation against the built-in heuristic) are not yet viewable. Verify the game with `uv run python -m managym.replay &lt;file&gt;`.</pre></div>
+</lf-component>
+<p>The writing revision can't view it either. Watch now raises a typed <code>NativeSeatRecord</code>, and launch passes its message through unchanged. The browser import route gets the same text. The new test fails without the launch change.</p>
+<lf-diff path="managym/academy/launch.py"></lf-diff>
+<lf-diff path="managym/academy/watch.py"></lf-diff>
+
+<h2>Wrong input</h2>
+<p><strong>Fixed:</strong> without the trophy corpus, the throughput CLI raised a raw <code>FileNotFoundError</code> after creating <code>--output-dir</code>, so the rerun after fetching failed with "exists; each arm needs a fresh directory". It now stops before creating anything:</p>
+<pre>eval_throughput.py: error: the trophy corpus …/experiments/data/mtg409/pools-v2/corpus.json is missing; fetch it with `uv run python -m manabot.data fetch experiments/data/mtg409/pools-v2/corpus.json`</pre>
+<lf-diff path="experiments/eval_throughput.py"></lf-diff>
+
+<h2>Not reached</h2>
+<ul>
+<li>L4 / CUDA arms, and the full 32-deal release panel: Pass 3 covers both, and this QA used a debug build.</li>
+<li>Managed Etude <code>play_many</code> against the released <code>etude-sdk 0.5.0</code>, which MTG-497 owns. The local SDK tree is a pre-rename archive.</li>
+<li>Viewing a native-seat game in Watch: deferred by design (plan, review Q3).</li>
+</ul>
+
+<h2>Still wrong, worst first</h2>
+<ol>
+<li><code>ScalarCapture</code> records no seat policies, and <code>Env</code> has no getter for them. A scalar capture of <code>Env(player_policies=("agent", "heuristic"))</code> writes an <code>("agent", "agent")</code> record that diverges at index 0. This predates MTG-506; the vector capture is correct. Logged in <code>scratch/questions.md</code>.</li>
+<li>Records written before the v35 digest (MTG-500) can't replay on this branch. Expected, and documented by that PR.</li>
+</ol>

@@ -565,3 +565,12 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   [data-testid=board-card][data-draft=can]` and then `primary-action`, and
   restrict offer clicks to `:visible`. A passive opponent discards to hand
   size, which fills its graveyard by about turn 4.
+- `managym academy replay` from a checkout whose venv has no `managym`
+  console script: `ACADEMY_FRONTEND_BUILD=$PWD/academy/ui/build .venv/bin/python
+  -c "import sys; from managym.cli import main; sys.argv=['managym']+sys.argv[1:]; main()"
+  academy replay <file> --game 1 --no-open --port <unused> --traces-dir <dir>`.
+  A fresh checkout needs `npm --prefix academy/ui ci` before the static build.
+  Start it in the background and kill the Python PID (not a `uv` wrapper).
+  Records with a native seat (`heuristic:64`, from vector evaluation against
+  the built-in heuristic) are refused with `replay.rejected`; custom-code
+  evaluation records (`("agent", "agent")`) open in Replay.

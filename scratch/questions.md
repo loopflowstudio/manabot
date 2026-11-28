@@ -198,3 +198,11 @@ it from a vector journal. The latest batch boundary can describe a subsequent
 step by a healthy slot, so a single-game projection leaves that boundary on
 the full journal record. The slot-1 step regression advances slot 0 to
 exercise this case.
+
+MTG-506 QA (2026-11-27): `ScalarCapture` records no seat policies, and
+`managym.Env` exposes no getter for them, so a scalar capture of an Env built
+with `player_policies=("agent", "heuristic")` writes an `("agent", "agent")`
+record that diverges at index 0 on replay. This predates MTG-506. The vector
+capture records its pairs. Left as is; a fix needs an `Env.player_policies`
+getter (Rust plus public API) or a `ScalarCapture(player_policies=...)`
+argument checked against the Env.

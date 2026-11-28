@@ -106,3 +106,23 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
   match and all four new legs to replay. A third pass reports
   `nothing to play`. Use a temporary track directory and retain each run's
   arena output separately.
+- Etude SDK drift while `main` pins 0.4.x: when the shared editable Etude
+  checkout has moved past what this tree imports (`ImportError: cannot import
+  name 'Matches'`), extract a clean tree instead of touching it:
+  `git -C <etude checkout> archive '1f7496e9^' | tar -x -C .runs/<x>/etude`,
+  then run with `PYTHONPATH=$PWD/.runs/<x>/etude/src` (it shadows the editable
+  install) and `uv run --no-sync`. The throughput CLI also needs
+  `uv run python -m manabot.data fetch experiments/data/mtg409/pools-v2/corpus.json`
+  under `doppler run --project manabot --config prd`. Wrap runs in
+  `caffeinate -i`: an idle laptop sleeps mid-run and a 60 s arm takes 5 min.
+- Custom (registered) code opponents in the vector runner: build the anchor
+  per deal with `admit_pairing(Match(players=(candidate, heuristic), ...),
+  [None, None], spec).request.candidate` → `register_anchor(..., "random",
+  player_id="opponent")` with `source_sha256` from
+  `source_digest(registration_source_paths(...))`, then seat
+  `Code(name="random", config={"registration": ...})`. A registration bound
+  to another deal's pairing fails with "player is not bound to the selected
+  matchup". Mix these deals with built-in heuristic deals in one
+  `play_pairings` call: heuristic legs record `("agent", "heuristic:64")` or
+  the swapped pair, custom legs `("agent", "agent")`; all replay through
+  `replay_game`. Driver: `.runs/qa506/drivers/custom_vector.py` (MTG-506 QA).
