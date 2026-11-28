@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-508 Concept Review · Coupled mana payments, fixed-tap choices, and owned activations</title>
+<title>MTG-508 Concept Review (Post-Implementation) · Coupled mana payments, fixed-tap choices, and owned activations</title>
 <style>
 /* Default review page theme tokens (light and dark).
  * Override per repository in `.lf/theme.css` (CSS custom properties only). */
@@ -848,20 +848,28 @@ button.lf-btn-quiet[aria-pressed="true"] {
 </head>
 <body>
 <main class="lf-page">
-<h1>MTG-508 Concept Review · Coupled mana payments, fixed-tap choices, and owned activations</h1>
+<h1>MTG-508 Concept Review (Post-Implementation) · Coupled mana payments, fixed-tap choices, and owned activations</h1>
 
-<p><strong>Area reviewed:</strong> Mana payment feasibility, execution, and announced activation lifecycle across
-  <code>managym/src/flow/mana.rs</code> (with <code>mana/{help,preview,autotapper,interchangeable}.rs</code>),
-  <code>flow/decision.rs</code>, <code>flow/payment.rs</code>, <code>flow/play.rs</code>,
-  <code>flow/action.rs</code>, and <code>flow/{layers,statics}.rs</code>.
-  This is a pre-implementation review of <code>scratch/plan.md</code> at <code>4a25a7a28f</code> (stacked on MTG-500 <code>5e9156a791</code>;
-  freshly fetched <code>origin/main</code> at <code>23212c88f5</code> is already an ancestor, with <code>MATCH_STATE_HASH_VERSION = 34</code> on <code>origin/main</code> and <code>35</code> on this branch).
+<p><strong>Area reviewed:</strong> Mana payment feasibility, execution, preview, and announced non-mana activation lifecycle across
+  <code>managym/src/flow/mana.rs</code>, <code>managym/src/flow/mana/{coupled,profile,help,preview,autotapper,interchangeable}.rs</code>,
+  <code>managym/src/flow/decision.rs</code>, <code>managym/src/flow/payment.rs</code>, <code>managym/src/flow/play.rs</code>,
+  <code>managym/src/flow/action.rs</code>, <code>managym/src/flow/game.rs</code>, <code>managym/src/flow/{layers,statics}.rs</code>,
+  <code>managym/src/flow/interchangeable.rs</code>, <code>managym/src/agent/continuation.rs</code>, and <code>managym/src/state/hash.rs</code>.
+  This reviews the completed four-pass implementation at <code>b0cd922864</code> against base <code>bc4d2ac17f</code>
+  (freshly fetched <code>origin/main</code> at <code>606e79e90a</code> is already an ancestor, with MTG-500 merged and
+  <code>MATCH_STATE_HASH_VERSION = 35</code> on <code>origin/main</code> vs. <code>36</code> on <code>HEAD</code>; no sync is needed).
 </p>
 
-<p><strong>Verdict on the first slice:</strong> Pass 1 (fixed taps suspending on a bonus choice) is the right first slice—Pass 2's native fork stepping hits the existing <code>perform_automatic_tap</code> panic without it—but its representation (<code>FixedOutput::{Exact, Choice}</code>) splits one concept across ~38 sites and misses <code>PaymentPreview</code>. Pass 2's plan has three structural defects that would fail its own committed fixtures if built as written:
-  (1) smuggling <code>&amp;Game</code> behind <code>cached_plan</code> while callers still pre-mutate frozen <code>PaymentModel</code> snapshots;
-  (2) dropping <code>Sensitive</code> sources from fork branching; and
-  (3) memoizing on <code>deterministic_hash()</code>, which hashes the full chronological event ledger and never deduplicates transpositions.
+<p><strong>Overall assessment:</strong> Passes 1 and 4 are conceptually clean—fixed-tap bonus choices fit natively into
+  <code>ManaActivationKind::FixedTap</code> and <code>produce_fixed_tap</code>, and owned non-mana activations cleanly unify
+  <code>ActivationX</code>, <code>ActivatedTargeting</code>, and <code>Operation::Activation</code> behind a borrow-friendly
+  <code>A = Box&lt;ActivatedAbilityDefinition&gt;</code> parameter with <code>acquired</code> grant keys preserved in hash v36.
+  Passes 2 and 3 implement the structured fork search cleanly for all committed fixtures, <strong>but four unfinished-rule gaps
+  and one hot-path cost remain inside the coupled authority</strong>:
+  (1) <code>coupling()</code> and the pure handoff misclassify non-tapping sensitive mana abilities, <code>cost_reduction_per</code> reads, and counted taps on <code>stateful_tap</code> boards;
+  (2) <code>resolution_mana_actions</code> drops simple choice-tap lands on coupled boards when an automatic route exists;
+  (3) <code>PaymentCandidate::Spend</code> skips the upfront <code>life_budget</code> check, and Delve <code>SelectCard</code> offers ignore graveyard-coupled sources;
+  (4) <code>PaymentModel::coupled()</code> rescans sources and clones <code>Game</code> inside <code>has_mutating_caller()</code> on every call instead of classifying once per model.
 </p>
 
 <h2>Domain concepts vs. code concepts</h2>
@@ -870,188 +878,233 @@ button.lf-btn-quiet[aria-pressed="true"] {
   <thead>
     <tr>
       <th>Domain concept (player / CR)</th>
-      <th>Planned code concept</th>
+      <th>Built code concept (<code>HEAD</code> <code>b0cd922864</code>)</th>
       <th>Aligned?</th>
       <th>What is wrong</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>Payment feasibility from a position (or after taking candidate step X)</strong>: does some legal sequence of mana taps, activations, help taps, delve exiles, and replacement orders complete every owed cost?</td>
-      <td><code>PaymentModel</code> (frozen <code>Arc&lt;Vec&lt;ManaSource&gt;&gt;</code> + <code>LifeBudget</code>) with <code>&amp;Game</code> bolted on behind <code>cached_plan</code>; callers still flatten candidate first steps (<code>activation_payable</code>, <code>after_tap</code>, <code>with_tapped</code>, <code>after_mana_choice</code>), reservations, convoke/improvise, and delve into pure <code>PaymentModel</code> mutations before calling <code>cached_plan</code>.</td>
+      <td><strong>Coupling roles</strong>: steps that change coupled board state (<em>Mutator</em>), steps whose cost, availability, or output depends on it (<em>Sensitive</em>), and independent steps (<em>Invariant</em>).</td>
+      <td><code>BoardArithmeticProfile</code> (<code>mana/profile.rs</code>) + <code>coupling()</code> and <code>loses_rules</code> in <code>mana/coupled.rs</code> + <code>mana_ability_reads()</code> in <code>flow/layers.rs</code>.</td>
       <td><strong>No</strong></td>
-      <td><strong>Biggest mismatch.</strong> An action's legality has no single coupled owner: callers mutate the frozen source list instead of stepping the fork, fast paths (<code>fixed_sufficient</code>, <code>PaymentCache</code>, <code>determined_source_counts</code>, <code>equivalent_mana_choices</code>, <code>automatic_units_within</code>) bypass <code>cached_plan</code>, and <code>help_obligations</code> pre-subtracts delve at the root and discards <code>help.delve</code>.</td>
+      <td><strong>Biggest mismatch.</strong> Three blind spots break the closed whitelist contract: (a) <code>coupling()</code> scopes <code>sensitive_tap()</code> (<code>writes_non_pt</code>) to <code>ability.tap_source</code> and <code>loses_rules</code> to <code>fixed</code> only, classifying non-tapping abilities under static discounts/grants as <code>Invariant</code>; (b) <code>mana_ability_reads()</code> omits <code>ability.cost_reduction_per</code>; (c) <code>expand()</code>'s pure handoff keeps <code>source.untapped = true</code> under <code>stateful_tap()</code>, letting <code>Obligation::Tap</code> mutate <code>tapped</code> before frozen non-tap outputs.</td>
     </tr>
     <tr>
-      <td><strong>Coupling roles</strong>: steps that change coupled board state (<em>Mutator</em>), steps whose output/cost/triggers depend on it (<em>Sensitive</em>), and independent steps (<em>Invariant</em>).</td>
-      <td><code>BoardArithmeticProfile</code> + <code>PaymentCoupling::{Invariant, Sensitive, Mutator}</code> in classifier, but Pass 2 search branches only on Mutators (treating Sensitive like Invariant) and deduplicates via <code>same_payment_profile</code>.</td>
+      <td><strong>Manual payment offers on a coupled board</strong>: every completing fixed tap, simple choice tap, activated mana ability, help tap, or Delve exile is offered; stranding steps are excluded.</td>
+      <td><code>compute_announced_mana_actions</code>, <code>resolution_mana_actions</code>, <code>useful_payment_taps</code> (<code>mana.rs</code>), and <code>help_actions</code> (<code>payment.rs</code>).</td>
       <td><strong>No</strong></td>
-      <td><strong>One concept dropped mid-flight.</strong> Not branching on <code>Sensitive</code> sources breaks <code>34092c814</code> (Audience before Citadel/Canyon), <code>a90fd7109</code> (Mountain tap before counter removal), and <code>PreventAll</code> before Citadel. <code>same_payment_profile</code> ignores <code>tap_candidates</code> membership. <code>BoardArithmeticProfile</code> also misses <code>Modification::{ExileIfWouldDie, ExileIfWouldLeave}</code> in <code>state.effects</code>.</td>
+      <td><strong>Rule unfinished on two reachable surfaces.</strong> (a) <code>resolution_mana_actions</code> omits <code>|| model.coupled().is_some()</code> from <code>explicit</code> (present in <code>compute_announced_mana_actions</code>), while <code>useful_payment_taps</code>'s coupled branch emits only <code>source.fixed</code>—dropping simple choice-tap lands during resolution payments whenever <code>can_pay</code> is true. (b) <code>help_actions</code> blindly offers every <code>graveyard_payers</code> card for Delve without checking post-exile feasibility, and <code>PaymentModel::coupled()</code> ignores Delve when no sacrifice mana ability is present.</td>
     </tr>
     <tr>
-      <td><strong>Equivalent payment states reached in different orders</strong> (memoization / transposition).</td>
-      <td>Memo key = <code>fork.state.deterministic_hash()</code> + separate abstract <code>pool</code> + obligations + reservations.</td>
+      <td><strong>In-flight mana spending for an upfront fee</strong> (<code>Decision::ManaSpend</code> with <code>SpendCompletion::Upfront</code>): spending must leave the activation's own life cost and enclosing callers payable.</td>
+      <td><code>mana_spend_choices</code> (<code>mana.rs:6086</code>) → <code>PaymentCandidate::Spend</code> (<code>coupled.rs:397</code>) vs. <code>fund_upfront</code> (<code>coupled.rs:825</code>).</td>
       <td><strong>No</strong></td>
-      <td><strong>Wrong concept for the key, and two pools.</strong> <code>deterministic_hash()</code> hashes <code>events</code>, <code>pending_events</code>, <code>observation_events</code>, <code>pending_triggers</code>, <code>id_gen</code>, and <code>mana_pool</code> in chronological order—it is a path-history digest, not a state equivalence key. Two orders of commutative Mutators never hit the memo table, while paying full JSON+BLAKE3 serialization of the match's <code>EventLedger</code> at every node. Keeping a separate abstract <code>pool</code> also diverges from <code>fork.state.players[p].mana_pool</code>, breaking <code>Condition::UnspentManaAtLeast</code>.</td>
+      <td><strong>One transition, two paths.</strong> <code>fund_upfront</code> checks <code>game.life_budget(player).can_pay(life_cost)</code> before <code>complete_mana_upfront</code>, but <code>PaymentCandidate::Spend</code> calls <code>complete_mana_upfront</code> without checking <code>life_budget</code> or source presence—allowing unpayable upfront life costs to pass when outer obligations are empty.</td>
     </tr>
     <tr>
-      <td><strong>In-flight mana activation</strong> waiting on its mana fee, counter/sacrifice replacements, or bonus choices.</td>
-      <td><code>fork</code> clears <code>suspended_decision</code>; <code>payment_obligations</code> collapses <code>ManaUpfront</code> / <code>ManaOutput</code> into pure <code>Obligation::Output { choices, life_cost, life_delta }</code>.</td>
+      <td><strong>Ordinary-board fast path</strong> (Engine Budget): boards with no coupling pay one cached profile read and stay on pure <code>PaymentModel</code> + <code>PaymentCache</code>.</td>
+      <td><code>PaymentModel.coupled: Option&lt;CoupledPayment&gt;</code> is always <code>Some</code> on live models; <code>model.coupled()</code> rescans <code>sources</code> and calls <code>has_mutating_caller()</code> (which clones <code>Game</code> inside <code>mana_suffix_life_delta</code>) at every caller.</td>
       <td><strong>No</strong></td>
-      <td><strong>Lifecycle flattened into arithmetic.</strong> Drops <code>ManaUpfrontActivation</code> and any suspended <code>OrderReplacement</code> / <code>PendingManaOutput</code> frame. A suspended <code>ManaUpfront</code> whose grant already ended (Pass 3 fixture) cannot be completed natively on <code>fork</code>, and an in-flight <code>OrderReplacement</code> (Caradora + Doubling Season) cannot be stepped once <code>suspended_decision</code> is cleared.</td>
+      <td><strong>Repeated recomputation where a per-model fact belongs.</strong> <code>model.coupled()</code> runs inside loops (<code>mana_spend_choices</code>, <code>help_taps</code>, <code>useful_payment_taps</code>), allocates <code>reservations: Vec</code> on uncoupled reserved models, has a redundant <code>stateful_tap()</code> check inside <code>sources.iter().any(...)</code>, and clones <code>Game</code> on every call while a suffixed <code>ManaUpfront</code> is suspended.</td>
     </tr>
     <tr>
-      <td><strong>Tapping a fixed-mana permanent whose triggered bonus needs a color choice</strong> (CR 106.12a / 605.4a).</td>
-      <td><code>ManaSource.fixed: Option&lt;FixedOutput&gt;</code> with <code>FixedOutput::{Exact(Mana), Choice(ManaChoices)}</code> across ~38 <code>.fixed</code> sites; <code>preview_tap</code> left assuming exact taps.</td>
-      <td><strong>No</strong></td>
-      <td><strong>One field for two ideas.</strong> <code>source.fixed</code> meant "one deterministic automatic output." Splitting it into an enum duplicates multi-output choice logic already in <code>ManaActivation</code> across bounds, witness search, floats, and taps, and misses <code>PaymentPreview::preview_tap</code> (called directly when hovering <code>Action::TapForMana</code>) and <code>producible_mana</code>.</td>
-    </tr>
-    <tr>
-      <td><strong>Announced non-mana activation</strong> keeping its priced cost and rules text until it reaches the stack (CR 602.2b).</td>
-      <td>Owned <code>(priced_cost, unfinalized ActivatedAbilityDefinition)</code> on <code>ActivatedTargeting</code> and <code>Operation::Activation</code>; <code>PendingChoice::ActivationX</code> left re-indexing live <code>characteristics</code>; priority scans construct owned <code>Operation::Activation</code>.</td>
-      <td><strong>No</strong></td>
-      <td><strong>Rule unfinished on one stage, redundant fields elsewhere.</strong> Leaves <code>PendingChoice::ActivationX</code> re-reading <code>activated_abilities[ability_index]</code>. Non-mana abilities have no dynamic mana output, so one finalized <code>ActivatedAbilityDefinition</code> already holds both priced cost and text. Cloning it on every priority scan adds unnecessary heap churn. Also, <code>Operation::Activation</code> is already inside <code>GameState.suspended_decision</code> (hashed directly by <code>deterministic_hash</code>), not only <code>PendingChoice</code>.</td>
-    </tr>
-    <tr>
-      <td><strong>Payer's replacement ordering during a payment</strong> (CR 616.1): only orders that complete the enclosing payment are legal; opponent orders are never filtered.</td>
-      <td>Filter <code>Decision::OrderReplacement</code> offers and admission when <code>has_enclosing_payment(chooser)</code>; payer OR / opponent AND in search.</td>
+      <td><strong>Equivalent payment states reached in different orders</strong> (transposition memoization + single mana pool).</td>
+      <td><code>CoupledMemoKey</code> (<code>coupled.rs:242</code>) + live <code>fork.state.players[player].mana_pool</code>.</td>
       <td><strong>Yes</strong></td>
-      <td>Matches CR 616.1 and the no-stranding contract once backed by live fork transitions (Findings 1 and 4) rather than clearing <code>suspended_decision</code>.</td>
+      <td>Sound Hash/Eq contract (<code>Counters</code> is sorted, event logs and <code>id_gen</code> are excluded, <code>fork</code> uses one real mana pool). Note: <code>Permanent.keyword_counter_timestamps</code> still carries <code>id_gen</code> <code>PublicId</code>s, which can miss transpositions between two keyword-counter additions (sound, just conservative).</td>
+    </tr>
+    <tr>
+      <td><strong>Fixed-mana tap whose triggered bonus opens a color choice</strong> (CR 106.12a / 605.4a).</td>
+      <td><code>source.fixed: Option&lt;Mana&gt;</code> for exact taps; <code>ManaActivationKind::FixedTap</code> (<code>automatic: false</code>) + <code>produce_fixed_tap</code> + <code>PaymentPreviewState::NeedsChoice</code> + <code>matches_view_after_tap</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Cleanly separates deterministic batch taps from choice-opening fixed taps across manual play, automatic play, upfront fees, receipts, and hover preview without splitting <code>source.fixed</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Payer vs. opponent replacement ordering during payment</strong> (CR 616.1).</td>
+      <td><code>Decision::OrderReplacement</code> filtered by <code>replacement_order_payable</code>; payer OR / opponent AND in <code>CoupledSearch::expand</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Payer orders that strand a committed payment are omitted and rejected on execution; optional resolution payments and opponent orders remain unfiltered; opponent orders require every branch to complete before offering the payment.</td>
+    </tr>
+    <tr>
+      <td><strong>Announced non-mana activation</strong> keeping priced cost, rules text, and acquired grant key through X, targeting, and payment (CR 602.2b).</td>
+      <td><code>Operation&lt;A = Box&lt;ActivatedAbilityDefinition&gt;&gt;</code>, <code>ActivatedTargeting&lt;A&gt;</code>, <code>PendingChoice::ActivationX</code>, <code>serialize_announced_ability</code>, <code>ReferenceCensus::walk_announced_ability</code>, hash v36.</td>
+      <td><strong>Yes</strong></td>
+      <td>Consistent across all three announcement stages, zero-clone priority scans via <code>Borrow</code>, explicit zone check retained for card activations, and <code>origin/main</code> is already at v35 so v36 is cleanly required.</td>
     </tr>
   </tbody>
 </table>
 
-<h2>Concrete interaction walk: where the current plan breaks</h2>
+<h2>Concrete interaction walk: where the built implementation breaks</h2>
 
-<p>Walk <code>fixed_mana_suffix_reads_life_through_damage_replacement</code> (<code>0d7bb6743</code>: 4 life, Henge <code>+2</code>, Citadel <code>-3 - life_gained_this_turn</code>, owing <code>{G}{G}{R}</code> + 2 life) and <code>a90fd7109</code> (Mountain tap + trample-counter removal beside trample-reading Heartbeat, owing <code>{G}{R}{R}</code>) through Pass 2 as written:</p>
+<p>Walk two minimal variations of Pass 3's own committed coupled boards through <code>HEAD</code> (<code>b0cd922864</code>):</p>
 
 <ol>
-  <li><strong>Offer check:</strong> <code>mana_ability_actions_with</code> checks whether Henge-first (<code>0d7bb6743</code>) or counter-first (<code>a90fd7109</code>) is legal by calling <code>PaymentModel::activation_payable</code> (<code>mana.rs:1741</code>).</li>
-  <li><strong>Failure in the planned boundary:</strong> <code>activation_payable</code> clones the frozen <code>PaymentModel</code>, removes the tap/counter from <code>model.sources</code>, prepends a pure <code>Obligation::Output { choices, life_cost, life_delta }</code>, and calls <code>model.payable(...)</code>. It <em>never executes Henge or removes Mountain's trample counter on <code>fork</code></em>.</li>
-  <li><strong>Resulting wrong answer:</strong> When <code>cached_plan</code> forks <code>self.game</code>, <code>fork.state.turn.history[0].life_gained</code> is still <code>0</code> (in <code>0d7bb6743</code>) and Mountain still has its trample counter (in <code>a90fd7109</code>). Stepping Citadel on <code>fork</code> still deals 3 damage instead of 5; tapping Mountain still triggers Heartbeat for <code>{R}{R}</code>. Both stranding actions are still offered and still crash with <code>AgentError("empty non-terminal action space")</code>.</li>
-  <li><strong>Same failure on Delve + sacrifice (Pass 3):</strong> <code>help_obligations</code> (<code>mana/help.rs:73</code>) reads <code>self.graveyard_payers(player, spell).len()</code> at the root (= 0) and discards <code>help.delve</code> before calling <code>model.payable</code>. Sacrificing a non-token creature on <code>fork</code> adds a card to the graveyard that the coupled search does not even know can pay generic delve mana.</li>
-  <li><strong>Same failure on <code>34092c814</code>:</strong> At 25 life (after Citadel #1, with Citadel #2 and Raucous Audience untapped, casting Solemn Simulacrum <code>{4}</code>), Citadel #2 has <code>mana_cost = {0}</code>. Pass 2's rule branches on Sensitive sources "only as far as funding a Mutator's own mana cost needs," so it never tries Audience (<code>Sensitive</code>) before Citadel #2 (<code>Mutator</code>), and wrongly reports the cast unpayable.</li>
-  <li><strong>Recovery / simpler model:</strong> Make the coupled authority accept a <em>structured payment query</em> (reservations, <code>Help</code>, pending live activations, and an optional candidate first step—activate, tap, mana choice, or replacement order—executed natively on the fork before searching). Branch on both <code>Mutator</code> and <code>Sensitive</code> sources; sync <code>fork</code>'s real mana pool with the search; memoize on a payment-state fingerprint that excludes event logs.</li>
+  <li><strong>Non-tapping discounted mana ability (variation of <code>coupled_fee_discount_reads_counters_removed_by_another_activation</code>, <code>coupled_boards.rs:402</code>):</strong>
+    Same board—White Lotus Tile granting <code>ActivatedAbilitiesCostLess { predicate: creature with counter, generic: 1 }</code>, Mountain (<code>{R}</code>), and a creature with a <code>+1/+1</code> counter and two mana abilities:
+    <ul>
+      <li>Ability 0: <code>{1}{R}, Pay 1 life: Add {G}{G}</code> (no <code>tap_source</code>, discounted to <code>{R}</code> while it has a counter),</li>
+      <li>Ability 1: <code>Remove a +1/+1 counter: Add {B}</code>,</li>
+    </ul>
+    paying <code>{G}{G}{B}</code>. The legal order is Ability 0 first (funded by Mountain at the discounted <code>{R}</code> fee), then Ability 1.
+    <br><strong>Failure in <code>HEAD</code>:</strong> <code>coupling()</code> (<code>coupled.rs:98</code>) checks <code>ability.facts.reads || ability.tap_source &amp;&amp; profile.sensitive_tap()</code>. Because Ability 0 has <code>tap_source == false</code> and its discount comes from another permanent's <code>StaticAbility::ActivatedAbilitiesCostLess</code> (not <code>ability.cost_reduction_per</code>), <code>coupling()</code> classifies Ability 0 as <strong><code>Invariant</code></strong>. In <code>expand()</code> (line 681), <code>Invariant</code> abilities are skipped outside <code>funding</code>; the search tries only Ability 1 (<code>Mutator</code>) first, removes the counter, loses the discount (now <code>{1}{R}</code> with only Mountain), and <strong>falsely reports the legal payment unpayable</strong>. The exact same failure hits any non-tapping mana ability granted by a sacrificed rule source because <code>loses_rules</code> (line 592) only promotes <code>fixed</code>, not <code>abilities</code>.
+  </li>
+  <li><strong>Delve exile beside a graveyard-reading mana source (variation of <code>coupled_delve_counts_only_sacrifices_that_reach_the_graveyard</code>, <code>coupled_boards.rs:267</code>):</strong>
+    Cast a <code>{1}{G}{G}{G}</code> Delve spell with 1 card in graveyard, 1 Forest, and 1 mana source with <code>Condition::GraveyardAtLeast { count: 1 }</code> (<code>{G}{G}</code> if graveyard ≥ 1, else <code>{G}</code>).
+    <br><strong>Failure in <code>HEAD</code>:</strong> First, <code>PaymentModel::coupled()</code> returns <code>None</code> (no sacrificing mana ability is present), so Delve is never treated as coupled. Second, <code>help_actions()</code> (<code>payment.rs:1675</code>) emits <code>Action::SelectCard</code> for every card in <code>graveyard_payers</code> without testing whether exiling it leaves the rest payable. Taking that offered exile drops the graveyard to 0 cards, lowers the source to <code>{G}</code>, leaves <code>{G}{G}{G}</code> owed with only <code>{G}{G}</code> available, and crashes with <code>AgentError("empty non-terminal action space")</code>.
+  </li>
+  <li><strong>Recovery / aligned model:</strong> Make <code>coupling()</code> promote any ability (tapping or not) to <code>Sensitive</code> when <code>profile.writes_non_pt || loses_rules</code>, scan <code>cost_reduction_per</code> in <code>mana_ability_reads()</code>, block the pure handoff on <code>Obligation::Tap</code> under <code>stateful_tap()</code>, and treat Delve exile as a real candidate step checked against post-exile feasibility whenever graveyard-sensitive rules exist.</li>
 </ol>
 
-<h2>Biggest mismatch: frozen <code>PaymentModel</code> mutations vs. live coupled transitions</h2>
+<h2>Biggest mismatch: incomplete coupling classification vs. the closed whitelist contract</h2>
 
-<p>Existing code in <code>managym/src/flow/mana.rs</code> and <code>managym/src/flow/mana/help.rs</code> shows why intercepting <code>cached_plan</code> alone cannot catch coupled transitions—callers already flattened the candidate action, delve count, reservations, and fast paths before <code>cached_plan</code> is ever reached:</p>
+<p>In <code>coupled.rs</code> and <code>layers.rs</code>, the role classifier and pure handoff omit non-tapping sensitive abilities, <code>cost_reduction_per</code> predicates, and counted taps under <code>stateful_tap()</code>:</p>
 
-<div class="lf-codeblock" data-path="managym/src/flow/mana.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana.rs:1741-1765</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="1741"><td class="lf-ln lf-ln-single">1741</td><td>    fn activation_payable(</td></tr>
-<tr class="lf-code-row" data-line="1742"><td class="lf-ln lf-ln-single">1742</td><td>        &amp;self,</td></tr>
-<tr class="lf-code-row" data-line="1743"><td class="lf-ln lf-ln-single">1743</td><td>        source_index: usize,</td></tr>
-<tr class="lf-code-row" data-line="1744"><td class="lf-ln lf-ln-single">1744</td><td>        ability_pos: usize,</td></tr>
-<tr class="lf-code-row" data-line="1745"><td class="lf-ln lf-ln-single">1745</td><td>        pool: &amp;Mana,</td></tr>
-<tr class="lf-code-row" data-line="1746"><td class="lf-ln lf-ln-single">1746</td><td>        pending_obligations: &amp;[Obligation],</td></tr>
-<tr class="lf-code-row" data-line="1747"><td class="lf-ln lf-ln-single">1747</td><td>    ) -&gt; bool {</td></tr>
-<tr class="lf-code-row" data-line="1748"><td class="lf-ln lf-ln-single">1748</td><td>        let source = &amp;self.sources[source_index];</td></tr>
-<tr class="lf-code-row" data-line="1749"><td class="lf-ln lf-ln-single">1749</td><td>        let ability = &amp;source.abilities[ability_pos];</td></tr>
-<tr class="lf-code-row" data-line="1750"><td class="lf-ln lf-ln-single">1750</td><td>        let mut model = self.clone();</td></tr>
-<tr class="lf-code-row" data-line="1751"><td class="lf-ln lf-ln-single">1751</td><td>        model.reserve_mana_activation(</td></tr>
-<tr class="lf-code-row" data-line="1752"><td class="lf-ln lf-ln-single">1752</td><td>            source.permanent,</td></tr>
-<tr class="lf-code-row" data-line="1753"><td class="lf-ln lf-ln-single">1753</td><td>            ability.tap_source,</td></tr>
-<tr class="lf-code-row" data-line="1754"><td class="lf-ln lf-ln-single">1754</td><td>            ability.sacrifice_source,</td></tr>
-<tr class="lf-code-row" data-line="1755"><td class="lf-ln lf-ln-single">1755</td><td>            ability.counter_cost.map(|cost| (cost.kind, cost.amount)),</td></tr>
-<tr class="lf-code-row" data-line="1756"><td class="lf-ln lf-ln-single">1756</td><td>        );</td></tr>
-<tr class="lf-code-row" data-line="1757"><td class="lf-ln lf-ln-single">1757</td><td>        if ability.limited {</td></tr>
-<tr class="lf-code-row" data-line="1758"><td class="lf-ln lf-ln-single">1758</td><td>            Arc::make_mut(&amp;mut model.sources)[source_index]</td></tr>
-<tr class="lf-code-row" data-line="1759"><td class="lf-ln lf-ln-single">1759</td><td>                .abilities</td></tr>
-<tr class="lf-code-row" data-line="1760"><td class="lf-ln lf-ln-single">1760</td><td>                .retain(|a| a.ability_index != ability.ability_index);</td></tr>
-<tr class="lf-code-row" data-line="1761"><td class="lf-ln lf-ln-single">1761</td><td>        }</td></tr>
-<tr class="lf-code-row" data-line="1762"><td class="lf-ln lf-ln-single">1762</td><td>        let mut obligations = PaymentModel::activation_obligations(ability);</td></tr>
-<tr class="lf-code-row" data-line="1763"><td class="lf-ln lf-ln-single">1763</td><td>        obligations.extend_from_slice(pending_obligations);</td></tr>
-<tr class="lf-code-row" data-line="1764"><td class="lf-ln lf-ln-single">1764</td><td>        model.payable(pool.clone(), obligations, SourcePolicy::All)</td></tr>
-<tr class="lf-code-row" data-line="1765"><td class="lf-ln lf-ln-single">1765</td><td>    }</td></tr>
+<div class="lf-codeblock" data-path="managym/src/flow/mana/coupled.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/coupled.rs:88-104</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,872 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="88"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">88</td><td class="lf-sign">+</td><td>fn coupling(</td></tr>
+<tr class="lf-add lf-code-row" data-line="89"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">89</td><td class="lf-sign">+</td><td>    profile: BoardArithmeticProfile,</td></tr>
+<tr class="lf-add lf-code-row" data-line="90"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">90</td><td class="lf-sign">+</td><td>    help: Help,</td></tr>
+<tr class="lf-add lf-code-row" data-line="91"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">91</td><td class="lf-sign">+</td><td>    ability: &amp;ManaActivation,</td></tr>
+<tr class="lf-add lf-code-row" data-line="92"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">92</td><td class="lf-sign">+</td><td>) -&gt; PaymentCoupling {</td></tr>
+<tr class="lf-add lf-code-row" data-line="93"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">93</td><td class="lf-sign">+</td><td>    if profile.reads_mana</td></tr>
+<tr class="lf-add lf-code-row" data-line="94"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">94</td><td class="lf-sign">+</td><td>        || profile.stateful_tap() &amp;&amp; (ability.tap_source || ability.tap_count &gt; 0)</td></tr>
+<tr class="lf-add lf-code-row" data-line="95"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">95</td><td class="lf-sign">+</td><td>        || profile.activation_mutates(ability.facts, help)</td></tr>
+<tr class="lf-add lf-code-row" data-line="96"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">96</td><td class="lf-sign">+</td><td>    {</td></tr>
+<tr class="lf-add lf-code-row" data-line="97"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">97</td><td class="lf-sign">+</td><td>        PaymentCoupling::Mutator</td></tr>
+<tr class="lf-add lf-code-row" data-line="98"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">98</td><td class="lf-sign">+</td><td>    } else if ability.facts.reads || ability.tap_source &amp;&amp; profile.sensitive_tap() {</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Only checks <code>profile.sensitive_tap()</code> when <code>ability.tap_source</code> is true; non-tapping abilities affected by <code>writes_non_pt</code> (static grants, <code>ActivatedAbilitiesCostLess</code>) or <code>loses_rules</code> fall into <code>Invariant</code>.</td></tr>
+<tr class="lf-add lf-code-row" data-line="99"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">99</td><td class="lf-sign">+</td><td>        PaymentCoupling::Sensitive</td></tr>
+<tr class="lf-add lf-code-row" data-line="100"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">100</td><td class="lf-sign">+</td><td>    } else {</td></tr>
+<tr class="lf-add lf-code-row" data-line="101"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">101</td><td class="lf-sign">+</td><td>        PaymentCoupling::Invariant</td></tr>
+<tr class="lf-add lf-code-row" data-line="102"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">102</td><td class="lf-sign">+</td><td>    }</td></tr>
+<tr class="lf-add lf-code-row" data-line="103"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">103</td><td class="lf-sign">+</td><td>}</td></tr>
+<tr class="lf-add lf-code-row" data-line="104"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">104</td><td class="lf-sign">+</td><td></td></tr>
 </tbody></table></div></div>
-<div class="lf-codeblock" data-path="managym/src/flow/mana.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana.rs:2684-2702</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="2684"><td class="lf-ln lf-ln-single">2684</td><td>    fn payable(&amp;self, pool: Mana, obligations: Vec&lt;Obligation&gt;, policy: SourcePolicy) -&gt; bool {</td></tr>
-<tr class="lf-code-row" data-line="2685"><td class="lf-ln lf-ln-single">2685</td><td>        if let Some(direct) = self.direct(&amp;obligations, policy) {</td></tr>
-<tr class="lf-code-row" data-line="2686"><td class="lf-ln lf-ln-single">2686</td><td>            let payable = self.direct_payable(&amp;pool, &amp;direct);</td></tr>
-<tr class="lf-code-row" data-line="2687"><td class="lf-ln lf-ln-single">2687</td><td>            debug_assert_eq!(</td></tr>
-<tr class="lf-code-row" data-line="2688"><td class="lf-ln lf-ln-single">2688</td><td>                payable,</td></tr>
-<tr class="lf-code-row" data-line="2689"><td class="lf-ln lf-ln-single">2689</td><td>                self.search(pool, obligations.clone(), policy).is_some(),</td></tr>
-<tr class="lf-code-row" data-line="2690"><td class="lf-ln lf-ln-single">2690</td><td>                &quot;direct payment answer differs from the search&quot;</td></tr>
-<tr class="lf-code-row" data-line="2691"><td class="lf-ln lf-ln-single">2691</td><td>            );</td></tr>
-<tr class="lf-code-row" data-line="2692"><td class="lf-ln lf-ln-single">2692</td><td>            return payable;</td></tr>
-<tr class="lf-code-row" data-line="2693"><td class="lf-ln lf-ln-single">2693</td><td>        }</td></tr>
-<tr class="lf-code-row" data-line="2694"><td class="lf-ln lf-ln-single">2694</td><td>        if policy == SourcePolicy::All &amp;&amp; self.fixed_sufficient(&amp;pool, self.life, &amp;obligations) {</td></tr>
-<tr class="lf-code-row" data-line="2695"><td class="lf-ln lf-ln-single">2695</td><td>            debug_assert!(</td></tr>
-<tr class="lf-code-row" data-line="2696"><td class="lf-ln lf-ln-single">2696</td><td>                self.search(pool, obligations.clone(), policy).is_some(),</td></tr>
-<tr class="lf-code-row" data-line="2697"><td class="lf-ln lf-ln-single">2697</td><td>                &quot;fixed-sufficient payment fast-path differed from the search&quot;</td></tr>
-<tr class="lf-code-row" data-line="2698"><td class="lf-ln lf-ln-single">2698</td><td>            );</td></tr>
-<tr class="lf-code-row" data-line="2699"><td class="lf-ln lf-ln-single">2699</td><td>            return true;</td></tr>
-<tr class="lf-code-row" data-line="2700"><td class="lf-ln lf-ln-single">2700</td><td>        }</td></tr>
-<tr class="lf-code-row" data-line="2701"><td class="lf-ln lf-ln-single">2701</td><td>        self.plan(pool, obligations, policy).is_some()</td></tr>
-<tr class="lf-code-row" data-line="2702"><td class="lf-ln lf-ln-single">2702</td><td>    }</td></tr>
+
+<div class="lf-codeblock" data-path="managym/src/flow/mana/coupled.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/coupled.rs:574-626</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,872 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="574"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">574</td><td class="lf-sign">+</td><td>        let mut pure = model.clone();</td></tr>
+<tr class="lf-add lf-code-row" data-line="575"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">575</td><td class="lf-sign">+</td><td>        let loses_rules = model</td></tr>
+<tr class="lf-add lf-code-row" data-line="576"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">576</td><td class="lf-sign">+</td><td>            .sources</td></tr>
+<tr class="lf-add lf-code-row" data-line="577"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">577</td><td class="lf-sign">+</td><td>            .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="578"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">578</td><td class="lf-sign">+</td><td>            .flat_map(|s| &amp;s.abilities)</td></tr>
+<tr class="lf-add lf-code-row" data-line="579"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">579</td><td class="lf-sign">+</td><td>            .any(|a| a.facts.sacrifices &amp;&amp; a.facts.rule_source);</td></tr>
+<tr class="lf-add lf-code-row" data-line="580"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">580</td><td class="lf-sign">+</td><td>        let roles: Vec&lt;_&gt; = model</td></tr>
+<tr class="lf-add lf-code-row" data-line="581"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">581</td><td class="lf-sign">+</td><td>            .sources</td></tr>
+<tr class="lf-add lf-code-row" data-line="582"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">582</td><td class="lf-sign">+</td><td>            .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="583"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">583</td><td class="lf-sign">+</td><td>            .map(|source| {</td></tr>
+<tr class="lf-add lf-code-row" data-line="584"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">584</td><td class="lf-sign">+</td><td>                let abilities: Vec&lt;_&gt; = source</td></tr>
+<tr class="lf-add lf-code-row" data-line="585"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">585</td><td class="lf-sign">+</td><td>                    .abilities</td></tr>
+<tr class="lf-add lf-code-row" data-line="586"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">586</td><td class="lf-sign">+</td><td>                    .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="587"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">587</td><td class="lf-sign">+</td><td>                    .map(|a| coupling(profile, self.payment.help, a))</td></tr>
+<tr class="lf-add lf-code-row" data-line="588"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">588</td><td class="lf-sign">+</td><td>                    .collect();</td></tr>
+<tr class="lf-add lf-code-row" data-line="589"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">589</td><td class="lf-sign">+</td><td>                let fixed = if profile.stateful_tap() {</td></tr>
+<tr class="lf-add lf-code-row" data-line="590"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">590</td><td class="lf-sign">+</td><td>                    PaymentCoupling::Mutator</td></tr>
+<tr class="lf-add lf-code-row" data-line="591"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">591</td><td class="lf-sign">+</td><td>                } else if profile.sensitive_tap()</td></tr>
+<tr class="lf-add lf-code-row" data-line="592"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">592</td><td class="lf-sign">+</td><td>                    || loses_rules</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4"><code>loses_rules</code> promotes <code>fixed</code> taps to <code>Sensitive</code>, but never promotes <code>abilities</code>.</td></tr>
+<tr class="lf-add lf-code-row" data-line="593"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">593</td><td class="lf-sign">+</td><td>                    || abilities.contains(&amp;PaymentCoupling::Mutator)</td></tr>
+<tr class="lf-add lf-code-row" data-line="594"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">594</td><td class="lf-sign">+</td><td>                {</td></tr>
+<tr class="lf-add lf-code-row" data-line="595"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">595</td><td class="lf-sign">+</td><td>                    PaymentCoupling::Sensitive</td></tr>
+<tr class="lf-add lf-code-row" data-line="596"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">596</td><td class="lf-sign">+</td><td>                } else {</td></tr>
+<tr class="lf-add lf-code-row" data-line="597"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">597</td><td class="lf-sign">+</td><td>                    PaymentCoupling::Invariant</td></tr>
+<tr class="lf-add lf-code-row" data-line="598"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">598</td><td class="lf-sign">+</td><td>                };</td></tr>
+<tr class="lf-add lf-code-row" data-line="599"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">599</td><td class="lf-sign">+</td><td>                (fixed, abilities)</td></tr>
+<tr class="lf-add lf-code-row" data-line="600"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">600</td><td class="lf-sign">+</td><td>            })</td></tr>
+<tr class="lf-add lf-code-row" data-line="601"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">601</td><td class="lf-sign">+</td><td>            .collect();</td></tr>
+<tr class="lf-add lf-code-row" data-line="602"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">602</td><td class="lf-sign">+</td><td>        let mut concrete = obligations.clone();</td></tr>
+<tr class="lf-add lf-code-row" data-line="603"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">603</td><td class="lf-sign">+</td><td>        if let Some(delve) = delve {</td></tr>
+<tr class="lf-add lf-code-row" data-line="604"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">604</td><td class="lf-sign">+</td><td>            let revised = game.help_obligations(player, &amp;delve.cost, delve.permissions, delve.life);</td></tr>
+<tr class="lf-add lf-code-row" data-line="605"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">605</td><td class="lf-sign">+</td><td>            concrete.extend(revised);</td></tr>
+<tr class="lf-add lf-code-row" data-line="606"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">606</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="607"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">607</td><td class="lf-sign">+</td><td>        if !funding &amp;&amp; !profile.reads_mana {</td></tr>
+<tr class="lf-add lf-code-row" data-line="608"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">608</td><td class="lf-sign">+</td><td>            for (source, (fixed, roles)) in Arc::make_mut(&amp;mut pure.sources).iter_mut().zip(&amp;roles)</td></tr>
+<tr class="lf-add lf-code-row" data-line="609"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">609</td><td class="lf-sign">+</td><td>            {</td></tr>
+<tr class="lf-add lf-code-row" data-line="610"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">610</td><td class="lf-sign">+</td><td>                if *fixed == PaymentCoupling::Mutator {</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">When <code>profile.stateful_tap()</code> is true, <code>pure</code> clears <code>fixed</code>/help taps but leaves <code>source.untapped = true</code>, so <code>Obligation::Tap</code> can still tap permanents inside <code>pure.cached_plan</code>.</td></tr>
+<tr class="lf-add lf-code-row" data-line="611"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">611</td><td class="lf-sign">+</td><td>                    source.fixed = None;</td></tr>
+<tr class="lf-add lf-code-row" data-line="612"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">612</td><td class="lf-sign">+</td><td>                    source.waterbend = false;</td></tr>
+<tr class="lf-add lf-code-row" data-line="613"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">613</td><td class="lf-sign">+</td><td>                    source.keyword = false;</td></tr>
+<tr class="lf-add lf-code-row" data-line="614"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">614</td><td class="lf-sign">+</td><td>                    source.convoke_colors = ManaTypeSet::EMPTY;</td></tr>
+<tr class="lf-add lf-code-row" data-line="615"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">615</td><td class="lf-sign">+</td><td>                }</td></tr>
+<tr class="lf-add lf-code-row" data-line="616"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">616</td><td class="lf-sign">+</td><td>                let mut roles = roles.iter();</td></tr>
+<tr class="lf-add lf-code-row" data-line="617"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">617</td><td class="lf-sign">+</td><td>                source</td></tr>
+<tr class="lf-add lf-code-row" data-line="618"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">618</td><td class="lf-sign">+</td><td>                    .abilities</td></tr>
+<tr class="lf-add lf-code-row" data-line="619"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">619</td><td class="lf-sign">+</td><td>                    .retain(|_| *roles.next().unwrap() != PaymentCoupling::Mutator);</td></tr>
+<tr class="lf-add lf-code-row" data-line="620"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">620</td><td class="lf-sign">+</td><td>            }</td></tr>
+<tr class="lf-add lf-code-row" data-line="621"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">621</td><td class="lf-sign">+</td><td>            if let Some(path) = pure.cached_plan(pool.clone(), concrete.clone(), self.policy, None)</td></tr>
+<tr class="lf-add lf-code-row" data-line="622"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">622</td><td class="lf-sign">+</td><td>            {</td></tr>
+<tr class="lf-add lf-code-row" data-line="623"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">623</td><td class="lf-sign">+</td><td>                return Some(path);</td></tr>
+<tr class="lf-add lf-code-row" data-line="624"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">624</td><td class="lf-sign">+</td><td>            }</td></tr>
+<tr class="lf-add lf-code-row" data-line="625"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">625</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="626"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">626</td><td class="lf-sign">+</td><td>        if !funding &amp;&amp; obligations.is_empty() &amp;&amp; delve.is_none() {</td></tr>
 </tbody></table></div></div>
-<div class="lf-codeblock" data-path="managym/src/flow/mana/help.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/help.rs:66-89</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="66"><td class="lf-ln lf-ln-single">66</td><td>    fn help_obligations(</td></tr>
-<tr class="lf-code-row" data-line="67"><td class="lf-ln lf-ln-single">67</td><td>        &amp;self,</td></tr>
-<tr class="lf-code-row" data-line="68"><td class="lf-ln lf-ln-single">68</td><td>        player: PlayerId,</td></tr>
-<tr class="lf-code-row" data-line="69"><td class="lf-ln lf-ln-single">69</td><td>        cost: &amp;ManaCost,</td></tr>
-<tr class="lf-code-row" data-line="70"><td class="lf-ln lf-ln-single">70</td><td>        permissions: CostPermissionContext,</td></tr>
-<tr class="lf-code-row" data-line="71"><td class="lf-ln lf-ln-single">71</td><td>        life: u32,</td></tr>
-<tr class="lf-code-row" data-line="72"><td class="lf-ln lf-ln-single">72</td><td>    ) -&gt; Vec&lt;Obligation&gt; {</td></tr>
-<tr class="lf-code-row" data-line="73"><td class="lf-ln lf-ln-single">73</td><td>        let cost = match permissions.help.delve {</td></tr>
-<tr class="lf-code-row" data-line="74"><td class="lf-ln lf-ln-single">74</td><td>            Some(spell) =&gt; {</td></tr>
-<tr class="lf-code-row" data-line="75"><td class="lf-ln lf-ln-single">75</td><td>                let cards = self.graveyard_payers(player, spell).len();</td></tr>
-<tr class="lf-code-row" data-line="76"><td class="lf-ln lf-ln-single">76</td><td>                cost.reduced_generic(cards.min(usize::from(u8::MAX)) as u8)</td></tr>
-<tr class="lf-code-row" data-line="77"><td class="lf-ln lf-ln-single">77</td><td>            }</td></tr>
-<tr class="lf-code-row" data-line="78"><td class="lf-ln lf-ln-single">78</td><td>            None =&gt; cost.clone(),</td></tr>
-<tr class="lf-code-row" data-line="79"><td class="lf-ln lf-ln-single">79</td><td>        };</td></tr>
-<tr class="lf-code-row" data-line="80"><td class="lf-ln lf-ln-single">80</td><td>        let waterbend = permissions.waterbend.min(cost.generic());</td></tr>
-<tr class="lf-code-row" data-line="81"><td class="lf-ln lf-ln-single">81</td><td>        let keyword = if permissions.help.convoke || permissions.help.improvise {</td></tr>
-<tr class="lf-code-row" data-line="82"><td class="lf-ln lf-ln-single">82</td><td>            cost.generic() - waterbend</td></tr>
-<tr class="lf-code-row" data-line="83"><td class="lf-ln lf-ln-single">83</td><td>        } else {</td></tr>
-<tr class="lf-code-row" data-line="84"><td class="lf-ln lf-ln-single">84</td><td>            0</td></tr>
-<tr class="lf-code-row" data-line="85"><td class="lf-ln lf-ln-single">85</td><td>        };</td></tr>
-<tr class="lf-code-row" data-line="86"><td class="lf-ln lf-ln-single">86</td><td>        let mut obligations = tap_obligations(&amp;cost, keyword, waterbend, permissions.help.convoke);</td></tr>
-<tr class="lf-code-row" data-line="87"><td class="lf-ln lf-ln-single">87</td><td>        obligations.extend(Obligation::life(life));</td></tr>
-<tr class="lf-code-row" data-line="88"><td class="lf-ln lf-ln-single">88</td><td>        obligations</td></tr>
-<tr class="lf-code-row" data-line="89"><td class="lf-ln lf-ln-single">89</td><td>    }</td></tr>
+
+<div class="lf-codeblock" data-path="managym/src/flow/layers.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/layers.rs:641-671</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -629,6 +630,46 @@ impl ReadSet {</td></tr>
+<tr class="lf-add lf-code-row" data-line="641"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">641</td><td class="lf-sign">+</td><td>pub(super) fn mana_ability_reads(ability: &amp;ActivatedAbilityDefinition) -&gt; StateReads {</td></tr>
+<tr class="lf-add lf-code-row" data-line="642"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">642</td><td class="lf-sign">+</td><td>    fn output_reads(reads: &amp;mut ReadSet, output: &amp;Effect) {</td></tr>
+<tr class="lf-add lf-code-row" data-line="643"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">643</td><td class="lf-sign">+</td><td>        match output {</td></tr>
+<tr class="lf-add lf-code-row" data-line="644"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">644</td><td class="lf-sign">+</td><td>            Effect::If {</td></tr>
+<tr class="lf-add lf-code-row" data-line="645"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">645</td><td class="lf-sign">+</td><td>                condition,</td></tr>
+<tr class="lf-add lf-code-row" data-line="646"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">646</td><td class="lf-sign">+</td><td>                then,</td></tr>
+<tr class="lf-add lf-code-row" data-line="647"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">647</td><td class="lf-sign">+</td><td>                otherwise,</td></tr>
+<tr class="lf-add lf-code-row" data-line="648"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">648</td><td class="lf-sign">+</td><td>            } =&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="649"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">649</td><td class="lf-sign">+</td><td>                reads.condition(condition);</td></tr>
+<tr class="lf-add lf-code-row" data-line="650"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">650</td><td class="lf-sign">+</td><td>                for output in then.iter().chain(otherwise) {</td></tr>
+<tr class="lf-add lf-code-row" data-line="651"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">651</td><td class="lf-sign">+</td><td>                    output_reads(reads, output);</td></tr>
+<tr class="lf-add lf-code-row" data-line="652"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">652</td><td class="lf-sign">+</td><td>                }</td></tr>
+<tr class="lf-add lf-code-row" data-line="653"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">653</td><td class="lf-sign">+</td><td>            }</td></tr>
+<tr class="lf-add lf-code-row" data-line="654"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">654</td><td class="lf-sign">+</td><td>            Effect::AddMana { amount, .. } | Effect::AddOneColorManaValue { amount, .. } =&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="655"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">655</td><td class="lf-sign">+</td><td>                reads.value(amount);</td></tr>
+<tr class="lf-add lf-code-row" data-line="656"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">656</td><td class="lf-sign">+</td><td>            }</td></tr>
+<tr class="lf-add lf-code-row" data-line="657"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">657</td><td class="lf-sign">+</td><td>            _ =&gt; {}</td></tr>
+<tr class="lf-add lf-code-row" data-line="658"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">658</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="659"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">659</td><td class="lf-sign">+</td><td>    }</td></tr>
+<tr class="lf-add lf-code-row" data-line="660"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">660</td><td class="lf-sign">+</td><td>    let mut reads = ReadSet::default();</td></tr>
+<tr class="lf-add lf-code-row" data-line="661"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">661</td><td class="lf-sign">+</td><td>    if let Some((output, _)) = ability.mana_parts() {</td></tr>
+<tr class="lf-add lf-code-row" data-line="662"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">662</td><td class="lf-sign">+</td><td>        if let Some(condition) = &amp;ability.condition {</td></tr>
+<tr class="lf-add lf-code-row" data-line="663"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">663</td><td class="lf-sign">+</td><td>            reads.condition(condition);</td></tr>
+<tr class="lf-add lf-code-row" data-line="664"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">664</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="665"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">665</td><td class="lf-sign">+</td><td>        if let Some(tap) = &amp;ability.tap_cost {</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Scans <code>condition</code>, <code>tap_cost</code>, and <code>output</code>, but misses <code>ability.cost_reduction_per</code>.</td></tr>
+<tr class="lf-add lf-code-row" data-line="666"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">666</td><td class="lf-sign">+</td><td>            reads.predicate(&amp;tap.predicate);</td></tr>
+<tr class="lf-add lf-code-row" data-line="667"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">667</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="668"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">668</td><td class="lf-sign">+</td><td>        output_reads(&amp;mut reads, output);</td></tr>
+<tr class="lf-add lf-code-row" data-line="669"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">669</td><td class="lf-sign">+</td><td>    }</td></tr>
+<tr class="lf-add lf-code-row" data-line="670"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">670</td><td class="lf-sign">+</td><td>    reads.state</td></tr>
+<tr class="lf-add lf-code-row" data-line="671"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">671</td><td class="lf-sign">+</td><td>}</td></tr>
 </tbody></table></div></div>
 
 <div class="lf-before-after">
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">Before</div>
     
-    <h4>Planned (in <code>scratch/plan.md</code>)</h4>
+    <h4>Built at <code>HEAD</code> (<code>b0cd922864</code>)</h4>
     <ul>
-      <li><code>PaymentModel</code> gains <code>&amp;Game</code> + <code>payer</code>, and intercepts only <code>cached_plan</code>.</li>
-      <li>Callers still mutate frozen <code>PaymentModel</code> before querying:
-        <ul>
-          <li><code>activation_payable</code> strips resources and prepends pure <code>Obligation::Output</code> without executing the activation on <code>fork</code>.</li>
-          <li><code>after_tap</code> / <code>payable_after_tap</code> / <code>with_tapped</code> / <code>plan_after_tap</code> strip <code>untapped</code> without tapping on <code>fork</code>.</li>
-          <li><code>after_mana_choice</code> edits an abstract <code>pool</code> without updating <code>fork</code>'s pool.</li>
-          <li><code>help_obligations</code> pre-reduces delve at root and discards <code>Help</code>; <code>reserve</code> discards reservation records.</li>
-        </ul>
-      </li>
-      <li><code>PaymentModel::payable</code> hits <code>direct()</code> and <code>fixed_sufficient()</code> before <code>cached_plan</code>; <code>PaymentCache</code> keys only on <code>(sources, life, pool, obligations, policy, tap)</code>.</li>
-      <li>Search branches only on Mutators, clears <code>suspended_decision</code> (losing suspended <code>ManaUpfront</code> / <code>OrderReplacement</code>), and hashes <code>deterministic_hash()</code> (the full <code>EventLedger</code>).</li>
+      <li><code>coupling()</code> promotes to <code>Sensitive</code> only on <code>ability.facts.reads || ability.tap_source &amp;&amp; profile.sensitive_tap()</code>; <code>loses_rules</code> applies only to <code>fixed</code>.</li>
+      <li><code>mana_ability_reads()</code> skips <code>ability.cost_reduction_per</code>.</li>
+      <li><code>pure</code> handoff leaves <code>source.untapped = true</code> while <code>stateful_tap()</code> is active, allowing <code>Obligation::Tap</code> to mutate tap state inside the pure solver.</li>
+      <li><code>resolution_mana_actions</code> omits <code>|| model.coupled().is_some()</code> from <code>explicit</code>, dropping simple choice-tap lands when <code>can_pay</code> is true.</li>
+      <li><code>help_actions</code> offers every Delve graveyard card unchecked; <code>PaymentModel::coupled()</code> ignores Delve when no sacrifice mana ability exists.</li>
+      <li><code>PaymentCandidate::Spend</code> skips <code>life_budget(player).can_pay(life_cost)</code> before <code>complete_mana_upfront</code>.</li>
+      <li><code>model.coupled()</code> rescans <code>sources</code> and clones <code>Game</code> via <code>has_mutating_caller()</code> on every call.</li>
     </ul>
   
   </div>
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">After</div>
     
-    <h4>Proposed redesign (for this Task)</h4>
+    <h4>Aligned design (fixing the remaining gaps in this Task)</h4>
     <ul>
-      <li>Keep pure <code>PaymentModel</code> intact for uncoupled boards (zero overhead on TLA / ordinary boards), and record the structured <strong>query context</strong> alongside it:
-        <ul>
-          <li><code>reservations: Vec&lt;SourceReservation&gt;</code> + counter reservations,</li>
-          <li><code>help: Help</code> (<code>convoke</code>, <code>improvise</code>, <code>delve: Option&lt;ObjectId&gt;</code>) so delve and help taps re-evaluate on every fork step,</li>
-          <li><code>pending_upfront: Vec&lt;PendingUpfrontObligation&gt;</code> retaining the owned <code>ManaUpfrontActivation</code> (and any active <code>OrderReplacement</code> frame for the first step).</li>
-        </ul>
-      </li>
-      <li>Route every candidate-step check (<code>activation_payable</code>, <code>tap_payable</code> / <code>plan_after_tap</code> / <code>with_tapped</code>, <code>mana_choice_completes_payment</code>, and <code>OrderReplacement</code> candidate) through one <code>PaymentAuthority</code> entry that:
-        <ul>
-          <li>takes the fast pure <code>PaymentModel</code> + <code>PaymentCache</code> path whenever the question has no <code>Mutator</code> (and no active coupled <code>OrderReplacement</code>);</li>
-          <li>otherwise steps the candidate action <strong>natively on <code>fork</code></strong>, syncs <code>fork</code>'s real <code>mana_pool</code>, rebuilds sources + reservations + help + coupling, and runs the coupled fork search.</li>
-        </ul>
-      </li>
-      <li>Coupled search tries pure handoff (Mutators removed, only when no pending coupled <code>ManaUpfront</code>/<code>OrderReplacement</code> remains), otherwise branches on every <code>Mutator</code> and every <code>Sensitive</code> source (plus one representative per <code>sources_equivalent</code> class of <code>Invariant</code> sources only while funding a pending upfront mana fee), memoized on a <strong>payment-state fingerprint</strong> (permanents, life, turn histories, graveyard/exile contents, pool, obligations, reservations—never <code>events</code> or <code>id_gen</code>).</li>
+      <li>Promote any ability to <code>Sensitive</code> when <code>ability.facts.reads || profile.writes_non_pt || loses_rules || (ability.tap_source &amp;&amp; profile.stateful_triggers)</code> (preserving the 207-state bound on the 10-Forest Citadel/Angel/Audience board where <code>writes_non_pt</code> is false).</li>
+      <li>Include <code>ability.cost_reduction_per</code> in <code>mana_ability_reads()</code>.</li>
+      <li>Skip the pure handoff when <code>profile.stateful_tap()</code> and <code>concrete</code> contains <code>Obligation::Tap</code> (or clear <code>source.untapped = false</code> in <code>pure</code> when <code>*fixed == Mutator</code>).</li>
+      <li>Add <code>|| model.coupled().is_some()</code> to <code>explicit</code> in <code>resolution_mana_actions</code>, matching <code>compute_announced_mana_actions</code>.</li>
+      <li>Treat Delve exile on graveyard-reading boards as coupled and filter <code>help_actions</code> / <code>payment.rs:1250</code> through <code>PaymentCandidate::DelveExile(ObjectId)</code>.</li>
+      <li>Share the <code>life_budget</code> + source-presence guard between <code>fund_upfront</code> and <code>PaymentCandidate::Spend</code>.</li>
+      <li>Compute coupling once on <code>PaymentModel</code> (and avoid constructing/scanning <code>CoupledPayment</code> or cloning <code>Game</code> in <code>has_mutating_caller()</code> on uncoupled boards).</li>
     </ul>
   
   </div>
@@ -1062,21 +1115,21 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <div class="lf-decision" data-decision-id="f1">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F1 · Route candidate-step checks, reservations, delve/help, and fast paths through one coupled query boundary (This work)</span>
+    <span class="lf-decision-title">F1 · Close the three classifier and pure-handoff blind spots (non-tapping Sensitive abilities, cost_reduction_per, and Obligation::Tap under stateful_tap) (This work)</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
-  <p><strong>Scope:</strong> This work (Pass 2 &amp; Pass 3). Fixing this is required for the plan's own committed fixtures (<code>0d7bb6743</code>, <code>a90fd7109</code>, <code>34092c814</code>, delve + non-token sacrifice) to pass.</p>
+  <p><strong>Scope:</strong> This work (Pass 2/3 follow-up).</p>
   <p><strong>What breaks:</strong></p>
   <ul>
-    <li><code>activation_payable</code> (<code>mana.rs:1741</code>), <code>after_tap</code>/<code>payable_after_tap</code> (<code>mana.rs:2652</code>), <code>plan_after_tap</code> (<code>mana.rs:2502</code>), <code>with_tapped</code> (<code>mana/help.rs:228</code>), and <code>after_mana_choice</code> (<code>mana.rs:4778</code>) encode candidate first steps as frozen <code>PaymentModel</code> edits instead of native fork steps.</li>
-    <li><code>PaymentModel</code> does not retain its applied <code>SourceReservation</code>s, counter reservations, or <code>Help</code> (<code>convoke</code>, <code>improvise</code>, <code>delve</code>), and <code>help_obligations</code> pre-subtracts delve at the root and throws <code>help.delve</code> away (<code>mana/help.rs:73-79</code>).</li>
-    <li>Uncoupled shortcuts missed by Pass 2's list: <code>PaymentModel::fixed_sufficient</code> (<code>mana.rs:2694</code>), <code>PaymentCache</code> lookup (<code>mana.rs:2609</code>—its key omits coupled game state), <code>determined_source_counts</code> (<code>mana/interchangeable.rs:55</code>), <code>automatic_units_within</code> (<code>mana.rs:4141</code>), and <code>equivalent_mana_choices</code> (<code>mana.rs:4560</code>). All must defer to the coupled authority when a Mutator is present.</li>
+    <li><code>coupling()</code> (<code>coupled.rs:98</code>) checks <code>profile.sensitive_tap()</code> only when <code>ability.tap_source</code> is true, and <code>loses_rules</code> (<code>coupled.rs:592</code>) only promotes <code>fixed</code>. Any non-tapping mana ability affected by <code>ActivatedAbilitiesCostLess</code> or a Layer-6 static grant/removal (<code>writes_non_pt</code> or <code>loses_rules</code>) is misclassified as <code>Invariant</code> and skipped in <code>expand()</code>, falsely rejecting legal payments.</li>
+    <li><code>mana_ability_reads()</code> (<code>layers.rs:641-671</code>) never inspects <code>ability.cost_reduction_per</code>, so a mana ability whose generic cost reduction reads <code>tapped</code> fails to set <code>profile.reads_tapped</code>.</li>
+    <li><code>expand()</code>'s pure handoff (<code>coupled.rs:607-625</code>) strips tapping mana sources when <code>profile.stateful_tap()</code> is true, but leaves <code>source.untapped = true</code>. A counted-tap obligation (<code>Obligation::Tap</code>) can therefore tap a permanent inside <code>pure.cached_plan</code> without recomputing a non-tapping <code>Sensitive</code> mana ability that reads <code>tapped</code>.</li>
   </ul>
-  <p><strong>Recommendation:</strong> Store <code>reservations</code>, <code>counter_reservations</code>, and <code>help</code> on the payment query context; add explicit candidate-step entry points (activate, tap-for-mana, tap-for-cost, mana-choice, order-replacement) that run the candidate step natively on <code>fork</code> when coupled and delegate to existing pure methods when uncoupled. Bypass <code>PaymentCache</code>, <code>direct</code>, <code>fixed_sufficient</code>, <code>determined_source_counts</code>, <code>automatic_units_within</code>, and <code>equivalent_mana_choices</code> whenever the question is coupled.</p>
-  <p><strong>Passed over:</strong> Intercepting only <code>cached_plan</code> (fails all four coupled fixtures and delve-from-sacrifice).</p>
+  <p><strong>Recommendation:</strong> Pass <code>loses_rules</code> into <code>coupling()</code> and classify an ability as <code>Sensitive</code> whenever <code>ability.facts.reads || profile.writes_non_pt || loses_rules || (ability.tap_source &amp;&amp; profile.stateful_triggers)</code>; call <code>reads.predicate(predicate)</code> for <code>ability.cost_reduction_per</code> in <code>mana_ability_reads()</code>; clear <code>source.untapped = false</code> (or skip pure handoff when <code>concrete</code> has <code>Obligation::Tap</code>) whenever <code>*fixed == PaymentCoupling::Mutator</code>. Add regression tests for a non-tapping discounted mana ability and a <code>cost_reduction_per</code> tapped predicate.</p>
+  <p><strong>Passed over:</strong> Leaving non-tapping abilities as <code>Invariant</code> (breaks non-tapping discounted/granted abilities); marking every ability <code>Sensitive</code> unconditionally (would blow up the 10-Forest <code>{15}</code> rejection bound).</p>
 </div>
-  <div data-choice="f1" data-label="F1 · Route candidate-step checks, reservations, delve/help, and fast paths through one coupled query boundary (This work)">
+  <div data-choice="f1" data-label="F1 · Close the three classifier and pure-handoff blind spots (non-tapping Sensitive abilities, cost_reduction_per, and Obligation::Tap under stateful_tap) (This work)">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1086,21 +1139,61 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <div class="lf-decision" data-decision-id="f2">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F2 · Branch on Sensitive sources in coupled search, deduplicate with sources_equivalent, and scan EffectRecords in BoardArithmeticProfile (This work)</span>
+    <span class="lf-decision-title">F2 · Keep simple choice-tap lands offered during coupled resolution payments (This work)</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
-  <p><strong>Scope:</strong> This work (Pass 2).</p>
-  <p><strong>What breaks:</strong></p>
-  <ul>
-    <li><code>scratch/plan.md</code> line 44 collapses <code>Sensitive</code> into <code>Invariant</code> ("branch on each Mutator, and on Sensitive/Invariant sources only as far as funding a Mutator's own mana cost needs"), contradicting <code>7cb3655f1</code> design 1 ("branch only on coupled mutators and affected sources"). Whenever a Mutator has mana cost <code>{0}</code> and degrades a Sensitive source (Audience before Citadel/Canyon in <code>34092c814</code>; Mountain tap before trample counter in <code>a90fd7109</code>; <code>PreventAll</code> before Citadel at 3 life), the search never tries the Sensitive source first and falsely reports unpayable.</li>
-    <li>Deduplicating Invariant funders with <code>same_payment_profile</code> (<code>mana.rs:748</code>) ignores <code>tap_candidates</code> membership—two sources with identical mana output can differ in whether a counted-tap ability (e.g. Food) can tap them. Use <code>PurposeProjection::sources_equivalent</code> (<code>mana.rs:432</code>) with <code>tap_candidate_sets</code> instead.</li>
-    <li><code>BoardArithmeticProfile</code> scanning only <code>SourceSeed</code>s and <code>functioning_command_objects(None)</code> misses resolved <code>EffectRecords</code> in <code>game.state.effects</code> carrying <code>Modification::ExileIfWouldDie</code> / <code>Modification::ExileIfWouldLeave</code> (<code>state/src/effect.rs:110,117</code>), which redirect a sacrificed non-token creature to exile instead of the graveyard (affecting delve and graveyard-conditional mana).</li>
-  </ul>
-  <p><strong>Recommendation:</strong> Branch on every <code>Mutator</code> and every <code>Sensitive</code> source; keep <code>Invariant</code> sources (one representative per <code>sources_equivalent</code> class) solely for funding a Mutator's or Sensitive source's upfront mana cost, leaving all other Invariant use to the pure handoff. Include <code>state.effects</code> replacement modifications in <code>BoardArithmeticProfile</code>.</p>
-  <p><strong>Passed over:</strong> Branching on Invariant sources too (blows up the 10-Forest <code>{15}</code> board); branching on Mutators only (fails <code>34092c814</code> and <code>a90fd7109</code>).</p>
+  <p><strong>Scope:</strong> This work (unfinished rule on a reachable surface).</p>
+  <p><strong>What breaks:</strong> <code>compute_announced_mana_actions</code> forces <code>explicit = true</code> on coupled boards so <code>mana_ability_actions_with</code> emits simple choice-tap lands (<code>ability.automatic == true</code>), because <code>useful_payment_taps</code>'s coupled branch only emits <code>source.fixed</code> (<code>Action::TapForMana</code>). <code>resolution_mana_actions</code> omitted that clause:</p>
+  <div class="lf-codeblock" data-path="managym/src/flow/mana.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana.rs:4160-4169</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -4015,8 +4160,8 @@ impl Game {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="4015" data-line="4160"><td class="lf-ln lf-ln-old">4015</td><td class="lf-ln lf-ln-new">4160</td><td class="lf-sign"> </td><td>        let _scan = self.payment_scan();</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="4016" data-line="4161"><td class="lf-ln lf-ln-old">4016</td><td class="lf-ln lf-ln-new">4161</td><td class="lf-sign"> </td><td>        let cost = payment.mana().0;</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="4017" data-line="4162"><td class="lf-ln lf-ln-old">4017</td><td class="lf-ln lf-ln-new">4162</td><td class="lf-sign"> </td><td>        let extra = self.offers_extra_payment_taps(player);</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="4019" data-line="4163"><td class="lf-ln lf-ln-old">4019</td><td class="lf-ln lf-ln-new">4163</td><td class="lf-sign"> </td><td>        let model = self.payment_model(player, None);</td></tr>
+<tr class="lf-add lf-code-row" data-line="4164"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">4164</td><td class="lf-sign">+</td><td>        let explicit = extra || payment.waterbends() || model.coupled().is_some();</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="4020" data-line="4165"><td class="lf-ln lf-ln-old">4020</td><td class="lf-ln lf-ln-new">4165</td><td class="lf-sign"> </td><td>        let pool = self.pooled_mana(player);</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="4021" data-line="4166"><td class="lf-ln lf-ln-old">4021</td><td class="lf-ln lf-ln-new">4166</td><td class="lf-sign"> </td><td>        let mut actions = self.mana_ability_actions_with(&amp;model, player, explicit);</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="4022" data-line="4167"><td class="lf-ln lf-ln-old">4022</td><td class="lf-ln lf-ln-new">4167</td><td class="lf-sign"> </td><td>        let help = self.help_actions(player);</td></tr>
+</tbody></table></div></div>
+  <div class="lf-codeblock" data-path="managym/src/flow/mana.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana.rs:4206-4235</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="4206"><td class="lf-ln lf-ln-single">4206</td><td>        let _scan = self.payment_scan();</td></tr>
+<tr class="lf-code-row" data-line="4207"><td class="lf-ln lf-ln-single">4207</td><td>        let model = self.payment_model(player, None);</td></tr>
+<tr class="lf-code-row" data-line="4208"><td class="lf-ln lf-ln-single">4208</td><td>        let pool = self.pooled_mana(player);</td></tr>
+<tr class="lf-code-row" data-line="4209"><td class="lf-ln lf-ln-single">4209</td><td>        let (fixed_payable, auto_can_pay) = self.automatic_payability(&amp;model, &amp;pool, player, cost);</td></tr>
+<tr class="lf-code-row" data-line="4210"><td class="lf-ln lf-ln-single">4210</td><td>        let can_pay = tail_payable &amp;&amp; auto_can_pay;</td></tr>
+<tr class="lf-code-row" data-line="4211"><td class="lf-ln lf-ln-single">4211</td><td>        let extra = self.offers_extra_payment_taps(player);</td></tr>
+<tr class="lf-code-row" data-line="4212"><td class="lf-ln lf-ln-single">4212</td><td>        let explicit = !can_pay || payment.waterbends() || extra;</td></tr>
+<tr class="lf-code-row" data-line="4213"><td class="lf-ln lf-ln-single">4213</td><td>        let mut actions = self.mana_ability_actions_with(&amp;model, player, explicit);</td></tr>
+<tr class="lf-code-row" data-line="4214"><td class="lf-ln lf-ln-single">4214</td><td>        let help_actions: Vec&lt;Action&gt; =</td></tr>
+<tr class="lf-code-row" data-line="4215"><td class="lf-ln lf-ln-single">4215</td><td>            if tail_payable &amp;&amp; (permissions.help != Help::default() || permissions.waterbend &gt; 0) {</td></tr>
+<tr class="lf-code-row" data-line="4216"><td class="lf-ln lf-ln-single">4216</td><td>                self.help_taps(</td></tr>
+<tr class="lf-code-row" data-line="4217"><td class="lf-ln lf-ln-single">4217</td><td>                    player,</td></tr>
+<tr class="lf-code-row" data-line="4218"><td class="lf-ln lf-ln-single">4218</td><td>                    cost,</td></tr>
+<tr class="lf-code-row" data-line="4219"><td class="lf-ln lf-ln-single">4219</td><td>                    permissions,</td></tr>
+<tr class="lf-code-row" data-line="4220"><td class="lf-ln lf-ln-single">4220</td><td>                    &amp;self.waterbend_candidates(player),</td></tr>
+<tr class="lf-code-row" data-line="4221"><td class="lf-ln lf-ln-single">4221</td><td>                )</td></tr>
+<tr class="lf-code-row" data-line="4222"><td class="lf-ln lf-ln-single">4222</td><td>                .into_iter()</td></tr>
+<tr class="lf-code-row" data-line="4223"><td class="lf-ln lf-ln-single">4223</td><td>                .map(|(permanent, _)| Action::WaterbendTap { player, permanent })</td></tr>
+<tr class="lf-code-row" data-line="4224"><td class="lf-ln lf-ln-single">4224</td><td>                .collect()</td></tr>
+<tr class="lf-code-row" data-line="4225"><td class="lf-ln lf-ln-single">4225</td><td>            } else {</td></tr>
+<tr class="lf-code-row" data-line="4226"><td class="lf-ln lf-ln-single">4226</td><td>                Vec::new()</td></tr>
+<tr class="lf-code-row" data-line="4227"><td class="lf-ln lf-ln-single">4227</td><td>            };</td></tr>
+<tr class="lf-code-row" data-line="4228"><td class="lf-ln lf-ln-single">4228</td><td>        if tail_payable</td></tr>
+<tr class="lf-code-row" data-line="4229"><td class="lf-ln lf-ln-single">4229</td><td>            &amp;&amp; !payment.waterbends()</td></tr>
+<tr class="lf-code-row" data-line="4230"><td class="lf-ln lf-ln-single">4230</td><td>            &amp;&amp; (!self.automatic_mana_payment(player) || model.coupled().is_some())</td></tr>
+<tr class="lf-code-row" data-line="4231"><td class="lf-ln lf-ln-single">4231</td><td>        {</td></tr>
+<tr class="lf-code-row" data-line="4232"><td class="lf-ln lf-ln-single">4232</td><td>            if let PaymentTaps::Choose(taps) = self.useful_payment_taps(</td></tr>
+<tr class="lf-code-row" data-line="4233"><td class="lf-ln lf-ln-single">4233</td><td>                &amp;model,</td></tr>
+<tr class="lf-code-row" data-line="4234"><td class="lf-ln lf-ln-single">4234</td><td>                &amp;pool,</td></tr>
+<tr class="lf-code-row" data-line="4235"><td class="lf-ln lf-ln-single">4235</td><td>                player,</td></tr>
+</tbody></table></div></div>
+  <p>Line 4212 omits <code>|| model.coupled().is_some()</code>: when <code>can_pay</code> is true, <code>mana_ability_actions_with</code> skips <code>ability.automatic</code> and <code>useful_payment_taps</code> skips all abilities.</p>
+  <p>During a resolution payment (e.g. Ward or a resolving cost) on a coupled board where an automatic route exists and <code>mana_floats == Off</code>, simple choice-tap lands vanish from manual offers.</p>
+  <p><strong>Recommendation:</strong> Change line 4212 in <code>resolution_mana_actions</code> to <code>let explicit = !can_pay || payment.waterbends() || extra || model.coupled().is_some();</code> and add a focused regression test.</p>
+  <p><strong>Passed over:</strong> Duplicating choice-tap emission inside <code>useful_payment_taps</code>'s coupled branch (splits one owner across two functions).</p>
 </div>
-  <div data-choice="f2" data-label="F2 · Branch on Sensitive sources in coupled search, deduplicate with sources_equivalent, and scan EffectRecords in BoardArithmeticProfile (This work)">
+  <div data-choice="f2" data-label="F2 · Keep simple choice-tap lands offered during coupled resolution payments (This work)">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1110,47 +1203,64 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <div class="lf-decision" data-decision-id="f3">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F3 · Replace deterministic_hash() memo key with a payment-state fingerprint and keep one mana pool on the fork (This work)</span>
+    <span class="lf-decision-title">F3 · Guard upfront life costs in PaymentCandidate::Spend and check Delve exiles on graveyard-coupled boards (This work)</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
-  <p><strong>Scope:</strong> This work (Pass 2).</p>
-  <p><strong>What breaks:</strong> <code>GameState::deterministic_hash()</code> serializes the entire match's chronological <code>events</code>, <code>pending_events</code>, <code>observation_events</code>, <code>pending_triggers</code>, <code>id_gen</code> watermark, and <code>mana_pool</code> unit origins into JSON and hashes with BLAKE3:</p>
-  <div class="lf-codeblock" data-path="managym/src/state/hash.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/state/hash.rs:234-261</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="234"><td class="lf-ln lf-ln-single">234</td><td>    players: &amp;&#39;a [crate::state::player::Player; 2],</td></tr>
-<tr class="lf-code-row" data-line="235"><td class="lf-ln lf-ln-single">235</td><td>    zones: &amp;&#39;a crate::state::zone::ZoneManager,</td></tr>
-<tr class="lf-code-row" data-line="236"><td class="lf-ln lf-ln-single">236</td><td>    turn: CanonicalTurn&lt;&#39;a&gt;,</td></tr>
-<tr class="lf-code-row" data-line="237"><td class="lf-ln lf-ln-single">237</td><td>    priority: &amp;&#39;a crate::flow::priority::PriorityState,</td></tr>
-<tr class="lf-code-row" data-line="238"><td class="lf-ln lf-ln-single">238</td><td>    stack_objects: &amp;&#39;a [crate::state::stack_object::StackObject],</td></tr>
-<tr class="lf-code-row" data-line="239"><td class="lf-ln lf-ln-single">239</td><td>    combat: Option&lt;CanonicalCombat&gt;,</td></tr>
-<tr class="lf-code-row" data-line="240"><td class="lf-ln lf-ln-single">240</td><td>    events: &amp;&#39;a crate::flow::event::EventLedger,</td></tr>
-<tr class="lf-code-row" data-line="241"><td class="lf-ln lf-ln-single">241</td><td>    pending_events: &amp;&#39;a [crate::flow::event::GameEvent],</td></tr>
-<tr class="lf-code-row" data-line="242"><td class="lf-ln lf-ln-single">242</td><td>    observation_events: &amp;&#39;a [crate::flow::event::GameEvent],</td></tr>
-<tr class="lf-code-row" data-line="243"><td class="lf-ln lf-ln-single">243</td><td>    pending_triggers: &amp;&#39;a [crate::flow::trigger::PendingTrigger],</td></tr>
-<tr class="lf-code-row" data-line="244"><td class="lf-ln lf-ln-single">244</td><td>    trigger_placement: Option&lt;&amp;&#39;a crate::flow::trigger::TriggerPlacement&gt;,</td></tr>
-<tr class="lf-code-row" data-line="245"><td class="lf-ln lf-ln-single">245</td><td>    delayed_triggers: &amp;&#39;a [crate::flow::trigger::DelayedTrigger],</td></tr>
-<tr class="lf-code-row" data-line="246"><td class="lf-ln lf-ln-single">246</td><td>    exile_links: &amp;&#39;a [crate::flow::trigger::ExileLink],</td></tr>
-<tr class="lf-code-row" data-line="247"><td class="lf-ln lf-ln-single">247</td><td>    /// Omitted when empty, keeping hashes of states without them unchanged.</td></tr>
-<tr class="lf-code-row" data-line="248"><td class="lf-ln lf-ln-single">248</td><td>    #[serde(skip_serializing_if = &quot;Vec::is_empty&quot;)]</td></tr>
-<tr class="lf-code-row" data-line="249"><td class="lf-ln lf-ln-single">249</td><td>    #[serde(serialize_with = &quot;crate::state::game_object::exact&quot;)]</td></tr>
-<tr class="lf-code-row" data-line="250"><td class="lf-ln lf-ln-single">250</td><td>    object_counters: Vec&lt;(ObjectId, &amp;&#39;a crate::state::permanent::Counters)&gt;,</td></tr>
-<tr class="lf-code-row" data-line="251"><td class="lf-ln lf-ln-single">251</td><td>    effects: &amp;&#39;a [crate::state::effect::ContinuousEffect],</td></tr>
-<tr class="lf-code-row" data-line="252"><td class="lf-ln lf-ln-single">252</td><td>    /// Omitted when empty, keeping hashes of states without grants unchanged.</td></tr>
-<tr class="lf-code-row" data-line="253"><td class="lf-ln lf-ln-single">253</td><td>    #[serde(skip_serializing_if = &quot;crate::flow::cast_permission::CastPermissions::is_empty&quot;)]</td></tr>
-<tr class="lf-code-row" data-line="254"><td class="lf-ln lf-ln-single">254</td><td>    cast_permissions: &amp;&#39;a crate::flow::cast_permission::CastPermissions,</td></tr>
-<tr class="lf-code-row" data-line="255"><td class="lf-ln lf-ln-single">255</td><td>    suspended_decision: &amp;&#39;a Option&lt;crate::flow::decision::SuspendedResolution&gt;,</td></tr>
-<tr class="lf-code-row" data-line="256"><td class="lf-ln lf-ln-single">256</td><td>    #[serde(skip_serializing_if = &quot;Option::is_none&quot;)]</td></tr>
-<tr class="lf-code-row" data-line="257"><td class="lf-ln lf-ln-single">257</td><td>    cast_caller: Option&lt;&amp;&#39;a crate::flow::decision::SuspendedResolution&gt;,</td></tr>
-<tr class="lf-code-row" data-line="258"><td class="lf-ln lf-ln-single">258</td><td>    trigger_enqueue_counter: u64,</td></tr>
-<tr class="lf-code-row" data-line="259"><td class="lf-ln lf-ln-single">259</td><td>    rng_probe: [u64; 8],</td></tr>
-<tr class="lf-code-row" data-line="260"><td class="lf-ln lf-ln-single">260</td><td>    allocation_watermark: u32,</td></tr>
-<tr class="lf-code-row" data-line="261"><td class="lf-ln lf-ln-single">261</td><td>}</td></tr>
+  <p><strong>Scope:</strong> This work (two unfinished-rule gaps on the no-stranding invariant).</p>
+  <p><strong>What breaks:</strong></p>
+  <ul>
+    <li><strong><code>PaymentCandidate::Spend</code>:</strong> Unlike <code>fund_upfront</code> (<code>coupled.rs:825</code>), <code>PaymentCandidate::Spend</code> (<code>coupled.rs:407-412</code>) calls <code>game.complete_mana_upfront</code> without checking <code>game.life_budget(player).can_pay(activation.life_cost)</code> or permanent presence:</li>
+  </ul>
+  <div class="lf-codeblock" data-path="managym/src/flow/mana/coupled.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/coupled.rs:397-416</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,872 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="397"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">397</td><td class="lf-sign">+</td><td>                PaymentCandidate::Spend(choice) =&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="398"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">398</td><td class="lf-sign">+</td><td>                    let caller = game.state.suspended_decision_mut().take()?;</td></tr>
+<tr class="lf-add lf-code-row" data-line="399"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">399</td><td class="lf-sign">+</td><td>                    let Decision::ManaSpend {</td></tr>
+<tr class="lf-add lf-code-row" data-line="400"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">400</td><td class="lf-sign">+</td><td>                        cost, completion, ..</td></tr>
+<tr class="lf-add lf-code-row" data-line="401"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">401</td><td class="lf-sign">+</td><td>                    } = caller.decision</td></tr>
+<tr class="lf-add lf-code-row" data-line="402"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">402</td><td class="lf-sign">+</td><td>                    else {</td></tr>
+<tr class="lf-add lf-code-row" data-line="403"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">403</td><td class="lf-sign">+</td><td>                        return None;</td></tr>
+<tr class="lf-add lf-code-row" data-line="404"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">404</td><td class="lf-sign">+</td><td>                    };</td></tr>
+<tr class="lf-add lf-code-row" data-line="405"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">405</td><td class="lf-sign">+</td><td>                    game.spend_mana_unit(player, &amp;choice.unit, &amp;cost);</td></tr>
+<tr class="lf-add lf-code-row" data-line="406"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">406</td><td class="lf-sign">+</td><td>                    return self.spend(game, choice.remaining, &amp;mut |search, mut game| {</td></tr>
+<tr class="lf-add lf-code-row" data-line="407"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">407</td><td class="lf-sign">+</td><td>                        if let SpendCompletion::Upfront(activation) = completion.as_ref() {</td></tr>
+<tr class="lf-add lf-code-row" data-line="408"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">408</td><td class="lf-sign">+</td><td>                            game.complete_mana_upfront(SuspendedResolution {</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Missing <code>life_budget(player).can_pay(life_cost)</code> and permanent-presence check before <code>complete_mana_upfront</code>.</td></tr>
+<tr class="lf-add lf-code-row" data-line="409"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">409</td><td class="lf-sign">+</td><td>                                frame: caller.frame.clone(),</td></tr>
+<tr class="lf-add lf-code-row" data-line="410"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">410</td><td class="lf-sign">+</td><td>                                decision: (**activation).clone(),</td></tr>
+<tr class="lf-add lf-code-row" data-line="411"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">411</td><td class="lf-sign">+</td><td>                            });</td></tr>
+<tr class="lf-add lf-code-row" data-line="412"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">412</td><td class="lf-sign">+</td><td>                        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="413"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">413</td><td class="lf-sign">+</td><td>                        search.visit(game, obligations.clone(), delve)</td></tr>
+<tr class="lf-add lf-code-row" data-line="414"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">414</td><td class="lf-sign">+</td><td>                    });</td></tr>
+<tr class="lf-add lf-code-row" data-line="415"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">415</td><td class="lf-sign">+</td><td>                }</td></tr>
+<tr class="lf-add lf-code-row" data-line="416"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">416</td><td class="lf-sign">+</td><td>            }</td></tr>
 </tbody></table></div></div>
-  <p>Two orders of commutative activations (<code>Citadel #1 → Citadel #2</code> vs. <code>Citadel #2 → Citadel #1</code>) emit events in different order, so their <code>deterministic_hash()</code> values never match—giving <strong>zero transposition hits</strong> while serializing the entire match history at every node. Separately, maintaining an abstract <code>pool</code> alongside <code>fork.state.players[player].mana_pool</code> lets them diverge, breaking <code>Condition::UnspentManaAtLeast</code> (<code>state/src/ability.rs:441</code>, <code>flow/layers.rs:620</code>).</p>
-  <p><strong>Recommendation:</strong> Keep one mana pool by keeping <code>fork.state.players[player].mana_pool</code> synchronized with the search's pool (note <code>mana_pool_mut</code> invalidates <code>LayerBoard</code> only when <code>reads.mana</code> is set), and memoize on a compact structural <code>CoupledMemoKey</code> hashed directly with <code>FastHasher</code>: per-permanent <code>(present, tapped, counters, activations_used)</code>, player life totals, turn histories (<code>life_gained</code>, <code>life_lost</code>, <code>permanents_sacrificed</code>, <code>permanents_left</code>, <code>nonlands_left</code>, <code>graveyard_arrivals</code>, <code>damage_pairs</code>), graveyard/exile card sets, abstract <code>Mana</code> pool, obligations, and reservations—excluding event logs, priority, and allocation watermarks.</p>
-  <p><strong>Passed over:</strong> <code>deterministic_hash()</code> (zero transposition hits + O(match-length) JSON serialization per node); <code>loop_fingerprint()</code> (still allocates a full JSON <code>serde_json::Value</code> tree and saturates counts).</p>
+  <ul>
+    <li><strong>Delve exile offers:</strong> <code>help_actions</code> (<code>payment.rs:1675-1681</code>) and <code>payment.rs:1250</code> offer and admit every card in <code>graveyard_payers</code> without verifying that exiling it leaves the remaining cost payable, and <code>PaymentModel::coupled()</code> does not treat Delve as coupled when no sacrificing mana ability is on the board:</li>
+  </ul>
+  <div class="lf-codeblock" data-path="managym/src/flow/payment.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/payment.rs:1670-1684</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="1670"><td class="lf-ln lf-ln-single">1670</td><td>                &amp;self.help_tap_candidates(player, payment),</td></tr>
+<tr class="lf-code-row" data-line="1671"><td class="lf-ln lf-ln-single">1671</td><td>            )</td></tr>
+<tr class="lf-code-row" data-line="1672"><td class="lf-ln lf-ln-single">1672</td><td>            .into_iter()</td></tr>
+<tr class="lf-code-row" data-line="1673"><td class="lf-ln lf-ln-single">1673</td><td>            .map(|(permanent, _)| Action::WaterbendTap { player, permanent })</td></tr>
+<tr class="lf-code-row" data-line="1674"><td class="lf-ln lf-ln-single">1674</td><td>            .collect();</td></tr>
+<tr class="lf-code-row" data-line="1675"><td class="lf-ln lf-ln-single">1675</td><td>        if let Some(spell) = help.delve.filter(|_| cost.generic() &gt; 0) {</td></tr>
+<tr class="lf-code-row" data-line="1676"><td class="lf-ln lf-ln-single">1676</td><td>            actions.extend(</td></tr>
+<tr class="lf-code-row" data-line="1677"><td class="lf-ln lf-ln-single">1677</td><td>                self.graveyard_payers(player, spell)</td></tr>
+<tr class="lf-code-row" data-line="1678"><td class="lf-ln lf-ln-single">1678</td><td>                    .into_iter()</td></tr>
+<tr class="lf-code-row" data-line="1679"><td class="lf-ln lf-ln-single">1679</td><td>                    .map(|object| Action::SelectCard { player, object }),</td></tr>
+<tr class="lf-code-row" data-line="1680"><td class="lf-ln lf-ln-single">1680</td><td>            );</td></tr>
+<tr class="lf-code-row" data-line="1681"><td class="lf-ln lf-ln-single">1681</td><td>        }</td></tr>
+<tr class="lf-code-row" data-line="1682"><td class="lf-ln lf-ln-single">1682</td><td>        actions</td></tr>
+<tr class="lf-code-row" data-line="1683"><td class="lf-ln lf-ln-single">1683</td><td>    }</td></tr>
+<tr class="lf-code-row" data-line="1684"><td class="lf-ln lf-ln-single">1684</td><td></td></tr>
+</tbody></table></div></div>
+  <p>On a board with a Delve spell and a graveyard-reading mana source (e.g. <code>Condition::GraveyardAtLeast</code> or <code>LayerCount::Graveyard</code> powering Raucous Audience), taking the offered Delve exile first strands the payment.</p>
+  <p><strong>Recommendation:</strong> (a) Check <code>game.life_budget(player).can_pay(life_cost)</code> and permanent presence inside <code>PaymentCandidate::Spend</code> (or factor a shared helper with <code>fund_upfront</code>). (b) Treat <code>help.delve.is_some() &amp;&amp; (profile.stateful_abilities || profile.stateful_statics || profile.stateful_triggers)</code> as coupled, add <code>PaymentCandidate::DelveExile(ObjectId)</code>, and filter Delve offers/execution in <code>help_actions</code> and <code>payment.rs:1250</code> when coupled.</p>
+  <p><strong>Passed over:</strong> Checking only sacrifice-to-graveyard Delve (leaves exile-from-graveyard Delve able to strand a committed cast).</p>
 </div>
-  <div data-choice="f3" data-label="F3 · Replace deterministic_hash() memo key with a payment-state fingerprint and keep one mana pool on the fork (This work)">
+  <div data-choice="f3" data-label="F3 · Guard upfront life costs in PaymentCandidate::Spend and check Delve exiles on graveyard-coupled boards (This work)">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1160,16 +1270,78 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <div class="lf-decision" data-decision-id="f4">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F4 · Preserve owned ManaUpfrontActivation and active OrderReplacement frames in coupled search (This work)</span>
+    <span class="lf-decision-title">F4 · Cache coupling classification on PaymentModel and eliminate Game::clone() inside has_mutating_caller() (This work)</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
-  <p><strong>Scope:</strong> This work (Pass 2 &amp; Pass 3).</p>
-  <p><strong>What breaks:</strong> Clearing <code>suspended_decision</code> on <code>fork</code> and representing a pending <code>Decision::ManaUpfront</code> as <code>Obligation::Output { choices, life_cost, life_delta }</code> drops the owned <code>ManaUpfrontActivation</code> (<code>output: Effect</code>, <code>suffix</code>, <code>remove_counters</code>, <code>add_counters</code>, <code>sacrifice_source</code>, <code>tap_source</code>). On Pass 3's own acceptance board—a suspended <code>ManaUpfront</code> whose static grant already ended—<code>fork</code> can neither look up the ability on <code>characteristics</code> nor run its costs/suffix/dynamic output through <code>complete_mana_upfront</code>. Similarly, while suspended on <code>Decision::OrderReplacement</code> inside a counter/sacrifice batch (Caradora + Doubling Season) or suffix, clearing <code>suspended_decision</code> drops the in-flight <code>EffectFrame</code> and <code>FrameCompletion::ManaOutput</code>.</p>
-  <p><strong>Recommendation:</strong> Give the coupled search an explicit <code>CoupledObligation::CompleteUpfront { permanent, activation: Box&lt;ManaUpfrontActivation&gt; }</code> (for every suspended or newly opened Mutator/Sensitive <code>ManaUpfront</code>) so it completes natively via <code>complete_mana_upfront</code> even after the grant ends, and step an in-flight <code>OrderReplacement</code> directly on the fork (via <code>choose_replacement</code> + <code>run_payment_frame</code>) until that activation finishes before stripping enclosing decisions.</p>
-  <p><strong>Passed over:</strong> Re-indexing <code>characteristics(permanent)</code> during search (fails when the grant ended); evaluating dynamic outputs and suffixes only at root (fails when an intervening activation changes counters, life, or replacements).</p>
+  <p><strong>Scope:</strong> This work (Engine Budget / hot-path ownership).</p>
+  <p><strong>What breaks:</strong> <code>Game::payment_model</code> (<code>mana.rs:3367</code>) always constructs <code>CoupledPayment</code>, and <code>PaymentModel::coupled()</code> (<code>coupled.rs:39-51</code>) recomputes the predicate from scratch on every call—scanning <code>self.sources</code>, checking <code>stateful_tap()</code> twice, and walking <code>suspended_decision</code> via <code>has_mutating_caller()</code> (<code>coupled.rs:121-169</code>):</p>
+  <div class="lf-codeblock" data-path="managym/src/flow/mana/coupled.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/coupled.rs:38-65</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,872 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="38"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">38</td><td class="lf-sign">+</td><td>impl PaymentModel&lt;&#39;_&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="39"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">39</td><td class="lf-sign">+</td><td>    pub(super) fn coupled(&amp;self) -&gt; Option&lt;&amp;CoupledPayment&lt;&#39;_&gt;&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="40"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">40</td><td class="lf-sign">+</td><td>        let coupled = self.coupled.as_ref()?;</td></tr>
+<tr class="lf-add lf-code-row" data-line="41"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">41</td><td class="lf-sign">+</td><td>        (self.sources.iter().any(|source| {</td></tr>
+<tr class="lf-add lf-code-row" data-line="42"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">42</td><td class="lf-sign">+</td><td>            let role = |ability| coupling(coupled.profile, coupled.help, ability);</td></tr>
+<tr class="lf-add lf-code-row" data-line="43"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">43</td><td class="lf-sign">+</td><td>            source.untapped &amp;&amp; source.fixed.is_some() &amp;&amp; coupled.profile.stateful_tap()</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Redundant with line 48's unconditional <code>|| coupled.profile.stateful_tap()</code>.</td></tr>
+<tr class="lf-add lf-code-row" data-line="44"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">44</td><td class="lf-sign">+</td><td>                || source</td></tr>
+<tr class="lf-add lf-code-row" data-line="45"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">45</td><td class="lf-sign">+</td><td>                    .abilities</td></tr>
+<tr class="lf-add lf-code-row" data-line="46"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">46</td><td class="lf-sign">+</td><td>                    .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="47"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">47</td><td class="lf-sign">+</td><td>                    .any(|ability| role(ability) == PaymentCoupling::Mutator)</td></tr>
+<tr class="lf-add lf-code-row" data-line="48"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">48</td><td class="lf-sign">+</td><td>        }) || coupled.profile.stateful_tap()</td></tr>
+<tr class="lf-add lf-code-row" data-line="49"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">49</td><td class="lf-sign">+</td><td>            || coupled.has_mutating_caller())</td></tr>
+<tr class="lf-add lf-code-row" data-line="50"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">50</td><td class="lf-sign">+</td><td>        .then_some(coupled)</td></tr>
+<tr class="lf-add lf-code-row" data-line="51"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">51</td><td class="lf-sign">+</td><td>    }</td></tr>
+<tr class="lf-add lf-code-row" data-line="52"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">52</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="53"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">53</td><td class="lf-sign">+</td><td>    /// The synchronous prefix uses only simple taps. It is safe when</td></tr>
+<tr class="lf-add lf-code-row" data-line="54"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">54</td><td class="lf-sign">+</td><td>    /// those taps cannot alter the board that prices or produces mana.</td></tr>
+<tr class="lf-add lf-code-row" data-line="55"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">55</td><td class="lf-sign">+</td><td>    pub(super) fn exact_tap_model(&amp;self) -&gt; Option&lt;Self&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="56"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">56</td><td class="lf-sign">+</td><td>        let coupled = self.coupled()?;</td></tr>
+<tr class="lf-add lf-code-row" data-line="57"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">57</td><td class="lf-sign">+</td><td>        if coupled.profile.stateful_tap() || coupled.has_mutating_caller() {</td></tr>
+<tr class="lf-add lf-code-row" data-line="58"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">58</td><td class="lf-sign">+</td><td>            return None;</td></tr>
+<tr class="lf-add lf-code-row" data-line="59"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">59</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="60"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">60</td><td class="lf-sign">+</td><td>        let mut exact = self.clone();</td></tr>
+<tr class="lf-add lf-code-row" data-line="61"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">61</td><td class="lf-sign">+</td><td>        exact.cache = None;</td></tr>
+<tr class="lf-add lf-code-row" data-line="62"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">62</td><td class="lf-sign">+</td><td>        exact.coupled = None;</td></tr>
+<tr class="lf-add lf-code-row" data-line="63"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">63</td><td class="lf-sign">+</td><td>        Some(exact)</td></tr>
+<tr class="lf-add lf-code-row" data-line="64"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">64</td><td class="lf-sign">+</td><td>    }</td></tr>
+<tr class="lf-add lf-code-row" data-line="65"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">65</td><td class="lf-sign">+</td><td></td></tr>
+</tbody></table></div></div>
+  <div class="lf-codeblock" data-path="managym/src/flow/mana/coupled.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/coupled.rs:121-145</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,872 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="121"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">121</td><td class="lf-sign">+</td><td>    fn has_mutating_caller(&amp;self) -&gt; bool {</td></tr>
+<tr class="lf-add lf-code-row" data-line="122"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">122</td><td class="lf-sign">+</td><td>        self.game</td></tr>
+<tr class="lf-add lf-code-row" data-line="123"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">123</td><td class="lf-sign">+</td><td>            .state</td></tr>
+<tr class="lf-add lf-code-row" data-line="124"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">124</td><td class="lf-sign">+</td><td>            .suspended_decision</td></tr>
+<tr class="lf-add lf-code-row" data-line="125"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">125</td><td class="lf-sign">+</td><td>            .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="126"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">126</td><td class="lf-sign">+</td><td>            .flat_map(SuspendedResolution::decisions)</td></tr>
+<tr class="lf-add lf-code-row" data-line="127"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">127</td><td class="lf-sign">+</td><td>            .any(|decision| match decision {</td></tr>
+<tr class="lf-add lf-code-row" data-line="128"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">128</td><td class="lf-sign">+</td><td>                Decision::ManaUpfront {</td></tr>
+<tr class="lf-add lf-code-row" data-line="129"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">129</td><td class="lf-sign">+</td><td>                    activation,</td></tr>
+<tr class="lf-add lf-code-row" data-line="130"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">130</td><td class="lf-sign">+</td><td>                    permanent,</td></tr>
+<tr class="lf-add lf-code-row" data-line="131"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">131</td><td class="lf-sign">+</td><td>                    ..</td></tr>
+<tr class="lf-add lf-code-row" data-line="132"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">132</td><td class="lf-sign">+</td><td>                } =&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="133"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">133</td><td class="lf-sign">+</td><td>                    let source = self.game.state.permanents[*permanent].as_ref();</td></tr>
+<tr class="lf-add lf-code-row" data-line="134"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">134</td><td class="lf-sign">+</td><td>                    let unverified_suffix = source.is_some_and(|source| {</td></tr>
+<tr class="lf-add lf-code-row" data-line="135"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">135</td><td class="lf-sign">+</td><td>                        self.game</td></tr>
+<tr class="lf-add lf-code-row" data-line="136"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">136</td><td class="lf-sign">+</td><td>                            .mana_suffix_life_delta(self.player, source.object, &amp;activation.suffix)</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4"><code>mana_suffix_life_delta</code> calls <code>self.clone()</code> for every non-empty suffix, so every <code>model.coupled()</code> check inside loops clones the entire <code>Game</code> while a suffixed <code>ManaUpfront</code> is suspended.</td></tr>
+<tr class="lf-add lf-code-row" data-line="137"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">137</td><td class="lf-sign">+</td><td>                            .is_none()</td></tr>
+<tr class="lf-add lf-code-row" data-line="138"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">138</td><td class="lf-sign">+</td><td>                    });</td></tr>
+<tr class="lf-add lf-code-row" data-line="139"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">139</td><td class="lf-sign">+</td><td>                    let rule_source = activation.sacrifice_source</td></tr>
+<tr class="lf-add lf-code-row" data-line="140"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">140</td><td class="lf-sign">+</td><td>                        &amp;&amp; source.is_some_and(|source| {</td></tr>
+<tr class="lf-add lf-code-row" data-line="141"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">141</td><td class="lf-sign">+</td><td>                            let view = self.game.layer_view(*permanent);</td></tr>
+<tr class="lf-add lf-code-row" data-line="142"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">142</td><td class="lf-sign">+</td><td>                            !view.static_abilities.is_empty()</td></tr>
+<tr class="lf-add lf-code-row" data-line="143"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">143</td><td class="lf-sign">+</td><td>                                || !view.triggered_mana_abilities.is_empty()</td></tr>
+<tr class="lf-add lf-code-row" data-line="144"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">144</td><td class="lf-sign">+</td><td>                                || !self.game.state[source.object]</td></tr>
+<tr class="lf-add lf-code-row" data-line="145"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">145</td><td class="lf-sign">+</td><td>                                    .replacement_effects</td></tr>
+</tbody></table></div></div>
+  <p>On ordinary TLA boards, every <code>payable()</code>, <code>plan()</code>, <code>activation_payable()</code>, and <code>reserve()</code> still scans <code>sources</code> and allocates <code>reservations: Vec</code> even when <code>profile</code> is completely uncoupled.</p>
+  <p><strong>Recommendation:</strong> Store a cheap cached flag/state on <code>PaymentModel</code> (or attach <code>CoupledPayment</code> only when <code>profile</code> / <code>sources</code> / <code>suspended_decision</code> / <code>help.delve</code> can be coupled, recomputing only in <code>mark_help_taps</code> when <code>help.delve</code> changes), and compute <code>unverified_suffix</code> once on <code>ManaUpfrontActivation</code> at announcement (or once per <code>CoupledPayment::new</code>) instead of cloning <code>Game</code> on every <code>model.coupled()</code> call. Remove the redundant line 43 check.</p>
+  <p><strong>Passed over:</strong> Leaving <code>model.coupled()</code> as an uncached scan (risks Engine Budget regression on ordinary TLA boards and quadratic <code>Game::clone()</code> work during nested suffixed upfront payments).</p>
 </div>
-  <div data-choice="f4" data-label="F4 · Preserve owned ManaUpfrontActivation and active OrderReplacement frames in coupled search (This work)">
+  <div data-choice="f4" data-label="F4 · Cache coupling classification on PaymentModel and eliminate Game::clone() inside has_mutating_caller() (This work)">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1179,121 +1351,18 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <div class="lf-decision" data-decision-id="f5">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F5 · Keep ManaSource.fixed strictly for exact automatic taps; unify choice-bonus fixed taps into ManaActivation and handle TapForMana preview (This work)</span>
+    <span class="lf-decision-title">F5 · Hash version 35 → 36 and pre-implementation headless choices (Irreversible once released — confirm before merge)</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
-  <p><strong>Scope:</strong> This work (Pass 1).</p>
-  <p><strong>What breaks:</strong> Replacing <code>ManaSource.fixed: Option&lt;Mana&gt;</code> with <code>Option&lt;FixedOutput&gt;</code> splits one field into two meanings across ~38 sites (<code>autotapper.rs</code>, <code>direct</code>, <code>fixed_sufficient</code>, <code>fixed_total</code>, <code>SourceSupply</code>, <code>color_set_bound</code>, <code>useful_payment_taps</code>, <code>append_mana_floats</code>, <code>determined_source_counts</code>, <code>producible_mana</code>) and duplicates multi-output choice handling that <code>ManaActivation</code> already implements. Meanwhile, <code>PaymentPreview</code> calls <code>preview_tap</code> → <code>perform_automatic_tap</code> directly when hovering <code>Action::TapForMana</code>, even outside automatic batches:</p>
-  <div class="lf-codeblock" data-path="managym/src/flow/mana/preview.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/preview.rs:283-295</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="283"><td class="lf-ln lf-ln-single">283</td><td>            Action::PayCost { .. } | Action::TapForMana { .. } =&gt; match &amp;self.pending_choice {</td></tr>
-<tr class="lf-code-row" data-line="284"><td class="lf-ln lf-ln-single">284</td><td>                Some(PendingChoice::Pay { payment, .. }) if owes_a_choice(&amp;payment.owed) =&gt; {</td></tr>
-<tr class="lf-code-row" data-line="285"><td class="lf-ln lf-ln-single">285</td><td>                    return Ok(PaymentPreview::needs_additional_cost());</td></tr>
-<tr class="lf-code-row" data-line="286"><td class="lf-ln lf-ln-single">286</td><td>                }</td></tr>
-<tr class="lf-code-row" data-line="287"><td class="lf-ln lf-ln-single">287</td><td>                Some(PendingChoice::Pay { payment, .. }) =&gt; {</td></tr>
-<tr class="lf-code-row" data-line="288"><td class="lf-ln lf-ln-single">288</td><td>                    helped = keyword_help(&amp;payment.owed);</td></tr>
-<tr class="lf-code-row" data-line="289"><td class="lf-ln lf-ln-single">289</td><td>                    sources</td></tr>
-<tr class="lf-code-row" data-line="290"><td class="lf-ln lf-ln-single">290</td><td>                        .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));</td></tr>
-<tr class="lf-code-row" data-line="291"><td class="lf-ln lf-ln-single">291</td><td>                    if payment.waterbends() {</td></tr>
-<tr class="lf-code-row" data-line="292"><td class="lf-ln lf-ln-single">292</td><td>                        position.to_mut().pending_choice = None;</td></tr>
-<tr class="lf-code-row" data-line="293"><td class="lf-ln lf-ln-single">293</td><td>                    }</td></tr>
-<tr class="lf-code-row" data-line="294"><td class="lf-ln lf-ln-single">294</td><td>                    Some(payment.mana().0.clone())</td></tr>
-<tr class="lf-code-row" data-line="295"><td class="lf-ln lf-ln-single">295</td><td>                }</td></tr>
-</tbody></table></div></div>
-  <div class="lf-codeblock" data-path="managym/src/flow/mana/preview.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/preview.rs:414-430</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="414"><td class="lf-ln lf-ln-single">414</td><td>    fn preview_tap(&amp;mut self, player: PlayerId, tap: AutomaticTap) -&gt; PaymentSourcePreview {</td></tr>
-<tr class="lf-code-row" data-line="415"><td class="lf-ln lf-ln-single">415</td><td>        let permanent = tap.permanent;</td></tr>
-<tr class="lf-code-row" data-line="416"><td class="lf-ln lf-ln-single">416</td><td>        let object = self.permanent_object(permanent).expect(&quot;planned source&quot;);</td></tr>
-<tr class="lf-code-row" data-line="417"><td class="lf-ln lf-ln-single">417</td><td>        let source = SubjectRef::Object {</td></tr>
-<tr class="lf-code-row" data-line="418"><td class="lf-ln lf-ln-single">418</td><td>            id: self</td></tr>
-<tr class="lf-code-row" data-line="419"><td class="lf-ln lf-ln-single">419</td><td>                .object_event_ref(object)</td></tr>
-<tr class="lf-code-row" data-line="420"><td class="lf-ln lf-ln-single">420</td><td>                .expect(&quot;planned source&quot;)</td></tr>
-<tr class="lf-code-row" data-line="421"><td class="lf-ln lf-ln-single">421</td><td>                .into(),</td></tr>
-<tr class="lf-code-row" data-line="422"><td class="lf-ln lf-ln-single">422</td><td>        };</td></tr>
-<tr class="lf-code-row" data-line="423"><td class="lf-ln lf-ln-single">423</td><td>        let label = self.observed_object_name(object);</td></tr>
-<tr class="lf-code-row" data-line="424"><td class="lf-ln lf-ln-single">424</td><td>        let before = self.pooled_mana(player);</td></tr>
-<tr class="lf-code-row" data-line="425"><td class="lf-ln lf-ln-single">425</td><td>        self.perform_automatic_tap(player, tap);</td></tr>
-<tr class="lf-code-row" data-line="426"><td class="lf-ln lf-ln-single">426</td><td>        let after = self.pooled_mana(player);</td></tr>
-<tr class="lf-code-row" data-line="427"><td class="lf-ln lf-ln-single">427</td><td>        let mut output = Mana {</td></tr>
-<tr class="lf-code-row" data-line="428"><td class="lf-ln lf-ln-single">428</td><td>            mana: std::array::from_fn(|i| after.mana[i] - before.mana[i]),</td></tr>
-<tr class="lf-code-row" data-line="429"><td class="lf-ln lf-ln-single">429</td><td>            ..Mana::default()</td></tr>
-<tr class="lf-code-row" data-line="430"><td class="lf-ln lf-ln-single">430</td><td>        };</td></tr>
-</tbody></table></div></div>
-  <p><strong>Recommendation:</strong> Keep <code>ManaSource.fixed: Option&lt;Mana&gt;</code> strictly for deterministic single-output taps (zero changes to <code>autotapper.rs</code>, <code>direct</code>, <code>fixed_sufficient</code>, <code>fixed_total</code>, or automatic prefixes). Represent a fixed tap whose triggered bonuses require a choice as a <code>ManaActivation</code> with <code>kind: ManaActivationKind::{FixedTap, Activated(usize)}</code> and <code>automatic: false</code> (emitting <code>PaymentStep::Fixed(permanent)</code> / <code>Action::TapForMana</code>, and included by <code>append_mana_floats</code> for priority floats). In <code>preview.rs</code>, when hovering a <code>TapForMana</code> whose source has no exact <code>fixed</code> output, return <code>PaymentPreviewState::NeedsChoice</code> instead of calling <code>preview_tap</code>. Keep <code>tap_bonuses</code> evaluating <code>CardPredicate.tapped</code> as satisfied, and have <code>tap_for_mana_action</code> pass the caller frame and <code>commit_start</code> into <code>resolve_mana_bonuses</code> so <code>ManaChoice</code> resumes cleanly (and never runs <code>commit_produced_mana</code> prematurely when suspended).</p>
-  <p><strong>Passed over:</strong> <code>FixedOutput::{Exact, Choice}</code> (touches ~38 exact-tap sites and duplicates <code>ManaActivation</code>'s multi-output search/bound logic).</p>
-</div>
-  <div data-choice="f5" data-label="F5 · Keep ManaSource.fixed strictly for exact automatic taps; unify choice-bonus fixed taps into ManaActivation and handle TapForMana preview (This work)">
-    <button type="button" data-value="Fix here">Fix here</button>
-    <button type="button" data-value="File Task">File Task</button>
-    <button type="button" data-value="Drop">Drop</button>
-  </div>
-</div>
-
-
-<div class="lf-decision" data-decision-id="f6">
-  <div class="lf-decision-head">
-    <span class="lf-decision-title">F6 · Finish owned non-mana activations across ActivationX, drop the redundant cost/unfinalized pair, avoid priority-scan clones, and document the true hash surface (This work)</span>
-    <span class="lf-decision-rec">Recommended: Fix here</span>
-  </div>
-  <div class="lf-decision-body">
-  <p><strong>Scope:</strong> This work (Pass 4).</p>
-  <p><strong>What breaks:</strong></p>
+  <p><strong>Scope:</strong> This work (release/merge confirmation; no code defect).</p>
+  <p><strong>Context:</strong> Five design choices from the pre-implementation concept review (<code>4b0a7d278b</code>) were adopted headless and implemented across Passes 1–4. One is irreversible once shipped:</p>
   <ul>
-    <li><code>PendingChoice::ActivationX</code> (<code>flow/play.rs:1760, 1851, 1871</code>) is omitted from Pass 4 and still indexes <code>self.characteristics(permanent).activated_abilities[ability_index]</code>—leaving the announcement-ownership rule unfinished on the first stage of the activation pipeline.</li>
-    <li>Pass 4 proposes storing both "the priced cost and the unfinalized <code>ActivatedAbilityDefinition</code>" by analogy with <code>ManaUpfrontActivation</code>. Inspecting <code>finalize_characteristics</code> (<code>flow/statics.rs:926-947</code>) shows that for non-mana abilities, finalization <em>only</em> prices <code>mana_cost</code> (non-mana abilities never have dynamic mana output). One finalized <code>Box&lt;ActivatedAbilityDefinition&gt;</code> already owns both the priced cost and the rules text.</li>
-    <li>Constructing owned <code>Operation::Activation</code> inside <code>priority_activate_ability_actions</code> (<code>flow/action.rs:820, 931</code>) clones an entire <code>ActivatedAbilityDefinition</code> for every permanent's activated abilities on every priority tick. Pass a borrowed <code>&amp;ActivatedAbilityDefinition</code> (or <code>Cow</code> / lightweight preview query) for hypothetical priority checks instead.</li>
-    <li>In <code>prepare_card_activated_ability</code> (<code>flow/play.rs:2441</code>), dropping <code>card_ability_in_zone</code> must still explicitly verify the card remains in <code>ability.zone</code> so <code>"activation source left its zone"</code> keeps holding.</li>
-    <li><strong>Hash version (irreversible once released):</strong> <code>Operation::Activation</code> is serialized not only inside <code>PendingChoice::Pay</code> (<code>state_digest</code>) but directly inside <code>GameState.suspended_decision</code> (<code>SpendCompletion::Announced</code>, <code>FrameCompletion::DiscardPayment</code>, <code>FrameCompletion::Paid</code>), which is hashed by <code>GameState::deterministic_hash()</code>. <code>origin/main</code> is at <code>v34</code>; PR #639 (MTG-500, open/unreleased) bumped to <code>v35</code>. Bumping to <code>v36</code> keeps <code>main</code> patch-releasable between PR #639 and MTG-508; reusing <code>v35</code> is sound only if both PRs never ship in separate releases.</li>
+    <li><code>MATCH_STATE_HASH_VERSION</code> bumped <code>35 → 36</code> (<code>managym/src/state/hash.rs:29</code>) because <code>PendingChoice::ActivationX</code>, <code>ActivatedTargeting</code>, and <code>Operation::Activation</code> now serialize the finalized <code>ActivatedAbilityDefinition</code> and its <code>acquired: Option&lt;GrantKey&gt;</code>. Since MTG-500 has already merged to <code>origin/main</code> (<code>606e79e90a</code>) at <code>v35</code>, keeping <code>v36</code> is now strictly required so <code>main</code> stays patch-compatible; Academy fixtures and Engine Budget baseline must be refreshed in delivery as planned.</li>
+    <li>Passes 1 and 4's representations (<code>ManaActivationKind::FixedTap</code>, <code>Operation&lt;A = Box&lt;ActivatedAbilityDefinition&gt;&gt;</code>, <code>serialize_announced_ability</code>) and Pass 2's structural <code>CoupledMemoKey</code> are clean and aligned with the engine's existing architecture.</li>
   </ul>
-  <div class="lf-codeblock" data-path="managym/src/flow/play.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/play.rs:1756-1766</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="1756"><td class="lf-ln lf-ln-single">1756</td><td>        if ability.announces_x() {</td></tr>
-<tr class="lf-code-row" data-line="1757"><td class="lf-ln lf-ln-single">1757</td><td>            if !self.has_legal_activation_x(player, permanent_id, ability_index, &amp;ability) {</td></tr>
-<tr class="lf-code-row" data-line="1758"><td class="lf-ln lf-ln-single">1758</td><td>                return Err(AgentError(&quot;no payable value of X&quot;.into()));</td></tr>
-<tr class="lf-code-row" data-line="1759"><td class="lf-ln lf-ln-single">1759</td><td>            }</td></tr>
-<tr class="lf-code-row" data-line="1760"><td class="lf-ln lf-ln-single">1760</td><td>            self.pending_choice = Some(PendingChoice::ActivationX {</td></tr>
-<tr class="lf-code-row" data-line="1761"><td class="lf-ln lf-ln-single">1761</td><td>                player,</td></tr>
-<tr class="lf-code-row" data-line="1762"><td class="lf-ln lf-ln-single">1762</td><td>                permanent: permanent_id,</td></tr>
-<tr class="lf-code-row" data-line="1763"><td class="lf-ln lf-ln-single">1763</td><td>                ability_index,</td></tr>
-<tr class="lf-code-row" data-line="1764"><td class="lf-ln lf-ln-single">1764</td><td>            });</td></tr>
-<tr class="lf-code-row" data-line="1765"><td class="lf-ln lf-ln-single">1765</td><td>            return Ok(());</td></tr>
-<tr class="lf-code-row" data-line="1766"><td class="lf-ln lf-ln-single">1766</td><td>        }</td></tr>
-</tbody></table></div></div>
-  <div class="lf-codeblock" data-path="managym/src/flow/play.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/play.rs:1857-1886</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="1857"><td class="lf-ln lf-ln-single">1857</td><td>    pub(crate) fn choose_activation_x_action(</td></tr>
-<tr class="lf-code-row" data-line="1858"><td class="lf-ln lf-ln-single">1858</td><td>        &amp;mut self,</td></tr>
-<tr class="lf-code-row" data-line="1859"><td class="lf-ln lf-ln-single">1859</td><td>        player: PlayerId,</td></tr>
-<tr class="lf-code-row" data-line="1860"><td class="lf-ln lf-ln-single">1860</td><td>        x: usize,</td></tr>
-<tr class="lf-code-row" data-line="1861"><td class="lf-ln lf-ln-single">1861</td><td>    ) -&gt; Result&lt;(), AgentError&gt; {</td></tr>
-<tr class="lf-code-row" data-line="1862"><td class="lf-ln lf-ln-single">1862</td><td>        let Some(PendingChoice::ActivationX {</td></tr>
-<tr class="lf-code-row" data-line="1863"><td class="lf-ln lf-ln-single">1863</td><td>            player: chooser,</td></tr>
-<tr class="lf-code-row" data-line="1864"><td class="lf-ln lf-ln-single">1864</td><td>            permanent,</td></tr>
-<tr class="lf-code-row" data-line="1865"><td class="lf-ln lf-ln-single">1865</td><td>            ability_index,</td></tr>
-<tr class="lf-code-row" data-line="1866"><td class="lf-ln lf-ln-single">1866</td><td>        }) = self.pending_choice</td></tr>
-<tr class="lf-code-row" data-line="1867"><td class="lf-ln lf-ln-single">1867</td><td>        else {</td></tr>
-<tr class="lf-code-row" data-line="1868"><td class="lf-ln lf-ln-single">1868</td><td>            return Err(AgentError(&quot;no value of X is pending&quot;.into()));</td></tr>
-<tr class="lf-code-row" data-line="1869"><td class="lf-ln lf-ln-single">1869</td><td>        };</td></tr>
-<tr class="lf-code-row" data-line="1870"><td class="lf-ln lf-ln-single">1870</td><td>        let x = i32::try_from(x).map_err(|_| AgentError(&quot;illegal value of X&quot;.into()))?;</td></tr>
-<tr class="lf-code-row" data-line="1871"><td class="lf-ln lf-ln-single">1871</td><td>        let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();</td></tr>
-<tr class="lf-code-row" data-line="1872"><td class="lf-ln lf-ln-single">1872</td><td>        let source = ActivationSource::Permanent(permanent);</td></tr>
-<tr class="lf-code-row" data-line="1873"><td class="lf-ln lf-ln-single">1873</td><td>        let legal = chooser == player</td></tr>
-<tr class="lf-code-row" data-line="1874"><td class="lf-ln lf-ln-single">1874</td><td>            &amp;&amp; self</td></tr>
-<tr class="lf-code-row" data-line="1875"><td class="lf-ln lf-ln-single">1875</td><td>                .activation_x_bounds(player, permanent, ability_index, &amp;ability)</td></tr>
-<tr class="lf-code-row" data-line="1876"><td class="lf-ln lf-ln-single">1876</td><td>                .contains(&amp;x)</td></tr>
-<tr class="lf-code-row" data-line="1877"><td class="lf-ln lf-ln-single">1877</td><td>            &amp;&amp; (ability.mana_cost.x == 0</td></tr>
-<tr class="lf-code-row" data-line="1878"><td class="lf-ln lf-ln-single">1878</td><td>                || self.activation_x_payable(player, permanent, ability_index, x as u8))</td></tr>
-<tr class="lf-code-row" data-line="1879"><td class="lf-ln lf-ln-single">1879</td><td>            &amp;&amp; (ability.target_requirements().is_empty()</td></tr>
-<tr class="lf-code-row" data-line="1880"><td class="lf-ln lf-ln-single">1880</td><td>                || self.activation_targets_available(player, source, ability_index, &amp;ability, x));</td></tr>
-<tr class="lf-code-row" data-line="1881"><td class="lf-ln lf-ln-single">1881</td><td>        if !legal {</td></tr>
-<tr class="lf-code-row" data-line="1882"><td class="lf-ln lf-ln-single">1882</td><td>            return Err(AgentError(&quot;illegal value of X&quot;.into()));</td></tr>
-<tr class="lf-code-row" data-line="1883"><td class="lf-ln lf-ln-single">1883</td><td>        }</td></tr>
-<tr class="lf-code-row" data-line="1884"><td class="lf-ln lf-ln-single">1884</td><td>        self.pending_choice = None;</td></tr>
-<tr class="lf-code-row" data-line="1885"><td class="lf-ln lf-ln-single">1885</td><td>        self.begin_activation_targets(player, source, ability_index, &amp;ability, x)</td></tr>
-<tr class="lf-code-row" data-line="1886"><td class="lf-ln lf-ln-single">1886</td><td>    }</td></tr>
-</tbody></table></div></div>
-  <p><strong>Recommendation:</strong> Capture one finalized <code>Box&lt;ActivatedAbilityDefinition&gt;</code> at announcement in <code>PendingChoice::ActivationX</code>, <code>ActivatedTargeting</code>, and <code>Operation::Activation</code>; keep priority feasibility checks borrow-only (no <code>ActivatedAbilityDefinition</code> clone per priority tick); retain the explicit zone check for card activations; bump <code>MATCH_STATE_HASH_VERSION</code> 35 → 36.</p>
-  <p><strong>Passed over:</strong> Leaving <code>ActivationX</code> unowned (unfinished rule); storing both priced cost and unfinalized definition (redundant for non-mana abilities); reusing <code>v35</code> (breaks if MTG-500 releases before MTG-508).</p>
 </div>
-  <div data-choice="f6" data-label="F6 · Finish owned non-mana activations across ActivationX, drop the redundant cost/unfinalized pair, avoid priority-scan clones, and document the true hash surface (This work)">
+  <div data-choice="f5" data-label="F5 · Hash version 35 → 36 and pre-implementation headless choices (Irreversible once released — confirm before merge)">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1303,37 +1372,25 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <h2>Questions</h2>
 
-<div data-choice="q1" data-label="1 · Coupled authority boundary">
-  <h3>1. How should candidate-step checks and reservations reach the coupled search?</h3>
-  <button data-value="1a">1a · (Recommended) Structured query context (reservations, Help/delve, pending upfront activations) + native candidate-step entry points that bypass pure shortcuts/cache when coupled</button>
-  <button data-value="1b">1b · Keep intercepting cached_plan only, and encode candidate steps as extra Obligation variants</button>
+<div data-choice="q1" data-label="1 · Classifier and pure-handoff fixes (F1)">
+  <h3>1. How should non-tapping sensitive abilities and counted taps under <code>stateful_tap()</code> be handled in <code>coupled.rs</code>?</h3>
+  <button data-value="1a">1a · (Recommended) Promote any ability to Sensitive on <code>writes_non_pt || loses_rules</code>, add <code>cost_reduction_per</code> to <code>mana_ability_reads()</code>, and block pure handoff on <code>Obligation::Tap</code> under <code>stateful_tap()</code></button>
+  <button data-value="1b">1b · Promote all abilities to Sensitive on every coupled board (simpler, but expands search on boards with pure P/T statics)</button>
 </div>
 
-<div data-choice="q2" data-label="2 · Coupled search memo key and pool">
-  <h3>2. How should the coupled fork search track the mana pool and memoize visited states?</h3>
-  <button data-value="2a">2a · (Recommended) Sync fork's real mana_pool with search steps and memoize on a structural payment-state key (excluding event logs and id_gen)</button>
-  <button data-value="2b">2b · Keep fork.state.deterministic_hash() as memo key and clear event logs on the fork before hashing</button>
+<div data-choice="q2" data-label="2 · Delve exile feasibility on graveyard-coupled boards (F3)">
+  <h3>2. Should Delve <code>SelectCard</code> offers be checked natively on graveyard-coupled boards in this Task?</h3>
+  <button data-value="2a">2a · (Recommended) Yes — add <code>PaymentCandidate::DelveExile</code> and treat graveyard-reading + Delve boards as coupled so no Delve exile can strand a cast</button>
+  <button data-value="2b">2b · Keep Delve exile unchecked and file a separate Task for graveyard-reading Delve boards</button>
 </div>
 
-<div data-choice="q3" data-label="3 · Choice-bonus fixed mana taps (Pass 1)">
-  <h3>3. How should ManaSource represent a fixed tap whose triggered bonuses open a choice?</h3>
-  <button data-value="3a">3a · (Recommended) Keep source.fixed: Option&lt;Mana&gt; strictly for exact automatic taps; model choice-bonus fixed taps as ManaActivation with kind FixedTap (automatic: false) and return NeedsChoice in PaymentPreview</button>
-  <button data-value="3b">3b · Replace source.fixed with Option&lt;FixedOutput::{Exact, Choice}&gt; across all ~38 callers</button>
-</div>
-
-<div data-choice="q4" data-label="4 · Owned non-mana activation shape (Pass 4)">
-  <h3>4. Should owned non-mana activations include ActivationX and store one finalized definition?</h3>
-  <button data-value="4a">4a · (Recommended) Capture one finalized Box&lt;ActivatedAbilityDefinition&gt; across ActivationX, ActivatedTargeting, and Operation::Activation; keep priority scans borrow-only</button>
-  <button data-value="4b">4b · Keep plan's (priced_cost, unfinalized ActivatedAbilityDefinition) on ActivatedTargeting and Operation::Activation only</button>
-</div>
-
-<div data-choice="q5" data-label="5 · Match-state hash version (irreversible once released)">
-  <h3>5. Match-state hash version for owned non-mana activations (origin/main is v34; open PR #639 is v35; irreversible once shipped):</h3>
-  <button data-value="5a">5a · (Recommended) Bump MATCH_STATE_HASH_VERSION 35 → 36 so PR #639 can release independently</button>
-  <button data-value="5b">5b · Reuse unreleased v35 (requires MTG-500 and MTG-508 to ship in the same release)</button>
+<div data-choice="q3" data-label="3 · Caching coupling state on PaymentModel (F4)">
+  <h3>3. Should <code>PaymentModel</code> precompute coupling once (and store <code>unverified_suffix</code> / skip <code>CoupledPayment</code> on uncoupled boards) before delivery benchmarks?</h3>
+  <button data-value="3a">3a · (Recommended) Yes — compute coupling once per <code>PaymentModel</code> so ordinary TLA boards avoid per-call source scans and <code>has_mutating_caller()</code> never clones <code>Game</code> inside loops</button>
+  <button data-value="3b">3b · Leave <code>model.coupled()</code> recomputing per call and rely on Engine Budget to detect any slowdown</button>
 </div>
 </main>
-<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-508"},"directory":"/Users/jack/src/manabot.mtg-508-support-coupled-mana","base":"5e9156a79104b367fea21562806b47cd4059a1eb","head":"4a25a7a28f","path":"scratch/concept-review.html","build_id":"9e82cd1a277f1181","protocol":{"revision":11,"min_revision":10}}</script>
+<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-508"},"directory":"/Users/jack/src/manabot.mtg-508-support-coupled-mana","base":"bc4d2ac17fba8cb2ae582b2f67de450024369b80","head":"b0cd922864","path":"scratch/concept-review.html","build_id":"81389ae6d5a0611d","protocol":{"revision":11,"min_revision":10}}</script>
 <script>
 (function () {
   "use strict";
