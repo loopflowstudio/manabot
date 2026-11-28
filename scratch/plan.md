@@ -1,6 +1,6 @@
 # MTG-508 · Coupled mana payments, fixed-tap bonus choices, owned non-mana activations
 
-Three rules gaps left by MTG-500 (PR #639, open; this branch is synced onto it at `5e9156a791`). Each one makes a legal payment end in `AgentError("empty non-terminal action space")`, a debug panic, or `invalid ability index`. When this lands, every offered payment action leads to a completed payment, and no action that strands the cost is offered.
+Three rules gaps left by MTG-500 (PR #639, merged as `606e79e90a` and already synced here). Each one makes a legal payment end in `AgentError("empty non-terminal action space")`, a debug panic, or `invalid ability index`. When this lands, every offered payment action leads to a completed payment.
 
 The designs come from MTG-500's ten concept reviews, revised by this Task's concept review (below): `7cb3655f1:scratch/plan.md` (designs 1, 4, 7 and the fixed-tap section) and `5e9156a791^:scratch/plan.md` (deferred findings). Nobody has approved them; they were "made for review" there and remain so.
 
@@ -40,9 +40,7 @@ All five questions were answered headless with the review's recommended option, 
 
 ## Pass 3 · Payer replacement order, remaining boards, bounds
 
-- **Design 7.** While the chooser has an enclosing payment, `Decision::OrderReplacement` offers (`decision.rs` ≈1949) and admits (≈2692) only orders the coupled authority completes, through the replacement-order entry point. An opponent's choice is never filtered. At priority all orders remain. One surviving order is taken by trivial-decision skipping.
-- Acceptance boards from `7cb3655f1:scratch/plan.md` pass 4b: Doubling Season → Caradora while casting `{G}{G}` (only Caradora → Season offered); delve beside a non-token `{T}, Sacrifice: Add {G}` (and the same with an `ExileIfWouldDie` record, where delve gains nothing); summoning-sick creature with remove-haste-counter mana; a `tap_cost` predicate and an `ActivatedAbilitiesCostLess` predicate each beside a non-mana write; PreventAll reader before Citadel at 3 life; remove-a-+1/+1-counter mana beside Raucous Audience; Treasure beside a `SacrificedThisTurnAtLeast` output; White Lotus Tile / Avatar Kyoshi with a sacrifice source; a suspended `ManaUpfront` whose grant ended.
-- `{15}` with 10 Forests, Angel, Audience and two Citadels: Forests classify Invariant, the answer is "unpayable", and the test pins the fork-state count (expected low hundreds; an estimate, not a measurement).
+`588a2333a` filters payer replacement orders, preserves opponent choices, and restores the shortest exact tap sequence for coupled upfront fees. All 28 focused manual-payment tests passed, including the remaining boards and the `{15}` rejection at 207 fork states.
 
 ## Pass 4 · Owned non-mana activations
 
@@ -64,7 +62,7 @@ Drafted in place before implementation (read these when building and reviewing):
 
 ## Next
 
-Pass 3 is next. Use the replacement-order candidate in `flow/mana/coupled.rs` to filter payer orders in `flow/decision.rs`. Exercise the remaining boards and pin the fork-state count for the `{15}` fixture. The native search already requires every opponent order to complete. The seven focused checks passed with debug assertions enabled and optimization disabled. The full debug suites, Engine Budget, and cold replay verification remain for CI and review.
+Pass 4 is next. Capture the finalized non-mana activation in `flow/game.rs`, `flow/play.rs` and `flow/payment.rs`, then follow the owned definition through the consumers listed above. The full debug suites, Engine Budget, fixture refresh and cold replay verification remain.
 
 ## Acceptance check
 
@@ -106,7 +104,3 @@ Debug profile (CI's). Expected: all pass, including the five flipped fixtures, t
 - The failure-asserting halves of the four fixtures (`unwrap_err` on `empty non-terminal action space`, the "frozen estimate" comments, the offline resolver walk in the fixed-tap test).
 - `activation_ability(source, index)` reads after announcement (ActivationX included), and `invalid ability index` at `play.rs` ≈2382.
 - Survives: `mana_suffix_life_delta`, `PaymentCache`, `SearchEquivalence`, `direct()`, every MTG-500 fixture's passing half.
-
-## Stack
-
-PR #639 lands first. This branch already contains it; after it merges, `lf sync main` rebases the stack. No security or privacy surface is touched; no security review needed.

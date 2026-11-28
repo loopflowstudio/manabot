@@ -1,4 +1,4 @@
-at: 6064af631c29266bf2236c57bac96eb0cc57bd14
+at: 588a2333a9670e3a7328288010f42f4c9e0bb447
 first:
   - path: managym/README.md
     why: Rules and offers the player will see
@@ -7,9 +7,11 @@ first:
   - path: managym/src/flow/mana.rs
     why: Feasibility entry points and native production
   - path: managym/src/flow/mana/coupled.rs
-    why: Native steps, retained costs, and structural memoization
+    why: Native steps, upfront tap budget, and memoization
   - path: managym/src/flow/decision.rs
-    why: Shared execution of choices and replacement effects
+    why: Replacement offers and execution share the payment check
+  - path: managym/src/flow/mana/tests/manual_payment/coupled_boards.rs
+    why: Live replacement decisions and order-sensitive payment boards
   - path: managym/src/flow/mana/tests/manual_payment.rs
     why: Regression positions and memoization checks
   - path: managym/cards/tests/cards/ody.rs
