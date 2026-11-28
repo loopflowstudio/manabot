@@ -30,8 +30,8 @@ if TYPE_CHECKING:
 
     from manabot.backends.torch.policy import ActorCritic
 
-EvalDevice = Literal["cuda", "mlx", "mps", "cpu"]
-EVAL_DEVICES: tuple[EvalDevice, ...] = ("cuda", "mlx", "mps", "cpu")
+EvalTarget = Literal["cuda", "mlx", "mps", "cpu"]
+EVAL_DEVICES: tuple[EvalTarget, ...] = ("cuda", "mlx", "mps", "cpu")
 Logits = Callable[[Prepared[np.ndarray]], np.ndarray]
 
 
@@ -45,7 +45,7 @@ def mlx_available() -> bool:
         return False
 
 
-def device_available(device: EvalDevice) -> bool:
+def device_available(device: EvalTarget) -> bool:
     if device == "cpu":
         return True
     if device == "mlx":
@@ -61,7 +61,7 @@ def device_available(device: EvalDevice) -> bool:
     return torch.backends.mps.is_available()
 
 
-def select_device() -> EvalDevice:
+def select_device() -> EvalTarget:
     """Choose the available evaluation device in order, unless explicitly set."""
     override = os.environ.get("MANABOT_EVAL_DEVICE")
     if override:
@@ -70,7 +70,7 @@ def select_device() -> EvalDevice:
             raise ValueError(
                 f"unknown MANABOT_EVAL_DEVICE {override!r}; expected one of: {accepted}"
             )
-        device = cast(EvalDevice, override)
+        device = cast(EvalTarget, override)
         if not device_available(device):
             extra = (
                 " (requires Apple Silicon and uv sync --extra mlx)"

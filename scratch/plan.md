@@ -224,8 +224,8 @@ forwards, and any change to the default precision or to compute class ids.
 
 Nothing existing is removed. The local probe scripts under `.runs/`
 (`probe_mps.sh`, `profile_forward.py`, `cold_warm.py`) are untracked
-scaffolding the experiment file replaces. `scratch/qa.html` and
-`scratch/tour.yaml` are MTG-497's and are not this Task's review material.
+scaffolding the experiment file replaces. `scratch/qa.html` records MTG-497's
+checks. `scratch/tour.yaml` gives the reading order for MTG-507.
 
 ## Done when
 

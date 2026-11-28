@@ -1,7 +1,7 @@
 //! Python ownership boundary for immutable positions and independent live Envs.
 #![allow(clippy::useless_conversion)]
 
-use super::bindings::{map_agent_err, ActionSpaceEnum, PhaseEnum, PyEnv};
+use super::bindings::{map_agent_err, ActionSpaceEnum, PhaseEnum, PyEnv, PyGameStateEdit};
 use crate::agent::{BranchMode, GameSnapshot, RestoreOptions, SnapshotMetadata};
 use pyo3::prelude::*;
 use std::sync::Arc;
@@ -28,7 +28,7 @@ impl PyGameSnapshot {
 
     #[pyo3(signature = (options=None))]
     fn restore(&self, py: Python<'_>, options: Option<&PyRestoreOptions>) -> PyResult<PyEnv> {
-        let options = options.map(|o| o.0).unwrap_or_default();
+        let options = options.map(|o| o.0.clone()).unwrap_or_default();
         py.allow_threads(|| self.0.restore(options))
             .map(PyEnv::from_live)
             .map_err(map_agent_err)
@@ -71,38 +71,43 @@ impl PyRestoreOptions {
         Self(RestoreOptions::default())
     }
     #[staticmethod]
-    #[pyo3(signature = (*, reseed=None, enable_decision_memory=None, forced_first_action=None))]
+    #[pyo3(signature = (*, reseed=None, enable_decision_memory=None, forced_first_action=None, game_state_edits=None))]
     fn exact(
         reseed: Option<u64>,
         enable_decision_memory: Option<bool>,
         forced_first_action: Option<usize>,
+        game_state_edits: Option<Vec<PyGameStateEdit>>,
     ) -> Self {
         Self(RestoreOptions {
             mode: BranchMode::Exact { reseed },
             enable_decision_memory,
             forced_first_action,
+            game_state_edits: game_state_edits.map(PyGameStateEdit::batch),
         })
     }
     #[staticmethod]
-    #[pyo3(signature = (seed, *, enable_decision_memory=None, forced_first_action=None))]
+    #[pyo3(signature = (seed, *, enable_decision_memory=None, forced_first_action=None, game_state_edits=None))]
     fn shuffle_libraries(
         seed: u64,
         enable_decision_memory: Option<bool>,
         forced_first_action: Option<usize>,
+        game_state_edits: Option<Vec<PyGameStateEdit>>,
     ) -> Self {
         Self(RestoreOptions {
             mode: BranchMode::ShuffleLibraries { seed },
             enable_decision_memory,
             forced_first_action,
+            game_state_edits: game_state_edits.map(PyGameStateEdit::batch),
         })
     }
     #[staticmethod]
-    #[pyo3(signature = (viewer, seed, *, enable_decision_memory=None, forced_first_action=None))]
+    #[pyo3(signature = (viewer, seed, *, enable_decision_memory=None, forced_first_action=None, game_state_edits=None))]
     fn determinize(
         viewer: isize,
         seed: u64,
         enable_decision_memory: Option<bool>,
         forced_first_action: Option<usize>,
+        game_state_edits: Option<Vec<PyGameStateEdit>>,
     ) -> PyResult<Self> {
         if !(0..=1).contains(&viewer) {
             return Err(pyo3::exceptions::PyValueError::new_err(
@@ -116,6 +121,7 @@ impl PyRestoreOptions {
             },
             enable_decision_memory,
             forced_first_action,
+            game_state_edits: game_state_edits.map(PyGameStateEdit::batch),
         }))
     }
 }

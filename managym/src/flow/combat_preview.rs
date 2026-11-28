@@ -5,12 +5,13 @@
 //! [`Game::preview`] and [`Game::submit`].
 use serde::{Deserialize, Serialize};
 
-use crate::agent::action::{ActionSpaceKind, AgentError};
+use crate::agent::action::AgentError;
 use crate::experience::ObjectRenderId;
 use crate::flow::decision_group::{DecisionAddress, DecisionChoice, DecisionOutcome, DecisionSpec};
 use crate::flow::game::Game;
 use crate::state::game_object::PlayerId;
 
+pub use crate::flow::combat::DeclarationKind;
 pub use crate::flow::decision_group::{PlannedAttack, PlannedBlock};
 
 /// The whole declaration a person drafts. An attack plan lists attackers;
@@ -22,13 +23,6 @@ pub struct CombatPlan {
     pub attackers: Vec<PlannedAttack>,
     #[serde(default)]
     pub blocks: Vec<PlannedBlock>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DeclarationKind {
-    Attackers,
-    Blockers,
 }
 
 /// A creature the declaration will ask about, in the engine's asking order.
@@ -132,11 +126,9 @@ impl Game {
         let space = self
             .action_space()
             .ok_or_else(|| AgentError("no decision".into()))?;
-        let kind = match space.kind {
-            ActionSpaceKind::DeclareAttacker => DeclarationKind::Attackers,
-            ActionSpaceKind::DeclareBlocker => DeclarationKind::Blockers,
-            _ => return Err(AgentError("not a combat declaration".into())),
-        };
+        let (kind, _, _) = space
+            .declarer()
+            .ok_or_else(|| AgentError("not a combat declaration".into()))?;
         // Preserve cross-field refusal messages from the flat `CombatPlan` shape.
         let wrong_field = match kind {
             DeclarationKind::Attackers => plan

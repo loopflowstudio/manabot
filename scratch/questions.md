@@ -23,6 +23,9 @@ Each is reversible.
 - **float32 stays the default** whatever the profile shows.
 - Local MPS timings on 2026-11-27 were taken at load 30-40 and are not
   evidence; only the op counts are used.
+- The MTG-497 sync keeps one shared `prepare_batch` for both arena batches and
+  captured single rows. The capture hook receives the selected coordinates
+  after per-seat memory ablation.
 
 Ideas outside this Task:
 
@@ -79,11 +82,6 @@ Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
 
 Ideas outside this Task:
 
-- **Zero-copy transport for policy inputs.** Gate 1's 6db832 bus passed zero
-  arrays by pointer. Its array discovery sees containers and NumPy arrays,
-  while `Prepared` arrives as a dataclass and is pickled in-band. The report
-  measures the direct bus with the production input shape. What interface
-  should expose those buffers without duplicating `Prepared`?
 - **Game-side recording cost.** Host work is 0.85 s per game against the
   heuristic and 1.5 s in self-play, the limit on CUDA below about 34M (MTG-328
   saw 21% L4 utilization). In a profile of one pairing, `evaluation_metadata`
@@ -127,3 +125,15 @@ Pass 6 implementation choices (2026-11-27):
 
 During compression I kept the scalar `play_pairing` keyword arguments used by
 experiments. Both runners pass the same `PairingSpec` through admission.
+
+Scalar and vector callers apply memory blanking before shared host preparation
+(2026-11-27). The eval paths use ordinary decision-memory rows, which can be
+joined across forwards. Training's retained
+prefixes select fold trees separately. Job declarations supply evaluation
+precision because saved policy checkpoints have no training-precision field.
+
+Post-pass 7 review choices made headless at `bf5bb9c70d` (2026-11-27), marked
+for review in `scratch/plan.md`: 1a (suffix non-float32 trophy benchmark
+names; irreversible once scored), 3a (one `vector_layout_key`), 4b (drain
+errors before backfill, `GAME_SECONDS = 120.0`, no extra per-slot ceiling).
+Q2 (live frames vs compact annotations) stays open with F4 deferred.

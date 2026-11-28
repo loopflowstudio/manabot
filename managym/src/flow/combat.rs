@@ -1,6 +1,35 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
+use crate::agent::action::{Action, ActionSpace, ActionSpaceKind};
 use crate::state::game_object::{ObjectId, PermanentId, PlayerId};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeclarationKind {
+    Attackers,
+    Blockers,
+}
+
+impl ActionSpace {
+    /// Every offer in a declaration concerns the same creature and rules player.
+    pub(crate) fn declarer(&self) -> Option<(DeclarationKind, PlayerId, PermanentId)> {
+        match (self.kind, self.actions.first()?) {
+            (
+                ActionSpaceKind::DeclareAttacker,
+                &Action::DeclareAttacker {
+                    player, permanent, ..
+                },
+            ) => Some((DeclarationKind::Attackers, player, permanent)),
+            (
+                ActionSpaceKind::DeclareBlocker,
+                &Action::DeclareBlocker {
+                    player, blocker, ..
+                },
+            ) => Some((DeclarationKind::Blockers, player, blocker)),
+            _ => None,
+        }
+    }
+}
 
 /// CR 508.1b. A permanent defender is bound to its battlefield appearance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, serde::Serialize)]
@@ -49,9 +78,28 @@ pub struct CombatState {
     /// once declaration finishes. Breaks block symmetry across prompts.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub declined_blockers: Vec<PermanentId>,
+    /// Already answered this step, but an edit detached the declaration.
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub detached_declarers: BTreeSet<PermanentId>,
 }
 
 impl CombatState {
+    pub(super) fn completed_declarers(&self, role: DeclarationKind) -> BTreeSet<PermanentId> {
+        match role {
+            DeclarationKind::Attackers => self
+                .attackers()
+                .chain(self.declined_attackers.iter().copied())
+                .collect(),
+            DeclarationKind::Blockers => self
+                .attacker_to_blockers
+                .values()
+                .flatten()
+                .chain(&self.declined_blockers)
+                .copied()
+                .collect(),
+        }
+    }
+
     pub fn attackers(&self) -> impl ExactSizeIterator<Item = PermanentId> + '_ {
         self.attack_targets.iter().map(|&(attacker, _)| attacker)
     }

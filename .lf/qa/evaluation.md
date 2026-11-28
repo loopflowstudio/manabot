@@ -96,3 +96,10 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
   `stored_runs(...).tournaments[name].tournament.environment` with the
   declaration's). Check `tla_trophies_colab`, `tla_trophies_floor` and
   `tla_frontier_snapshots`. `tla_trophies` already conflicts on `main`.
+- To verify live resume, run a named `Benchmark` with one
+  `CheckpointSlot` seating through `uv run --no-sync etude eval FILE --source DIR`.
+  Add a distinct checkpoint to the same declaration and rerun. Expect one new
+  played deal with the new checkpoint, the old result block's checksum to
+  match and all four new legs to replay. A third pass reports
+  `nothing to play`. Use a temporary track directory and retain each run's
+  arena output separately.

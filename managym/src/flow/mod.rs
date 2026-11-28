@@ -32,6 +32,7 @@ pub mod search;
 mod selection_sampling;
 pub mod setup;
 pub mod stabilization;
+pub mod state_edit;
 pub mod statics;
 pub mod statistics;
 pub mod tick;

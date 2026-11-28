@@ -21,7 +21,7 @@ use crate::{
         Command as SemanticCommand, DecisionFrame, Observation as SemanticObservation,
         SemanticTransition,
     },
-    flow::{card_capture::CaptureMode, game::Game, search::mix_seed},
+    flow::{card_capture::CaptureMode, game::Game, search::mix_seed, state_edit::GameStateEdit},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
     search_state::{witness, SearchStateWitness},
@@ -131,6 +131,8 @@ pub struct FlatMcResult {
 
 mod provenance;
 mod snapshot;
+#[cfg(test)]
+mod state_edit_tests;
 use provenance::{GameProvenance, Intervention, RecordedAction};
 pub use snapshot::{BranchMode, GameSnapshot, RestoreOptions, SnapshotMetadata};
 
@@ -1504,6 +1506,18 @@ impl Env {
         self.apply_intervention(Intervention::Reseed { seed })
     }
 
+    /// Apply one counterfactual batch and observe the refreshed decision as its chooser.
+    pub fn edit_game_state(
+        &mut self,
+        edits: impl Into<Arc<[GameStateEdit]>>,
+    ) -> Result<Observation, AgentError> {
+        self.apply_intervention(Intervention::GameStateEdits {
+            edits: edits.into(),
+        })?;
+        let game = self.game.as_ref().expect("edited live game");
+        Ok(Observation::for_player(game, game.agent_player()))
+    }
+
     pub(crate) fn restore_frame_candidates(
         &self,
         take: impl FnOnce(&str) -> Result<bool, AgentError>,
@@ -1548,6 +1562,12 @@ impl Env {
                     ));
                 }
                 self.step_and_settle(chooser, action as i64)?;
+            }
+            Intervention::GameStateEdits { ref edits } => {
+                game.edit_game_state(edits)?;
+                if edits.is_empty() {
+                    return Ok(());
+                }
             }
         }
         if let Some(trace) = &mut self.provenance {

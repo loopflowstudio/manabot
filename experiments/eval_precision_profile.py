@@ -48,7 +48,7 @@ from manabot.eval.agent_loader import (
     load_with_precision,
     torch_forward_context,
 )
-from manabot.eval.agents import Sampler, build, checked_logits, local_forward
+from manabot.eval.agents import build, checked_logits, local_forward, prepare_batch
 from manabot.eval.vector import LocalMatches
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.files import atomic_json
@@ -124,15 +124,13 @@ def capture(
     os.environ["MANABOT_EVAL_DEVICE"] = device
     os.environ["OMP_NUM_THREADS"] = "1"
     forward = load_with_precision(ref, "float32")
-    pending: tuple[HostBatch, ObservationSelection, Sampler, Spec] | None = None
+    pending: tuple[HostBatch, ObservationSelection, Spec] | None = None
     count = 0
 
-    def observe(
-        batch: HostBatch, selection: ObservationSelection, sampler: Sampler, spec: Spec
-    ) -> None:
+    def observe(batch: HostBatch, selection: ObservationSelection, spec: Spec) -> None:
         nonlocal pending
         assert pending is None, "capture expects one checkpoint per round"
-        pending = batch, selection, sampler, spec
+        pending = batch, selection, spec
 
     with NamedTemporaryFile(dir=batches.parent, suffix=".partial") as partial:
         with gzip.GzipFile(fileobj=partial, mode="wb", compresslevel=1) as stream:
@@ -142,7 +140,7 @@ def capture(
                 assert (
                     pending is not None and len(inputs) == 1 and inputs[0] is pending[0]
                 )
-                batch, selection, sampler, spec = pending
+                batch, selection, spec = pending
                 pending = None
                 if count == 0:
                     pickle.dump(
@@ -160,7 +158,7 @@ def capture(
                     (batch,)
                     if batch.batch == 1
                     else tuple(
-                        sampler.prepare(
+                        prepare_batch(
                             ObservationSelection(selection.space, (coordinate,)), spec
                         )
                         for coordinate in selection.coordinates
