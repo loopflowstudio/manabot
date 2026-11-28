@@ -632,12 +632,20 @@ def test_player_crash_is_an_interrupted_record(monkeypatch: pytest.MonkeyPatch) 
     assert replay.stop is not None and replay.stop.status == "interrupted"
 
 
-def test_runner_failure_after_terminal_step_voids_the_view_result() -> None:
+def test_runner_failure_after_terminal_step_voids_the_view_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from manabot.env.observation import ObservationSpace
+    from manabot.infra.config import ObservationConfig
     from manabot.sim.evaluation_records import audit_view
     from manabot.sim.matchup import selected_match
     from manabot.sim.native_game import execute_game
     from managym.recording import GameRecord
 
+    def cutoff_space() -> ObservationSpace:
+        return ObservationSpace(ObservationConfig(action_overflow="first-legal"))
+
+    monkeypatch.setattr("manabot.sim.native_game.ObservationSpace", cutoff_space)
     _, players = selected_players()
     game = dict(
         match_id="late-runner-failure",
@@ -657,6 +665,9 @@ def test_runner_failure_after_terminal_step_voids_the_view_result() -> None:
     end = GameRecord.model_validate(data).games[0].end
     assert end is not None and end.status == "complete"
     assert audit_view(data)["terminated"] is True
+    metadata = data["context"]["evaluation"]
+    cutoff_context = metadata["policy_action_cutoff"]["context"]["evaluation"]
+    assert cutoff_context["termination_reason"] == metadata["termination_reason"]
 
     data["context"]["evaluation"]["failure"] = "send failed"
     data["context"]["evaluation"]["termination_reason"] = "crash"

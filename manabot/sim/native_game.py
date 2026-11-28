@@ -279,18 +279,21 @@ def execute_game(
                 capture_path = Path(
                     game.get("capture_path", Path(temporary.name) / "journal.jsonl")
                 )
+
+                def capture_context() -> dict[str, object]:
+                    return {"evaluation": deepcopy(evaluation_metadata(game))}
+
                 capture = ScalarCapture(
                     game["deal_seed"],
                     journal_path=capture_path,
                     context={"source_kind": "evaluation"},
+                    context_provider=capture_context,
                     failure_directory=capture_path.parent,
                     # The journal must replay the log the players observe.
                     decision_memory=memory.max_decision_records > 0,
                     decision_memory_include_own=memory.decision_memory_include_own,
                 )
-                capture.frozen_context = {
-                    "evaluation": deepcopy(evaluation_metadata(game))
-                }
+                capture.frozen_context = capture_context()
             env, obs = replay_environment(game, space, capture=capture)
         if capture is None:
             game["initial_state_digest"] = env._engine.state_digest()
@@ -427,6 +430,8 @@ def execute_game(
         else:
             failure_record(game, "command_cap", "game exceeded its Command cap", None)
     except BaseException as exc:
+        if capture is not None:
+            capture.frozen_context = None
         if not is_game_error(exc):
             if env is not None:
                 env.close()
@@ -440,11 +445,11 @@ def execute_game(
             responsible,
         )
     if env is not None:
+        if capture is not None:
+            # Capture the settled metadata in the cutoff report and close journal.
+            capture.frozen_context = None
         if env.obs_space.config.action_overflow == "first-legal":
             game["policy_action_cutoff"] = env._capture.policy_action_report()
-        if capture is not None:
-            # The close journal also retains the runner's ending and integrity.
-            capture.frozen_context = {"evaluation": deepcopy(evaluation_metadata(game))}
         env.close(reason=game["termination_reason"])
         if capture is not None:
             # The journal includes a rejected/pending call; viewing never executes it.
