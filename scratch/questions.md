@@ -43,6 +43,13 @@ Choices taken headless (planning and the realign after concept review,
   error is stored on the failed game's ending and projects to a reset failure
   when the stream is read on its own.
 
+- **Pass 4 review Q1 (1a, for review).** One `GameEnd.failure` with
+  `operation` replaces the reset-only `OpeningFailure`; a `CodeSeat` decision
+  error is a player crash, never a native root failure.
+- **Pass 4 review Q2 (2a, for review).** No maintained experiment moves to a
+  `native-v3` tournament name in this Task, including `tla_trophies.py`'s
+  unscored bf16/tf32 branches.
+
 Ideas outside this Task:
 
 - Managed scalar evaluation (`play_scalar`) could seat the heuristic natively
