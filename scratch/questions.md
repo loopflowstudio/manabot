@@ -164,3 +164,9 @@ trajectories with no interventions or issued object-candidate frames and no
 consumer apply callback. This covers vector evaluation and keeps semantic
 boundary replay on its fork-based path. After a divergent step the walker
 rebuilds the verified position, including card capture when requested.
+
+MTG-506 Pass 3 used the retained `w384l8` checkpoint bytes across the panel.
+The first trained MPS timing began before formatting was applied. The report
+uses the 32-deal rerun whose source fingerprint matches the other nine arms.
+Both timings and both 16-deal profiles are under
+`.runs/eval-throughput/mtg506/`.

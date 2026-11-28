@@ -193,10 +193,10 @@ review.
 6. **Process-constant identity is computed once where it is produced.**
    `manabot/infra/provenance.py` caches its engine/source/content fingerprints
    per process (like `managym/recording.py:runtime_identities`), so scalar
-   play, admission and registration gain too; replay calls `audit_view` once
-   per game. `execute_game` sets `capture.frozen_context` once setup completes
-   (refreshed only on integrity or failure changes) instead of deep-copying
-   `evaluation_metadata` at each snapshot (`manabot/sim/native_game.py:292`).
+   play, admission and registration gain too. Replay projects the audit once
+   per game. Card evidence reads the setup and outcome directly. Scalar
+   capture freezes runner context at setup and reads the current context again
+   for cutoff diagnostics and the closing journal.
 
 ## Source of truth
 
@@ -264,38 +264,19 @@ evidence, `Play` counts and any viewer frame derive from walking it.
 ## Passes
 
 0. **Sync with main** (`6a48ef1c68`) brought in MTG-502 while keeping the MTG-497 stack.
-1. **Native heuristic seats** (`bc03df8508`) added capped policies, per-game code players, replayable slot policies and isolation for failed openings.
-2. **Compact evidence and background replay** (`4071284d29`) removed live viewer projection, verified indexed transitions once, and moved replay to two bounded workers.
-3. **Leftovers and measurement.** Design 6, a re-profile, then the panel:
-   Apple arms (CPU scalar, MPS-64, MLX-64) for both checkpoints on the M4 Max,
-   CUDA-64 float32 and bf16 on one L4 rental under `--max-usd 5`. Report and
-   docs updated.
+1. **Native heuristic seats** (`bc03df8508`) added capped policies, per-game code players and isolated opening failures. All 64 MPS games replayed and the first four deals matched scalar on 1,585 checkpoint actions and all endings.
+2. **Compact evidence and background replay** (`4071284d29`) removed live viewer projection and moved verification to two bounded workers. All 64 MPS games matched Pass 1 on 5,964 actions, pre-decision digests and endings. The two passes used different build profiles.
+3. **Process provenance and capture metadata** (`ad8b9dbaab`, `c2db934c5`) cached build and catalog identity, froze scalar capture context during play and removed redundant replay projection.
 
-### Pass 1 evidence
-
-The M4 Max MPS probe replayed all 64 vector legs across 16 trophy deals.
-The four matching scalar deals agreed on all 1,585 checkpoint action indices,
-pre-decision digests, winners, scores and final digests across 16 legs.
-The vector reached 6,889 games/hour and 21.2 mean rows per forward with a peak
-of 64. Forwards were the largest stage at 17.66 of 33.44 seconds. The mean
-includes the drain after the last deal was seated. The earlier 15.8-row
-reference used 32 deals and the prior heuristic seed cohort.
-Receipts are in `/tmp/mtg506-pass1.W3eFkt`. The full Apple and L4 panel is Pass 3.
-
-### Pass 2 evidence
-
-The same 16 MPS deals replayed all 64 games and matched Pass 1 on all
-5,964 actions, pre-decision digests, and game endings. The debug extension
-ran at 4,825 games/hour and 21.2 mean rows per forward. The probe used a
-different build profile from Pass 1, so compare throughput on matched builds
-in Pass 3. Pass 2 receipts are in `/tmp/mtg506-pass2.eqDN3S/vector`.
-
-The focused checks passed for replay overlap and shutdown, registered seats,
-memory blanking, reconstructed scalar frame hashes, failure binding, and
-verified-prefix card capture. Public API and package boundary checks passed.
-For the matched local panel, the retained corpus is under
-`ETUDE_INPUTS_DIR=/tmp/mtg497-probe/inputs` and the trained checkpoint is
-`/tmp/mtg497-local-policy/00002000-raw.safetensors`.
+The [32-deal panel](../experiments/reports/eval_throughput.md#native-heuristic-and-background-replay-mtg-506)
+used the same source across ten arms and one release build per host. All
+1,280 games replayed. The trained MPS arm reached 11,959 games/hour and
+36.3 mean rows, with forwards taking 85% of wall. Every float32 arm matched
+scalar on each leg. The trained L4 bf16 arm disagreed on 19 checkpoint
+action traces and matched every score. The matched 16-deal profile reduced
+fingerprinting from 1.782 to 0.027 seconds across 80 calls and preserved the
+5,964 recorded checkpoint actions. The profiled total wall time rose from
+24.7 to 28.6 seconds. The broad Rust suite is deferred to CI.
 
 ## Deferred findings
 
@@ -313,15 +294,17 @@ uv run --no-sync python -m experiments.eval_throughput \
   --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors
 ```
 
-prints a summary with 128 games, 128 replay passes, mean rows per forward of
-at least 32 and `largest_stage: forward`; the scalar arm on the same deals
-gives the same winners, scores and checkpoint forward rows.
+prints a summary with 128 games, mean rows per forward of at least 32 and
+`largest_stage: forward`. The per-deal replay receipts show 128 passes. The
+scalar arm on the same deals gives the same winners, scores and checkpoint
+forward rows.
 
 ## Build notes
 
-- This checkout has a CPython 3.13 `.venv` that reads MTG-497's dependencies
-  and the editable EXP-77 Etude source. Use `uv run --no-sync`.
-- The cp313 native extension was rebuilt for Pass 1. Rebuild after changing Rust.
+- This checkout has a CPython 3.13 `.venv` with editable Etude 6db832. Use
+  `uv run --no-sync`. The corpus is in `/tmp/mtg497-probe/inputs` and the
+  trained checkpoint is `/tmp/mtg497-local-policy/00002000-raw.safetensors`.
+- The cp313 extension was rebuilt in release for the Pass 3 measurements.
 - Rust tests run in debug with `CARGO_BUILD_JOBS=2`.
 
 ## Done when
