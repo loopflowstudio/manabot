@@ -272,24 +272,17 @@ emission guard, exact `(kind, 0x…)` diagnostics, the 44 memory names' hashes.
    Python checks pass with the rebuilt extension, including both pinned pilots
    and the constructed memory checkpoint. The optional `u1952` replay skipped.
 
-After Pass 4: PR body with the 0.3.0 hold notice and release line; merge and
-auto-merge stay off.
+Remaining: publish the PR (none exists yet) with the 0.3.0 hold notice and
+release line; merge and auto-merge stay off.
 
 ## Concept review dispositions
 
-Pre-implementation review (a173411b48): all findings built in Passes 1–3.
-
-Post-implementation review (54e1b1816b):
-- `record_renames()` chains all of `TOKENS` (61 printed-only, plus every
-  future retirement) into phantom `execution/*` retirements → Pass 4.
-- Live `condition_text` prose feeds retirements; a wording change would make
-  every pre-0.3.0 checkpoint fail with "unexplained record_name key" → Pass 4.
-- Named `RECORDS` constant gone and `record_renames()` untested → Pass 4.
-- Stale module headers in `record_vocabulary.rs` and
-  `manabot/verify/record_coverage.py` → fixed in this realign.
-- Divergent decision-memory label admission → Deferred findings.
-- Review question 1 (card/set retirements) → decision 7. Question 2 (hold,
-  constructed memory checkpoint, API names) → decisions 1, 2, 6 stand.
+Post-Pass-4 review (a95a094c94, against main 23212c88f5): no in-scope
+findings; the three Pass-4 findings from 54e1b1816b are confirmed fixed.
+- Divergent decision-memory label admission → Deferred findings (unchanged).
+- Question 1 (card/set retirements) → decision 7 stands (1a).
+- Question 2 (hold, constructed memory checkpoint, API names) → decisions 1,
+  2 and 6 stand (2a); the open question in `scratch/questions.md` remains.
 
 ## Deferred findings
 
