@@ -33,8 +33,8 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-planeswalkers.json"
 )
-AUTHORITY_SHA256 = "a2eb4df25ac2651be7121644aff8d27d13ca02188308bd74c70c79d2c538441e"
-TERMINAL_STATE = "7579635e057980ae75908fc77f25300fa96cc1ed4fb45184b83ca595bd754dff"
+AUTHORITY_SHA256 = "bc999f425dc39ea58402e440a55f729b4a5d0d5b1956cf910e07ecf4755815c5"
+TERMINAL_STATE = "5deb8c0fc2a794b5b831f6b029512cb0ad1b0c179ff7df3f4343fe1d47d2aa58"
 
 COMMAND_COUNT = 174
 

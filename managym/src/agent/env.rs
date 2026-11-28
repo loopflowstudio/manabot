@@ -353,15 +353,15 @@ impl Env {
         }
         let _scope = self.profiler.track("env_reset");
         let evidence = self.current_recording()?;
-        self.retained_exposure.extend(evidence.exposure);
-        self.retained_statistics.extend(evidence.statistics);
         let mut game = Game::construct(
             &player_configs,
             self.seed,
             self.skip_trivial,
             self.capture,
             self.collect_statistics,
-        );
+        )?;
+        self.retained_exposure.extend(evidence.exposure);
+        self.retained_statistics.extend(evidence.statistics);
         game.decision_memory_enabled =
             self.decision_memory_enabled || self.decision_memory_include_own;
         game.decision_memory_include_own = self.decision_memory_include_own;
@@ -1762,7 +1762,7 @@ impl Env {
     /// Constructed-position access for native measurement and card tests,
     /// absent from Python/wheels. The caller must refresh priority after
     /// changing its constructed board.
-    #[cfg(feature = "fixtures")]
+    #[cfg(any(test, feature = "fixtures"))]
     pub fn fixture_game_mut(&mut self) -> &mut Game {
         self.scenario_game_mut("fixture_game_mut").unwrap()
     }

@@ -7,7 +7,7 @@
 use crate::state::card::SpellProfile;
 #[cfg(test)]
 use crate::state::player::ManaFloats;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::Arc};
 
 use rand::seq::SliceRandom;
 
@@ -30,15 +30,63 @@ use crate::{
     },
     state::{
         ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant},
+        card::{ActivatedAbilityDefinition, TapCost},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
         knowledge::LibraryKnowledge,
         mana::ManaCost,
         payment::{How, PaymentReceipt, Toward},
-        permanent::{CounterKind, SpellEntry},
+        permanent::{CounterKind, EntryChoice, SpellEntry},
         predicate::CardPredicate,
         zone::ZoneType,
     },
 };
+
+/// The priced cost and rules text of an announced mana activation. Paying
+/// its fee can change the source's live abilities, so the decision owns both.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ManaUpfrontActivation {
+    pub(crate) mana_cost: ManaCost,
+    pub(crate) tap_cost: Option<TapCost>,
+    pub(crate) tap_source: bool,
+    pub(crate) remove_counters: Option<(CounterKind, u16)>,
+    pub(crate) add_counters: Option<(CounterKind, u16)>,
+    pub(crate) life_cost: u32,
+    pub(crate) sacrifice_source: bool,
+    pub(crate) output: Effect,
+    pub(crate) suffix: Vec<Effect>,
+}
+
+impl ManaUpfrontActivation {
+    pub(crate) fn new(mana_cost: ManaCost, raw: &ActivatedAbilityDefinition) -> Self {
+        let (output, suffix) = raw.mana_parts().expect("announced mana ability");
+        Self {
+            mana_cost,
+            tap_cost: raw.tap_cost.clone(),
+            tap_source: raw.tap_source,
+            remove_counters: raw.remove_counters,
+            add_counters: raw.add_counters,
+            life_cost: raw.life_cost,
+            sacrifice_source: raw.sacrifice_source,
+            output: output.clone(),
+            suffix: suffix.to_vec(),
+        }
+    }
+}
+
+/// The announced mana output after the fee, tap and life costs have committed.
+/// The event frame still owes counters or a sacrifice before reading the board.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PendingManaOutput {
+    pub(crate) player: PlayerId,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub(crate) source: Option<ObjectId>,
+    pub(crate) tapped: Option<TappedForMana>,
+    pub(crate) chosen: Option<Arc<EntryChoice>>,
+    pub(crate) output: Effect,
+    pub(crate) suffix: Vec<Effect>,
+    pub(crate) caller: EffectFrame,
+    pub(crate) resume: Option<Box<Decision>>,
+}
 
 /// The caller awaiting a frame's completion. A child owns exactly one return
 /// destination; unfinished effects never grant priority or expose a saved
@@ -70,6 +118,8 @@ pub enum FrameCompletion {
         ability: crate::state::stack_object::ActivatedAbilityOnStack,
         source_after_cost: Option<ObjectId>,
     },
+    /// Read the mana output after all counter and sacrifice costs commit.
+    ManaOutput(Box<PendingManaOutput>),
     /// An iteration child returns to its interrupted scope.
     Frame(Box<EffectFrame>),
     /// Announce a completed rules operation before resuming its caller.
@@ -102,6 +152,7 @@ impl FrameCompletion {
             Self::StateBased { next } => next.then(completion),
             Self::Frame(frame) | Self::Event { frame, .. } => frame.completion.then(completion),
             Self::Decision(caller) => caller.frame.completion.then(completion),
+            Self::ManaOutput(output) => output.caller.completion.then(completion),
             _ => panic!("rule continuation must return to its caller"),
         }
     }
@@ -506,6 +557,9 @@ pub enum ManaProduction {
         tapped: ObjectId,
         produced: crate::state::mana::Mana,
         pending: Vec<PendingManaBonus>,
+        /// First unit of this production in the pool when paying an announced cost.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        commit_start: Option<usize>,
     },
 }
 
@@ -648,11 +702,12 @@ pub enum Decision {
         spent: PaymentReceipt,
         completion: Box<SpendCompletion>,
     },
-    /// A mana ability's printed upfront cost, before its output exists.
+    /// A mana ability's announced cost, before its output exists.
     ManaUpfront {
         player: PlayerId,
         permanent: PermanentId,
         ability_index: usize,
+        activation: Box<ManaUpfrontActivation>,
         #[serde(skip_serializing_if = "crate::state::is_zero")]
         tap_remaining: usize,
         resume: Option<Box<Decision>>,
@@ -1076,6 +1131,12 @@ impl SuspendedResolution {
                     frame_chain(&caller.frame, out);
                     decision_chain(&caller.decision, out);
                 }
+                FrameCompletion::ManaOutput(output) => {
+                    frame_chain(&output.caller, out);
+                    if let Some(resume) = &output.resume {
+                        decision_chain(resume, out);
+                    }
+                }
                 FrameCompletion::StateBased { next } => completion_chain(next, out),
                 FrameCompletion::DiscardPayment(_)
                 | FrameCompletion::Paid { .. }
@@ -1117,7 +1178,7 @@ impl SuspendedResolution {
     }
 
     /// A child's chooser does not end the retained caller's inspection rights.
-    pub(crate) fn decisions(&self) -> impl Iterator<Item = &Decision> {
+    pub(crate) fn decisions(&self) -> impl DoubleEndedIterator<Item = &Decision> {
         self.continuation()
             .into_iter()
             .filter_map(|part| match part {
@@ -1512,6 +1573,10 @@ impl Game {
                     }
                     FrameCompletion::Decision(caller) => {
                         *self.state.suspended_decision_mut() = Some(*caller);
+                        return Ok(());
+                    }
+                    FrameCompletion::ManaOutput(output) => {
+                        self.complete_mana_output(*output);
                         return Ok(());
                     }
                     FrameCompletion::StateBased { next } => {
@@ -2762,6 +2827,12 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Ok(());
                 }
+                if !self.can_pay_life(payment.player, payment.tail_life()) {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError(
+                        "cannot pay remaining resolution life cost".into(),
+                    ));
+                }
                 if let Err(error) = self.produce_mana(payment.player, &cost) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(error);
@@ -2816,11 +2887,14 @@ impl Game {
                     && self.pending_choice.is_none()
                     && self.mana_capture(player).is_some())
                 .then(|| self.state.players[player.0].mana_pool.total());
-                // Mana made for no nested cost pays toward an announced cost
-                // being paid as it is produced.
-                let start = resume
-                    .is_none()
-                    .then(|| self.state.players[player.0].mana_pool.unit_count());
+                // Bonus choices only append mana. Keep the boundary from
+                // before the original output until the whole production ends.
+                let start = match production {
+                    ManaProduction::Output { .. } => resume
+                        .is_none()
+                        .then(|| self.state.players[player.0].mana_pool.unit_count()),
+                    ManaProduction::Bonus { commit_start, .. } => *commit_start,
+                };
                 let origin = match production {
                     ManaProduction::Output { source, .. } => *source,
                     ManaProduction::Bonus { source, .. } => Some(*source),
@@ -2835,7 +2909,14 @@ impl Game {
                         tapped: Some(tapped),
                     } => {
                         let bonuses = self.production_bonuses(player, tapped);
-                        self.resolve_mana_bonuses(player, *source, mana, bonuses, resume.take())
+                        self.resolve_mana_bonuses(
+                            player,
+                            *source,
+                            mana,
+                            bonuses,
+                            resume.take(),
+                            start,
+                        )
                     }
                     ManaProduction::Output { .. } => resume.take(),
                     ManaProduction::Bonus {
@@ -2849,14 +2930,12 @@ impl Game {
                         produced,
                         std::mem::take(pending),
                         resume.take(),
+                        start,
                     ),
                 };
                 if let Some(before) = before {
                     let produced = self.state.players[player.0].mana_pool.total() - before;
                     self.mana_capture(player).unwrap().float(produced);
-                }
-                if let Some(start) = start {
-                    self.commit_produced_mana(player, start);
                 }
                 if let Some(next) = next {
                     suspended.decision = *next;
@@ -2868,13 +2947,15 @@ impl Game {
                     // An activated mana ability retains its payer's priority;
                     // its empty rule frame is not a resolving stack object.
                     self.state.priority_mut().on_non_pass_action(player);
-                    // The announced payment its output paid toward advances
-                    // as a fixed tap's does.
-                    if start.is_some()
-                        && matches!(self.paying(), Some((payer, _, CostComponent::Mana { .. })) if payer == player)
-                    {
-                        let payment = self.pending_payment(player)?.clone();
-                        return self.advance_payment(player, payment);
+                    // A pending bonus can supply an alternative unit for
+                    // the same pip. Commit only when production finishes.
+                    if let Some(start) = start {
+                        self.commit_produced_mana(player, start);
+                        if matches!(self.paying(), Some((payer, _, CostComponent::Mana { .. })) if payer == player)
+                        {
+                            let payment = self.pending_payment(player)?.clone();
+                            return self.advance_payment(player, payment);
+                        }
                     }
                 }
                 Ok(())

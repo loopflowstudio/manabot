@@ -18,16 +18,22 @@ fn foundations_5e_offer_immortality() {
 fn ovika_composite_ward_and_haste_tokens() {
     use crate::support::game::{five_color_setup, move_to_hand};
     use crate::support::inspect::{has_action, keywords, permanent};
-    use crate::support::play::{cast_card, choose, pass_until, settle, spend_colorless};
+    use crate::support::play::{
+        activate, cast_card, choose, choose_mode, pass_until, settle, spend_colorless,
+    };
     use managym::agent::action::{Action, ActionSpaceKind};
     use managym::flow::turn::StepKind;
     use managym::state::card::Keyword;
     use managym::state::game_object::{PlayerId, Target};
 
-    // 1. Ward — {3}, Pay 3 life: unpayable at 2 life; payable at 10 life costs both {3} and 3 life.
-    for (foe_life, can_pay) in [(2, false), (10, true)] {
-        let mut s = five_color_setup(&["Ovika, Enigma Goliath", "Lightning Bolt"]);
+    // Ward requires both {3} and 3 life. The mana ability can gain life
+    // while the opponent is paying the mana portion.
+    for (foe_life, gain_life) in [(2, false), (2, true), (10, false)] {
+        let mut s =
+            five_color_setup(&["Ovika, Enigma Goliath", "Lightning Bolt", "The Great Henge"]);
+        s.game_mut().skip_trivial = false;
         let ovika = s.force_permanent_on_battlefield(0, "Ovika, Enigma Goliath");
+        let henge = gain_life.then(|| s.force_permanent_on_battlefield(1, "The Great Henge"));
         s.game_mut().state.players[1].life = foe_life;
         s.set_player_mana_pool(1, "3R");
         let bolt = crate::support::game::force_new_card_in_hand(&mut s, 1, "Lightning Bolt");
@@ -35,19 +41,28 @@ fn ovika_composite_ward_and_haste_tokens() {
         s.pass_priority();
         cast_card(&mut s, bolt);
         assert!(s.choose_target(Target::Permanent(ovika)));
+        if s.game().pending_choice.is_some() {
+            // Leave Henge untapped until the ward payment.
+            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        }
         pass_until(&mut s, ActionSpaceKind::PayOrNot);
-        assert_eq!(
+        let pay_offered = |s: &crate::support::game::Scenario| {
             has_action(
-                &s,
-                |a| matches!(a, Action::PayCost { player } if *player == PlayerId(1))
-            ),
-            can_pay
-        );
-        if can_pay {
+                s,
+                |a| matches!(a, Action::PayCost { player } if *player == PlayerId(1)),
+            )
+        };
+        assert_eq!(pay_offered(&s), foe_life >= 3);
+        if let Some(henge) = henge {
+            activate(&mut s, henge, 0);
+            choose_mode(&mut s, 0);
+            assert!(pay_offered(&s));
+        }
+        if pay_offered(&s) {
             choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
             spend_colorless(&mut s);
             settle(&mut s);
-            s.assert_life(1, foe_life - 3);
+            s.assert_life(1, foe_life + i32::from(gain_life) * 2 - 3);
             assert_eq!(permanent(&s, ovika).damage, 3);
         } else {
             choose(&mut s, |a| matches!(a, Action::Decline { .. }));
