@@ -304,6 +304,12 @@ batch raises `managym.AgentError` and changes nothing.
   links, and the one-pass transaction. Quiet moves use plain
   `capture_object_move` with the existing capture cause and replay keys.
   Token-catalog discovery and the hidden-hand limit are deferred below.
+- Post-fix (`e9d68bb7a5`): no fix-here findings. One open question goes to
+  ship-review: confirm the three flat constructors and their wire keys before
+  they become permanent in `managym-snapshot-v1` (the first entry in
+  `scratch/questions.md`). Its other two items are the deferred findings below.
+
+No passes remain.
 
 ## Deferred findings
 
