@@ -1342,8 +1342,8 @@ pub(super) fn evaluate_board(
                         - permanent.counter_count(CounterKind::MinusOneMinusOne);
                     if count != 0 {
                         let view = eval.view_mut(id);
-                        view.power += count;
-                        view.toughness += count;
+                        view.power = view.power.saturating_add(count);
+                        view.toughness = view.toughness.saturating_add(count);
                     }
                 }
             }

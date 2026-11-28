@@ -495,6 +495,7 @@ The Torch wrapper and the capture wrapper are separate Python classes:
 | A fixed viewer's observation | `Env.observation_for_player(player_index)` |
 | Encoded fixed-viewer observations for all or selected slots, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
 | Live snapshots and batched slot loading (`GameSnapshot`, `RestoreOptions`, `SlotLoad`) | `Env.snapshot` / `restore`; `VectorEnv.snapshot_slots`, `slot_metadata`, `load_slots_into_buffers` ([Batched slot loading and snapshots](engine-python.md#batched-slot-loading-and-snapshots)) |
+| Counterfactual state edits (`GameStateEdit`) | `Env.edit_game_state`; `RestoreOptions.exact(game_state_edits=...)` ([Counterfactual state edits](engine-python.md#counterfactual-state-edits)) |
 | Revision-bound Commands, decision captures, search forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
 | Batched readable observations | `managym.VectorEnv.reset_all` / `step` |
 | Caller-owned NumPy buffers, per-slot setups, sparse slot loading and partial stepping | Native `VectorEnv` buffer methods |
@@ -931,6 +932,39 @@ rather than identities, `managym.catalog_tokens()` gives each definition's
 tokenized rules text, rows by `CardDefId`, with the same `keys` and
 `registry_names` beside them, so the tokens describe cards a model has not
 seen.
+
+### Program-token vocabulary
+
+`managym.catalog_tokens()` holds only the printed rules spans of catalog
+definitions (cards, tokens and back faces). Live observations also emit
+runtime program tokens in fact and shared-effect rows — suspended resolution
+frames, granted abilities and last-known characteristics — whose runtime-only
+symbols come from `managym.record_vocabulary()`.
+
+```python
+import managym
+
+catalog = managym.catalog_tokens()
+printed = set(zip(catalog["token_kind"], catalog["token_value"], strict=True))
+runtime = {
+    (kind, value)
+    for _space, name, _hashed, kind, value in managym.record_vocabulary()
+    if kind is not None
+    and value is not None
+    and not name.startswith("DecisionMemory::")
+}
+admitted_program_tokens = printed | runtime
+```
+
+`Integer` and `Boolean` carry their values directly. Every other token,
+including `Null` and `DefinitionRef`, needs an exact pair in
+`admitted_program_tokens`. Admission reports missing pairs as `(kind, 0x…)`.
+Policies with decision memory enabled also admit the `DecisionMemory::*` rows.
+
+An expanded naming source can supply a chosen card name outside the installed
+catalog. Suspended entries and named exile or search programs encode it as
+`Null`, and permanent facts omit its vocabulary row. Rules state and readable
+observations keep the chosen spelling.
 
 ### Deprecated names
 

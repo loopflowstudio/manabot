@@ -24,7 +24,7 @@ impl SlotLoad {
     pub fn with_slot(&self, slot: usize) -> Self {
         match self {
             Self::Fresh(_, setup, seed) => Self::Fresh(slot, setup.clone(), *seed),
-            Self::Snapshot(_, source, options) => Self::Snapshot(slot, source.clone(), *options),
+            Self::Snapshot(_, source, options) => Self::Snapshot(slot, source.clone(), options.clone()),
         }
     }
 
@@ -193,7 +193,7 @@ impl VectorEnv {
             }
             SlotLoad::Snapshot(_, source, options) => {
                 if !source.compatible(
-                    *options,
+                    options,
                     self.player_policies,
                     self.skip_trivial,
                     self.decision_memory_enabled,
@@ -204,7 +204,7 @@ impl VectorEnv {
                             .into(),
                     ));
                 }
-                let env = source.restore(*options)?;
+                let env = source.restore(options.clone())?;
                 let obs = env.observation_for_player(env.current_agent_index().unwrap_or(0))?;
                 if rewind {
                     next_seed = previous.reset_seed();

@@ -46,6 +46,7 @@ use managym::{
             encode, EncodedObservation, FactKind, InputLayout, ObservationEncoderConfig, CARD_DIM,
             FACT_DIM, PERMANENT_DIM, PLAYER_DIM, STACK_DIM, TURN_STATE_DIM,
         },
+        record_vocabulary::missing_program_tokens,
         shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
     flow::{
@@ -61,8 +62,13 @@ use managym::{
     },
 };
 use managym::{
-    cards::content_pack::default_content_pack,
-    cards::tokens::{catalog_tokens, definition_tokens, name_value, rules_tokens, TokenKind},
+    cards::{
+        content_pack::default_content_pack,
+        tokens::{
+            catalog_tokens, definition_tokens, definition_tokens_unchecked, name_value,
+            rules_tokens_unchecked, TokenKind,
+        },
+    },
     state::{
         ability::{
             Ability, Actor, AttackSize, Condition, DamageKind, DamageRecipientFilter, DelayedEvent,
@@ -2144,7 +2150,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::SpendAnyManaToCast(creature()),
         StaticAbility::AttachedHas(ActivatedAbilityDefinition::default()),
         StaticAbility::AttachedSetsCharacteristics(SetCharacteristics {
-            named: "Witness".into(),
+            named: "Humble Merchant".into(),
             creature_types: vec!["Citizen".into()],
             power: 1,
             toughness: 1,
@@ -2352,7 +2358,7 @@ fn tokens_of(definition: &ObjectDefinition) -> Vec<(TokenKind, i32)> {
 
 fn spell(effects: Vec<Effect>) -> ObjectDefinition {
     ObjectDefinition::face(PrintedCharacteristics {
-        name: "Witness".into(),
+        name: "Gray Ogre".into(),
         spell_effects: effects,
         ..Default::default()
     })
@@ -2370,68 +2376,23 @@ fn every_effect_variant_reaches_the_learning_tokens() {
     names.dedup();
     assert_eq!(names.len(), EFFECT_VARIANTS, "one witness per variant");
     let pack = default_content_pack();
-    let catalog = catalog_tokens(pack).unwrap();
-    let known: std::collections::BTreeSet<_> = catalog
-        .token_kind
-        .into_iter()
-        .zip(catalog.token_value)
-        .chain(
-            managym::agent::record_vocabulary::record_names()
-                .into_iter()
-                .filter_map(|entry| entry.token),
-        )
-        .collect();
-    let mut missing = std::collections::BTreeSet::new();
-    let kinds = [
-        TokenKind::Structure,
-        TokenKind::Field,
-        TokenKind::Variant,
-        TokenKind::Integer,
-        TokenKind::Boolean,
-        TokenKind::Text,
-        TokenKind::DefinitionRef,
-        TokenKind::Null,
-        TokenKind::ProgramKind,
-    ];
+    // Aggregate omissions across every variant and both serialization paths.
+    let mut missing = BTreeSet::new();
     for effect in witnesses {
-        let tokens = tokens_of(&spell(vec![effect.clone()]));
+        let tokens = definition_tokens_unchecked(&spell(vec![effect.clone()]), pack).unwrap();
         let name = effect_token(&effect);
-        let expected = (TokenKind::Variant, name_value(name));
+        let expected = (TokenKind::Variant as u16, name_value(name));
         assert!(tokens.contains(&expected), "{effect:?}");
         for (path, tokens) in [
             ("spell", tokens),
-            (
-                "rules",
-                rules_tokens(&effect, pack)
-                    .unwrap()
-                    .into_iter()
-                    .map(|(kind, value)| {
-                        let kind = *kinds
-                            .iter()
-                            .find(|candidate| **candidate as u16 == kind)
-                            .expect("known token kind");
-                        (kind, value)
-                    })
-                    .collect(),
-            ),
+            ("rules", rules_tokens_unchecked(&effect, pack).unwrap()),
         ] {
-            for (kind, value) in tokens {
-                let requires_lookup = match kind {
-                    TokenKind::Integer | TokenKind::Boolean => false,
-                    TokenKind::Structure
-                    | TokenKind::Field
-                    | TokenKind::Variant
-                    | TokenKind::Text
-                    | TokenKind::DefinitionRef
-                    | TokenKind::Null
-                    | TokenKind::ProgramKind => true,
-                };
-                if requires_lookup && !known.contains(&(kind as u16, value)) {
-                    missing.insert(format!(
-                        "{name} ({path}): {kind:?} (kind {}), value {value} (0x{:08x})",
-                        kind as u16, value as u32
-                    ));
-                }
+            for (kind, value) in missing_program_tokens(&tokens) {
+                missing.insert(format!(
+                    "{name} ({path}): {:?} (kind {kind}), value {value} (0x{:08x})",
+                    TokenKind::of(kind),
+                    value as u32
+                ));
             }
         }
     }
@@ -2453,7 +2414,7 @@ fn every_trigger_condition_and_ability_reaches_the_learning_tokens() {
             }],
         };
         let definition = ObjectDefinition::face(PrintedCharacteristics {
-            name: "Witness".into(),
+            name: "Gray Ogre".into(),
             abilities: vec![ability.clone()],
             ..Default::default()
         });
@@ -2486,7 +2447,7 @@ fn every_triggered_mana_output_and_actor_reaches_the_learning_tokens() {
             TriggeredManaOutput::OneProducedType,
         ] {
             let definition = ObjectDefinition::face(PrintedCharacteristics {
-                name: "Witness".into(),
+                name: "Gray Ogre".into(),
                 triggered_mana_abilities: vec![TriggeredManaAbility {
                     who,
                     predicate: CardPredicate::default(),
@@ -2575,7 +2536,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
         });
     }
     let definition = ObjectDefinition::face(PrintedCharacteristics {
-        name: "Witness".into(),
+        name: "Gray Ogre".into(),
         abilities: conditions
             .into_iter()
             .map(|condition| Ability::Triggered {
@@ -2602,7 +2563,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
     for controlled_by in [Actor::You, Actor::Opponent, Actor::AnyPlayer] {
         for another in [false, true] {
             let tokens = tokens_of(&ObjectDefinition::face(PrintedCharacteristics {
-                name: "Witness".into(),
+                name: "Gray Ogre".into(),
                 abilities: vec![Ability::Triggered {
                     intervening_if: None,
                     condition: TriggerCondition::Dies {
@@ -2650,7 +2611,7 @@ fn every_condition_reaches_the_learning_tokens() {
 #[test]
 fn an_intervening_if_reaches_the_learning_tokens() {
     let definition = ObjectDefinition::face(PrintedCharacteristics {
-        name: "Witness".into(),
+        name: "Gray Ogre".into(),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::AttackedThisTurn),
@@ -2868,7 +2829,7 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
     let (base_game, ogre) = ogre_game();
     let (base_obs, base) = observe(&base_game, 0);
     let bare = tokens_of(&ObjectDefinition::face(PrintedCharacteristics {
-        name: "Witness".into(),
+        name: "Gray Ogre".into(),
         ..Default::default()
     }));
     for keyword in Keyword::ALL {
@@ -2907,7 +2868,7 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
         }
 
         let definition = ObjectDefinition::face(PrintedCharacteristics {
-            name: "Witness".into(),
+            name: "Gray Ogre".into(),
             keywords,
             ..Default::default()
         });
@@ -2933,7 +2894,7 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
 #[test]
 fn sorcery_timing_reaches_the_activated_ability_tokens() {
     let definition = ObjectDefinition::face(PrintedCharacteristics {
-        name: "Witness".into(),
+        name: "Gray Ogre".into(),
         activated_abilities: vec![ActivatedAbilityDefinition {
             sorcery_timing: true,
             effects: vec![Effect::Surveil { count: 1 }],
@@ -3262,7 +3223,7 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
         }
         // The token also appears for a bare definition with only this ability.
         let bare = ObjectDefinition::face(PrintedCharacteristics {
-            name: "Witness".into(),
+            name: "Gray Ogre".into(),
             statics: vec![ability.clone()],
             ..Default::default()
         });
@@ -5497,10 +5458,9 @@ fn pooled_mana_classes_are_programs_on_their_player() {
             .find(|definition| definition.name == "Animal Attendant")
             .unwrap();
         let tokens = tokens_of(&ObjectDefinition::card(definition));
-        let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
         for &(kind, value) in &classes[0].program {
             assert!(
-                literal.contains(&kind)
+                TokenKind::of(kind).is_numeric()
                     || tokens.iter().any(|&(k, v)| k as u16 == kind && v == value),
                 "program token ({kind}, {value}) is outside the definition's vocabulary"
             );
@@ -5648,24 +5608,11 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
 /// Every execution token of `frame` is a literal, a definition's token or a
 /// registered runtime name: the policy's whole token vocabulary.
 fn assert_execution_tokens_registered(frame: &ContinuationFrame) {
-    let vocabulary: std::collections::HashSet<(u16, i32)> =
-        managym::agent::record_vocabulary::record_names()
-            .into_iter()
-            .filter_map(|name| name.token)
-            .chain(
-                managym_cards::catalog()
-                    .iter()
-                    .flat_map(|definition| tokens_of(&ObjectDefinition::card(definition)))
-                    .map(|(kind, value)| (kind as u16, value)),
-            )
-            .collect();
-    let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
-    for token in &frame.effect_execution {
-        assert!(
-            literal.contains(&token.0) || vocabulary.contains(token),
-            "unregistered execution token {token:?}"
-        );
-    }
+    let missing = missing_program_tokens(&frame.effect_execution);
+    assert!(
+        missing.is_empty(),
+        "unregistered execution tokens: {missing:?}"
+    );
 }
 
 /// A choice interrupts the parent after it has drained three life. Its

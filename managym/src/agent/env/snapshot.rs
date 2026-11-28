@@ -56,11 +56,12 @@ pub enum BranchMode {
     Determinize { viewer: usize, seed: u64 },
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct RestoreOptions {
     pub mode: BranchMode,
     pub enable_decision_memory: Option<bool>,
     pub forced_first_action: Option<usize>,
+    pub game_state_edits: Option<Arc<[GameStateEdit]>>,
 }
 
 impl RestoreOptions {
@@ -69,6 +70,7 @@ impl RestoreOptions {
             mode: BranchMode::Exact { reseed },
             enable_decision_memory: None,
             forced_first_action: None,
+            game_state_edits: None,
         }
     }
 }
@@ -140,6 +142,12 @@ impl Env {
 impl GameSnapshot {
     /// Materialize a new live game generation, continuing both viewer logs.
     pub fn restore(&self, options: RestoreOptions) -> Result<Env, AgentError> {
+        let edits = options.game_state_edits.filter(|edits| !edits.is_empty());
+        if edits.is_some() && options.forced_first_action.is_some() {
+            return Err(AgentError(
+                "game_state_edits cannot be combined with forced_first_action".into(),
+            ));
+        }
         if let BranchMode::Determinize { viewer, .. } = options.mode {
             self.state.sampling_viewer(viewer)?;
         }
@@ -159,6 +167,9 @@ impl GameSnapshot {
             None
         };
         let mut env = self.live_env();
+        if let Some(edits) = edits {
+            env.apply_intervention(Intervention::GameStateEdits { edits })?;
+        }
         let intervention = match options.mode {
             BranchMode::Exact { reseed } => reseed.map(|seed| Intervention::Reseed { seed }),
             BranchMode::ShuffleLibraries { seed } => Some(Intervention::ShuffleLibraries { seed }),
@@ -270,7 +281,7 @@ impl GameSnapshot {
 
     pub(crate) fn compatible(
         &self,
-        options: RestoreOptions,
+        options: &RestoreOptions,
         policies: [PlayerPolicy; 2],
         skip_trivial: bool,
         memory: bool,

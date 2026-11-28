@@ -853,6 +853,22 @@ impl TrackedState {
         untapped
     }
 
+    /// Direct tap-state edit without a rules untap or a stun-counter spend.
+    pub(super) fn set_tapped(&mut self, permanent: PermanentId, tapped: bool) {
+        self.revisions.tapped += 1;
+        self.permanent_untracked(permanent)
+            .expect("live permanent")
+            .tapped = tapped;
+    }
+
+    pub(super) fn set_damage(&mut self, permanent: PermanentId, damage: i32) {
+        let permanent = self.permanent_untracked(permanent).expect("live permanent");
+        permanent.damage = damage;
+        if damage == 0 {
+            permanent.deathtouch_damage = false;
+        }
+    }
+
     /// Trigger matching and resolution read hits directly. Neither the layer
     /// board nor the index of potential trigger sources depends on them.
     pub(crate) fn damage_history_mut(&mut self) -> &mut DamageHistory {

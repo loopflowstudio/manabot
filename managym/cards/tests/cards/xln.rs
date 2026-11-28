@@ -147,27 +147,37 @@ fn entry_choice_sorcerous_spyglass() {
     ));
 }
 
-#[test]
-fn entry_choice_simultaneous_spyglass_and_banner() {
+/// Resolve Brought Back to the first of two pending entry choices.
+fn spyglass_and_banner_entry() -> crate::support::game::Scenario {
     use crate::support::{
         game::{five_color_setup, move_card},
-        inspect::{card_of, permanent_named},
-        play::{cast, choose_entry_value, resolve_top, settle},
+        inspect::card_of,
+        play::{cast, resolve_top},
     };
     use managym::state::{game_object::Target, zone::ZoneType};
+
     let mut s = five_color_setup(&["Brought Back", "Sorcerous Spyglass", "Heraldic Banner"]);
-    let mut buried = vec![];
-    for name in ["Sorcerous Spyglass", "Heraldic Banner"] {
-        let id = s.force_permanent_on_battlefield(0, name);
-        let card = card_of(&s, id);
-        buried.push(move_card(&mut s, card, ZoneType::Graveyard));
-    }
+    let buried = ["Sorcerous Spyglass", "Heraldic Banner"].map(|card| {
+        let permanent = s.force_permanent_on_battlefield(0, card);
+        let object = card_of(&s, permanent);
+        move_card(&mut s, object, ZoneType::Graveyard)
+    });
     s.force_card_in_hand(1, "Forest");
     cast(&mut s, "Brought Back");
-    for &object in &buried {
+    for object in buried {
         assert!(s.choose_target(Target::GraveyardCard(object)));
     }
     resolve_top(&mut s);
+    s
+}
+
+#[test]
+fn entry_choice_simultaneous_spyglass_and_banner() {
+    use crate::support::{
+        inspect::permanent_named,
+        play::{choose_entry_value, settle},
+    };
+    let s = spyglass_and_banner_entry();
     crate::support::inspect::assert_choice_contract(&s);
     for first in [0, 1] {
         let mut fork = s.clone();
@@ -199,6 +209,81 @@ fn entry_choice_simultaneous_spyglass_and_banner() {
                 .is_some());
         }
     }
+}
+
+#[test]
+fn spyglass_keeps_a_fixture_only_name_in_text_but_not_policy_input() {
+    use crate::support::{
+        inspect::permanent_named,
+        play::{choose_entry_value, settle},
+    };
+    use managym::{
+        agent::{
+            observation::Observation,
+            observation_encoder::{encode, FactKind, ObservationEncoderConfig},
+            observation_layout::fact,
+        },
+        cards::tokens::{name_value, TokenKind},
+        state::{game_object::PlayerId, permanent::EntryChoice},
+    };
+    let viewer = PlayerId(0);
+    let name = "70,000 Light-Years from Home";
+    let mut s = spyglass_and_banner_entry();
+    choose_entry_value(&mut s, "for Sorcerous Spyglass");
+    s.game_mut().scenario_naming_vocabulary().unwrap();
+    choose_entry_value(&mut s, name);
+
+    // Banner's unanswered replacement keeps Spyglass's entry in the batch.
+    assert!(s
+        .battlefield_permanents_named(0, "Sorcerous Spyglass")
+        .is_empty());
+    let capture = s.game().capture_decision(viewer, 0).unwrap();
+    let entry = [
+        (TokenKind::Text as u16, name_value("chosen on entry")),
+        (
+            TokenKind::Variant as u16,
+            name_value("EntryChoice::CardName"),
+        ),
+        (TokenKind::Null as u16, 0),
+    ];
+    let frame = capture
+        .frames
+        .iter()
+        .find(|frame| {
+            frame
+                .effect_execution
+                .windows(entry.len())
+                .any(|part| part == entry)
+        })
+        .expect("suspended entry retains the chosen-name variant with a Null payload");
+    assert!(frame
+        .effect_execution_description
+        .as_deref()
+        .unwrap()
+        .contains(&format!("chosen on entry: {name}")));
+
+    choose_entry_value(&mut s, "Red");
+    settle(&mut s);
+    let spyglass = permanent_named(&s, "Sorcerous Spyglass");
+    let chosen = EntryChoice::CardName(name.into());
+    assert_eq!(
+        s.game().state.permanents[spyglass]
+            .as_ref()
+            .unwrap()
+            .chosen
+            .as_deref(),
+        Some(&chosen)
+    );
+    let obs = Observation::for_player(s.game(), viewer);
+    assert!(obs
+        .agent_permanents
+        .iter()
+        .any(|permanent| permanent.chosen.as_ref() == Some(&chosen)));
+    let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    assert!(encoded
+        .facts
+        .chunks_exact(fact::WIDTH)
+        .all(|row| row[fact::KIND] != FactKind::ChosenName as u8 as f32));
 }
 
 #[test]

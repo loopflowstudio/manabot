@@ -22,6 +22,7 @@ use crate::agent::action::{Action, ActionSpaceKind, AgentError};
 use crate::agent::decision_surface::DecisionVerb;
 use crate::cards::content_pack::default_content_pack;
 use crate::experience::{ObjectRenderId, OfferSubjectView, SubjectRef};
+use crate::flow::combat::DeclarationKind;
 use crate::flow::decision::Decision;
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
@@ -33,7 +34,7 @@ mod combat;
 mod library;
 
 pub(crate) use combat::{
-    AttackPlanNormalizer, BlockPlanNormalizer, CombatGroup, PlannedAttackEntry, PlannedBlockEntry,
+    AttackPlanNormalizer, BlockPlanNormalizer, PlannedAttackEntry, PlannedBlockEntry,
 };
 use library::{OrderLibraryGroup, PartitionPilesGroup, ScryGroup, SurveilGroup};
 
@@ -411,11 +412,9 @@ fn active_spec(game: &Game, viewer: PlayerId) -> DecisionSpec {
             _ => None,
         }
     } else {
-        match space.kind {
-            ActionSpaceKind::DeclareAttacker => CombatGroup::attackers().describe(game, viewer),
-            ActionSpaceKind::DeclareBlocker => CombatGroup::blockers().describe(game, viewer),
-            _ => None,
-        }
+        space
+            .declarer()
+            .and_then(|(kind, _, _)| kind.describe(game, viewer))
     };
     spec.unwrap_or(DecisionSpec::Single)
 }
@@ -793,10 +792,10 @@ impl Game {
         match &decision.spec {
             DecisionSpec::Single => Err(AgentError("no active grouped decision".into())),
             DecisionSpec::DeclareAttackers { .. } => {
-                drive_preview(self, &CombatGroup::attackers(), actor, decision, choice)
+                drive_preview(self, &DeclarationKind::Attackers, actor, decision, choice)
             }
             DecisionSpec::DeclareBlockers { .. } => {
-                drive_preview(self, &CombatGroup::blockers(), actor, decision, choice)
+                drive_preview(self, &DeclarationKind::Blockers, actor, decision, choice)
             }
             DecisionSpec::Scry { .. } => drive_preview(self, &ScryGroup, actor, decision, choice),
             DecisionSpec::Surveil { .. } => {
