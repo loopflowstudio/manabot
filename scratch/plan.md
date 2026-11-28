@@ -128,9 +128,9 @@ review.
      and annotations; heuristic choices are recomputed at replay, bound by the
      next surfaced digest and the final digest. `decisions`, per-player
      latency and `max_commands` count checkpoint decisions.
-   - Consequence (review Q3, 3a adopted for review): Academy Watch
-     (`managym/academy/watch.py:486`) refuses non-`("agent", "agent")`
-     records, so new vector heuristic records are unviewable there. Deferred.
+   - Consequence (reopened in ship-review, steer `0b2a547d`, choice `3b`): Academy Watch
+     (`managym/academy/watch.py`) originally refused non-`("agent", "agent")`
+     records; Pass 7 adds native-seat import inside MTG-506.
    - Passed over: keeping the heuristic in Python behind a faster path (leaves
      56% of rounds rowless for that slot).
 2. **Code players keep their state for a game in both runners. (for review;
@@ -308,21 +308,32 @@ that lands, run `lf sync` and repeat
 `uv run --no-sync python -m pytest tests/eval/test_experiment_files.py -k 'trophy or frontier_eval_jobs or opponent_memory_evaluation'`
 with the released SDK. The broad Rust suite remains with CI.
 
-## Review of Pass 5 (`d49a901555`)
+## Ship-review decisions (2026-11-27, steer `0b2a547d`)
 
-- Replay agreement for isolated failures: fixed in Pass 6.
-- Heuristic tournament rollout (Q1, 1a, for review): stored experiments
-  stay unversioned and refuse; new `native-v3` tournament names and baseline
-  reruns wait for the next evaluation campaign. Irreversible once scored;
-  ship review surfaces it.
-- Watch native-seat import (Q2, 2a): deferred below.
+Recorded verbatim in `scratch/ship-review-notes.md`:
+
+> (1) `scratch/ship-review.html` § 1 · Maintained experiment migration to native-v3: 1a (2) `scratch/ship-review.html` § 2 · Compact vector decision records: 2a (3) `scratch/ship-review.html` § 3 · Academy Watch native-seat import (F1): 3b (4) `scratch/ship-review.html` § 4 · Pre-existing ScalarCapture seat-policy gap (F3): 4a
+
+Outcome: return to `build` for Pass 7.
+
+7. **Academy Watch native-seat import (`3b`).**
+   - Support importing native-seat `GameRecord`s (e.g. `("agent", "heuristic:64")`,
+     `("heuristic:64", "agent")`, `heuristic`, `random`) in `managym/academy/watch.py`
+     and configured launch (`managym/academy/launch.py`), replacing the
+     `NativeSeatRecord` refusal.
+   - Preserve Academy's two-seat acting-view contract and shared decision
+     surface: verify against the stored record's surfaced actions, digests, and
+     ending while surfacing/reconstructing the native seat's turns cleanly (with
+     exact determinism and no hidden-information leaks).
+   - Update `docs/academy.md` (`#open-a-replay-directly`,
+     `#watch-a-game-from-an-evaluation`) and tests
+     (`tests/academy/test_configured_launch.py` and Watch import tests), and
+     verify opening a real vector heuristic evaluation record in Academy Replay
+     during QA.
 
 ## Deferred findings
 
-- **Academy Watch native-seat import** (pre- and post-build review, Q3 3a): Watch rejects records
-  whose policies are not `("agent", "agent")`. Needs Watch to walk such a
-  record and surface (or recompute) the heuristic's turns. Separate Academy
-  Task; file it when this lands.
+- None filed from ship-review (`1a`, `2a`, `4a` accepted/dropped; `3b` moved into Pass 7 above; `etude-sdk 0.5.0` stays owned by stacked parent MTG-497).
 
 ## Acceptance check
 
@@ -355,5 +366,6 @@ forward rows.
 - Every game replays, and scalar and vector runs of the same deals agree on
   checkpoint actions, winners and final digests.
 - A custom Python opponent still plays through the vector runner.
+- Native-seat evaluation records (`("agent", "heuristic:64")` / `("heuristic:64", "agent")`) import and open cleanly in Academy Watch / Replay while preserving Academy's two-seat acting-view contract.
 - `tests/test_package_boundaries.py`, `scripts/public_api.py check` and the
   debug Rust suite pass.

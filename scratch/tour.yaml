@@ -1,4 +1,4 @@
-at: f9fc0ee7f40b6e55d38c76e9012b72de0e3836c5
+at: 598663ae160b8dccb17b81446c1983ee91d9f636
 first:
   - path: experiments/reports/eval_throughput.md
     why: Throughput and replay parity on Apple and L4
@@ -38,16 +38,32 @@ first:
     why: Process fingerprints and per-game identities
   - path: managym/src/python/bindings.rs
     why: Scalar replay releases the GIL
+  - path: managym/academy/watch.py
+    why: Typed refusal for native-seat evaluation records
+  - path: managym/academy/launch.py
+    why: Preserve native-seat replay advice on launch
   - path: experiments/eval_throughput.py
-    why: Wall time and background replay measurements
+    why: Wall time, background replay and corpus check
   - path: tests/eval/test_vector_eval.py
     why: Paired-game parity, crash isolation and replay capacity
   - path: tests/env/test_record_reducers.py
     why: Verified card exposure and mixed-slot failure records
   - path: tests/eval/test_evaluation_match.py
     why: Scalar capture, audit projection and fingerprint reuse
+  - path: tests/academy/test_configured_launch.py
+    why: Native-seat refusal message on Academy launch
 hide:
   - path: tests/public_api.json
     why: Generated additive signatures
   - path: scratch/concept-review.page.html
+    why: Generated review page
+  - path: scratch/concept-review.html
+    why: Generated review page
+  - path: scratch/qa.page.html
+    why: Generated review page
+  - path: scratch/qa.html
+    why: Generated review page
+  - path: scratch/ship-review.page.html
+    why: Generated review page
+  - path: scratch/ship-review.html
     why: Generated review page

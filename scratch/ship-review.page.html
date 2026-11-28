@@ -1,196 +1,254 @@
 <header>
-  <h1>GPU-batched trophy evaluation</h1>
-  <p>MTG-497 · <a href="https://github.com/loopflowstudio/manabot/pull/638">PR #638</a> · <code>0f885b1f43</code></p>
-  <p>The ship-review fixes are in the PR. The remaining release gate is a published Etude SDK 0.5.0 and a fresh locked verification run.</p>
+  <h1>Cut game-side host, replay, and heuristic-stepping overhead in vectorized eval</h1>
+  <p>MTG-506 · <a href="https://github.com/loopflowstudio/manabot/pull/643">PR #643</a> · <code>598663ae16</code> · stacked on <a href="https://github.com/loopflowstudio/manabot/pull/638">PR #638 (MTG-497)</a></p>
+  <p>Vector evaluation against the built-in heuristic now steps heuristic turns natively in Rust, drops per-decision viewer projection, and runs single-digest replay on two background threads — raising M4 Max MPS throughput 6.0× to 11,959 games/hr with forwards at 85% of wall time.</p>
 </header>
 
 <section id="outcome">
-  <h2>What was built</h2>
-  <p>A TLA trophy evaluation can keep up to 64 native games in flight per Etude game process. A finished game frees its slot for the next compatible game. Each deal still crosses both decks and seats, and Etude receives its result after all four games settle and replay. Automatic runtime selection is CUDA, MLX, MPS, then CPU. On Apple Silicon, MLX is selected when the optional extra and Metal are available.</p>
-  <p><strong>How to try it</strong> <code>uv run --no-sync python -m experiments.eval_throughput --output-dir ".runs/ship-review-$(date +%s)" --device mlx --runner vector --slots 64 --deals 4 --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors</code></p>
-  <p>Use the fetched TLA corpus and trained checkpoint, the MLX extra, and an editable Etude checkout with the async API. Select <code>mps</code> or <code>cpu</code> on a host without MLX. The command writes <code>summary.json</code> and per-deal evidence in <code>arena/</code>. <a href="../experiments/reports/eval_throughput.md#reproduce">Setup and reproduction</a></p>
+  <h2>1. What was built</h2>
+  <p>When you run a vectorized evaluation against the built-in heuristic, the engine settles every heuristic turn internally in Rust (<code>heuristic:64</code>) so every live slot in a round contributes a row to the checkpoint forward batch. Finished deals verify and retain evidence on two GIL-releasing background threads while the remaining slots keep stepping. Vector records store compact runner annotations instead of live viewer frames (frames reconstruct on demand from the verified record), and process-constant fingerprints compute once per process. Built-in heuristic declarations must now opt into <code>version: "native-v3"</code> so stored <code>native-v2</code> tournaments cannot silently mix with the fixed stateful heuristic.</p>
 
-  <h3>Post-compression QA on M4 Max</h3>
-  <p>The trained float32 checkpoint produced the same actions, digests and endings on the eight shared legs across CPU scalar, CPU vector with three slots, and MLX vector with 64 slots. The three-slot run exercised backfill. Both managed Metal runs completed two deals and replayed all eight games. Float32 took 15.8 s and bf16 took 15.5 s. They used the same player seeds, and bf16 recorded <code>etude-policy-bf16-auto-v1</code>. The CLI now reports an invalid deal count in one line. <a href="qa.html">QA scenarios and receipts</a></p>
+  <p><strong>How to try it:</strong> <code>uv run --no-sync python -m experiments.eval_throughput --output-dir ".runs/ship-review-$(date +%s)" --device mps --runner vector --slots 64 --deals 4 --checkpoint /tmp/mtg497-local-policy/00002000-raw.safetensors</code></p>
+
+  <h3>32-deal release panel (M4 Max &amp; RunPod L4, 128 games/arm)</h3>
+  <p>Measured at <code>ad8b9dbaab</code> with one release build per host and one Torch CPU thread. Every arm finished 128/128 games with 128/128 replay passes; every float32 vector arm matched CPU scalar on all 128 checkpoint action traces, pre-decision digests, final digests, and scores. <a href="../experiments/reports/eval_throughput.md#native-heuristic-and-background-replay-mtg-506">Full report</a></p>
+
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Host · Checkpoint</th>
+        <th scope="col">Arm</th>
+        <th scope="col">Games/hr</th>
+        <th scope="col">vs MTG-497</th>
+        <th scope="col">Wall (s)</th>
+        <th scope="col">Forward (s)</th>
+        <th scope="col">Other arena (s)</th>
+        <th scope="col">Bg replay (s)</th>
+        <th scope="col">Mean / max rows</th>
+        <th scope="col">Largest stage</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row">M4 Max · Trained <code>w160l8</code></th>
+        <td>MPS vector-64</td>
+        <td><strong>11,959</strong></td>
+        <td>6.0×</td>
+        <td>38.5</td>
+        <td>32.9 (85%)</td>
+        <td>5.7</td>
+        <td>5.4</td>
+        <td>36.30 / 64</td>
+        <td>Forward</td>
+      </tr>
+      <tr>
+        <th scope="row">M4 Max · Trained <code>w160l8</code></th>
+        <td>MLX vector-64</td>
+        <td>10,328</td>
+        <td>5.1×</td>
+        <td>44.6</td>
+        <td>32.7 (73%)</td>
+        <td>11.9</td>
+        <td>12.7</td>
+        <td>36.30 / 64</td>
+        <td>Forward</td>
+      </tr>
+      <tr>
+        <th scope="row">M4 Max · Seeded <code>w384l8</code></th>
+        <td>MPS / MLX vector-64</td>
+        <td>11,449 / <strong>13,429</strong></td>
+        <td>6.1× / 7.0×</td>
+        <td>40.2 / 34.3</td>
+        <td>36.2 / 30.3</td>
+        <td>4.0 / 4.0</td>
+        <td>3.9 / 4.1</td>
+        <td>30.78 / 64</td>
+        <td>Forward</td>
+      </tr>
+      <tr>
+        <th scope="row">RunPod L4 · Trained <code>w160l8</code></th>
+        <td>CUDA-64 f32 / bf16</td>
+        <td><strong>12,029</strong> / 8,413</td>
+        <td>3.3× / 2.6×</td>
+        <td>38.3 / 54.8</td>
+        <td>27.7 / 43.6</td>
+        <td>10.6 / 11.2</td>
+        <td>12.8 / 10.8</td>
+        <td>36.30 / 35.89</td>
+        <td>Forward</td>
+      </tr>
+      <tr>
+        <th scope="row">RunPod L4 · Seeded <code>w384l8</code></th>
+        <td>CUDA-64 f32 / bf16</td>
+        <td>11,199 / <strong>20,661</strong></td>
+        <td>3.3× / 5.3×</td>
+        <td>41.1 / 22.3</td>
+        <td>33.4 / 13.7</td>
+        <td>7.7 / 8.6</td>
+        <td>7.1 / 9.1</td>
+        <td>30.78 / 64</td>
+        <td>Forward</td>
+      </tr>
+    </tbody>
+  </table>
+
   <details>
-    <summary>Four-deal MLX receipt and CLI output</summary>
+    <summary>Real command output — M4 Max trained <code>w160l8</code> MPS-64 summary &amp; QA refusal output</summary>
     <pre><code>{
-  "deals": 4,
-  "device": "mlx",
-  "precision": "float32",
-  "runner": "vector",
+  "background_replay_seconds": 5.4418749148608185,
+  "checkpoint_sha256": "26ff27b76cffd9a1076d5224b81886560262ee48a575c9cde5b9026520951f37",
+  "deals": 32,
+  "device": "mps",
+  "forward_calls": 329,
+  "forward_rows": 11944,
+  "games": 128,
+  "games_per_hour": 11958.594779732568,
+  "largest_stage": "forward",
+  "max_rows_per_forward": 64,
+  "mean_rows_per_forward": 36.30395136778115,
+  "seconds": 38.53295545902802,
   "slots": 64,
-  "seconds": 28.78772687498713,
-  "games_per_hour": 2000.8526637109048,
-  "forward_calls": 400,
-  "mean_rows_per_forward": 3.535,
-  "max_rows_per_forward": 11,
-  "largest_stage": "replay"
+  "stage_seconds": {
+    "forward": 32.86743633373408,
+    "other_arena": 5.66551912529394
+  }
 }</code></pre>
-    <pre><code>eval_throughput.py: error: --deals must be between 1 and 32</code></pre>
-    <p>All 16 games replayed. This small run includes startup and replay costs. <a href="../.runs/qa-pass9/w160-mlx-64/summary.json">Local receipt</a></p>
+    <pre><code># Unversioned heuristic declaration refused at admission:
+built-in heuristic requires version 'native-v3'; got None. Use a new tournament for the current version
+
+# Academy Watch refusal on a native-seat record (QA fix 428f773bf7):
+replay.rejected: Academy requires both seats' surfaced decisions; native-seat records (such as an evaluation against the built-in heuristic) are not yet viewable. Verify the game with `uv run python -m managym.replay &lt;file&gt;`.</code></pre>
+    <p>See <a href="qa.html">QA scenarios and receipts</a> for mixed custom-code + heuristic runs, Academy Replay of custom-code records, and missing-corpus CLI handling.</p>
   </details>
-
-  <h3>Live resume of a named benchmark</h3>
-  <p>The first launch of <code>stored-trophy-deal</code> scored one deal for the trained <code>w160l8</code> checkpoint in an isolated local Etude store. After adding the seeded <code>w384l8</code>, the second launch loaded only that checkpoint and played its four legs. The first result’s <code>plays.parquet</code> still matched its recorded SHA256. All eight games replayed. Colab, floor and frontier snapshot returns were also checked against stored R2 history at planning time. <a href="../.lf/qa/evaluation.md">Resume procedure</a> · <a href="../.runs/qa/named-trophy-resume/">Local receipts</a></p>
-  <pre><code>eval stored-trophy-deal: 1 new, 0 running, 0 failed, 1 played
-eval stored-trophy-deal: nothing to play</code></pre>
-
-  <h3>Gate 1 rerun with zero-copy input arrays</h3>
-  <p>The full M4 Max rerun used Etude 6db832 at <code data-no-check>d876a7b</code> and Manabot’s contiguous preparation at <code>f3b00a8467</code>. Each arm ran 32 deals with 64 slots, one game process and 15 inference threads. The trained <code>w160l8</code> has 6.49M parameters. The seeded <code>w384l8</code> has 33.75M random parameters and makes fewer checkpoint decisions.</p>
-  <table>
-    <caption>Managed float32 Gate 1</caption>
-    <thead><tr><th scope="col">Checkpoint</th><th scope="col">Backend</th><th scope="col">EXP-77 socket games/hr</th><th scope="col">Zero-copy direct games/hr</th><th scope="col">Mean rows per forward</th><th scope="col">Arrays passed by pointer</th><th scope="col">In-band MB</th></tr></thead>
-    <tbody>
-      <tr><th scope="row">Trained <code>w160l8</code></th><td>MLX</td><td>4,749</td><td>4,818</td><td>16.61</td><td>56,979</td><td>14.23</td></tr>
-      <tr><th scope="row">Trained <code>w160l8</code></th><td>MPS</td><td>4,009</td><td>4,522</td><td>16.61</td><td>56,979</td><td>14.23</td></tr>
-      <tr><th scope="row">Seeded <code>w384l8</code></th><td>MLX</td><td>4,930</td><td>5,486</td><td>12.11</td><td>45,563</td><td>11.79</td></tr>
-      <tr><th scope="row">Seeded <code>w384l8</code></th><td>MPS</td><td>4,377</td><td>4,865</td><td>12.11</td><td>45,563</td><td>11.79</td></tr>
-    </tbody>
-  </table>
-  <p>All 512 rerun games matched the corresponding original direct arms on seeds, actions, offers, frame and state digests, and scores. Every arm recorded zero copied input arrays and zero socket bytes. The remaining in-band bytes carry Python structure. A separate 64-row compact-attention input preserved the addresses of all 68 array leaves it contained. The timings come from separate runs and include game work and result delivery, so the throughput differences cannot be attributed to transport alone. <a href="../experiments/reports/eval_throughput.md#gate-1-with-zero-copy-inputs">Gate 1 revisions, measurements and receipts</a></p>
-
-  <h3>Standalone accelerator measurements</h3>
-  <table>
-    <caption>Games/hour and mean checkpoint rows per forward over 128 games per arm</caption>
-    <thead><tr><th scope="col">Host and model</th><th scope="col">CPU scalar</th><th scope="col">GPU vector-64 float32</th><th scope="col">CUDA vector-64 bf16</th></tr></thead>
-    <tbody>
-      <tr><th scope="row">M4 Max · trained</th><td>749 · 1</td><td>MPS 1,989 · 15.78<br>MLX 2,033 · 15.78</td><td>—</td></tr>
-      <tr><th scope="row">M4 Max · seeded</th><td>782 · 1</td><td>MPS 1,882 · 8.72<br>MLX 1,915 · 8.72</td><td>—</td></tr>
-      <tr><th scope="row">L4 · trained</th><td>293 · 1</td><td>3,648 · 18.59</td><td>3,192 · 18.66</td></tr>
-      <tr><th scope="row">L4 · seeded</th><td>195 · 1</td><td>3,380 · 9.91</td><td>3,908 · 9.91</td></tr>
-    </tbody>
-  </table>
-  <p>Float32 GPU arms matched their CPU baselines leg for leg. All games replayed, including the trained L4 bf16 arm, which matched 117 of 128 float32 action traces and 127 of 128 scores. The full panels were captured at the revisions in the report. The later M4 Max smoke matched the pass 8 smoke. The older standalone receipts precede the engine-base update and game-budget alignment, and CUDA was last measured before compression. <a href="../experiments/reports/eval_throughput.md">Per-arm evidence</a> · <a href="qa.html">Post-compression comparison</a></p>
 </section>
 
 <section id="implementation">
-  <h2>How it works</h2>
-  <h3>Etude streams deals into the native arena</h3>
-  <lf-diff path="experiments/tla_trophies.py" lines="236-255">
-    <lf-note line="245">Closing the callback also closes the game stream.</lf-note>
-    <lf-note line="255">The historical float32 name is reused. Reduced-precision jobs get their own report and tournament name.</lf-note>
+  <h2>2. How it works</h2>
+
+  <h3>Per-slot native heuristic seats and version enforcement</h3>
+  <p><code>PlayerPolicy::Heuristic { max_actions }</code> serializes as <code>heuristic</code> or <code>heuristic:&lt;N&gt;</code>, keeping the existing record string format while honouring the registered 64-action cap. <code>SlotLoad::Fresh</code> carries an optional per-slot policy pair so deals can swap seats across legs without resetting the vector.</p>
+  <lf-diff path="managym/src/agent/player_policy.rs" lines="6-46">
+    <lf-note line="21">Serialized as a plain policy string so GameRecord.player_policies and snapshot replay need no schema bump.</lf-note>
+  </lf-diff>
+  <lf-diff path="managym/src/agent/vector_env/slots.rs" lines="18-46"></lf-diff>
+  <lf-diff path="manabot/eval/agents.py" lines="211-256">
+    <lf-note line="220">Both runners now open one stateful player per game seat via open_game(seed) instead of rebuilding per decision.</lf-note>
+    <lf-note line="238">Vector evaluation seats NativeHeuristic natively in Rust; CodeSeat stays a Python seat.</lf-note>
+  </lf-diff>
+  <lf-diff path="manabot/eval/pairing.py" lines="95-115">
+    <lf-note line="105">Refuses built-in heuristic players that omit version="native-v3" so stored native-v2 tournaments cannot silently mix.</lf-note>
   </lf-diff>
 
-  <h3>The game worker prepares one batch per checkpoint</h3>
-  <lf-diff path="manabot/eval/vector.py" lines="390-430">
-    <lf-note line="404">Memory blanking is a seat choice, including when two seats share weights.</lf-note>
-    <lf-note line="422">Each seat samples its own legal row using its recorded seed.</lf-note>
+  <h3>Compact vector evidence, isolated failures, and background replay</h3>
+  <p>Vector rounds skip live viewer-frame serialization, <code>describe_actions</code>, and <code>decision_observations</code> (except for custom <code>CodeSeat</code> slots). Completed deals hand off to a bounded 2-thread <code>ThreadPoolExecutor</code>, while <code>RecordWalker.run</code> takes a single-digest path for plain integer trajectories and <code>PyEnv</code> releases the GIL during replay.</p>
+  <lf-diff path="manabot/eval/vector.py" lines="231-270">
+    <lf-note line="239">Vector capture omits live viewer frames, so private_exposures is removed rather than reported as zero.</lf-note>
+    <lf-note line="266">Each leg carries its own (candidate, opponent) native policy pair into SlotLoad.fresh.</lf-note>
   </lf-diff>
-  <lf-diff path="manabot/eval/agents.py" lines="114-154">
-    <lf-note line="148">The host-admitted batch is ready before the sampler awaits Etude. Malformed logits are reported against this checkpoint.</lf-note>
+  <lf-diff path="manabot/eval/vector.py" lines="601-640">
+    <lf-note line="617">Completed 4-leg deals verify off the stepping loop; backfill stays open while fewer than slots replays are pending.</lf-note>
+    <lf-note line="637">Native opening or step crashes attribute to game_error_seat rather than the last Python actor.</lf-note>
   </lf-diff>
-  <details>
-    <summary>Contiguous arrays for direct transport</summary>
-    <p>The five original strided arrays were <code>relation_rows</code>, <code>name_rows</code>, <code>group_last</code>, <code>compact_attention.batches</code> and <code>compact_attention.slots</code>. Gate 1 also found a sixth, <code>effects.detail_kinds</code>, on rounds with live effects. The final preparation paths produce contiguous storage for all six. Compression converts lookup columns directly, removing intermediate copies.</p>
-    <lf-diff path="manabot/policy/prepare.py" lines="975-987"></lf-diff>
-    <lf-diff path="manabot/policy/prepare.py" lines="1030-1040"></lf-diff>
-    <lf-diff path="manabot/policy/prepare.py" lines="1085-1091"></lf-diff>
-    <lf-diff path="manabot/policy/prepare.py" lines="1361-1374"></lf-diff>
-  </details>
+  <lf-diff path="manabot/sim/evaluation_records.py" lines="80-113"></lf-diff>
+  <lf-diff path="managym/replay.py" lines="224-254">
+    <lf-note line="227">Direct path checks digests[0] once and each post-step transition once, cutting replay state_digest calls in half.</lf-note>
+  </lf-diff>
+  <lf-diff path="managym/replay.py" lines="294-303"></lf-diff>
+  <lf-diff path="managym/src/python/bindings.rs" lines="4309-4320">
+    <lf-note line="4312">PyEnv.reset, step, and state_digest release the GIL so background replay threads run alongside the main loop.</lf-note>
+  </lf-diff>
 
-  <h3>Each match owns its queued legs and its failure</h3>
-  <lf-diff path="manabot/eval/vector.py" lines="515-563">
-    <lf-note line="529">A compatible match supplies its next queued leg. On a fresh vector, the oldest waiting deal picks the layout.</lf-note>
+  <h3>Unified per-slot failure records and process-level fingerprint caching</h3>
+  <lf-diff path="managym/recording.py" lines="129-146">
+    <lf-note line="132">Isolated reset and step failures share one per-game GameFailure schema hoisted by GameRecord.for_game().</lf-note>
   </lf-diff>
-  <lf-diff path="manabot/eval/vector.py" lines="725-735">
-    <lf-note line="730">Removing the affected match also removes its queued legs. Slots belonging to unrelated checkpoints stay live.</lf-note>
+  <lf-diff path="managym/recording.py" lines="406-444"></lf-diff>
+  <lf-diff path="managym/replay.py" lines="584-600">
+    <lf-note line="594">Any stream with game.end.status == "failed" reports original_outcome="failed"; strict batch exceptions stay execution_outcome_unknown.</lf-note>
   </lf-diff>
-  <lf-diff path="manabot/eval/vector.py" lines="626-655">
-    <lf-note line="635">The seed travels with the deal to the free slot.</lf-note>
-    <lf-note line="654">Etude receives held failures before the runner requests replacement grants.</lf-note>
+  <lf-diff path="manabot/infra/provenance.py" lines="76-99">
+    <lf-note line="77">Matched 16-deal profile cut runtime_fingerprints from 1.782 s to 0.027 s across 80 calls.</lf-note>
   </lf-diff>
-  <p>The pass 7 regression reproduced a negative grant with 10 failures and nine slots. After admission and reuse adopted one layout key, the final nine-slot test queues eight healthy deals with a genuinely different layout, fails two deals sharing one checkpoint, and checks that both errors arrive before a new grant. The unrelated active deal completes and replays all four legs, and the deferred deals succeed. The checkpoint failure is injected in the fixture. <a href="../tests/eval/test_vector_eval.py#L869">Final regression</a></p>
 </section>
 
 <section id="contracts">
-  <h2>Key data structures and APIs</h2>
+  <h2>3. Key data structures and APIs</h2>
   <dl>
-    <dt><code>Deal</code> and <code>PairingSpec</code></dt>
-    <dd><code>Deal</code> supplies the trophy pools, seed and precision. Scalar and vector play share <code>PairingSpec</code> for the matchup, four-leg crossing, limits and precision.</dd>
-    <dt><code>Matches.take(n)</code> and <code>play_many</code></dt>
-    <dd>Etude grants matches with seat agents. The async generator yields <code>(match, Result | Exception)</code> when a deal settles. Scalar jobs declare an async <code>play</code> callback.</dd>
-    <dt><code>ObservationBatch</code>, <code>ObservationSelection</code> and <code>Prepared</code></dt>
-    <dd>Managym supplies packed v11 observation rows. The worker gathers checkpoint-specific row coordinates, resolves joins and legal masks through <code>prepare_batch</code>, and sends <code>Forward([prepared], rows=prepared.batch)</code>. Backends return float32 masked logits with shape <code>[batch, action slots]</code>.</dd>
-    <dt><code>ActiveMatch</code>, <code>PendingLeg</code> and <code>VectorLayout</code></dt>
-    <dd>A match holds its pending legs in grant order. One compatibility key governs admission and reuse from buffer shapes, overflow policy and vector-wide decision-memory settings. Mana payment stays a seat setting.</dd>
-    <dt><code>EvalTarget</code> and <code>AGENTS</code>, <code>AGENTS_BF16</code>, <code>AGENTS_TF32</code></dt>
-    <dd><code>EvalTarget</code> names the internal runtime choice behind <code>MANABOT_EVAL_DEVICE</code>. Job declarations select the agent set and persist precision in the compute class. TF32 requires CUDA.</dd>
-    <dt><code>SlotLoad.fresh(..., seed=...)</code> and <code>RecordedVectorEnv.take_slot_record</code></dt>
-    <dd>Seeded slot loads preserve the deal’s identity during backfill. The recorder detaches the finished game before slot reuse. The <code>managym-game-v1</code> record carries Commands, offers, live viewer frame evidence and digests. The Etude result retains outcome, behaviour and card evidence.</dd>
+    <dt><code>PlayerPolicy::Heuristic { max_actions: Option&lt;u32&gt; }</code> (<a href="../managym/src/agent/player_policy.rs#L7">player_policy.rs</a>)</dt>
+    <dd>Parses and displays <code>agent</code>, <code>random</code>, <code>heuristic</code>, and <code>heuristic:&lt;N&gt;</code>. Enforces the positive <code>u32</code> action cap inside native heuristic selection.</dd>
+    <dt><code>SlotLoad.fresh(..., player_policies=None)</code> &amp; <code>VectorEnv.reset_each_into_buffers(..., player_policies=None, isolated=False)</code> (<a href="../managym/__init__.pyi">managym/__init__.pyi</a>)</dt>
+    <dd>Additive public API (recorded in <code>tests/public_api.json</code>). Omitting <code>player_policies</code> uses the vector's default pair, never the previous occupant's. <code>isolated=True</code> converts per-slot construction and opening-settlement errors into poisoned slots and receipts carrying <code>game_error_seat</code>. <code>VectorEnv.current_player_policies()</code> inspects live slot pairs.</dd>
+    <dt><code>GameInputs.player_policies</code> &amp; <code>GameEnd.failure: GameFailure</code> (<a href="../managym/recording.py#L129">recording.py</a>)</dt>
+    <dd>Multi-slot snapshots and journals store per-game policies (omitted when equal to <code>GameRecord.player_policies</code>) and per-slot isolated failures (<code>operation: "reset" | "step"</code>, <code>error_class</code>, <code>traceback</code>). <code>GameRecord.for_game()</code> hoists both to top-level fields when projecting a single stream.</dd>
+    <dt><code>NativeHeuristic</code>, <code>CodeSeat</code>, <code>GamePlayer.open_game(seed)</code> (<a href="../manabot/eval/agents.py#L211">agents.py</a>, <a href="../manabot/sim/agent.py">agent.py</a>)</dt>
+    <dd>Replaces the old <code>agents.py:Heuristic</code>. Built-in heuristic seats require <code>Code.config["version"] == "native-v3"</code> (<code>HEURISTIC_VERSION</code>), which changes Etude player keys and derived game seeds. Registered custom code players stay <code>CodeSeat</code> and keep stateful per-game instances via <code>open_game(seed)</code>.</dd>
+    <dt><code>DecisionIdentity</code> &amp; compact vector annotations (<a href="../manabot/sim/evaluation_records.py#L80">evaluation_records.py</a>)</dt>
+    <dd>Vector annotations store <code>actor</code>, <code>revision</code>, <code>player_id</code>, <code>player_seed</code>, <code>player_decision_ordinal</code>, <code>policy_rng_seed</code>, and <code>latency_seconds</code>; they omit <code>frame_sha256</code>, <code>chosen_offer</code>, and <code>action_space_kind</code>. <code>audit_view</code> derives offer IDs from <code>inputs["actions"][i]</code> when <code>chosen_offer</code> is absent; <code>_replay_record</code> verifies optional fields when present.</dd>
+    <dt><code>NativeSeatRecord</code> (<a href="../managym/academy/watch.py#L494">watch.py</a>)</dt>
+    <dd>Typed refusal raised when Academy Watch or configured launch tries to open a non-<code>("agent", "agent")</code> record, directing the user to <code>uv run python -m managym.replay &lt;file&gt;</code>.</dd>
   </dl>
-  <details>
-    <summary>The existing backend input contract</summary>
-    <lf-file path="manabot/policy/prepare.py" lines="652-682"></lf-file>
-  </details>
 </section>
 
 <section id="invariants">
-  <h2>Trade-offs and invariants going forward</h2>
+  <h2>4. Trade-offs and invariants going forward</h2>
   <ul>
-    <li><strong>Stable seeds and evidence.</strong> Float32 retains its existing environment and compute-class identities. BF16 and TF32 use suffixed tournament names and carry declared precision. The paired-deal and player seeds stay stable across precisions. A precision can choose a different action and still replay the exact action it recorded. Scalar and vector evidence is compared field by field because raw record hashes also contain runner mode and timings.</li>
-    <li><strong>Optional inference and training extensions.</strong> Evaluation keeps eager Torch. On MPS, full-graph compilation failed the binding check. A permissive run matched eager logits within <code>1e-5</code>, took 19.0 s on the first call, and took 1.620 s over 36 warm calls versus 1.315 s eager. Checkpoints carry no training-precision field, so evaluation precision stays a job declaration with float32 as the default. Evaluation joins ordinary memory rows. Training’s retained memory fold trees keep their own preparation and checkpoint compatibility. <a href="../experiments/reports/eval_throughput.md#torch-compilation-on-mps">Compilation probe</a> · <a href="../manabot/policy/batching.py#L182">Fold-tree boundary</a></li>
-    <li><strong>Scheduling and limits.</strong> The oldest held deal chooses the next vector layout after a drain. Each game’s 120-second gameplay budget accrues its share of live round time. The throughput CLI uses the same budget. The Command cap and Etude job deadline also bound a trophy run.</li>
-    <li><strong>Data boundaries.</strong> The game worker caches metadata by path, SHA256 and size under Etude’s immutable artifact contract, forwards prepared observations, and delivers viewer-safe replay evidence. Run <code>lf security-review</code> before delivery to check artifact admission and the observation and evidence boundaries.</li>
+    <li><strong>Stateful heuristic changes play (16 / 7,155 decisions in 10 / 64 profiled games).</strong> Both runners previously rebuilt the heuristic every decision, dropping intra-turn state (attack pool, block plan, kicker memory). Fixing this aligns eval with training's native heuristic seat and shifts the heuristic identity to <code>native-v3</code> (including <code>player_policy.rs</code> in <code>heuristic_source_paths()</code>). Existing stored experiment declarations stay unversioned and refuse loudly rather than mixing cohorts.</li>
+    <li><strong>Native heuristic decisions leave the stored record.</strong> A vector record against the built-in heuristic holds only the checkpoint's surfaced actions, digests, and annotations. Heuristic turns are recomputed at replay and bound by the next surfaced digest and the final digest. <code>decisions</code>, per-player latency, and <code>max_commands</code> count surfaced checkpoint decisions.</li>
+    <li><strong>Compact vector records trade live viewer hashes for speed.</strong> Scalar records keep live viewer frames, <code>frame_sha256</code>, and the per-decision <code>private_exposures</code> check. Vector records omit them because nothing in the vector runner consumes a viewer frame; any frame can still be reconstructed deterministically by walking the verified record.</li>
+    <li><strong>Background replay bounds memory without stalling steps.</strong> Two worker threads verify completed deals while up to <code>slots</code> settled matches may be in flight; once at capacity, backfill pauses while retaining the idle vector until a replay finishes. If future workloads ever starve the loop, replay child processes remain the documented fallback.</li>
+    <li><strong>Security &amp; trust boundaries:</strong> This diff touches record/provenance caching (<code>@cache</code> on <code>process_fingerprints</code> and <code>arena_source_sha256</code>), untrusted policy-string parsing in Rust (<code>PlayerPolicy::from_str</code>), replay verification of stored records, and removes the per-decision <code>private_exposures</code> viewer check in the vector runner (because no viewer frame is constructed or sent). Worth a quick <code>lf security-review</code> before delivering if you want a formal check on the replay/provenance boundary.</li>
   </ul>
-
-  <h3>Engine Budget on <code>0f885b1f43</code></h3>
-  <table>
-    <caption>Same-runner reference <code>4c85b7f32</code> and PR candidate</caption>
-    <thead><tr><th scope="col">Metric</th><th scope="col">Reference</th><th scope="col">Candidate</th><th scope="col">Change</th></tr></thead>
-    <tbody>
-      <tr><th scope="row">Steps throughput</th><td>17,687.6/s</td><td>17,993.6/s</td><td>+1.73%</td></tr>
-      <tr><th scope="row">Search total</th><td>110.467 s</td><td>110.944 s</td><td>+0.43% time</td></tr>
-      <tr><th scope="row">Worst search reply</th><td>2.924 s</td><td>2.954 s</td><td>+1.05% time</td></tr>
-      <tr><th scope="row">Digests</th><td>Steps and search seeds 1–3</td><td>All identical</td><td>0 changes</td></tr>
-    </tbody>
-  </table>
-  <p>The artifact reports the same 119,453 steps over 512 games. Each search seed had 40 decisions and identical action counts and score digests. Per-simulation times were 7.147 → 7.155 ms over 6,208 simulations, 4.327 → 4.350 ms over 7,424, and 4.871 → 4.907 ms over 6,976. Seed 3 still had the worst reply. The search differences are small timing increases on the same trajectories. The native step checks a flag before copying decision events, with the copy already used for native heuristic play. Seed bookkeeping and detaching the completed recording run at slot replacement. The benchmark does not isolate a cause for the timing differences. <a href="https://github.com/loopflowstudio/manabot/actions/runs/46095850847/job/140827067691">Engine Budget job</a> · <a href="https://github.com/loopflowstudio/manabot/actions/runs/46095850847/artifacts/15243691834">Per-seed and per-sample artifact</a></p>
-  <lf-diff path="managym/src/agent/env.rs" lines="735-762">
-    <lf-note line="750">Vector recording opts in to the same post-step chooser events used in scalar trace evidence.</lf-note>
-  </lf-diff>
+  <lf-diff path="managym/academy/watch.py" lines="488-499"></lf-diff>
 </section>
 
 <section id="findings">
-  <h2>Findings</h2>
-  <p>The five original transport copies and the sixth exposed by live effects, named benchmark resume, batch-preparation ownership, the internal runtime type and queued failure isolation are resolved in this PR. Earlier dispositions sent host work and the L4 bf16 profile to existing Tasks. The separate slow-slot timeout and the standalone historical trophy identity conflict were dropped. The conflict already reproduces on main. <a href="concept-review.html">Concept review</a> · <a href="plan.md">Plan and deferred findings</a> · <a href="questions.md">Working decisions</a></p>
+  <h2>5. Findings left outside this PR</h2>
 
-  <lf-component name="decision" id="sdk-release" title="Published Etude SDK and locked CI" recommendation="Fix here">
-    <p>PyPI still lists 0.4.7 and has no 0.5.0 distribution. On this PR head, locked integration and clean package installs fail before execution on async Etude imports including <code>ForwardError</code>, <code>ModelForward</code> and <code>Matches</code>. Editable 6db832 supplied those APIs for QA. Once 0.5.0 publishes, update the three dependency bounds and exact play-runtime pin in <code>pyproject.toml</code>, run <code>uv lock --upgrade-package etude-sdk</code>, and rerun locked sync, managed evaluation and clean package installation with the published wheel. <a href="https://pypi.org/project/etude-sdk/">PyPI</a> · <a href="https://github.com/loopflowstudio/manabot/actions/runs/46095850847/job/140827067765">Locked evaluation failure</a> · <a href="https://github.com/loopflowstudio/manabot/actions/runs/46095850792/job/140828314018">Package installation failure</a></p>
+  <lf-component name="decision" id="f1" title="Support native-seat GameRecords in Academy Watch" recommendation="File Task">
+    <p>Vector evaluations against the built-in heuristic now record <code>("agent", "heuristic:64")</code> / <code>("heuristic:64", "agent")</code>. <code>managym/academy/watch.py</code> refuses any non-<code>("agent", "agent")</code> record with <code>NativeSeatRecord</code> and directs callers to <code>uv run python -m managym.replay &lt;file&gt;</code>. Surfacing or recomputing native-seat turns inside Watch is Academy-scoped work.</p>
+    <p><button data-lf='{"kind":"task.create","title":"Support native-seat GameRecords in Academy Watch"}'>File Academy Watch Task</button></p>
   </lf-component>
 
-  <lf-component name="decision" id="stored-traces" title="Viewer evidence and game-side throughput" recommendation="Drop">
-    <p><a href="loopflow://manabot/task/MTG-506">MTG-506</a> already owns game-side throughput, including replay and retention, repeated metadata and frame work, and native heuristic stepping. Work outside forward round trips took 56–67% of the zero-copy Gate 1 arms. Arena work and replay took 72–89% of the L4 GPU arms. Keep the current live frame evidence in this PR. Question 1 decides the storage contract for that follow-up.</p>
+  <lf-component name="decision" id="f2" title="Maintained experiment migration to native-v3 tournament names" recommendation="Drop">
+    <p><code>tla_trophies*.py</code>, <code>opponent_memory.py</code>, <code>mana_taps.py</code>, and <code>tla_frontier.py</code> remain unversioned on this branch so they refuse loudly instead of silently mixing <code>native-v3</code> into stored <code>native-v2</code> tournaments. Choosing new <code>-v3</code> tournament names (and which baselines to rerun) is irreversible once scored; handle it when starting the next evaluation campaign (Question 1).</p>
   </lf-component>
 
-  <lf-component name="decision" id="l4-bf16" title="Trained L4 bf16 performance" recommendation="Drop">
-    <p><a href="loopflow://manabot/task/MTG-507">MTG-507</a> already owns the profile. The trained arm’s forward time rose from 24.0 to 40.5 s in bf16, while the wider seeded arm fell from 29.5 to 12.6 s. The measured result stays in the report and float32 stays the default. <a href="../experiments/reports/eval_throughput.md#runpod-l4">L4 evidence</a></p>
+  <lf-component name="decision" id="f3" title="ScalarCapture does not record non-agent seat policies (pre-existing)" recommendation="Drop">
+    <p>Surfaced during QA: <code>ScalarCapture</code> writes <code>("agent", "agent")</code> even if the wrapped <code>managym.Env</code> was created with <code>player_policies=("agent", "heuristic")</code>, because <code>Env</code> exposes no policy getter, causing replay divergence at index 0. Predates MTG-506; scalar evaluation always seats <code>("agent", "agent")</code> and vector capture records per-slot pairs accurately. Fixing requires an <code>Env.player_policies</code> Rust getter + public API addition (Question 4).</p>
   </lf-component>
 
-  <lf-component name="decision" id="final-panels" title="Full throughput panels on the locked release candidate" recommendation="Drop">
-    <p>Post-compression QA exercised the current runner on Apple Silicon. Published throughput figures remain tied to their measured revisions and full CUDA runs predate compression. A full rerun would update the figures for this release candidate. The managed smoke and locked checks are already part of the SDK gate. Question 3.</p>
-  </lf-component>
-
-  <lf-component name="decision" id="etude-placement" title="Etude shared GPU placement and cache residency" recommendation="Drop">
-    <p>Etude owns shared Apple GPU placement and the <code>Forwards._evict</code> edge case where the only resident checkpoint can be evicted. QA exercised shared Metal with the editable SDK. In direct mode each game process can hold a checkpoint copy. <code>MANABOT_EVAL_DEVICE=cpu</code> remains available on memory-constrained hosts. <a href="plan.md">Etude companion and cache findings</a></p>
+  <lf-component name="decision" id="f4" title="Etude SDK 0.5.0 release pin and Matches → MatchStream sync" recommendation="Drop">
+    <p>Owned by stacked parent <a href="https://github.com/loopflowstudio/manabot/pull/638">PR #638 (MTG-497)</a>. Locked CI fails on the unreleased <code>etude-sdk 0.5.0</code> async imports, and editable Etude <code data-no-check>1f7496e9</code> renamed <code>Matches</code> to <code>MatchStream</code>. Once MTG-497 lands with the published SDK, sync MTG-506 onto main before delivering.</p>
   </lf-component>
 </section>
 
 <section id="questions">
-  <h2>Decisions for Jack</h2>
-  <div data-choice="q1" data-label="1 · Stored decision evidence">
-    <p><strong>1. What should MTG-506 retain for each stored decision?</strong></p>
-    <button data-value="1a">1a · Keep live viewer frame evidence and remove redundant work around it</button>
-    <button data-value="1b">1b · Store compact decision annotations and reconstruct viewer evidence on replay</button>
+  <h2>6. Questions</h2>
+
+  <div data-choice="q1" data-label="1 · Maintained experiment migration to native-v3">
+    <p><strong>1. Built-in heuristic declarations without <code>version: "native-v3"</code> are refused so stored <code>native-v2</code> tournaments cannot mix cohorts. Which maintained experiments should move to <code>native-v3</code> now?</strong> (Irreversible once scored.)</p>
+    <button data-value="1a">1a · (Recommended) Keep all stored experiment files frozen in MTG-506; adopt new <code>native-v3</code> tournament names in the next evaluation campaign</button>
+    <button data-value="1b">1b · Add <code>version: "native-v3"</code> only to never-scored <code>bf16</code>/<code>tf32</code> branches in <code>tla_trophies.py</code> now</button>
+    <button data-value="1c">1c · Add new <code>-v3</code> tournament names with <code>version: "native-v3"</code> across <code>tla_trophies*.py</code> in this PR</button>
+    <button data-value="1d">1d · Add explicit stateless <code>version="native-v2"</code> dispatch so existing tournament names keep running</button>
   </div>
-  <div data-choice="q2" data-label="2 · Precision-specific tournament names">
-    <p><strong>2. Which names should Etude use when you first score reduced-precision trophies?</strong> The name becomes part of the stored benchmark identity after scoring.</p>
-    <button data-value="2a">2a · Use the implemented -bf16 and -tf32 suffixes and keep the existing float32 name</button>
-    <button data-value="2b">2b · Choose different reduced-precision names before any such tournament is scored</button>
+
+  <div data-choice="q2" data-label="2 · Compact vector decision records">
+    <p><strong>2. Confirm the compact vector trace contract (omitting live viewer frames, <code>frame_sha256</code>, <code>chosen_offer</code>, <code>action_space_kind</code>, and <code>private_exposures</code> in vector records; scalar keeps live frames)?</strong></p>
+    <button data-value="2a">2a · (Recommended) Keep compact vector annotations and reconstruct viewer frames on demand from verified records</button>
+    <button data-value="2b">2b · Restore live viewer frames or per-decision offer metadata on vector records in this PR</button>
   </div>
-  <div data-choice="q3" data-label="3 · Throughput evidence at release">
-    <p><strong>3. Do you need games/hour measured on the locked release candidate?</strong></p>
-    <button data-value="3a">3a · Keep the revisioned panels and rerun the managed smoke with the published SDK</button>
-    <button data-value="3b">3b · Repeat the complete M4 Max and CUDA panels after the SDK pin and update the report</button>
+
+  <div data-choice="q3" data-label="3 · Academy Watch native-seat import (F1)">
+    <p><strong>3. Confirm deferring Academy Watch import of native-seat records (<code>("agent", "heuristic:64")</code>) to a separate Academy Task?</strong></p>
+    <button data-value="3a">3a · (Recommended) Keep Watch's <code>NativeSeatRecord</code> refusal and file a follow-up Academy Task</button>
+    <button data-value="3b">3b · Implement native-seat import in Academy Watch inside MTG-506</button>
+  </div>
+
+  <div data-choice="q4" data-label="4 · Pre-existing ScalarCapture seat-policy gap (F3)">
+    <p><strong>4. What should happen to QA's finding that <code>ScalarCapture</code> ignores non-agent <code>Env</code> seat policies?</strong></p>
+    <button data-value="4a">4a · (Recommended) Drop for now (predates MTG-506; scalar eval always uses <code>("agent", "agent")</code>)</button>
+    <button data-value="4b">4b · Fix here: add <code>Env.player_policies</code> getter in Rust and record it in <code>ScalarCapture</code></button>
+    <button data-value="4c">4c · File a Task covering <code>Env.player_policies</code> + native heuristic seating in scalar eval</button>
   </div>
 </section>
