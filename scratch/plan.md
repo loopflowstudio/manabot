@@ -247,7 +247,7 @@ the three new kinds and still rejects untyped payloads.
 |---|---|
 | `managym/src/flow/state_edit.rs` (+ `tests.rs`) | three variants, one transaction for both decisions, validation, quiet entry |
 | `managym/src/flow/zones.rs`, `scenario.rs`, `sba.rs`, `card_capture.rs` | two extracted functions; scenario uses the shared installation; `aura_attachment_illegal` visible to `state_edit` |
-| `managym/src/python/bindings.rs` | two constructors, `repr`, by-reference batch |
+| `managym/src/python/bindings.rs` | three constructors, `repr`, native token validation |
 | `managym/__init__.pyi`, `tests/public_api.json` | additive; `uv run python scripts/public_api.py record` |
 | `managym/recording.py` | `CreateToken`, `AddToBattlefield`, `AddFromLibrary` models in the union |
 | `docs/engine-python.md`, `.lf/qa/engine.md` | constructor table rows, entry-behavior paragraph, refusal list, token keys from `managym.content_pool("world")`, the library-only limit under `determinize` |
@@ -277,12 +277,9 @@ their tests survive unchanged.
 ## Passes
 
 1. **Engine complete** (`4e2a85351`). All 14 focused debug tests passed, including quiet entry, rollback, Clue resolution attribution and cold replay through the next Command.
-2. **Python surface and QA note.** Bindings, stub, pydantic mirror, public API
-   snapshot, extension rebuild, Python tests, and `.lf/qa/engine.md`.
+2. **Python surface complete** (`fddd9a4d8`). The CPython 3.13 debug wheel built, all 20 focused Python and Academy tests passed, and the public API check confirmed the three additive methods. The tests cover cold replay, Aura rollback, and equal scalar and recorded vector digests after determinized restore and one action.
 
-The native performance budget and full suites are deferred to CI. The Python
-pass should update the bindings' by-value `repr` match for the string-carrying
-variants before rebuilding the extension.
+The native performance budget and full suites are deferred to CI.
 
 ## Docs written
 

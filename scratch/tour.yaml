@@ -1,13 +1,25 @@
-at: 4e2a853518bd8ce6b1a631fc2f18c4ab9f14b779
+at: fddd9a4d82bd9ea6e6fd0a6e7c978cc14e0106d7
 first:
   - path: docs/engine-python.md
     why: Live edit examples and the entry contract
   - path: managym/src/flow/state_edit.rs
     why: Replay variants, validation and the live decision transaction
+  - path: managym/__init__.pyi
+    why: Public Python constructors and keyword defaults
+  - path: managym/src/python/bindings.rs
+    why: Constructor validation and round-trippable representations
+  - path: managym/recording.py
+    why: Strict Python models for each replay variant
   - path: managym/src/flow/zones.rs
     why: Shared departure knowledge and permanent installation
+  - path: tests/env/test_game_state_edits.py
+    why: Combat offers, rollback, cold replay and vector restore
   - path: managym/src/flow/state_edit/tests.rs
     why: Quiet entry, Aura legality, knowledge and statistics
   - path: managym/src/agent/env/state_edit_tests.rs
     why: Refreshed combat offers and cold replay
-hide: []
+  - path: tests/academy/test_game_records.py
+    why: Academy imports the token edit and marks the branch
+hide:
+  - path: tests/public_api.json
+    why: Generated snapshot of the three constructor signatures
