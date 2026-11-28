@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from collections.abc import AsyncIterable
+from dataclasses import asdict, dataclass
 from importlib.metadata import version
 import json
 import os
@@ -18,6 +18,7 @@ import platform
 import time
 
 from etude.checkpoints import CheckpointRef
+from etude.eval.agents import ModelForward
 from etude.eval.records import Code, Match, checkpoint_player
 from etude.eval.result import Result
 from etude.records import ArtifactRef
@@ -55,36 +56,20 @@ DEALS = 32
 RANDOM_SEED = 1
 
 
-@dataclass
+@dataclass(frozen=True)
 class ForwardCall:
     rows: int
     seconds: float
 
 
-@dataclass
-class ForwardTiming:
-    """Counts and wall time at the synchronous loader boundary."""
+def timed_forward(forward: ModelForward, calls: list[ForwardCall]) -> ModelForward:
+    """Append one timing per completed loader call."""
 
-    calls: int = 0
-    rows: int = 0
-    max_rows: int = 0
-    seconds: float = 0.0
-    forwards: list[ForwardCall] = field(default_factory=list)
-
-
-def timed_forward(
-    forward: Callable[[list[object]], list[object]], timing: ForwardTiming
-) -> Callable[[list[object]], list[object]]:
     def call(inputs: list[object]) -> list[object]:
         rows = sum(item.batch for item in inputs if isinstance(item, Prepared))
         start = time.perf_counter()
         output = forward(inputs)
-        elapsed = time.perf_counter() - start
-        timing.forwards.append(ForwardCall(rows, elapsed))
-        timing.seconds += elapsed
-        timing.calls += 1
-        timing.rows += rows
-        timing.max_rows = max(timing.max_rows, rows)
+        calls.append(ForwardCall(rows, time.perf_counter() - start))
         return output
 
     return call
@@ -95,13 +80,15 @@ def random_checkpoint(
 ) -> None:
     """Generate seeded weights, optionally keeping another policy's input contract."""
     torch.manual_seed(RANDOM_SEED)
-    source = read_container(template) if template is not None else None
-    space = source.space if source is not None else ObservationSpace(OBSERVATION)
-    config = source.model if source is not None else model("w160l8")
+    if template is None:
+        space, config, readings = ObservationSpace(OBSERVATION), model("w160l8"), None
+    else:
+        source = read_container(template)
+        space, config, readings = source.space, source.model, source.readings
     policy = ActorCritic(
         space,
         config.model_copy(update={"hidden_dim": width, "num_attention_heads": heads}),
-        readings=source.readings if source is not None else None,
+        readings=readings,
     )
     save_checkpoint(policy, space, path, player_configs=None)
 
@@ -157,19 +144,11 @@ def completed_games(match: Match, result: Result) -> int:
     return len(plays)
 
 
-async def run_vector(
-    matches: LocalMatches,
-    specs: dict[str, PairingSpec],
-    slots: int,
-    out: Path,
+async def count_vector_games(
+    results: AsyncIterable[tuple[Match, Result | Exception]],
 ) -> int:
     games = 0
-    async for match, outcome in play_pairings(
-        matches,
-        lambda match: specs[match.key],
-        slots=slots,
-        output_dir=out,
-    ):
+    async for match, outcome in results:
         if isinstance(outcome, Exception):
             raise RuntimeError(f"deal {match.key} failed") from outcome
         games += completed_games(match, outcome)
@@ -210,7 +189,6 @@ def main() -> None:
         path = out / f"w{args.random_width}l8.safetensors"
         random_checkpoint(path, args.random_width)
     ref = checkpoint_ref(path, ARENA)
-    digest = ref.artifact.sha256
     checkpoint = read_container(path)
     if not checkpoint.space.one_token:
         raise ValueError("the throughput comparison requires a v11 checkpoint")
@@ -219,8 +197,8 @@ def main() -> None:
     del checkpoint
 
     heuristic, specs, matches = trophy_deals(ref, args.deals, args.precision)
-    timing = ForwardTiming()
-    forward = timed_forward(load_with_precision(ref, args.precision), timing)
+    calls: list[ForwardCall] = []
+    forward = timed_forward(load_with_precision(ref, args.precision), calls)
     agents = (forward, build(heuristic, {}))
     started = time.perf_counter()
     if args.runner == "scalar":
@@ -241,7 +219,10 @@ def main() -> None:
     else:
         vector_agents = (local_forward(forward), agents[1])
         source = LocalMatches([(match, vector_agents) for match in matches])
-        games = asyncio.run(run_vector(source, specs, args.slots, out))
+        results = play_pairings(
+            source, lambda match: specs[match.key], slots=args.slots, output_dir=out
+        )
+        games = asyncio.run(count_vector_games(results))
     seconds = time.perf_counter() - started
     if games != 4 * len(matches):
         raise RuntimeError(f"completed {games} games across {len(matches)} deals")
@@ -250,10 +231,12 @@ def main() -> None:
         json.loads((out / "arena" / match.key / "replay.json").read_bytes())["seconds"]
         for match in matches
     )
+    forward_rows = sum(call.rows for call in calls)
+    forward_seconds = sum(call.seconds for call in calls)
     stages = {
-        "forward": timing.seconds,
+        "forward": forward_seconds,
         "replay": replay_seconds,
-        "other_arena": seconds - timing.seconds - replay_seconds,
+        "other_arena": seconds - forward_seconds - replay_seconds,
     }
     summary = {
         "platform": platform.platform(),
@@ -265,16 +248,16 @@ def main() -> None:
         "slots": 1 if args.runner == "scalar" else args.slots,
         "model": model_name,
         "parameters": parameters,
-        "checkpoint_sha256": digest,
+        "checkpoint_sha256": ref.artifact.sha256,
         "random_seed": RANDOM_SEED if args.checkpoint is None else None,
         "deals": len(matches),
         "games": games,
         "seconds": seconds,
         "games_per_hour": 3600 * games / seconds,
-        "forward_calls": timing.calls,
-        "forward_rows": timing.rows,
-        "mean_rows_per_forward": timing.rows / timing.calls if timing.calls else 0,
-        "max_rows_per_forward": timing.max_rows,
+        "forward_calls": len(calls),
+        "forward_rows": forward_rows,
+        "mean_rows_per_forward": forward_rows / len(calls) if calls else 0,
+        "max_rows_per_forward": max((call.rows for call in calls), default=0),
         "stage_seconds": stages,
         "largest_stage": max(stages, key=stages.__getitem__),
     }
@@ -284,7 +267,7 @@ def main() -> None:
         summary["gpu"] = torch.cuda.get_device_name()
         summary["cuda"] = torch.version.cuda
     with (out / "forwards.jsonl").open("w") as receipt:
-        for call in timing.forwards:
+        for call in calls:
             receipt.write(json.dumps(asdict(call)) + "\n")
     atomic_json(out / "summary.json", summary)
     print(json.dumps(summary, indent=2))

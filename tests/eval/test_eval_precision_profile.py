@@ -1,6 +1,8 @@
 """Exercise the offline forward profiler on real decisions from a small paired deal."""
 
+import json
 from pathlib import Path
+from statistics import mean
 
 from etude.checkpoints import CheckpointRef
 from etude.eval.records import Code, Match, checkpoint_player
@@ -15,6 +17,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.eval.agent_loader import load_torch_policy
 from manabot.eval.pairing import PairingSpec
 from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.identity import file_sha256
 from manabot.policy.batching import concatenate
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import DeckMatchup
@@ -46,19 +49,21 @@ def test_cuda_trace_charges_nested_casts_to_attention_and_kernel_overlap_once() 
         event(experiment.FORWARD, 0, 100, "user_annotation"),
         event(experiment.FORWARD, 30, 50, "gpu_user_annotation", gpu=True),
         event("aten::to", 2, 5, "cpu_op"),
+        event("cudaLaunchKernel", 3, 1, "cuda_runtime", correlation=6),
         event(experiment.ATTENTION, 10, 25, "user_annotation"),
         event("aten::to", 15, 10, "cpu_op"),
         event("cudaLaunchKernel", 20, 2, "cuda_runtime", correlation=7),
         event("attention_kernel", 30, 50, "kernel", gpu=True, correlation=7),
+        event("copy_kernel", 40, 10, "kernel", gpu=True, correlation=6),
         event("outside_forward", 110, 10, "kernel", gpu=True, correlation=8),
     ]
     wall, cuda, kernels = experiment.bucket_trace(events)
     elapsed = sum(scope["dur"] for scope in experiment.forward_scopes(events)) / 1e6
     assert sum(wall.values()) == pytest.approx(elapsed)
     assert wall == pytest.approx(
-        {"other": 25e-6, "casts_and_copies": 5e-6, "attention": 70e-6}
+        {"other": 25e-6, "casts_and_copies": 15e-6, "attention": 60e-6}
     )
-    assert cuda == pytest.approx({"attention": 50e-6})
+    assert cuda == pytest.approx({"attention": 40e-6, "casts_and_copies": 10e-6})
     assert kernels == {"attention_kernel": 1}
 
 
@@ -139,32 +144,27 @@ def check_profile(tmp_path: Path) -> None:
     with experiment.open_capture(batches) as (_, calls):
         multi = None
         for call in calls:
-            logits, _ = experiment.run_call(
-                policy, call.batch, "float32", device, sync, 0
-            )
+            logits, _ = experiment.run_call(policy, call.batch, "float32", device, sync)
             np.testing.assert_array_equal(logits, call.logits)
             if call.batch.batch > 1 and multi is None:
                 multi = call
         assert multi is not None
     joined = concatenate(list(multi.singles))
-    logits, _ = experiment.run_call(policy, joined, "float32", device, sync, 0)
+    logits, _ = experiment.run_call(policy, joined, "float32", device, sync)
     np.testing.assert_array_equal(logits, multi.logits)
     for actual, single in zip(logits, multi.singles, strict=True):
-        expected, _ = experiment.run_call(policy, single, "float32", device, sync, 0)
+        expected, _ = experiment.run_call(policy, single, "float32", device, sync)
         np.testing.assert_allclose(actual, expected[0], atol=2e-5, rtol=1e-5)
 
     alternate = tmp_path / "alternate.safetensors"
     experiment.random_checkpoint(alternate, 32, 4, template=checkpoint)
-    digest = experiment.checkpoint_ref(alternate, experiment.ARENA).artifact.sha256
-    assert digest is not None
+    digest = file_sha256(alternate)
     widened = load_torch_policy(alternate, "float32", device)
     with pytest.raises(ValueError, match="exact bytes"):
         next(experiment.bound_inputs(batches, widened, digest, None, 1, 0))
     (batch,) = experiment.bound_inputs(batches, widened, digest, 4, 1, 0)
     assert batch.batch == 4
-    assert (
-        experiment.run_call(widened, batch, "float32", device, sync, 0)[0].shape[0] == 4
-    )
+    assert experiment.run_call(widened, batch, "float32", device, sync)[0].shape[0] == 4
 
     receipt = experiment.replay(
         checkpoint,
@@ -173,8 +173,8 @@ def check_profile(tmp_path: Path) -> None:
         device_name="cpu",
         variant="float32",
         limit=2,
-        repeats=1,
-        profile_calls=2,
+        repeats=2,
+        profile_calls=1,
     )
     buckets = receipt["profile_estimated_bucket_mean_seconds"]
     assert isinstance(buckets, dict)
@@ -183,6 +183,16 @@ def check_profile(tmp_path: Path) -> None:
         receipt["profile_synced_sample_mean_seconds"]
     )
     assert receipt["cuda_buckets_seconds"] is None
+    # With seed 1 the second call replaces the first in the one-call sample.
+    calls = [
+        json.loads(line)
+        for line in (tmp_path / "replay/calls.jsonl").read_text().splitlines()
+    ]
+    assert receipt["profile_synced_sample_mean_seconds"] == mean(
+        call["forward_seconds"]
+        for call in calls
+        if call["repeat"] and call["call"] == 1
+    )
     report = tmp_path / "report.md"
     experiment.render_report(tmp_path, report)
     assert "| replay |" in report.read_text()

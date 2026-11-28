@@ -15,7 +15,7 @@ from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import asdict, dataclass, replace
 import gzip
 import heapq
-from itertools import count, islice
+from itertools import batched, islice
 import json
 import os
 from pathlib import Path
@@ -34,7 +34,7 @@ from torch.profiler import ProfilerActivity, profile, record_function
 from experiments.eval_throughput import (
     DEALS,
     checkpoint_ref,
-    completed_games,
+    count_vector_games,
     random_checkpoint,
     trophy_deals,
 )
@@ -50,6 +50,7 @@ from manabot.eval.agents import build, checked_logits, local_forward, prepare_ba
 from manabot.eval.vector import LocalMatches, play_pairings
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.files import atomic_json
+from manabot.infra.identity import file_sha256
 from manabot.policy.admission import Spec, binding
 from manabot.policy.batching import concatenate
 from manabot.policy.prepare import Prepared
@@ -104,6 +105,19 @@ class CapturedCall:
     logits: np.ndarray
 
 
+@contextmanager
+def write_capture(path: Path) -> Iterator[gzip.GzipFile]:
+    """Publish a complete capture without overwriting another writer's file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(dir=path.parent, suffix=".partial") as partial:
+        with gzip.GzipFile(fileobj=partial, mode="wb", compresslevel=1) as stream:
+            yield stream
+            # EOF before the terminator means the capture was truncated.
+            pickle.dump(None, stream, protocol=5)
+        partial.flush()
+        os.link(partial.name, path)
+
+
 def capture(
     checkpoint: Path,
     batches: Path,
@@ -116,7 +130,6 @@ def capture(
     ref = checkpoint_ref(checkpoint, ARENA)
     heuristic, specs, matches = trophy_deals(ref, deals, "float32")
     out.mkdir(parents=True, exist_ok=False)
-    batches.parent.mkdir(parents=True, exist_ok=True)
     os.environ["MANABOT_EVAL_DEVICE"] = device
     os.environ["OMP_NUM_THREADS"] = "1"
     forward = load_with_precision(ref, "float32")
@@ -136,61 +149,46 @@ def capture(
         )
         observed[id(batch)] = singles, spec
 
-    with NamedTemporaryFile(dir=batches.parent, suffix=".partial") as partial:
-        with gzip.GzipFile(fileobj=partial, mode="wb", compresslevel=1) as stream:
+    with write_capture(batches) as stream:
 
-            def record(inputs: list[object]) -> list[object]:
-                nonlocal count
-                (batch,) = inputs
-                assert isinstance(batch, Prepared)
-                singles, spec = observed.pop(id(batch))
-                if count == 0:
-                    pickle.dump(
-                        (
-                            ref.artifact.sha256,
-                            spec.model,
-                            spec.space.config,
-                            dict(spec.tables.layout.readings),
-                        ),
-                        stream,
-                        protocol=5,
-                    )
-                outputs = forward(inputs)
+        def record(inputs: list[object]) -> list[object]:
+            nonlocal count
+            (batch,) = inputs
+            assert isinstance(batch, Prepared)
+            singles, spec = observed.pop(id(batch))
+            if count == 0:
                 pickle.dump(
-                    (batch, singles, checked_logits(outputs, batch)),
+                    (
+                        ref.artifact.sha256,
+                        spec.model,
+                        spec.space.config,
+                        dict(spec.tables.layout.readings),
+                    ),
                     stream,
                     protocol=5,
                 )
-                count += 1
-                return outputs
+            outputs = forward(inputs)
+            pickle.dump(
+                (batch, singles, checked_logits(outputs, batch)),
+                stream,
+                protocol=5,
+            )
+            count += 1
+            return outputs
 
-            agents = (local_forward(record), build(heuristic, {}))
-            source = LocalMatches([(match, agents) for match in matches])
+        agents = (local_forward(record), build(heuristic, {}))
+        source = LocalMatches([(match, agents) for match in matches])
 
-            async def collect() -> int:
-                games = 0
-                async for match, outcome in play_pairings(
-                    source,
-                    lambda match: specs[match.key],
-                    slots=slots,
-                    output_dir=out,
-                    observe_prepared=observe,
-                ):
-                    if isinstance(outcome, Exception):
-                        raise RuntimeError(f"deal {match.key} failed") from outcome
-                    games += completed_games(match, outcome)
-                return games
-
-            games = asyncio.run(collect())
-            if games != deals * 4 or not count:
-                raise ValueError(
-                    f"capture completed {games} games and {count} forwards"
-                )
-            # A terminator distinguishes a complete capture from a truncated one.
-            pickle.dump(None, stream, protocol=5)
-        partial.flush()
-        # Link only complete bytes and fail if another capture owns the destination.
-        os.link(partial.name, batches)
+        results = play_pairings(
+            source,
+            lambda match: specs[match.key],
+            slots=slots,
+            output_dir=out,
+            observe_prepared=observe,
+        )
+        games = asyncio.run(count_vector_games(results))
+        if games != deals * 4 or not count:
+            raise ValueError(f"capture completed {games} games and {count} forwards")
     print(f"Captured {count} calls from {games} games in {batches}")
 
 
@@ -207,22 +205,43 @@ def open_capture(path: Path) -> Iterator[tuple[BatchContract, Iterator[CapturedC
         yield contract, calls()
 
 
-def profile_inputs(
-    calls: Iterator[CapturedCall],
+def grid_batches(
+    calls: Iterator[CapturedCall], rows: int, skip_rows: int
+) -> Iterator[HostBatch]:
+    singles = (row for call in calls for row in call.singles)
+    for group in batched(islice(singles, skip_rows, None), rows):
+        if len(group) == rows:
+            yield group[0] if rows == 1 else concatenate(list(group))
+
+
+def bound_inputs(
+    batches: Path,
+    policy: ActorCritic,
+    checkpoint_sha256: str,
     grid_rows: int | None,
     limit: int | None,
     skip_rows: int,
 ) -> Iterator[HostBatch]:
-    if grid_rows is None:
-        yield from (call.batch for call in islice(calls, limit))
-        return
-    singles = (row for call in calls for row in call.singles)
-    singles = islice(singles, skip_rows, None)
-    for _ in islice(count(), limit):
-        group = list(islice(singles, grid_rows))
-        if len(group) != grid_rows:
-            break
-        yield group[0] if grid_rows == 1 else concatenate(group)
+    with open_capture(batches) as (contract, calls):
+        if grid_rows is None and contract.checkpoint_sha256 != checkpoint_sha256:
+            raise ValueError(
+                "arena batches require the capturing checkpoint's exact bytes"
+            )
+        source, target = contract.bind(policy, grid=grid_rows is not None)
+        inputs = (
+            (call.batch for call in calls)
+            if grid_rows is None
+            else grid_batches(calls, grid_rows, skip_rows)
+        )
+        for batch in islice(inputs, limit):
+            if batch.binding != source:
+                raise ValueError(
+                    "captured batch does not match its policy input contract"
+                )
+            yield replace(batch, binding=target) if source != target else batch
+
+
+# Forward timing and trace attribution
 
 
 def linear_weights_bf16(policy: ActorCritic) -> None:
@@ -245,7 +264,6 @@ def device_sync(device: torch.device) -> Callable[[], None]:
 class CallTiming:
     rows: int
     packed_gru_rows: int
-    repeat: int
     transfer_seconds: float
     forward_seconds: float
     readback_seconds: float
@@ -257,7 +275,6 @@ def run_call(
     precision: EvalPrecision,
     device: torch.device,
     sync: Callable[[], None],
-    repeat: int,
     *,
     profiling: bool = False,
 ) -> tuple[np.ndarray, CallTiming]:
@@ -281,7 +298,6 @@ def run_call(
     return logits, CallTiming(
         batch.batch,
         sum(sum(rows.schedule.sizes) for rows in schedules if rows is not None),
-        repeat,
         transferred - start,
         forwarded - transferred,
         read - forwarded,
@@ -370,12 +386,50 @@ def forward_scopes(events: list[TraceEvent]) -> list[TraceEvent]:
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class TraceSpan:
+    start: float
+    end: float
+    bucket: str
+    gpu: bool = False
+
+
+def wall_time_by_bucket(
+    spans: list[TraceSpan],
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Partition Chrome trace microseconds into elapsed seconds by owner."""
+    boundaries = sorted(
+        (time, opening, i)
+        for i, span in enumerate(spans)
+        for time, opening in ((span.start, True), (span.end, False))
+    )
+    wall: defaultdict[str, float] = defaultdict(float)
+    gpu: defaultdict[str, float] = defaultdict(float)
+    # A GPU operation owns host overlap. Within each timeline, prefer the
+    # latest start, then the earliest end (the innermost CPU scope).
+    active: list[tuple[bool, float, float, int]] = []
+    previous = 0.0
+    for time, opening, i in boundaries:
+        while active and active[0][2] <= previous:
+            heapq.heappop(active)
+        if active and time > previous:
+            owner = spans[active[0][3]]
+            seconds = (time - previous) / 1e6
+            wall[owner.bucket] += seconds
+            if owner.gpu:
+                gpu[owner.bucket] += seconds
+        if opening:
+            span = spans[i]
+            heapq.heappush(active, (not span.gpu, -span.start, span.end, i))
+        previous = time
+    return dict(wall), dict(gpu)
+
+
 def bucket_trace(
     events: list[TraceEvent],
 ) -> tuple[dict[str, float], dict[str, float], dict[str, int]]:
     """Partition profiled forward wall time. A running GPU kernel owns overlap."""
-    host: list[tuple[float, float, str]] = []
-    device: list[tuple[float, float, str]] = []
+    spans: list[TraceSpan] = []
     by_launch: dict[int, str] = {}
     by_op: dict[int, str] = {}
     attention_kernels: defaultdict[str, int] = defaultdict(int)
@@ -398,11 +452,12 @@ def bucket_trace(
             bucket = op_bucket(event["name"], stack[-1][1] if stack else "other")
             end_at = min(start_at + event["dur"], end)
             stack.append((end_at, bucket))
-            host.append((start_at, end_at, bucket))
-            correlation = event.get("args", {}).get("correlation")
+            spans.append(TraceSpan(start_at, end_at, bucket))
+            args = event.get("args", {})
+            correlation = args.get("correlation")
             if correlation is not None:
                 by_launch[correlation] = bucket
-            external = event.get("args", {}).get("External id")
+            external = args.get("External id")
             if external is not None and event["cat"] == "cpu_op":
                 by_op[external] = bucket
     for event in events:
@@ -414,36 +469,14 @@ def bucket_trace(
         if bucket is None and external is not None:
             bucket = by_op.get(external)
         if bucket is not None:
-            device.append((event["ts"], event["ts"] + event["dur"], bucket))
+            spans.append(
+                TraceSpan(event["ts"], event["ts"] + event["dur"], bucket, gpu=True)
+            )
             if bucket == "attention" and event["cat"] == "kernel":
                 attention_kernels[event["name"]] += 1
 
-    buckets: defaultdict[str, float] = defaultdict(float)
-    gpu_buckets: defaultdict[str, float] = defaultdict(float)
-    # The deepest CPU interval wins. The latest-started CUDA kernel wins when
-    # kernels overlap, so no elapsed time is charged twice in either case.
-    spans = [(*span, False) for span in host] + [(*span, True) for span in device]
-    boundaries = sorted(
-        (time, opening, i)
-        for i, (start, end, _, _) in enumerate(spans)
-        if start < end
-        for time, opening in ((start, True), (end, False))
-    )
-    active: list[tuple[bool, float, float, int]] = []
-    previous = 0.0
-    for time, opening, i in boundaries:
-        while active and spans[active[0][3]][1] <= previous:
-            heapq.heappop(active)
-        if active and time > previous:
-            _, _, bucket, is_gpu = spans[active[0][3]]
-            buckets[bucket] += (time - previous) / 1e6
-            if is_gpu:
-                gpu_buckets[bucket] += (time - previous) / 1e6
-        if opening:
-            start, end, _, is_gpu = spans[i]
-            heapq.heappush(active, (not is_gpu, -start, end, i))
-        previous = time
-    return dict(buckets), dict(gpu_buckets), dict(attention_kernels)
+    wall, gpu = wall_time_by_bucket(spans)
+    return wall, gpu, dict(attention_kernels)
 
 
 def profile_forward(
@@ -459,7 +492,7 @@ def profile_forward(
         activities.append(ProfilerActivity.CUDA)
     with profile_modules(policy), profile(activities=activities) as profiler:
         for batch in batches:
-            run_call(policy, batch, precision, device, sync, 0, profiling=True)
+            run_call(policy, batch, precision, device, sync, profiling=True)
     profiler.export_chrome_trace(str(trace))
     events = [
         cast(TraceEvent, event)
@@ -488,33 +521,11 @@ def profile_forward(
         "cuda_buckets_seconds": device_buckets if device.type == "cuda" else None,
         "sdpa_dispatches": dict(dispatches),
         "native_mha_dispatches": native_mha_dispatches,
-        "cuda_attention_kernels": dict(attention_kernels)
-        if device.type == "cuda"
-        else None,
+        "cuda_attention_kernels": attention_kernels if device.type == "cuda" else None,
     }
 
 
-def bound_inputs(
-    batches: Path,
-    policy: ActorCritic,
-    checkpoint_sha256: str,
-    grid_rows: int | None,
-    limit: int | None,
-    skip_rows: int,
-) -> Iterator[HostBatch]:
-    with open_capture(batches) as (contract, calls):
-        grid = grid_rows is not None
-        if not grid and contract.checkpoint_sha256 != checkpoint_sha256:
-            raise ValueError(
-                "arena batches require the capturing checkpoint's exact bytes"
-            )
-        source, target = contract.bind(policy, grid=grid)
-        for batch in profile_inputs(calls, grid_rows, limit, skip_rows):
-            if batch.binding != source:
-                raise ValueError(
-                    "captured batch does not match its policy input contract"
-                )
-            yield replace(batch, binding=target) if source != target else batch
+# Replay and reporting
 
 
 def logit_difference(
@@ -526,6 +537,14 @@ def logit_difference(
     return bool(np.array_equal(actual, expected)), float(
         np.abs(actual - expected).max()
     )
+
+
+def stage_means(calls: list[CallTiming]) -> dict[str, float]:
+    return {
+        "transfer_seconds": mean(call.transfer_seconds for call in calls),
+        "forward_seconds": mean(call.forward_seconds for call in calls),
+        "readback_seconds": mean(call.readback_seconds for call in calls),
+    }
 
 
 def replay(
@@ -546,8 +565,7 @@ def replay(
     precision = cast(EvalPrecision, "bf16" if variant.startswith("bf16") else variant)
     device = torch.device(device_name)
     sync = device_sync(device)
-    digest = checkpoint_ref(checkpoint, ARENA).artifact.sha256
-    assert digest is not None
+    digest = file_sha256(checkpoint)
     out.mkdir(parents=True, exist_ok=False)
 
     def inputs(policy: ActorCritic) -> Iterator[HostBatch]:
@@ -559,7 +577,7 @@ def replay(
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
 
-    calls: list[CallTiming] = []
+    passes: list[list[CallTiming]] = []
     sample: list[tuple[int, HostBatch]] = []
     compare_bf16 = variant != "bf16" and device.type != "cpu"
     first_logits: list[np.ndarray] = []
@@ -568,12 +586,14 @@ def replay(
     rng = Random(1)
     with (out / "calls.jsonl").open("w") as receipt:
         for repeat in range(repeats + 1):
+            calls: list[CallTiming] = []
             for index, batch in enumerate(inputs(policy)):
-                logits, timing = run_call(
-                    policy, batch, precision, device, sync, repeat
-                )
+                logits, timing = run_call(policy, batch, precision, device, sync)
                 calls.append(timing)
-                receipt.write(json.dumps({"call": index, **asdict(timing)}) + "\n")
+                receipt.write(
+                    json.dumps({"call": index, "repeat": repeat, **asdict(timing)})
+                    + "\n"
+                )
                 if repeat:
                     continue
                 if compare_bf16:
@@ -586,18 +606,12 @@ def replay(
                         sample[selected] = index, batch
             if not calls:
                 raise ValueError("no captured calls fit the requested replay")
+            passes.append(calls)
     peak = torch.cuda.max_memory_allocated(device) if device.type == "cuda" else None
-    warm = [call for call in calls if call.repeat]
-    stages = ("transfer_seconds", "forward_seconds", "readback_seconds")
-    stage_means = {
-        stage: mean(getattr(call, stage) for call in warm) for stage in stages
-    }
-    first_means = {
-        stage: mean(getattr(call, stage) for call in calls if not call.repeat)
-        for stage in stages
-    }
+    first, *timed = passes
+    warm = [call for repeat_calls in timed for call in repeat_calls]
     sample.sort()
-    run_call(policy, sample[0][1], precision, device, sync, 0)
+    run_call(policy, sample[0][1], precision, device, sync)
     breakdown = profile_forward(
         policy,
         [batch for _, batch in sample],
@@ -606,12 +620,10 @@ def replay(
         sync,
         out / "profile.json",
     )
-    selected_indices = {index for index, _ in sample}
-    calls_per_repeat = len(calls) // (repeats + 1)
     sample_mean = mean(
-        call.forward_seconds
-        for offset, call in enumerate(calls)
-        if call.repeat and offset % calls_per_repeat in selected_indices
+        repeat_calls[index].forward_seconds
+        for repeat_calls in timed
+        for index, _ in sample
     )
     profiled_total = breakdown["profiled_forward_seconds"]
     raw_buckets = breakdown["wall_buckets_seconds"]
@@ -620,7 +632,7 @@ def replay(
         del policy
         reference = load_torch_policy(checkpoint, "bf16", device)
         for batch, logits in zip(inputs(reference), first_logits, strict=True):
-            baseline, _ = run_call(reference, batch, "bf16", device, sync, 0)
+            baseline, _ = run_call(reference, batch, "bf16", device, sync)
             same, delta = logit_difference(logits, baseline, batch.legal)
             exact &= same
             difference = max(difference, delta)
@@ -639,9 +651,9 @@ def replay(
         "grid_skip_rows": skip_rows,
         "mean_rows": mean(call.rows for call in warm),
         "mean_packed_gru_rows": mean(call.packed_gru_rows for call in warm),
-        "calls_per_repeat": calls_per_repeat,
-        "first_touch_stage_means": first_means,
-        "repeat_stage_means": stage_means,
+        "calls_per_repeat": len(first),
+        "first_touch_stage_means": stage_means(first),
+        "repeat_stage_means": stage_means(warm),
         "peak_cuda_bytes": peak,
         "exact_bf16_logits": exact if compare_bf16 or variant == "bf16" else None,
         "max_abs_difference_from_bf16": difference

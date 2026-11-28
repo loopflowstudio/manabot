@@ -35,6 +35,8 @@ Each is reversible.
 - Grid cells use 12 consecutive calls per batch size after skipping 2,048
   single rows, with two timed repeats and three sampled calls for profiling.
   Each precision gets the same calls within its cell.
+- The compression pass treats the existing capture and receipt formats as
+  inputs for future analysis. Only the in-memory timing records change shape.
 
 Ideas outside this Task:
 

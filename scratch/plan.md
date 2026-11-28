@@ -135,10 +135,9 @@ batch sets separates board density (packed GRU rows) from kernel dispatch.
 Arena replicates come after the replay pass and are sized by it: alternating
 float32/bf16 repeats of the existing `eval_throughput` vector-64 arm for
 trained `w160l8` and seeded `w384l8` (up to three each, about 2.2 minutes per
-arm), to state the spread and to verify any fix. `ForwardTiming` keeps
-`(rows, seconds)` per call in memory and writes `forwards.jsonl` once after
-the run, so no disk write enters a timed forward; `summary.json` is
-unchanged.
+arm), to state the spread and to verify any fix. The runner retains one
+`ForwardCall(rows, seconds)` per completed call. It writes `forwards.jsonl`
+and derives the `summary.json` aggregates after the run.
 
 Loader split, chosen for review: `agent_loader.py` gains
 `load_torch_policy(path, precision, device)` (validated, eval-mode, programs

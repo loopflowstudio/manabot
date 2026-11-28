@@ -1,13 +1,15 @@
 # CUDA evaluation precision profile
 
-The [earlier L4 comparison](eval_throughput.md#runpod-l4) measured trained
-`w160l8` forwards at 24.0 s in float32 and 40.5 s in bf16. Seeded
-`w384l8` ran in 29.5 s and 12.6 s respectively. Each arm played the same
-held-out deals. Its policy controlled the actions, so each arm could produce
-different batches.
+On the L4, bf16 sent trained `w160l8`'s 20-wide heads through math
+attention and seeded `w384l8`'s 48-wide heads through memory-efficient
+attention. On identical inputs, bf16 raised mean forward time from 39.13
+to 66.32 ms per call for `w160l8` and cut it from 44.63 to 18.12 ms for
+`w384l8`. Changing the head count at width 160 reproduced the dispatch
+switch.
 
-The profiler runs both precisions on the same captured inputs. The exact
-arena comparisons keep the original batches and checkpoint. The head-width
+The [earlier arena comparison](eval_throughput.md#runpod-l4) let each
+precision play its own games. Here both precisions replay the same batches
+from each checkpoint's float32 games. The head-width
 grid uses independently prepared single rows from those same calls. Seeded
 controls in the grid inherit the trained checkpoint's saved observation
 readings. The trained checkpoint predates additional columns and two larger
