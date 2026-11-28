@@ -249,10 +249,14 @@ it is: **Training game**, one the training loop itself
 played, **Evaluation game**, one played afterwards to measure policies, or
 **Recorded game** for a record that says neither.
 
-Any game managym recorded opens this way with only `managym` installed: your
+Any game managym recorded with forced-decision skipping enabled and both seats
+using `agent` (`("agent", "agent")`) opens this way with only `managym` installed: your
 own loop's ([Record games](engine-python.md#record-games)), a training run's,
 an evaluation's, or a private snapshot replay exported by
 `GameSnapshot.to_replay_json()` ([Save and restore game positions](engine-python.md#save-and-restore-game-positions)).
+Records where a seat stepped natively (such as `"heuristic"` or
+`"heuristic:64"`) are currently refused by Watch; verify them with
+`python -m managym.replay`.
 A record holds the seed, both setups, the actions, and any recorded boundary
 interventions (such as library reshuffles or determinizations), so
 Academy plays the game again through the engine, checks the recorded state
@@ -1872,7 +1876,10 @@ holds private deal seeds; keep it private.
 This needs only `managym`. Replaying does not require the original checkpoint.
 A game bound to an incompatible world must be opened with the build that
 recorded it, which the refusal names; opening never upgrades frozen evaluation
-evidence.
+evidence. Evaluation games whose opponent stepped natively as a built-in
+policy (for example vector trophy runs against `"heuristic:64"`) are currently
+refused because Watch requires `("agent", "agent")` records; inspect or verify
+those with `uv run --no-project python -m managym.replay <file>`.
 
 Two kinds of evaluation game are command traces
 (`traces/<cell-id>.commands.jsonl.gz`) instead: every game of an evaluation

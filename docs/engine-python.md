@@ -243,11 +243,16 @@ and takes the same options. Construct it with `num_envs` and `seed`, use
 global stream identities across producers. A game recorded from a batch opens
 exactly like a scalar one.
 
-To reopen buffered streams at saved game seeds, call
-`reset_each_into_buffers(setups, seeds=seeds)` after binding the buffers. Pass
-one setup and one seed per slot in stream order. This can be the first reset.
+To reopen buffered streams at saved game seeds or per-slot policies, call
+`reset_each_into_buffers(setups, seeds=seeds, player_policies=policies)` after
+binding the buffers. Pass one setup, and optionally one seed and one two-seat
+policy pair, per slot in stream order; an omitted `player_policies` uses the
+`VectorEnv`'s default pair. This can be the first reset.
 The next game in each stream advances from its supplied seed by the normal
-stride. Replay the committed actions to reach a saved decision.
+stride. Replay the committed actions to reach a saved decision. When slots hold
+different policy pairs, each stream's `GameInputs` records `player_policies`
+whenever it differs from the record's default, and single-game records written
+from a slot carry that slot's pair.
 
 `capture.close()` writes each selected game still in progress as
 **interrupted**, with the reason, and syncs the file. Rows written at game end
@@ -274,7 +279,12 @@ print(replay.stop)   # complete, winner 0
 per game, including each stream of a vector snapshot or journal.
 `read_record(path)` reads exactly one row or projected journal and keeps all its
 streams together for failure reproduction. `walk` plays the game in a scalar `Env` and
-yields each decision only after its digest matched. It ends with a typed
+yields each decision only after its digest matched. For a record with a native
+built-in seat (including `"heuristic:<N>"`), `walk` recomputes the built-in
+turns between recorded external actions and checks the next surfaced digest and
+final digest. Because `Env.reset`, `Env.step` and `Env.state_digest` release
+the Python GIL, independent `walk` calls run concurrently across worker
+threads. It ends with a typed
 `stop`:
 
 | Stop | Meaning |
@@ -527,7 +537,7 @@ games.reset_all_into_buffers(players)
 [snap, _] = games.snapshot_slots([True, False])
 assert meta is not None and snap is not None
 
-# Restore slot 0 and deal slot 1 with a different setup.
+# Restore slot 0 and deal slot 1 at an explicit seed with a capped native heuristic in seat 0.
 alt_players = [
     managym.PlayerConfig(f"alt{seat}", {"Forest": 8, "Llanowar Elves": 4})
     for seat in (0, 1)
@@ -536,27 +546,39 @@ results = games.load_slots_into_buffers([
     managym.SlotLoad.snapshot(
         0, snap, managym.RestoreOptions.shuffle_libraries(seed=101)
     ),
-    managym.SlotLoad.fresh(1, player_configs=alt_players),
+    managym.SlotLoad.fresh(
+        1,
+        player_configs=alt_players,
+        seed=99,
+        player_policies=("heuristic:64", "agent"),
+    ),
 ])
 for result in results:
     print(result.slot, result.seed, result.acting_player, result.terminal)
 # 0 42 0 False
-# 1 45 0 False
+# 1 99 1 False
 print(games.next_fresh_seeds())
-# [42, 47]
+# [42, 45]
 ```
 
 `slot_metadata(mask)` reads the live position without cloning it or advancing
 its RNG. `snapshot_slots(mask)` returns detached handles. Both return `None`
 for skipped slots and reject requests to read an unset or poisoned slot.
 
-`load_slots_into_buffers(requests)` accepts live, finished and poisoned slots.
+`load_slots_into_buffers(requests, *, isolated=False)` accepts live, finished
+and poisoned slots.
 
-- `SlotLoad.fresh(slot, player_configs=None)` deals the slot's next scheduled
-  seed and advances it by `seed_stride`, saturating at the maximum u64.
-  An explicit setup becomes the default for subsequent fresh loads. With a
-  uniform or training roster, omit the setup so the roster can draw the decks.
-- `SlotLoad.snapshot(slot, snapshot, options=None)` restores a branch.
+- `SlotLoad.fresh(slot, player_configs=None, *, seed=None, player_policies=None)`
+  deals the slot's next scheduled seed and advances it by `seed_stride`,
+  saturating at the maximum u64; passing an explicit `seed` deals that seed
+  instead without advancing the slot's schedule. An explicit setup becomes the
+  default for subsequent fresh loads. With a uniform or training roster, omit
+  the setup so the roster can draw the decks. Supply `player_policies` (for
+  example `("heuristic:64", "agent")`) to override the `VectorEnv`'s policy pair
+  for that game; omitting it uses the `VectorEnv`'s default pair, never the
+  slot's previous occupant.
+- `SlotLoad.snapshot(slot, snapshot, options=None)` restores a branch along
+  with the snapshot's own policy pair.
   Replacing an untouched fresh opening with a snapshot refunds that opening's
   seed. Other snapshot loads leave the seed sequence unchanged.
 - `SlotLoad.slot`, `SlotLoad.with_slot(slot)` and `SlotLoadResult.with_slot(slot)`
@@ -567,6 +589,17 @@ capacity across all participating shards before writing any row or spending a
 seed. You can correct a rejected request and retry it. Results follow request
 order and carry the slot, generation, seed, acting player, terminal flag and
 source digest. `next_fresh_seeds()` gives each slot's next unspent seed.
+
+When a slot uses a seat-0 built-in policy, resetting or loading it settles that
+seat's opening turns immediately. A built-in opening can finish the game before
+seat 1 acts, producing `terminal=True` and `acting_player=None`. Pass
+`isolated=True` to `reset_each_into_buffers` or `load_slots_into_buffers` to
+isolate native `AgentError` and panic failures during opening settlement per
+slot: the failing slot becomes poisoned (`acting_player=None`, `terminal=False`)
+with `game_error` and `game_error_seat` in `get_last_info()[slot]`, while the
+other slots load normally. Isolated step receipts from
+`step_isolated_into_buffers` report `game_error_seat` the same way, naming the
+acting seat when a mid-game built-in turn fails.
 
 Mask parked slots out of steps until you reset or reload them. A forced action
 can finish a restored game during the load itself. Its result then has

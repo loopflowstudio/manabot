@@ -214,7 +214,23 @@ evidence, `Play` counts and any viewer frame derive from walking it.
 - Readers of decision evidence that must accept both shapes:
   `audit_view`, `_replay_record`, `manabot/eval/match.py` game rows,
   `manabot/reports/evaluation.py`, card evidence, `experiments/eval_throughput.py`.
-- Docs: `docs/evaluation.md#etude-agents`, `experiments/reports/eval_throughput.md`.
+- Docs (written ahead of build; `experiments/reports/eval_throughput.md` updates
+  in Pass 3 after measurements run):
+  - `docs/engine.md` (`#per-seat-players`, `#built-in-heuristic`)
+  - `docs/engine-python.md` (`#record-games`, `#read-and-re-execute-a-record`, `#batched-slot-loading-and-snapshots`)
+  - `docs/evaluation.md` (`#anchors-and-ratings`, `#etude-agents`, `#ownership`)
+  - `docs/academy.md` (`#open-a-replay-directly`, `#watch-a-game-from-an-evaluation`)
+
+## Open design questions from `write-docs`
+
+- **Opening-settlement isolation API (`isolated: bool = False` vs unconditional):**
+  Should `VectorEnv.reset_each_into_buffers` and `load_slots_into_buffers`
+  isolate native `AgentError`/panic failures during opening settlement only when
+  `isolated=True` is passed (matching `step_isolated_into_buffers` and
+  `managym`'s opt-in isolation contract, preserving strict transactional
+  rejection by default), or unconditionally? The docs provisionally specify
+  opt-in `isolated=True`, producing `SlotLoadResult(acting_player=None,
+  terminal=False)` and `game_error` / `game_error_seat` in `get_last_info()[slot]`.
 
 ## Absent and error states
 
