@@ -1,0 +1,17 @@
+at: 034865aec16c47500ba0323bc2a1284b01f01bec
+first:
+  - path: managym/README.md
+    why: How players encounter mana choices and inspect payments
+  - path: scratch/plan.md
+    why: Verified work and the coupled-search cases still open
+  - path: managym/src/flow/mana.rs
+    why: Fixed tap classification, offer, and saved payment
+  - path: managym/src/flow/layers.rs
+    why: Trigger predicates read the expected tapped status
+  - path: managym/src/flow/mana/preview.rs
+    why: Hover identifies taps that open bonus choices
+  - path: managym/src/flow/mana/tests/manual_payment.rs
+    why: Both colors, receipts, automatic casting, and nested payment
+hide:
+  - path: scratch/concept-review.page.html
+    why: Compiled copy of the concept review

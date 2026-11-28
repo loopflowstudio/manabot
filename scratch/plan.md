@@ -6,7 +6,7 @@ The designs come from MTG-500's ten concept reviews, revised by this Task's conc
 
 ## What a player sees
 
-| Position (committed fixture) | Today | After |
+| Position (committed fixture) | Before | After |
 |---|---|---|
 | Mountain making `{U}{R}` beside a tapped-lands Heartbeat, casting Sokka (`fixed_mana_tap_can_open_a_bonus_choice`, `710163f05`) | `TapForMana` offered; taking it panics in debug (`an automatic tap's bonuses need no choice`) | Tap, then a blue/red bonus choice, then the cast completes |
 | 4 life, Citadel + Henge, damage replacement adding life gained this turn (`fixed_mana_suffix_reads_life_through_damage_replacement`, `0d7bb6743`) | Henge-first offered, then empty decision at 6 life | Only Citadel-first offered; completes at 1 life |
@@ -32,19 +32,13 @@ All five questions were answered headless with the review's recommended option, 
 
 ## Pass 1 · Fixed taps can suspend on a bonus choice
 
-Prerequisite for pass 2: the fork search steps taps natively, and a fixed tap that opens a choice panics today.
-
-- `tap_bonuses` (`mana.rs` ≈5142) evaluates the trigger predicate as the permanent will be once tapped (CR 106.12a): `CardPredicate.tapped` (`state/src/predicate.rs:65`) counts as satisfied. Boards whose layers read tap state are pass 2's Mutator case.
-- `ManaSource.fixed: Option<Mana>` keeps meaning "one deterministic automatic output"; no change to the autotapper, `direct`, `fixed_sufficient`, `fixed_total` or automatic prefixes. A fixed tap whose bonuses need a choice gets `fixed: None` and a `ManaActivation` with `kind: ManaActivationKind::{FixedTap, Activated(usize)}` and `automatic: false`, emitting `PaymentStep::Fixed(permanent)` / `Action::TapForMana`, and included by `append_mana_floats`. Removes `fixed_source_mana`'s one-type assumption (≈5100).
-- `tap_for_mana_action` (≈4388) takes the caller's frame and `commit_start` like `activate_mana_ability` (≈4831) and passes them to `resolve_mana_bonuses`; `perform_automatic_tap`'s `assert!(resolved.is_none())` becomes a suspension on the bonus `ManaChoice`, never running `commit_produced_mana` while suspended. Resume is the existing `ChooseMode` arm (`decision.rs` ≈2874).
-- `PaymentPreview` (`mana/preview.rs:414`): hovering a `TapForMana` whose source has no exact fixed output returns `PaymentPreviewState::NeedsChoice` instead of calling `preview_tap`.
-- No new `Decision` variant, action or hash change.
-
-Shows: the `710163f05` fixture steps `TapForMana`, chooses each colour in turn on a clone, and Sokka reaches the stack with the right receipt origins; the automatic-mode cast of the same position completes; the hover preview reports `NeedsChoice`.
+`034865aec` routes choice-opening fixed taps through native mana continuations and verifies both bonus colors, receipt origins, automatic casting, hover preview and a suspended upfront fee.
 
 ## Pass 2 · Coupled payment authority and fork search
 
 The pass that could prove the plan wrong.
+
+Pass 1 projects the tapped status into predicates, including alternatives, while using the current layered characteristics. Treat taps that can change a layer's output or trigger set as native candidate steps. If such a change opens an unexpected choice in the exact batch today, that path returns an error after tapping.
 
 **Classifier (design 4).** `BoardArithmeticProfile`, cached per source seed and merged in `LayerBoard` (`flow/statics.rs` ≈316, `flow/layers.rs` ≈1488): a closed positive whitelist; anything unrecognised is stateful. Flags as in `7cb3655f1:scratch/plan.md` design 4, `ReplacementEffect` matched exhaustively (no `_` arm), and resolved `EffectRecords` in `state.effects` carrying `Modification::{ExileIfWouldDie, ExileIfWouldLeave}` (`state/src/effect.rs:110,117`) included. Per question each activation is `PaymentCoupling::{Invariant, Sensitive, Mutator}`. Subsumes `has_triggered_mana_abilities`. A question with no Mutator answers through today's pure path, untouched.
 
@@ -93,7 +87,7 @@ Drafted in place before implementation (read these when building and reviewing):
 
 ## Next
 
-Nothing is built. Pass 1 is next: it delivers the fixed-tap bonus choice and teaches whether `ManaActivationKind::FixedTap` fits the existing `ManaActivation` search without touching exact-tap sites. Pass 2 is where the plan can still be proved wrong.
+Pass 2 is next. Add the board profile in `flow/statics.rs` and `flow/layers.rs`, wire the structured candidate queries into `flow/mana.rs`, and flip the damage-replacement, keyword-counter and Citadel/Henge/Canyon counterexamples to assert which offers complete.
 
 ## Acceptance check
 
