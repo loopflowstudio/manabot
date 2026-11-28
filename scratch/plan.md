@@ -146,17 +146,12 @@ see "What exists".
    the new checkpoint. All 512 Gate 1 games replayed with zero array copies.
    The MPS compilation probe favored eager execution. See `scratch/qa.html`
    and `experiments/reports/eval_throughput.md`.
-8. **Review fixes (next).** F1 suffix non-float32 trophy benchmark names
-   (both `Benchmark` and `Matches`), with a test assembling float32 and bf16
-   jobs together; F2 `vector_layout_key` in admission and slot reuse, with a
-   test that a per-seat `mana_payment` difference reuses the env and an
-   `action_overflow` mismatch is refused; F3 error drain before backfill and
-   `GAME_SECONDS = 120.0`. Run `tests/eval/test_vector_eval.py`,
-   `tests/eval/test_experiment_files.py` and `scripts/public_api.py check`.
-9. **Release (blocked on `etude-sdk 0.5.0` on PyPI; 0.4.7 on 2026-11-27).**
-   Update the three `etude-sdk` bounds and the `==0.4.7` play-runtime pin in
-   `pyproject.toml`, run `uv lock --upgrade-package etude-sdk`, then a locked
-   sync and the managed eval tests.
+8. Done (`0c9594273`). Precision-specific trophy names and reports, shared vector layout compatibility, error delivery before backfill, and a 120-second throughput game budget. All 42 focused tests and the API check passed with the rebuilt debug extension. The trained `w160l8` CPU smoke replayed all four legs with three slots.
+9. **Release (blocked on `etude-sdk 0.5.0`).** [PyPI](https://pypi.org/project/etude-sdk/)
+   still lists 0.4.7 on 2026-11-27. Once 0.5.0 publishes, update the three
+   `etude-sdk` bounds and the exact play-runtime pin in `pyproject.toml`, then
+   run `uv lock --upgrade-package etude-sdk`, a locked sync and the managed
+   eval tests.
 
 ## Docs
 

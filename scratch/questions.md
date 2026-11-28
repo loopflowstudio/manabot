@@ -102,3 +102,8 @@ for review in `scratch/plan.md`: 1a (suffix non-float32 trophy benchmark
 names; irreversible once scored), 3a (one `vector_layout_key`), 4b (drain
 errors before backfill, `GAME_SECONDS = 120.0`, no extra per-slot ceiling).
 Q2 (live frames vs compact annotations) stays open with F4 deferred.
+
+Pass 8 uses a keyword-only precision on the trophy report. Etude's default
+report call selects float32. The mixed-layout backlog fixture now queues an
+unrelated layout: a checkpoint's admitted vector layout is the same in every
+deal that uses it, and a difference in seat mana settings shares that layout.

@@ -1,4 +1,4 @@
-at: 89b7f9d99cf02889acba729d3587b4e3b7ccb762
+at: 0c9594273120fe237e8d1d3ad422a6d57e4ab293
 first:
   - path: docs/evaluation.md
     why: Managed callbacks, runtime targets, precision and game budgets
@@ -7,9 +7,11 @@ first:
   - path: scratch/qa.html
     why: Live benchmark resume, interruption and accelerator checks
   - path: experiments/tla_trophies.py
-    why: Streams trophy deals and preserves float32 tournament identity
+    why: Streams trophy deals and names tournaments by precision
   - path: experiments/tla_trophies_floor.py
     why: Reuses the stored floor and colab environment identity
+  - path: experiments/eval_throughput.py
+    why: Runs the fixed trophy deals with their game budget
   - path: manabot/eval/pairing.py
     why: Shared paired deal specification and admission
   - path: manabot/eval/agents.py
@@ -21,7 +23,7 @@ first:
   - path: manabot/sim/native_game.py
     why: Viewer frames and decision evidence shared across runners
   - path: manabot/eval/vector.py
-    why: One decision round, slot backfill and failure isolation
+    why: Shared slot layouts and failure delivery before backfill
   - path: managym/__init__.pyi
     why: Public seeded slot loads and opt-in decision events
   - path: managym/recording.py
@@ -31,7 +33,9 @@ first:
   - path: manabot/eval/match.py
     why: Replays and retains settled deals
   - path: tests/eval/test_vector_eval.py
-    why: Trace parity, backfill and mixed-layout checkpoint failures
+    why: Trace parity, layout reuse and failure-aware backfill
+  - path: tests/eval/test_experiment_files.py
+    why: Schedules BF16 and float32 trophies together in Etude
   - path: tests/model/test_prepare_rows.py
     why: Contiguous compact attention and shared-effect inputs
 hide:
