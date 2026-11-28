@@ -12,3 +12,6 @@ test until one is named.
 
 The name tracer uses a Cargo feature declared only in its temporary writer
 archive. Historical writers keep their existing trace format.
+
+For the compress pass, the installed pre-pass extension supplies the expected
+vocabulary and ledger order for a one-time comparison with the Rust registry.

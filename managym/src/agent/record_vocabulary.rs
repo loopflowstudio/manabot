@@ -1,26 +1,11 @@
-//! Every name the fact and shared-effect encoders hash into an id column, and
-//! every program token a runtime projection can emit without a printed span.
+//! Fact and shared-effect encoders hash names in three namespaces: rules
+//! tokens, card names and combat restrictions. [`record_names`] lists each
+//! name and the program token whose embedding it shares, if any (for example,
+//! granted `flying` and printed `Keyword::flying`).
 //!
-//! Fact rows (`observation_encoder::facts`) and shared-effect records
-//! (`shared_effects`) carry open-vocabulary names as `name_value` hashes:
-//! counter kinds, colors, subtypes, keywords, modifications, set names,
-//! combat restrictions and projection labels. The hash keeps the transport
-//! exact, but a model needs the finite set of names to embed each one as its
-//! own row. [`record_names`] lists that set, each name with the learning token
-//! card text uses for the same concept when there is one (a granted `flying`
-//! and a printed `Keyword::flying`), so the policy can share one embedding
-//! between them. That token is only an alias into the program vocabulary.
-//!
-//! Names fall in three namespaces, because the same string may mean different
-//! things in different columns: `token` (rules vocabulary), `name` (a set card
-//! name) and `restriction` (a combat restriction's predicate description).
-//!
-//! [`runtime_tokens`] lists the program tokens that retained execution frames
-//! (`effect_execution`), last-known characteristics and other runtime
-//! projections emit. The admitted program vocabulary is `catalog_tokens()`
-//! (printed spans) together with it.
-//!
-//! Entry points: [`record_names`] and [`runtime_tokens`].
+//! [`runtime_tokens`] registers symbols supplied by runtime projections,
+//! including those aliases. Together with printed [`catalog_tokens`] they
+//! form the policy's program vocabulary.
 
 use std::{
     collections::{BTreeSet, HashSet},
@@ -44,7 +29,6 @@ use crate::{
         card::{Keyword, SourceQuality},
         mana::Color,
         permanent::CounterKind,
-        predicate::CardPredicate,
         subtype::subtypes,
     },
 };
@@ -94,14 +78,26 @@ struct Vocabulary {
 
 impl Vocabulary {
     fn record(&mut self, namespace: RecordNamespace, name: &str, token: Option<(TokenKind, &str)>) {
+        let token = token.map(|(kind, name)| {
+            let token = runtime_token(kind, name);
+            let key = (kind as u16, token.value);
+            self.runtime.push(token);
+            key
+        });
         self.records.push(RecordName {
             namespace,
             name: name.to_owned(),
             value: name_value(name),
-            token: token.map(|(kind, name)| (kind as u16, name_value(name))),
+            token,
         });
-        if let Some((kind, name)) = token {
-            self.runtime.push(runtime_token(kind, name));
+    }
+
+    // A copied or renamed permanent can emit its name both as a fact id
+    // and as text in a last-known characteristics program.
+    fn content_name(&mut self, name: &str) {
+        if self.content_names.insert(name.to_owned()) {
+            self.record(RecordNamespace::Name, name, None);
+            self.runtime.push(runtime_token(TokenKind::Text, name));
         }
     }
 
@@ -138,7 +134,7 @@ pub(crate) fn content_names() -> &'static BTreeSet<String> {
 }
 
 static VOCABULARY: LazyLock<Vocabulary> = LazyLock::new(|| {
-    use RecordNamespace::{Name, Restriction, Token};
+    use RecordNamespace::Token;
     let mut out = Vocabulary::default();
     for keyword in Keyword::ALL {
         // Effects name a keyword bare; card text serializes the enum variant.
@@ -178,33 +174,13 @@ static VOCABULARY: LazyLock<Vocabulary> = LazyLock::new(|| {
     out.record(Token, SPENT_TYPE, None);
     let pack = default_content_pack();
     for candidate in pack.name_candidates().iter() {
-        out.record(Name, &candidate.name, None);
-        out.content_names.insert(candidate.name.clone());
+        out.content_name(&candidate.name);
     }
     for (_, definition) in pack.definition_entries() {
-        out.record(Name, &definition.name, None);
-        out.content_names.insert(definition.name.clone());
+        out.content_name(&definition.name);
         let json = serde_json::to_value(definition).expect("serializable definition");
-        for name in set_names(&json) {
-            out.record(Name, &name, None);
-            out.content_names.insert(name);
-        }
-        for condition in play_grant_conditions(&json) {
-            out.runtime.push(runtime_token(
-                TokenKind::Text,
-                &condition_text("permanent", &condition),
-            ));
-        }
-        for predicate in combat_restrictions(&json) {
-            let description = predicate_description(&predicate, "creatures");
-            out.record(Restriction, &description, None);
-        }
+        register_definition_rules(&json, &mut out);
     }
-    out.runtime.extend(
-        out.content_names
-            .iter()
-            .map(|name| runtime_token(TokenKind::Text, name)),
-    );
     register_runtime_tokens(&mut out.runtime);
     out.records
         .sort_by(|a, b| (a.namespace, &a.name).cmp(&(b.namespace, &b.name)));
@@ -261,9 +237,8 @@ fn register_runtime_tokens(out: &mut Vec<RuntimeToken>) {
     // creature type, which no printed definition serializes.
     add(TokenKind::Text, "all");
     add(TokenKind::Variant, "DamageRecipientFilter::Any");
-    add(TokenKind::Structure, "PlayGrantExtension");
-    add(TokenKind::Structure, "/PlayGrantExtension");
     for name in [
+        "PlayGrantExtension",
         "PlayerId",
         "CardDefId",
         "ZoneSelection",
@@ -414,59 +389,51 @@ fn register_runtime_tokens(out: &mut Vec<RuntimeToken>) {
     }
 }
 
-/// Every condition a serialized definition puts on the cards it lets you
-/// play (Flameshape's "you control a Wizard"), wherever the effect sits:
-/// a spell, an inset, a trigger, an activation or an `If` branch.
-fn play_grant_conditions(value: &serde_json::Value) -> Vec<crate::state::ability::Condition> {
-    objects(value)
-        .into_iter()
-        .filter_map(|map| map.get("GrantPlay")?.get("condition"))
-        .map(|condition| serde_json::from_value(condition.clone()).expect("serialized condition"))
-        .collect()
-}
+/// Rules at any depth can set a name, condition a play grant or restrict
+/// attackers in an additional combat phase.
+fn register_definition_rules(definition: &serde_json::Value, out: &mut Vocabulary) {
+    use serde_json::Value;
 
-/// Every JSON object nested in a serialized definition.
-fn objects(value: &serde_json::Value) -> Vec<&serde_json::Map<String, serde_json::Value>> {
-    let mut out = Vec::new();
-    let mut stack = vec![value];
+    let mut stack = vec![definition];
     while let Some(value) = stack.pop() {
         match value {
-            serde_json::Value::Object(map) => {
-                out.push(map);
+            Value::Object(map) => {
+                if let Some(name) = map
+                    .get("named")
+                    .or_else(|| map.get("SetName"))
+                    .and_then(Value::as_str)
+                {
+                    out.content_name(name);
+                }
+                if let Some(condition) = map
+                    .get("GrantPlay")
+                    .and_then(|grant| grant.get("condition"))
+                {
+                    let condition =
+                        serde_json::from_value(condition.clone()).expect("serialized condition");
+                    out.runtime.push(runtime_token(
+                        TokenKind::Text,
+                        &condition_text("permanent", &condition),
+                    ));
+                }
+                if let Some(attackers) = map
+                    .get("AdditionalCombatPhase")
+                    .and_then(|phase| phase.get("attackers"))
+                {
+                    let predicate = serde_json::from_value(attackers.clone())
+                        .expect("serialized attacker predicate");
+                    out.record(
+                        RecordNamespace::Restriction,
+                        &predicate_description(&predicate, "creatures"),
+                        None,
+                    );
+                }
                 stack.extend(map.values());
             }
-            serde_json::Value::Array(items) => stack.extend(items),
+            Value::Array(items) => stack.extend(items),
             _ => {}
         }
     }
-    out
-}
-
-/// The names a definition's `SetCharacteristics` or `Modification::SetName`
-/// give other permanents (a copy takes a definition's own name).
-fn set_names(value: &serde_json::Value) -> Vec<String> {
-    objects(value)
-        .into_iter()
-        // `SetCharacteristics::named` (Honest Work) and `Modification::SetName`.
-        .filter_map(|map| {
-            map.get("named")
-                .or_else(|| map.get("SetName"))?
-                .as_str()
-                .map(str::to_owned)
-        })
-        .collect()
-}
-
-/// The attacker predicates of every `AdditionalCombatPhase` in a definition:
-/// the only source of a combat's attacker restriction.
-fn combat_restrictions(value: &serde_json::Value) -> Vec<CardPredicate> {
-    objects(value)
-        .into_iter()
-        .filter_map(|map| map.get("AdditionalCombatPhase")?.get("attackers"))
-        .map(|attackers| {
-            serde_json::from_value(attackers.clone()).expect("serialized attacker predicate")
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -475,7 +442,10 @@ mod tests {
 
     #[test]
     fn play_grant_conditions_are_found_at_any_depth() {
-        use crate::state::ability::{Condition, Effect, PlayWindow};
+        use crate::state::{
+            ability::{Condition, Effect, PlayWindow},
+            predicate::CardPredicate,
+        };
         let wizard = Condition::ControlsAtLeast {
             distinct_names: false,
             count: 1,
@@ -494,7 +464,15 @@ mod tests {
             otherwise: Effect::exile_top_to_play(1, PlayWindow::ThisTurn),
         };
         let json = serde_json::json!({ "abilities": [{ "effects": [nested] }] });
-        assert_eq!(play_grant_conditions(&json), [wizard]);
+        let mut out = Vocabulary::default();
+        register_definition_rules(&json, &mut out);
+        assert_eq!(
+            out.runtime,
+            [runtime_token(
+                TokenKind::Text,
+                &condition_text("permanent", &wizard)
+            )]
+        );
     }
 
     #[test]

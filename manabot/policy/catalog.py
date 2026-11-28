@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import count
 
 import numpy as np
 
@@ -41,12 +42,7 @@ def _record_tables(
     """
     tokens = dict(vocabulary)
     names: dict[tuple[int, int], int] = {}
-    size = len(vocabulary) + 1
-
-    def append() -> int:
-        nonlocal size
-        size += 1
-        return size - 1
+    rows = count(len(vocabulary) + 1)  # Row zero is padding.
 
     def add_name(namespace: RecordNamespace, name: str, value: int, row: int) -> None:
         key = (int(namespace), value)
@@ -56,18 +52,18 @@ def _record_tables(
 
     for kind, _, value in managym.runtime_tokens():
         if (kind, value) not in tokens:
-            tokens[kind, value] = append()
+            tokens[kind, value] = next(rows)
     for space, name, value, kind, token in managym.record_vocabulary():
         if kind is None or token is None:
-            row = append()
+            row = next(rows)
         else:
             row = tokens[kind, token]
         add_name(RecordNamespace[space.upper()], name, value, row)
     if decision_memory:
         for name, value in managym.decision_memory_names():
-            add_name(RecordNamespace.TOKEN, name, value, append())
-    numbers = {kind: append() for kind in NUMBER_TOKEN_KINDS}
-    return _RecordTables(names, tokens, numbers, size)
+            add_name(RecordNamespace.TOKEN, name, value, next(rows))
+    numbers = {kind: next(rows) for kind in NUMBER_TOKEN_KINDS}
+    return _RecordTables(names, tokens, numbers, next(rows))
 
 
 def _sorted_keys(

@@ -55,8 +55,6 @@ def test_checkpoint_keeps_vectors_after_vocabulary_keys_retire(tmp_path: Path) -
     save_checkpoint(writer, space, path, player_configs=None)
     record = read_checkpoint(path)
     state = record["model_state_dict"]
-    names = "semantic_cards.record_name"
-    tokens = "semantic_cards.record_token"
     weights = "semantic_cards.token_embedding.weight"
     no_memory = catalog_tables(managym.WORLD_SETUP, records=True, decision_memory=False)
     assert len(state[weights]) == no_memory.embedding_rows + 44
@@ -64,31 +62,26 @@ def test_checkpoint_keeps_vectors_after_vocabulary_keys_retire(tmp_path: Path) -
     def key(kind: int, name: str) -> int:
         return packed(kind, managym.catalog_token_value(name))
 
-    # Before the split the memory name and its phantom Variant shared a row.
-    memory_value = key(RecordNamespace.TOKEN, "DecisionMemory::Priority")
-    memory_row = state[f"{names}_rows"][state[f"{names}_keys"] == memory_value].item()
-    token_keys, token_rows = state[f"{tokens}_keys"], state[f"{tokens}_rows"]
-    token_keys = torch.cat(
-        (token_keys, token_keys.new_tensor([key(3, "DecisionMemory::Priority")]))
-    )
-    token_rows = torch.cat((token_rows, token_rows.new_tensor([memory_row])))
+    def rows_by_key(family: str) -> dict[int, int]:
+        keys = state[f"semantic_cards.record_{family}_keys"]
+        rows = state[f"semantic_cards.record_{family}_rows"]
+        return dict(zip(keys.tolist(), rows.tolist(), strict=True))
 
-    # An earlier execution label's two keys also addressed one shared row.
-    current = token_keys == key(6, "kept permanent")
-    old = "kept creature"
-    execution_row = token_rows[current].item()
-    token_keys[current] = key(6, old)
-    order = token_keys.argsort()
-    state[f"{tokens}_keys"], state[f"{tokens}_rows"] = (
-        token_keys[order],
-        token_rows[order],
-    )
-    name_keys, name_rows = state[f"{names}_keys"], state[f"{names}_rows"]
-    synthetic = key(RecordNamespace.TOKEN, f"execution/6/{old}")
-    name_keys = torch.cat((name_keys, name_keys.new_tensor([synthetic])))
-    name_rows = torch.cat((name_rows, name_rows.new_tensor([execution_row])))
-    order = name_keys.argsort()
-    state[f"{names}_keys"], state[f"{names}_rows"] = name_keys[order], name_rows[order]
+    names = rows_by_key("name")
+    tokens = rows_by_key("token")
+    # Each historical pair of keys addressed one learned vector.
+    memory = "DecisionMemory::Priority"
+    tokens[key(3, memory)] = names[key(RecordNamespace.TOKEN, memory)]
+    old = key(6, "kept creature")
+    tokens[old] = tokens.pop(key(6, "kept permanent"))
+    names[key(RecordNamespace.TOKEN, "execution/6/kept creature")] = tokens[old]
+
+    for family, table in (("name", names), ("token", tokens)):
+        keys = sorted(table)
+        state[f"semantic_cards.record_{family}_keys"] = torch.tensor(keys)
+        state[f"semantic_cards.record_{family}_rows"] = torch.tensor(
+            [table[k] for k in keys]
+        )
     write_checkpoint(record, path)
 
     restored, _ = load_checkpoint(str(path))

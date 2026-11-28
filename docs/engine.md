@@ -919,57 +919,36 @@ seen.
 
 ### Program-token vocabulary
 
-Four engine lists describe the symbolic tokens and hashed names a policy
-admits:
-
-- `managym.catalog_tokens()` holds the printed rules spans of catalog
-  definitions (cards, tokens and back faces), rows by `CardDefId`.
-- `managym.runtime_tokens()` holds every program token a runtime projection can
-  emit in fact and shared-effect rows — suspended resolution frames, granted
-  abilities, last-known characteristics and tokens aliased by record names — as
-  `(kind, name, value)` tuples, using the same `TokenKind` code and signed
-  `i32` value as `catalog_tokens()`. It may overlap printed spans and is never
-  filtered against the pack.
-- `managym.record_vocabulary()` holds only the names fact and shared-effect
-  encoders hash into id columns, as
-  `(namespace, name, value, token_kind, token_value)` across the `token`,
-  `name` and `restriction` namespaces. When `(token_kind, token_value)` is
-  present, it aliases a pair already in the program-token vocabulary (for
-  example, granted `flying` shares the row of printed `Keyword::flying`) rather
-  than introducing a new program token.
-- `managym.decision_memory_names()` holds the decision-memory names hashed in
-  the `token` namespace (such as `"DecisionMemory::Priority"`), as
-  `(name, value)` pairs with no program token.
-
-The admitted program-token vocabulary is the exact union of `catalog_tokens()`
-and `runtime_tokens()`, with no string filter and regardless of whether
-decision memory is enabled:
+A catalog policy reads printed rules from `managym.catalog_tokens()`, indexed
+by `CardDefId` for cards, tokens and back faces. Runtime projections such as
+suspended resolution frames and last-known characteristics can emit additional
+symbols. `managym.runtime_tokens()` lists registered `(kind, name, value)`
+triples, including symbols that also occur in print. Both sources use the
+same token kinds and signed 32-bit values.
 
 ```python
 import managym
 
 catalog = managym.catalog_tokens()
 printed = set(zip(catalog["token_kind"], catalog["token_value"], strict=True))
-runtime = {(kind, value) for kind, _name, value in managym.runtime_tokens()}
+runtime = {(kind, value) for kind, _, value in managym.runtime_tokens()}
 admitted_program_tokens = printed | runtime
-
-record_names = {
-    (space, value)
-    for space, _name, value, _kind, _token in managym.record_vocabulary()
-}
-memory_names = {
-    ("token", value) for _name, value in managym.decision_memory_names()
-}
-print(len(admitted_program_tokens) >= len(printed), len(record_names) > 0, len(memory_names))
-# True True 44
 ```
 
-Every aliased `(token_kind, token_value)` in `record_vocabulary()` belongs to
-`admitted_program_tokens`. `Integer` and `Boolean` carry their values directly;
-every other program token, including `Null` and `DefinitionRef`, needs an exact
-pair in `admitted_program_tokens`. Admission reports missing pairs as
-`(kind, 0x…)`. Policies append `decision_memory_names()` rows to their name
-lookup table only when decision memory is enabled.
+`Integer` and `Boolean` carry literal values. Every other program token,
+including `Null` and `DefinitionRef`, needs an exact pair in this union.
+Admission reports missing pairs as `(kind, 0x…)`.
+
+`managym.record_vocabulary()` lists the names fact and shared-effect encoders
+hash into the `token`, `name` and `restriction` namespaces. Each entry is a
+`(namespace, name, value, token_kind, token_value)` tuple. A name with a token
+shares that token's embedding row (for example, granted `flying` shares the
+row for printed `Keyword::flying`). Other names get their own rows.
+
+Policies that read decision memory also allocate name rows in the `token`
+namespace for the `(name, value)` pairs in `managym.decision_memory_names()`,
+such as `DecisionMemory::Priority`. The program vocabulary is the same with
+decision memory enabled or disabled.
 
 An expanded naming source can supply a chosen card name outside the installed
 catalog. Suspended entries and named exile or search programs encode it as

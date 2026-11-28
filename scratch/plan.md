@@ -271,6 +271,10 @@ emission guard, exact `(kind, 0x…)` diagnostics, the 44 memory names' hashes.
    `ab2b757d9` execution keys covered. Six focused debug Rust tests and ten
    Python checks pass with the rebuilt extension, including both pinned pilots
    and the constructed memory checkpoint. The optional `u1952` replay skipped.
+5. Compress: one walk per serialized definition. Comparison with the pre-pass
+   extension matched all 1,800 record names, 2,148 runtime tokens, 44 memory
+   names, 144 token dispositions and 1,665 record dispositions in order.
+   Three registry tests and four Python row and checkpoint checks passed.
 
 Remaining: publish the PR (none exists yet) with the 0.3.0 hold notice and
 release line; merge and auto-merge stay off.

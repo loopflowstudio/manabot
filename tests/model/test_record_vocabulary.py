@@ -27,6 +27,7 @@ from manabot.env.observation import (
 from manabot.infra.config import ModelConfig
 from manabot.model.architecture import architecture_identity
 from manabot.policy import admission
+from manabot.policy.binding import packed
 from manabot.policy.prepare import RecordNamespace
 from manabot.verify.representation import kellan_upgrade_root
 import managym
@@ -85,31 +86,26 @@ def _fact_encoder() -> FactEncoder:
 
 
 def test_every_record_name_reads_exactly_one_row(cards: SemanticCardEncoder) -> None:
-    names = managym.record_vocabulary() + [
-        ("token", name, value, None, None)
-        for name, value in managym.decision_memory_names()
-    ]
-    rows = []
-    for space, name, value, kind, token in names:
-        namespace = RecordNamespace[space.upper()]
-        key = (int(namespace) << 32) | (value & 0xFFFFFFFF)
-        index = int(torch.searchsorted(cards.record_name_keys, torch.tensor(key)))
-        assert int(cards.record_name_keys[index]) == key, name
-        row = int(cards.record_name_rows[index])
+    def by_key(keys: torch.Tensor, rows: torch.Tensor) -> dict[int, int]:
+        ordered = keys.tolist()
+        assert ordered == sorted(ordered)  # Policy lookup uses searchsorted.
+        return dict(zip(ordered, rows.tolist(), strict=True))
+
+    names = by_key(cards.record_name_keys, cards.record_name_rows)
+    tokens = by_key(cards.record_token_keys, cards.record_token_rows)
+    assert len(set(names.values())) == len(cards.record_name_keys)
+    assert all(0 < row < cards.token_embedding.num_embeddings for row in names.values())
+    last_program_row = max(tokens.values())
+
+    for space, name, value, kind, token in managym.record_vocabulary():
+        row = names.pop(packed(RecordNamespace[space.upper()], value))
         if kind is not None and token is not None:
-            token_key = (kind << 32) | (token & 0xFFFFFFFF)
-            token_index = int(
-                torch.searchsorted(cards.record_token_keys, torch.tensor(token_key))
-            )
-            assert int(cards.record_token_keys[token_index]) == token_key, name
-            assert row == int(cards.record_token_rows[token_index]), name
+            assert row == tokens[packed(kind, token)], name
         else:
-            # Appended after the card tokens, whose rows stay unchanged.
-            assert row > len(cards.token_vocabulary), name
-        rows.append(row)
-    assert len(set(rows)) == len(names)
-    assert max(rows) < cards.token_embedding.num_embeddings
-    assert len(cards.record_name_keys) == len(names)
+            assert row > last_program_row, name
+    for name, value in managym.decision_memory_names():
+        assert names.pop(packed(RecordNamespace.TOKEN, value)) > last_program_row, name
+    assert not names
 
 
 def test_granted_fact_and_printed_keyword_share_one_row(
