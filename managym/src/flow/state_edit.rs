@@ -126,7 +126,14 @@ impl Game {
         if edits.is_empty() {
             return Ok(());
         }
-        let mut edited = self.with_game_state_edits(edits)?;
+        let mut edited = self.rollback_snapshot();
+        for edit in edits {
+            edited.apply_game_state_edit(self, edit)?;
+        }
+        edited.assert_stack_consistent();
+        edited.refresh_control();
+        edited.check_added_auras(self.state.permanents.len())?;
+        edited.assert_library_knowledge();
         if let Some((role, player, focal)) = declaration {
             let completed = self
                 .state
@@ -195,175 +202,178 @@ impl Game {
         Ok(())
     }
 
-    fn with_game_state_edits(&self, edits: &[GameStateEdit]) -> Result<Self, AgentError> {
-        let mut edited = self.rollback_snapshot();
+    fn check_added_auras(&self, first_added: usize) -> Result<(), AgentError> {
+        // A later edit can remove the host or change what it can be enchanted by.
+        for (index, row) in self.state.permanents.iter().enumerate().skip(first_added) {
+            let id = PermanentId(index);
+            let row = row.as_ref().expect("added permanent");
+            if row.attached_to.is_some()
+                && self.aura_attachment_illegal(id, &self.characteristics(id))
+            {
+                let card = &self.state[row.object];
+                return Err(AgentError(format!(
+                    "game state edits: added Aura {:?} (card {}) has an illegal attachment",
+                    card.name, card.id.0 as i32
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn apply_game_state_edit(
+        &mut self,
+        original: &Game,
+        edit: &GameStateEdit,
+    ) -> Result<(), AgentError> {
         let seats = self.state.players.len();
-        let live_permanent = |edited: &Game, permanent| {
-            // Slots added in this batch are absent from the original position.
-            let id = self.edit_permanent(permanent)?;
-            if edited.state.permanents[id].is_none() {
+        let live_permanent = |permanent| {
+            let id = original.edit_permanent(permanent)?;
+            if self.state.permanents[id].is_none() {
                 return Err(AgentError(format!(
                     "game state edits: permanent {permanent} already moved in this batch"
                 )));
             }
             Ok(id)
         };
-        let mut auras = Vec::new();
-        for edit in edits {
-            let (object, controller, ready, tapped, attached_to) = match *edit {
-                GameStateEdit::MovePermanent { permanent, to } => {
-                    let id = live_permanent(&edited, permanent)?;
-                    edited.quiet_move_permanent(id, to);
-                    continue;
-                }
-                GameStateEdit::SetTapped { permanent, tapped } => {
-                    let id = live_permanent(&edited, permanent)?;
-                    edited.state.set_tapped(id, tapped);
-                    continue;
-                }
-                GameStateEdit::SetDamage { permanent, damage } => {
-                    if damage < 0 {
-                        return Err(AgentError(
-                            "game state edits: damage must be nonnegative".into(),
-                        ));
-                    }
-                    let id = live_permanent(&edited, permanent)?;
-                    edited.state.set_damage(id, damage);
-                    continue;
-                }
-                GameStateEdit::SetCounters {
-                    permanent,
-                    counter,
-                    count,
-                } => {
-                    if count < 0 {
-                        return Err(AgentError(
-                            "game state edits: counter count must be nonnegative".into(),
-                        ));
-                    }
-                    let id = live_permanent(&edited, permanent)?;
-                    let current = edited.state.permanents[id]
-                        .as_ref()
-                        .expect("live permanent")
-                        .counter_count(counter);
-                    edited.state.change_counters(id, counter, count - current);
-                    continue;
-                }
-                GameStateEdit::SetLife { player, life } => {
-                    let player = edit_player(player, seats)?;
-                    *edited.state.life_mut(player).expect("validated seat") = life;
-                    continue;
-                }
-                GameStateEdit::CreateToken {
-                    ref key,
-                    controller,
-                    ready,
-                    tapped,
-                } => {
-                    let controller = edit_player(controller, seats)?;
-                    validate_edit_token(key)?;
-                    let token = edited
-                        .prepare_token(key, controller)
-                        .expect("validated token key");
-                    let entry = ZoneEntry {
-                        tapped,
-                        ..Default::default()
-                    };
-                    edited.quiet_enter(token, controller, ready, entry);
-                    continue;
-                }
-                GameStateEdit::AddToBattlefield {
-                    card,
-                    controller,
-                    ready,
-                    tapped,
-                    attached_to,
-                } => (
-                    self.edit_card(card)?,
-                    controller,
-                    ready,
-                    tapped,
-                    attached_to,
-                ),
-                GameStateEdit::AddFromLibrary {
-                    player,
-                    ref name,
-                    controller,
-                    ready,
-                    tapped,
-                    attached_to,
-                } => {
-                    let owner = edit_player(player, seats)?;
-                    let object = self.edit_library_card(&edited, owner, name)?;
-                    (object, controller, ready, tapped, attached_to)
-                }
-            };
-
-            let card = &self.state[object];
-            let Some(from) = edited.state.zones.zone_of(object) else {
-                return Err(AgentError(format!(
-                    "game state edits: card {} already added in this batch",
-                    card.id.0
-                )));
-            };
-            let controller = controller
-                .map(|seat| edit_player(seat, seats))
-                .transpose()?
-                .unwrap_or(card.owner);
-            let face = card.retained_base().1;
-            if face.types.is_instant_or_sorcery() {
-                return Err(AgentError(format!(
-                    "game state edits: {:?} cannot enter the battlefield",
-                    face.name
-                )));
+        match *edit {
+            GameStateEdit::MovePermanent { permanent, to } => {
+                let id = live_permanent(permanent)?;
+                self.quiet_move_permanent(id, to);
             }
-            let host = match (face.has_subtype("Aura"), attached_to) {
-                (true, Some(id)) => Some(
-                    self.permanent_object(self.edit_permanent(id)?)
-                        .expect("validated host"),
-                ),
-                (false, None) => None,
-                (true, None) => {
+            GameStateEdit::SetTapped { permanent, tapped } => {
+                let id = live_permanent(permanent)?;
+                self.state.set_tapped(id, tapped);
+            }
+            GameStateEdit::SetDamage { permanent, damage } => {
+                if damage < 0 {
                     return Err(AgentError(
-                        "game state edits: an Aura requires attached_to".into(),
-                    ))
+                        "game state edits: damage must be nonnegative".into(),
+                    ));
                 }
-                (false, Some(_)) => {
+                let id = live_permanent(permanent)?;
+                self.state.set_damage(id, damage);
+            }
+            GameStateEdit::SetCounters {
+                permanent,
+                counter,
+                count,
+            } => {
+                if count < 0 {
                     return Err(AgentError(
-                        "game state edits: attached_to requires an Aura".into(),
-                    ))
+                        "game state edits: counter count must be nonnegative".into(),
+                    ));
                 }
-            };
-            let entry = ZoneEntry {
+                let id = live_permanent(permanent)?;
+                let current = self.state.permanents[id]
+                    .as_ref()
+                    .expect("live permanent")
+                    .counter_count(counter);
+                self.state.change_counters(id, counter, count - current);
+            }
+            GameStateEdit::SetLife { player, life } => {
+                let player = edit_player(player, seats)?;
+                *self.state.life_mut(player).expect("validated seat") = life;
+            }
+            GameStateEdit::CreateToken {
+                ref key,
+                controller,
+                ready,
                 tapped,
-                attached_to: host,
-                inspected_library_departure: true,
-                ..Default::default()
-            };
-            edited.forget_zone_departure(object, Some(from), ZoneType::Battlefield, &entry);
-            if from == ZoneType::Exile {
-                edited
-                    .state
-                    .exile_links
-                    .retain(|link| link.exiled_object != object);
+            } => {
+                let controller = edit_player(controller, seats)?;
+                validate_edit_token(key)?;
+                let token = self
+                    .prepare_token(key, controller)
+                    .expect("validated token key");
+                let entry = ZoneEntry {
+                    tapped,
+                    ..Default::default()
+                };
+                self.quiet_enter(token, controller, ready, entry);
             }
-            policy_history::expire_links(&mut edited, card.id, None);
-            let permanent = edited.quiet_enter(object, controller, ready, entry);
-            if host.is_some() {
-                auras.push((permanent, &face.name, card.id.0 as i32));
+            GameStateEdit::AddToBattlefield {
+                card,
+                controller,
+                ready,
+                tapped,
+                attached_to,
+            } => {
+                let object = original.edit_card(card)?;
+                self.quiet_add_card(original, object, controller, ready, tapped, attached_to)?;
+            }
+            GameStateEdit::AddFromLibrary {
+                player,
+                ref name,
+                controller,
+                ready,
+                tapped,
+                attached_to,
+            } => {
+                let owner = edit_player(player, seats)?;
+                let object = original.edit_library_card(self, owner, name)?;
+                self.quiet_add_card(original, object, controller, ready, tapped, attached_to)?;
             }
         }
-        edited.assert_stack_consistent();
-        edited.refresh_control();
-        for (aura, name, card) in auras {
-            if edited.aura_attachment_illegal(aura, &edited.characteristics(aura)) {
-                return Err(AgentError(format!(
-                    "game state edits: added Aura {name:?} (card {card}) has an illegal attachment"
-                )));
-            }
+        Ok(())
+    }
+
+    fn quiet_add_card(
+        &mut self,
+        original: &Game,
+        object: ObjectId,
+        controller: Option<usize>,
+        ready: bool,
+        tapped: bool,
+        attached_to: Option<i32>,
+    ) -> Result<(), AgentError> {
+        let card = &original.state[object];
+        let Some(from) = self.state.zones.zone_of(object) else {
+            return Err(AgentError(format!(
+                "game state edits: card {} already added in this batch",
+                card.id.0
+            )));
+        };
+        let controller = edit_player(controller.unwrap_or(card.owner.0), self.state.players.len())?;
+        let face = card.retained_base().1;
+        if face.types.is_instant_or_sorcery() {
+            return Err(AgentError(format!(
+                "game state edits: {:?} cannot enter the battlefield",
+                face.name
+            )));
         }
-        edited.assert_library_knowledge();
-        Ok(edited)
+        let host = match (face.has_subtype("Aura"), attached_to) {
+            (true, Some(id)) => Some(
+                original
+                    .permanent_object(original.edit_permanent(id)?)
+                    .expect("validated host"),
+            ),
+            (false, None) => None,
+            (true, None) => {
+                return Err(AgentError(
+                    "game state edits: an Aura requires attached_to".into(),
+                ))
+            }
+            (false, Some(_)) => {
+                return Err(AgentError(
+                    "game state edits: attached_to requires an Aura".into(),
+                ))
+            }
+        };
+        let entry = ZoneEntry {
+            tapped,
+            attached_to: host,
+            inspected_library_departure: true,
+            ..Default::default()
+        };
+        self.forget_zone_departure(object, Some(from), ZoneType::Battlefield, &entry);
+        if from == ZoneType::Exile {
+            self.state
+                .exile_links
+                .retain(|link| link.exiled_object != object);
+        }
+        policy_history::expire_links(self, card.id, None);
+        self.quiet_enter(object, controller, ready, entry);
+        Ok(())
     }
 
     fn edit_permanent(&self, permanent: i32) -> Result<PermanentId, AgentError> {
@@ -444,7 +454,7 @@ impl Game {
         controller: PlayerId,
         ready: bool,
         mut entry: ZoneEntry,
-    ) -> PermanentId {
+    ) {
         let from = self.state.zones.zone_of(object);
         let face = self.state.entry_object(object).retained_base().1;
         if let Some(loyalty) = face
@@ -464,9 +474,8 @@ impl Game {
         } else {
             self.state.turn.turn_number
         };
-        let permanent = self.install_permanent(arrival, controller, entry, entry_turn, !ready);
+        self.install_permanent(arrival, controller, entry, entry_turn, !ready);
         self.capture_object_move(arrival, from, Some(ZoneType::Battlefield), controller);
-        permanent
     }
 
     fn quiet_move_permanent(&mut self, permanent: PermanentId, to: PermanentDestination) {

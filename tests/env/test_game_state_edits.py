@@ -11,7 +11,7 @@ import pytest
 import managym
 from managym.decision import Command, DecisionFrame
 from managym.possible_worlds import PossibleWorldSpace
-from managym.recording import GameStateEdits, RecordedVectorEnv, read_record
+from managym.recording import GameInputs, GameStateEdits, RecordedVectorEnv, read_record
 from managym.replay import walk
 from managym.statistics import reduce_cards
 
@@ -240,6 +240,40 @@ def test_edit_errors_leave_the_boundary_and_journal_intact(
         managym.Env().edit_game_state([life])
 
 
+def check_vector_restore(
+    players: managym.GameSetup,
+    root: managym.GameSnapshot,
+    options: managym.RestoreOptions,
+    scalar: managym.Env,
+) -> GameInputs:
+    """Load the same branch in a vector slot and advance both by one action."""
+    with closing(
+        RecordedVectorEnv(num_envs=1, decision_memory_include_own=True)
+    ) as vector:
+        vector.set_observation_layout(
+            {
+                "rewards": np.zeros(1),
+                "terminated": np.zeros(1, dtype=np.uint8),
+                "truncated": np.zeros(1, dtype=np.uint8),
+            },
+            layout=managym.ObservationLayout(),
+        )
+        vector.reset_all_into_buffers(players)
+        [loaded] = vector.load_slots_into_buffers(
+            [managym.SlotLoad.snapshot(0, root, options)]
+        )
+        assert loaded.source_digest == root.state_digest
+        assert vector.native.state_digests() == [scalar.state_digest()]
+        [loaded_obs] = vector.native.decision_observations([True])
+        assert (
+            loaded_obs is not None and loaded_obs.toJSON() == chooser(scalar).toJSON()
+        )
+        vector.step_into_buffers([0])
+        scalar.step(0)
+        assert vector.native.state_digests() == [scalar.state_digest()]
+        return vector.game_inputs(0)
+
+
 def test_edited_priority_branch_loads_in_a_recorded_vector(
     blocking_game: managym.Env,
 ) -> None:
@@ -265,35 +299,10 @@ def test_edited_priority_branch_loads_in_a_recorded_vector(
         obs.agent.zone_counts[managym.ZoneEnum.GRAVEYARD] + 1
     )
 
-    with closing(
-        RecordedVectorEnv(num_envs=1, decision_memory_include_own=True)
-    ) as vector:
-        layout = managym.ObservationLayout()
-        vector.set_observation_layout(
-            {
-                "rewards": np.zeros(1),
-                "terminated": np.zeros(1, dtype=np.uint8),
-                "truncated": np.zeros(1, dtype=np.uint8),
-            },
-            layout=layout,
-        )
-        vector.reset_all_into_buffers(setup())
-        [loaded] = vector.load_slots_into_buffers(
-            [managym.SlotLoad.snapshot(0, root, options)]
-        )
-        assert loaded.source_digest == root.state_digest
-        assert vector.native.state_digests() == [scalar.state_digest()]
-        [loaded_obs] = vector.native.decision_observations([True])
-        assert (
-            loaded_obs is not None and loaded_obs.toJSON() == chooser(scalar).toJSON()
-        )
-        vector.step_into_buffers([0])
-        scalar.step(0)
-        assert vector.native.state_digests() == [scalar.state_digest()]
-        inputs = vector.game_inputs(0)
-        [intervention] = inputs.interventions
-        assert isinstance(intervention, GameStateEdits)
-        assert intervention.at_action == len(inputs.actions) - 1
+    inputs = check_vector_restore(setup(), root, options, scalar)
+    [intervention] = inputs.interventions
+    assert isinstance(intervention, GameStateEdits)
+    assert intervention.at_action == len(inputs.actions) - 1
 
 
 def test_battlefield_additions_round_trip_at_declare_attackers(tmp_path: Path) -> None:
@@ -440,32 +449,10 @@ def test_battlefield_additions_round_trip_at_declare_attackers(tmp_path: Path) -
         json.loads(chooser(sampled).toJSON())["agent_permanents"]
         == json.loads(updated.toJSON())["agent_permanents"]
     )
-    with closing(
-        RecordedVectorEnv(num_envs=1, decision_memory_include_own=True)
-    ) as vector:
-        vector.set_observation_layout(
-            {
-                "rewards": np.zeros(1),
-                "terminated": np.zeros(1, dtype=np.uint8),
-                "truncated": np.zeros(1, dtype=np.uint8),
-            },
-            layout=managym.ObservationLayout(),
-        )
-        vector.reset_all_into_buffers(players)
-        [loaded] = vector.load_slots_into_buffers(
-            [managym.SlotLoad.snapshot(0, root, options)]
-        )
-        assert loaded.source_digest == root.state_digest
-        assert vector.native.state_digests() == [sampled.state_digest()]
-        vector.step_into_buffers([0])
-        sampled.step(0)
-        assert vector.native.state_digests() == [sampled.state_digest()]
-        recorded_edits = [
-            item
-            for item in vector.game_inputs(0).interventions
-            if isinstance(item, GameStateEdits)
-        ]
-        assert recorded_edits == [intervention]
+    inputs = check_vector_restore(players, root, options, sampled)
+    assert [
+        item for item in inputs.interventions if isinstance(item, GameStateEdits)
+    ] == [intervention]
 
     assert env.snapshot().to_replay_json() == before
 

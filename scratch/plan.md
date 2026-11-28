@@ -153,8 +153,8 @@ change to real moves:
 2. *Permanent installation* (the `entered_permanent` closure,
    `zones.rs:1052–1081`): face, `Permanent::new`, controller, `entry_turn`,
    tapped, counters, `attached_to`, the `permanents` push and
-   `object_to_permanent` link — nothing else. `land_entered` (`:1073`),
-   `prepare_inset` (`:1077`) and entering attacking stay in
+   `object_to_permanent` link. An attacking entry registers its defender in
+   combat at installation. `land_entered` and `prepare_inset` stay in
    `commit_zone_move`.
 
 `scenario_force_battlefield` (`flow/scenario.rs:155`) keeps its contract

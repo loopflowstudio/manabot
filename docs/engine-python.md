@@ -633,9 +633,9 @@ assert managym.GameSnapshot.from_replay_json(replay).state_digest == branch.stat
 
 | Constructor | Effect |
 |---|---|
-| `create_token(key, controller, *, ready=True, tapped=False)` | Creates one token from the catalog by its `"token.*"` key (for example `"token.spirit"`, never by printed name) under native seat 0 or 1. Repeat the edit to create multiple tokens. |
-| `add_to_battlefield(card, *, controller=None, ready=True, tapped=False, attached_to=None)` | Moves a card by its observed `Card.id` from hand, graveyard, exile, or an inspected library top onto the battlefield under `controller` (defaulting to its owner). Pass `attached_to` (an existing `Permanent.id`) when adding an Aura. |
-| `add_from_library(player, name, *, controller=None, ready=True, tapped=False, attached_to=None)` | Moves one copy of a card by its deck-entry `name` from native seat `player`'s library onto the battlefield under `controller` (defaulting to `player`). Prefers the bottom-most copy that is neither pinned nor known to either player, falling back to the bottom-most copy so scry and `"library_bottom"` knowledge stay intact. Pass `attached_to` when adding an Aura. |
+| `create_token(key, controller, *, ready=True, tapped=False)` | Creates one token per edit under `controller`, using its catalog key (for example `"token.spirit"`). |
+| `add_to_battlefield(card, *, controller=None, ready=True, tapped=False, attached_to=None)` | Moves the observed card from hand, graveyard, exile, or an inspected library top. |
+| `add_from_library(player, name, *, controller=None, ready=True, tapped=False, attached_to=None)` | Moves one copy with the deck-entry `name` from `player`'s library. Prefers the bottom-most unpinned copy unknown to either player, falling back to the bottom-most copy. |
 | `move_permanent(permanent, to="graveyard")` | Moves a card to its owner's `"graveyard"`, `"exile"`, or `"library_bottom"`. A melded permanent moves both cards. Tokens cease to exist. Cards exiled until the permanent leaves stay in exile. A bottom placement stays pinned through `shuffle_libraries`. |
 | `set_tapped(permanent, tapped)` | Sets tap state directly, bypassing stun counters and tap or untap triggers. |
 | `set_damage(permanent, damage)` | Sets nonnegative marked damage. Zero also clears the deathtouch mark. `dealt_damage_this_turn` keeps its value. |
@@ -649,22 +649,22 @@ previous revision become stale. Opening hands, pending choices, suspended
 decisions and finished games cannot be edited. An empty live batch at a
 supported decision returns its observation and preserves the revision.
 
-Added permanents enter quietly, with no replacement effects, no arrival or
-counter events, no enter-the-battlefield, landfall or constellation triggers,
-and no change to turn history (such as lands played). Each receives a fresh
-`Permanent.id` and the newest timestamp in batch order, and its static
-abilities apply immediately. Because its id is assigned during the batch, a
-newly added permanent cannot be edited or named as `attached_to` later in the
-same batch; apply a second batch after reading the returned observation. With
-`ready=True` (the default), a permanent enters as if already on the board
-before this turn (not summoning-sick, `entered_this_turn` is `False`);
-`ready=False` marks it as having entered this turn (`entered_this_turn` is
-`True`) and subject to summoning sickness. Cards enter face up on their printed
-front face, even from face-down exile. Planeswalkers enter with printed
-loyalty, Sagas enter with one lore counter without triggering chapter I, and
-Equipment enters unattached. Replacement choices such as Clones, "enters with
-counters" or "as ... enters, choose" are not applied (a Clone enters uncopied
-as a 0/0). Added permanents never enter attacking or blocking.
+Both card edits default to the card's owner as controller. For an Aura, pass
+the host's observed `Permanent.id` as `attached_to`. Each addition gets a
+fresh `Permanent.id` and timestamp in batch order. To edit a new permanent or
+attach an Aura to it, use its id from the returned observation in a second batch.
+
+Static abilities apply immediately. With `ready=True`, added permanents count
+as on the board since before this turn. With `ready=False`, they have
+summoning sickness and `entered_this_turn` is true. They enter without
+attacking or blocking. Cards enter face up on their printed front face, even
+from face-down exile. Planeswalkers get printed loyalty, Sagas get one lore
+counter, and Equipment enters unattached.
+
+Quiet entry skips replacement effects (including “as this enters” choices),
+arrival and counter events, and triggers such as landfall, constellation and
+Saga chapter I. A Clone enters as a 0/0. Lands played and other turn history
+keep their values.
 
 Edits preserve turn, stack, mana, decision memory and the 32-row policy-history
 window. Moving a permanent or a card expires its live object links in policy
@@ -693,11 +693,10 @@ and preserves the original state and journal. Refusals include:
   phased-out host, or an added Aura whose attachment is illegal after the batch
 
 Snapshot restore applies edits before reseeding, shuffling or determinizing.
-Because edits run before `determinize`, `add_from_library` draws from the
-snapshot's actual library rather than the redrawn world, and fails with
-`managym.AgentError` when every remaining copy sits in the opponent's hidden
-hand. `SlotLoad.snapshot` accepts the same options for a vector slot. A
-non-empty batch excludes `forced_first_action` because the action indices can
+`add_from_library` therefore fails with `managym.AgentError` if every
+remaining copy is in the opponent's hidden hand in the snapshot.
+`SlotLoad.snapshot` accepts the same options for a vector slot. A non-empty
+batch excludes `forced_first_action` because the action indices can
 change. For recorded counterfactuals, export via `snapshot().to_replay_json()`
 or load into `RecordedVectorEnv` with `SlotLoad.snapshot` rather than calling
 `env.edit_game_state` directly on a `ScalarCapture`-tracked `Env`, which does

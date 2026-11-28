@@ -888,34 +888,35 @@ impl Game {
         entry: &ZoneEntry,
     ) -> Option<CardDefId> {
         let owner = self.state.entry_object(prior_object).owner;
-        let known_top = if old_zone == Some(ZoneType::Library) {
-            self.state
-                .library_order_pins_mut(owner)
-                .remove(&prior_object);
-            if entry.library_top_departure {
-                self.state.known_library_mut(owner).remove_top()
-            } else if entry.inspected_library_departure {
-                let position = self
-                    .library_from_top(owner)
-                    .position(|object| object == prior_object)
-                    .expect("departing inspected card in library");
+        match old_zone {
+            Some(ZoneType::Library) => {
                 self.state
-                    .known_library_mut(owner)
-                    .remove_position(position)
-            } else {
-                self.state.known_library_mut(owner).forget_order();
+                    .library_order_pins_mut(owner)
+                    .remove(&prior_object);
+                if entry.library_top_departure {
+                    self.state.known_library_mut(owner).remove_top()
+                } else if entry.inspected_library_departure {
+                    let position = self
+                        .library_from_top(owner)
+                        .position(|object| object == prior_object)
+                        .expect("departing inspected card in library");
+                    self.state
+                        .known_library_mut(owner)
+                        .remove_position(position)
+                } else {
+                    self.state.known_library_mut(owner).forget_order();
+                    None
+                }
+            }
+            Some(ZoneType::Hand) if to_zone != ZoneType::Hand => {
+                let seen = ((to_zone != ZoneType::Library || entry.shuffle_library == Some(true))
+                    && !entry.is_face_down())
+                .then(|| self.state.entry_object(prior_object).definition_id);
+                self.forget_hand_card(owner, seen);
                 None
             }
-        } else {
-            None
-        };
-        if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
-            let seen = ((to_zone != ZoneType::Library || entry.shuffle_library == Some(true))
-                && !entry.is_face_down())
-            .then(|| self.state.entry_object(prior_object).definition_id);
-            self.forget_hand_card(owner, seen);
+            _ => None,
         }
-        known_top
     }
 
     /// Install a battlefield appearance and its paired permanent row.
@@ -943,6 +944,11 @@ impl Game {
         permanent.tapped = entry.tapped;
         permanent.counters = entry.counters;
         permanent.attached_to = entry.attached_to;
+        if let (Some(target), Some(combat)) = (entry.attack_target, self.state.combat.as_mut()) {
+            permanent.attacking = true;
+            combat.attack_targets.push((id, Some(target)));
+            combat.attacker_to_blockers.entry(id).or_default();
+        }
         self.state.permanents.push(Some(permanent));
         self.state.object_to_permanent[object.slot()] = Some(id);
         id
@@ -1092,19 +1098,10 @@ impl Game {
                     self.state[object_id].show_melded(result, row.printed.clone());
                 }
             }
-            let attack_target = entry.attack_target;
             let prepared = entry.prepared;
             entry.spell = entry.spell.or_else(|| cast.map(std::sync::Arc::new));
             let permanent_id =
                 self.install_permanent(object_id, holder, entry, self.state.turn.turn_number, true);
-            if let (Some(target), Some(combat)) = (attack_target, self.state.combat.as_mut()) {
-                combat.attack_targets.push((permanent_id, Some(target)));
-                combat.attacker_to_blockers.entry(permanent_id).or_default();
-                self.state.permanents[permanent_id]
-                    .as_mut()
-                    .unwrap()
-                    .attacking = true;
-            }
             if self.state[object_id].types.is_land() {
                 self.state.turn.history[holder.0].land_entered = true;
             }

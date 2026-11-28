@@ -78,6 +78,7 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
         .into_iter()
         .filter(|&id| game.characteristics(id).types.is_land())
         .collect();
+    let first_added = game.state.permanents.len();
     let original_frame = root.semantic_decision_frame().unwrap();
     let bottom_card = game
         .state
@@ -159,18 +160,10 @@ fn game_state_edits_replay_a_cold_branch_and_its_next_command() {
             assert_eq!(bottom, game.state.object_of(bottom_card));
         }
         let remaining = &game.state.combat.as_ref().unwrap().attackers_to_declare;
-        let spirit = game
-            .iter_battlefield_permanents(owner)
-            .find(|id| game.characteristics(*id).name == "Spirit")
-            .unwrap();
+        let spirit = PermanentId(first_added);
+        let giant = PermanentId(first_added + 1);
+        assert_eq!(game.characteristics(spirit).name, "Spirit");
         assert!(remaining.contains(&spirit));
-        let giant = game
-            .state
-            .permanents
-            .iter()
-            .rposition(|p| p.is_some())
-            .unwrap();
-        let giant = PermanentId(giant);
         assert_eq!(game.characteristics(giant).name, "Hill Giant");
         assert!(!remaining.contains(&giant));
         assert_ne!(branch.state_digest().unwrap(), original.state_digest());
