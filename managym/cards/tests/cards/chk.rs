@@ -19,7 +19,6 @@ use managym::{
         card::{ActivatedAbilityDefinition, CardType},
         game_object::{ObjectId, PermanentId, PlayerId},
         mana::Mana,
-        predicate::CardPredicate,
         zone::ZoneType,
     },
 };
@@ -160,25 +159,17 @@ fn heartbeat_of_spring_triggers_for_a_land_sacrificed_in_its_mana_ability() {
 /// before its output is produced adds nothing.
 #[test]
 fn heartbeat_of_spring_sacrificed_by_the_mana_ability_adds_nothing() {
-    let (mut s, lands) = heartbeat_setup(0, &["Forest"]);
+    let (mut s, _) = heartbeat_setup(0, &[]);
     s.allow_priority_floats();
-    let heartbeat = card_of(&s, permanent_named(&s, "Heartbeat of Spring"));
-    let card = card_of(&s, lands[0]);
-    let abilities = &mut s.game_mut().state[card].activated_abilities;
-    abilities.push(ActivatedAbilityDefinition {
-        tap_source: true,
-        effects: vec![
-            Effect::add_mana(Mana::parse("G")),
-            Effect::sacrifice(CardPredicate {
-                card_type: Some(CardType::Enchantment),
-                ..Default::default()
-            }),
-        ],
-        ..Default::default()
-    });
-    let ability = abilities.len() - 1;
-    activate(&mut s, lands[0], ability);
-    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    let source = permanent_named(&s, "Heartbeat of Spring");
+    let heartbeat = card_of(&s, source);
+    // The same permanent qualifies as the tapped land and supplies the trigger.
+    s.game_mut().state[heartbeat]
+        .types
+        .types
+        .insert(CardType::Land);
+    let ability = add_tap_ability(&mut s, source, "G", true);
+    activate(&mut s, source, ability);
     take_single_output(&mut s);
     assert_eq!(zone_of(&s, heartbeat), Some(ZoneType::Graveyard));
     assert_eq!(*pool(&s, 0), Mana::parse("G"));
