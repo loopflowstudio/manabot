@@ -3,7 +3,15 @@
 Each is reversible.
 
 - **Profile by replaying captured batches**, not by instrumenting the live
-  arena; arena behavior comes from three repeats per arm.
+  arena; replay runs first on the L4 and sizes the arena repeats.
+- **Cross-width replay re-tags `Prepared.binding` in the harness** after
+  asserting equal observation config, readings and decision memory
+  (concept review, 2026-11-27). Alternative: prepare per width from raw
+  observations.
+- **`bf16-linear-once` is the only candidate production fix**;
+  `bf16-cached-autocast` is diagnostic (review Q2a).
+- **`agent_loader.py` gains `load_torch_policy` and a shared per-call
+  context helper now** (review Q4a), Torch types under `TYPE_CHECKING`.
 - **One L4 rental under `--max-usd 5`**, no CPU baseline arms.
 - **A fix that changes bf16 logits is not taken**: it would be a new compute
   class beside `etude-policy-bf16-auto-v1`. The report documents the

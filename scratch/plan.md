@@ -53,8 +53,21 @@ From `experiments/reports/eval_throughput.md` and the receipts in
   bf16 forwards of 23.7, 23.8 and 11.2 s against float32 11.7, 14.9 and
   11.4 s, with the machine at load 30-40 from other work. Replaying captured
   batches outside the arena showed no bf16 penalty (23 ms per call either
-  way). The single L4 arm may likewise be one draw from a wide distribution,
-  so the first thing the rental does is repeat it.
+  way). The L4 penalty is not one noisy draw: MTG-317 reproduced it (below).
+
+## Leading hypothesis (concept review, 2026-11-27)
+
+`w160l8` has `head_dim = 160 / 8 = 20`; `w256l8` and `w384l8` have 32 and 48.
+On CUDA, float32 memory-efficient SDPA accepts `head_dim % 4 == 0`, but bf16
+Flash and memory-efficient SDPA need `head_dim % 8 == 0`, so bf16 `w160l8`
+falls back to math attention and materializes `[B, 8, N, N]` scores in every
+layer (`nn.MultiheadAttention`, `manabot/backends/torch/policy.py:1387,1455`).
+`experiments/reports/cuda_precision.md` (MTG-317, same L4 and Torch
+2.15.0+cu132) already shows it: `w160l8` padded bf16 large calls 464 -> 719 ms
+and learner peak 5.3 -> 10.7 GB, repeats within 2%, while `w256l8`/`w384l8`
+sped up 1.95-2.7x and halved memory. The slowdown is therefore already
+reproduced; the L4 run's job is to name the mechanism, and the 160/256/384
+8-head grid alone cannot separate width from `head_dim % 8`.
 
 ## Design
 
@@ -63,67 +76,93 @@ shape of `experiments/eval_throughput.py` (exploratory: no prediction, the
 report ends it). Three subcommands:
 
 1. `capture` plays the 32 held-out deals on the vector-64 runner under
-   float32 and writes every host `Prepared` batch the checkpoint was asked
-   for, in arena order, to one file per model. Three batch sets: trained
-   `w160l8`, seeded `w160l8` (`random_checkpoint(path, 160)` already exists)
-   and seeded `w384l8`.
+   float32 and writes, per model, (a) every multi-row host `Prepared` batch in
+   arena order, for exact same-checkpoint replay, and (b) the same decisions
+   as single-row `Prepared` inputs, for the grid. Grid calls of 1, 4, 16 and
+   64 rows are built with the existing `batching.concatenate`
+   (`manabot/policy/batching.py:24`); there is no split and none is written.
+   Batch sets: trained `w160l8`, seeded `w160l8` and seeded `w384l8`.
 2. `replay` loads one checkpoint under one variant and runs one batch set
    through it, in order, with `torch.cuda.synchronize` between transfer,
    forward and readback. It writes one row per call (rows, packed GRU rows,
-   first-touch or repeat, stage seconds), then a `torch.profiler` pass with
-   CUDA activity folded into named buckets: transfer, autocast casts
-   (`aten::to`/`_to_copy`/`copy_` inside the forward), packed GRU, attention,
-   linear/MLP, norm, gather/index, readback, and unattributed host time.
+   first-touch or repeat, stage seconds), `torch.cuda.max_memory_allocated()`,
+   the max and exact-equality logit difference against shipped bf16, then a
+   `torch.profiler` pass. Buckets come from `record_function` scopes in the
+   harness (transfer, attention, packed GRU, readback) plus op classes
+   (autocast casts `aten::to`/`_to_copy`/`copy_`, linear/MLP, norm,
+   gather/index, unattributed host), and the attention bucket lists the
+   dispatched SDPA kernels (flash, mem-efficient, or math `bmm`+`_softmax`).
    Feeding both precisions the same float32-captured batches removes the
    diverging-trajectory confound.
 3. `render_report` reads the receipts and writes the tables.
 
+Cross-width replay: `admission.binding` dumps the whole `ModelConfig`
+(`manabot/policy/admission.py:110`), so `forward_distribution`
+(`policy.py:770`) rejects a `w160l8` batch on any other width although
+`Prepared` holds no width-dependent arrays. Chosen for review: the harness
+asserts equal `space.config`, readings and decision-memory settings between
+capturing and replaying model, then re-tags `Prepared.binding` with
+`dataclasses.replace`; production keeps the strict check. Passed over:
+preparing per width from captured raw observations (a second capture path
+for the same bytes).
+
 Variants:
 
 - `float32`, `tf32`, `bf16` as the loader ships them.
-- `bf16-cast-once`: weights cast to bfloat16 at load, GRU modules left
-  float32, forward still under autocast. This is the candidate fix for the
-  per-call weight casts; the replay records whether its logits equal
-  shipped bf16 bit for bit.
+- `bf16-linear-once`: after `cache_programs()`, cast only `nn.Linear` and
+  `nn.MultiheadAttention` projection weights and biases to bfloat16; leave
+  `LayerNorm`, `Embedding`, `nn.GRU` and bare `nn.Parameter`s
+  (`perspective`, `value_token`) float32, which autocast also keeps float32.
+  Forward still under autocast. Candidate production fix if bit-identical.
+- `bf16-cached-autocast` (diagnostic only): one `torch.autocast` context held
+  open across replayed calls, so PyTorch's own weight-cast cache survives;
+  the upper bound of removing per-call casts. Not a production shape: a
+  thread-local autocast context would leak into other Torch work.
 
-Crosses that separate the confounds:
+Models (seeded unless trained; `random_checkpoint` gains a head count):
 
-- **Trained or width?** trained `w160l8` against seeded `w160l8`, each on the
-  trained batch set and on the seeded-`w160l8` set.
-- **Batches or model?** seeded `w384l8` on its own set and on the trained
-  set. `Prepared.binding` is checked in `forward_distribution`
-  (`manabot/backends/torch/policy.py:770`); if it refuses a batch prepared
-  for another width, each model replays only sets prepared for it and the
-  report says the cross is by game population, not identical bytes.
-- **Threshold.** Seeded widths 160, 256, 384 on the trained set, with the
-  set re-chunked to 1, 4, 16 and 64 rows per call, gives the width-by-batch
-  grid where bf16 forward time crosses float32.
+| Model | head_dim | Separates |
+| --- | ---: | --- |
+| trained `w160l8` | 20 | the arena case |
+| seeded `w160l8` | 20 | trained weights vs width |
+| seeded `w160` 5 heads | 32 | alignment at narrow width |
+| seeded `w256l8` | 32 | threshold point |
+| seeded `w288l8` | 36 | misalignment at wide width |
+| seeded `w384l8` | 48 | the arena case |
 
-Arena replicates: three alternating float32/bf16 repeats of the existing
-`eval_throughput` vector-64 arm for trained `w160l8` and seeded `w384l8`
-(12 arms of about 2.2 minutes), so the report states the spread the original
-single arms came from. `eval_throughput` keeps its summary; its
-`ForwardTiming` additionally writes per-call rows and seconds to
-`forwards.jsonl` so in-arena and replayed calls can be laid side by side.
+If `head_dim % 8` is the cause, `w160`/5-heads speeds up under bf16 and
+`w288l8` slows down. Trained vs seeded `w160l8` on the trained and seeded
+batch sets separates board density (packed GRU rows) from kernel dispatch.
 
-`torch_logits` is split so the profiler loads the model exactly as the loader
-does (`load_torch_policy(path, precision, device)` returns the eval-mode model
-with programs cached; `torch_logits` wraps it). No second loading path.
+Arena replicates come after the replay pass and are sized by it: alternating
+float32/bf16 repeats of the existing `eval_throughput` vector-64 arm for
+trained `w160l8` and seeded `w384l8` (up to three each, about 2.2 minutes per
+arm), to state the spread and to verify any fix. `ForwardTiming` keeps
+`(rows, seconds)` per call in memory and writes `forwards.jsonl` once after
+the run, so no disk write enters a timed forward; `summary.json` is
+unchanged.
+
+Loader split, chosen for review: `agent_loader.py` gains
+`load_torch_policy(path, precision, device)` (validated, eval-mode, programs
+cached) and one per-call context helper (`apply_matmul_precision`,
+`torch.inference_mode`, `forward_precision`) that both `torch_logits` and
+`replay` use, with Torch and `ActorCritic` types under `TYPE_CHECKING` so
+`manabot.eval.agents` stays Torch-free
+(`tests/test_package_boundaries.py:260`). Passed over: leaving the loader
+untouched until pass 2 (replay would duplicate the per-call contract).
 
 Chosen for review: profile by replaying captured batches rather than
-instrumenting the live arena. The arena view comes from the replicates and
-`forwards.jsonl`. Passed over: `torch.profiler` around the live arena
-(profiler overhead distorts the host stages that dominate there) and a
-synthetic fixed-shape microbenchmark (the local replay shows steady-state
-shapes hide the effect).
+instrumenting the live arena. Passed over: `torch.profiler` around the live
+arena (profiler overhead distorts the host stages that dominate there) and a
+synthetic fixed-shape microbenchmark.
 
 ## Rental
 
 One RunPod L4 through Etude, the path the `l4-966e8ff296` arms used, under
-`--max-usd 5`: about 30 minutes of arena replicates and 20 of replays at
-roughly USD0.45/h. No CPU baseline arms (they took 65 minutes last time and
-answer nothing here). Receipts go to `.runs/eval-precision-profile/l4-<rev>/`;
-the launcher's cost is recorded once in the report. Confirm the pod is gone.
+`--max-usd 5`. Order: the replay/profile pass first (minutes), then only the
+arena arms it calls for. No CPU baseline arms. Receipts go to
+`.runs/eval-precision-profile/l4-<rev>/`; the launcher's cost is recorded once
+in the report. Confirm the pod is gone.
 
 ## Acceptance check
 
@@ -134,27 +173,28 @@ uv run --no-sync python -m experiments.eval_precision_profile replay \
   --device cuda --variant bf16 --output-dir .runs/eval-precision-profile/l4-<rev>/w160-trained-bf16
 ```
 
-prints per-call stage means and a bucket table whose buckets sum to the
-synced forward time within 5%, and the report's `w160l8` table accounts for
-the bf16-minus-float32 difference by bucket.
+prints per-call stage means, peak CUDA memory, the SDPA kernels dispatched,
+and a bucket table whose buckets sum to the synced forward time within 5%;
+the report's `w160l8` table accounts for the bf16-minus-float32 difference by
+bucket.
 
 A CPU smoke test (`tests/eval/test_eval_precision_profile.py`, one deal,
 float32) captures, replays and checks that replayed logits equal the logits
-the arena received and that the buckets cover the forward.
+the arena received, that a `concatenate`d grid call equals its single-row
+parts, and that the buckets cover the forward.
 
 ## Passes
 
-1. **Harness and the L4 run.** Split the loader, add `forwards.jsonl`, write
-   `capture`/`replay`/`render_report` and the smoke test, validate locally on
-   CPU and MPS, then run replicates, crosses and the grid on the L4. This is
-   the pass that can prove the premise wrong: if three repeats do not
-   reproduce a `w160l8` bf16 slowdown, the report says so with the spread and
-   the Task ends there with the threshold grid.
-2. **Fix or threshold.** If `bf16-cast-once` (or another cause the buckets
-   name) removes the penalty with identical logits, change `torch_logits`,
-   rerun the two bf16 arena arms on the same rental session and report
-   before/after. If the fix changes logits, it is a different compute class
-   and is not taken here; the report documents the threshold instead. Update
+1. **Harness and the L4 diagnosis.** Split the loader, add `forwards.jsonl`,
+   extend `random_checkpoint` with heads, write `capture`/`replay`/
+   `render_report` and the smoke test, validate locally on CPU and MPS, then
+   on the L4 run the replay grid over the six models and five variants, and
+   the arena arms it calls for.
+2. **Fix or rule.** If `bf16-linear-once` removes the penalty with logits
+   bit-identical to shipped bf16, change `torch_logits`, rerun the two bf16
+   arena arms on the same rental and report before/after. Otherwise the
+   report states the L4 rule in `head_dim` and width/rows-per-call terms
+   (for example `head_dim % 8 == 0` and width at least N). Update
    `docs/evaluation.md#etude-agents` and add one line to
    `experiments/reports/eval_throughput.md` pointing at the new report.
 
@@ -187,5 +227,27 @@ scaffolding the experiment file replaces. `scratch/qa.html` and
 - It names the cause of the `w160l8` result (or shows the slowdown does not
   reproduce), separating width from trained weights and batch composition.
 - Either the loader fix is in with before/after arena arms and unchanged
-  logits, or the docs give the width and rows-per-call above which bf16 is
-  faster on an L4.
+  logits, or the docs give the `head_dim`, width and rows-per-call conditions
+  under which bf16 is faster on an L4.
+
+## Concept review (2026-11-27) dispositions
+
+- `head_dim % 8` SDPA fallback missing from the grid: adopted; models table,
+  SDPA kernel and peak-memory recording added.
+- Cross-width binding rejection and no `split`: adopted; single-row capture
+  plus `concatenate`, harness-only re-tag (for review).
+- Cast-once rounding LayerNorm/Embedding: replaced by `bf16-linear-once`
+  plus diagnostic `bf16-cached-autocast` (review Q2a).
+- Rental order: replay first, arena arms sized by it (Q3a); `forwards.jsonl`
+  written once after the run.
+- Loader split vs Torch-free import: `load_torch_policy` plus shared per-call
+  helper under `TYPE_CHECKING` (Q4a, for review).
+
+## Deferred findings
+
+- If the L4 profile confirms the `head_dim % 8` fallback, file a separate
+  Task to revisit frontier width/head guidance and `BF16_MIN_HIDDEN_DIM = 256`
+  (`manabot/infra/config.py:347`; MLX uses it too), since training (MTG-317)
+  shows the same penalty. Padding `head_dim` inside `GameObjectAttention`
+  changes bf16 rounding and needs a new compute class id, so it is not
+  MTG-507's.
