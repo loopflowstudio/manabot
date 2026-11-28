@@ -1101,7 +1101,7 @@ button.lf-btn-quiet[aria-pressed="true"] {
 <div class="lf-before-after">
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">Before</div>
-    
+
     <h4>Current implementation (<code>178a551d79</code>)</h4>
     <ul>
       <li><strong><code>op_bucket</code>:</strong> <code>casts_and_copies</code> preempts <code>policy.attention</code> and <code>policy.packed_gru</code>. Report shows <code>w160l8</code> delta as <code>+36.40 ms</code> attention, <code>+13.30 ms</code> casts/copies, <code>−9.87 ms</code> MLP.</li>
@@ -1110,11 +1110,11 @@ button.lf-btn-quiet[aria-pressed="true"] {
       <li><strong>Capture hook:</strong> <code>ObservePrepared</code> leaks <code>ObservationSelection</code> and <code>Spec</code> through <code>vector.py</code> and <code>eval_throughput.py</code> into <code>nonlocal pending</code>.</li>
       <li><strong>Docs:</strong> <code>docs/evaluation.md:450-456</code> lists tested head widths (<code>20, 36</code> vs <code>32, 40, 48</code>) without stating the <code>head_dim % 8 == 0</code> rule.</li>
     </ul>
-  
+
   </div>
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">After</div>
-    
+
     <h4>Recommended design (no new L4 rental needed)</h4>
     <ul>
       <li><strong><code>op_bucket</code>:</strong> Respect <code>ATTENTION</code>/<code>GRU</code> and <code>parent != "other"</code> before <code>casts_and_copies</code>, then recompute the bucket table offline from the retained <code>profile.json</code> traces: <code>w160l8</code> delta becomes <code>+48.14 ms</code> attention (<code>36.41 → 84.55 ms</code>), <code>+0.20 ms</code> outside casts, <code>−8.64 ms</code> MLP.</li>
@@ -1123,7 +1123,7 @@ button.lf-btn-quiet[aria-pressed="true"] {
       <li><strong>Tighten capture boundary:</strong> Remove <code>observe_prepared</code> from <code>eval_throughput.run_vector</code> (call <code>play_pairings</code> directly in <code>capture</code>), prepare <code>singles</code> synchronously inside the callback so <code>ObservationSelection</code> never escapes <code>prepare_group</code>, and key by <code>id(prepared)</code> instead of <code>nonlocal pending</code>.</li>
       <li><strong>State the rule in docs:</strong> Update <code>docs/evaluation.md:450-456</code> to name <code>head_dim = hidden_dim // num_attention_heads</code> divisible by 8 directly alongside the tested shapes and batch thresholds.</li>
     </ul>
-  
+
   </div>
 </div>
 
