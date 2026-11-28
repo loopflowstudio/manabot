@@ -1999,26 +1999,23 @@ impl Game {
         if self.is_game_over() {
             return Err(DecisionSurfaceError::GameOver);
         }
-        let offered = self
+        let space = self
             .action_space()
-            .ok_or(DecisionSurfaceError::NoActiveActionSpace)?
-            .actions
-            .iter()
-            .any(|legal| legal == action);
-        if !offered {
+            .ok_or(DecisionSurfaceError::NoActiveActionSpace)?;
+        let Some(index) = space.actions.iter().position(|legal| legal == action) else {
             return Err(DecisionSurfaceError::StaleOrIllegal(
                 "search action is no longer offered".to_string(),
             ));
-        }
+        };
 
         #[cfg(feature = "benchmark")]
         drop(validation_timer);
         #[cfg(feature = "benchmark")]
         let _rules_timer = crate::benchmark_search::Timer::new("rules_execution");
-        let pending_memory =
-            crate::agent::decision_memory::capture(self, self.action_space().unwrap(), action);
+        let pending_memory = crate::agent::decision_memory::capture(self, space, action);
+        let actor = space.player;
+        let exposure = self.exposure_choice(space, index);
         let action = action.clone();
-        let exposure = self.exposure_for_action(&action);
         self.clear_published_decision();
         self.execute_action(&action).unwrap_or_else(|error| {
             panic!("structured search offer admitted an unexecutable action: {error}")
@@ -2027,7 +2024,7 @@ impl Game {
         if let Some(choice) = exposure {
             self.commit_capture_choice(choice);
         }
-        self.finish_action_step()
+        self.finish_published_choice(actor, index)
             .map_err(|error| DecisionSurfaceError::Invariant(error.0))
     }
 

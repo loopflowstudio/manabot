@@ -266,10 +266,71 @@ def test_native_vector_game_replay_keeps_both_acting_views(
         i for i, choice in enumerate(exposure.choices) if choice.actor == first_external
     ]
     assert rejected["count"] == external_ordinals[1]
+    replay_index = client.get(f"/api/traces/{rejected['id']}/recording")
+    assert replay_index.status_code == 200, replay_index.text
+    assert replay_index.json()["record_stop"]["index"] == rejected["count"]
+    prefix = walk(record, capture_choices=True)
+    assert len(list(prefix)) == 1
+    assert prefix.stop is not None and prefix.stop.index == 1
+    assert prefix.choices() == [
+        (choice.actor, choice.selected)
+        for choice in exposure.choices[: rejected["count"]]
+    ]
 
 
-def test_native_random_replay_preserves_rng_and_forced_override(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("edit", ["determinize", "move_permanent"])
+def test_native_record_imports_after_card_state_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, edit: str
+) -> None:
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
+    env = managym.Env(seed=7, player_policies=("agent", "heuristic:64"))
+    obs, _ = env.reset(
+        [managym.PlayerConfig(str(i), {"Mountain": 8, "Gray Ogre": 4}) for i in (0, 1)]
+    )
+    for _ in range(8):
+        land = next(
+            (
+                i
+                for i, action in enumerate(obs.action_space.actions)
+                if action.action_type == managym.ActionEnum.PRIORITY_PLAY_LAND
+            ),
+            None,
+        )
+        obs, *_ = env.step(0 if land is None else land)
+        if land is not None:
+            break
+    else:
+        pytest.fail("seeded game did not reach a land play")
+    if edit == "determinize":
+        env.determinize(seed=35, perspective=obs.agent.player_index)
+        marker = "determinize"
+    else:
+        permanent = obs.agent_permanents[0]
+        env.edit_game_state(
+            [managym.GameStateEdit.move_permanent(permanent.id, to="library_bottom")]
+        )
+        marker = "game_state_edits"
+    env.step(0)
+
+    imported = import_game(json.loads(env.snapshot().to_replay_json()))
+    assert imported["stop"] == "interrupted"
+    assert imported["count"] > 2
+    recording, _ = server._recording_read(imported["id"])
+    assert [
+        kinds
+        for position in recording.positions
+        if position.kind == "choice"
+        and (kinds := recording.metadata(position)["branched"])
+    ] == [[marker]]
+
+
+@pytest.mark.parametrize("branch_op", ["reseed", "determinize"])
+@pytest.mark.parametrize("trailing_force", [False, True])
+def test_native_random_replay_preserves_rng_and_marks_forced_branch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    branch_op: str,
+    trailing_force: bool,
 ) -> None:
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
     env = managym.Env(seed=42, player_policies=("random", "heuristic"))
@@ -277,10 +338,24 @@ def test_native_random_replay_preserves_rng_and_forced_override(
         [managym.PlayerConfig(str(i), {"Mountain": 8, "Gray Ogre": 4}) for i in (0, 1)]
     )
     env.step(None)
-    branch = env.snapshot().restore(managym.RestoreOptions.exact(forced_first_action=0))
+    options = (
+        managym.RestoreOptions.exact(reseed=35, forced_first_action=0)
+        if branch_op == "reseed"
+        else managym.RestoreOptions.determinize(1, 35, forced_first_action=0)
+    )
+    branch = env.snapshot().restore(options)
+    if not trailing_force:
+        branch.step(None)
     imported = import_game(json.loads(branch.snapshot().to_replay_json()))
     assert imported["stop"] == "interrupted"
-    assert imported["count"] == 2
+    assert imported["count"] == (2 if trailing_force else 3)
+    recording, _ = server._recording_read(imported["id"])
+    choices = [
+        position for position in recording.positions if position.kind == "choice"
+    ]
+    assert [recording.metadata(position)["branched"] for position in choices] == (
+        [None, [branch_op]] if trailing_force else [None, [branch_op], None]
+    )
     assert [inspect_watch(imported["id"], i)["decision"]["viewer"] for i in (0, 1)] == [
         0,
         1,

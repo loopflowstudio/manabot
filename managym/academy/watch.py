@@ -487,7 +487,7 @@ def import_record(record: GameRecord) -> dict[str, Any]:
     inputs = record.games[0]
     policies = record.policies_for(inputs)
     native_seats = policies != ("agent", "agent")
-    replay = walk(record, capture_cards=native_seats)
+    replay = walk(record, capture_choices=native_seats)
     source = record.sha256
     store = AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite")
     existing = store.arena_recording(source)
@@ -553,7 +553,16 @@ def import_record(record: GameRecord) -> dict[str, Any]:
             def apply(decision: RecordedDecision) -> None:
                 # The verified observation includes interventions at this boundary.
                 session.obs = decision.observation
-                project_recorded_choice(session, decision.chosen, decision)
+                project_recorded_choice(
+                    session,
+                    decision.chosen,
+                    decision,
+                    branched=[
+                        op.op
+                        for op in decision.interventions
+                        if op.op in BRANCHING_INTERVENTIONS
+                    ],
+                )
 
             for _ in replay.run(apply):
                 pass
@@ -562,7 +571,9 @@ def import_record(record: GameRecord) -> dict[str, Any]:
         assert session.trace is not None and replay.stop is not None
         stop = replay.stop
         reason = "game_over" if stop.status == "complete" else f"record_{stop.status}"
-        session.trace.recording_import = RecordingImport(stop, replay.build_differs)
+        session.trace.recording_import = RecordingImport(
+            replace(stop, index=len(session.canonical_decisions)), replay.build_differs
+        )
         session._persist_attempt(end_reason=reason)
         return {
             "id": session.match_id,
@@ -580,6 +591,7 @@ def project_recorded_choice(
     index: int,
     decision: RecordedDecision | None,
     *,
+    branched: Sequence[str],
     native_random: bool = False,
 ) -> None:
     assert session.obs is not None and session.trace is not None
@@ -623,15 +635,10 @@ def project_recorded_choice(
         native_command=raw,
         native_random=native_random,
     )
-    branched = [
-        item.op
-        for item in (decision.interventions if decision is not None else ())
-        if item.op in BRANCHING_INTERVENTIONS
-    ]
     if branched:
         # Replace the event so the trace re-encodes it.
         events = session.trace.events
-        events[-1] = replace(events[-1], branched=branched)
+        events[-1] = replace(events[-1], branched=list(branched))
 
 
 def project_native_record(
@@ -639,36 +646,38 @@ def project_native_record(
 ) -> None:
     """Expand the verified source choices, preserving external record boundaries.
 
-    The verifier runs the original native seats. Its exposure capture identifies
-    committed nontrivial choices in order. Academy rebinds those choices to its
-    Commands, drawing from the rules RNG for native random selections.
+    The verifier runs the original native seats and logs their committed choices.
+    Academy rebinds those choices to its Commands, drawing from the rules RNG
+    for native random selections.
     """
     decisions = list(replay)
     assert replay.stop is not None and session.env is not None
     if replay.stop.status == "diverged" and not decisions:
         return
     env = session.env
-    exposure = replay.cards().capture.exposure
-    assert exposure is not None
-    choices = iter(exposure.choices)
+    choices = iter(replay.choices())
     mixed = policies.count("agent") == 1
     remaining_frames = set(replay.game.object_candidate_frames)
+    pending_branches: list[str] = []
 
     def apply_choice(
         decision: RecordedDecision | None = None, *, forced: int | None = None
     ) -> None:
         choice = next(choices, None)
-        if choice is None or choice.actor != env.current_agent_index():
+        if choice is None or choice[0] != env.current_agent_index():
             raise ValueError("native replay choice differs from the acting seat")
+        actor, selected = choice
         expected = decision.chosen if decision is not None else forced
-        if expected not in (None, -1, choice.selected):
+        if expected not in (None, -1, selected):
             raise ValueError("native replay choice differs from the recorded action")
         project_recorded_choice(
             session,
-            choice.selected,
+            selected,
             decision,
-            native_random=policies[choice.actor] == "random" and expected in (None, -1),
+            branched=pending_branches,
+            native_random=policies[actor] == "random" and expected in (None, -1),
         )
+        pending_branches.clear()
 
     def settle() -> None:
         # Only mixed games automatically run the built-in seat. Two built-in
@@ -688,6 +697,8 @@ def project_native_record(
             else:
                 apply_boundary(env, (operation,), remaining_frames)
                 session.obs = env.observation_for_player(env.current_agent_index() or 0)
+                if operation.op in BRANCHING_INTERVENTIONS:
+                    pending_branches.append(operation.op)
         apply_boundary(env, (), remaining_frames)
 
     settle()

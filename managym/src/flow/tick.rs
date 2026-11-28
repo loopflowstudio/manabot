@@ -17,6 +17,7 @@ use crate::{
         zone::ZoneType,
     },
 };
+use std::sync::Arc;
 
 impl Game {
     pub fn step(&mut self, action: usize) -> Result<bool, AgentError> {
@@ -52,7 +53,20 @@ impl Game {
         if let Some(choice) = exposure {
             self.commit_capture_choice(choice);
         }
-        self.finish_action_step()
+        self.finish_published_choice(decision.space.player, action)
+    }
+
+    /// Record a published choice after rules execution reaches the next boundary.
+    pub(crate) fn finish_published_choice(
+        &mut self,
+        actor: Option<PlayerId>,
+        selected: usize,
+    ) -> Result<bool, AgentError> {
+        let done = self.finish_action_step()?;
+        if let Some(choices) = &mut self.committed_choices {
+            Arc::make_mut(choices).push((actor.expect("published chooser").0, selected));
+        }
+        Ok(done)
     }
 
     /// Finish one externally committed action after its complete declaration

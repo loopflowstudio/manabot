@@ -301,6 +301,14 @@ threads. It ends with a typed
 | `interrupted` | The recording ended before the game did. The decisions before it are verified; there is no winner. |
 | `diverged` | At this index the digest differed, the recorded action was not offered, or the engine raised. Nothing after it is produced. |
 
+`walk(record, capture_choices=True)` also collects the published choices
+from both seats, including choices made during native opening and settlement.
+After traversing the record, `replay.choices()` returns the acting seat and
+selected action index for each choice in execution order. The stop index uses
+the offsets in the source record's action list. For live scalar games,
+`Env.enable_choice_capture()` before reset enables the same log, read through
+`Env.committed_choices()`.
+
 A failed reset walks an empty verified prefix and stops at index zero. A
 failed step walks up to the last committed action. Diagnostic replay through
 `replay_failure_inputs` attempts the failed call with the recorded seat

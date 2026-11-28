@@ -232,6 +232,7 @@ impl GameSnapshot {
             statistics: None,
             presentation: None,
             card_capture: None,
+            committed_choices: None,
             capture_originals: Default::default(),
             capture_drawing: None,
         };

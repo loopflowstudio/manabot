@@ -154,6 +154,7 @@ pub struct Env {
     drained_generation: Option<u64>,
     pub(crate) record_terminal: bool,
     capture: Option<CaptureMode>,
+    capture_choices: bool,
     retained_exposure: Vec<String>,
     skip_trivial: bool,
     decision_memory_enabled: bool,
@@ -259,6 +260,7 @@ impl Env {
             drained_generation: None,
             record_terminal: false,
             capture: None,
+            capture_choices: false,
             retained_exposure: Vec::new(),
             skip_trivial,
             decision_memory_enabled: false,
@@ -379,6 +381,7 @@ impl Env {
         game.decision_memory_enabled =
             self.decision_memory_enabled || self.decision_memory_include_own;
         game.decision_memory_include_own = self.decision_memory_include_own;
+        game.committed_choices = self.capture_choices.then(Arc::default);
         self.provenance = Some(GameProvenance {
             setup: setup.clone(),
             skip_trivial: self.skip_trivial,
@@ -496,6 +499,27 @@ impl Env {
         self.enable_card_capture()?;
         self.capture = Some(CaptureMode::Exposure);
         Ok(())
+    }
+
+    /// Capture published choices from the opening onward, including native seats.
+    pub fn enable_choice_capture(&mut self) -> Result<(), AgentError> {
+        if self.game.is_some() {
+            return Err(AgentError(
+                "choice capture must be enabled before reset".into(),
+            ));
+        }
+        self.capture_choices = true;
+        Ok(())
+    }
+
+    /// Published choices in execution order as (acting seat, action index).
+    /// Each reset starts a fresh log. Forks leave the log with its source game.
+    pub fn committed_choices(&self) -> Result<&[(usize, usize)], AgentError> {
+        self.game
+            .as_ref()
+            .and_then(|game| game.committed_choices.as_ref())
+            .map(|choices| choices.as_slice())
+            .ok_or_else(|| AgentError("choice capture unavailable".into()))
     }
 
     pub fn exposure_json(&self) -> Result<String, AgentError> {
@@ -2077,6 +2101,58 @@ impl Env {
         }
         insert_info(info, "profiler", InfoValue::Map(out));
     }
+}
+
+#[cfg(test)]
+#[test]
+fn choice_capture_tracks_live_commitments_and_resets() {
+    let setup = || {
+        ["a", "b"]
+            .map(|name| {
+                PlayerConfig::new(
+                    name,
+                    BTreeMap::from([("Mountain".into(), 8), ("Gray Ogre".into(), 4)]),
+                )
+            })
+            .to_vec()
+    };
+    let mut env = Env::new(7, true, false, false)
+        .with_player_policies([PlayerPolicy::Random, PlayerPolicy::Agent]);
+    env.enable_choice_capture().unwrap();
+    env.reset(setup()).unwrap();
+    let opening = env.committed_choices().unwrap().to_vec();
+    assert!(!opening.is_empty());
+    assert!(opening.iter().all(|&(seat, _)| seat == 0));
+    assert_eq!(env.current_agent_index(), Some(1));
+    assert!(env.enable_choice_capture().is_err());
+    assert!(env.step(i64::MAX).is_err());
+    assert_eq!(env.committed_choices().unwrap(), opening);
+
+    let frame = env.semantic_decision_frame().unwrap();
+    let command = SemanticCommand {
+        command_id: "choice-capture".into(),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[0].id.0,
+        answers: vec![],
+        object_preconditions: vec![],
+    };
+    env.execute_semantic_command(&command).unwrap();
+    let mut expected = opening.clone();
+    expected.push((1, 0));
+    assert_eq!(env.committed_choices().unwrap(), expected);
+    assert!(env.execute_semantic_command(&command).is_err());
+    assert_eq!(env.committed_choices().unwrap(), expected);
+    assert!(env.fork().unwrap().committed_choices().is_err());
+    assert!(env
+        .snapshot()
+        .unwrap()
+        .restore(RestoreOptions::default())
+        .unwrap()
+        .committed_choices()
+        .is_err());
+
+    env.reset(setup()).unwrap();
+    assert_eq!(env.committed_choices().unwrap(), opening);
 }
 
 #[cfg(test)]

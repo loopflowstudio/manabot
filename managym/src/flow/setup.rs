@@ -193,6 +193,7 @@ impl Game {
             skip_trivial_count: 0,
             skipped_priority_passes: 0,
             card_capture: None,
+            committed_choices: None,
             statistics: None,
             presentation: None,
             capture_drawing: None,

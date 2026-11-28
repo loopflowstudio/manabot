@@ -121,6 +121,7 @@ class RecordWalker:
         record: GameRecord,
         *,
         capture_cards: bool = False,
+        capture_choices: bool = False,
     ) -> None:
         if len(record.games) != 1 or record.mode == "search":
             raise ValueError("walk requires one game, not a batch or a search")
@@ -151,6 +152,7 @@ class RecordWalker:
         if not self.game.players and not self._failed_opening:
             raise ValueError("record setup unavailable")
         self._capture_cards = capture_cards
+        self._capture_choices = capture_choices
         self.env, self.observation = self._open()
         self.stop: ReplayStop | None = None
         self._used = False
@@ -167,7 +169,17 @@ class RecordWalker:
             return env, None
         if self._capture_cards:
             env.enable_exposure_capture()
+        if self._capture_choices:
+            env.enable_choice_capture()
         return env, env.reset(self.game.setup())[0]
+
+    def choices(self) -> list[tuple[int, int]]:
+        """Published (acting seat, action index) pairs, including built-in choices."""
+        if not self._capture_choices:
+            raise ValueError("walk requires capture_choices=True to collect choices")
+        if self.stop is None:
+            raise ValueError("choices require a finished verified traversal")
+        return [] if self._failed_opening else self.env.committed_choices()
 
     def cards(self) -> CapturedCards:
         """Private facts strictly through the last verified commitment."""
@@ -354,7 +366,7 @@ class RecordWalker:
             managym.AgentError,
         ) as error:
             if unverified_step:
-                # Restore the verified position and exposure on divergence.
+                # Restore the verified position and its capture logs on divergence.
                 self.env, self.observation = self._open()
                 for action in actions[:index]:
                     assert isinstance(action, int)
@@ -362,8 +374,12 @@ class RecordWalker:
             self.stop = ReplayStop("diverged", index, f"{error}; {self.builds}")
 
 
-def walk(record: GameRecord, *, capture_cards: bool = False) -> RecordWalker:
-    return RecordWalker(record, capture_cards=capture_cards)
+def walk(
+    record: GameRecord, *, capture_cards: bool = False, capture_choices: bool = False
+) -> RecordWalker:
+    return RecordWalker(
+        record, capture_cards=capture_cards, capture_choices=capture_choices
+    )
 
 
 @dataclass

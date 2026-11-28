@@ -4293,6 +4293,24 @@ impl PyEnv {
             .map_err(map_agent_err)
     }
 
+    fn enable_choice_capture(&self) -> PyResult<()> {
+        self.reject_guarded_mutation("Env.enable_choice_capture")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_choice_capture()
+            .map_err(map_agent_err)
+    }
+
+    fn committed_choices(&self) -> PyResult<Vec<(usize, usize)>> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .committed_choices()
+            .map(<[_]>::to_vec)
+            .map_err(map_agent_err)
+    }
+
     fn set_seed(&self, seed: u64) -> PyResult<()> {
         let mut env = self
             .inner

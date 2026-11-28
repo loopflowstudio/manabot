@@ -2128,6 +2128,10 @@
             "kind": "method",
             "signature": "(self, viewer, revision, fingerprint, plan_json)"
           },
+          "committed_choices": {
+            "kind": "method",
+            "signature": "(self)"
+          },
           "compare_profile": {
             "kind": "method",
             "signature": "(self, baseline)"
@@ -2179,6 +2183,10 @@
             "signature": "(self, edits)"
           },
           "enable_card_capture": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "enable_choice_capture": {
             "kind": "method",
             "signature": "(self)"
           },

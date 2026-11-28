@@ -1089,6 +1089,7 @@ pub struct Game {
         std::collections::BTreeMap<usize, crate::flow::card_capture::CardSnapshot>,
     pub(crate) capture_drawing: Option<ObjectId>,
     pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
+    pub(crate) committed_choices: Option<std::sync::Arc<Vec<(usize, usize)>>>,
     /// Academy's told facts; like `statistics`, omitted by search clones,
     /// kept by rollback snapshots, never hashed.
     pub(crate) presentation: Option<Box<crate::flow::presentation::PresentationSink>>,
@@ -1172,6 +1173,7 @@ impl Clone for Game {
             skip_trivial_count: self.skip_trivial_count,
             skipped_priority_passes: self.skipped_priority_passes,
             card_capture: None,
+            committed_choices: None,
             statistics: None,
             presentation: None,
             capture_drawing: None,

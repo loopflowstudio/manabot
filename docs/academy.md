@@ -270,9 +270,9 @@ seat's stays tucked showing each card's name bar (hover or focus a tucked card
 to peek and inspect it, or use **Show hand / Tuck hand** on that seat's plate).
 Unchecking **Show both hands** switches to the acting view, which draws the
 non-acting seat's hidden cards as backs while keeping any rules-revealed cards
-face-up. Where the record
-changed or re-dealt the position before a recorded choice, the move list shows a neutral note
-in its place, such as **Branch · libraries reshuffled**, **Branch · hidden
+face-up. Where the record changed or re-dealt the position, the move list marks
+the first affected choice, including a built-in seat's forced choice, with a
+note such as **Branch · libraries reshuffled**, **Branch · hidden
 cards re-dealt** or **Branch · game state edited**, which jumps to that decision. Branch seeds stay private in
 either view.
 Replay runs no policy, loads no checkpoint, and never changes the file. Opening the same game again returns to the
@@ -286,6 +286,8 @@ A game does not have to be whole to open:
 |---|---|
 | **Interrupted · saved recording only** | The run stopped during the game. Every decision up to the last recorded one, then the reason it stopped. No winner is shown. |
 | **Stopped at decision N · saved recording only** | This engine did not reproduce the game from decision N: the digest differed, the recorded action was not offered, or the engine raised. Decisions before N are shown with the message; nothing after N is. |
+
+The stop number includes the built-in seats' choices shown in Replay.
 
 Neither can be continued, and no later board is invented. An opened recording
 from a file is read-only: it only plays saved data, even when its game never
