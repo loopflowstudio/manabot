@@ -1,7 +1,10 @@
 # MTG-506: cut game-side host, replay and heuristic-stepping overhead in vectorized eval
 
-Stacked on MTG-497 (`fb1580b472`, its PR lands first; the `etude-sdk 0.5.0`
-merge gate is inherited). The MTG-497 plan is in that branch's history.
+Stacked on MTG-497, which lands first and is gated on `etude-sdk 0.5.0`.
+Its Pass 7 enabled zero-copy inputs, separated preparation from sampling,
+and fixed the failure backlog's slot grant. All 512 Gate 1 games replayed,
+and the MPS compilation probe favored eager execution. See the MTG-497 plan
+at `bf5bb9c70d` and `experiments/reports/eval_throughput.md`.
 
 ## Outcome
 
@@ -248,8 +251,7 @@ evidence, `Play` counts and any viewer frame derive from walking it.
 
 - Scalar records keep live frames, their hash and the root-mutation digest
   check.
-- Zero-copy `Prepared` transport, the L4 `w160l8` bf16 slowdown and
-  `torch.compile` stay deferred from MTG-497.
+- Profiling the L4 `w160l8` bf16 slowdown remains separate work.
 - No change to observations, action spaces or policy input.
 
 ## What goes

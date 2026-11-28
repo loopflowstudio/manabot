@@ -1030,7 +1030,11 @@ def prepare(
         live_keys = np.arange(lengths.max(initial=0)) < lengths[:, None]
         batches, slots = np.nonzero(live_keys)
         mask = np.where(live_keys, f32(0), f32(-np.inf))
-        compact_attention = CompactAttention(batches, slots, mask[:, None, None, :])
+        compact_attention = CompactAttention(
+            np.ascontiguousarray(batches),
+            np.ascontiguousarray(slots),
+            mask[:, None, None, :],
+        )
     return Prepared(
         batch=batch,
         legal_support=bool(legal.any(-1).all()),
@@ -1079,7 +1083,9 @@ def prepare(
         effects=_effects(obs, tables, objects, object_remap, native=native),
         relation_features=relation_features,
         relation_valid=relation_valid.astype(f32),
-        relation_rows=tables.rows(relations[..., _RELATION_DEFINITIONS]),
+        relation_rows=np.ascontiguousarray(
+            tables.rows(relations[..., _RELATION_DEFINITIONS])
+        ),
         relation_objects=tuple(relation_objects),
         relation_object_masks=tuple(relation_masks),
         frame_indexes=frame_indexes,
@@ -1090,10 +1096,10 @@ def prepare(
         action_features=action_features.astype(f32),
         action_frames=legal_batches * relation_count + (frames - 1).clip(min=0),
         action_frame_mask=(frames != 0).astype(f32),
-        name_rows=candidates[:, _NAME],
+        name_rows=np.ascontiguousarray(candidates[:, _NAME]),
         name_mask=(candidates[:, _NAME] > 0).astype(f32),
         group_first=(first - 1).clip(min=0),
-        group_last=last,
+        group_last=np.ascontiguousarray(last),
         group_mask=(first > 0).astype(f32),
         group_counts=(last - first + 1).clip(min=1).astype(f32),
         candidate_rows=tables.rows(candidates[:, _NAME_DEFINITION]),
@@ -1357,7 +1363,7 @@ def _effects(
     else:
         detail_values = native.tables["effect_details"].integers
     detail_host = detail_values.astype(np.int64)
-    kinds = detail_host[:, DETAIL_KIND]
+    kinds = np.ascontiguousarray(detail_host[:, DETAIL_KIND])
     records, member_rows = effect_span_rows(member_offsets, member_counts)
     member_batches = live_batches[records]
     targets = (

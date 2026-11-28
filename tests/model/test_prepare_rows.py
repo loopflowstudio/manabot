@@ -248,6 +248,16 @@ def test_compact_attention_places_live_objects_and_masks_shorter_boards() -> Non
     prepared = prepare(obs, tables, attention="live_tokens", value_token=True)
     compact = prepared.compact_attention
     assert compact is not None and prepared.live_index is not None
+    assert all(
+        array.flags.c_contiguous
+        for array in (
+            prepared.relation_rows,
+            prepared.name_rows,
+            prepared.group_last,
+            compact.batches,
+            compact.slots,
+        )
+    )
 
     # A value token follows the last object slot, even on the shorter board.
     present = np.pad(prepared.validity, ((0, 0), (0, 1)), constant_values=1)
@@ -590,6 +600,8 @@ def test_native_batch_preserves_prepared_rows_and_full_external_admission(
         expected = policy.prepare(dense, inference=inference)
         actual = policy.prepare(batch, inference=inference)
         np.testing.assert_equal(asdict(actual), asdict(expected))
+        assert actual.effects is not None
+        assert actual.effects.detail_kinds.flags.c_contiguous
     with pytest.raises(ValueError, match="layout differs"):
         other = ActorCritic(
             ObservationSpace(space.config.model_copy(update={"max_actions": 3})),

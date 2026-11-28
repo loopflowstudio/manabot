@@ -42,6 +42,7 @@ from manabot.eval.agents import (
     Seat,
     checkpoint_reader,
     game_players,
+    prepare_batch,
 )
 from manabot.eval.behaviour import Play
 from manabot.eval.evaluation import CellResult, retain_attempt
@@ -376,7 +377,7 @@ async def step_round(
         def prepare_group(
             members: list[tuple[SlotState, Sampler]],
         ) -> Prepared[np.ndarray]:
-            first, sampler = members[0]
+            first, _ = members[0]
             spec = first.leg.active_match.inputs[turns[first.slot].player_id].spec
             coords: list[BatchRow] = []
             for state, seat in members:
@@ -386,9 +387,7 @@ async def step_round(
                         blank[batch] = batch.blank_decision_memory()
                     batch = blank[batch]
                 coords.append((batch, index))
-            return sampler.prepare(
-                ObservationSelection(spec.space, tuple(coords)), spec
-            )
+            return prepare_batch(ObservationSelection(spec.space, tuple(coords)), spec)
 
         async def sample_group(
             members: list[tuple[SlotState, Sampler]], prepared: Prepared[np.ndarray]
@@ -495,7 +494,8 @@ async def play_pairings(
         nonlocal current_space, source_exhausted, legs_per_match_hint
         while not source_exhausted and len(pending_legs) < needed_legs:
             capacity = slots - max(len(deferred_matches), len(ready_errors))
-            if capacity == 0:
+            # One failed forward can settle live and deferred deals at once.
+            if capacity <= 0:
                 break
             missing = needed_legs - len(pending_legs)
             request_count = min(capacity, math.ceil(missing / legs_per_match_hint))

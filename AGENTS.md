@@ -967,11 +967,14 @@ Etude imports evaluation callbacks by module and qualified name, including local
 runs. Use an importable `async def play(match, agents)` or `play_many(matches)`.
 Managed jobs select their precision with `manabot.eval.agents.agents_for`.
 `eval.agent_loader` chooses the framework and device. Checkpoint seats carry
-an async forward keyed by checkpoint. Use `play_scalar` to supply synchronous
-players to the scalar arena. Seating configs containing records with omitted
-fields must pass their JSON model dump so a retained tournament compares
-alike on resume. Persistence fixtures that inject local outcomes use
-`tests/fixtures/evaluation_callbacks.py` across the real game process boundary.
+an async forward keyed by checkpoint. Etude's in-process forward bus borrows
+C-contiguous NumPy arrays inside `Prepared`. Materialize strided lookup
+columns in host preparation so they can travel by pointer. Use `play_scalar`
+to supply synchronous players to the scalar arena. Seating configs containing
+records with omitted fields must pass their JSON model dump so a retained
+tournament compares alike on resume. Persistence fixtures that inject local
+outcomes use `tests/fixtures/evaluation_callbacks.py` across the real game
+process boundary.
 
 Etude hashes tracked source paths (`git add -N` admits new files for local
 implementation checks). Eval runs are sealed blocks: each game's card evidence

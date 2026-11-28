@@ -179,16 +179,48 @@ player seed, selected action, offer, frame digest, state digest and final
 score. The trained model won 115 of 128 games and used 12,140 policy rows in
 each arm. The seeded model won 9 of 128 and used 6,770 rows.
 
-Direct mode gained 3.4–8.4% over the socket at the same backend. Its receipts
-show zero socket bytes and zero arrays passed by pointer. `Prepared` is an
-opaque dataclass to the Etude transport, which pickled every input in-band:
-4.13 GB per trained-model arm and 2.44 GB per seeded-model arm. These are
-measurements of direct inference with that serialized input path.
+Direct mode gained 3.4–8.4% over the socket at the same backend. At
+`49b085a`, Etude pickled the `Prepared` dataclass and its arrays in-band,
+totaling 4.13 GB per trained-model arm and 2.44 GB per seeded-model arm.
 
 An initial run on the older local engine build produced 23 wall-clock
 timeouts while other deals were being replayed. The regression test and
 `92a578b417` move the slot budget to live decision rounds. The reported
 measurements all use the rebuilt engine and the corrected clock.
+
+### Gate 1 with zero-copy inputs
+
+The M4 Max rerun used Etude 6db832 at `d876a7b`, Manabot's contiguous
+preparation change `f3b00a846`, and the local engine extension (SHA256
+`e2bab7ce2570…`). It kept the same checkpoint bytes, deal and environment
+identity, 64 slots, and 15 inference threads. The first run with five field
+fixes still copied `effects.detail_kinds` on rounds with live effects. The
+measurements below include its fix.
+
+| Checkpoint | Backend | Games/hr | Wall (s) | Mean rows/forward | Forward round trips (s) | Array transfers by pointer | In-band MB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Trained `w160l8` | MLX | 4,818 | 95.6 | 16.61 | 31.4 | 56,979 | 14.23 |
+| Trained `w160l8` | MPS | 4,522 | 101.9 | 16.61 | 41.3 | 56,979 | 14.23 |
+| Seeded `w384l8` | MLX | 5,486 | 84.0 | 12.11 | 30.2 | 45,563 | 11.79 |
+| Seeded `w384l8` | MPS | 4,865 | 94.7 | 12.11 | 42.0 | 45,563 | 11.79 |
+
+All 512 games replayed and matched their original direct arms leg for leg
+on seeds, actions, offers, frame and state digests, and scores. Every arm
+recorded zero copied input arrays and zero socket bytes. A separate 64-row
+native compact-attention input preserved the memory addresses of all 68
+array leaves through the codec. In-band bytes carry the remaining Python
+structure. Work outside forward round trips still took 56–67% of wall time.
+The timings came from separate runs and do not isolate the effect of
+transport on games/hour.
+
+### Torch compilation on MPS
+
+A Torch 2.15 probe used the trained `w160l8` checkpoint and prepared opening
+observations with 12, 17 and 16 rows. Full-graph compilation failed at the
+policy's binding check. Allowing graph breaks matched eager logits within
+`1e-5`. The first compiled call took 19.0 s from a cold cache. Over 36 warm
+calls with synchronous logits readback, eager took 1.315 s and compiled took
+1.620 s. The managed loader uses eager execution.
 
 ## Reproduce
 
@@ -233,3 +265,6 @@ The CLI writes `summary.json` alongside the per-deal diagnostics in `arena/`.
 For the managed comparison, use `EvalRun.play_many` with
 `experiments.tla_trophies.play_many` and `AGENTS`. The Gate 1 harness, receipts,
 and per-leg comparison are under `.runs/eval-throughput/gate1-92a578b417/`.
+The zero-copy rerun uses the same harness with the original environment digest
+held fixed and an editable 6db832 at `d876a7b`. Its receipts and comparison
+are under `.runs/eval-throughput/gate1-all-arrays/`.

@@ -496,14 +496,15 @@ fixed weights in the declared dtype and transfers policy logits to the host.
 Declare `AGENTS_BF16` for bfloat16 on CUDA, MLX, or MPS with hardware support,
 or `AGENTS_TF32` for TF32 on CUDA. Each loader returns a deterministic forward
 `list[Prepared] -> list[masked logits]`, preserving length and order. Host
-preparation and admission happen once in the game-side sampler. The loader
+preparation and admission happen once in the game process. The loader
 merges admitted rows, rebasing their object, frame, fact and effect routes;
 it never selects an action. `build(player, leaves)` creates the heuristic or
 checkpoint sampler without importing Torch. Each decision's recorded seed
 controls NumPy PCG64 sampling in the game process.
 
-A checkpoint with a decision-memory encoder has its log prepared by the same
-sampler, and the loader batches those rows with their memory. A seat whose
+A checkpoint with a decision-memory encoder has its log prepared with the
+observation. The loader joins these memory rows and rebuilds their packed
+sequence schedule when Etude sends multiple inputs. A seat whose
 player config holds `blank_decision_memory: True` plays the same bytes with
 the log zeroed at every decision, registered as a distinct player
 ([reliance comparison](observation-and-model.md#whole-game-decision-memory));

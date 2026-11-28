@@ -789,3 +789,84 @@ def test_vector_runner_bounds_deferred_layouts_before_play(
     settled = asyncio.run(run())
     assert settled[0] == (matches[0].key, 6)
     assert {key for key, _ in settled} == {match.key for match in matches}
+
+
+def test_vector_runner_evicts_failed_checkpoint_across_layout_backlog(
+    tmp_path: Path,
+    cpu_eval: None,
+) -> None:
+    slots = 9
+    space = ObservationSpace()
+    other_space = ObservationSpace(ObservationConfig(mana_payment="auto"))
+    assert space.config != other_space.config and space.shapes == other_space.shapes
+    broken_ref = _fixture_checkpoint(tmp_path, 61, space)
+    healthy_ref = _fixture_checkpoint(tmp_path, 62, space)
+    deferred_ref = _fixture_checkpoint(tmp_path, 63, other_space)
+    failed_player = checkpoint_player(broken_ref)
+    healthy_player = checkpoint_player(healthy_ref)
+    deferred_player = checkpoint_player(deferred_ref)
+    heuristic = Code(name="heuristic")
+    opponent = build(heuristic, {})
+    error = ForwardError(broken_ref.key, "checkpoint unavailable")
+    broken_calls = 0
+    healthy_calls = 0
+
+    async def broken(inputs: list[object], *, rows: int | None = None) -> list[object]:
+        nonlocal broken_calls
+        broken_calls += 1
+        raise error
+
+    async def healthy(inputs: list[object], *, rows: int | None = None) -> list[object]:
+        nonlocal healthy_calls
+        [batch] = inputs
+        assert isinstance(batch, Prepared) and rows == batch.batch
+        healthy_calls += 1
+        return [np.zeros(batch.legal.shape, dtype=np.float32)]
+
+    async def deferred(
+        inputs: list[object], *, rows: int | None = None
+    ) -> list[object]:
+        pytest.fail(
+            "a deal containing the failed checkpoint reached the deferred layout"
+        )
+
+    # Eight live failing legs, eight deferred deals with that same checkpoint
+    # in the other seat, then one healthy leg with three siblings queued.
+    live_failures = [
+        Match(players=(failed_player, heuristic), games=4, config={"deal": deal})
+        for deal in range(2)
+    ]
+    queued_failures = [
+        Match(players=(deferred_player, failed_player), games=4, config={"deal": deal})
+        for deal in range(2, slots + 1)
+    ]
+    healthy_match = Match(
+        players=(healthy_player, heuristic), games=4, config={"deal": slots + 1}
+    )
+    source = LocalMatches(
+        [(match, [broken, opponent]) for match in live_failures]
+        + [(match, [deferred, broken]) for match in queued_failures]
+        + [(healthy_match, [healthy, opponent])]
+    )
+    matchup = _allies_lessons_matchup()
+
+    def spec_for(match: Match) -> PairingSpec:
+        return PairingSpec(
+            matchup=matchup,
+            deal=int(match.config["deal"]),
+            matchup_mode="cross",
+            game_seconds=60,
+            arena="fixture-failure-backlog",
+        )
+
+    settled = play_local(source, spec_for, slots=slots, output_dir=tmp_path)
+    assert broken_calls == 1 and healthy_calls > 0
+    assert len(settled) == len(live_failures) + len(queued_failures) + 1
+    failed_keys = {match.key for match in live_failures + queued_failures}
+    assert {match.key for match, outcome in settled if outcome is error} == failed_keys
+    assert settled[-1][0] == healthy_match and isinstance(settled[-1][1], Result)
+    retained = tmp_path / "arena" / healthy_match.key
+    games = read_trace(retained / "games" / "candidate__opponent.jsonl")
+    assert len(games) == 4
+    assert all(game["terminated"] and game["failure"] is None for game in games)
+    assert json.loads((retained / "replay.json").read_bytes())["passed"] is True
