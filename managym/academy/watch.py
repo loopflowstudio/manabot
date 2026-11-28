@@ -4,6 +4,9 @@ Controllers advance exactly one Command; inspection exposes only one acting
 view. The mixed canonical record and retained roots remain server-private.
 """
 
+from __future__ import annotations
+
+from collections.abc import Sequence
 from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field, replace
 import logging
@@ -11,15 +14,16 @@ from threading import Lock
 from time import monotonic
 from typing import TYPE_CHECKING, Any, TypedDict
 
-if TYPE_CHECKING:
-    from managym.recording import GameRecord
-
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from managym.bots import BotPolicy
+import managym
+from managym.bots import BotDecision, BotPolicy
+from managym.decision import Command
 from managym.disclosure import DecklistDisclosure
 from managym.policy import PolicyRunner
+from managym.recording import ForceAction, records_from_source
+from managym.replay import apply_boundary, interventions_by_offset, walk
 from managym.search import SearchConfig, SearchError
 
 from . import server
@@ -28,12 +32,13 @@ from .deck_import import DeckImportSides
 from .extensions import bot_extension
 from .opponent import policy_registry
 from .replay_index import DecisionAddressV2
+from .trace import BRANCHING_INTERVENTIONS, GameConfig, RecordingImport
 from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy, player_fields
 from .work import Work
 
-
-class NativeSeatRecord(ValueError):
-    """A record in which a seat stepped natively, so its turns were never surfaced."""
+if TYPE_CHECKING:
+    from managym.recording import GameRecord, Intervention
+    from managym.replay import RecordedDecision, RecordWalker
 
 
 class WatchCreated(TypedDict):
@@ -364,10 +369,6 @@ def import_game(game_record: dict[str, Any]) -> dict[str, Any]:
     Source digests and receipt stay in their original namespace; the imported
     Academy match gets its own identity and retained Study roots.
     """
-    from managym.recording import records_from_source
-
-    from .trace import GameConfig
-
     records = records_from_source(game_record)
     if records is not None:
         if len(records) != 1:
@@ -477,134 +478,234 @@ def import_game(game_record: dict[str, Any]) -> dict[str, Any]:
         raise
 
 
-def import_record(record: "GameRecord") -> dict[str, Any]:
+def import_record(record: GameRecord) -> dict[str, Any]:
     """Project the verified prefix through GameSession's Command authority."""
-    from managym.bots import BotDecision
-    from managym.decision import Command
-    from managym.replay import RecordedDecision, walk
-
-    from .trace import BRANCHING_INTERVENTIONS, GameConfig, RecordingImport
-
     if not record.skip_trivial:
         raise ValueError("Academy requires forced-decision skipping")
-    if len(record.games) == 1 and record.policies_for(record.games[0]) != (
-        "agent",
-        "agent",
-    ):
-        raise NativeSeatRecord(
-            "Academy requires both seats' surfaced decisions; native-seat records "
-            "(such as an evaluation against the built-in heuristic) are not yet "
-            "viewable. Verify the game with `uv run python -m managym.replay <file>`."
-        )
-    replay = walk(record)
+    if len(record.games) != 1:
+        raise ValueError("select exactly one game record")
+    inputs = record.games[0]
+    policies = record.policies_for(inputs)
+    native_seats = policies != ("agent", "agent")
+    replay = walk(record, capture_cards=native_seats)
     source = record.sha256
     store = AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite")
     existing = store.arena_recording(source)
     if existing is not None:
         return {"id": existing, "finished": True, "source_sha256": source}
-    setups = replay.game.players
+    setups = inputs.players
+    if replay.observation is None:
+        raise ValueError("record has no playable opening")
     if len({p.disclosure for p in setups}) != 1:
         raise ValueError("mixed deck disclosure is not supported by Watch")
-    created = create_watch(
-        WatchRequest(seed=replay.game.seed),
-        recorded_players=[
-            RecordedPlayer(
-                seat, p.name, "bot", p.name, p.name, inference={"source_sha256": source}
-            )
-            for seat, p in enumerate(setups)
-        ],
+
+    config = GameConfig(
+        hero_deck=setups[0].decklist,
+        villain_deck=setups[1].decklist,
+        hero_sideboard=setups[0].sideboard,
+        villain_sideboard=setups[1].sideboard,
+        seed=inputs.seed,
+        villain_type="random",
+        decklists=setups[0].disclosure,
+        watch_players=[p.name for p in setups],
+        opponent={
+            "kind": "record",
+            "name": "Recorded game",
+            **(
+                {"source_kind": record.context["source_kind"]}
+                if record.context.get("source_kind") in ("training", "evaluation")
+                else {}
+            ),
+        },
     )
-    session = live_watch(created["id"]).game
-    try:
-        assert session.trace is not None
-        session.env = replay.env
-        session.trace.config = GameConfig(
-            hero_deck=setups[0].decklist,
-            villain_deck=setups[1].decklist,
-            hero_sideboard=setups[0].sideboard,
-            villain_sideboard=setups[1].sideboard,
-            seed=replay.game.seed,
-            villain_type="random",
-            decklists=setups[0].disclosure,
-            watch_players=[p.name for p in setups],
-            opponent={
-                "kind": "record",
-                "name": "Recorded game",
-                **(
-                    {"source_kind": record.context["source_kind"]}
-                    if record.context.get("source_kind") in ("training", "evaluation")
-                    else {}
-                ),
-            },
+    env, obs = replay.env, replay.observation
+    if native_seats:
+        # The projection accepts Commands at either seat, including Study forks.
+        # The separate verifier owns built-in policy state and native settlement.
+        env = managym.Env(
+            seed=inputs.seed,
+            decision_memory=inputs.decision_memory,
+            decision_memory_include_own=inputs.decision_memory_include_own,
         )
+        obs, _ = env.reset(inputs.setup())
+    env.enable_presentation()
+    session = server.GameSession(watch_mode=True)
+    session.record_players = [
+        RecordedPlayer(
+            seat, p.name, "bot", p.name, p.name, inference={"source_sha256": source}
+        )
+        for seat, p in enumerate(setups)
+    ]
+    try:
+        session._begin(
+            config,
+            env,
+            obs,
+            None,
+            match_id=session._id_factory("match"),
+            timestamp=session._clock(),
+            played_from=None,
+        )
+        if native_seats:
+            project_native_record(session, replay, policies)
+        else:
 
-        def apply(decision: RecordedDecision) -> None:
-            # The verified observation includes any interventions at this boundary.
-            session.obs = decision.observation
-            session.published_prompt = None
-            seat = int(session.obs.agent.player_index)
-            context = (
-                session._publish_current_prompt()
-                if seat == 0
-                else session._build_decision_context(session.obs, viewer=seat)
-            )
-            assert context is not None
-            annotation = decision.annotation
-            probabilities = annotation.probabilities if annotation else None
-            if probabilities is not None and len(probabilities) != len(context.offers):
-                raise ValueError("recorded probabilities differ from legal offers")
-            session._bot_decision = BotDecision(
-                decision.chosen,
-                probabilities=probabilities or [],
-                search_scores=annotation.search_scores if annotation else [],
-                belief=annotation.belief if annotation else None,
-                value=annotation.value if annotation else None,
-                update=annotation.update if annotation else None,
-                unavailable="not retained" if annotation is None else None,
-            )
-            offer = next(
-                key
-                for key, action in context.action_by_offer.items()
-                if action == decision.chosen
-            )
-            bound = session._authority_command(context, offer, "policy")
-            native = decision.commitment
-            if isinstance(native, Command):
-                bound["command_id"] = native.command_id
-                bound["answers"] = list(native.answers)
-            step = len(session.trace.events)
-            session._apply_bound_command(
-                context,
-                bound,
-                source="policy",
-                native_command=native.to_json()
-                if isinstance(native, Command)
-                else None,
-            )
-            branched = [
-                item.op
-                for item in decision.interventions
-                if item.op in BRANCHING_INTERVENTIONS
-            ]
-            if branched:
-                # Replaced, not edited: the trace re-encodes replaced events only.
-                events = session.trace.events
-                events[step] = replace(events[step], branched=branched)
+            def apply(decision: RecordedDecision) -> None:
+                # The verified observation includes interventions at this boundary.
+                session.obs = decision.observation
+                project_recorded_choice(session, decision.chosen, decision)
 
-        for _ in replay.run(apply):
-            pass
-        session.obs = replay.observation
+            for _ in replay.run(apply):
+                pass
+            session.obs = replay.observation
         session.published_prompt = None
-        assert replay.stop is not None
+        assert session.trace is not None and replay.stop is not None
         stop = replay.stop
         reason = "game_over" if stop.status == "complete" else f"record_{stop.status}"
         session.trace.recording_import = RecordingImport(stop, replay.build_differs)
         session._persist_attempt(end_reason=reason)
         return {
-            **created,
+            "id": session.match_id,
             "finished": True,
             "count": len(session.canonical_decisions),
             "stop": stop.status,
+            "source_sha256": source,
         }
     finally:
-        server.end_game(session.match_id, "record_import_closed")
+        session.release()
+
+
+def project_recorded_choice(
+    session: server.GameSession,
+    index: int,
+    decision: RecordedDecision | None,
+    *,
+    native_random: bool = False,
+) -> None:
+    assert session.obs is not None and session.trace is not None
+    seat = int(session.obs.agent.player_index)
+    context = (
+        session._publish_current_prompt()
+        if seat == session.human_seat
+        else session._build_decision_context(session.obs, viewer=seat)
+    )
+    assert context is not None
+    annotation = decision.annotation if decision is not None else None
+    probabilities = annotation.probabilities if annotation else None
+    if probabilities is not None and len(probabilities) != len(context.offers):
+        raise ValueError("recorded probabilities differ from legal offers")
+    session._bot_decision = BotDecision(
+        index,
+        probabilities=probabilities or [],
+        search_scores=annotation.search_scores if annotation else [],
+        belief=annotation.belief if annotation else None,
+        value=annotation.value if annotation else None,
+        update=annotation.update if annotation else None,
+        unavailable="not retained" if annotation is None else None,
+    )
+    offer = next(
+        (key for key, action in context.action_by_offer.items() if action == index),
+        None,
+    )
+    if offer is None:
+        raise ValueError("recorded choice differs from legal offers")
+    bound = session._authority_command(context, offer, "policy")
+    native = decision.commitment if decision is not None else None
+    raw = None
+    if isinstance(native, Command):
+        bound["command_id"] = native.command_id
+        bound["answers"] = list(native.answers)
+        raw = native.to_json()
+    session._apply_bound_command(
+        context,
+        bound,
+        source="policy",
+        native_command=raw,
+        native_random=native_random,
+    )
+    branched = [
+        item.op
+        for item in (decision.interventions if decision is not None else ())
+        if item.op in BRANCHING_INTERVENTIONS
+    ]
+    if branched:
+        # Replace the event so the trace re-encodes it.
+        events = session.trace.events
+        events[-1] = replace(events[-1], branched=branched)
+
+
+def project_native_record(
+    session: server.GameSession, replay: RecordWalker, policies: tuple[str, str]
+) -> None:
+    """Expand the verified source choices, preserving external record boundaries.
+
+    The verifier runs the original native seats. Its exposure capture identifies
+    committed nontrivial choices in order. Academy rebinds those choices to its
+    Commands, drawing from the rules RNG for native random selections.
+    """
+    decisions = list(replay)
+    assert replay.stop is not None and session.env is not None
+    if replay.stop.status == "diverged" and not decisions:
+        return
+    env = session.env
+    exposure = replay.cards().capture.exposure
+    assert exposure is not None
+    choices = iter(exposure.choices)
+    mixed = policies.count("agent") == 1
+    remaining_frames = set(replay.game.object_candidate_frames)
+
+    def apply_choice(
+        decision: RecordedDecision | None = None, *, forced: int | None = None
+    ) -> None:
+        choice = next(choices, None)
+        if choice is None or choice.actor != env.current_agent_index():
+            raise ValueError("native replay choice differs from the acting seat")
+        expected = decision.chosen if decision is not None else forced
+        if expected not in (None, -1, choice.selected):
+            raise ValueError("native replay choice differs from the recorded action")
+        project_recorded_choice(
+            session,
+            choice.selected,
+            decision,
+            native_random=policies[choice.actor] == "random" and expected in (None, -1),
+        )
+
+    def settle() -> None:
+        # Only mixed games automatically run the built-in seat. Two built-in
+        # seats take one decision for each recorded -1.
+        if mixed:
+            while (seat := env.current_agent_index()) is not None and policies[
+                seat
+            ] != "agent":
+                apply_choice()
+
+    def restore(operations: Sequence[Intervention]) -> None:
+        for operation in operations:
+            if isinstance(operation, ForceAction):
+                apply_boundary(env, (), remaining_frames)
+                apply_choice(forced=operation.action)
+                settle()
+            else:
+                apply_boundary(env, (operation,), remaining_frames)
+                session.obs = env.observation_for_player(env.current_agent_index() or 0)
+        apply_boundary(env, (), remaining_frames)
+
+    settle()
+    for decision in decisions:
+        restore(decision.interventions)
+        index = decision.index
+        if (
+            index < len(replay.game.digests)
+            and env.state_digest() != replay.game.digests[index]
+        ):
+            raise ValueError("Academy projection differs from the recorded state")
+        apply_choice(decision)
+        if isinstance(decision.commitment, int):
+            settle()
+    if replay.stop.status != "diverged":
+        restore(interventions_by_offset(replay.game).get(replay.stop.index, ()))
+        if (
+            next(choices, None) is not None
+            or env.state_digest() != replay.env.state_digest()
+        ):
+            raise ValueError("Academy projection differs from the verified ending")

@@ -674,32 +674,29 @@ def test_cli_search_specs_reach_the_shared_python_launch_api(
     assert "removed in 0.3.0" not in capsys.readouterr().err
 
 
-def test_native_seat_record_names_the_replay_command(
-    academy: Academy, tmp_path: Path
-) -> None:
+def test_native_seat_record_opens_from_file(academy: Academy, tmp_path: Path) -> None:
     import managym
-    from managym.recording import ScalarCapture
+    from managym.academy.watch import inspect_watch
+    from managym.recording import RecordedVectorEnv
 
     games = tmp_path / "games.jsonl"
-    game = managym.Env(seed=7)
-    capture = ScalarCapture(seed=7, games_path=games)
-    capture.reset(
-        game,
+    capture = RecordedVectorEnv(
+        num_envs=1, seed=7, games_path=games, player_policies=("heuristic:64", "agent")
+    )
+    capture.reset_all(
         [
             managym.authored_deck_setup("tla-baseline-v1", key)
             for key in ("tla_red", "tla_white")
-        ],
+        ]
     )
     for _ in range(3):
-        capture.step(game, 0)
+        capture.step([0])
     capture.close()
-    # Watch refuses on the declared seats alone, before walking the game.
-    row = json.loads(games.read_text().splitlines()[-1])
-    row["player_policies"] = ["agent", "heuristic:64"]
-    games.write_text(json.dumps(row) + "\n")
-    with pytest.raises(AcademyLaunchError) as error:
-        academy.replay(games)
-    assert error.value.code == "replay.rejected"
-    assert "native-seat records" in error.value.message
-    assert "uv run python -m managym.replay" in error.value.message
-    assert "revision that wrote it" not in error.value.message
+    original = games.read_bytes()
+    launched = academy.replay(games)
+    trace_id = parse_qs(urlparse(launched.url).query)["trace"][0]
+    opening = inspect_watch(trace_id, 0)
+    assert opening["decision"]["viewer"] == 0
+    assert opening["count"] > read_games(games)[0].decisions == 3
+    assert academy.replay(games) == launched
+    assert games.read_bytes() == original

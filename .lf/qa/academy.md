@@ -571,6 +571,7 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   academy replay <file> --game 1 --no-open --port <unused> --traces-dir <dir>`.
   A fresh checkout needs `npm --prefix academy/ui ci` before the static build.
   Start it in the background and kill the Python PID (not a `uv` wrapper).
-  Records with a native seat (`heuristic:64`, from vector evaluation against
-  the built-in heuristic) are refused with `replay.rejected`; custom-code
-  evaluation records (`("agent", "agent")`) open in Replay.
+  Vector evaluation records against `heuristic:64` open in Replay. Inspect
+  choices on both seats and check that revealing both hands leaves the
+  acting viewer's history identical. Replay counts every reconstructed
+  choice. The source file counts only the checkpoint's choices.
