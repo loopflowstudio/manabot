@@ -1,3 +1,72 @@
+# MTG-506 open questions and assumptions
+
+Choices taken headless (planning and the realign after concept review,
+2026-11-27). Each is marked for review in `scratch/plan.md`.
+
+- **Heuristic identity (review Q2, local v3 taken).**
+  Fixing per-game turn state changes 16 of 7,155 heuristic choices in 10 of
+  64 profiled games. The plan adds `player_policy.rs` to
+  `heuristic_source_paths()` and bumps the Manabot anchor to `native-v3`.
+  The Manabot registration changes the cohort and its derived seeds. Etude
+  keeps the same `Code.key` and trophy `Seating.definition` when only source
+  bytes change. Setting `config.version` to `native-v3` changes both, so the
+  standalone probe uses that config. Existing trophy declarations and report
+  selections still use the stored tournament identities. Resuming under those
+  identities could mix opponents, and changing the existing seatings in place
+  would cause a seating conflict. Review the new tournament names and which
+  baselines to rerun before publishing shared evaluations.
+- **Native heuristic decisions leave the record.** Replay recomputes them; no
+  per-decision heuristic latency or chosen offer is stored.
+- **Compact vector annotations (review Q1, 1a)** drop `frame_sha256`,
+  `chosen_offer`, `action_space_kind` and the per-decision private-hand check.
+- **Academy Watch native-seat import is in this Task** (ship-review choice
+  `3b`, Pass 7). Pass 8 takes the Pass 7 review's Q1 answer `1a` (a native
+  committed-choice log rather than reading card-exposure capture), for review.
+- **Opening-settlement isolation is in this Task (review Q4, 4a).**
+- **Replay uses two worker threads** with the GIL released in `PyEnv`.
+- **Scalar records keep live frames.**
+- **L4 arms run on one rental under `--max-usd 5`.**
+- **Opening failures use opt-in isolation.** The coordinator asks for
+  `isolated=True` on reset and slot loads. The engine reports the actual
+  failing seat. An opening failure has an empty commitment prefix and its
+  diagnostic replay runs the retained native policies.
+
+- **Post-build review Q1 (1a, for review).** The built-in heuristic refuses a
+  declaration without `version: native-v3`. Maintained experiments with stored
+  tournaments (`tla_trophies*`, `opponent_memory`, `mana_taps`,
+  `tla_frontier`) are left unversioned, so they refuse rather than mix.
+  Open: which of them get a new `native-v3` tournament name, and which
+  baselines rerun. Irreversible once scored.
+- **Post-build review Q2 (2a, for review).** A failed reset walks an empty
+  prefix at index 0. MTG-500 can fail before even an agent-only opening
+  reaches a position, so ordinary walking skips reset entirely. Diagnostic
+  replay runs the recorded policies. In a mixed vector snapshot, the opening
+  error is stored on the failed game's ending and projects to a reset failure
+  when the stream is read on its own.
+
+- **Pass 4 review Q1 (1a, for review).** One `GameEnd.failure` with
+  `operation` replaces the reset-only `OpeningFailure`; a `CodeSeat` decision
+  error is a player crash, never a native root failure.
+- **Pass 4 review Q2 (2a, for review).** No maintained experiment moves to a
+  `native-v3` tournament name in this Task, including `tla_trophies.py`'s
+  unscored bf16/tf32 branches.
+
+Ideas outside this Task:
+
+- Managed scalar evaluation (`play_scalar`) could seat the heuristic natively
+  too, with the same record shape.
+- `state_digest` costs 0.41 ms on a scalar `Env` against 0.18 ms per slot on
+  the vector; nobody has looked at why.
+
+The sync onto `85a3a5fb48` keeps MTG-497's match-owned queues and layout
+compatibility checks with MTG-506's isolated native seating. This checkout's
+plan and tour cover MTG-506. The MTG-497 versions are at the synced commit.
+
+For compression, the comparison base combines the synced MTG-497 commit
+`0f885b1f43` and main commit `606e79e90a`. This isolates MTG-506's changes.
+
+---
+
 # MTG-497 open questions and assumptions
 
 Assumptions taken during planning (headless, 2026-11-26). Each is reversible.
@@ -112,3 +181,46 @@ During compression I kept admitted deals in grant order. When a vector drains,
 the oldest waiting deal chooses the next layout. The standalone throughput
 arms keep the same Match key across precisions and use the trophy pairing's
 game budget.
+
+MTG-506 Pass 2 uses the single-step walker for integer-only committed
+trajectories with no interventions or issued object-candidate frames and no
+consumer apply callback. This covers vector evaluation and keeps semantic
+boundary replay on its fork-based path. After a divergent step the walker
+rebuilds the verified position, including card capture when requested.
+
+MTG-506 Pass 3 used the retained `w384l8` checkpoint bytes across the panel.
+The first trained MPS timing began before formatting was applied. The report
+uses the 32-deal rerun whose source fingerprint matches the other nine arms.
+Both timings and both 16-deal profiles are under
+`.runs/eval-throughput/mtg506/`.
+
+MTG-506 Pass 5 uses the failed game's own operation and frame when projecting
+it from a vector journal. The latest batch boundary can describe a subsequent
+step by a healthy slot, so a single-game projection leaves that boundary on
+the full journal record. The slot-1 step regression advances slot 0 to
+exercise this case.
+
+MTG-506 QA (2026-11-27): `ScalarCapture` records no seat policies, and
+`managym.Env` exposes no getter for them, so a scalar capture of an Env built
+with `player_policies=("agent", "heuristic")` writes an `("agent", "agent")`
+record that diverges at index 0 on replay. This predates MTG-506. The vector
+capture records its pairs. Left as is; a fix needs an `Env.player_policies`
+getter (Rust plus public API) or a `ScalarCapture(player_policies=...)`
+argument checked against the Env.
+
+MTG-506 Pass 7 uses native exposure capture to obtain the committed choices
+for Academy imports, then binds those choices through Academy's Command path.
+A divergence at the first recorded boundary with no verified actions keeps
+the opening deal with no reconstructed choices.
+
+All four legs in `.runs/qa506/mps-v64/arena/*/games/deals/candidate__opponent.40900.jsonl`
+imported. Leg 0 took 1.44 s to launch with 92 Academy choices from 66 recorded
+checkpoint actions. Chromium followed both native seats with **Show both hands**
+off. Source bytes matched after launch. The earlier `.runs/eval-throughput/mtg506/w160-mps-matched`
+sample diverged at the first digest in the standard verifier on this engine
+build. Its original measurement evidence remains tied to its recorded build.
+
+Pass 8 used a debug cp313 wheel for the import checks. The checkout's local
+environment lacked dependencies, so the Academy tests used a uv overlay. The
+public API, reducer and package-boundary checks used Etude SDK source archived
+from `d2dd820a` with the installed CPython 3.13 dependencies from MTG-507.

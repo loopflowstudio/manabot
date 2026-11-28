@@ -2246,6 +2246,7 @@ class GameSession:
         *,
         source: str,
         native_command: str | None = None,
+        native_random: bool = False,
     ) -> None:
         """Validate, capture, and lower one deliberate authority command."""
         command = Command.model_validate(raw_command)
@@ -2270,6 +2271,7 @@ class GameSession:
             command=command.model_dump(mode="json"),
             source=source,
             native_command=native_command,
+            native_random=native_random,
         )
 
     def _step_and_record(
@@ -2282,6 +2284,7 @@ class GameSession:
         command: dict[str, Any] | None = None,
         source: str | None = None,
         native_command: str | None = None,
+        native_random: bool = False,
     ) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             raise RuntimeError("Cannot step without an active game.")
@@ -2389,6 +2392,10 @@ class GameSession:
                 answers=tuple(command["answers"]),
             )
         )
+        # A recorded native random choice consumed the rules RNG. Keep the
+        # Study root before that draw, at the decision shown to the viewer.
+        if native_random and self.env.random_action_index() != action_index:
+            raise ValueError("recorded native random action differs")
         transition_json, next_obs, reward, _, _, _ = self.env.step_semantic_command(
             semantic_command.to_json()
         )

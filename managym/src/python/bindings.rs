@@ -4214,13 +4214,14 @@ impl PyEnv {
         py: Python<'_>,
         player_configs: Bound<'_, PyAny>,
     ) -> PyResult<(PyObservation, PyObject)> {
-        let mut env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-
         let configs = game_setup(&player_configs)?;
-        let (obs, info) = env.reset(configs).map_err(map_agent_err)?;
+        let (obs, info) = py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .reset(configs)
+                .map_err(map_agent_err)
+        })?;
 
         let py_dict = info_dict_to_pydict(py, &info);
         Ok((PyObservation::from(obs), py_dict.into_any().unbind()))
@@ -4292,6 +4293,24 @@ impl PyEnv {
             .map_err(map_agent_err)
     }
 
+    fn enable_choice_capture(&self) -> PyResult<()> {
+        self.reject_guarded_mutation("Env.enable_choice_capture")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_choice_capture()
+            .map_err(map_agent_err)
+    }
+
+    fn committed_choices(&self) -> PyResult<Vec<(usize, usize)>> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .committed_choices()
+            .map(<[_]>::to_vec)
+            .map_err(map_agent_err)
+    }
+
     fn set_seed(&self, seed: u64) -> PyResult<()> {
         let mut env = self
             .inner
@@ -4308,13 +4327,13 @@ impl PyEnv {
         action: Option<i64>,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject)> {
         self.reject_guarded_mutation("Env.step(index)")?;
-        let mut env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-
-        let (obs, reward, terminated, truncated, info) =
-            env.step(action.unwrap_or(-1)).map_err(map_agent_err)?;
+        let (obs, reward, terminated, truncated, info) = py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .step(action.unwrap_or(-1))
+                .map_err(map_agent_err)
+        })?;
         let py_dict = info_dict_to_pydict(py, &info);
         Ok((
             PyObservation::from(obs),
@@ -4500,12 +4519,14 @@ impl PyEnv {
     }
 
     /// Canonical full-engine digest for exact differential assertions.
-    fn state_digest(&self) -> PyResult<String> {
-        let env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        env.state_digest().map_err(map_agent_err)
+    fn state_digest(&self, py: Python<'_>) -> PyResult<String> {
+        py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .state_digest()
+                .map_err(map_agent_err)
+        })
     }
 
     fn info(&self, py: Python<'_>) -> PyResult<PyObject> {

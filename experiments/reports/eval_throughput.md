@@ -1,10 +1,90 @@
 # Paired evaluation throughput
 
-Exploratory calibration for MTG-497. The comparison measures completed,
-replay-verified games per hour through the full paired arena. The first
-measurements ran at `08a854747f` on 2026-11-27 on an Apple M4 Max
+The comparison measures completed, replay-verified games per hour through the
+full paired arena. The first exploratory calibration (MTG-497) ran at
+`08a854747f` on 2026-11-27 on an Apple M4 Max
 (16 CPU cores, 40-core GPU, 128 GiB unified memory, macOS 26.7.4, PyTorch
 2.15.0).
+
+## Native heuristic and background replay (MTG-506)
+
+At `ad8b9dbaab`, the vector runner settled the built-in heuristic's turns
+inside the engine, retained compact decision annotations, and checked each
+finished deal on one of two replay threads. Each vector round batched the
+checkpoint decisions from all live slots. Slots drain after the final deal
+is seated, so the mean includes the smaller batches near the end.
+
+The panel used the same checkpoint bytes and 32 held-out trophy deals as
+MTG-497. The `native-v3` heuristic keeps its turn state for each game and its
+registration yields a new player-seed cohort. Replay and action parity compare
+arms within this panel. The historical rates below show the overall throughput
+change across revisions and cohorts.
+
+The Apple and L4 arms used one release build per host and one Torch CPU
+thread. The native extensions were `6a2d43d4d292…` on macOS and
+`558bb3a393d9…` on Linux. Each table row reports one run. For vector arms,
+other arena time is wall time minus synchronized forwards and includes any
+wait for replay at the end.
+The sum of replay-worker durations can overlap both gameplay and another
+worker. Scalar replay runs inline and has its own wall-time column.
+
+### M4 Max
+
+| Checkpoint | Arm | Games/hr | Wall (s) | Forward (s) | Other arena (s) | Replay (s) | Mean / max rows | Largest stage |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Trained `w160l8` | CPU scalar | 951 | 484.7 | 363.2 | 96.1 | 25.3 | 1.00 / 1 | Forward |
+| Trained `w160l8` | MPS vector-64 | 11,959 | 38.5 | 32.9 | 5.7 | 5.4 | 36.30 / 64 | Forward |
+| Trained `w160l8` | MLX vector-64 | 10,328 | 44.6 | 32.7 | 11.9 | 12.7 | 36.30 / 64 | Forward |
+| Seeded `w384l8` | CPU scalar | 1,153 | 399.8 | 303.9 | 74.4 | 21.5 | 1.00 / 1 | Forward |
+| Seeded `w384l8` | MPS vector-64 | 11,449 | 40.2 | 36.2 | 4.0 | 3.9 | 30.78 / 64 | Forward |
+| Seeded `w384l8` | MLX vector-64 | 13,429 | 34.3 | 30.3 | 4.0 | 4.1 | 30.78 / 64 | Forward |
+
+The trained MPS arm met the targets of 4,000 games/hour, 32 mean rows, and
+forward as the largest stage. It spent 85% of wall time in forwards and ran
+6.0× as many games/hour as the historical MPS-64 arm. The seeded MPS arm
+ran 6.1× as many.
+
+### RunPod L4
+
+The CUDA arms ran sequentially on one NVIDIA L4 with an AMD EPYC 9254 host,
+driver 595.112.07, and PyTorch 2.15.0+cu132.
+
+| Checkpoint | Arm | Games/hr | Wall (s) | Forward (s) | Other arena (s) | Replay (s) | Mean / max rows | Largest stage |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Trained `w160l8` | CUDA vector-64 float32 | 12,029 | 38.3 | 27.7 | 10.6 | 12.8 | 36.30 / 64 | Forward |
+| Trained `w160l8` | CUDA vector-64 bf16 | 8,413 | 54.8 | 43.6 | 11.2 | 10.8 | 35.89 / 64 | Forward |
+| Seeded `w384l8` | CUDA vector-64 float32 | 11,199 | 41.1 | 33.4 | 7.7 | 7.1 | 30.78 / 64 | Forward |
+| Seeded `w384l8` | CUDA vector-64 bf16 | 20,661 | 22.3 | 13.7 | 8.6 | 9.1 | 30.78 / 64 | Forward |
+
+Float32 delivered 3.3× historical CUDA throughput on both checkpoints. In
+the new panel, bf16 reduced throughput by 30% on the trained model and
+increased it by 85% on the seeded model.
+
+### Replay parity
+
+All 1,280 games passed replay. Against the scalar arms, every float32
+vector arm matched all 128 checkpoint action traces, pre-decision digests,
+final digests and scores for each checkpoint. The seeded bf16 arm also
+matched exactly. The trained bf16 arm matched all 128 scores, 109
+action-index traces and 111 game endings.
+
+The rental `mtg497-l4-5983ff37999e` ran under `--max-usd 5`. Etude recorded
+an estimated USD 0.11 at cleanup, and RunPod confirmed deletion at 02:21 UTC
+on 2026-11-28. The ten summaries, comparisons and replay receipts are under
+`.runs/eval-throughput/mtg506/`.
+
+The panel predates `c2db934c5`, which refreshed scalar cutoff diagnostics
+at close. The measured records retain the settled game outcome, and the
+pipeline fix updates the nested diagnostic context after play.
+
+### Provenance profile
+
+Matched 16-deal MPS profiles at `b69d28df7c` and `ad8b9dbaab` used the same
+release extension. Across 80 calls, cumulative time in
+`runtime_fingerprints` fell from 1.782 s to 0.027 s, and admission fell from
+1.980 s to 0.234 s. The profiles took 24.7 s and 28.6 s overall, including
+18.9 s and 21.8 s in forwards. Both replayed all 64 games and agreed on
+5,964 checkpoint actions, pre-decision digests and game endings.
 
 ## Workload
 

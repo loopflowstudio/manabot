@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Iterator, Sequence
+from copy import deepcopy
 import json
 from pathlib import Path
+from threading import Event
 from typing import Any, Literal
 
 from etude.checkpoints import CheckpointRef
@@ -30,19 +32,25 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
 from manabot.eval import agents as agent_module, vector as vector_runner
+from manabot.eval.admission import register_anchor
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import build, local_forward
 from manabot.eval.card_query import CardSelection, audit, card_data, card_db
-from manabot.eval.pairing import PairingSpec, play_pairing
+from manabot.eval.evaluate import registration_source_paths, source_digest
+from manabot.eval.pairing import PairingSpec, admit_pairing, play_pairing
 from manabot.eval.vector import LocalMatches, play_pairings
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.infra.identity import file_sha256
+from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.policy.prepare import Prepared
-from manabot.sim.heuristic import heuristic_source_paths
+from manabot.sim.frames import build_viewer_frame
+from manabot.sim.heuristic import HEURISTIC_VERSION, heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 from manabot.sim.replay import read_trace, replay_failure, replay_game
 import managym
-from managym.recording import GameRecord, RecordedVectorEnv
+from managym.experience import UNVERSIONED_CONTENT_HASH
+from managym.recording import GameRecord, RecordedVectorEnv, read_record
+from managym.replay import replay_failure_inputs, walk
 
 
 @pytest.fixture
@@ -137,9 +145,19 @@ def play_local(
 
 
 def _canonical_decisions(game: dict[str, Any]) -> list[dict[str, Any]]:
-    """Deterministic per-decision fields independent of wall-clock latency."""
+    """Deterministic evidence shared by the scalar and vector runners."""
     return [
-        {k: v for k, v in decision.items() if k != "latency_seconds"}
+        {
+            k: v
+            for k, v in decision.items()
+            if k
+            not in {
+                "latency_seconds",
+                "frame_sha256",
+                "chosen_offer",
+                "action_space_kind",
+            }
+        }
         for decision in game["decisions"]
     ]
 
@@ -179,7 +197,13 @@ def _strip_record_digests(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         {
             k: v
             for k, v in row.items()
-            if k not in {"evidence_sha256", "evidence_bytes", "trace_sha256"}
+            if k
+            not in {
+                "evidence_sha256",
+                "evidence_bytes",
+                "trace_sha256",
+                "replay_sha256",
+            }
         }
         for row in rows
     ]
@@ -222,19 +246,69 @@ def test_slot_load_fresh_explicit_seed_matches_scalar_reset() -> None:
             "truncated": np.zeros(2, dtype=np.uint8),
         }
         vector.set_observation_layout(state, "error", layout=space.layout)
-        vector.reset_each_into_buffers([setup_a, setup_a], seeds=[11, 22])
+        policies = [("agent", "heuristic:64"), ("heuristic:64", "agent")]
+        vector.reset_each_into_buffers(
+            [setup_a, setup_a], seeds=[11, 22], player_policies=policies
+        )
+        assert vector.current_agent_indices() == [0, 1]
+        [_, swapped] = vector.snapshot_slots([False, True])
+        assert swapped is not None
+        [restored] = vector.load_slots_into_buffers(
+            [managym.SlotLoad.snapshot(0, swapped)]
+        )
+        assert restored.acting_player == 1
+        assert vector.game_inputs(0).player_policies == policies[1]
 
         explicit_seed = 777_123
         loaded = vector.load_slots_into_buffers(
             [managym.SlotLoad.fresh(1, setup_b, seed=explicit_seed)]
         )
         assert len(loaded) == 1 and loaded[0].seed == explicit_seed
-        assert vector.current_game_seeds() == [11, explicit_seed]
+        assert vector.current_game_seeds() == [22, explicit_seed]
         assert vector.games[1].seed == explicit_seed
+        assert vector.games[1].player_policies is None
 
         scalar = managym.Env(seed=explicit_seed)
         scalar.reset(setup_b)
         assert vector.state_digests([False, True])[1] == scalar.state_digest()
+        raw = vector.decision_observations([False, True])[1]
+        assert raw is not None
+        code_root = vector_runner.CodeDecisionEnv(raw, vector, 1)._engine
+        assert code_root.state_digest() == scalar.state_digest()
+    finally:
+        vector.close()
+
+
+def test_swapped_native_seats_survive_vector_failure_snapshot(tmp_path: Path) -> None:
+    setup = EnvMatch(_allies_lessons_matchup().match(0)).to_rust()
+    space = ObservationSpace(ObservationConfig())
+    journal = tmp_path / "games.jsonl"
+    vector = RecordedVectorEnv(
+        num_envs=2, seed=123, record_fraction=1.0, journal_path=journal
+    )
+    try:
+        state = {
+            "rewards": np.zeros(2, dtype=np.float64),
+            "terminated": np.zeros(2, dtype=np.uint8),
+            "truncated": np.zeros(2, dtype=np.uint8),
+        }
+        vector.set_observation_layout(state, "error", layout=space.layout)
+        pairs = [("agent", "heuristic:64"), ("heuristic:64", "agent")]
+        vector.reset_each_into_buffers([setup, setup], player_policies=pairs)
+        assert vector.current_player_policies() == pairs
+        assert [game.player_policies for game in read_record(journal).games] == pairs
+
+        vector.step_isolated_into_buffers([0, 999_999])
+        assert vector.get_last_info()[1]["game_error_seat"] == 1
+        snapshot = GameRecord.model_validate_json(
+            vector.snapshot().model_dump_json(by_alias=True)
+        )
+        snapshot.boundary = None  # Explicit diagnostic from the isolated call.
+        healthy, rejected = replay_failure_inputs(snapshot)
+        assert healthy["status"] == "advanced"
+        assert rejected["status"] == "failed"
+        assert rejected["at_retained_failure"] is True
+        assert rejected["matches_binding"] is True
     finally:
         vector.close()
 
@@ -251,7 +325,9 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
     ref = _fixture_checkpoint(tmp_path, 19, space)
     candidate = checkpoint_player(ref)
     heuristic = Code(
-        name="heuristic", source=heuristic_source_paths(), config={"max_actions": 64}
+        name="heuristic",
+        source=heuristic_source_paths(),
+        config={"max_actions": 64, "version": HEURISTIC_VERSION},
     )
 
     deals = (123, 124)
@@ -305,6 +381,8 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         elapsed_per_round = 0.1
         previous_forwards = 0
         original_step = RecordedVectorEnv.step_isolated_into_buffers
+        replay_started = Event()
+        stepped_during_replay = Event()
 
         def spy_step(
             self: RecordedVectorEnv,
@@ -327,22 +405,33 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
                 recover_capacity,
                 annotations=annotations,
             )
+            if replay_started.is_set():
+                stepped_during_replay.set()
 
         monkeypatch.setattr(RecordedVectorEnv, "step_isolated_into_buffers", spy_step)
-        finalize = vector_runner.finalize_match
-        replay_pause = 0.0
-        steps_at_settlement: list[int] = []
 
-        def delayed_finalize(active_match: vector_runner.ActiveMatch) -> Result:
-            nonlocal replay_pause
-            replay_pause += 90.0
-            steps_at_settlement.append(len(observed_active_counts))
-            return finalize(active_match)
+        def unexpected_projection(
+            self: RecordedVectorEnv, active: list[bool]
+        ) -> list[managym.Observation | None]:
+            pytest.fail(
+                "checkpoint and native seats must not request detached observations"
+            )
 
-        # The first completed deal's replay takes longer than the game budget.
-        # Other live legs should continue once the coordinator resumes stepping.
-        monkeypatch.setattr(vector_runner, "monotonic", lambda: clock + replay_pause)
-        monkeypatch.setattr(vector_runner, "finalize_match", delayed_finalize)
+        monkeypatch.setattr(
+            RecordedVectorEnv,
+            "decision_observations",
+            unexpected_projection,
+            raising=False,
+        )
+        verify = vector_runner.finalize_settled_cell
+
+        def overlapping_replay(*args: Any, **kwargs: Any) -> Any:
+            replay_started.set()
+            assert stepped_during_replay.wait(timeout=10), "stepping waited for replay"
+            return verify(*args, **kwargs)
+
+        monkeypatch.setattr(vector_runner, "monotonic", lambda: clock)
+        monkeypatch.setattr(vector_runner, "finalize_settled_cell", overlapping_replay)
         reads = 0
         read_checkpoint = agent_module.read_checkpoint_inputs
 
@@ -380,7 +469,7 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
             output_dir=vector_root,
         )
         assert len(yielded) == 2
-        assert steps_at_settlement[0] < len(observed_active_counts)
+        assert stepped_during_replay.is_set()
 
         vector_results: dict[str, Result] = {}
         for match, outcome in yielded:
@@ -389,7 +478,8 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
             active.store(match, outcome)
 
     assert reads == 1
-    assert max(forwards_per_step) == 1
+    assert set(forwards_per_step) == {1}
+    assert batch_sizes == observed_active_counts
     # Pre-collated batches carried more than one row.
     assert max(batch_sizes) > 1
     # With eight legs, all six slots start full and only drain after the queue empties.
@@ -397,7 +487,7 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
     assert observed_active_counts == sorted(observed_active_counts, reverse=True)
 
     charged_seconds = 0.0
-    # Exact trace, Command, digest, score, behaviour and card parity per deal.
+    # Each vector commitment corresponds to the checkpoint's scalar choice.
     for match in matches:
         serial_res = serial_results[match.key]
         vector_res = vector_results[match.key]
@@ -419,7 +509,52 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         assert len(vector_games) == len(serial_games) == 4
         for s_game, v_game in zip(serial_games, vector_games, strict=True):
             charged_seconds += v_game["execution_seconds"]
-            assert _canonical_game_summary(v_game) == _canonical_game_summary(s_game)
+            scalar = s_game["record"]["games"][0]
+            native = v_game["record"]["games"][0]
+            indices = [
+                i
+                for i, d in enumerate(s_game["decisions"])
+                if d["player_id"] == "candidate"
+            ]
+            assert native["actions"] == [scalar["actions"][i] for i in indices]
+            assert native["digests"] == [scalar["digests"][i] for i in indices]
+            assert native["end"] == scalar["end"]
+            assert v_game["winner"] == s_game["winner"]
+            assert all(d["player_id"] == "candidate" for d in v_game["decisions"])
+            expected_fields = {
+                "actor",
+                "revision",
+                "player_id",
+                "player_seed",
+                "player_decision_ordinal",
+                "policy_rng_seed",
+                "latency_seconds",
+            }
+            for index, decision in zip(
+                indices, walk(GameRecord.model_validate(v_game["record"])), strict=True
+            ):
+                assert decision.annotation is not None
+                assert decision.annotation.extra["evaluation"].keys() == expected_fields
+                assert (
+                    v_game["decisions"][decision.index]["command"]["offer_id"]
+                    == decision.chosen
+                )
+                frame = build_viewer_frame(
+                    decision.observation,
+                    match_id=s_game["match_id"],
+                    revision=index,
+                    content_hash=UNVERSIONED_CONTENT_HASH,
+                    asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
+                )
+                assert (
+                    canonical_sha256(frame)
+                    == s_game["decisions"][index]["frame_sha256"]
+                )
+            expected_policies = [
+                "agent" if player == "candidate" else "heuristic:64"
+                for player in v_game["seat_players"]
+            ]
+            assert v_game["record"]["player_policies"] == expected_policies
             if v_game["seat_players"][0] == "candidate":
                 assert v_game["match_hypers"]["mana_payment"] == ["auto", "manual"]
                 assert v_game["match_hypers"]["mana_floats"] == ["usable", "off"]
@@ -439,12 +574,174 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         len(observed_active_counts) * elapsed_per_round
     )
 
+    altered = deepcopy(vector_games[0]["record"])
+    first = altered["games"][0]["annotations"][0]["extra"]["evaluation"]
+    first["actor"] = 1 - first["actor"]
+    first["frame_sha256"] = "0" * 64
+    receipt, _ = replay_game(altered)
+    assert receipt.actor_mismatches == receipt.frame_mismatches == 1
+
     with card_db("vector-parity", track_vector) as db:
         data = card_data(db, CardSelection(experiment="vector-parity"))
         assert data.games == 16 and data.cards
         checked = audit(db, track_vector)
         assert checked.games == 8
         assert checked.problems == ()
+
+
+def test_registered_code_opens_once_per_leg_in_both_runners(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cpu_eval: None
+) -> None:
+    matchup = _allies_lessons_matchup()
+    ref = _fixture_checkpoint(tmp_path, 19, ObservationSpace(ObservationConfig()))
+    candidate = checkpoint_player(ref)
+    spec = PairingSpec(
+        matchup=matchup, deal=123, matchup_mode="cross", game_seconds=60, arena="code"
+    )
+    builtin = Code(name="heuristic", config={"version": HEURISTIC_VERSION})
+    candidate_registration = admit_pairing(
+        Match(players=(candidate, builtin), games=4), [None, None], spec
+    ).request.candidate
+    registration = register_anchor(
+        candidate_registration, "random", player_id="opponent"
+    )
+    registration = registration.model_copy(
+        update={"source_sha256": source_digest(registration_source_paths(registration))}
+    )
+    registered = Code(
+        name="random", config={"registration": registration.model_dump(mode="json")}
+    )
+    match = Match(players=(candidate, registered), games=4)
+    seeds: list[int] = []
+    build_code_player = agent_module.build_code_player
+
+    def open_code(
+        registration: agent_module.PlayerRegistration, *, seed: int
+    ) -> agent_module.CodePlayer:
+        seeds.append(seed)
+        return build_code_player(registration, seed=seed)
+
+    monkeypatch.setattr(agent_module, "build_code_player", open_code)
+    forward = load(ref)
+    code = build(registered, {})
+    serial_root, vector_root = tmp_path / "serial", tmp_path / "vector"
+    monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(serial_root))
+    play_pairing(
+        match,
+        [forward, code],
+        matchup=matchup,
+        deal=spec.deal,
+        matchup_mode="cross",
+        game_seconds=spec.game_seconds,
+        arena=spec.arena,
+    )
+    assert len(seeds) == 4
+    [(_, result)] = play_local(
+        LocalMatches([(match, [local_forward(forward), code])]),
+        lambda _: spec,
+        slots=4,
+        output_dir=vector_root,
+    )
+    assert isinstance(result, Result), result
+    assert seeds[:4] == seeds[4:]
+    trace = Path("arena") / match.key / "games" / "candidate__opponent.jsonl"
+    for serial, vector in zip(
+        read_trace(serial_root / trace), read_trace(vector_root / trace), strict=True
+    ):
+        assert vector["record"]["player_policies"] == ["agent", "agent"]
+        assert _canonical_game_summary(vector) == _canonical_game_summary(serial)
+
+    choose = vector_runner.choose_code_action
+    failing_slot = None
+
+    def fail_one_code_choice(
+        choice: vector_runner.GameChoice,
+        env: vector_runner.CodeDecisionEnv,
+        *,
+        seed: int,
+        space: ObservationSpace,
+    ) -> tuple[int, float]:
+        nonlocal failing_slot
+        if failing_slot is None:
+            failing_slot = env.slot
+            env._engine.step(999_999)
+        return choose(choice, env, seed=seed, space=space)
+
+    monkeypatch.setattr(vector_runner, "choose_code_action", fail_one_code_choice)
+    failure_root = tmp_path / "code-failure"
+    [(_, result)] = play_local(
+        LocalMatches([(match, [uniform_logits, code])]),
+        lambda _: spec,
+        slots=4,
+        output_dir=failure_root,
+    )
+    assert isinstance(result, Result), result
+    rows = result.tables["plays"]
+    assert {row["game"] for row in rows if not row["valid"]} == {failing_slot}
+    assert all(row["score"] is None for row in rows if not row["valid"])
+    games = read_trace(failure_root / trace)
+    [failed] = [game for game in games if game["failure"]]
+    assert failed["failed_player_id"] == "opponent"
+    record = GameRecord.model_validate(failed["record"])
+    assert (
+        record.error is None and record.error_class is None and record.traceback is None
+    )
+    assert record.operation == "step"
+    assert record.execution_outcome == "last_command_succeeded"
+    assert not record.needs_reproduction
+    metadata = record.context["evaluation"]
+    assert isinstance(metadata, dict)
+    assert metadata["termination_reason"] == "crash"
+    assert metadata["failed_player_id"] == "opponent"
+    assert metadata["failure"].startswith(f"{metadata['error_class']}: ")
+    assert metadata["failure_trace"]
+    [inputs] = record.games
+    end = inputs.end
+    assert end is not None and end.status == "interrupted" and end.reason == "crash"
+    assert end.digest is not None and end.failure is None
+    assert "terminated" not in metadata and "winner" not in metadata
+    assert inputs.committed == len(inputs.actions)
+    assert replay_game(failed)[0].passed
+
+    def broken_code_choice(
+        choice: vector_runner.GameChoice,
+        env: vector_runner.CodeDecisionEnv,
+        *,
+        seed: int,
+        space: ObservationSpace,
+    ) -> tuple[int, float]:
+        raise RuntimeError("broken code player")
+
+    monkeypatch.setattr(vector_runner, "choose_code_action", broken_code_choice)
+    with pytest.raises(RuntimeError, match="broken code player"):
+        play_local(
+            LocalMatches([(match, [uniform_logits, code])]),
+            lambda _: spec,
+            slots=4,
+            output_dir=tmp_path / "broken-code",
+        )
+
+
+@pytest.mark.parametrize("version", [None, "native-v2"])
+def test_heuristic_build_and_pairing_require_the_current_version(
+    tmp_path: Path, version: str | None
+) -> None:
+    config = {} if version is None else {"version": version}
+    heuristic = Code(name="heuristic", config=config)
+    with pytest.raises(ValueError, match="requires version 'native-v3'"):
+        build(heuristic, {})
+
+    ref = _fixture_checkpoint(tmp_path, 19, ObservationSpace())
+    match = Match(players=(checkpoint_player(ref), heuristic), games=4)
+    spec = PairingSpec(
+        matchup=_allies_lessons_matchup(),
+        deal=123,
+        matchup_mode="cross",
+        game_seconds=60,
+        arena="version",
+    )
+    with pytest.raises(ValueError, match="requires version 'native-v3'"):
+        admit_pairing(match, [None, None], spec)
 
 
 def test_vector_runner_matches_play_pairing_with_gru_memory_and_blanking(
@@ -532,7 +829,9 @@ def test_vector_runner_isolates_native_crash_and_keeps_other_legs_valid(
     ref = _fixture_checkpoint(tmp_path, 31, space)
     candidate = checkpoint_player(ref)
     heuristic = Code(
-        name="heuristic", source=heuristic_source_paths(), config={"max_actions": 64}
+        name="heuristic",
+        source=heuristic_source_paths(),
+        config={"max_actions": 64, "version": HEURISTIC_VERSION},
     )
     matches = [
         Match(players=(candidate, heuristic), games=4, config={"deal": deal})
@@ -613,6 +912,7 @@ def test_vector_runner_isolates_native_crash_and_keeps_other_legs_valid(
     )
     failed_leg = next(g for g in crashed_games if g["leg"] == 1)
     assert failed_leg["failure"] is not None
+    assert failed_leg["record"]["games"][0]["frame"] is not None
     assert (
         vector_root
         / "arena"
@@ -636,7 +936,9 @@ def test_vector_runner_isolates_admission_and_checkpoint_failures(
     ref = _fixture_checkpoint(tmp_path, 41, space)
     candidate = checkpoint_player(ref)
     heuristic = Code(
-        name="heuristic", source=heuristic_source_paths(), config={"max_actions": 64}
+        name="heuristic",
+        source=heuristic_source_paths(),
+        config={"max_actions": 64, "version": HEURISTIC_VERSION},
     )
 
     # 1. Invalid match yields Exception without breaking sibling valid match.
@@ -739,6 +1041,71 @@ def test_vector_runner_isolates_admission_and_checkpoint_failures(
         )
 
 
+def test_vector_runner_yields_replay_error_and_joins_running_replay_on_close(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cpu_eval: None
+) -> None:
+    checkpoint = _fixture_checkpoint(tmp_path, 57, ObservationSpace())
+    heuristic = Code(name="heuristic", config={"version": HEURISTIC_VERSION})
+    matches = [
+        Match(
+            players=(checkpoint_player(checkpoint), heuristic),
+            games=4,
+            config={"deal": i},
+        )
+        for i in (1, 2)
+    ]
+    matchup = _allies_lessons_matchup()
+    error = OSError("cannot retain replay evidence")
+    release = Event()
+    finished = Event()
+    finalize = vector_runner.finalize_match
+
+    def spec_for(match: Match) -> PairingSpec:
+        return PairingSpec(
+            matchup=matchup,
+            deal=int(match.config["deal"]),
+            matchup_mode="cross",
+            game_seconds=60,
+            max_commands=1,
+            arena="fixture-replay-close",
+        )
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        replaying = asyncio.Event()
+
+        def finalize_one(active_match: vector_runner.ActiveMatch) -> Result:
+            if active_match.match == matches[0]:
+                raise error
+            loop.call_soon_threadsafe(replaying.set)
+            assert release.wait(timeout=10), "replay was never released"
+            result = finalize(active_match)
+            finished.set()
+            return result
+
+        monkeypatch.setattr(vector_runner, "finalize_match", finalize_one)
+        source = LocalMatches(
+            [(match, [uniform_logits, build(heuristic, {})]) for match in matches]
+        )
+        stream = play_pairings(source, spec_for, slots=8, output_dir=tmp_path)
+        closing: asyncio.Future[None] | None = None
+        try:
+            assert await anext(stream) == (matches[0], error)
+            await asyncio.wait_for(replaying.wait(), timeout=10)
+            closing = asyncio.ensure_future(stream.aclose())
+            await asyncio.sleep(0)
+            assert not closing.done()
+        finally:
+            release.set()
+            if closing is None:
+                await stream.aclose()
+            else:
+                await closing
+
+    asyncio.run(run())
+    assert finished.is_set()
+
+
 def test_vector_runner_bounds_deferred_layouts_before_play(
     tmp_path: Path,
     cpu_eval: None,
@@ -747,7 +1114,7 @@ def test_vector_runner_bounds_deferred_layouts_before_play(
     different_layout = _fixture_checkpoint(
         tmp_path, 52, ObservationSpace(ObservationConfig(max_actions=32))
     )
-    heuristic = Code(name="heuristic")
+    heuristic = Code(name="heuristic", config={"version": HEURISTIC_VERSION})
     matches = [
         Match(
             players=(checkpoint_player(ref), heuristic),
@@ -794,6 +1161,117 @@ def test_vector_runner_bounds_deferred_layouts_before_play(
     assert {key for key, _ in settled} == {match.key for match in matches}
 
 
+@pytest.mark.parametrize("fail_last_opening", [False, True])
+def test_vector_runner_reuses_idle_vector_after_waiting_for_replay(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cpu_eval: None,
+    fail_last_opening: bool,
+) -> None:
+    ref = _fixture_checkpoint(tmp_path, 19, ObservationSpace())
+    heuristic = Code(name="heuristic", config={"version": HEURISTIC_VERSION})
+    matches = [
+        Match(players=(checkpoint_player(ref), heuristic), games=4, config={"deal": i})
+        for i in (10, 11)
+    ]
+    source = LocalMatches(
+        [(match, [uniform_logits, build(heuristic, {})]) for match in matches]
+    )
+    release = Event()
+    finalize = vector_runner.finalize_match
+    open_vector = vector_runner.open_vector
+    load_slots = RecordedVectorEnv.load_slots_into_buffers
+    opened = []
+    loads = 0
+
+    def load_with_optional_opening_failure(
+        vector: RecordedVectorEnv,
+        requests: Sequence[managym.SlotLoad],
+        *,
+        isolated: bool = False,
+    ) -> list[managym.SlotLoadResult]:
+        nonlocal loads
+        loads += 1
+        if fail_last_opening and loads == 3:
+            native = vector.native
+
+            class FailedOpeningReceipt:
+                def __getattr__(self, name: str) -> Any:
+                    return getattr(native, name)
+
+                def get_last_info(self) -> list[dict[str, object]]:
+                    if loads != 3:
+                        return native.get_last_info()
+                    return [
+                        {
+                            "game_error": "stalled opening",
+                            "game_error_class": "AgentError",
+                        }
+                    ]
+
+                def current_agent_indices(self) -> list[int]:
+                    return [-1] if loads == 3 else native.current_agent_indices()
+
+            monkeypatch.setattr(vector, "native", FailedOpeningReceipt())
+        return load_slots(vector, requests, isolated=isolated)
+
+    def observe_open(
+        num_envs: int, space: ObservationSpace
+    ) -> tuple[RecordedVectorEnv, dict[str, np.ndarray]]:
+        vector, buffers = open_vector(num_envs, space)
+        opened.append(vector)
+        return vector, buffers
+
+    def spec_for(match: Match) -> PairingSpec:
+        return PairingSpec(
+            matchup=_allies_lessons_matchup(),
+            deal=int(match.config["deal"]),
+            matchup_mode="cross",
+            game_seconds=60,
+            max_commands=1,
+            arena="fixture-replay-capacity",
+        )
+
+    async def run() -> None:
+        loop = asyncio.get_running_loop()
+        first_replaying = asyncio.Event()
+
+        def hold_first(active_match: vector_runner.ActiveMatch) -> Result:
+            if active_match.match == matches[0]:
+                loop.call_soon_threadsafe(first_replaying.set)
+                assert release.wait(timeout=10), "first replay was never released"
+            return finalize(active_match)
+
+        async def consume() -> list[Result | Exception]:
+            return [
+                result
+                async for _, result in play_pairings(
+                    source, spec_for, slots=1, output_dir=tmp_path
+                )
+            ]
+
+        monkeypatch.setattr(vector_runner, "open_vector", observe_open)
+        monkeypatch.setattr(vector_runner, "finalize_match", hold_first)
+        monkeypatch.setattr(
+            RecordedVectorEnv,
+            "load_slots_into_buffers",
+            load_with_optional_opening_failure,
+        )
+        playing = asyncio.create_task(consume())
+        try:
+            await asyncio.wait_for(first_replaying.wait(), timeout=10)
+            assert len(opened) == 1 and not opened[0]._closed
+        finally:
+            release.set()
+            results = await playing
+        assert len(results) == 2 and all(
+            isinstance(result, Result) for result in results
+        )
+        assert len(opened) == 1 and opened[0]._closed
+
+    asyncio.run(run())
+
+
 def test_vector_runner_layout_covers_shared_settings_and_allows_seat_mana(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -807,7 +1285,7 @@ def test_vector_runner_layout_covers_shared_settings_and_allows_seat_mana(
         checkpoint_player(_fixture_checkpoint(tmp_path, seed, space))
         for seed, space in enumerate((manual, auto, first_legal), start=61)
     ]
-    heuristic = Code(name="heuristic")
+    heuristic = Code(name="heuristic", config={"version": HEURISTIC_VERSION})
     first = Match(players=(manual_player, heuristic), games=4, config={"deal": 1})
     compatible = Match(
         players=(auto_player, manual_player), games=4, config={"deal": 2}
@@ -879,7 +1357,7 @@ def test_vector_runner_drains_checkpoint_failures_before_backfill(
     failed_player = checkpoint_player(broken_ref)
     healthy_player = checkpoint_player(healthy_ref)
     deferred_player = checkpoint_player(deferred_ref)
-    heuristic = Code(name="heuristic")
+    heuristic = Code(name="heuristic", config={"version": HEURISTIC_VERSION})
     opponent = build(heuristic, {})
     error = ForwardError(broken_ref.key, "checkpoint unavailable")
     broken_calls = 0

@@ -141,6 +141,8 @@ pub struct Env {
     game: Option<Game>,
     pub(crate) heuristics: [Option<Box<Heuristic>>; 2],
     player_policies: [PlayerPolicy; 2],
+    // The chooser at the failing operation, even if a step already advanced state.
+    pub(super) gameplay_seat: Option<usize>,
     // Observation::for_player deliberately omits events. Built-in index stepping
     // must reuse the live projection's events, especially combat declarations.
     heuristic_events: Vec<EventData>,
@@ -152,6 +154,7 @@ pub struct Env {
     drained_generation: Option<u64>,
     pub(crate) record_terminal: bool,
     capture: Option<CaptureMode>,
+    capture_choices: bool,
     retained_exposure: Vec<String>,
     skip_trivial: bool,
     decision_memory_enabled: bool,
@@ -249,6 +252,7 @@ impl Env {
             heuristic_events: Vec::new(),
             decision_events: false,
             player_policies: [PlayerPolicy::Agent; 2],
+            gameplay_seat: None,
             provenance: None,
             reset_setup: None,
             collect_statistics: false,
@@ -256,6 +260,7 @@ impl Env {
             drained_generation: None,
             record_terminal: false,
             capture: None,
+            capture_choices: false,
             retained_exposure: Vec::new(),
             skip_trivial,
             decision_memory_enabled: false,
@@ -309,7 +314,16 @@ impl Env {
         &mut self,
         player_configs: impl Into<GameSetup>,
     ) -> Result<(Observation, InfoDict), AgentError> {
-        let mut player_configs = player_configs.into();
+        self.prepare_root(player_configs.into(), self.player_policies)?;
+        self.open_game()
+    }
+
+    /// Admit the setup and retire the previous game before attempting gameplay.
+    pub(super) fn prepare_root(
+        &mut self,
+        mut player_configs: GameSetup,
+        player_policies: [PlayerPolicy; 2],
+    ) -> Result<(), AgentError> {
         if player_configs.len() != 2 {
             return Err(AgentError(format!(
                 "expected exactly 2 player configs, got {}",
@@ -339,24 +353,37 @@ impl Env {
                 }
             }
         }
-        let _scope = self.profiler.track("env_reset");
         let evidence = self.current_recording()?;
+        self.retained_exposure.extend(evidence.exposure);
+        self.retained_statistics.extend(evidence.statistics);
+        self.capture_generation = GAME_GENERATION.fetch_add(1, Ordering::Relaxed);
+        self.reset_seed = self.seed;
+        self.reset_setup = Some(Arc::new(player_configs));
+        self.player_policies = player_policies;
+        self.game = None;
+        self.provenance = None;
+        self.heuristics = [None, None];
+        self.gameplay_seat = None;
+        Ok(())
+    }
+
+    /// Construct the admitted game and play through to its first external choice.
+    pub(super) fn open_game(&mut self) -> Result<(Observation, InfoDict), AgentError> {
+        let _scope = self.profiler.track("env_reset");
+        let setup = self.reset_setup.as_ref().expect("admitted reset setup");
         let mut game = Game::construct(
-            &player_configs,
+            setup,
             self.seed,
             self.skip_trivial,
             self.capture,
             self.collect_statistics,
         )?;
-        self.retained_exposure.extend(evidence.exposure);
-        self.retained_statistics.extend(evidence.statistics);
         game.decision_memory_enabled =
             self.decision_memory_enabled || self.decision_memory_include_own;
         game.decision_memory_include_own = self.decision_memory_include_own;
-        let setup = Arc::new(player_configs);
-        self.reset_setup = Some(setup.clone());
+        game.committed_choices = self.capture_choices.then(Arc::default);
         self.provenance = Some(GameProvenance {
-            setup,
+            setup: setup.clone(),
             skip_trivial: self.skip_trivial,
             player_policies: self.player_policies,
             decision_memory: game.decision_memory_enabled,
@@ -366,10 +393,7 @@ impl Env {
         });
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
-        self.capture_generation = GAME_GENERATION.fetch_add(1, Ordering::Relaxed);
-        self.reset_seed = self.seed;
         self.game = Some(game);
-        self.heuristics = [None, None];
         drop(_scope);
         self.remember_heuristic_events(&observation);
         let (observation, _, _, _, info) =
@@ -403,9 +427,9 @@ impl Env {
         self.decision_events = true;
     }
 
-    pub(crate) fn replacement_root(&self, seed: u64) -> Self {
+    pub(crate) fn replacement_root(&self, seed: u64, policies: [PlayerPolicy; 2]) -> Self {
         let mut next = Self::new(seed, self.skip_trivial, self.profiler.is_enabled(), false)
-            .with_player_policies(self.player_policies)
+            .with_player_policies(policies)
             .with_decision_memory(self.decision_memory_enabled)
             .with_decision_memory_include_own(self.decision_memory_include_own);
         next.decision_events = self.decision_events;
@@ -477,6 +501,27 @@ impl Env {
         Ok(())
     }
 
+    /// Capture published choices from the opening onward, including native seats.
+    pub fn enable_choice_capture(&mut self) -> Result<(), AgentError> {
+        if self.game.is_some() {
+            return Err(AgentError(
+                "choice capture must be enabled before reset".into(),
+            ));
+        }
+        self.capture_choices = true;
+        Ok(())
+    }
+
+    /// Published choices in execution order as (acting seat, action index).
+    /// Each reset starts a fresh log. Forks leave the log with its source game.
+    pub fn committed_choices(&self) -> Result<&[(usize, usize)], AgentError> {
+        self.game
+            .as_ref()
+            .and_then(|game| game.committed_choices.as_ref())
+            .map(|choices| choices.as_slice())
+            .ok_or_else(|| AgentError("choice capture unavailable".into()))
+    }
+
     pub fn exposure_json(&self) -> Result<String, AgentError> {
         let game = self
             .game
@@ -531,21 +576,23 @@ impl Env {
 
     /// The current game's resolved disclosure; open before the first reset.
     pub fn decklists(&self) -> DecklistDisclosure {
-        self.game
-            .as_ref()
-            .map_or(Default::default(), |game| game.state.disclosure)
+        self.reset_setup
+            .as_deref()
+            .map_or_else(DecklistDisclosure::default, |setup| {
+                setup.decklists.resolve(self.reset_seed)
+            })
     }
 
     pub fn mana_payment(&self) -> [ManaPayment; 2] {
-        self.game
-            .as_ref()
-            .map_or([ManaPayment::Manual; 2], |game| game.mana_payment)
+        self.reset_setup
+            .as_deref()
+            .map_or([ManaPayment::Manual; 2], |setup| setup.mana_payment)
     }
 
     pub fn mana_floats(&self) -> [ManaFloats; 2] {
-        self.game
-            .as_ref()
-            .map_or([ManaFloats::Off; 2], |game| game.mana_floats)
+        self.reset_setup
+            .as_deref()
+            .map_or([ManaFloats::Off; 2], |setup| setup.mana_floats)
     }
 
     /// Setups this game was reset with; empty before the first reset.
@@ -608,14 +655,20 @@ impl Env {
         self
     }
 
+    #[cfg(any(feature = "python", test))]
+    pub(super) fn player_policies(&self) -> [PlayerPolicy; 2] {
+        self.player_policies
+    }
+
     /// A negative action requests one built-in decision. Mixed games then settle
     /// built-ins until an external chooser or terminal; two built-ins step once.
     pub fn step(
         &mut self,
         action: i64,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
+        self.gameplay_seat = self.current_agent_index();
         let chooser = self
-            .current_agent_index()
+            .gameplay_seat
             .ok_or_else(|| AgentError("no active chooser".into()))?;
         let external_action = action;
         let policy = self.player_policies[chooser];
@@ -694,6 +747,7 @@ impl Env {
             if terminated || truncated || chooser == external {
                 return Ok((obs, reward, terminated, truncated, info));
             }
+            self.gameplay_seat = Some(chooser);
             let action = self.player_policies[chooser].select_for_step(self, &obs)?;
             (obs, reward, terminated, truncated, info) = self.step_once(action)?;
             reward = -reward;
@@ -723,6 +777,7 @@ impl Env {
         let agent = action_space
             .player
             .ok_or_else(|| AgentError("no agent player in current action space".to_string()))?;
+        self.gameplay_seat = Some(agent.0);
         let action_count = action_space.actions.len();
         let out_of_bounds = || {
             AgentError(format!(
@@ -737,7 +792,7 @@ impl Env {
         let done = game.step(action)?;
         let mut result = finish_game_step(game, agent, done);
         // The profiler scope borrows self, so this cannot call remember_heuristic_events.
-        if self.decision_events || self.player_policies.contains(&PlayerPolicy::Heuristic) {
+        if self.decision_events || self.player_policies.iter().any(PlayerPolicy::is_heuristic) {
             self.heuristic_events.clone_from(&result.0.recent_events);
         }
         if done {
@@ -747,7 +802,7 @@ impl Env {
     }
 
     fn remember_heuristic_events(&mut self, observation: &Observation) {
-        if self.decision_events || self.player_policies.contains(&PlayerPolicy::Heuristic) {
+        if self.decision_events || self.player_policies.iter().any(PlayerPolicy::is_heuristic) {
             self.heuristic_events.clone_from(&observation.recent_events);
         }
     }
@@ -2046,6 +2101,58 @@ impl Env {
         }
         insert_info(info, "profiler", InfoValue::Map(out));
     }
+}
+
+#[cfg(test)]
+#[test]
+fn choice_capture_tracks_live_commitments_and_resets() {
+    let setup = || {
+        ["a", "b"]
+            .map(|name| {
+                PlayerConfig::new(
+                    name,
+                    BTreeMap::from([("Mountain".into(), 8), ("Gray Ogre".into(), 4)]),
+                )
+            })
+            .to_vec()
+    };
+    let mut env = Env::new(7, true, false, false)
+        .with_player_policies([PlayerPolicy::Random, PlayerPolicy::Agent]);
+    env.enable_choice_capture().unwrap();
+    env.reset(setup()).unwrap();
+    let opening = env.committed_choices().unwrap().to_vec();
+    assert!(!opening.is_empty());
+    assert!(opening.iter().all(|&(seat, _)| seat == 0));
+    assert_eq!(env.current_agent_index(), Some(1));
+    assert!(env.enable_choice_capture().is_err());
+    assert!(env.step(i64::MAX).is_err());
+    assert_eq!(env.committed_choices().unwrap(), opening);
+
+    let frame = env.semantic_decision_frame().unwrap();
+    let command = SemanticCommand {
+        command_id: "choice-capture".into(),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[0].id.0,
+        answers: vec![],
+        object_preconditions: vec![],
+    };
+    env.execute_semantic_command(&command).unwrap();
+    let mut expected = opening.clone();
+    expected.push((1, 0));
+    assert_eq!(env.committed_choices().unwrap(), expected);
+    assert!(env.execute_semantic_command(&command).is_err());
+    assert_eq!(env.committed_choices().unwrap(), expected);
+    assert!(env.fork().unwrap().committed_choices().is_err());
+    assert!(env
+        .snapshot()
+        .unwrap()
+        .restore(RestoreOptions::default())
+        .unwrap()
+        .committed_choices()
+        .is_err());
+
+    env.reset(setup()).unwrap();
+    assert_eq!(env.committed_choices().unwrap(), opening);
 }
 
 #[cfg(test)]

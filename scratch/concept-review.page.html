@@ -1,0 +1,161 @@
+<h1>Concept Review: MTG-506 — Vectorized Eval Host, Replay, and Heuristic Stepping</h1>
+
+<p><strong>Area reviewed:</strong> Whole-area post-build review at <code>64fa41b261</code> against
+freshly fetched <code>origin/main</code> (<code>606e79e90a</code>, also the checkout merge-base;
+MTG-497 stack parent at <code>aa124b0953</code>), superseding the Pass 7 review at
+<code>8cd847466d</code> after Pass 8 (<code>2192a34b3c</code>) added an independent committed-choice
+log, projected Replay stop coordinates, and preserved branching markers across
+<code>ForceAction</code> boundaries. Covers vectorized evaluation execution, per-seat native
+policies, isolated failure recording and diagnostic replay, and Academy Replay/Watch import of
+native-seat records across <code>managym</code> (<code>PlayerPolicy</code>, <code>Env</code>,
+<code>VectorEnv</code>/<code>SlotLoad</code>, <code>RecordedVectorEnv</code>,
+<code>GameRecord</code>/<code>GameEnd</code>/<code>GameFailure</code>,
+<code>RecordWalker</code>, <code>replay_failure_inputs</code>, <code>academy/watch</code>,
+<code>academy/server</code>) and <code>manabot</code> (<code>eval/agents</code>,
+<code>eval/pairing</code>, <code>eval/vector</code>, <code>sim/heuristic</code>,
+<code>sim/native_game</code>, <code>sim/evaluation_records</code>, <code>sim/replay</code>,
+<code>infra/provenance</code>).</p>
+
+<p><strong>What changed since <code>8cd847466d</code>:</strong> Pass 8 (<code>2192a34b3c</code>)
+resolved all three Pass 7 mismatches (F1–F3): (1) <code>Env.enable_choice_capture()</code> /
+<code>Env.committed_choices()</code> and <code>walk(..., capture_choices=True)</code> /
+<code>RecordWalker.choices()</code> decouple committed-choice recording from
+<code>CapturedCards</code> physical-card conservation telemetry, so <code>determinize</code> and
+<code>GameStateEdit.move_permanent</code> now import cleanly on native-seat records; (2)
+<code>import_record</code> stores <code>replace(stop, index=len(session.canonical_decisions))</code>
+in <code>RecordingImport</code> while keeping source-action offsets on
+<code>RecordWalker.stop</code>; (3) <code>project_native_record</code> carries
+<code>BRANCHING_INTERVENTIONS</code> across <code>restore()</code> onto the first affected choice
+(forced, settled, or external). Every domain concept in the area now aligns with the code.</p>
+
+<h2>Do domain concepts and code concepts line up?</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Domain concept</th>
+      <th>Code concept (at <code>64fa41b261</code>)</th>
+      <th>Aligned?</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Committed-choice transcript for expanding native-seat Replay</strong><br>Importing a native-seat record expands every committed <code>(actor, selected)</code> choice in execution order, including games with recorded counterfactual interventions (<code>determinize</code>, <code>game_state_edits</code>, <code>shuffle_libraries</code>, <code>reseed</code>, <code>force_action</code>) and without physical-card conservation or exposure JSON overhead.</td>
+      <td><code>Env.enable_choice_capture()</code> / <code>Env.committed_choices()</code> (<code>managym/src/agent/env.rs:505-523</code>) populated in <code>Game::finish_published_choice</code> (<code>managym/src/flow/tick.rs:60-70</code>) via copy-on-write <code>Arc&lt;Vec&lt;(usize, usize)&gt;&gt;</code> (kept across <code>rollback_snapshot</code>, omitted on search clones/forks/restored snapshots); exposed via <code>walk(..., capture_choices=True)</code> / <code>RecordWalker.choices()</code> (<code>managym/replay.py:172-182</code>) and consumed by <code>import_record</code> with <code>capture_cards=False</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned (Pass 7 F1 resolved; reversible API choice <code>1a</code> taken headless and recorded in <code>tests/public_api.json</code>).</td>
+    </tr>
+    <tr>
+      <td><strong>Divergence stop position in Academy Replay</strong><br>When a replayed record diverges partway through, Academy Replay's banner ("Stopped at decision N · saved recording only") names the decision boundary in <em>this Replay</em>, while <code>RecordWalker.stop.index</code> keeps source-record action offsets.</td>
+      <td><code>import_record</code> (<code>managym/academy/watch.py:574-576</code>) stores <code>RecordingImport(replace(stop, index=len(session.canonical_decisions)), replay.build_differs)</code>; <code>docs/academy.md:290</code> and <code>docs/engine-python.md:307</code> document each coordinate space.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned (Pass 7 F2 resolved).</td>
+    </tr>
+    <tr>
+      <td><strong>Branching-intervention markers across <code>ForceAction</code></strong><br>When a branching intervention (<code>reseed</code>, <code>determinize</code>, <code>shuffle_libraries</code>, <code>game_state_edits</code>) precedes a choice—forced, settled, or external—Replay marks that first affected choice as <code>branched</code>.</td>
+      <td><code>project_recorded_choice</code> takes explicit <code>branched: Sequence[str]</code> (<code>watch.py:589-641</code>); <code>project_native_record</code> accumulates branching ops in <code>pending_branches</code> during <code>restore()</code> and attaches/clears them on the next <code>apply_choice()</code> (<code>watch.py:661-701</code>).</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned (Pass 7 F3 resolved, including trailing <code>ForceAction</code> at <code>stop.index</code>).</td>
+    </tr>
+    <tr>
+      <td><strong>Native random RNG alignment &amp; Study root preservation</strong><br>Re-executing a native <code>random</code> seat keeps the rules RNG aligned with the verified game while preserving pre-draw Study roots and skipping RNG draws on <code>ForceAction</code> overrides.</td>
+      <td><code>GameSession._step_and_record</code> (<code>managym/academy/server.py:2356-2399</code>) clones <code>retained_root</code> before calling <code>self.env.random_action_index()</code> when <code>native_random=True</code>; <code>project_native_record</code> sets <code>native_random=False</code> for explicit <code>ForceAction</code> overrides.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned.</td>
+    </tr>
+    <tr>
+      <td><strong>Per-slot isolated native failures &amp; replay agreement</strong><br>Isolated vector failures (reset or step) prove that stream failed; strict batch exceptions leave per-stream outcome unknown; healthy and detached sibling slots behave identically with or without a journal.</td>
+      <td><code>GameFailure(operation, error_class, traceback)</code> hoisted by <code>GameRecord.for_game()</code>; <code>replay_failure_inputs</code> and <code>_replay_game_inputs</code> check <code>observed_failure</code> and treat boundaryless healthy/detached siblings like the journaled path.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned (Pass 5 finding resolved in Pass 6).</td>
+    </tr>
+    <tr>
+      <td><strong>Player-choice crash vs. native root-engine failure</strong><br>A native error inside a custom <code>CodeSeat</code> isolates to that leg, attributes the crash in evaluation metadata, and leaves the root <code>GameRecord</code> honest that the root <code>Env</code> did not fail.</td>
+      <td><code>PlayedRound.code_errors</code> → evaluation metadata crash fields + <code>GameEnd(status="interrupted", reason="crash")</code> with <code>execution_outcome="last_command_succeeded"</code> and <code>needs_reproduction=False</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned.</td>
+    </tr>
+    <tr>
+      <td><strong>Built-in heuristic identity, per-slot <code>player_policies</code>, compact evidence, background replay, &amp; process provenance</strong><br>Each slot owns its policy pair; <code>native-v3</code> never mixes with stored <code>native-v2</code> tournaments; vector annotations hold runner facts only; single-digest replay runs off the stepping loop; idle vectors survive replay backpressure; process identity caches once.</td>
+      <td><code>PlayerPolicy::Heuristic { max_actions }</code>; <code>SlotLoad.fresh</code> / <code>reset_each_into_buffers</code>; <code>require_heuristic_version</code> (ship-review choice <code>1a</code>); compact annotations (<code>2a</code>); <code>RecordWalker.run</code> direct path + 2-worker pool + idle-vector retention (<code>5dadfbe929</code>); cached <code>process_fingerprints()</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned (ship-review steer <code data-no-check>0b2a547d</code> settled <code>1a</code>, <code>2a</code>, and <code>4a</code>).</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Pass 7 → Pass 8 resolution: dedicated choice log and aligned Replay coordinates</h2>
+
+<p>Pass 8 closed all three conceptual gaps from the Pass 7 review without changing any stored
+<code>GameRecord</code> or Academy Replay schema:</p>
+
+<lf-component name="before-after">
+  <div slot="before">
+    <h4>Pass 7 (<code>6920b1e012</code>)</h4>
+    <ul>
+      <li><code>import_record</code> enabled <code>capture_cards=native_seats</code> and read <code>replay.cards().capture.exposure.choices</code>, breaking native-seat imports after <code>determinize</code> or <code>GameStateEdit.move_permanent</code> and serializing full card-exposure telemetry on every import.</li>
+      <li><code>RecordingImport</code> persisted external-action <code>replay.stop.index</code>, disagreeing with Replay's expanded decision count on divergence.</li>
+      <li><code>project_recorded_choice</code> read <code>decision.interventions</code> only, shifting or dropping <code>branched</code> across <code>ForceAction</code> boundaries.</li>
+    </ul>
+  </div>
+  <div slot="after">
+    <h4>Pass 8 (<code>64fa41b261</code>)</h4>
+    <ul>
+      <li><code>Game::finish_published_choice</code> appends <code>(actor, selected)</code> to an opt-in copy-on-write <code>Arc&lt;Vec&lt;(usize, usize)&gt;&gt;</code> only after <code>finish_action_step()?</code> succeeds; <code>import_record</code> reads <code>walk(record, capture_choices=native_seats).choices()</code> with <code>capture_cards=False</code>.</li>
+      <li><code>import_record</code> stores <code>replace(stop, index=len(session.canonical_decisions))</code> in <code>RecordingImport</code> while keeping external-action offsets on <code>RecordWalker.stop</code>.</li>
+      <li><code>project_native_record</code> carries <code>pending_branches</code> across <code>restore()</code> and attaches/clears them on the first affected choice (forced, settled, or external).</li>
+    </ul>
+  </div>
+</lf-component>
+
+<h3>Code evidence</h3>
+
+<p><strong>1. Lightweight opt-in committed-choice log on <code>Game</code> and <code>Env</code>, pushed only after rules execution reaches the next boundary:</strong></p>
+
+<lf-diff path="managym/src/flow/tick.rs" lines="52-72"></lf-diff>
+<lf-diff path="managym/src/agent/env.rs" lines="504-524"></lf-diff>
+
+<p><strong>2. <code>RecordWalker</code> choice capture (including cold-prefix rebuild on direct-path divergence) and Academy Replay projection:</strong></p>
+
+<lf-diff path="managym/replay.py" lines="160-185"></lf-diff>
+<lf-diff path="managym/academy/watch.py" lines="549-585"></lf-diff>
+<lf-diff path="managym/academy/watch.py" lines="644-722"></lf-diff>
+
+<h3>Failure and divergence boundary check</h3>
+
+<p>Direct probes at <code>64fa41b261</code> verified divergence handling across the new surfaces:</p>
+
+<ul>
+  <li><strong>Corrupt <code>digests[0]</code> or <code>digests[1]</code> on <code>("heuristic:64", "agent")</code>:</strong>
+    <code>RecordWalker</code> stops at <code>ReplayStop(status="diverged", index=0)</code> with 0
+    yielded external decisions; <code>replay.choices()</code> mirrors <code>self.env.committed_choices()</code>
+    (consistent with <code>replay.cards().capture.exposure.choices</code> on the post-reset
+    <code>Env</code>), and <code>project_native_record</code> returns immediately when
+    <code>replay.stop.status == "diverged" and not decisions</code> so Academy displays 0 decisions
+    with <code>record_stop.index == 0</code> and never surfaces an unverified opening choice.</li>
+  <li><strong><code>ForceAction</code> combined with diverged <code>digests[1]</code>, illegal <code>actions[1]</code>, or corrupt <code>end.digest</code> on <code>("random", "heuristic")</code>:</strong>
+    <code>import_record</code> imports the verified prefix cleanly (<code>count == 1</code>,
+    <code>stop == "diverged"</code>, <code>record_stop.index == 1</code>) with no mismatch or crash.</li>
+  <li><strong><code>execute_semantic_command</code> followed by built-in stepping on mixed seats:</strong>
+    <code>project_native_record</code> settles built-in turns only after integer commitments
+    (<code>isinstance(decision.commitment, int)</code>), matching <code>Env::commit_command</code>'s
+    non-settling semantics.</li>
+  <li><strong>Rollback and search-fork isolation:</strong>
+    <code>Game::rollback_snapshot</code> clones the <code>Arc</code> (preserving pre-transaction
+    choices via <code>Arc::make_mut</code> on copy-on-write), while <code>Game::clone</code>,
+    <code>Env::fork</code>, and <code>GameSnapshot::restore</code> leave
+    <code>committed_choices = None</code>.</li>
+</ul>
+
+<h2>Findings</h2>
+
+<p><strong>None.</strong> All three Pass 7 findings (F1–F3) are resolved, every domain concept in
+MTG-506's scope aligns with its code representation at <code>64fa41b261</code>, and
+<code>origin/main</code> has not moved since <code>606e79e90a</code>.</p>
+
+<p><em>Note on Pass 8's headless choice:</em> Pass 8 implemented the Pass 7 review's recommended
+option <code>1a</code> (additive <code>Env.enable_choice_capture()</code> /
+<code>Env.committed_choices()</code> and <code>walk(..., capture_choices=True)</code> /
+<code>RecordWalker.choices()</code>, recorded in <code>tests/public_api.json</code>). It is
+self-contained and additive; no open design questions remain for this Task.</p>

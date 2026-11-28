@@ -249,10 +249,13 @@ it is: **Training game**, one the training loop itself
 played, **Evaluation game**, one played afterwards to measure policies, or
 **Recorded game** for a record that says neither.
 
-Any game managym recorded opens this way with only `managym` installed: your
-own loop's ([Record games](engine-python.md#record-games)), a training run's,
-an evaluation's, or a private snapshot replay exported by
+Games managym recorded with forced-decision skipping enabled open with only
+`managym` installed. That includes your own loop's
+([Record games](engine-python.md#record-games)), a training run's, an
+evaluation's, or a private snapshot replay exported by
 `GameSnapshot.to_replay_json()` ([Save and restore game positions](engine-python.md#save-and-restore-game-positions)).
+Replay includes choices by built-in seats such as `heuristic:64` and `random`.
+Each choice opens from the seat that made it.
 A record holds the seed, both setups, the actions, and any recorded boundary
 interventions (such as library reshuffles, determinizations or counterfactual
 state edits), so
@@ -267,9 +270,9 @@ seat's stays tucked showing each card's name bar (hover or focus a tucked card
 to peek and inspect it, or use **Show hand / Tuck hand** on that seat's plate).
 Unchecking **Show both hands** switches to the acting view, which draws the
 non-acting seat's hidden cards as backs while keeping any rules-revealed cards
-face-up. Where the record
-changed or re-dealt the position before a recorded choice, the move list shows a neutral note
-in its place, such as **Branch · libraries reshuffled**, **Branch · hidden
+face-up. Where the record changed or re-dealt the position, the move list marks
+the first affected choice, including a built-in seat's forced choice, with a
+note such as **Branch · libraries reshuffled**, **Branch · hidden
 cards re-dealt** or **Branch · game state edited**, which jumps to that decision. Branch seeds stay private in
 either view.
 Replay runs no policy, loads no checkpoint, and never changes the file. Opening the same game again returns to the
@@ -283,6 +286,8 @@ A game does not have to be whole to open:
 |---|---|
 | **Interrupted · saved recording only** | The run stopped during the game. Every decision up to the last recorded one, then the reason it stopped. No winner is shown. |
 | **Stopped at decision N · saved recording only** | This engine did not reproduce the game from decision N: the digest differed, the recorded action was not offered, or the engine raised. Decisions before N are shown with the message; nothing after N is. |
+
+The stop number includes the built-in seats' choices shown in Replay.
 
 Neither can be continued, and no later board is invented. An opened recording
 from a file is read-only: it only plays saved data, even when its game never
@@ -1866,14 +1871,14 @@ holds private deal seeds; keep it private.
    **Open selected game**. A single game opens automatically.
 4. Use **Next**, **Previous**, or **Play** to follow choices, consequences and
    the result ([replay controls](#inspect-a-replay)). Academy re-executes the
-   game and checks its state digests without running the original players
-   again. Search outputs the evaluation recorded appear at each choice; what
-   it did not record is marked **not retained**.
+   game and checks its state digests. The engine reconstructs built-in choices,
+   including those played by the heuristic in vector trophy runs. Each
+   choice shows the acting seat's legal offers. Search outputs appear where
+   the evaluation recorded them. Other outputs are marked **not retained**.
 
 This needs only `managym`. Replaying does not require the original checkpoint.
 A game bound to an incompatible world must be opened with the build that
-recorded it, which the refusal names; opening never upgrades frozen evaluation
-evidence.
+recorded it, which the refusal names. Academy keeps the source file as written.
 
 Two kinds of evaluation game are command traces
 (`traces/<cell-id>.commands.jsonl.gz`) instead: every game of an evaluation

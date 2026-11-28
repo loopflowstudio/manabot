@@ -102,7 +102,11 @@ def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> Non
         )
 
 
-def test_replay_rejects_a_command_that_was_not_exactly_retained(tmp_path: Path) -> None:
+def test_replay_rejects_a_command_that_was_not_exactly_retained(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from manabot.sim import replay
+
     contract = arena_fixture()
     _, trace, _ = play_cell(
         key=contract.key,
@@ -112,11 +116,50 @@ def test_replay_rejects_a_command_that_was_not_exactly_retained(tmp_path: Path) 
         out_dir=tmp_path,
     )
     games = read_trace(Path(trace["path"]))
+    project = replay.audit_view
+    projections = 0
+
+    def project_once(
+        data: dict[str, Any], *, digest: str | None = None
+    ) -> dict[str, Any]:
+        nonlocal projections
+        projections += 1
+        return project(data, digest=digest)
+
+    monkeypatch.setattr(replay, "audit_view", project_once)
+    assert replay_games([games[0]["record"]]).passed
+    assert projections == 1
+
     games[0]["decisions"][0]["command"]["command_id"] = "fabricated"
     receipt = replay_games(games)
     assert not receipt.passed
     assert receipt.command_mismatches > 0
     assert receipt.trace_mismatches > 0
+
+
+def test_runtime_fingerprints_reuse_the_catalog_without_reusing_match_or_abi() -> None:
+    from manabot.env.match import Match
+    from manabot.env.observation import ObservationSpace
+    from manabot.infra.config import ObservationConfig
+    from manabot.infra.identity import canonical_sha256
+    from manabot.infra.provenance import process_fingerprints, runtime_fingerprints
+    from manabot.sim.matchup import selected_match
+    import managym
+
+    first = runtime_fingerprints()
+    hits = process_fingerprints.cache_info().hits
+    setup = selected_match().model_copy(update={"decklists": "closed"})
+    space = ObservationSpace(ObservationConfig(max_actions=64))
+    second = runtime_fingerprints(match_config=setup, observation_space=space)
+    assert process_fingerprints.cache_info().hits == hits + 1
+    game = managym.Env(seed=11, skip_trivial=True)
+    game.reset(Match(setup).to_rust())
+    content = game.content_pack_manifest()
+    assert first["content_manifest_sha256"] == second["content_manifest_sha256"]
+    assert second["content_manifest_sha256"] == canonical_sha256(content)
+    assert second["matchup"] == setup.model_dump()
+    for key in ("matchup_sha256", "observation_abi_sha256", "action_abi_sha256"):
+        assert first[key] != second[key]
 
 
 def selected_players():
@@ -589,12 +632,20 @@ def test_player_crash_is_an_interrupted_record(monkeypatch: pytest.MonkeyPatch) 
     assert replay.stop is not None and replay.stop.status == "interrupted"
 
 
-def test_runner_failure_after_terminal_step_voids_the_view_result() -> None:
+def test_runner_failure_after_terminal_step_voids_the_view_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from manabot.env.observation import ObservationSpace
+    from manabot.infra.config import ObservationConfig
     from manabot.sim.evaluation_records import audit_view
     from manabot.sim.matchup import selected_match
     from manabot.sim.native_game import execute_game
     from managym.recording import GameRecord
 
+    def cutoff_space() -> ObservationSpace:
+        return ObservationSpace(ObservationConfig(action_overflow="first-legal"))
+
+    monkeypatch.setattr("manabot.sim.native_game.ObservationSpace", cutoff_space)
     _, players = selected_players()
     game = dict(
         match_id="late-runner-failure",
@@ -614,6 +665,9 @@ def test_runner_failure_after_terminal_step_voids_the_view_result() -> None:
     end = GameRecord.model_validate(data).games[0].end
     assert end is not None and end.status == "complete"
     assert audit_view(data)["terminated"] is True
+    metadata = data["context"]["evaluation"]
+    cutoff_context = metadata["policy_action_cutoff"]["context"]["evaluation"]
+    assert cutoff_context["termination_reason"] == metadata["termination_reason"]
 
     data["context"]["evaluation"]["failure"] = "send failed"
     data["context"]["evaluation"]["termination_reason"] = "crash"

@@ -197,11 +197,14 @@ def replay_game(
     reduction: Reduction | None = None,
 ) -> tuple[ReplayReceipt, dict[str, Any] | None]:
     """Verify one game, optionally retaining native facts from the same replay."""
-    if is_record(game):
-        game = audit_view(game, digest=GameRecord.model_validate(game).sha256)
-    if "record" in game:
+    canonical = game if is_record(game) else game.get("record")
+    if canonical is not None:
+        record = GameRecord.model_validate(canonical)
+        original = audit_view(canonical, digest=record.sha256)
         return _replay_record(
-            game,
+            original if canonical is game else game,
+            record,
+            original,
             require_terminal=require_terminal,
             capture_cards=capture_cards,
             reduction=reduction,
@@ -223,14 +226,14 @@ def replay_game(
 
 def _replay_record(
     game: dict[str, Any],
+    record: GameRecord,
+    original: dict[str, Any],
     *,
     require_terminal: bool,
     capture_cards: bool,
     reduction: Reduction | None = None,
 ) -> tuple[ReplayReceipt, dict[str, Any] | None]:
-    record = GameRecord.model_validate(game["record"])
     counts = asdict(ReplayReceipt(games=1))
-    original = audit_view(game["record"])
     if evaluation_metadata(game) != record.context.get("evaluation"):
         counts["trace_mismatches"] += 1
     if "match_hypers" in game:
@@ -241,37 +244,44 @@ def _replay_record(
                 counts["trace_mismatches"] += 1
     if game["decisions"] != original["decisions"]:
         counts["trace_mismatches"] += 1
-    if game.get("game_trace_sha256") != record.sha256:
+    if game.get("game_trace_sha256") != original["game_trace_sha256"]:
         counts["trace_mismatches"] += 1
     walker = walk(record, capture_cards=capture_cards or reduction is not None)
     if reduction is not None:
         reduction.start(walker.game.players)
     for decision in walker:
         expected = game["decisions"][decision.index]
-        frame = build_viewer_frame(
-            decision.observation,
-            match_id=game["match_id"],
-            revision=decision.index,
-            content_hash=UNVERSIONED_CONTENT_HASH,
-            asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
-        )
-        if canonical_sha256(frame) != expected["frame_sha256"]:
-            counts["frame_mismatches"] += 1
-        if frame["projection"]["opponent"].get("hand"):
-            counts["private_exposures"] += 1
-        if build_command(frame, decision.chosen) != expected["command"]:
-            counts["command_mismatches"] += 1
+        if {"frame_sha256", "chosen_offer", "action_space_kind"} & expected.keys():
+            frame = build_viewer_frame(
+                decision.observation,
+                match_id=game["match_id"],
+                revision=decision.index,
+                content_hash=UNVERSIONED_CONTENT_HASH,
+                asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
+            )
+            if (
+                "frame_sha256" in expected
+                and canonical_sha256(frame) != expected["frame_sha256"]
+            ):
+                counts["frame_mismatches"] += 1
+            if frame["projection"]["opponent"].get("hand"):
+                counts["private_exposures"] += 1
+            if build_command(frame, decision.chosen) != expected["command"]:
+                counts["command_mismatches"] += 1
+            if (
+                "chosen_offer" in expected
+                and frame["offers"][decision.chosen] != expected["chosen_offer"]
+            ) or (
+                "action_space_kind" in expected
+                and frame["action_space"] != expected["action_space_kind"]
+            ):
+                counts["offer_mismatches"] += 1
         actor = int(decision.observation.agent.player_index)
         if (
             actor != expected["actor"]
             or game["seat_players"][actor] != expected["player_id"]
         ):
             counts["actor_mismatches"] += 1
-        if (
-            frame["offers"][decision.chosen] != expected["chosen_offer"]
-            or frame["action_space"] != expected["action_space_kind"]
-        ):
-            counts["offer_mismatches"] += 1
         counts["decisions"] += 1
         if reduction is not None:
             reduction.decision(decision)

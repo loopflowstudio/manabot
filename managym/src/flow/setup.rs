@@ -24,6 +24,7 @@ use crate::{
 #[cfg(test)]
 thread_local! {
     pub(crate) static CONSTRUCTIONS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    pub(crate) static FAIL_CONSTRUCTION: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
 }
 
 impl Game {
@@ -192,6 +193,7 @@ impl Game {
             skip_trivial_count: 0,
             skipped_priority_passes: 0,
             card_capture: None,
+            committed_choices: None,
             statistics: None,
             presentation: None,
             capture_drawing: None,
@@ -206,6 +208,11 @@ impl Game {
             }
             game.card_capture = capture.map(|mode| CardCapture::new(&game, initial.clone(), mode));
             game.capture_originals = initial.into_iter().map(|card| (card.copy, card)).collect();
+        }
+        #[cfg(test)]
+        if FAIL_CONSTRUCTION.get() == Some(seed) {
+            FAIL_CONSTRUCTION.set(None);
+            return Err(AgentError("stalled opening".into()));
         }
         game.tick()?;
         Ok(game)

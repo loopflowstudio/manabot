@@ -344,11 +344,22 @@ search/decision digest, fails.
 
 Both `managym.Env` and `managym.VectorEnv` accept a two-seat
 `player_policies` tuple. Each player policy is `"agent"` (external human, model
-or tool), `"random"` or `"heuristic"`. The default `("agent", "agent")`
+or tool), `"random"`, `"heuristic"`, or a capped heuristic `"heuristic:<N>"`
+(for example `"heuristic:64"`, restricting selection to the first `N` legal
+actions). The default `("agent", "agent")`
 surfaces both seats' decisions. The native published chooser selects the seat,
 including under control effects; built-ins receive only that chooser's live
 viewer observation. Player policies are separate from game/deck configuration
 and world identity.
+
+On `VectorEnv`, individual slots can also override the vector's default policy
+pair through `reset_each_into_buffers(..., player_policies=...)` and
+`SlotLoad.fresh(..., player_policies=...)`, allowing swapped seats such as
+`("agent", "heuristic:64")` and `("heuristic:64", "agent")` to run side by side
+in one batch ([batched slot loading](engine-python.md#batched-slot-loading-and-snapshots)).
+Omitting `player_policies` on a fresh load uses the `VectorEnv`'s default pair,
+never the slot's previous occupant; restoring a `GameSnapshot` keeps the
+snapshot's own policy pair.
 
 For example, step a batch with an external learner in seat 0 and the built-in
 heuristic in seat 1:
@@ -387,7 +398,9 @@ external action, preserving atomic receipts and stale rejection. If the
 resulting chooser is a built-in, call scalar `step()` to continue native play.
 Supplying an external index for a built-in chooser raises an error. Native
 trivial skipping still applies. Each seat owns independent heuristic memory;
-reset clears both, even with the same seed, and forks copy both.
+reset clears both, even with the same seed, and forks copy both. Scalar
+`Env.reset`, `Env.step` and `Env.state_digest` release the Python GIL so
+independent games and record replays run concurrently across worker threads.
 
 The Python training wrapper accepts the same tuple. The public vector
 `opponent_policy` argument is deprecated, warns, and will be removed in 0.3.0:
@@ -408,7 +421,10 @@ native rules as the built-in player policy. Direct native callers can create
 independent games. Keep one selector per seat. Selection returns an original
 legal action index and rejects an empty action space. The optional
 `max_actions` constructor argument restricts selection to that legal prefix;
-it must be positive and is used only by explicitly bounded policies.
+it must be positive and is used only by explicitly bounded policies. Passing
+`"heuristic:<N>"` in `player_policies` applies the same legal-prefix cap on a
+native seat. Both scalar and vector evaluation runners keep one selector per
+game so within-turn state matches training's native opponent.
 
 To evaluate an existing compatible checkpoint, use the
 [local evaluation command](evaluation.md#quick-local-evaluation) with

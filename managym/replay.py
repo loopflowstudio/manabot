@@ -22,7 +22,7 @@ from typing import Literal, Never, Protocol
 import numpy as np
 
 import managym
-from managym.card_capture import CapturedCards, captured_cards
+from managym.card_capture import CapturedCards, NativeCapture, captured_cards
 from managym.decision import Command, DecisionFrame, SemanticContractError
 from managym.recording import (
     BufferSpec,
@@ -30,8 +30,9 @@ from managym.recording import (
     GameInputs,
     GameRecord,
     Intervention,
-    read_record,
-    read_records,
+    NativeBoundary,
+    _games_from_snapshot,
+    _read_snapshots,
     runtime_identities,
     semantic_frame_sha256,
 )
@@ -120,6 +121,7 @@ class RecordWalker:
         record: GameRecord,
         *,
         capture_cards: bool = False,
+        capture_choices: bool = False,
     ) -> None:
         if len(record.games) != 1 or record.mode == "search":
             raise ValueError("walk requires one game, not a batch or a search")
@@ -146,21 +148,38 @@ class RecordWalker:
         )
         self.record = record
         self.game = record.games[0]
-        if not self.game.players:
+        self._failed_opening = record.failed_opening(self.game)
+        if not self.game.players and not self._failed_opening:
             raise ValueError("record setup unavailable")
-        self.env = managym.Env(
+        self._capture_cards = capture_cards
+        self._capture_choices = capture_choices
+        self.env, self.observation = self._open()
+        self.stop: ReplayStop | None = None
+        self._used = False
+
+    def _open(self) -> tuple[managym.Env, managym.Observation | None]:
+        env = managym.Env(
             seed=self.game.seed,
-            skip_trivial=record.skip_trivial,
-            player_policies=record.resolved_player_policies,
+            skip_trivial=self.record.skip_trivial,
+            player_policies=self.record.policies_for(self.game),
             decision_memory=self.game.decision_memory,
             decision_memory_include_own=self.game.decision_memory_include_own,
         )
-        self._capture_cards = capture_cards
-        if capture_cards:
-            self.env.enable_exposure_capture()
-        self.observation = self.env.reset(self.game.setup())[0]
-        self.stop: ReplayStop | None = None
-        self._used = False
+        if self._failed_opening:
+            return env, None
+        if self._capture_cards:
+            env.enable_exposure_capture()
+        if self._capture_choices:
+            env.enable_choice_capture()
+        return env, env.reset(self.game.setup())[0]
+
+    def choices(self) -> list[tuple[int, int]]:
+        """Published (acting seat, action index) pairs, including built-in choices."""
+        if not self._capture_choices:
+            raise ValueError("walk requires capture_choices=True to collect choices")
+        if self.stop is None:
+            raise ValueError("choices require a finished verified traversal")
+        return [] if self._failed_opening else self.env.committed_choices()
 
     def cards(self) -> CapturedCards:
         """Private facts strictly through the last verified commitment."""
@@ -168,6 +187,18 @@ class RecordWalker:
             raise ValueError("walk requires capture_cards=True to collect card facts")
         if self.stop is None:
             raise ValueError("card facts require a finished verified traversal")
+        if self._failed_opening:
+            return CapturedCards(
+                capture=NativeCapture(
+                    version=1,
+                    content_digest=managym.world_identity()["card_digest"],
+                    initial=(),
+                    opening=((), ()),
+                    moves=(),
+                ),
+                final_cards=(),
+                turn=0,
+            )
         return captured_cards(self.env)
 
     def __iter__(self) -> Iterator[RecordedDecision]:
@@ -181,6 +212,12 @@ class RecordWalker:
             raise ValueError("a record walker can only be consumed once")
         self._used = True
         game = self.game
+        if self._failed_opening:
+            reason = self.record.error or (
+                game.end.reason if game.end is not None else None
+            )
+            self.stop = ReplayStop("interrupted", 0, reason)
+            return
         count = len(game.actions) if game.committed is None else game.committed
         boundary = self.record.boundary
         if boundary is not None and boundary.phase != "ready":
@@ -196,11 +233,21 @@ class RecordWalker:
             count = max(0, count - 1)
         boundaries = interventions_by_offset(game)
         remaining_frames = set(game.object_candidate_frames)
+        actions = game.actions[:count]
+        # In an integer-only trajectory each checked post-state is the next
+        # decision's pre-state. Semantic and consumer paths may bind more state.
+        direct = (
+            apply is None
+            and not boundaries
+            and not remaining_frames
+            and all(isinstance(action, int) for action in actions)
+        )
 
         index = 0
+        unverified_step = False
         try:
             # The final boundary can contain interventions after the last action.
-            for index, action in enumerate(chain(game.actions[:count], (None,))):
+            for index, action in enumerate(chain(actions, (None,))):
                 operations = boundaries.get(index, ())
                 apply_boundary(self.env, operations, remaining_frames)
                 if operations:
@@ -210,11 +257,13 @@ class RecordWalker:
                 if action is None:
                     break
                 if (
-                    index < len(game.digests)
+                    (not direct or index == 0)
+                    and index < len(game.digests)
                     and self.env.state_digest() != game.digests[index]
                 ):
                     raise ValueError("pre-decision digest differs")
                 observation = self.observation
+                assert observation is not None
                 frame = None
                 commitment: int | Command = (
                     action if isinstance(action, int) else Command(**json.loads(action))
@@ -247,11 +296,6 @@ class RecordWalker:
                     frame,
                     tuple(operations),
                 )
-                # Check the transition on a search fork before committing it to
-                # the Env owning the retained card facts or consumer presentation.
-                # A divergent action must contribute to neither history nor rows.
-                target = self.env.clone_env()
-                decision.apply(target)
                 after = (
                     game.digests[index + 1]
                     if index + 1 < count and index + 1 < len(game.digests)
@@ -259,6 +303,18 @@ class RecordWalker:
                     if index + 1 == count and game.end is not None
                     else None
                 )
+                if direct:
+                    unverified_step = True
+                    self.observation = decision.apply(self.env)
+                    if after is not None and self.env.state_digest() != after:
+                        raise ValueError("transition digest differs")
+                    unverified_step = False
+                    yield decision
+                    continue
+                # On a semantic or consumer path, verify on a search fork
+                # before committing the transition to the live timeline.
+                target = self.env.clone_env()
+                decision.apply(target)
                 # Compare the consumer immediately after its action. The retained
                 # next digest includes any interventions before the next decision.
                 expected = target.state_digest() if apply is not None else None
@@ -285,7 +341,8 @@ class RecordWalker:
                 raise ValueError("snapshot object candidate frame missing")
             end = game.end
             if (
-                end is not None
+                (not direct or count == 0)
+                and end is not None
                 and end.digest is not None
                 and self.env.state_digest() != end.digest
             ):
@@ -308,11 +365,21 @@ class RecordWalker:
             SemanticContractError,
             managym.AgentError,
         ) as error:
+            if unverified_step:
+                # Restore the verified position and its capture logs on divergence.
+                self.env, self.observation = self._open()
+                for action in actions[:index]:
+                    assert isinstance(action, int)
+                    self.observation = self.env.step(action)[0]
             self.stop = ReplayStop("diverged", index, f"{error}; {self.builds}")
 
 
-def walk(record: GameRecord, *, capture_cards: bool = False) -> RecordWalker:
-    return RecordWalker(record, capture_cards=capture_cards)
+def walk(
+    record: GameRecord, *, capture_cards: bool = False, capture_choices: bool = False
+) -> RecordWalker:
+    return RecordWalker(
+        record, capture_cards=capture_cards, capture_choices=capture_choices
+    )
 
 
 @dataclass
@@ -411,68 +478,89 @@ def require_replay_runtime(
     return native
 
 
+def _inputs_at_boundary(
+    game: GameInputs, boundary: NativeBoundary | None, index: int
+) -> GameInputs:
+    """Keep the attempted action and frame only when the journal binds both."""
+    actions = game.actions
+    if (
+        boundary is not None
+        and boundary.phase == "executing"
+        and boundary.operation in {"step", "step_isolated", "command"}
+        and index < len(boundary.committed_counts)
+    ):
+        committed = boundary.committed_counts[index]
+        if (
+            index < len(boundary.active)
+            and boundary.active[index]
+            and index < len(boundary.pending_actions)
+            and len(actions) == committed + 1
+            and actions[-1] == boundary.pending_actions[index]
+            and game.frame is not None
+        ):
+            return game
+        actions = actions[:committed]
+    return game.model_copy(update={"actions": actions, "frame": None})
+
+
 def replay_failure_inputs(
     evidence: GameRecord, *, statistics: bool = False
 ) -> list[dict[str, object]]:
     """Replay only retained inputs. The CLI supplies the process wall-time bound."""
     boundary = evidence.boundary
-    if boundary is None:
+    if boundary is None and all(game.failure is None for game in evidence.games):
         return [
             _replay_game_inputs(evidence, game, statistics=statistics)
             for game in evidence.games
         ]
-    retained = evidence.model_copy(deep=True)
-    # Journal reset inputs describe the prior game, not the proposed new root.
-    # Only an active step row with its exact pre-action frame binds an attempt.
-    retained.operation = "step"
+
+    coordinates: dict[str, object] = {}
+    if boundary is not None:
+        coordinates = {
+            "boundary_operation": boundary.operation,
+            "boundary_phase": boundary.phase,
+            "native_returned": boundary.returned,
+            "setup_known": boundary.setup_known,
+        }
+    # Journal reset inputs describe the prior game. Only an executing step
+    # with a matching action and frame identifies a pending call in that game.
+    prefix = evidence.model_copy(update={"operation": "step"})
     results: list[dict[str, object]] = []
-    for index, game in enumerate(retained.games):
-        bound_step = (
-            boundary.phase == "executing"
-            and boundary.operation in {"step", "step_isolated", "command"}
-            and index < len(boundary.active)
-            and boundary.active[index]
-            and index < len(boundary.committed_counts)
-            and index < len(boundary.pending_actions)
-            and len(game.actions) == boundary.committed_counts[index] + 1
-            and game.actions[-1] == boundary.pending_actions[index]
-            and game.frame is not None
-        )
-        if not bound_step:
-            game.frame = None
-            if (
-                boundary.phase == "executing"
-                and boundary.operation in {"step", "step_isolated", "command"}
-                and index < len(boundary.committed_counts)
-            ):
-                game.actions = game.actions[: boundary.committed_counts[index]]
+    for index, game in enumerate(evidence.games):
+        if game.failure is not None or (
+            boundary is not None and evidence.failed_opening(game)
+        ):
+            result = _replay_game_inputs(evidence, game, statistics=statistics)
+            results.append({**result, **coordinates})
+            continue
+
+        game = _inputs_at_boundary(game, boundary, index)
         if not game.players:
-            result: dict[str, object] = {
-                "stream": game.stream,
-                "status": "setup_unavailable",
-            }
+            result = {"stream": game.stream, "status": "setup_unavailable"}
+            if boundary is None:
+                results.append(result)
+                continue
         else:
-            result = _replay_game_inputs(retained, game, statistics=statistics)
-        result.update(
-            boundary_operation=boundary.operation,
-            boundary_phase=boundary.phase,
-            native_returned=boundary.returned,
-            setup_known=boundary.setup_known,
-            original_outcome=(
-                "failed"
-                if evidence.mode != "vector" and evidence.execution_outcome == "failed"
-                else "execution_outcome_unknown"
-            ),
-            diagnostic="Replay cannot settle the original interrupted call's outcome",
-        )
-        if not bound_step:
+            result = _replay_game_inputs(prefix, game, statistics=statistics)
+        if boundary is not None:
+            result.update(
+                coordinates,
+                original_outcome=(
+                    "failed"
+                    if evidence.mode != "vector"
+                    and evidence.execution_outcome == "failed"
+                    else "execution_outcome_unknown"
+                ),
+                diagnostic="Replay cannot settle the original interrupted call's outcome",
+            )
+        if game.frame is None:
             result.update(
                 at_retained_failure=False,
                 matches_binding=None,
                 matches_error=None,
                 diagnostic=(
                     "Reconstructed the current known prefix; no native call was pending"
-                    if boundary.phase == "ready"
+                    if boundary is None or boundary.phase == "ready"
                     else "Reconstructed last-known prefix; pending binding or current setup unavailable"
                 ),
             )
@@ -513,11 +601,16 @@ def _replay_game_inputs(
     evidence: GameRecord, game: GameInputs, *, statistics: bool = False
 ) -> dict[str, object]:
     """Reconstruct one stream; keep binding divergence out of native failures."""
+    if game.failure is not None:
+        evidence = evidence.for_game(game)
+        [game] = evidence.games
     # A strict vector exception records the batch outcome, without proving
     # which individual streams advanced. Replay cannot fill in that history.
+    # An isolated failure, at reset or step, ends its own stream as failed.
+    observed_failure = game.end is not None and game.end.status == "failed"
     agreement = ReplayAgreement(
         "execution_outcome_unknown"
-        if evidence.mode == "vector"
+        if evidence.mode == "vector" and not observed_failure
         else evidence.execution_outcome
     )
     # A reset/search failure has a different boundary from a rejected game
@@ -544,11 +637,11 @@ def _replay_game_inputs(
             decision_memory=game.decision_memory,
             decision_memory_include_own=game.decision_memory_include_own,
             skip_trivial=evidence.skip_trivial,
-            player_policies=evidence.resolved_player_policies,
+            player_policies=evidence.policies_for(game),
         )
         if vector_steps
         else managym.Env(
-            player_policies=evidence.resolved_player_policies,
+            player_policies=evidence.policies_for(game),
             seed=game.seed,
             skip_trivial=evidence.skip_trivial,
             decision_memory=game.decision_memory,
@@ -714,8 +807,8 @@ def main() -> None:
     if not args.worker:
         run_bounded_replay("managym.replay", args.seconds)
     try:
-        records = read_records(args.path)
-        evidence = next(records)
+        snapshots = _read_snapshots(args.path)
+        first = next(snapshots)
     except StopIteration:
         if not args.path.is_dir():
             parser.error(f"cannot read journal {args.path}: no game records")
@@ -725,48 +818,42 @@ def main() -> None:
         )
     except (OSError, ValueError) as error:
         parser.error(f"cannot read journal {args.path}: {error}")
-    if not evidence.needs_reproduction:
-        results = []
-        for record in chain((evidence,), records):
-            try:
-                replay = walk(record, capture_cards=args.statistics)
-            except ValueError as error:
-                parser.error(f"cannot replay {args.path}: {error}")
-            for _ in replay:
-                pass
-            assert replay.stop is not None
-            result = {**asdict(replay.stop), "build_differs": replay.build_differs}
-            if args.statistics:
-                result["statistics"] = {
-                    "terminal": replay.stop.status == "complete",
-                    "winner": replay.stop.winner,
-                    "cards": [
-                        row.model_dump(mode="json")
-                        for row in reduce_cards(replay.cards())
-                    ],
-                }
-            results.append(result)
-        print(json.dumps({"status": "replayed", "results": results}))
-        return
-    # Reproduction needs every stream and its original batch boundary.
-    evidence = read_record(args.path)
+    results: list[dict[str, object]] = []
     try:
-        require_replay_runtime(
-            evidence.identities,
-            allow_changed_runtime=args.allow_changed_runtime,
-            require_source=True,
-        )
-    except ValueError as error:
-        parser.error(str(error))
-    print(
-        json.dumps(
-            {
-                "status": "replayed",
-                "results": replay_failure_inputs(evidence, statistics=args.statistics),
-                "original_outcome": evidence.execution_outcome,
-            }
-        )
-    )
+        for index, evidence in enumerate(chain((first,), snapshots)):
+            if evidence.needs_reproduction:
+                # Reproduction needs the full record and its batch boundary.
+                require_replay_runtime(
+                    evidence.identities,
+                    allow_changed_runtime=args.allow_changed_runtime,
+                    require_source=True,
+                )
+                results.extend(
+                    replay_failure_inputs(evidence, statistics=args.statistics)
+                )
+                continue
+            for record in _games_from_snapshot(evidence):
+                replay = walk(record, capture_cards=args.statistics)
+                for _ in replay:
+                    pass
+                assert replay.stop is not None
+                result = {**asdict(replay.stop), "build_differs": replay.build_differs}
+                if args.statistics:
+                    result["statistics"] = {
+                        "terminal": replay.stop.status == "complete",
+                        "winner": replay.stop.winner,
+                        "cards": [
+                            row.model_dump(mode="json")
+                            for row in reduce_cards(replay.cards())
+                        ],
+                    }
+                results.append(result)
+    except (OSError, ValueError) as error:
+        parser.error(f"cannot replay {args.path}: {error}")
+    output: dict[str, object] = {"status": "replayed", "results": results}
+    if index == 0 and first.needs_reproduction:
+        output["original_outcome"] = first.execution_outcome
+    print(json.dumps(output))
 
 
 if __name__ == "__main__":

@@ -6,15 +6,15 @@ identity and never grants automatic admission to an older execution.
 """
 
 from collections.abc import Iterable, Mapping
+from functools import cache
 import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
-from manabot.env.env import Env
-from manabot.env.match import Match, Reward
+from manabot.env.match import Match
 from manabot.env.observation import ActionEnum, ObservationSpace
-from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.verify.games import INTERACTIVE_DECK
 import managym
@@ -64,29 +64,48 @@ def engine_source_paths() -> list[Path]:
     return paths
 
 
-def runtime_fingerprints(
-    seed: int = 197,
-    *,
-    match_config: MatchConfig | None = None,
-    observation_space: ObservationSpace | None = None,
-) -> dict[str, Any]:
-    """Return identities that the pre-registration freezes before a run."""
-
-    obs_space = observation_space or ObservationSpace()
-    matchup = match_config or MatchConfig(
+def default_matchup() -> MatchConfig:
+    return MatchConfig(
         hero="teacher-a",
         villain="teacher-b",
         hero_deck=dict(INTERACTIVE_DECK),
         villain_deck=dict(INTERACTIVE_DECK),
     )
-    env = Env(
-        Match(matchup),
-        obs_space,
-        Reward(RewardConfig()),
-        seed=seed,
-    )
-    env.reset(seed=seed)
+
+
+@cache
+def process_fingerprints() -> dict[str, str | int]:
+    """Fingerprint the loaded engine and its process-wide catalog once."""
+    env = managym.Env(seed=197, skip_trivial=True)
+    env.reset(Match(default_matchup()).to_rust())
     content = env.content_pack_manifest()
+    extension_path = Path(managym._managym.__file__)
+    return {
+        "engine_source_sha256": source_bundle_sha256(engine_source_paths()),
+        "engine_extension_sha256": file_sha256(extension_path),
+        "engine_extension_name": extension_path.name,
+        "content_schema_version": content["schema_version"],
+        "content_digest": content["content_digest"],
+        "content_manifest_sha256": canonical_sha256(content),
+        "experience_protocol_sha256": file_sha256(PROTOCOL_SCHEMA),
+        "experience_content_hash": UNVERSIONED_CONTENT_HASH,
+        "asset_manifest_hash": RECORDED_ASSET_MANIFEST_HASH,
+    }
+
+
+@cache
+def arena_source_sha256() -> str:
+    return source_bundle_sha256((REPO_ROOT / "manabot").rglob("*.py"))
+
+
+def runtime_fingerprints(
+    *,
+    match_config: MatchConfig | None = None,
+    observation_space: ObservationSpace | None = None,
+) -> dict[str, Any]:
+    """Bind the process identity to the requested matchup and input ABI."""
+    obs_space = observation_space or ObservationSpace()
+    matchup = (match_config or default_matchup()).model_dump()
     observation_schema = {
         name: {"shape": list(shape), "dtype": "float32"}
         for name, shape in sorted(obs_space.shapes.items())
@@ -98,21 +117,12 @@ def runtime_fingerprints(
         "action_focus_shape": list(obs_space.shapes["action_focus"]),
         "actions_valid_shape": list(obs_space.shapes["actions_valid"]),
     }
-    extension_path = Path(managym._managym.__file__)
     return {
-        "engine_source_sha256": source_bundle_sha256(engine_source_paths()),
-        "engine_extension_sha256": file_sha256(extension_path),
-        "engine_extension_name": extension_path.name,
-        "content_schema_version": content.get("schema_version"),
-        "content_digest": content.get("content_digest"),
-        "content_manifest_sha256": canonical_sha256(content),
+        **process_fingerprints(),
         "observation_abi_sha256": canonical_sha256(observation_schema),
         "action_abi_sha256": canonical_sha256(action_abi),
-        "experience_protocol_sha256": file_sha256(PROTOCOL_SCHEMA),
-        "experience_content_hash": UNVERSIONED_CONTENT_HASH,
-        "asset_manifest_hash": RECORDED_ASSET_MANIFEST_HASH,
-        "matchup_sha256": canonical_sha256(matchup.model_dump()),
-        "matchup": matchup.model_dump(),
+        "matchup_sha256": canonical_sha256(matchup),
+        "matchup": matchup,
     }
 
 

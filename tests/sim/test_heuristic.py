@@ -135,7 +135,7 @@ def test_heuristic_registration_versions_native_sources() -> None:
     scripted = register_anchor(candidate, "scripted_greedy", player_id="scripted")
     native = register_anchor(candidate, "heuristic", player_id="native")
     assert scripted.source_sha256 == file_sha256(Path(anchors.__file__))
-    assert native.player_spec == {"kind": "heuristic", "version": "native-v2"}
+    assert native.player_spec == {"kind": "heuristic", "version": "native-v3"}
     assert native.source_sha256 != scripted.source_sha256
     assert any(path.suffix == ".rs" for path in heuristic_source_paths())
     assert all(path.exists() for path in heuristic_source_paths())

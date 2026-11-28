@@ -12,7 +12,8 @@ recreate their root.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from copy import deepcopy
+from dataclasses import asdict
 from multiprocessing.connection import Connection
 from pathlib import Path
 import tempfile
@@ -27,14 +28,14 @@ from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import (
     RECORDED_ASSET_MANIFEST_HASH,
+    arena_source_sha256,
     runtime_fingerprints,
-    source_bundle_sha256,
 )
 from manabot.policy.protocol import BackendName, SimulationBackend
 from manabot.sim.agent import GamePlayer
 from manabot.sim.evaluation_records import (
+    DecisionIdentity,
     bind_record,
-    decision_annotation,
     evaluation_metadata,
     finalize_game,
 )
@@ -138,49 +139,19 @@ def resolve_game_match(
     return resolved
 
 
-def arena_source_sha256() -> str:
-    return source_bundle_sha256(Path(__file__).resolve().parents[1].rglob("*.py"))
-
-
 def game_runtime_identities(
-    seed: int, match: MatchConfig | None, space: ObservationSpace, arena_source: str
+    match: MatchConfig | None, space: ObservationSpace
 ) -> dict[str, Any]:
-    return runtime_fingerprints(seed, match_config=match, observation_space=space) | {
-        "arena_source_sha256": arena_source,
+    return runtime_fingerprints(match_config=match, observation_space=space) | {
+        "arena_source_sha256": arena_source_sha256(),
     }
 
 
-@dataclass(frozen=True)
-class ArenaDecision:
-    """A live viewer frame and the sampling identity of its acting player."""
-
-    frame: dict[str, Any]
-    player_id: str
-    player_seed: int
-    ordinal: int
-
-    @property
-    def policy_seed(self) -> int:
-        return (self.player_seed + self.ordinal) % (2**63)
-
-    def evidence(self, offer: dict[str, Any], elapsed: float) -> dict[str, Any]:
-        return {
-            **offer_evidence(self.frame, offer),
-            "revision": self.frame["revision"],
-            "player_id": self.player_id,
-            "player_seed": self.player_seed,
-            "player_decision_ordinal": self.ordinal,
-            "policy_rng_seed": self.policy_seed,
-            "latency_seconds": elapsed,
-        }
-
-
-def arena_decision(
+def arena_frame(
     game: dict[str, Any],
     raw: managym.Observation,
     revision: int,
-    counts: Mapping[str, int],
-) -> ArenaDecision:
+) -> dict[str, Any]:
     frame = build_viewer_frame(
         raw,
         match_id=game["match_id"],
@@ -191,16 +162,13 @@ def arena_decision(
     if frame["projection"]["opponent"].get("hand"):
         game["integrity"]["private_exposures"] += 1
         raise RuntimeError("viewer frame exposes a private hand")
-    player_id = game["seat_players"][int(raw.agent.player_index)]
-    return ArenaDecision(
-        frame, player_id, game["player_seeds"][player_id], counts[player_id]
-    )
+    return frame
 
 
 def chosen_offer(
-    game: dict[str, Any], decision: ArenaDecision, action: int
+    game: dict[str, Any], frame: dict[str, Any], action: int
 ) -> dict[str, Any]:
-    for offer in decision.frame["offers"]:
+    for offer in frame["offers"]:
         if int(offer["id"]) == action:
             return offer
     game["integrity"]["illegal_actions"] += 1
@@ -245,16 +213,17 @@ def execute_game(
         for registration in registrations:
             responsible = registration.player_id
             send(("phase", responsible))
+            player_seed = game["player_seeds"][responsible]
             if agents is not None:
                 player = agents[responsible]
                 assert match is not None
                 player.admit(match)
-                built[responsible] = (player, player.space)
+                built[responsible] = (player.open_game(player_seed), player.space)
             else:
                 with perf.span("player_startup"):
                     built[responsible] = in_child.build(
                         registration,
-                        seed=game["player_seeds"][responsible],
+                        seed=player_seed,
                         checkpoint_path=checkpoint_paths.get(responsible),
                     )
         responsible = None
@@ -275,9 +244,7 @@ def execute_game(
                 send(("match", game["match_hypers"]))
         game["observation_hypers"] = space.config.model_dump()
         send(("observation", game["observation_hypers"]))
-        game["runtime_identities"] = game_runtime_identities(
-            game["deal_seed"], match, space, arena_source_sha256()
-        )
+        game["runtime_identities"] = game_runtime_identities(match, space)
         send(("identities", game["runtime_identities"]))
         with perf.span("native_reset_and_encoding"):
             memory = space.config
@@ -285,16 +252,21 @@ def execute_game(
                 capture_path = Path(
                     game.get("capture_path", Path(temporary.name) / "journal.jsonl")
                 )
+
+                def capture_context() -> dict[str, object]:
+                    return {"evaluation": deepcopy(evaluation_metadata(game))}
+
                 capture = ScalarCapture(
                     game["deal_seed"],
                     journal_path=capture_path,
                     context={"source_kind": "evaluation"},
-                    context_provider=lambda: {"evaluation": evaluation_metadata(game)},
+                    context_provider=capture_context,
                     failure_directory=capture_path.parent,
                     # The journal must replay the log the players observe.
                     decision_memory=memory.max_decision_records > 0,
                     decision_memory_include_own=memory.decision_memory_include_own,
                 )
+                capture.frozen_context = capture_context()
             env, obs = replay_environment(game, space, capture=capture)
         if capture is None:
             game["initial_state_digest"] = env._engine.state_digest()
@@ -316,7 +288,8 @@ def execute_game(
             raw = env.last_raw_obs
             actor = int(raw.agent.player_index)
             frame_started = time.monotonic()
-            turn = arena_decision(game, raw, revision, decision_counts)
+            frame = arena_frame(game, raw, revision)
+            turn = DecisionIdentity.for_actor(game, actor, revision, decision_counts)
             player_id = turn.player_id
             perf.record("frame_projection", frame_started)
             pre_digest = env._engine.state_digest()
@@ -327,7 +300,7 @@ def execute_game(
                 in_child.seed(policy_seed)
             started = time.perf_counter()
             if agents is not None:
-                action = agents[player_id].choose(env, obs, policy_seed)
+                action = built[player_id][0](env, obs, policy_seed)
             else:
                 with perf.span("scalar_policy"):
                     action = int(built[player_id][0].act(env, obs))
@@ -336,26 +309,21 @@ def execute_game(
             if env._engine.state_digest() != pre_digest:
                 game["integrity"]["root_mutations"] += 1
                 raise RuntimeError("player mutated the authoritative root")
-            offer = chosen_offer(game, turn, action)
+            offer = chosen_offer(game, frame, action)
             perf.record("command_validation", validation_started)
             responsible = None
             send(("phase", None))
-            command = command_for_offer(turn.frame, offer)
-            decision = turn.evidence(offer, elapsed)
-            decision.update(command=command, command_sha256=canonical_sha256(command))
-            if capture is None:
-                decision["pre_state_digest"] = pre_digest
+            evidence = turn.evidence(elapsed) | offer_evidence(frame, offer)
+            annotation: dict[str, Any] = {"extra": {"evaluation": evidence}}
             player = built[player_id][0]
             if in_child.observes_steps(player) and player.last_receipt is not None:
                 # Arena traces are private. Advice uses the explicit public projection.
-                decision["local_update_receipt"] = player.last_receipt.to_json()
-                decision["latency_seconds"] += player.last_receipt.belief_seconds
-                decision["belief_model_mismatch"] = (
+                receipt = player.last_receipt
+                evidence["local_update_receipt"] = receipt.to_json()
+                evidence["latency_seconds"] += receipt.belief_seconds
+                evidence["belief_model_mismatch"] = (
                     "opponent_behavior_not_assumed_equal_to_frozen_policy"
                 )
-            annotation = decision_annotation(decision)
-            if in_child.observes_steps(player) and player.last_receipt is not None:
-                receipt = player.last_receipt
                 annotation.update(
                     probabilities=list(receipt.target),
                     search_scores=list(receipt.values),
@@ -375,6 +343,12 @@ def execute_game(
                 )
             # Scenarios use the parent's acknowledged Command journal. Ordinary
             # games fsync their capture journal immediately before native execution.
+            command = command_for_offer(frame, offer)
+            decision = dict(
+                evidence, command=command, command_sha256=canonical_sha256(command)
+            )
+            if capture is None:
+                decision["pre_state_digest"] = pre_digest
             game["pending_decision"] = decision
             with perf.span("command_durable_acknowledgement"):
                 send(("pending", decision))
@@ -431,6 +405,8 @@ def execute_game(
         else:
             failure_record(game, "command_cap", "game exceeded its Command cap", None)
     except BaseException as exc:
+        if capture is not None:
+            capture.frozen_context = None
         if not is_game_error(exc):
             if env is not None:
                 env.close()
@@ -443,7 +419,11 @@ def execute_game(
             f"{type(exc).__name__}: {exc}",
             responsible,
         )
+    record = None
     if env is not None:
+        if capture is not None:
+            # Capture the settled metadata in the cutoff report and close journal.
+            capture.frozen_context = None
         if env.obs_space.config.action_overflow == "first-legal":
             game["policy_action_cutoff"] = env._capture.policy_action_report()
         env.close(reason=game["termination_reason"])
@@ -454,10 +434,12 @@ def execute_game(
                 if game.get("pending_decision")
                 else capture.snapshot()
             )
-            bind_record(game, record)
     temporary.cleanup()
     game["worker_performance"] = perf.snapshot()
-    finalize_game(game)
+    if record is None:
+        finalize_game(game)
+    else:
+        bind_record(game, record)
     send(("result", game))
 
 

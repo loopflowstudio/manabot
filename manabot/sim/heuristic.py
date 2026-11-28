@@ -15,6 +15,8 @@ from manabot.env.env import Env
 from manabot.env.observation import ObservationBuffers
 import managym
 
+HEURISTIC_VERSION = "native-v3"
+
 
 def heuristic_source_paths() -> list[Path]:
     """Native rules and adapter bytes identifying newly registered opponents."""
@@ -23,6 +25,7 @@ def heuristic_source_paths() -> list[Path]:
         Path(__file__).resolve(),
         root / "src/agent/heuristic/mod.rs",
         root / "src/agent/heuristic/knowledge.rs",
+        root / "src/agent/player_policy.rs",
         root / "src/python/heuristic_bindings.rs",
     ]
 

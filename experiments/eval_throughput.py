@@ -47,7 +47,7 @@ from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.policy.checkpoint import read_container
 from manabot.policy.prepare import Prepared
-from manabot.sim.heuristic import heuristic_source_paths
+from manabot.sim.heuristic import HEURISTIC_VERSION, heuristic_source_paths
 from manabot.sim.registration import EvalPrecision
 
 ARENA = "eval-throughput"
@@ -102,7 +102,9 @@ def trophy_deals(
         raise ValueError(f"the trophy split has fewer than {2 * count} playable pools")
     candidate = checkpoint_player(ref)
     heuristic = Code(
-        name="heuristic", source=heuristic_source_paths(), config=HEURISTIC
+        name="heuristic",
+        source=heuristic_source_paths(),
+        config={**HEURISTIC, "version": HEURISTIC_VERSION},
     )
     specs: dict[str, PairingSpec] = {}
     matches: list[Match] = []
@@ -161,6 +163,12 @@ def main() -> None:
         parser.error(f"--device {args.device} is unavailable on this host")
     if args.checkpoint is not None and not args.checkpoint.is_file():
         parser.error(f"--checkpoint {args.checkpoint} is not a file")
+    if not corpus_path().is_file():
+        parser.error(
+            f"the trophy corpus {corpus_path()} is missing; fetch it with "
+            "`uv run python -m manabot.data fetch "
+            "experiments/data/mtg409/pools-v2/corpus.json`"
+        )
     out = args.output_dir.resolve()
     if out.exists():
         parser.error(f"--output-dir {out} exists; each arm needs a fresh directory")
@@ -225,9 +233,10 @@ def main() -> None:
     )
     stages = {
         "forward": timing.seconds,
-        "replay": replay_seconds,
-        "other_arena": seconds - timing.seconds - replay_seconds,
     }
+    if args.runner == "scalar":
+        stages["replay"] = replay_seconds
+    stages["other_arena"] = seconds - sum(stages.values())
     summary = {
         "platform": platform.platform(),
         "torch": torch.__version__,
@@ -251,6 +260,9 @@ def main() -> None:
         "stage_seconds": stages,
         "largest_stage": max(stages, key=stages.__getitem__),
     }
+    if args.runner == "vector":
+        # Worker durations can overlap both gameplay and one another.
+        summary["background_replay_seconds"] = replay_seconds
     if args.device == "mlx":
         summary["mlx"] = version("mlx")
     if args.device == "cuda":

@@ -2128,6 +2128,10 @@
             "kind": "method",
             "signature": "(self, viewer, revision, fingerprint, plan_json)"
           },
+          "committed_choices": {
+            "kind": "method",
+            "signature": "(self)"
+          },
           "compare_profile": {
             "kind": "method",
             "signature": "(self, baseline)"
@@ -2179,6 +2183,10 @@
             "signature": "(self, edits)"
           },
           "enable_card_capture": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "enable_choice_capture": {
             "kind": "method",
             "signature": "(self)"
           },
@@ -3702,7 +3710,7 @@
           },
           "fresh": {
             "kind": "staticmethod",
-            "signature": "(slot, player_configs=..., *, seed=...)"
+            "signature": "(slot, player_configs=..., *, seed=..., player_policies=...)"
           },
           "slot": {
             "kind": "property"
@@ -4056,6 +4064,10 @@
             "kind": "method",
             "signature": "(self)"
           },
+          "current_player_policies": {
+            "kind": "method",
+            "signature": "(self)"
+          },
           "decision_memory_counts": {
             "kind": "method",
             "signature": "(self)"
@@ -4090,7 +4102,7 @@
           },
           "load_slots_into_buffers": {
             "kind": "method",
-            "signature": "(self, requests)"
+            "signature": "(self, requests, *, isolated=...)"
           },
           "next_fresh_seeds": {
             "kind": "method",
@@ -4118,7 +4130,7 @@
           },
           "reset_each_into_buffers": {
             "kind": "method",
-            "signature": "(self, player_configs, *, seeds=...)"
+            "signature": "(self, player_configs, *, seeds=..., player_policies=..., isolated=...)"
           },
           "reset_seeds_into_buffers": {
             "kind": "method",

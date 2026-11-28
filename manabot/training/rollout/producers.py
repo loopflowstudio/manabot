@@ -258,6 +258,9 @@ class BufferedStreams:
         """Return each current game with resolved open/closed disclosure."""
         return self._read_rows(lambda native: native.current_player_configs())
 
+    def current_player_policies(self) -> list[tuple[str, str]]:
+        return self._read_rows(lambda native: native.current_player_policies())
+
     def current_matchup_indices(self) -> list[tuple[int, int]]:
         pairs = self._read_rows(lambda native: native.current_matchup_indices())
         return pairs if len(pairs) == self.num_envs else []

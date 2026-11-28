@@ -126,12 +126,23 @@ class DecisionAnnotation(BaseModel):
     extra: dict[str, object] = {}
 
 
+class GameFailure(BaseModel):
+    """A native error owned by one game in a vector snapshot or journal."""
+
+    operation: Literal["reset", "step"]
+    error_class: str
+    traceback: str | None = None
+
+
 class GameEnd(BaseModel):
     status: Literal["complete", "interrupted", "failed"]
     winner: int | None = None
     winner_retained: bool = True
     reason: str | None = None
     digest: str | None = None
+    failure: GameFailure | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class BoundaryIntervention(BaseModel):
@@ -223,6 +234,9 @@ class GameInputs(BaseModel):
     )
     seed: int
     players: list[PlayerSetup]
+    player_policies: tuple[str, str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     actions: list[int | str] = []
     interventions: list[Intervention] = Field(
         default_factory=list, exclude_if=lambda v: not v
@@ -240,6 +254,10 @@ class GameInputs(BaseModel):
     end: GameEnd | None = None
     actor: int | None = None
     frame: str | None = None
+
+    @property
+    def failure(self) -> GameFailure | None:
+        return self.end.failure if self.end is not None else None
 
     @model_validator(mode="after")
     def validate_boundaries(self) -> "GameInputs":
@@ -360,6 +378,7 @@ class GameRecord(BaseModel):
             or self.error_class is not None
             or self.execution_outcome == "failed"
             or self.mode == "search"
+            or any(game.failure is not None for game in self.games)
             or (self.boundary is not None and self.boundary.phase != "ready")
             or (
                 self.boundary is None
@@ -383,6 +402,45 @@ class GameRecord(BaseModel):
     def resolved_player_policies(self) -> tuple[str, str]:
         """Read either receipt spelling without deprecating retained evidence."""
         return self.player_policies or _retained_player_policies(self.opponent_policy)
+
+    def policies_for(self, game: GameInputs) -> tuple[str, str]:
+        return game.player_policies or self.resolved_player_policies
+
+    def failed_opening(self, game: GameInputs) -> bool:
+        if (failure := game.failure) is not None:
+            return failure.operation == "reset"
+        return (
+            self.operation == "reset"
+            and self.execution_outcome == "failed"
+            and not game.actions
+            and (
+                self.mode == "scalar"
+                or (game.end is not None and game.end.status == "failed")
+            )
+        )
+
+    def for_game(
+        self, game: GameInputs, boundary: NativeBoundary | None = None
+    ) -> "GameRecord":
+        fields: dict[str, object] = {"boundary": boundary}
+        game_fields: dict[str, object] = {}
+        if game.player_policies is not None:
+            fields["player_policies"] = game.player_policies
+            game_fields["player_policies"] = None
+        if game.end is not None and (failure := game.end.failure) is not None:
+            # This slot's observed failure owns its call, even after the
+            # vector journal advances to a different batch boundary.
+            fields.update(
+                boundary=None,
+                operation=failure.operation,
+                execution_outcome="failed",
+                error=game.end.reason,
+                error_class=failure.error_class,
+                traceback=failure.traceback,
+            )
+            game_fields["end"] = game.end.model_copy(update={"failure": None})
+        fields["games"] = [game.model_copy(update=game_fields) if game_fields else game]
+        return self.model_copy(update=fields)
 
 
 class GameChange(BaseModel):
@@ -512,7 +570,8 @@ class _GameJournal:
             )
             if not executing:
                 for game in retained.games:
-                    game.frame = None
+                    if game.failure is None:
+                        game.frame = None
             self.sequence = 0
             row = JournalCheckpoint(sequence=0, evidence=retained)
             self.checkpoint_bytes = self.writer.replace(
@@ -526,7 +585,7 @@ class _GameJournal:
             zip(evidence.games, self.evidence.games, strict=True)
         ):
             count = len(game.actions) if counts is None else counts[index]
-            frame = game.frame if executing else None
+            frame = game.frame if executing or game.failure is not None else None
             if (
                 self.actions[index] is not game.actions
                 or game.seed != old.seed
@@ -1041,10 +1100,12 @@ class ScalarCapture(_Capture):
                 self._publish(self._snapshot("reset"), "ready")
             return result
 
-    def _snapshot(self, operation: Literal["reset", "step"] = "step") -> GameRecord:
+    def _snapshot(
+        self, operation: Literal["reset", "step"] | None = None
+    ) -> GameRecord:
         return self._evidence(
             mode="scalar",
-            operation=operation,
+            operation=operation or (self._raised.operation if self._raised else "step"),
             games=[self.inputs],
             skip_trivial=self.skip_trivial,
         )
@@ -1252,6 +1313,7 @@ _VECTOR_READS = frozenset(
         "observations_for_players",
         "current_matchup_indices",
         "current_player_configs",
+        "current_player_policies",
         "get_last_info",
         "semantic_decision_frames_json",
         "skip_trivial_counts",
@@ -1559,31 +1621,25 @@ class RecordedVectorEnv(_Capture):
         return self._branch_roots[slot] is None and super()._selected(game)
 
     def _record_of(self, game: GameInputs) -> GameRecord:
-        return self._evidence_for([game], "step")
+        record = self._evidence_for([game], "step")
+        return record.for_game(record.games[0])
 
     def take_slot_record(
         self,
         slot: int,
         *,
         end: GameEnd | None = None,
-        info: dict[str, Any] | None = None,
     ) -> GameRecord:
         """Detach an in-memory game's record before reusing its slot.
 
-        A runner may settle an opening terminal or impose its own stop. Native
-        isolated failures supply their error metadata in the step receipt.
+        A runner may supply an ending for its own stop. Native failures
+        already carry their ending and attempted inputs.
         """
         game = self.games[slot]
         record = self._record_of(game)
-        if end is not None:
-            record.games[0].end = end
-        if info is not None and info.get("game_error"):
-            record.execution_outcome = "failed"
-            record.error_class = str(info.get("game_error_class", "AgentError"))
-            record.error = str(info["game_error"])
-            if info.get("game_error_trace"):
-                record.traceback = str(info["game_error_trace"])
-        else:
+        if record.execution_outcome != "failed":
+            if end is not None:
+                record.games[0].end = end
             record.execution_outcome = "last_command_succeeded"
         self.games[slot] = GameInputs(
             stream=game.stream,
@@ -1673,12 +1729,21 @@ class RecordedVectorEnv(_Capture):
         self.reset_each_into_buffers([players for _ in self.games])
 
     def reset_each_into_buffers(
-        self, players: list[managym.GameSetup], *, seeds: list[int] | None = None
+        self,
+        players: list[managym.GameSetup],
+        *,
+        seeds: list[int] | None = None,
+        player_policies: list[tuple[str, str]] | None = None,
+        isolated: bool = False,
     ) -> None:
         self._reset_each(
             players,
             self.next_seeds if seeds is None else seeds,
-            lambda: self.native.reset_each_into_buffers(players, seeds=seeds),
+            lambda: self.native.reset_each_into_buffers(
+                players, seeds=seeds, player_policies=player_policies, isolated=isolated
+            ),
+            player_policies=player_policies,
+            isolated=isolated,
         )
 
     def reset_all(self, players: managym.GameSetup) -> Any:
@@ -1693,9 +1758,19 @@ class RecordedVectorEnv(_Capture):
         players: list[managym.GameSetup],
         seeds: list[int],
         call: Callable[[], Any],
+        *,
+        player_policies: list[tuple[str, str]] | None = None,
+        isolated: bool = False,
     ) -> Any:
         if len(players) != len(self.games) or len(seeds) != len(self.games):
             raise ValueError("expected one setup and seed per stream")
+        policies = (
+            player_policies
+            if player_policies is not None
+            else [self.player_policies] * len(self.games)
+        )
+        if len(policies) != len(self.games):
+            raise ValueError("expected one policy pair per stream")
         retained = [
             _retain_players(setup, seed)
             for setup, seed in zip(players, seeds, strict=True)
@@ -1709,15 +1784,18 @@ class RecordedVectorEnv(_Capture):
                 seeds=seeds,
                 players=retained,
             )
-        for game, seats, seed in zip(self.games, retained, seeds, strict=True):
+        for game, seats, seed, pair in zip(
+            self.games, retained, seeds, policies, strict=True
+        ):
             self._write_game(game, GameEnd(status="interrupted", reason="reset"))
             game.players = seats
+            game.player_policies = pair if pair != self.player_policies else None
             game.restart(seed)
         with self._guard(lambda: self._snapshot("reset")):
             self._executing()
             result = call()
         self._returned()
-        self._record_roots(dict.fromkeys(range(len(players))))
+        self._record_roots(dict.fromkeys(range(len(players))), isolated=isolated)
         return result
 
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
@@ -1733,6 +1811,7 @@ class RecordedVectorEnv(_Capture):
         for game, seed in zip(self.games, seeds, strict=True):
             self._write_game(game, GameEnd(status="interrupted", reason="reset"))
             game.restart(seed)
+            game.player_policies = None
         with self._guard(lambda: self._snapshot("reset")):
             self._executing()
             self.native.reset_seeds_into_buffers(seeds)
@@ -1740,12 +1819,12 @@ class RecordedVectorEnv(_Capture):
         self._record_roots(dict.fromkeys(range(len(seeds))))
 
     def load_slots_into_buffers(
-        self, requests: Sequence[managym.SlotLoad]
+        self, requests: Sequence[managym.SlotLoad], *, isolated: bool = False
     ) -> list[managym.SlotLoadResult]:
         """Publish recording roots only after native admission of the whole batch."""
         if not requests:
             return []
-        return load_recorded_slots([(self, requests)])[0]
+        return load_recorded_slots([(self, requests)], isolated=isolated)[0]
 
     def _finish_games(
         self, finished: set[int], infos: Sequence[dict[str, Any]]
@@ -1772,7 +1851,9 @@ class RecordedVectorEnv(_Capture):
             ]
             self._end_current_analysis(mask, infos)
 
-    def _record_roots(self, roots: dict[int, BranchRoot | None]) -> None:
+    def _record_roots(
+        self, roots: dict[int, BranchRoot | None], *, isolated: bool = False
+    ) -> None:
         """Bind replay inputs and reducers to admitted replacement games."""
         self._flush_statistics()
         self.next_seeds = self.native.next_fresh_seeds()
@@ -1784,10 +1865,15 @@ class RecordedVectorEnv(_Capture):
         # when a fresh root is installed.
         players = self.native.current_player_configs() if None in roots.values() else []
         seeds = self.native.current_game_seeds()
+        policies = self.native.current_player_policies()
+        infos = self.native.get_last_info() if isolated else []
         for index, root in sorted(roots.items()):
             game = self.games[index]
             self._branch_roots[index] = root
             game.restart(seeds[index])
+            game.player_policies = (
+                policies[index] if policies[index] != self.player_policies else None
+            )
             if self._reductions:
                 self._analysis_active[index] = False
             if root is not None:
@@ -1797,6 +1883,9 @@ class RecordedVectorEnv(_Capture):
                 continue
             game.decision_memory = self.decision_memory
             game.players = _retain_players(players[index], seeds[index])
+            if infos and infos[index].get("game_error"):
+                self._record_game_failure(game, "reset", infos[index])
+                continue
             if self._reductions and self._reduction.error is None:
                 self._analysis_indices[index] = 0
                 self._analysis_active[index] = True
@@ -1804,6 +1893,25 @@ class RecordedVectorEnv(_Capture):
                 if self._reductions[index].error is not None:
                     self._reduction.fail(self._reductions[index].error)
         self._publish_ready()
+
+    def _record_game_failure(
+        self,
+        game: GameInputs,
+        operation: Literal["reset", "step"],
+        info: dict[str, Any],
+    ) -> None:
+        end = GameEnd(
+            status="failed",
+            reason=info["game_error"],
+            failure=GameFailure(
+                operation=operation,
+                error_class=info["game_error_class"],
+                traceback=info.get("game_error_trace"),
+            ),
+        )
+        self._write_game(game, end)
+        # Diagnostic snapshots retain failed slots even without game sampling.
+        game.end = end
 
     def _publish_ready(self) -> None:
         if self._game_journal is not None:
@@ -1889,6 +1997,17 @@ class RecordedVectorEnv(_Capture):
             on and self._selected(game)
             for on, game in zip(enabled, self.games, strict=True)
         ]
+        reducing = bool(self._reductions) and self._reduction.error is None
+        retained_annotations = (
+            [None] * len(self.games)
+            if annotations is None
+            else [
+                DecisionAnnotation.model_validate(annotation)
+                if annotation is not None and (reducing or selected_games[index])
+                else None
+                for index, annotation in enumerate(annotations)
+            ]
+        )
         if self._recording:
             self.native.record_games(selected_games)
         digests = (
@@ -1897,18 +2016,23 @@ class RecordedVectorEnv(_Capture):
             else [None] * len(self.games)
         )
         actors = self.native.current_agent_indices()
-        frames = self.native.semantic_decision_frames_json(active)
+        # Isolated native failures return the attempted frame in their receipt.
+        needs_frames = (
+            not isolated
+            or self._game_journal is not None
+            or any(
+                annotation is not None and annotation.probabilities is not None
+                for annotation in retained_annotations
+            )
+        )
+        frames = (
+            self.native.semantic_decision_frames_json(active)
+            if needs_frames
+            else [None] * len(self.games)
+        )
         summaries = (
             self.native.current_action_summaries() if self._action_cutoff else []
         )
-        hook_annotations: list[DecisionAnnotation | None] = []
-        if self._reductions and self._reduction.error is None:
-            hook_annotations = [
-                None
-                if annotation is None
-                else DecisionAnnotation.model_validate(annotation)
-                for annotation in (annotations or [None] * len(self.games))
-            ]
         hook_observations = (
             self.native.decision_observations(
                 [
@@ -1916,7 +2040,7 @@ class RecordedVectorEnv(_Capture):
                     for on, active in zip(enabled, self._analysis_active, strict=True)
                 ]
             )
-            if hook_annotations
+            if reducing
             else []
         )
         attempted = []
@@ -1933,12 +2057,7 @@ class RecordedVectorEnv(_Capture):
                     digest = digests[index]
                     assert digest is not None
                     game.digests.append(digest)
-                    annotation = annotations[index] if annotations is not None else None
-                    retained = (
-                        None
-                        if annotation is None
-                        else DecisionAnnotation.model_validate(annotation)
-                    )
+                    retained = retained_annotations[index]
                     if retained is not None:
                         if retained.probabilities is not None and frame is not None:
                             offers = json.loads(frame)["offers"]
@@ -2003,11 +2122,11 @@ class RecordedVectorEnv(_Capture):
             if not on:
                 continue
             if infos and infos[index].get("game_error"):
+                if not needs_frames:
+                    game.frame = infos[index].get("game_error_frame")
                 if self._reductions:
                     self._analysis_active[index] = False
-                self._write_game(
-                    game, GameEnd(status="failed", reason=infos[index]["game_error"])
-                )
+                self._record_game_failure(game, "step", infos[index])
                 if self._branch_roots[index] is not None:
                     self.games[index] = self.game_inputs(index)
                 continue
@@ -2033,7 +2152,7 @@ class RecordedVectorEnv(_Capture):
                             self._analysis_indices[index],
                             observation,
                             int(actions[index]),
-                            hook_annotations[index],
+                            retained_annotations[index],
                         )
                     )
                     self._analysis_indices[index] += 1
@@ -2047,6 +2166,8 @@ class RecordedVectorEnv(_Capture):
 
 def load_recorded_slots(
     batches: Sequence[tuple[RecordedVectorEnv, Sequence[managym.SlotLoad]]],
+    *,
+    isolated: bool = False,
 ) -> list[list[managym.SlotLoadResult]]:
     """Admit every vector's replacements before changing games or their replay roots."""
     for vector, _ in batches:
@@ -2059,10 +2180,13 @@ def load_recorded_slots(
     try:
         if len(batches) == 1:
             vector, requests = batches[0]
-            loaded = [vector.native.load_slots_into_buffers(requests)]
+            loaded = [
+                vector.native.load_slots_into_buffers(requests, isolated=isolated)
+            ]
         else:
             loaded = managym.VectorEnv._load_shard_buffers(
-                [(vector.native, requests) for vector, requests in batches]
+                [(vector.native, requests) for vector, requests in batches],
+                isolated=isolated,
             )
     except (managym.AgentError, ValueError, TypeError, RuntimeError) as error:
         # Admission rejected the batch. The durable cursor still owns the
@@ -2093,7 +2217,7 @@ def load_recorded_slots(
                 vector._write_game(
                     game, GameEnd(status="interrupted", reason="root replaced")
                 )
-        vector._record_roots(roots)
+        vector._record_roots(roots, isolated=isolated)
     return loaded
 
 
@@ -2348,7 +2472,7 @@ def _games_from_snapshot(record: GameRecord) -> Iterator[GameRecord]:
                 if (values := getattr(boundary, name))
             }
             boundary = boundary.model_copy(update=fields)
-        yield record.model_copy(update={"games": [game], "boundary": boundary})
+        yield record.for_game(game, boundary)
 
 
 def read_records(path: Path) -> Iterator[GameRecord]:

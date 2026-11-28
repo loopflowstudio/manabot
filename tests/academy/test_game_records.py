@@ -3,13 +3,20 @@
 import json
 from pathlib import Path
 
+from fastapi.testclient import TestClient
 import pytest
 
 import managym
 from managym.academy import server, trace
 from managym.academy.launch import read_games
-from managym.academy.watch import import_game, inspect_watch
-from managym.recording import ScalarCapture, runtime_identities
+from managym.academy.watch import import_game, import_record, inspect_watch
+from managym.recording import (
+    RecordedVectorEnv,
+    ScalarCapture,
+    read_record,
+    runtime_identities,
+)
+from managym.replay import walk
 from tests.fixtures.recorded_commands import record_until_object_candidate
 
 
@@ -17,8 +24,7 @@ from tests.fixtures.recorded_commands import record_until_object_candidate
 def test_mixed_disclosure_record_replays_and_imports(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, vector: bool
 ) -> None:
-    from managym.recording import RecordedVectorEnv, read_records
-    from managym.replay import walk
+    from managym.recording import read_records
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
     setup = managym.GameSetup(
@@ -95,8 +101,6 @@ def test_interrupted_record_import_is_closed_and_readable(
     assert shown["winner"] is None
     assert imported["id"] not in server.LIVE_GAMES
     # The launcher opens the recording in a browser that holds no credential.
-    from fastapi.testclient import TestClient
-
     anonymous = TestClient(server.app).get(f"/api/traces/{imported['id']}/recording")
     assert anonymous.status_code == 200, anonymous.text
     assert "private-label" not in anonymous.text
@@ -151,9 +155,6 @@ def test_diverged_transition_never_persists_its_consequences(
     capture.step(env, 0)
     capture.step(env, 0)
     capture.close()
-    from managym.academy.watch import import_record
-    from managym.recording import read_record
-
     record = read_record(path)
     record.games[0].digests[2] = "edited-next-state"
     imported = import_record(record)
@@ -164,12 +165,207 @@ def test_diverged_transition_never_persists_its_consequences(
     assert imported["id"] not in server.LIVE_GAMES
 
 
+@pytest.mark.parametrize(
+    ("policies", "first_external"),
+    [
+        (("agent", "heuristic:64"), 0),
+        (("heuristic:64", "agent"), 1),
+        (("random", "agent"), 1),
+    ],
+)
+def test_native_vector_game_replay_keeps_both_acting_views(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    policies: tuple[str, str],
+    first_external: int,
+) -> None:
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
+    path = tmp_path / "native.jsonl"
+    setup = managym.GameSetup(
+        [
+            managym.PlayerConfig("Red", {"Mountain": 8, "Gray Ogre": 4}),
+            managym.PlayerConfig("White", {"Plains": 8, "Savannah Lions": 4}),
+        ],
+        decklists="closed",
+    )
+    capture = RecordedVectorEnv(
+        num_envs=1,
+        seed=7,
+        games_path=path,
+        player_policies=policies,
+        context={"source_kind": "evaluation"},
+    )
+    capture.reset_all(setup)
+    for _ in range(100):
+        _, _, done, _, _ = capture.step([0], annotations=[{"value": 0.25}])[0]
+        if done:
+            break
+    else:
+        pytest.fail("native-seat fixture did not end")
+    capture.close()
+    record = read_record(path)
+    replay = walk(record, capture_cards=True)
+    decisions = list(replay)
+    exposure = replay.cards().capture.exposure
+    assert exposure is not None
+    client = TestClient(server.app)
+    response = client.post(
+        "/api/watch/import",
+        content=path.read_bytes(),
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 200, response.text
+    imported = response.json()
+    trace_id = imported["id"]
+    assert imported["stop"] == "complete"
+    assert imported["count"] == len(exposure.choices) > len(decisions) > 2
+    assert trace_id not in server.LIVE_GAMES
+
+    recorded, _ = server._recording_read(trace_id)
+    assert recorded.replay is not None
+    for row, choice in zip(recorded.replay.decisions, exposure.choices, strict=True):
+        assert (row.viewer, row.offer_id) == (choice.actor, choice.selected)
+    end = record.games[0].end
+    assert end is not None and recorded.payload["winner"] == end.winner
+
+    first = inspect_watch(trace_id, 0)
+    assert first["decision"]["viewer"] == 0
+    actor_ordinal = next(
+        row.ordinal for row in recorded.replay.decisions if row.viewer == first_external
+    )
+    assert inspect_watch(trace_id, actor_ordinal)["outputs"]["value"] == 0.25
+    native_rows = [
+        row for row in recorded.replay.decisions if row.viewer != first_external
+    ]
+    native = inspect_watch(trace_id, native_rows[-1].ordinal)
+    assert native["source_kind"] == "evaluation"
+    assert native["outputs"]["unavailable"] == "not retained"
+    assert native["observation"]["agent"]["player_index"] == 1 - first_external
+    assert native["observation"]["opponent"]["hand"] == []
+    assert native["presentation"]
+    assert all(
+        event["seq"] < native["decision"]["presentation_cursor"]
+        for event in native["presentation"]
+    )
+    spectator = inspect_watch(trace_id, native_rows[-1].ordinal, reveal=True)
+    assert spectator["decision"] == native["decision"]
+    assert spectator["presentation"] == native["presentation"]
+    assert (
+        client.get(
+            f"/api/traces/{trace_id}/decisions/{native['decision']['address']}"
+        ).json()["viewer"]
+        == 1 - first_external
+    )
+
+    # Corrupt the second transition's target boundary. Its automatic reply
+    # must disappear with the unverified external action.
+    record.games[0].digests[2] = "edited-next-state"
+    rejected = import_record(record)
+    assert rejected["stop"] == "diverged"
+    external_ordinals = [
+        i for i, choice in enumerate(exposure.choices) if choice.actor == first_external
+    ]
+    assert rejected["count"] == external_ordinals[1]
+    replay_index = client.get(f"/api/traces/{rejected['id']}/recording")
+    assert replay_index.status_code == 200, replay_index.text
+    assert replay_index.json()["record_stop"]["index"] == rejected["count"]
+    prefix = walk(record, capture_choices=True)
+    assert len(list(prefix)) == 1
+    assert prefix.stop is not None and prefix.stop.index == 1
+    assert prefix.choices() == [
+        (choice.actor, choice.selected)
+        for choice in exposure.choices[: rejected["count"]]
+    ]
+
+
+@pytest.mark.parametrize("edit", ["determinize", "move_permanent"])
+def test_native_record_imports_after_card_state_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, edit: str
+) -> None:
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
+    env = managym.Env(seed=7, player_policies=("agent", "heuristic:64"))
+    obs, _ = env.reset(
+        [managym.PlayerConfig(str(i), {"Mountain": 8, "Gray Ogre": 4}) for i in (0, 1)]
+    )
+    for _ in range(8):
+        land = next(
+            (
+                i
+                for i, action in enumerate(obs.action_space.actions)
+                if action.action_type == managym.ActionEnum.PRIORITY_PLAY_LAND
+            ),
+            None,
+        )
+        obs, *_ = env.step(0 if land is None else land)
+        if land is not None:
+            break
+    else:
+        pytest.fail("seeded game did not reach a land play")
+    if edit == "determinize":
+        env.determinize(seed=35, perspective=obs.agent.player_index)
+        marker = "determinize"
+    else:
+        permanent = obs.agent_permanents[0]
+        env.edit_game_state(
+            [managym.GameStateEdit.move_permanent(permanent.id, to="library_bottom")]
+        )
+        marker = "game_state_edits"
+    env.step(0)
+
+    imported = import_game(json.loads(env.snapshot().to_replay_json()))
+    assert imported["stop"] == "interrupted"
+    assert imported["count"] > 2
+    recording, _ = server._recording_read(imported["id"])
+    assert [
+        kinds
+        for position in recording.positions
+        if position.kind == "choice"
+        and (kinds := recording.metadata(position)["branched"])
+    ] == [[marker]]
+
+
+@pytest.mark.parametrize("branch_op", ["reseed", "determinize"])
+@pytest.mark.parametrize("trailing_force", [False, True])
+def test_native_random_replay_preserves_rng_and_marks_forced_branch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    branch_op: str,
+    trailing_force: bool,
+) -> None:
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
+    env = managym.Env(seed=42, player_policies=("random", "heuristic"))
+    env.reset(
+        [managym.PlayerConfig(str(i), {"Mountain": 8, "Gray Ogre": 4}) for i in (0, 1)]
+    )
+    env.step(None)
+    options = (
+        managym.RestoreOptions.exact(reseed=35, forced_first_action=0)
+        if branch_op == "reseed"
+        else managym.RestoreOptions.determinize(1, 35, forced_first_action=0)
+    )
+    branch = env.snapshot().restore(options)
+    if not trailing_force:
+        branch.step(None)
+    imported = import_game(json.loads(branch.snapshot().to_replay_json()))
+    assert imported["stop"] == "interrupted"
+    assert imported["count"] == (2 if trailing_force else 3)
+    recording, _ = server._recording_read(imported["id"])
+    choices = [
+        position for position in recording.positions if position.kind == "choice"
+    ]
+    assert [recording.metadata(position)["branched"] for position in choices] == (
+        [None, [branch_op]] if trailing_force else [None, [branch_op], None]
+    )
+    assert [inspect_watch(imported["id"], i)["decision"]["viewer"] for i in (0, 1)] == [
+        0,
+        1,
+    ]
+
+
 def test_original_command_import_and_stale_rejection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from managym.academy.watch import import_record
     from managym.decision import Command
-    from managym.recording import read_record
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
     path = tmp_path / "commands.jsonl"
@@ -213,7 +409,7 @@ def test_original_command_import_and_stale_rejection(
 
 
 def test_journal_listing_projects_the_complete_file(tmp_path: Path) -> None:
-    from managym.recording import read_record, records_from_source
+    from managym.recording import records_from_source
 
     path = tmp_path / "journal.jsonl"
     capture = ScalarCapture(seed=7, journal_path=path)
@@ -284,8 +480,6 @@ def test_imported_state_edit_marks_the_verified_replay_choice(
 def test_search_outputs_open_without_private_runner_metadata(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from managym.recording import read_record
-
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "traces")
     path = tmp_path / "evaluation.jsonl"
     env = managym.Env(seed=7)

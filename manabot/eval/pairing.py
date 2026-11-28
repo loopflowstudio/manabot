@@ -1,7 +1,7 @@
 """Play a paired deal through the replay-checked arena.
 
-The candidate is a checkpoint; the opponent is a checkpoint or the native
-heuristic (`Code(name="heuristic")`). The caller owns the experimental
+The candidate is a checkpoint. The opponent can be a checkpoint, the native
+heuristic, or a registered code player. The caller owns the experimental
 schedule; Etude owns the model forwards and supplies the built agents. This
 module admits players, retains the arena trace and returns each game's card
 evidence as a blob of the Etude match.
@@ -28,9 +28,11 @@ from manabot.eval.agents import (
     checkpoint_reader,
     local_scalar_sampler,
     registration,
+    require_heuristic_version,
 )
 from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.card_evaluation import trace_card_tables
+from manabot.eval.evaluate import validate_registration_source
 from manabot.eval.evaluation import (
     EvaluationRequest,
     EvaluationResult,
@@ -92,19 +94,29 @@ def admit_pairing[Seat](
     paths: dict[str, str] = {}
     for name, player in zip(PARTICIPANTS, match.players, strict=True):
         if name == "opponent" and isinstance(player, Code):
-            if player.name != "heuristic":
-                raise ValueError("a pairing's code opponent must be the heuristic")
-            players.append(
-                register_anchor(
+            if "registration" in player.config:
+                opponent = PlayerRegistration.model_validate(
+                    player.config["registration"]
+                )
+                if opponent.runner_kind != "code" or opponent.player_id != name:
+                    raise ValueError("code pairing registration must name the opponent")
+                validate_registration_source(opponent)
+            elif player.name == "heuristic":
+                require_heuristic_version(player)
+                opponent = register_anchor(
                     players[0],
                     "heuristic",
                     player_id=name,
                     heuristic_actions=player.config.get("max_actions"),
                 )
-            )
+            else:
+                raise ValueError("a pairing's code opponent requires a registration")
+            players.append(opponent)
             continue
         if not isinstance(player, CheckpointPlayer):
-            raise ValueError("pairing players are checkpoints or a heuristic opponent")
+            raise ValueError(
+                "pairing requires a checkpoint candidate and an admitted opponent"
+            )
         players.append(
             registration(
                 player,

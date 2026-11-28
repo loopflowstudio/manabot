@@ -102,12 +102,21 @@ Select `--opponent heuristic` for local evaluation or
 `MonitorProtocol(opponent="heuristic")` for checkpoint monitoring. The scalar
 adapter and batched opponent share the
 [native heuristic rules](engine.md#built-in-heuristic).
-New arena registrations use `version="native-v2"` and bind the native rule
-sources and adapter as their source identity. The `managym` wheel includes engine
-sources at their original package paths, so installed registration and validation hash
-the same paths and bytes as a checkout. Results recorded against the Python
-heuristic retain their original identity.
+New arena registrations use `version="native-v3"` and bind the native rule
+sources, native policy driver (`player_policy.rs`), and adapter as their source
+identity. Both scalar and vector evaluation runners keep one heuristic instance
+per game so within-turn state matches training's native opponent. The `managym`
+wheel includes engine sources at their original package paths, so installed
+registration and validation hash the same paths and bytes as a checkout.
+Results recorded against earlier heuristic versions (`native-v2` and the Python
+heuristic) retain their original identity.
 A changed anchor identity needs a new version, never a relabeling of old games.
+Etude keys a `Code` player by name and config. Set `config={"version":
+"native-v3", "max_actions": 64}` for a new built-in heuristic tournament with
+a 64-action cap. The builder and paired-deal admission reject a missing or
+different version. The throughput probe declares this version and size. Run
+the current heuristic under new tournament and seating identities. Use the
+revision that wrote an existing tournament to resume it.
 The code anchors `scripted_greedy` and `random`
 (`manabot.sim.anchors`, frozen v1 sources) remain admissible for compatibility
 and diagnostics, not as working anchors; `fit_population` still places
@@ -418,22 +427,79 @@ residency, retries and performance records. A scalar job declares
 `play_scalar` to run the native game and Command replay in a worker thread
 while the Etude event loop handles checkpoint forwards.
 
-TLA trophy evaluation declares `play_many(matches)`. The async generator
-pulls matches into 64 native game slots, replaces finished legs as new matches
-arrive, and yields a replay-checked result for each completed deal. The
-vector runner groups v11 observations by checkpoint key and prepares one
+TLA trophy evaluation declares `play_many(matches)`:
+
+```python
+from contextlib import aclosing
+
+from manabot.eval.vector import play_pairings
+
+
+async def play_many(matches):
+    async with aclosing(play_pairings(matches, pairing_spec)) as stream:
+        async for outcome in stream:
+            yield outcome
+```
+
+The async generator pulls matches into 64 native game slots, replaces finished
+legs as new matches arrive, and yields a replay-checked `(match, Result)` for
+each completed deal. When a seat is the built-in `heuristic` (an Etude `Code`
+player with no custom `registration`), the vector runner seats it natively on
+that slot with its declared `max_actions` cap (for example
+`("agent", "heuristic:64")` or `("heuristic:64", "agent")`). Every active slot
+against the heuristic therefore surfaces only checkpoint decisions and
+contributes a row to each round's forward batch. Custom or registered `Code`
+players remain Python seats (`("agent", "agent")`), and both runners keep one
+code-player instance per game so per-game state persists across decisions.
+
+The vector runner groups v11 observations by checkpoint key and prepares one
 host batch per checkpoint per round, including seats that blank decision
 memory. It awaits `Forward([prepared], rows=prepared.batch)`. The game worker
-reuses verified checkpoint metadata across deals.
-A checkpoint forward failure settles the affected matches as errors before
-the runner requests replacements for those slots. Unrelated games continue.
-Checkpoints in one deal must agree on the vector observation layout, action
-overflow and decision-memory capture. Compatible deals share the environment
-even when their seat-specific mana settings differ. For a local Etude run,
-pass the generator and agent set to `active.play_many`. Each live decision
-round divides its elapsed time among the active slots. A game's budget and
-recorded execution time use its share. The Etude run deadline covers
-admission, replay and result delivery too.
+reuses verified checkpoint metadata across deals. Checkpoints in one deal
+must agree on the vector observation layout, action overflow and decision-memory
+capture. Compatible deals share the environment even when their seat-specific
+mana settings differ. Finished deals verify on two background replay threads
+(with `managym.Env` releasing the GIL during `reset`, `step`, and `state_digest`)
+while the main loop continues stepping active slots. The runner yields each
+`(match, Result)` as its replay completes and pauses new leg seating while
+`slots` settled deals wait in replay. If all live legs finish at that limit,
+the runner keeps the idle vector open until a replay completes. A checkpoint
+forward failure settles the affected matches as errors before the runner
+requests replacement legs. Unrelated games continue.
+For a local Etude run, pass the generator and agent set to `active.play_many`,
+or run the local throughput probe on held-out trophy deals:
+
+```bash
+uv run --no-sync python -m experiments.eval_throughput \
+  --output-dir .runs/eval-throughput/w160-mps-64 --device mps \
+  --runner vector --slots 64 \
+  --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors
+```
+
+It prints a JSON summary with `games`, `mean_rows_per_forward`, `largest_stage`,
+and separate timings for wall-clock stages and background replay. In vector
+runs, `background_replay_seconds` sums replay durations across workers, which
+can overlap each other and gameplay. The wall-clock `other_arena` stage
+includes any wait for replay. Each live decision round divides its elapsed
+time among the active slots. A game's budget and recorded execution time use
+its share. The Etude run deadline covers admission, replay and result delivery
+too.
+
+Vector games record compact decision annotations carrying only runner-owned
+facts: actor, revision, `player_id`, `player_seed`, `player_decision_ordinal`,
+`policy_rng_seed`, and `latency_seconds`. They omit per-decision
+`frame_sha256`, `chosen_offer`, and `action_space_kind` (the recorded state
+digest binds the action space and the recorded action index binds the choice;
+scalar records retain live viewer frames and their hash). For a native-heuristic
+leg, the game record holds only surfaced checkpoint actions, digests, and
+annotations: replay recomputes heuristic turns between surfaced checkpoint
+decisions and binds them with the next surfaced digest and final digest.
+`decisions`, per-player latency, and `max_commands` count surfaced checkpoint
+decisions. Readers check `frame_sha256`, `chosen_offer`, and
+`action_space_kind` when present and accept compact records without them.
+Because Academy Watch currently requires `("agent", "agent")` records,
+native-heuristic vector records verify through `managym.replay` and evaluation
+audits rather than opening in Academy Watch.
 
 `manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path` and
 prefers CUDA, followed by MLX, MPS, and CPU. MLX uses
@@ -474,8 +540,13 @@ retain scalar checkpoint play through bounded local children.
 **Failure.** The game loop checks `game_seconds` between decisions and enforces
 `max_commands`. Scalar play fsyncs the pending Command before native execution.
 The vector runner holds live records in memory and retains settled diagnostics
-when a deal completes. Native `AgentError` and PyO3 `PanicException` produce
-invalid, score-null rows and retain failure evidence. Later games continue.
+when a deal completes. Native `AgentError` and PyO3 `PanicException` during
+construction, opening settlement or stepping isolate to the failing leg and
+poison only that slot. The invalid score-null row names the acting seat when
+the native receipt supplies one (`game_error_seat`). If a registered code
+player hits a native error while choosing an action, the runner records a crash
+for that player and ends the game at the last committed action. The failure
+details live in evaluation metadata. In both cases, other games continue.
 Replay checks the recorded Commands against the reconstructed game. Invalid rows never become forfeits.
 Other Python exceptions fail the match. Elemental also fails a match with no
 valid replayed games, preserving its evidence, so an all-invalid smoke cannot
@@ -722,8 +793,14 @@ carries them. Tests load the INT-6 fixture's key and anchors through
 Ordinary evaluation games are retained as canonical managym records in
 `games/<cell-id>.jsonl`, with finalized per-deal shards in `games/deals/`. Evaluation
 setup, participant and runtime identities stay in private record context;
-viewer-frame hashes, player ordinals, policy seeds, latencies, inference ids and
-local-update receipts stay in decision annotations. Card eligibility and Etude
+the worker fingerprints its engine and catalog once per process and binds
+each game's matchup and observation ABI separately. Scalar journals freeze
+that context at setup and refresh it when the game closes.
+
+Player ordinals, policy seeds, latencies, inference ids and local-update
+receipts stay in decision annotations (scalar records also retain viewer-frame
+hashes, chosen offers and action-space kinds, while vector records write compact
+annotations without per-decision viewer frames). Card eligibility and Etude
 admission still require the separate successful replay audit. Its `trace_sha256`
 identifies the canonical record, including that metadata. Existing rollup names
 and `gih-copies-v1` counting rules are unchanged.

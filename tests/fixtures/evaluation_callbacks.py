@@ -20,7 +20,10 @@ from etude.eval.run import EvalRun
 from etude.jobs import Agents
 import pytest
 
-from manabot.sim.agent import GamePlayer
+from manabot.env.env import Env
+from manabot.env.observation import ObservationBuffers
+from manabot.infra.config import MatchConfig
+from manabot.sim.agent import GameChoice, GamePlayer
 
 
 async def play_callback(match: Match, agents: Sequence[object]) -> Tables | Result:
@@ -121,21 +124,26 @@ def play_native_case_scalar(match: Match, agents: Sequence[GamePlayer]) -> Resul
         space = first.space
         called = False
 
-        def admit(self, match: object) -> None:
+        def admit(self, match: MatchConfig) -> None:
             first.admit(match)
 
-        def choose(self, env: object, obs: object, seed: int) -> int:
-            if not self.called:
-                self.called = True
-                if case == "agent":
-                    raise managym.AgentError("controlled agent failure")
-                if case == "panic":
-                    raise PanicException("controlled native panic")
-                if case == "retry":
-                    from etude.errors import RetryRequested
+        def open_game(self, seed: int) -> GameChoice:
+            choose = first.open_game(seed)
 
-                    raise RetryRequested("controlled agent transport failure")
-            return first.choose(env, obs, seed)
+            def inject(env: Env, obs: ObservationBuffers, decision_seed: int) -> int:
+                if not self.called:
+                    self.called = True
+                    if case == "agent":
+                        raise managym.AgentError("controlled agent failure")
+                    if case == "panic":
+                        raise PanicException("controlled native panic")
+                    if case == "retry":
+                        from etude.errors import RetryRequested
+
+                        raise RetryRequested("controlled agent transport failure")
+                return choose(env, obs, decision_seed)
+
+            return inject
 
     built = {
         spec.players[0].player_id: Injected(),
