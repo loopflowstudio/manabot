@@ -140,6 +140,8 @@ Arena work and replay took 72–89% of time across the four CUDA arms.
 Bfloat16 forwards took 43% as long on `w384l8`, raising whole-run throughput
 by 16%. On `w160l8`, bfloat16 forwards took 1.69× as long and throughput fell
 by 12%. Each figure comes from one arm on one worker.
+The [same-batch L4 profile](eval_precision_profile.md) identifies the attention
+backend crossover and measures the spread across three repeats per arm.
 
 All 768 games passed Command replay. Both float32 CUDA arms matched their
 CPU baselines on all 128 action traces and scores, as did `w384l8` bf16.

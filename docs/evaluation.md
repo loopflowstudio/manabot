@@ -447,6 +447,14 @@ it never selects an action. `build(player, leaves)` creates the heuristic or
 checkpoint sampler without importing Torch. Each decision's recorded seed
 controls NumPy PCG64 sampling in the game process.
 
+For padded TLA evaluation on an NVIDIA L4 with Torch 2.15.0+cu132, keep
+float32 for 20- or 36-wide attention heads. Those bf16 shapes used the
+SDPA math backend. Bfloat16 used memory-efficient attention with 32-,
+40- and 48-wide heads. It was faster at 4, 16 and 64 rows per call for
+`w256l8` and `w384l8`, and at 16 and 64 rows for the aligned 160-wide
+four- and five-head controls. See the
+[L4 evaluation precision profile](../experiments/reports/eval_precision_profile.md).
+
 A checkpoint with a decision-memory encoder has its log prepared with the
 observation. The loader joins these memory rows and rebuilds their packed
 sequence schedule when Etude sends multiple inputs. A seat whose

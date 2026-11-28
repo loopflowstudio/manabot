@@ -26,6 +26,13 @@ Each is reversible.
 - The MTG-497 sync keeps one shared `prepare_batch` for both arena batches and
   captured single rows. The capture hook receives the selected coordinates
   after per-seat memory ablation.
+- The first L4 trace showed that even-head float32 uses native MHA. Add a
+  seeded 160-wide, four-head grid control so the aligned narrow comparison
+  can retain that float32 path. The planned five-head control keeps its
+  separate comparison through SDPA.
+- Grid cells use 12 consecutive calls per batch size after skipping 2,048
+  single rows, with two timed repeats and three sampled calls for profiling.
+  Each precision gets the same calls within its cell.
 
 Ideas outside this Task:
 
