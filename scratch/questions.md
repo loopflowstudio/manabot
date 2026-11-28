@@ -19,8 +19,9 @@ Choices taken headless (planning and the realign after concept review,
   per-decision heuristic latency or chosen offer is stored.
 - **Compact vector annotations (review Q1, 1a)** drop `frame_sha256`,
   `chosen_offer`, `action_space_kind` and the per-decision private-hand check.
-- **Academy Watch cannot open new vector heuristic records (review Q3, 3a)**
-  until a separate Task adds native-seat import.
+- **Academy Watch native-seat import is in this Task** (ship-review choice
+  `3b`, Pass 7). Pass 8 takes the Pass 7 review's Q1 answer `1a` (a native
+  committed-choice log rather than reading card-exposure capture), for review.
 - **Opening-settlement isolation is in this Task (review Q4, 4a).**
 - **Replay uses two worker threads** with the GIL released in `PyEnv`.
 - **Scalar records keep live frames.**
