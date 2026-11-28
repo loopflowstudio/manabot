@@ -223,6 +223,9 @@ class GameInputs(BaseModel):
     )
     seed: int
     players: list[PlayerSetup]
+    player_policies: tuple[str, str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     actions: list[int | str] = []
     interventions: list[Intervention] = Field(
         default_factory=list, exclude_if=lambda v: not v
@@ -383,6 +386,28 @@ class GameRecord(BaseModel):
     def resolved_player_policies(self) -> tuple[str, str]:
         """Read either receipt spelling without deprecating retained evidence."""
         return self.player_policies or _retained_player_policies(self.opponent_policy)
+
+    def policies_for(self, game: GameInputs) -> tuple[str, str]:
+        return game.player_policies or self.resolved_player_policies
+
+    def failed_opening(self, game: GameInputs) -> bool:
+        return (
+            self.mode == "vector"
+            and self.operation == "reset"
+            and self.execution_outcome == "failed"
+            and not game.actions
+            and game.end is not None
+            and game.end.status == "failed"
+        )
+
+    def for_game(
+        self, game: GameInputs, boundary: NativeBoundary | None = None
+    ) -> "GameRecord":
+        fields: dict[str, object] = {"games": [game], "boundary": boundary}
+        if game.player_policies is not None:
+            fields["player_policies"] = game.player_policies
+            fields["games"] = [game.model_copy(update={"player_policies": None})]
+        return self.model_copy(update=fields)
 
 
 class GameChange(BaseModel):
@@ -1559,7 +1584,8 @@ class RecordedVectorEnv(_Capture):
         return self._branch_roots[slot] is None and super()._selected(game)
 
     def _record_of(self, game: GameInputs) -> GameRecord:
-        return self._evidence_for([game], "step")
+        record = self._evidence_for([game], "step")
+        return record.for_game(record.games[0])
 
     def take_slot_record(
         self,
@@ -1578,6 +1604,11 @@ class RecordedVectorEnv(_Capture):
         if end is not None:
             record.games[0].end = end
         if info is not None and info.get("game_error"):
+            if not game.actions:
+                record.operation = "reset"
+                record.games[0].end = GameEnd(
+                    status="failed", reason=str(info["game_error"])
+                )
             record.execution_outcome = "failed"
             record.error_class = str(info.get("game_error_class", "AgentError"))
             record.error = str(info["game_error"])
@@ -1673,12 +1704,20 @@ class RecordedVectorEnv(_Capture):
         self.reset_each_into_buffers([players for _ in self.games])
 
     def reset_each_into_buffers(
-        self, players: list[managym.GameSetup], *, seeds: list[int] | None = None
+        self,
+        players: list[managym.GameSetup],
+        *,
+        seeds: list[int] | None = None,
+        player_policies: list[tuple[str, str]] | None = None,
+        isolated: bool = False,
     ) -> None:
         self._reset_each(
             players,
             self.next_seeds if seeds is None else seeds,
-            lambda: self.native.reset_each_into_buffers(players, seeds=seeds),
+            lambda: self.native.reset_each_into_buffers(
+                players, seeds=seeds, player_policies=player_policies, isolated=isolated
+            ),
+            player_policies=player_policies,
         )
 
     def reset_all(self, players: managym.GameSetup) -> Any:
@@ -1693,9 +1732,18 @@ class RecordedVectorEnv(_Capture):
         players: list[managym.GameSetup],
         seeds: list[int],
         call: Callable[[], Any],
+        *,
+        player_policies: list[tuple[str, str]] | None = None,
     ) -> Any:
         if len(players) != len(self.games) or len(seeds) != len(self.games):
             raise ValueError("expected one setup and seed per stream")
+        policies = (
+            player_policies
+            if player_policies is not None
+            else [self.player_policies] * len(self.games)
+        )
+        if len(policies) != len(self.games):
+            raise ValueError("expected one policy pair per stream")
         retained = [
             _retain_players(setup, seed)
             for setup, seed in zip(players, seeds, strict=True)
@@ -1709,9 +1757,12 @@ class RecordedVectorEnv(_Capture):
                 seeds=seeds,
                 players=retained,
             )
-        for game, seats, seed in zip(self.games, retained, seeds, strict=True):
+        for game, seats, seed, pair in zip(
+            self.games, retained, seeds, policies, strict=True
+        ):
             self._write_game(game, GameEnd(status="interrupted", reason="reset"))
             game.players = seats
+            game.player_policies = pair if pair != self.player_policies else None
             game.restart(seed)
         with self._guard(lambda: self._snapshot("reset")):
             self._executing()
@@ -1733,6 +1784,7 @@ class RecordedVectorEnv(_Capture):
         for game, seed in zip(self.games, seeds, strict=True):
             self._write_game(game, GameEnd(status="interrupted", reason="reset"))
             game.restart(seed)
+            game.player_policies = None
         with self._guard(lambda: self._snapshot("reset")):
             self._executing()
             self.native.reset_seeds_into_buffers(seeds)
@@ -1740,12 +1792,12 @@ class RecordedVectorEnv(_Capture):
         self._record_roots(dict.fromkeys(range(len(seeds))))
 
     def load_slots_into_buffers(
-        self, requests: Sequence[managym.SlotLoad]
+        self, requests: Sequence[managym.SlotLoad], *, isolated: bool = False
     ) -> list[managym.SlotLoadResult]:
         """Publish recording roots only after native admission of the whole batch."""
         if not requests:
             return []
-        return load_recorded_slots([(self, requests)])[0]
+        return load_recorded_slots([(self, requests)], isolated=isolated)[0]
 
     def _finish_games(
         self, finished: set[int], infos: Sequence[dict[str, Any]]
@@ -1784,10 +1836,14 @@ class RecordedVectorEnv(_Capture):
         # when a fresh root is installed.
         players = self.native.current_player_configs() if None in roots.values() else []
         seeds = self.native.current_game_seeds()
+        policies = self.native._current_player_policies()
         for index, root in sorted(roots.items()):
             game = self.games[index]
             self._branch_roots[index] = root
             game.restart(seeds[index])
+            game.player_policies = (
+                policies[index] if policies[index] != self.player_policies else None
+            )
             if self._reductions:
                 self._analysis_active[index] = False
             if root is not None:
@@ -2047,6 +2103,8 @@ class RecordedVectorEnv(_Capture):
 
 def load_recorded_slots(
     batches: Sequence[tuple[RecordedVectorEnv, Sequence[managym.SlotLoad]]],
+    *,
+    isolated: bool = False,
 ) -> list[list[managym.SlotLoadResult]]:
     """Admit every vector's replacements before changing games or their replay roots."""
     for vector, _ in batches:
@@ -2059,10 +2117,13 @@ def load_recorded_slots(
     try:
         if len(batches) == 1:
             vector, requests = batches[0]
-            loaded = [vector.native.load_slots_into_buffers(requests)]
+            loaded = [
+                vector.native.load_slots_into_buffers(requests, isolated=isolated)
+            ]
         else:
             loaded = managym.VectorEnv._load_shard_buffers(
-                [(vector.native, requests) for vector, requests in batches]
+                [(vector.native, requests) for vector, requests in batches],
+                isolated=isolated,
             )
     except (managym.AgentError, ValueError, TypeError, RuntimeError) as error:
         # Admission rejected the batch. The durable cursor still owns the
@@ -2348,7 +2409,7 @@ def _games_from_snapshot(record: GameRecord) -> Iterator[GameRecord]:
                 if (values := getattr(boundary, name))
             }
             boundary = boundary.model_copy(update=fields)
-        yield record.model_copy(update={"games": [game], "boundary": boundary})
+        yield record.for_game(game, boundary)
 
 
 def read_records(path: Path) -> Iterator[GameRecord]:

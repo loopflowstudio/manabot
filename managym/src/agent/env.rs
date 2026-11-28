@@ -141,6 +141,8 @@ pub struct Env {
     game: Option<Game>,
     pub(crate) heuristics: [Option<Box<Heuristic>>; 2],
     player_policies: [PlayerPolicy; 2],
+    // The chooser at the failing operation, even if a step already advanced state.
+    pub(super) gameplay_seat: Option<usize>,
     // Observation::for_player deliberately omits events. Built-in index stepping
     // must reuse the live projection's events, especially combat declarations.
     heuristic_events: Vec<EventData>,
@@ -249,6 +251,7 @@ impl Env {
             heuristic_events: Vec::new(),
             decision_events: false,
             player_policies: [PlayerPolicy::Agent; 2],
+            gameplay_seat: None,
             provenance: None,
             reset_setup: None,
             collect_statistics: false,
@@ -309,7 +312,16 @@ impl Env {
         &mut self,
         player_configs: impl Into<GameSetup>,
     ) -> Result<(Observation, InfoDict), AgentError> {
-        let mut player_configs = player_configs.into();
+        let observation = self.reset_root(player_configs.into(), self.player_policies)?;
+        self.settle_opening(observation)
+    }
+
+    pub(super) fn reset_root(
+        &mut self,
+        player_configs: GameSetup,
+        player_policies: [PlayerPolicy; 2],
+    ) -> Result<Observation, AgentError> {
+        let mut player_configs = player_configs;
         if player_configs.len() != 2 {
             return Err(AgentError(format!(
                 "expected exactly 2 player configs, got {}",
@@ -355,6 +367,7 @@ impl Env {
         game.decision_memory_include_own = self.decision_memory_include_own;
         let setup = Arc::new(player_configs);
         self.reset_setup = Some(setup.clone());
+        self.player_policies = player_policies;
         self.provenance = Some(GameProvenance {
             setup,
             skip_trivial: self.skip_trivial,
@@ -370,8 +383,16 @@ impl Env {
         self.reset_seed = self.seed;
         self.game = Some(game);
         self.heuristics = [None, None];
+        self.gameplay_seat = None;
         drop(_scope);
         self.remember_heuristic_events(&observation);
+        Ok(observation)
+    }
+
+    pub(super) fn settle_opening(
+        &mut self,
+        observation: Observation,
+    ) -> Result<(Observation, InfoDict), AgentError> {
         let (observation, _, _, _, info) =
             self.settle_players(observation, 0.0, false, false, empty_info_dict())?;
         Ok((observation, info))
@@ -403,9 +424,9 @@ impl Env {
         self.decision_events = true;
     }
 
-    pub(crate) fn replacement_root(&self, seed: u64) -> Self {
+    pub(crate) fn replacement_root(&self, seed: u64, policies: [PlayerPolicy; 2]) -> Self {
         let mut next = Self::new(seed, self.skip_trivial, self.profiler.is_enabled(), false)
-            .with_player_policies(self.player_policies)
+            .with_player_policies(policies)
             .with_decision_memory(self.decision_memory_enabled)
             .with_decision_memory_include_own(self.decision_memory_include_own);
         next.decision_events = self.decision_events;
@@ -608,14 +629,19 @@ impl Env {
         self
     }
 
+    pub(super) fn player_policies(&self) -> [PlayerPolicy; 2] {
+        self.player_policies
+    }
+
     /// A negative action requests one built-in decision. Mixed games then settle
     /// built-ins until an external chooser or terminal; two built-ins step once.
     pub fn step(
         &mut self,
         action: i64,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
+        self.gameplay_seat = self.current_agent_index();
         let chooser = self
-            .current_agent_index()
+            .gameplay_seat
             .ok_or_else(|| AgentError("no active chooser".into()))?;
         let external_action = action;
         let policy = self.player_policies[chooser];
@@ -694,6 +720,7 @@ impl Env {
             if terminated || truncated || chooser == external {
                 return Ok((obs, reward, terminated, truncated, info));
             }
+            self.gameplay_seat = Some(chooser);
             let action = self.player_policies[chooser].select_for_step(self, &obs)?;
             (obs, reward, terminated, truncated, info) = self.step_once(action)?;
             reward = -reward;
@@ -723,6 +750,7 @@ impl Env {
         let agent = action_space
             .player
             .ok_or_else(|| AgentError("no agent player in current action space".to_string()))?;
+        self.gameplay_seat = Some(agent.0);
         let action_count = action_space.actions.len();
         let out_of_bounds = || {
             AgentError(format!(
@@ -737,7 +765,7 @@ impl Env {
         let done = game.step(action)?;
         let mut result = finish_game_step(game, agent, done);
         // The profiler scope borrows self, so this cannot call remember_heuristic_events.
-        if self.decision_events || self.player_policies.contains(&PlayerPolicy::Heuristic) {
+        if self.decision_events || self.player_policies.iter().any(PlayerPolicy::is_heuristic) {
             self.heuristic_events.clone_from(&result.0.recent_events);
         }
         if done {
@@ -747,7 +775,7 @@ impl Env {
     }
 
     fn remember_heuristic_events(&mut self, observation: &Observation) {
-        if self.decision_events || self.player_policies.contains(&PlayerPolicy::Heuristic) {
+        if self.decision_events || self.player_policies.iter().any(PlayerPolicy::is_heuristic) {
             self.heuristic_events.clone_from(&observation.recent_events);
         }
     }

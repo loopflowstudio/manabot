@@ -156,7 +156,7 @@ def test_loader_batches_prepared_rows_without_sampling(
 
         def choose(match: EtudeMatch, agents: Sequence[GamePlayer]) -> tuple[int, int]:
             a, b = agents
-            return a.choose(env, obs, 123), b.choose(env, obs, 123)
+            return a.open_game(123)(env, obs, 123), b.open_game(123)(env, obs, 123)
 
         managed = asyncio.run(
             play_scalar(choose, managed_match, [seated, local_forward(forward)])

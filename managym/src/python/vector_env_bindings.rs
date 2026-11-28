@@ -24,6 +24,7 @@ use crate::{
             encode, encode_into, encode_into_incremental, EncodedObservation,
             EncodedObservationMut, ObservationEncoderConfig,
         },
+        player_policy::PlayerPolicy,
         rollout_pool::RolloutPool,
         vector_env::{
             ObservationRead, ObservationWriteError, SlotLoad, SlotLoadResult, SlotReplacement,
@@ -159,7 +160,7 @@ impl PySlotLoad {
     /// A fresh game using the setup already configured for this slot.
     #[getter]
     fn uses_slot_setup(&self) -> bool {
-        matches!(self.0, SlotLoad::Fresh(_, None, _))
+        matches!(self.0, SlotLoad::Fresh(_, None, ..))
     }
 
     /// Detached replay authority for a recording wrapper, including the intervention.
@@ -175,17 +176,19 @@ impl PySlotLoad {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (slot, player_configs=None, *, seed=None))]
+    #[pyo3(signature = (slot, player_configs=None, *, seed=None, player_policies=None))]
     fn fresh(
         slot: usize,
         player_configs: Option<Bound<'_, PyAny>>,
         seed: Option<u64>,
+        player_policies: Option<Vec<String>>,
     ) -> PyResult<Self> {
         let setup = player_configs
             .as_ref()
             .map(super::bindings::game_setup)
             .transpose()?;
-        Ok(Self(SlotLoad::Fresh(slot, setup, seed)))
+        let policies = player_policies.map(parse_policy_pair).transpose()?;
+        Ok(Self(SlotLoad::Fresh(slot, setup, seed, policies)))
     }
 
     #[staticmethod]
@@ -463,34 +466,38 @@ impl PyVectorEnv {
             inner.reset_with_writer(
                 vec![configs; inner.len()],
                 None,
-                |env_index, obs, reward, terminated, truncated| {
-                    write_buffers
-                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                },
+                None,
+                false,
+                |slot, obs, terminal| write_buffers.write_opening(slot, obs, terminal, &config),
             )
         })
     }
 
-    #[pyo3(signature = (player_configs, *, seeds=None))]
+    #[pyo3(signature = (player_configs, *, seeds=None, player_policies=None, isolated=false))]
     fn reset_each_into_buffers(
         &mut self,
         py: Python<'_>,
         player_configs: Vec<Bound<'_, PyAny>>,
         seeds: Option<Vec<u64>>,
+        player_policies: Option<Vec<Vec<String>>>,
+        isolated: bool,
     ) -> PyResult<()> {
         let configs = player_configs
             .into_iter()
             .map(|row| super::bindings::game_setup(&row))
             .collect::<PyResult<Vec<_>>>()?;
+        let policies = player_policies
+            .map(|pairs| {
+                pairs
+                    .into_iter()
+                    .map(parse_policy_pair)
+                    .collect::<PyResult<Vec<_>>>()
+            })
+            .transpose()?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_with_writer(
-                configs,
-                seeds,
-                |env_index, obs, reward, terminated, truncated| {
-                    write_buffers
-                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                },
-            )
+            inner.reset_with_writer(configs, seeds, policies, isolated, |slot, obs, terminal| {
+                write_buffers.write_opening(slot, obs, terminal, &config)
+            })
         })
     }
 
@@ -528,24 +535,28 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
+    #[pyo3(signature = (requests, *, isolated=false))]
     fn load_slots_into_buffers(
         &mut self,
         py: Python<'_>,
         requests: Vec<PySlotLoad>,
+        isolated: bool,
     ) -> PyResult<Vec<SlotLoadResult>> {
-        let prepared = self.prepare_slot_buffers(py, requests)?;
+        let prepared = self.prepare_slot_buffers(py, requests, isolated)?;
         self.publish_slot_buffers(py, prepared)
     }
 
     /// Keep every vector exclusively borrowed across both phases of a sharded load.
     #[staticmethod]
+    #[pyo3(signature = (batches, *, isolated=false))]
     fn _load_shard_buffers(
         py: Python<'_>,
         batches: Vec<(PyRefMut<'_, PyVectorEnv>, Vec<PySlotLoad>)>,
+        isolated: bool,
     ) -> PyResult<Vec<Vec<SlotLoadResult>>> {
         let mut admitted = Vec::with_capacity(batches.len());
         for (mut vector, requests) in batches {
-            let replacements = vector.prepare_slot_buffers(py, requests)?;
+            let replacements = vector.prepare_slot_buffers(py, requests, isolated)?;
             admitted.push((vector, replacements));
         }
         admitted
@@ -627,6 +638,14 @@ impl PyVectorEnv {
             .map(|(((players, disclosure), taps), payment)| {
                 super::bindings::python_game_setup(py, players, disclosure, taps, payment)
             })
+            .collect()
+    }
+
+    fn _current_player_policies(&self) -> Vec<(String, String)> {
+        self.inner
+            .current_player_policies()
+            .into_iter()
+            .map(|[a, b]| (a.to_string(), b.to_string()))
             .collect()
     }
 
@@ -985,12 +1004,13 @@ impl PyVectorEnv {
         &mut self,
         py: Python<'_>,
         requests: Vec<PySlotLoad>,
+        isolated: bool,
     ) -> PyResult<Vec<SlotReplacement>> {
         let requests: Vec<_> = requests.into_iter().map(|request| request.0).collect();
         self.with_buffers(py, move |inner, buffers, config| {
             let mut admission: Option<EncodedObservation> = None;
             inner
-                .prepare_slots(&requests, |slot, obs| {
+                .prepare_slots(&requests, isolated, |slot, obs| {
                     // Owners may have resized a registered array between calls.
                     // Check every selected destination before publishing any of them.
                     // Packed rows are appended only when published, so a rejected
@@ -1001,10 +1021,12 @@ impl PyVectorEnv {
                     buffers.rewards.element_ptr(slot)?;
                     buffers.terminated.element_ptr(slot)?;
                     buffers.truncated.element_ptr(slot)?;
-                    if let Some(row) = &mut admission {
-                        encode_into(obs, &config, row.buffers_mut())?;
-                    } else {
-                        admission = Some(encode(obs, &config)?);
+                    if let Some(obs) = obs {
+                        if let Some(row) = &mut admission {
+                            encode_into(obs, &config, row.buffers_mut())?;
+                        } else {
+                            admission = Some(encode(obs, &config)?);
+                        }
                     }
                     Ok(())
                 })
@@ -1020,12 +1042,7 @@ impl PyVectorEnv {
         let loaded = self.with_buffers(py, move |inner, buffers, config| {
             inner
                 .publish_slots(replacements, |slot, obs, terminal| {
-                    buffers.clear_memory_cursor(slot);
-                    buffers.write_encoded_row(slot, obs, 0.0, terminal, false, &config)?;
-                    if terminal {
-                        buffers.clear_memory_cursor(slot);
-                    }
-                    Ok(())
+                    buffers.write_opening(slot, obs, terminal, &config)
                 })
                 .map_err(map_write_error)
         })?;
@@ -1422,8 +1439,7 @@ fn encode_observations_into(
 pub(crate) fn parse_player_policies(
     values: Option<Vec<String>>,
     legacy: Option<&str>,
-) -> PyResult<[crate::agent::player_policy::PlayerPolicy; 2]> {
-    use crate::agent::player_policy::PlayerPolicy;
+) -> PyResult<[PlayerPolicy; 2]> {
     if values.is_some() && legacy.is_some() {
         return Err(PyValueError::new_err(
             "use player_policies or opponent_policy, not both",
@@ -1446,20 +1462,18 @@ pub(crate) fn parse_player_policies(
     } else {
         values.unwrap_or_else(|| vec!["agent".into(); 2])
     };
-    if values.len() != 2 {
-        return Err(PyValueError::new_err(
-            "player_policies requires exactly two seats",
-        ));
-    }
-    let parse = |value: &str| match value {
-        "agent" => Ok(PlayerPolicy::Agent),
-        "random" => Ok(PlayerPolicy::Random),
-        "heuristic" => Ok(PlayerPolicy::Heuristic),
-        _ => Err(PyValueError::new_err(format!(
-            "unsupported player policy: {value}"
-        ))),
+    parse_policy_pair(values)
+}
+
+fn parse_policy_pair(values: Vec<String>) -> PyResult<[PlayerPolicy; 2]> {
+    let [a, b]: [String; 2] = values
+        .try_into()
+        .map_err(|_| PyValueError::new_err("player_policies requires exactly two seats"))?;
+    let parse = |name: String| {
+        name.parse()
+            .map_err(|error: AgentError| PyValueError::new_err(error.0))
     };
-    Ok([parse(&values[0])?, parse(&values[1])?])
+    Ok([parse(a)?, parse(b)?])
 }
 
 #[cfg(feature = "python")]
@@ -1919,6 +1933,24 @@ struct SendWriteBuffers<'a> {
 
 #[cfg(feature = "python")]
 impl SendWriteBuffers<'_> {
+    fn write_opening(
+        &self,
+        slot: usize,
+        obs: Option<&Observation>,
+        terminal: bool,
+        config: &ObservationEncoderConfig,
+    ) -> Result<(), ObservationWriteError> {
+        self.clear_memory_cursor(slot);
+        match obs {
+            Some(obs) => self.write_encoded_row(slot, obs, 0.0, terminal, false, config)?,
+            None => self.write_step_state(slot, 0.0, false, false)?,
+        }
+        if terminal {
+            self.clear_memory_cursor(slot);
+        }
+        Ok(())
+    }
+
     fn clear_memory_cursor(&self, slot: usize) {
         if let Some(cursors) = self.memory_encoding {
             *cursors[slot].lock().expect("exclusive buffer row") = Default::default();

@@ -245,16 +245,17 @@ def execute_game(
         for registration in registrations:
             responsible = registration.player_id
             send(("phase", responsible))
+            player_seed = game["player_seeds"][responsible]
             if agents is not None:
                 player = agents[responsible]
                 assert match is not None
                 player.admit(match)
-                built[responsible] = (player, player.space)
+                built[responsible] = (player.open_game(player_seed), player.space)
             else:
                 with perf.span("player_startup"):
                     built[responsible] = in_child.build(
                         registration,
-                        seed=game["player_seeds"][responsible],
+                        seed=player_seed,
                         checkpoint_path=checkpoint_paths.get(responsible),
                     )
         responsible = None
@@ -327,7 +328,7 @@ def execute_game(
                 in_child.seed(policy_seed)
             started = time.perf_counter()
             if agents is not None:
-                action = agents[player_id].choose(env, obs, policy_seed)
+                action = built[player_id][0](env, obs, policy_seed)
             else:
                 with perf.span("scalar_policy"):
                     action = int(built[player_id][0].act(env, obs))

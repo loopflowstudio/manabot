@@ -282,13 +282,11 @@ impl GameSnapshot {
     pub(crate) fn compatible(
         &self,
         options: &RestoreOptions,
-        policies: [PlayerPolicy; 2],
         skip_trivial: bool,
         memory: bool,
         include_own: bool,
     ) -> bool {
-        self.policies == policies
-            && self.skip_trivial == skip_trivial
+        self.skip_trivial == skip_trivial
             && options
                 .enable_decision_memory
                 .unwrap_or(self.memory_enabled)

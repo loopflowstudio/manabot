@@ -111,6 +111,9 @@ registration and validation hash the same paths and bytes as a checkout.
 Results recorded against earlier heuristic versions (`native-v2` and the Python
 heuristic) retain their original identity.
 A changed anchor identity needs a new version, never a relabeling of old games.
+Etude keys a `Code` player by name and config. The throughput probe includes
+`version="native-v3"` in its player config, and the source digest is recorded
+as provenance. A benchmark using that player needs its own seating identities.
 The code anchors `scripted_greedy` and `random`
 (`manabot.sim.anchors`, frozen v1 sources) remain admissible for compatibility
 and diagnostics, not as working anchors; `fit_population` still places

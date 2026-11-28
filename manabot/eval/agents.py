@@ -32,7 +32,7 @@ from manabot.policy.admission import Spec, admit_native, check, legal_mask
 from manabot.policy.checkpoint import read_container
 from manabot.policy.prepare import Layout, Prepared, Tables, prepare
 from manabot.policy.spans import ObservationSelection
-from manabot.sim.agent import GamePlayer
+from manabot.sim.agent import GameChoice, GamePlayer
 from manabot.sim.heuristic import HeuristicPlayer
 from manabot.sim.players import CodePlayer, build_code_player
 from manabot.sim.registration import (
@@ -197,17 +197,51 @@ class ScalarSampler:
         )
         return self.sampler.sample(self.logits(batch)[0], batch.legal[0], seed)
 
+    def open_game(self, seed: int) -> GameChoice:
+        return self.choose
+
+
+def code_choice(player: CodePlayer) -> GameChoice:
+    def choose(env: Env, obs: ObservationBuffers, seed: int) -> int:
+        return player.act(env, obs)
+
+    return choose
+
 
 @dataclass(frozen=True)
-class Heuristic:
+class CodeSeat:
     factory: Callable[[int], CodePlayer]
     space: None = None
 
     def admit(self, match: MatchConfig) -> None:
         pass
 
-    def choose(self, env: Env, obs: ObservationBuffers, seed: int) -> int:
-        return self.factory(seed).act(env, obs)
+    def open_game(self, seed: int) -> GameChoice:
+        return code_choice(self.factory(seed))
+
+
+@dataclass(frozen=True)
+class NativeHeuristic:
+    max_actions: int | None
+    space: None = None
+
+    def __post_init__(self) -> None:
+        if self.max_actions is not None and (
+            type(self.max_actions) is not int or not 0 < self.max_actions < 2**32
+        ):
+            raise ValueError("heuristic max_actions must be a positive u32")
+
+    def admit(self, match: MatchConfig) -> None:
+        pass
+
+    @property
+    def player_policy(self) -> str:
+        return (
+            "heuristic" if self.max_actions is None else f"heuristic:{self.max_actions}"
+        )
+
+    def open_game(self, seed: int) -> GameChoice:
+        return code_choice(HeuristicPlayer(max_actions=self.max_actions))
 
 
 def blank_decision_memory(player: CheckpointPlayer) -> bool:
@@ -218,7 +252,7 @@ def blank_decision_memory(player: CheckpointPlayer) -> bool:
     return blank
 
 
-type Seat = Sampler | Heuristic
+type Seat = Sampler | CodeSeat | NativeHeuristic
 
 
 def build(player: object, leaves: Mapping[str, Forward]) -> Seat:
@@ -241,12 +275,10 @@ def build(player: object, leaves: Mapping[str, Forward]) -> Seat:
             registration = PlayerRegistration.model_validate(
                 player.config["registration"]
             )
-            return Heuristic(lambda seed: build_code_player(registration, seed=seed))
+            return CodeSeat(lambda seed: build_code_player(registration, seed=seed))
         if player.name != "heuristic":
             raise TypeError(f"Code player {player.name} has no Manabot builder")
-        maximum = player.config.get("max_actions")
-        HeuristicPlayer(max_actions=maximum)  # refuse a bad cap here, not mid-game
-        return Heuristic(lambda seed: HeuristicPlayer(max_actions=maximum))
+        return NativeHeuristic(player.config.get("max_actions"))
     raise TypeError(f"unsupported Manabot player {type(player).__name__}")
 
 

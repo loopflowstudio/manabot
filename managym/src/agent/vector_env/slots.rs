@@ -5,6 +5,7 @@ use crate::{
         action::AgentError,
         env::{Env, GameRecording, GameSnapshot, RestoreOptions, SnapshotMetadata},
         observation::Observation,
+        player_policy::PlayerPolicy,
     },
     infra::profiler::{InfoDict, InfoValue},
     state::player::GameSetup,
@@ -16,15 +17,24 @@ use std::{collections::HashSet, sync::Arc};
 /// ordinary roster sampler.
 #[derive(Clone)]
 pub enum SlotLoad {
-    Fresh(usize, Option<GameSetup>, Option<u64>),
+    Fresh(
+        usize,
+        Option<GameSetup>,
+        Option<u64>,
+        Option<[PlayerPolicy; 2]>,
+    ),
     Snapshot(usize, Arc<GameSnapshot>, RestoreOptions),
 }
 
 impl SlotLoad {
     pub fn with_slot(&self, slot: usize) -> Self {
         match self {
-            Self::Fresh(_, setup, seed) => Self::Fresh(slot, setup.clone(), *seed),
-            Self::Snapshot(_, source, options) => Self::Snapshot(slot, source.clone(), options.clone()),
+            Self::Fresh(_, setup, seed, policies) => {
+                Self::Fresh(slot, setup.clone(), *seed, *policies)
+            }
+            Self::Snapshot(_, source, options) => {
+                Self::Snapshot(slot, source.clone(), options.clone())
+            }
         }
     }
 
@@ -50,7 +60,7 @@ pub(crate) struct SlotReplacement {
     setup: Option<GameSetup>,
     result: SlotLoadResult,
     env: Env,
-    obs: Observation,
+    obs: Option<Observation>,
     info: InfoDict,
     state: SlotState,
     next_seed: u64,
@@ -95,17 +105,22 @@ impl VectorEnv {
     pub fn load_slots_into(
         &mut self,
         requests: &[SlotLoad],
-        validate: impl FnMut(usize, &Observation) -> Result<(), ObservationWriteError>,
-        write: impl FnMut(usize, &Observation, bool) -> Result<(), ObservationWriteError>,
+        mut validate: impl FnMut(usize, &Observation) -> Result<(), ObservationWriteError>,
+        mut write: impl FnMut(usize, &Observation, bool) -> Result<(), ObservationWriteError>,
     ) -> Result<Vec<(SlotLoadResult, InfoDict)>, ObservationWriteError> {
-        let prepared = self.prepare_slots(requests, validate)?;
-        self.publish_slots(prepared, write)
+        let prepared = self.prepare_slots(requests, false, |slot, obs| {
+            validate(slot, obs.expect("strict slot load"))
+        })?;
+        self.publish_slots(prepared, |slot, obs, terminal| {
+            write(slot, obs.expect("strict slot load"), terminal)
+        })
     }
 
     pub(crate) fn prepare_slots(
         &self,
         requests: &[SlotLoad],
-        mut validate: impl FnMut(usize, &Observation) -> Result<(), ObservationWriteError>,
+        isolated: bool,
+        mut validate: impl FnMut(usize, Option<&Observation>) -> Result<(), ObservationWriteError>,
     ) -> Result<Vec<SlotReplacement>, ObservationWriteError> {
         if requests.is_empty() {
             return Ok(Vec::new());
@@ -120,8 +135,8 @@ impl VectorEnv {
         }
         let mut prepared = Vec::with_capacity(requests.len());
         for request in requests {
-            let next = self.prepare_slot(request)?;
-            validate(request.slot(), &next.obs)?;
+            let next = self.prepare_slot(request, isolated)?;
+            validate(request.slot(), next.obs.as_ref())?;
             prepared.push(next);
         }
         Ok(prepared)
@@ -130,12 +145,12 @@ impl VectorEnv {
     pub(crate) fn publish_slots(
         &mut self,
         prepared: Vec<SlotReplacement>,
-        mut write: impl FnMut(usize, &Observation, bool) -> Result<(), ObservationWriteError>,
+        mut write: impl FnMut(usize, Option<&Observation>, bool) -> Result<(), ObservationWriteError>,
     ) -> Result<Vec<(SlotLoadResult, InfoDict)>, ObservationWriteError> {
         let mut results = Vec::with_capacity(prepared.len());
         for next in prepared {
             let slot = next.result.slot;
-            write(slot, &next.obs, next.result.terminal)?;
+            write(slot, next.obs.as_ref(), next.result.terminal)?;
             self.envs[slot].replace_slot(next.env, next.recording);
             if let Some(setup) = next.setup {
                 self.player_configs[slot] = setup;
@@ -147,7 +162,11 @@ impl VectorEnv {
         Ok(results)
     }
 
-    fn prepare_slot(&self, request: &SlotLoad) -> Result<SlotReplacement, AgentError> {
+    fn prepare_slot(
+        &self,
+        request: &SlotLoad,
+        isolated: bool,
+    ) -> Result<SlotReplacement, AgentError> {
         let slot = request.slot();
         let previous = &self.envs[slot];
         let replaces_opening = matches!(request, SlotLoad::Snapshot(..))
@@ -161,7 +180,7 @@ impl VectorEnv {
             );
         let mut next_seed = self.next_seeds[slot];
         let (env, obs, mut info, state, source_digest) = match request {
-            SlotLoad::Fresh(_, setup, explicit_seed) => {
+            SlotLoad::Fresh(_, setup, explicit_seed, policies) => {
                 if let Some(setup) = setup {
                     if !self.uniform_roster.is_empty() {
                         return Err(AgentError(
@@ -171,13 +190,16 @@ impl VectorEnv {
                     Self::validate_player_configs(setup.len())?;
                 }
                 let mut dealt_seed = explicit_seed.unwrap_or(next_seed);
-                let mut env = previous.replacement_root(dealt_seed);
+                let policies = policies.unwrap_or(self.player_policies);
+                let mut env = previous.replacement_root(dealt_seed, policies);
                 let (obs, info) = Self::deal_fresh_game(
                     &self.uniform_roster,
                     &mut env,
                     &mut dealt_seed,
                     self.seed_stride,
                     setup.as_ref().unwrap_or(&self.player_configs[slot]),
+                    policies,
+                    isolated,
                 )?;
                 let automatic_seed = explicit_seed.is_none();
                 if automatic_seed {
@@ -194,14 +216,12 @@ impl VectorEnv {
             SlotLoad::Snapshot(_, source, options) => {
                 if !source.compatible(
                     options,
-                    self.player_policies,
                     self.skip_trivial,
                     self.decision_memory_enabled,
                     self.decision_memory_include_own,
                 ) {
                     return Err(AgentError(
-                        "snapshot policies, skip_trivial or decision memory differ from vector"
-                            .into(),
+                        "snapshot skip_trivial or decision memory differ from vector".into(),
                     ));
                 }
                 let env = source.restore(options.clone())?;
@@ -211,22 +231,22 @@ impl VectorEnv {
                 }
                 (
                     env,
-                    obs,
+                    Some(obs),
                     InfoDict::new(),
                     SlotState::Playing,
                     Some(source.state_digest().to_owned()),
                 )
             }
         };
-        let terminal = env.is_game_over();
-        if let Some(winner) = env.winner_index() {
+        let terminal = obs.is_some() && env.is_game_over();
+        if let Some(winner) = terminal.then(|| env.winner_index()).flatten() {
             info.insert("winner_index".into(), InfoValue::Int(winner as i64));
         }
         let result = SlotLoadResult {
             slot,
             generation: env.capture_generation,
             seed: env.reset_seed(),
-            acting_player: if terminal {
+            acting_player: if terminal || obs.is_none() {
                 None
             } else {
                 env.current_agent_index()
@@ -241,14 +261,20 @@ impl VectorEnv {
         };
         Ok(SlotReplacement {
             setup: match request {
-                SlotLoad::Fresh(_, setup, _) => setup.clone(),
+                SlotLoad::Fresh(_, setup, ..) => setup.clone(),
                 SlotLoad::Snapshot(..) => None,
             },
             result,
             env,
+            state: if obs.is_none() {
+                SlotState::Poisoned
+            } else if terminal {
+                SlotState::Terminal
+            } else {
+                state
+            },
             obs,
             info,
-            state: if terminal { SlotState::Terminal } else { state },
             next_seed,
             recording,
         })

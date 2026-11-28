@@ -322,11 +322,7 @@ class Env:
         *,
         decision_memory_include_own: bool = False,
         decision_memory: bool = False,
-        player_policies: tuple[
-            Literal["agent", "random", "heuristic"],
-            Literal["agent", "random", "heuristic"],
-        ]
-        | None = None,
+        player_policies: tuple[str, str] | None = None,
     ) -> None: ...
     def reset(
         self, player_configs: GameSetup | list[PlayerConfig]
@@ -605,6 +601,7 @@ class SlotLoad:
         player_configs: GameSetup | list[PlayerConfig] | None = None,
         *,
         seed: int | None = None,
+        player_policies: tuple[str, str] | None = None,
     ) -> SlotLoad: ...
     @staticmethod
     def snapshot(
@@ -641,11 +638,7 @@ class VectorEnv:
         decision_memory_include_own: bool = False,
         decision_memory: bool = False,
         decision_events: bool = False,
-        player_policies: tuple[
-            Literal["agent", "random", "heuristic"],
-            Literal["agent", "random", "heuristic"],
-        ]
-        | None = None,
+        player_policies: tuple[str, str] | None = None,
     ) -> None: ...
     def reset_all(
         self, player_configs: GameSetup | list[PlayerConfig]
@@ -687,6 +680,8 @@ class VectorEnv:
         player_configs: list[GameSetup | list[PlayerConfig]],
         *,
         seeds: list[int] | None = None,
+        player_policies: list[tuple[str, str]] | None = None,
+        isolated: bool = False,
     ) -> None:
         """Deal each setup at its supplied seed, or at the stream's next seed."""
         ...
@@ -711,10 +706,13 @@ class VectorEnv:
     @staticmethod
     def _load_shard_buffers(
         batches: Sequence[tuple[VectorEnv, Sequence[SlotLoad]]],
+        *,
+        isolated: bool = False,
     ) -> list[list[SlotLoadResult]]: ...
     def load_slots_into_buffers(
-        self, requests: Sequence[SlotLoad]
+        self, requests: Sequence[SlotLoad], *, isolated: bool = False
     ) -> list[SlotLoadResult]: ...
+    def _current_player_policies(self) -> list[tuple[str, str]]: ...
     def current_game_seeds(self) -> list[int]: ...
     def decision_memory_cursors(self) -> list[list[list[int]]]:
         """Per-viewer record/detail/reference/member counts and tail revision."""

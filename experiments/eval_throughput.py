@@ -48,7 +48,7 @@ from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.policy.checkpoint import read_container
 from manabot.policy.prepare import Prepared
-from manabot.sim.heuristic import heuristic_source_paths
+from manabot.sim.heuristic import HEURISTIC_VERSION, heuristic_source_paths
 from manabot.sim.registration import EvalPrecision
 
 ARENA = "eval-throughput"
@@ -105,7 +105,9 @@ def trophy_deals(
         raise ValueError(f"the trophy split has fewer than {2 * count} playable pools")
     candidate = checkpoint_player(ref)
     heuristic = Code(
-        name="heuristic", source=heuristic_source_paths(), config=HEURISTIC
+        name="heuristic",
+        source=heuristic_source_paths(),
+        config={**HEURISTIC, "version": HEURISTIC_VERSION},
     )
     specs: dict[str, PairingSpec] = {}
     matches: list[Match] = []

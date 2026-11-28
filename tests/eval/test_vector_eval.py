@@ -30,10 +30,12 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
 from manabot.eval import agents as agent_module, vector as vector_runner
+from manabot.eval.admission import register_anchor
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import build, local_forward
 from manabot.eval.card_query import CardSelection, audit, card_data, card_db
-from manabot.eval.pairing import PairingSpec, play_pairing
+from manabot.eval.evaluate import registration_source_paths, source_digest
+from manabot.eval.pairing import PairingSpec, admit_pairing, play_pairing
 from manabot.eval.vector import LocalMatches, play_pairings
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
@@ -42,7 +44,8 @@ from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 from manabot.sim.replay import read_trace, replay_failure, replay_game
 import managym
-from managym.recording import GameRecord, RecordedVectorEnv
+from managym.recording import GameRecord, RecordedVectorEnv, read_record
+from managym.replay import replay_failure_inputs
 
 
 @pytest.fixture
@@ -171,7 +174,13 @@ def _strip_record_digests(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         {
             k: v
             for k, v in row.items()
-            if k not in {"evidence_sha256", "evidence_bytes", "trace_sha256"}
+            if k
+            not in {
+                "evidence_sha256",
+                "evidence_bytes",
+                "trace_sha256",
+                "replay_sha256",
+            }
         }
         for row in rows
     ]
@@ -214,19 +223,68 @@ def test_slot_load_fresh_explicit_seed_matches_scalar_reset() -> None:
             "truncated": np.zeros(2, dtype=np.uint8),
         }
         vector.set_observation_layout(state, "error", layout=space.layout)
-        vector.reset_each_into_buffers([setup_a, setup_a], seeds=[11, 22])
+        policies = [("agent", "heuristic:64"), ("heuristic:64", "agent")]
+        vector.reset_each_into_buffers(
+            [setup_a, setup_a], seeds=[11, 22], player_policies=policies
+        )
+        assert vector.current_agent_indices() == [0, 1]
+        [_, swapped] = vector.snapshot_slots([False, True])
+        assert swapped is not None
+        [restored] = vector.load_slots_into_buffers(
+            [managym.SlotLoad.snapshot(0, swapped)]
+        )
+        assert restored.acting_player == 1
+        assert vector.game_inputs(0).player_policies == policies[1]
 
         explicit_seed = 777_123
         loaded = vector.load_slots_into_buffers(
             [managym.SlotLoad.fresh(1, setup_b, seed=explicit_seed)]
         )
         assert len(loaded) == 1 and loaded[0].seed == explicit_seed
-        assert vector.current_game_seeds() == [11, explicit_seed]
+        assert vector.current_game_seeds() == [22, explicit_seed]
         assert vector.games[1].seed == explicit_seed
+        assert vector.games[1].player_policies is None
 
         scalar = managym.Env(seed=explicit_seed)
         scalar.reset(setup_b)
         assert vector.state_digests([False, True])[1] == scalar.state_digest()
+        raw = vector.decision_observations([False, True])[1]
+        assert raw is not None
+        code_root = vector_runner.CodeDecisionEnv(raw, vector, 1)._engine
+        assert code_root.state_digest() == scalar.state_digest()
+    finally:
+        vector.close()
+
+
+def test_swapped_native_seats_survive_vector_failure_snapshot(tmp_path: Path) -> None:
+    setup = EnvMatch(_allies_lessons_matchup().match(0)).to_rust()
+    space = ObservationSpace(ObservationConfig())
+    journal = tmp_path / "games.jsonl"
+    vector = RecordedVectorEnv(
+        num_envs=2, seed=123, record_fraction=1.0, journal_path=journal
+    )
+    try:
+        state = {
+            "rewards": np.zeros(2, dtype=np.float64),
+            "terminated": np.zeros(2, dtype=np.uint8),
+            "truncated": np.zeros(2, dtype=np.uint8),
+        }
+        vector.set_observation_layout(state, "error", layout=space.layout)
+        pairs = [("agent", "heuristic:64"), ("heuristic:64", "agent")]
+        vector.reset_each_into_buffers([setup, setup], player_policies=pairs)
+        assert [game.player_policies for game in read_record(journal).games] == pairs
+
+        vector.step_isolated_into_buffers([0, 999_999])
+        assert vector.get_last_info()[1]["game_error_seat"] == 1
+        snapshot = GameRecord.model_validate_json(
+            vector.snapshot().model_dump_json(by_alias=True)
+        )
+        snapshot.boundary = None  # Explicit diagnostic from the isolated call.
+        healthy, rejected = replay_failure_inputs(snapshot)
+        assert healthy["status"] == "advanced"
+        assert rejected["status"] == "failed"
+        assert rejected["at_retained_failure"] is True
+        assert rejected["matches_binding"] is True
     finally:
         vector.close()
 
@@ -381,7 +439,8 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
             active.store(match, outcome)
 
     assert reads == 1
-    assert max(forwards_per_step) == 1
+    assert set(forwards_per_step) == {1}
+    assert batch_sizes == observed_active_counts
     # Pre-collated batches carried more than one row.
     assert max(batch_sizes) > 1
     # With eight legs, all six slots start full and only drain after the queue empties.
@@ -389,7 +448,7 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
     assert observed_active_counts == sorted(observed_active_counts, reverse=True)
 
     charged_seconds = 0.0
-    # Exact trace, Command, digest, score, behaviour and card parity per deal.
+    # Each vector commitment corresponds to the checkpoint's scalar choice.
     for match in matches:
         serial_res = serial_results[match.key]
         vector_res = vector_results[match.key]
@@ -411,7 +470,23 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         assert len(vector_games) == len(serial_games) == 4
         for s_game, v_game in zip(serial_games, vector_games, strict=True):
             charged_seconds += v_game["execution_seconds"]
-            assert _canonical_game_summary(v_game) == _canonical_game_summary(s_game)
+            scalar = s_game["record"]["games"][0]
+            native = v_game["record"]["games"][0]
+            indices = [
+                i
+                for i, d in enumerate(s_game["decisions"])
+                if d["player_id"] == "candidate"
+            ]
+            assert native["actions"] == [scalar["actions"][i] for i in indices]
+            assert native["digests"] == [scalar["digests"][i] for i in indices]
+            assert native["end"] == scalar["end"]
+            assert v_game["winner"] == s_game["winner"]
+            assert all(d["player_id"] == "candidate" for d in v_game["decisions"])
+            expected_policies = [
+                "agent" if player == "candidate" else "heuristic:64"
+                for player in v_game["seat_players"]
+            ]
+            assert v_game["record"]["player_policies"] == expected_policies
             if v_game["seat_players"][0] == "candidate":
                 assert v_game["match_hypers"]["mana_payment"] == ["auto", "manual"]
                 assert v_game["match_hypers"]["mana_floats"] == ["usable", "off"]
@@ -437,6 +512,69 @@ def test_vector_runner_matches_play_pairing_against_heuristic_and_backfills(
         checked = audit(db, track_vector)
         assert checked.games == 8
         assert checked.problems == ()
+
+
+def test_registered_code_opens_once_per_leg_in_both_runners(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cpu_eval: None
+) -> None:
+    matchup = _allies_lessons_matchup()
+    ref = _fixture_checkpoint(tmp_path, 19, ObservationSpace(ObservationConfig()))
+    candidate = checkpoint_player(ref)
+    spec = PairingSpec(
+        matchup=matchup, deal=123, matchup_mode="cross", game_seconds=60, arena="code"
+    )
+    builtin = Code(name="heuristic")
+    candidate_registration = admit_pairing(
+        Match(players=(candidate, builtin), games=4), [None, None], spec
+    ).request.candidate
+    registration = register_anchor(
+        candidate_registration, "random", player_id="opponent"
+    )
+    registration = registration.model_copy(
+        update={"source_sha256": source_digest(registration_source_paths(registration))}
+    )
+    registered = Code(
+        name="random", config={"registration": registration.model_dump(mode="json")}
+    )
+    match = Match(players=(candidate, registered), games=4)
+    seeds: list[int] = []
+    build_code_player = agent_module.build_code_player
+
+    def open_code(
+        registration: agent_module.PlayerRegistration, *, seed: int
+    ) -> agent_module.CodePlayer:
+        seeds.append(seed)
+        return build_code_player(registration, seed=seed)
+
+    monkeypatch.setattr(agent_module, "build_code_player", open_code)
+    forward = load(ref)
+    code = build(registered, {})
+    serial_root, vector_root = tmp_path / "serial", tmp_path / "vector"
+    monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(serial_root))
+    play_pairing(
+        match,
+        [forward, code],
+        matchup=matchup,
+        deal=spec.deal,
+        matchup_mode="cross",
+        game_seconds=spec.game_seconds,
+        arena=spec.arena,
+    )
+    assert len(seeds) == 4
+    [(_, result)] = play_local(
+        LocalMatches([(match, [local_forward(forward), code])]),
+        lambda _: spec,
+        slots=4,
+        output_dir=vector_root,
+    )
+    assert isinstance(result, Result), result
+    assert seeds[:4] == seeds[4:]
+    trace = Path("arena") / match.key / "games" / "candidate__opponent.jsonl"
+    for serial, vector in zip(
+        read_trace(serial_root / trace), read_trace(vector_root / trace), strict=True
+    ):
+        assert vector["record"]["player_policies"] == ["agent", "agent"]
+        assert _canonical_game_summary(vector) == _canonical_game_summary(serial)
 
 
 def test_vector_runner_matches_play_pairing_with_gru_memory_and_blanking(

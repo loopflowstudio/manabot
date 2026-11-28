@@ -483,7 +483,10 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
 
     if not record.skip_trivial:
         raise ValueError("Academy requires forced-decision skipping")
-    if record.resolved_player_policies != ("agent", "agent"):
+    if len(record.games) == 1 and record.policies_for(record.games[0]) != (
+        "agent",
+        "agent",
+    ):
         raise ValueError(
             "Academy requires both seats' surfaced decisions; native-seat records are not yet viewable"
         )

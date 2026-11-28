@@ -3,8 +3,9 @@
 `play_pairings` steps up to `slots` paired-deal legs concurrently on the v11
 CSR `ObservationBatch` -> `Prepared` path. In each round, every active slot
 needing the same checkpoint is gathered into one pre-collated `Prepared` input
-for one awaited forward; heuristic/code seats act in the same round from
-detached native observations. Finished or natively-failed legs free their slot
+for one awaited forward. The native engine settles built-in opponents between
+checkpoint choices, while registered code seats choose from detached native
+observations. Finished or natively-failed legs free their slot
 and backfill immediately via seeded `SlotLoad.fresh(..., seed=)`. Once all legs
 of a match finish, the match is replayed, card-evidenced, retained to disk and
 yielded as `(match, Result)`.
@@ -37,7 +38,8 @@ from manabot.env.observation import ObservationSpace
 from manabot.eval.agents import (
     CheckpointInputs,
     CheckpointReader,
-    Heuristic,
+    CodeSeat,
+    NativeHeuristic,
     Sampler,
     Seat,
     checkpoint_reader,
@@ -62,6 +64,7 @@ from manabot.eval.pairing import (
 from manabot.infra.config import MatchConfig
 from manabot.policy.prepare import Prepared
 from manabot.policy.spans import BatchRow, ObservationSelection
+from manabot.sim.agent import GameChoice
 from manabot.sim.evaluation_records import (
     bind_record,
     decision_annotation,
@@ -101,10 +104,19 @@ class LocalMatches:
 
 
 @dataclass(frozen=True)
-class RawObservationEnv:
-    """Minimal read-only adapter supplying `last_raw_obs` to code players."""
+class CodeDecisionEnv:
+    """The code player's observation and, on demand, a detached search root."""
 
     last_raw_obs: managym.Observation
+    vector: RecordedVectorEnv
+    slot: int
+
+    @property
+    def _engine(self) -> managym.Env:
+        mask = [i == self.slot for i in range(len(self.vector.games))]
+        root = self.vector.snapshot_slots(mask)[self.slot]
+        assert root is not None
+        return root.restore()
 
 
 @dataclass
@@ -112,6 +124,8 @@ class PendingLeg:
     active_match: ActiveMatch
     game: dict[str, Any]
     setup: managym.GameSetup
+    player_policies: tuple[str, str]
+    code_choices: dict[str, GameChoice]
 
 
 @dataclass(eq=False)
@@ -217,29 +231,40 @@ def admit_active_match(
         game["runtime_identities"] = game_runtime_identities(
             game["deal_seed"], resolved_match, space, arena_source
         )
+        players = game["seat_players"]
+        a, b = (
+            seat.player_policy if isinstance(seat, NativeHeuristic) else "agent"
+            for seat in (admitted.agents[player] for player in players)
+        )
         legs.append(
             PendingLeg(
                 active_match=active_match,
                 game=game,
                 setup=EnvMatch(resolved_match).to_rust(),
+                player_policies=(a, b),
+                code_choices={
+                    player: seat.open_game(game["player_seeds"][player])
+                    for player in players
+                    if isinstance(seat := admitted.agents[player], CodeSeat)
+                },
             )
         )
     return active_match, legs
 
 
 def choose_code_action(
-    player: Heuristic,
-    raw: managym.Observation,
+    choose: GameChoice,
+    env: CodeDecisionEnv,
     *,
     seed: int,
     space: ObservationSpace,
 ) -> tuple[int, float]:
     started = time.perf_counter()
-    count = len(raw.action_space.actions)
+    count = len(env.last_raw_obs.action_space.actions)
     if space.config.action_overflow == "first-legal":
         count = min(count, space.config.max_actions)
     obs = {"actions_valid": np.ones(count, dtype=np.float32)}
-    action = int(player.factory(seed).act(RawObservationEnv(raw), obs))  # type: ignore[arg-type]
+    action = int(choose(env, obs, seed))  # type: ignore[arg-type]
     return action, time.perf_counter() - started
 
 
@@ -347,7 +372,7 @@ async def step_round(
     observations = vector.decision_observations(active)
     turns: dict[int, ArenaDecision] = {}
     groups: dict[str, list[tuple[SlotState, Sampler]]] = defaultdict(list)
-    code: list[tuple[SlotState, Heuristic, managym.Observation]] = []
+    code: list[tuple[SlotState, GameChoice, managym.Observation]] = []
     for state in states:
         if state is None:
             continue
@@ -366,7 +391,7 @@ async def step_round(
         if isinstance(seat, Sampler):
             groups[seat.checkpoint_key].append((state, seat))
         else:
-            code.append((state, seat, raw))
+            code.append((state, state.leg.code_choices[turn.player_id], raw))
 
     chosen: dict[int, tuple[int, float]] = {}
     errors: dict[str, ForwardError] = {}
@@ -421,7 +446,10 @@ async def step_round(
     for state, seat, raw in code:
         if active[state.slot]:
             chosen[state.slot] = choose_code_action(
-                seat, raw, seed=turns[state.slot].policy_seed, space=space
+                seat,
+                CodeDecisionEnv(raw, vector, state.slot),
+                seed=turns[state.slot].policy_seed,
+                space=space,
             )
     players = {slot: turn.player_id for slot, turn in turns.items() if active[slot]}
     if not players:
@@ -549,6 +577,27 @@ async def play_pairings(
             active_matches.remove(active_match)
             completed_matches.append(active_match)
 
+    def complete_failed_leg(slot_state: SlotState, info: dict[str, Any]) -> None:
+        game = slot_state.leg.game
+        error_class = str(info.get("game_error_class", "AgentError"))
+        if error_class == "ObservationCapacity":
+            game["integrity"]["truncations"] += 1
+            failure_record(
+                game, "truncated", "environment or observation truncated", None
+            )
+        else:
+            game["error_class"] = error_class
+            if info.get("game_error_trace"):
+                game["failure_trace"] = str(info["game_error_trace"])
+            seat = info.get("game_error_seat")
+            failure_record(
+                game,
+                "crash",
+                f"{error_class}: {info['game_error']}",
+                game["seat_players"][seat] if seat is not None else None,
+            )
+        complete_leg(slot_state, info=info)
+
     def seat_legs(free: Sequence[int]) -> list[SlotState]:
         seated = []
         for slot in free:
@@ -575,13 +624,16 @@ async def play_pairings(
         ]
         if not ended:
             return False
+        infos = vector.get_last_info()
         mask = [False] * len(slot_states)
         for state in ended:
-            mask[state.slot] = True
+            mask[state.slot] = not infos[state.slot].get("game_error")
         digests = vector.state_digests(mask)
-        infos = vector.get_last_info()
         for slot_state in ended:
             slot = slot_state.slot
+            if infos[slot].get("game_error"):
+                complete_failed_leg(slot_state, infos[slot])
+                continue
             winner = infos[slot].get("winner_index")
             slot_state.leg.game.update(
                 winner=winner,
@@ -604,10 +656,14 @@ async def play_pairings(
             vector.load_slots_into_buffers(
                 [
                     managym.SlotLoad.fresh(
-                        state.slot, state.leg.setup, seed=state.leg.game["deal_seed"]
+                        state.slot,
+                        state.leg.setup,
+                        seed=state.leg.game["deal_seed"],
+                        player_policies=state.leg.player_policies,
                     )
                     for state in seated
-                ]
+                ],
+                isolated=True,
             )
             if not settle_openings(seated):
                 break
@@ -655,6 +711,9 @@ async def play_pairings(
                     + [seated[-1].leg.setup] * idle,
                     seeds=[state.leg.game["deal_seed"] for state in seated]
                     + [0] * idle,
+                    player_policies=[state.leg.player_policies for state in seated]
+                    + [("agent", "agent")] * idle,
+                    isolated=True,
                 )
                 settle_openings(seated)
                 await backfill_free_slots()
@@ -737,27 +796,7 @@ async def play_pairings(
                 info = infos[slot] if slot < len(infos) else {}
 
                 if info.get("game_error"):
-                    error_class = str(info.get("game_error_class", "AgentError"))
-                    error_msg = str(info["game_error"])
-                    if error_class == "ObservationCapacity":
-                        leg.game["integrity"]["truncations"] += 1
-                        failure_record(
-                            leg.game,
-                            "truncated",
-                            "environment or observation truncated",
-                            None,
-                        )
-                    else:
-                        leg.game["error_class"] = error_class
-                        if info.get("game_error_trace"):
-                            leg.game["failure_trace"] = str(info["game_error_trace"])
-                        failure_record(
-                            leg.game,
-                            "crash",
-                            f"{error_class}: {error_msg}",
-                            player_id,
-                        )
-                    complete_leg(slot_state, info=info)
+                    complete_failed_leg(slot_state, info)
                     continue
 
                 slot_state.decision_counts[player_id] += 1

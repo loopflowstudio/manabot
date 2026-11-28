@@ -3702,7 +3702,7 @@
           },
           "fresh": {
             "kind": "staticmethod",
-            "signature": "(slot, player_configs=..., *, seed=...)"
+            "signature": "(slot, player_configs=..., *, seed=..., player_policies=...)"
           },
           "slot": {
             "kind": "property"
@@ -4090,7 +4090,7 @@
           },
           "load_slots_into_buffers": {
             "kind": "method",
-            "signature": "(self, requests)"
+            "signature": "(self, requests, *, isolated=...)"
           },
           "next_fresh_seeds": {
             "kind": "method",
@@ -4118,7 +4118,7 @@
           },
           "reset_each_into_buffers": {
             "kind": "method",
-            "signature": "(self, player_configs, *, seeds=...)"
+            "signature": "(self, player_configs, *, seeds=..., player_policies=..., isolated=...)"
           },
           "reset_seeds_into_buffers": {
             "kind": "method",

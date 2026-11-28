@@ -426,7 +426,7 @@ fn heuristic_env_forks_copy_history_and_same_seed_reset_clears_it() {
     env.reset(players.clone()).unwrap();
     // Select through the batch policy boundary. Kicker history must survive
     // a fork even after the lands used to estimate its cost become tapped.
-    let policy = PlayerPolicy::Heuristic;
+    let policy = PlayerPolicy::Heuristic { max_actions: None };
     let mut obs = board(Space::PayOrNot);
     let mut spell = card(1, "Firebending Lesson", 1);
     spell.kicker_cost = 4;
@@ -474,13 +474,13 @@ fn heuristic_per_seat_memory_is_independent_and_forked() {
         offer(Action::DeclineChoice, &[], None),
     ];
     lands(&mut obs, 5);
-    PlayerPolicy::Heuristic
+    PlayerPolicy::Heuristic { max_actions: None }
         .select_action(&mut env, &obs)
         .unwrap();
     assert!(env.heuristics[0].is_some());
     assert!(env.heuristics[1].is_none());
     obs.agent.player_index = 1;
-    PlayerPolicy::Heuristic
+    PlayerPolicy::Heuristic { max_actions: None }
         .select_action(&mut env, &obs)
         .unwrap();
     assert!(env.heuristics[1].is_some());
@@ -502,10 +502,22 @@ fn heuristic_per_seat_scalar_vector_parity_and_terminal_rewards() {
         })
         .to_vec();
     for policies in [
-        [PlayerPolicy::Agent, PlayerPolicy::Heuristic],
-        [PlayerPolicy::Heuristic, PlayerPolicy::Agent],
-        [PlayerPolicy::Random, PlayerPolicy::Heuristic],
-        [PlayerPolicy::Heuristic, PlayerPolicy::Heuristic],
+        [
+            PlayerPolicy::Agent,
+            PlayerPolicy::Heuristic { max_actions: None },
+        ],
+        [
+            PlayerPolicy::Heuristic { max_actions: None },
+            PlayerPolicy::Agent,
+        ],
+        [
+            PlayerPolicy::Random,
+            PlayerPolicy::Heuristic { max_actions: None },
+        ],
+        [
+            PlayerPolicy::Heuristic { max_actions: None },
+            PlayerPolicy::Heuristic { max_actions: None },
+        ],
     ] {
         let mut scalar = Env::new(213, true, false, false).with_player_policies(policies);
         let mut vector = VectorEnv::new(1, 213, true, policies);
@@ -555,8 +567,8 @@ fn heuristic_builtin_steps_retain_live_event_parity() {
     let players = ["elemental_ur", "elemental_gw"]
         .map(|key| setup.player_config(key, key).unwrap())
         .to_vec();
-    let mut builtins =
-        Env::new(213, true, false, false).with_player_policies([PlayerPolicy::Heuristic; 2]);
+    let mut builtins = Env::new(213, true, false, false)
+        .with_player_policies([PlayerPolicy::Heuristic { max_actions: None }; 2]);
     let mut manual = Env::new(213, true, false, false);
     builtins.reset(players.clone()).unwrap();
     let (mut obs, _) = manual.reset(players).unwrap();

@@ -1056,8 +1056,10 @@ fn env_submit_settles_mixed_policy_identically_to_env_step() {
         PlayerConfig::new("Hero", deck(&[("Mountain", 20), ("Gray Ogre", 20)])),
         PlayerConfig::new("Bot", deck(&[("Forest", 20), ("Llanowar Elves", 20)])),
     ];
-    let mut env = Env::new(19, true, false, false)
-        .with_player_policies([PlayerPolicy::Agent, PlayerPolicy::Heuristic]);
+    let mut env = Env::new(19, true, false, false).with_player_policies([
+        PlayerPolicy::Agent,
+        PlayerPolicy::Heuristic { max_actions: None },
+    ]);
     env.reset(setup).unwrap();
 
     // Keep opening hand, then put ready attackers and heuristic blockers on the board.

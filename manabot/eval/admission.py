@@ -19,7 +19,7 @@ from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import Backend
 from manabot.sim import anchors
-from manabot.sim.heuristic import heuristic_source_paths
+from manabot.sim.heuristic import HEURISTIC_VERSION, heuristic_source_paths
 from manabot.sim.registration import PlayerRegistration
 
 AnchorKind = Literal["scripted_greedy", "heuristic", "random"]
@@ -120,8 +120,8 @@ def register_anchor(
         player_spec.update(max_actions=heuristic_actions, action_overflow="first-legal")
     if kind == "heuristic":
         source = source_bundle_sha256(heuristic_source_paths())
-        player_spec["version"] = "native-v2"
-        compute_class_id = "heuristic-cpu-v2"
+        player_spec["version"] = HEURISTIC_VERSION
+        compute_class_id = "heuristic-cpu-v3"
     else:
         source = file_sha256(Path(anchors.__file__))
         compute_class_id = kind.replace("_", "-") + "-cpu-v1"

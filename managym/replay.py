@@ -151,7 +151,12 @@ class RecordWalker:
         self.env = managym.Env(
             seed=self.game.seed,
             skip_trivial=record.skip_trivial,
-            player_policies=record.resolved_player_policies,
+            # A rejected opening has no committed decisions. The diagnostic
+            # failure replay runs its settling policies, while the prefix walker
+            # retains only the deal before the failed settlement.
+            player_policies=("agent", "agent")
+            if record.failed_opening(self.game)
+            else record.policies_for(self.game),
             decision_memory=self.game.decision_memory,
             decision_memory_include_own=self.game.decision_memory_include_own,
         )
@@ -544,11 +549,11 @@ def _replay_game_inputs(
             decision_memory=game.decision_memory,
             decision_memory_include_own=game.decision_memory_include_own,
             skip_trivial=evidence.skip_trivial,
-            player_policies=evidence.resolved_player_policies,
+            player_policies=evidence.policies_for(game),
         )
         if vector_steps
         else managym.Env(
-            player_policies=evidence.resolved_player_policies,
+            player_policies=evidence.policies_for(game),
             seed=game.seed,
             skip_trivial=evidence.skip_trivial,
             decision_memory=game.decision_memory,
