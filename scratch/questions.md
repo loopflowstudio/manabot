@@ -96,3 +96,9 @@ Scalar and vector callers apply memory blanking before shared host preparation
 joined across forwards. Training's retained
 prefixes select fold trees separately. Job declarations supply evaluation
 precision because saved policy checkpoints have no training-precision field.
+
+Post-pass 7 review choices made headless at `bf5bb9c70d` (2026-11-27), marked
+for review in `scratch/plan.md`: 1a (suffix non-float32 trophy benchmark
+names; irreversible once scored), 3a (one `vector_layout_key`), 4b (drain
+errors before backfill, `GAME_SECONDS = 120.0`, no extra per-slot ceiling).
+Q2 (live frames vs compact annotations) stays open with F4 deferred.
