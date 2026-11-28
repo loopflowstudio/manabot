@@ -851,22 +851,22 @@ button.lf-btn-quiet[aria-pressed="true"] {
 <h1>Concept review: L4 bf16 evaluation profile (MTG-507)</h1>
 
 <p>
-  <strong>Area reviewed:</strong> CUDA evaluation precision execution, profiling harness, and precision guidance
-  across <code>manabot/eval/agent_loader.py</code>, <code>manabot/backends/torch/policy.py</code>,
-  <code>manabot/backends/torch/learner.py</code>, <code>manabot/policy/admission.py</code>,
-  <code>manabot/policy/batching.py</code>, <code>experiments/eval_throughput.py</code>, the planned
-  <code>experiments/eval_precision_profile.py</code>, and <code>docs/evaluation.md#etude-agents</code>.
-  MTG-507 is pre-implementation (one commit, <code>73be5ae6e8</code>, on top of MTG-497
-  <code>fb1580b472</code>), so this reviews the whole thing the plan builds and whether its premise and first
-  slice are right before launching the L4 rental.
+  <strong>Area reviewed:</strong> Post-implementation review of the CUDA evaluation precision path,
+  batch-capture and profiling harness, precision report, and caller guidance across
+  <code>manabot/eval/agent_loader.py</code>, <code>manabot/eval/vector.py</code>,
+  <code>experiments/eval_precision_profile.py</code>, <code>experiments/eval_throughput.py</code>,
+  <code>experiments/reports/eval_precision_profile.md</code>, and
+  <code>docs/evaluation.md#etude-agents</code>, reviewed as a whole against base
+  <code>659dd138fe</code> (at <code>HEAD</code> <code>178a551d79</code>).
 </p>
 
 <p>
-  <strong>Sync check against <code>origin/main</code>:</strong> Freshly fetched <code>origin/main</code>
-  (<code>23212c88f5</code>) is two commits ahead of MTG-497's base (<code>624751ae71</code> runtime
-  program-token guard and <code>23212c88f5</code> counterfactual board edits). Neither touches
-  <code>manabot/eval/</code>, <code>manabot/backends/torch/</code>, or <code>docs/evaluation.md</code>, so the
-  evaluation precision vocabulary has not moved on <code>origin/main</code>.
+  <strong>Sync check against <code>origin/main</code>:</strong> Freshly fetched
+  <code>origin/main</code> (<code>606e79e90a</code>, MTG-500 manual mana payments) is one commit
+  ahead of MTG-507's base. It touches only Rust <code>managym</code> mana-payment logic,
+  conformance fixtures, and <code>docs/engine.md</code>. Nothing in <code>manabot/eval/</code>,
+  <code>manabot/backends/torch/</code>, <code>experiments/eval_*</code>, or
+  <code>docs/evaluation.md</code> has moved on <code>origin/main</code>.
 </p>
 
 <h2>Do the domain concepts and the code concepts line up?</h2>
@@ -882,505 +882,410 @@ button.lf-btn-quiet[aria-pressed="true"] {
   </thead>
   <tbody>
     <tr>
-      <td><strong>Why L4 bf16 slows one checkpoint and speeds up another</strong> ("width/batch threshold vs per-call cast overhead")</td>
-      <td><code>GameObjectAttention</code> (<code>nn.MultiheadAttention</code>, <code>head_dim = hidden_dim // num_heads</code>), CUDA SDPA backend dispatch, and <code>BF16_MIN_HIDDEN_DIM = 256</code> (<code>manabot/infra/config.py:347</code>)</td>
+      <td><strong>Diagnostic variant: "keep PyTorch's autocast weight cache across calls"</strong></td>
+      <td><code>bf16-cached-autocast</code> / <code>cached_context()</code> in <code>experiments/eval_precision_profile.py:557-576</code> wrapping <code>run_call</code> (which enters <code>torch.inference_mode()</code>)</td>
       <td><strong>No</strong></td>
       <td>
-        <strong>A concept the code has and the plan never sees.</strong>
-        <code>w160l8</code> has <code>head_dim = 160 / 8 = 20</code> (not divisible by 8), while
-        <code>w256l8</code> has <code>32</code> and <code>w384l8</code> has <code>48</code>. On CUDA,
-        <code>float32</code> memory-efficient SDPA accepts <code>head_dim % 4 == 0</code>, whereas
-        <code>bf16</code> Flash and memory-efficient SDPA require <code>head_dim % 8 == 0</code> and fall back
-        to materialized <code>math</code> attention. Existing L4 evidence in
-        <code>experiments/reports/cuda_precision.md</code> (MTG-317) already measured <code>w160l8 padded</code>
-        bf16 running <strong>1.55× slower</strong> (464 → 719 ms at ≥64 rows) and <strong>doubling learner peak
-        VRAM</strong> (5.3 → 10.7 GB), while <code>w256l8</code> and <code>w384l8</code> sped up 1.95–2.71× and
-        halved VRAM. The plan's 8-head <code>(160, 256, 384)</code> grid confounds width with
-        <code>head_dim % 8</code>, and its profiler buckets omit SDPA backend and peak VRAM.
+        <strong>A concept the code claims to test and never exercises.</strong>
+        PyTorch disables autocast weight caching under <code>torch.inference_mode()</code> (and
+        <code>torch.no_grad()</code>). The retained L4 <code>profile.json</code> traces prove
+        <code>bf16-cached-autocast</code> ran the exact same cast op counts as uncached
+        <code>bf16</code> (<code>1,094</code> vs <code>1,094</code> <code>aten::copy_</code> and
+        <code>1,793</code> vs <code>1,793</code> <code>to</code>/<code>_to_copy</code> on
+        <code>w384l8</code>; <code>1,261</code> and <code>2,188</code> on <code>w160l8</code>)
+        and identical peak VRAM (<code>670,990,336</code> / <code>747,497,472</code> bytes).
+        Meanwhile <code>bf16-linear-once</code> actually eliminated those casts
+        (<code>1,094 → 556</code> <code>aten::copy_</code>, <code>1,793 → 669</code>
+        <code>to</code>/<code>_to_copy</code>), sped up <code>w384l8</code> by
+        <strong>14.6%</strong> (<code>18.12 → 15.48 ms/call</code>), and cut peak VRAM by
+        <strong>54 MiB</strong> (<code>640.0 → 585.9 MiB</code>) with <code>0.0</code> logit diff.
+        <code>eval_precision_profile.md:67-70</code> falsely credits <code>bf16-cached-autocast</code>
+        with keeping the weight cache and omits <code>bf16-linear-once</code>'s <code>w384l8</code> win.
       </td>
     </tr>
     <tr>
-      <td><strong>Replaying one captured batch set across widths and batch sizes</strong> ("trained set replayed by 160/256/384, re-chunked to 1, 4, 16, 64 rows")</td>
-      <td><code>Prepared</code>, <code>admission.binding(model, space, readings)</code> (<code>manabot/policy/admission.py:110</code>), and <code>batching.concatenate</code> (<code>manabot/policy/batching.py:24</code>)</td>
+      <td><strong>Forward time breakdown: "attention work" vs "cast and copy overhead"</strong></td>
+      <td><code>op_bucket(name, parent)</code> in <code>experiments/eval_precision_profile.py:333-356</code></td>
       <td><strong>No</strong></td>
       <td>
-        <strong>Two missing code primitives the plan assumes exist.</strong>
-        (1) <code>admission.binding</code> dumps the full <code>ModelConfig</code> (including
-        <code>hidden_dim</code> and <code>num_attention_heads</code>), so
-        <code>ActorCritic.forward_distribution</code> (<code>policy.py:770</code>) deterministically rejects
-        <code>w160l8</code>-prepared batches on <code>w256l8</code>/<code>w384l8</code>—even though
-        <code>Prepared</code> carries zero width-dependent arrays—contradicting the plan's own threshold grid
-        (<code>plan.md:98</code>) and refusal contract (<code>plan.md:164</code>).
-        (2) <code>batching.py</code> implements only <code>concatenate</code>, not <code>split</code>; re-chunking
-        18.6-row arena batches down to 1, 4, and 16 rows requires inventing a full inverse of
-        <code>concatenate</code>'s CSR, fact-program, effect-route, and memory-schedule rebasing.
+        <strong>One bucket name for two causes.</strong>
+        <code>op_bucket</code> classifies <code>aten::to</code>, <code>aten::_to_copy</code>, and
+        <code>aten::copy_</code> as <code>casts_and_copies</code> <em>before</em> checking
+        <code>parent != "other"</code>. In <code>trained-w160-bf16/profile.json</code>,
+        <strong>49.96 ms of 52.81 ms (94.6%)</strong> of GPU <code>casts_and_copies</code> time
+        happened <em>inside</em> <code>policy.attention</code> (math SDPA's internal fp32/bf16
+        conversions; unchanged at <code>50.15 ms</code> under <code>bf16-linear-once</code>).
+        The report's delta row (<code>+36.40 ms</code> attention, <code>+13.30 ms</code> casts and
+        copies) steals <strong>12.1 ms/call</strong> from attention and makes external cast overhead
+        look ~10× larger than it is. Respecting parent scopes on the exact same traces gives
+        <code>+48.14 ms</code> attention (<code>36.41 → 84.55 ms</code>) and
+        <code>+0.20 ms</code> outside-scope casts.
       </td>
     </tr>
     <tr>
-      <td><strong>Bit-identical <code>bf16-cast-once</code> fix for <code>etude-policy-bf16-auto-v1</code></strong> ("weights cast to bf16 at load, GRU left float32, still under autocast")</td>
-      <td><code>torch_logits</code> (<code>manabot/eval/agent_loader.py:89</code>) and PyTorch <code>torch.autocast</code> fp32/bf16 promotion lists (<code>LayerNorm</code>, <code>Embedding</code>, <code>nn.Parameter</code>, <code>Linear</code>, <code>MultiheadAttention</code>)</td>
+      <td><strong>Capturing arena batches and single-row inputs from the vector runner</strong></td>
+      <td><code>ObservePrepared</code> / <code>observe_prepared</code> threaded through <code>manabot/eval/vector.py</code> (<code>play_pairings</code>, <code>step_round</code>), <code>experiments/eval_throughput.py</code> (<code>run_vector</code>), and correlated via <code>nonlocal pending</code> in <code>experiments/eval_precision_profile.py:127-179</code></td>
       <td><strong>No</strong></td>
       <td>
-        <strong>One name for two numerical semantics.</strong>
-        Under <code>torch.autocast("cuda", bfloat16)</code>, <code>LayerNorm</code>, <code>Embedding</code>
-        (including <code>token_embedding</code> feeding float32 <code>packed_gru</code> inside
-        <code>cache_programs()</code>), and bare <code>nn.Parameter</code>s (<code>perspective</code>,
-        <code>value_token</code>) stay <strong>float32</strong>; only <code>Linear</code> and
-        <code>MultiheadAttention</code> projection weights downcast. Casting all non-GRU weights to bf16 alters
-        <code>cache_programs()</code> and norm/embedding arithmetic, guaranteeing non-identical logits and falsely
-        failing the parity check. Meanwhile, entering and exiting <code>torch.autocast</code> per call clears
-        PyTorch's own built-in autocast weight cache every forward.
+        <strong>One action split across two callbacks via a mutable side-channel, leaking internal handles onto library APIs.</strong>
+        <code>manabot.eval.vector.play_pairings</code> now exposes internal
+        <code>ObservationSelection</code> (holding live native <code>ObservationBatch</code>
+        coordinates) and <code>Spec</code> across three call layers for one experiment script.
+        <code>capture()</code> stashes them in <code>nonlocal pending</code> and matches them by
+        object identity (<code>inputs[0] is pending[0]</code>) inside <code>local_forward(record)</code>.
+        Because <code>step_round:421</code> prepares all checkpoint groups before
+        <code>asyncio.gather</code> invokes forwards, any two-checkpoint match trips
+        <code>assert pending is None</code>, and <code>ObservationSelection</code> escapes
+        <code>prepare_group</code>.
       </td>
     </tr>
     <tr>
-      <td><strong>One shared Torch model-loading path for evaluation and profiling</strong> (<code>load_torch_policy</code> vs <code>torch_logits</code>)</td>
-      <td><code>manabot/eval/agent_loader.py</code> and the Torch-free child-import contract (<code>tests/test_package_boundaries.py:260</code>)</td>
+      <td><strong>L4 precision rule ("when should I use bf16 vs float32?")</strong></td>
+      <td><code>docs/evaluation.md:450-456</code> vs <code>experiments/reports/eval_precision_profile.md:101-109</code> vs <code>BF16_MIN_HIDDEN_DIM = 256</code> (<code>manabot/infra/config.py:347</code>)</td>
       <td><strong>No</strong></td>
       <td>
-        <strong>Action with a split owner.</strong>
-        Splitting only load (<code>load_torch_policy</code> returning <code>ActorCritic</code>) leaves the
-        per-call precision contract (<code>apply_matmul_precision</code>, <code>torch.inference_mode</code>,
-        <code>forward_precision</code>, transfer, float32 readback) duplicated in <code>replay</code>. Adding an
-        eager <code>ActorCritic</code> annotation to <code>agent_loader.py</code> would also break
-        <code>test_evaluation_child_modules_import_without_array_framework</code> because
-        <code>manabot.eval.agents</code> imports <code>agent_loader</code> at module top.
+        <strong>The structural rule is missing from caller docs, and training/MLX still encode width-only <code>256</code>.</strong>
+        <code>eval_precision_profile.md:101</code> identifies the divisibility-by-8 head-width
+        rule, but <code>docs/evaluation.md:450-456</code> only lists the five tested head widths
+        (20, 36 vs 32, 40, 48) without stating <code>head_dim = hidden_dim // num_attention_heads</code>
+        divisible by 8—leaving untested shapes like <code>w192l8</code> (24) or <code>w224l8</code>
+        (28) ambiguous. Separately, <code>BF16_MIN_HIDDEN_DIM = 256</code> and
+        <code>docs/training.md:1147</code> still describe the L4 threshold by <code>hidden_dim</code> alone.
       </td>
     </tr>
     <tr>
-      <td><strong>L4 diagnostic order</strong> ("confirm whether slowdown reproduces, then explain it")</td>
-      <td>Pass 1: 12 full 32-deal arena repeats (~30 min, 72–89% host + replay) alongside 20 min of replays</td>
-      <td><strong>No</strong></td>
-      <td>
-        <strong>Wrong first slice.</strong>
-        MTG-317 already reproduced the <code>w160l8 padded</code> L4 bf16 slowdown (1.55×, repeats within 2%).
-        Noisy local MPS numbers taken at host load 30–40 misled the plan into treating L4 variance as the leading
-        risk. Spending ~30 minutes of L4 rental on 12 full arena runs before a ~3-minute captured-batch profile
-        burns budget before naming the mechanism.
-      </td>
-    </tr>
-    <tr>
-      <td><strong>Declared evaluation precision &amp; compute identity</strong> (<code>float32</code> default; explicit <code>AGENTS_TF32</code> / <code>AGENTS_BF16</code>)</td>
-      <td><code>EvalPrecision</code>, <code>etude_compute_class</code>, <code>AGENTS_*</code>, <code>validate_precision</code>, <code>forward_precision</code></td>
+      <td><strong>Shared Torch evaluation loading and precision execution</strong></td>
+      <td><code>load_torch_policy</code> and <code>torch_forward_context</code> in <code>manabot/eval/agent_loader.py:97-159</code></td>
       <td><strong>Yes</strong></td>
-      <td>Single precision validator, explicit opt-in compute classes, and unchanged <code>float32</code> default.</td>
+      <td>
+        Clean single owner for validation, eval mode, <code>cache_programs()</code>, and per-call
+        precision context while keeping Torch lazy under <code>TYPE_CHECKING</code> so
+        <code>manabot.eval.agents</code> and <code>manabot.eval.vector</code> remain Torch-free.
+        (Minor note: <code>load_torch_policy:133</code> calls <code>apply_matmul_precision</code>
+        once outside and again inside <code>torch_forward_context:136</code>.)
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Same-batch replay, cross-width binding, and buffered arena forward receipts</strong></td>
+      <td><code>BatchContract.bind</code>, <code>CapturedCall</code>, <code>profile_inputs</code> (<code>experiments/eval_precision_profile.py:73-107,205-221,492-513</code>) and <code>ForwardTiming.forwards</code> (<code>experiments/eval_throughput.py:60-92,300-303</code>)</td>
+      <td><strong>Yes</strong></td>
+      <td>
+        Arena replay enforces exact checkpoint SHA-256; cross-width grid replay re-tags
+        <code>Prepared.binding</code> only after checking identical observation config, readings,
+        and non-width model fields; grid batches reuse production <code>concatenate</code>; and
+        <code>forwards.jsonl</code> writes once after timed arena play.
+      </td>
     </tr>
   </tbody>
 </table>
 
-<h2>Biggest mismatch: width threshold vs <code>head_dim % 8</code> SDPA fallback</h2>
+<h2>Biggest mismatch: profiler attribution &amp; diagnostic honesty in the L4 evidence</h2>
 
 <p>
-  The plan frames MTG-507 around two hypotheses—host-side autocast cast overhead (~1,300 ops/call) and batch/width
-  scaling—while noting that a fixed per-call cast cost cannot explain why <code>w160l8</code> adds 27.5 ms/call
-  when <code>w384l8</code> takes only 18.6 ms/call in total (<code>scratch/plan.md:33-35</code>).
-  It misses the third mechanism already visible in this repository's own L4 precision report:
-</p>
-
-<div class="lf-codeblock" data-path="experiments/reports/cuda_precision.md"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/reports/cuda_precision.md:85-108</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="85"><td class="lf-ln lf-ln-single">85</td><td>| Group | Arm | Learner step | Large call | Learner peak | Collection peak |</td></tr>
-<tr class="lf-code-row" data-line="86"><td class="lf-ln lf-ln-single">86</td><td>|---|---|---:|---:|---:|---:|</td></tr>
-<tr class="lf-code-row" data-line="87"><td class="lf-ln lf-ln-single">87</td><td>| w160l8 padded | float32 | 382 | 464 | 5.3 | 3.8 |</td></tr>
-<tr class="lf-code-row" data-line="88"><td class="lf-ln lf-ln-single">88</td><td>| | tf32 | 340 | 410 | 5.3 | 3.8 |</td></tr>
-<tr class="lf-code-row" data-line="89"><td class="lf-ln lf-ln-single">89</td><td>| | bf16 | 498 | 719 | 10.7 | 4.4 |</td></tr>
-<tr class="lf-code-row" data-line="90"><td class="lf-ln lf-ln-single">90</td><td>| w160l8 bucketed | float32 | 176 | 193 | 2.2 | 0.8 |</td></tr>
-<tr class="lf-code-row" data-line="91"><td class="lf-ln lf-ln-single">91</td><td>| | tf32 | 159 | 188 | 2.2 | 0.8 |</td></tr>
-<tr class="lf-code-row" data-line="92"><td class="lf-ln lf-ln-single">92</td><td>| | bf16 | 183 | 226 | 2.2 | 1.0 |</td></tr>
-<tr class="lf-code-row" data-line="93"><td class="lf-ln lf-ln-single">93</td><td>| w384l8 padded | float32 | 869 | 1,018 | 12.8 | 4.4 |</td></tr>
-<tr class="lf-code-row" data-line="94"><td class="lf-ln lf-ln-single">94</td><td>| | tf32 | 655 | 677 | 12.8 | 4.4 |</td></tr>
-<tr class="lf-code-row" data-line="95"><td class="lf-ln lf-ln-single">95</td><td>| | bf16 | 397 | 376 | 7.5 | 2.3 |</td></tr>
-<tr class="lf-code-row" data-line="96"><td class="lf-ln lf-ln-single">96</td><td>| w384l8 bucketed | float32 | 381 | 396 | 5.4 | 1.7 |</td></tr>
-<tr class="lf-code-row" data-line="97"><td class="lf-ln lf-ln-single">97</td><td>| | tf32 | 283 | 272 | 5.4 | 1.7 |</td></tr>
-<tr class="lf-code-row" data-line="98"><td class="lf-ln lf-ln-single">98</td><td>| | bf16 | 196 | 194 | 3.4 | 1.1 |</td></tr>
-<tr class="lf-code-row" data-line="99"><td class="lf-ln lf-ln-single">99</td><td></td></tr>
-<tr class="lf-code-row" data-line="100"><td class="lf-ln lf-ln-single">100</td><td>The float32 order and repeat arms read within 2% of float32 in every group, so</td></tr>
-<tr class="lf-code-row" data-line="101"><td class="lf-ln lf-ln-single">101</td><td>host drift is small. Small calls (≤ 8 rows) are host-bound at 19–32 ms in</td></tr>
-<tr class="lf-code-row" data-line="102"><td class="lf-ln lf-ln-single">102</td><td>every arm. BF16 adds 3–7 ms to them, the cost of the autocast casts. At w160l8,</td></tr>
-<tr class="lf-code-row" data-line="103"><td class="lf-ln lf-ln-single">103</td><td>BF16&#39;s cast and layout overhead exceeds its tensor-core gain, and with padded</td></tr>
-<tr class="lf-code-row" data-line="104"><td class="lf-ln lf-ln-single">104</td><td>shapes it doubles learner peak memory. At w384l8 the gain dominates and memory</td></tr>
-<tr class="lf-code-row" data-line="105"><td class="lf-ln lf-ln-single">105</td><td>falls. The default bar (≥ 1.10× on both the learner step and large calls, at</td></tr>
-<tr class="lf-code-row" data-line="106"><td class="lf-ln lf-ln-single">106</td><td>both sizes, bucketed) fails for both: TF32&#39;s large calls at w160l8 bucketed</td></tr>
-<tr class="lf-code-row" data-line="107"><td class="lf-ln lf-ln-single">107</td><td>are 1.03×, and BF16 is below 1× there.</td></tr>
-<tr class="lf-code-row" data-line="108"><td class="lf-ln lf-ln-single">108</td><td></td></tr>
-</tbody></table></div></div>
-
-<p>
-  On the same NVIDIA L4 and PyTorch 2.15.0+cu132 stack, <code>w160l8 padded</code> bf16 was already 1.55× slower
-  at 64–256 rows/call <em>and doubled learner peak VRAM from 5.3 GB to 10.7 GB</em>, whereas <code>w256l8</code>
-  and <code>w384l8</code> sped up 1.95–2.71× and cut peak VRAM nearly in half. Why does bf16 double memory only
-  at <code>w160l8</code>? Look at <code>GameObjectAttention</code>:
-</p>
-
-<div class="lf-codeblock" data-path="manabot/backends/torch/policy.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/backends/torch/policy.py:1455-1518</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="1455"><td class="lf-ln lf-ln-single">1455</td><td>        self.mha = nn.MultiheadAttention(</td></tr>
-<tr class="lf-code-row" data-line="1456"><td class="lf-ln lf-ln-single">1456</td><td>            embedding_dim, num_heads=num_heads, batch_first=True</td></tr>
-<tr class="lf-code-row" data-line="1457"><td class="lf-ln lf-ln-single">1457</td><td>        )</td></tr>
-<tr class="lf-code-row" data-line="1458"><td class="lf-ln lf-ln-single">1458</td><td>        self.norm1 = nn.LayerNorm(embedding_dim)</td></tr>
-<tr class="lf-code-row" data-line="1459"><td class="lf-ln lf-ln-single">1459</td><td>        expansion = (</td></tr>
-<tr class="lf-code-row" data-line="1460"><td class="lf-ln lf-ln-single">1460</td><td>            feedforward_dim</td></tr>
-<tr class="lf-code-row" data-line="1461"><td class="lf-ln lf-ln-single">1461</td><td>            if feedforward_dim is not None</td></tr>
-<tr class="lf-code-row" data-line="1462"><td class="lf-ln lf-ln-single">1462</td><td>            else num_heads * embedding_dim</td></tr>
-<tr class="lf-code-row" data-line="1463"><td class="lf-ln lf-ln-single">1463</td><td>        )</td></tr>
-<tr class="lf-code-row" data-line="1464"><td class="lf-ln lf-ln-single">1464</td><td>        self.mlp = nn.Sequential(</td></tr>
-<tr class="lf-code-row" data-line="1465"><td class="lf-ln lf-ln-single">1465</td><td>            layer_init(nn.Linear(embedding_dim, expansion)),</td></tr>
-<tr class="lf-code-row" data-line="1466"><td class="lf-ln lf-ln-single">1466</td><td>            nn.ReLU(),</td></tr>
-<tr class="lf-code-row" data-line="1467"><td class="lf-ln lf-ln-single">1467</td><td>            layer_init(nn.Linear(expansion, embedding_dim)),</td></tr>
-<tr class="lf-code-row" data-line="1468"><td class="lf-ln lf-ln-single">1468</td><td>        )</td></tr>
-<tr class="lf-code-row" data-line="1469"><td class="lf-ln lf-ln-single">1469</td><td>        self.norm2 = nn.LayerNorm(embedding_dim)</td></tr>
-<tr class="lf-code-row" data-line="1470"><td class="lf-ln lf-ln-single">1470</td><td></td></tr>
-<tr class="lf-code-row" data-line="1471"><td class="lf-ln lf-ln-single">1471</td><td>    def forward(</td></tr>
-<tr class="lf-code-row" data-line="1472"><td class="lf-ln lf-ln-single">1472</td><td>        self,</td></tr>
-<tr class="lf-code-row" data-line="1473"><td class="lf-ln lf-ln-single">1473</td><td>        objects: torch.Tensor,</td></tr>
-<tr class="lf-code-row" data-line="1474"><td class="lf-ln lf-ln-single">1474</td><td>        is_agent: torch.Tensor,</td></tr>
-<tr class="lf-code-row" data-line="1475"><td class="lf-ln lf-ln-single">1475</td><td>        key_padding_mask: torch.BoolTensor,</td></tr>
-<tr class="lf-code-row" data-line="1476"><td class="lf-ln lf-ln-single">1476</td><td>        summaries: torch.Tensor | None = None,</td></tr>
-<tr class="lf-code-row" data-line="1477"><td class="lf-ln lf-ln-single">1477</td><td>    ) -&gt; torch.Tensor:</td></tr>
-<tr class="lf-code-row" data-line="1478"><td class="lf-ln lf-ln-single">1478</td><td>        if self.memory_gate is not None:</td></tr>
-<tr class="lf-code-row" data-line="1479"><td class="lf-ln lf-ln-single">1479</td><td>            assert summaries is not None and self.memory_projection is not None</td></tr>
-<tr class="lf-code-row" data-line="1480"><td class="lf-ln lf-ln-single">1480</td><td>            # Mean keeps K&gt;1 summaries usable without extending the attention sequence.</td></tr>
-<tr class="lf-code-row" data-line="1481"><td class="lf-ln lf-ln-single">1481</td><td>            delta = self.memory_projection(summaries.mean(1).to(objects.dtype))</td></tr>
-<tr class="lf-code-row" data-line="1482"><td class="lf-ln lf-ln-single">1482</td><td>            delta = torch.tanh(self.memory_gate_scale * self.memory_gate) * delta</td></tr>
-<tr class="lf-code-row" data-line="1483"><td class="lf-ln lf-ln-single">1483</td><td>            board_mask = (~key_padding_mask).clone()</td></tr>
-<tr class="lf-code-row" data-line="1484"><td class="lf-ln lf-ln-single">1484</td><td>            board_mask[:, is_agent.shape[1] :] = False</td></tr>
-<tr class="lf-code-row" data-line="1485"><td class="lf-ln lf-ln-single">1485</td><td>            objects = objects + delta.unsqueeze(1) * board_mask.unsqueeze(-1)</td></tr>
-<tr class="lf-code-row" data-line="1486"><td class="lf-ln lf-ln-single">1486</td><td>        owned_objects = objects</td></tr>
-<tr class="lf-code-row" data-line="1487"><td class="lf-ln lf-ln-single">1487</td><td>        if self.perspective is not None:</td></tr>
-<tr class="lf-code-row" data-line="1488"><td class="lf-ln lf-ln-single">1488</td><td>            perspective_scale = torch.where(is_agent.unsqueeze(-1), 1.0, -1.0)</td></tr>
-<tr class="lf-code-row" data-line="1489"><td class="lf-ln lf-ln-single">1489</td><td>            # Appended value tokens are neutral; real-object indexes stay fixed.</td></tr>
-<tr class="lf-code-row" data-line="1490"><td class="lf-ln lf-ln-single">1490</td><td>            if objects.shape[1] &gt; is_agent.shape[1]:</td></tr>
-<tr class="lf-code-row" data-line="1491"><td class="lf-ln lf-ln-single">1491</td><td>                perspective_scale = torch.cat(</td></tr>
-<tr class="lf-code-row" data-line="1492"><td class="lf-ln lf-ln-single">1492</td><td>                    (</td></tr>
-<tr class="lf-code-row" data-line="1493"><td class="lf-ln lf-ln-single">1493</td><td>                        perspective_scale,</td></tr>
-<tr class="lf-code-row" data-line="1494"><td class="lf-ln lf-ln-single">1494</td><td>                        perspective_scale.new_zeros(</td></tr>
-<tr class="lf-code-row" data-line="1495"><td class="lf-ln lf-ln-single">1495</td><td>                            (objects.shape[0], objects.shape[1] - is_agent.shape[1], 1)</td></tr>
-<tr class="lf-code-row" data-line="1496"><td class="lf-ln lf-ln-single">1496</td><td>                        ),</td></tr>
-<tr class="lf-code-row" data-line="1497"><td class="lf-ln lf-ln-single">1497</td><td>                    ),</td></tr>
-<tr class="lf-code-row" data-line="1498"><td class="lf-ln lf-ln-single">1498</td><td>                    dim=1,</td></tr>
-<tr class="lf-code-row" data-line="1499"><td class="lf-ln lf-ln-single">1499</td><td>                )</td></tr>
-<tr class="lf-code-row" data-line="1500"><td class="lf-ln lf-ln-single">1500</td><td>            owned_objects = objects + perspective_scale * self.perspective</td></tr>
-<tr class="lf-code-row" data-line="1501"><td class="lf-ln lf-ln-single">1501</td><td></td></tr>
-<tr class="lf-code-row" data-line="1502"><td class="lf-ln lf-ln-single">1502</td><td>        mask = (~key_padding_mask).unsqueeze(-1).float()</td></tr>
-<tr class="lf-code-row" data-line="1503"><td class="lf-ln lf-ln-single">1503</td><td>        attention_input = self.norm1(owned_objects) if self.pre_norm else owned_objects</td></tr>
-<tr class="lf-code-row" data-line="1504"><td class="lf-ln lf-ln-single">1504</td><td>        attended, _ = self.mha(</td></tr>
-<tr class="lf-code-row" data-line="1505"><td class="lf-ln lf-ln-single">1505</td><td>            attention_input,</td></tr>
-<tr class="lf-code-row" data-line="1506"><td class="lf-ln lf-ln-single">1506</td><td>            attention_input,</td></tr>
-<tr class="lf-code-row" data-line="1507"><td class="lf-ln lf-ln-single">1507</td><td>            attention_input,</td></tr>
-<tr class="lf-code-row" data-line="1508"><td class="lf-ln lf-ln-single">1508</td><td>            key_padding_mask=key_padding_mask,</td></tr>
-<tr class="lf-code-row" data-line="1509"><td class="lf-ln lf-ln-single">1509</td><td>            need_weights=False,</td></tr>
-<tr class="lf-code-row" data-line="1510"><td class="lf-ln lf-ln-single">1510</td><td>        )</td></tr>
-<tr class="lf-code-row" data-line="1511"><td class="lf-ln lf-ln-single">1511</td><td>        return self._after_attention(owned_objects + attended) * mask</td></tr>
-<tr class="lf-code-row" data-line="1512"><td class="lf-ln lf-ln-single">1512</td><td></td></tr>
-<tr class="lf-code-row" data-line="1513"><td class="lf-ln lf-ln-single">1513</td><td>    def _after_attention(self, residual: torch.Tensor) -&gt; torch.Tensor:</td></tr>
-<tr class="lf-code-row" data-line="1514"><td class="lf-ln lf-ln-single">1514</td><td>        if self.pre_norm:</td></tr>
-<tr class="lf-code-row" data-line="1515"><td class="lf-ln lf-ln-single">1515</td><td>            return residual + self.mlp(self.norm2(residual))</td></tr>
-<tr class="lf-code-row" data-line="1516"><td class="lf-ln lf-ln-single">1516</td><td>        x = self.norm1(residual)</td></tr>
-<tr class="lf-code-row" data-line="1517"><td class="lf-ln lf-ln-single">1517</td><td>        return self.norm2(x + self.mlp(x))</td></tr>
-<tr class="lf-code-row" data-line="1518"><td class="lf-ln lf-ln-single">1518</td><td></td></tr>
-</tbody></table></div></div>
-
-<p>
-  <code>model("w160l8")</code> uses <code>num_attention_heads = 8</code>, giving <code>head_dim = 20</code>
-  (<code>20 % 8 == 4</code>). In <code>experiments/eval_throughput.py:90</code>, varying only
-  <code>hidden_dim</code> across <code>(160, 256, 384)</code> produces <code>head_dim = (20, 32, 48)</code>.
-  On CUDA, PyTorch's <code>mem_efficient</code> SDPA supports <code>head_dim % 4 == 0</code> in
-  <code>float32</code>, while both <code>flash</code> and <code>mem_efficient</code> require
-  <code>head_dim % 8 == 0</code> in <code>bfloat16</code>. When <code>head_dim = 20</code> enters bf16
-  autocast, SDPA falls back to the <code>math</code> backend, materializing the full
-  <code>[B, 8, N, N]</code> attention score matrix across all 8 layers (which scales with batch size
-  <code>B</code>, explaining why 18.6 rows/call adds 27.5 ms and 256 rows/call adds 255 ms + 5.4 GB VRAM).
-  Because a naive op-name classifier puts <code>math</code> SDPA's <code>aten::bmm</code> and
-  <code>aten::_softmax</code> into <code>linear/MLP</code> or <code>unattributed</code>, the plan's proposed
-  buckets can also misattribute the slowdown unless SDPA backends and peak CUDA memory are recorded explicitly.
+  MTG-507's L4 measurement settled the root cause cleanly: <code>w160l8</code>'s
+  <code>head_dim = 20</code> (and <code>w288l8</code>'s <code>36</code>) falls back from
+  native float32 MHA to <code>aten::_scaled_dot_product_attention_math</code> under CUDA bf16
+  autocast, whereas 8-aligned heads (<code>32</code>, <code>40</code>, <code>48</code>) dispatch
+  <code>aten::_scaled_dot_product_efficient_attention</code>.
 </p>
 
 <p>
-  Two concrete code boundaries in the plan also fail on contact with the existing implementation:
+  Two mismatches in <code>experiments/eval_precision_profile.py</code> distort the secondary numbers
+  drawn from those exact traces:
 </p>
 
-<div class="lf-codeblock" data-path="manabot/policy/admission.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/policy/admission.py:110-118</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="110"><td class="lf-ln lf-ln-single">110</td><td>def binding(model: ModelConfig, space: ObservationSpace, readings: Readings) -&gt; str:</td></tr>
-<tr class="lf-code-row" data-line="111"><td class="lf-ln lf-ln-single">111</td><td>    &quot;&quot;&quot;The configuration a prepared batch belongs to, independent of weights.</td></tr>
-<tr class="lf-code-row" data-line="112"><td class="lf-ln lf-ln-single">112</td><td></td></tr>
-<tr class="lf-code-row" data-line="113"><td class="lf-ln lf-ln-single">113</td><td>    Compared in process and stored nowhere; the readings (and so the saved</td></tr>
-<tr class="lf-code-row" data-line="114"><td class="lf-ln lf-ln-single">114</td><td>    widths) are part of it, since they decide every prepared number.&quot;&quot;&quot;</td></tr>
-<tr class="lf-code-row" data-line="115"><td class="lf-ln lf-ln-single">115</td><td>    key = model.model_dump_json() + &quot;\n&quot; + space.config.model_dump_json()</td></tr>
-<tr class="lf-code-row" data-line="116"><td class="lf-ln lf-ln-single">116</td><td>    return key + f&quot;\nreadings={sorted(readings.items())}&quot;</td></tr>
-<tr class="lf-code-row" data-line="117"><td class="lf-ln lf-ln-single">117</td><td></td></tr>
-<tr class="lf-code-row" data-line="118"><td class="lf-ln lf-ln-single">118</td><td></td></tr>
-</tbody></table></div></div>
-<div class="lf-codeblock" data-path="manabot/policy/batching.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/policy/batching.py:24-50</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="24"><td class="lf-ln lf-ln-single">24</td><td>def concatenate(rows: list[Prepared[np.ndarray]]) -&gt; Prepared[np.ndarray]:</td></tr>
-<tr class="lf-code-row" data-line="25"><td class="lf-ln lf-ln-single">25</td><td>    if not rows:</td></tr>
-<tr class="lf-code-row" data-line="26"><td class="lf-ln lf-ln-single">26</td><td>        raise ValueError(&quot;a prepared batch needs rows&quot;)</td></tr>
-<tr class="lf-code-row" data-line="27"><td class="lf-ln lf-ln-single">27</td><td>    first = rows[0]</td></tr>
-<tr class="lf-code-row" data-line="28"><td class="lf-ln lf-ln-single">28</td><td>    objects = first.validity.shape[1]</td></tr>
-<tr class="lf-code-row" data-line="29"><td class="lf-ln lf-ln-single">29</td><td>    frames = first.relation_features.shape[1]</td></tr>
-<tr class="lf-code-row" data-line="30"><td class="lf-ln lf-ln-single">30</td><td>    facts = first.facts.kinds.shape[1]</td></tr>
-<tr class="lf-code-row" data-line="31"><td class="lf-ln lf-ln-single">31</td><td>    shifted: list[Prepared[np.ndarray]] = []</td></tr>
-<tr class="lf-code-row" data-line="32"><td class="lf-ln lf-ln-single">32</td><td>    batch_offset = action_offset = 0</td></tr>
-<tr class="lf-code-row" data-line="33"><td class="lf-ln lf-ln-single">33</td><td>    for row in rows:</td></tr>
-<tr class="lf-code-row" data-line="34"><td class="lf-ln lf-ln-single">34</td><td>        if (</td></tr>
-<tr class="lf-code-row" data-line="35"><td class="lf-ln lf-ln-single">35</td><td>            row.batch &lt; 1</td></tr>
-<tr class="lf-code-row" data-line="36"><td class="lf-ln lf-ln-single">36</td><td>            or row.binding != first.binding</td></tr>
-<tr class="lf-code-row" data-line="37"><td class="lf-ln lf-ln-single">37</td><td>            or row.validity.shape[1:] != first.validity.shape[1:]</td></tr>
-<tr class="lf-code-row" data-line="38"><td class="lf-ln lf-ln-single">38</td><td>            or row.relation_features.shape[1:] != first.relation_features.shape[1:]</td></tr>
-<tr class="lf-code-row" data-line="39"><td class="lf-ln lf-ln-single">39</td><td>            or row.facts.kinds.shape[1:] != first.facts.kinds.shape[1:]</td></tr>
-<tr class="lf-code-row" data-line="40"><td class="lf-ln lf-ln-single">40</td><td>            or row.legal.shape[1:] != first.legal.shape[1:]</td></tr>
-<tr class="lf-code-row" data-line="41"><td class="lf-ln lf-ln-single">41</td><td>            or row.packed_attention is not None</td></tr>
-<tr class="lf-code-row" data-line="42"><td class="lf-ln lf-ln-single">42</td><td>            or row.compact_attention is not None</td></tr>
-<tr class="lf-code-row" data-line="43"><td class="lf-ln lf-ln-single">43</td><td>            or row.facts.compact</td></tr>
-<tr class="lf-code-row" data-line="44"><td class="lf-ln lf-ln-single">44</td><td>            or row.attention_columns is not None</td></tr>
-<tr class="lf-code-row" data-line="45"><td class="lf-ln lf-ln-single">45</td><td>            or row.live_index is not None</td></tr>
-<tr class="lf-code-row" data-line="46"><td class="lf-ln lf-ln-single">46</td><td>            or row.bucket_needs is not None</td></tr>
-<tr class="lf-code-row" data-line="47"><td class="lf-ln lf-ln-single">47</td><td>            or row.guard is not None</td></tr>
-<tr class="lf-code-row" data-line="48"><td class="lf-ln lf-ln-single">48</td><td>        ):</td></tr>
-<tr class="lf-code-row" data-line="49"><td class="lf-ln lf-ln-single">49</td><td>            raise ValueError(&quot;batched inference requires one admitted full layout&quot;)</td></tr>
-<tr class="lf-code-row" data-line="50"><td class="lf-ln lf-ln-single">50</td><td>        shifted.append(</td></tr>
-</tbody></table></div></div>
-<div class="lf-codeblock" data-path="manabot/eval/agent_loader.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/eval/agent_loader.py:89-127</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="89"><td class="lf-ln lf-ln-single">89</td><td>def torch_logits(</td></tr>
-<tr class="lf-code-row" data-line="90"><td class="lf-ln lf-ln-single">90</td><td>    path: Path,</td></tr>
-<tr class="lf-code-row" data-line="91"><td class="lf-ln lf-ln-single">91</td><td>    precision: EvalPrecision,</td></tr>
-<tr class="lf-code-row" data-line="92"><td class="lf-ln lf-ln-single">92</td><td>    device_name: Literal[&quot;cuda&quot;, &quot;mps&quot;, &quot;cpu&quot;],</td></tr>
-<tr class="lf-code-row" data-line="93"><td class="lf-ln lf-ln-single">93</td><td>) -&gt; Logits:</td></tr>
-<tr class="lf-code-row" data-line="94"><td class="lf-ln lf-ln-single">94</td><td>    import torch</td></tr>
-<tr class="lf-code-row" data-line="95"><td class="lf-ln lf-ln-single">95</td><td></td></tr>
-<tr class="lf-code-row" data-line="96"><td class="lf-ln lf-ln-single">96</td><td>    from manabot.backends.torch.arrays import on_device</td></tr>
-<tr class="lf-code-row" data-line="97"><td class="lf-ln lf-ln-single">97</td><td>    from manabot.backends.torch.checkpoint import load_checkpoint</td></tr>
-<tr class="lf-code-row" data-line="98"><td class="lf-ln lf-ln-single">98</td><td>    from manabot.backends.torch.learner import (</td></tr>
-<tr class="lf-code-row" data-line="99"><td class="lf-ln lf-ln-single">99</td><td>        apply_matmul_precision,</td></tr>
-<tr class="lf-code-row" data-line="100"><td class="lf-ln lf-ln-single">100</td><td>        forward_precision,</td></tr>
-<tr class="lf-code-row" data-line="101"><td class="lf-ln lf-ln-single">101</td><td>        validate_precision,</td></tr>
-<tr class="lf-code-row" data-line="102"><td class="lf-ln lf-ln-single">102</td><td>    )</td></tr>
-<tr class="lf-code-row" data-line="103"><td class="lf-ln lf-ln-single">103</td><td></td></tr>
-<tr class="lf-code-row" data-line="104"><td class="lf-ln lf-ln-single">104</td><td>    device = torch.device(device_name)</td></tr>
-<tr class="lf-code-row" data-line="105"><td class="lf-ln lf-ln-single">105</td><td>    validate_precision(precision, device)</td></tr>
-<tr class="lf-code-row" data-line="106"><td class="lf-ln lf-ln-single">106</td><td>    if precision == &quot;bf16&quot;:</td></tr>
-<tr class="lf-code-row" data-line="107"><td class="lf-ln lf-ln-single">107</td><td>        if device.type == &quot;cuda&quot; and not torch.cuda.is_bf16_supported():</td></tr>
-<tr class="lf-code-row" data-line="108"><td class="lf-ln lf-ln-single">108</td><td>            raise ValueError(&quot;precision bf16 is not supported on this CUDA device&quot;)</td></tr>
-<tr class="lf-code-row" data-line="109"><td class="lf-ln lf-ln-single">109</td><td>        if device.type == &quot;mps&quot; and not torch.backends.mps.is_macos_or_newer(14, 0):</td></tr>
-<tr class="lf-code-row" data-line="110"><td class="lf-ln lf-ln-single">110</td><td>            raise ValueError(&quot;precision bf16 on MPS requires macOS 14.0 or newer&quot;)</td></tr>
-<tr class="lf-code-row" data-line="111"><td class="lf-ln lf-ln-single">111</td><td></td></tr>
-<tr class="lf-code-row" data-line="112"><td class="lf-ln lf-ln-single">112</td><td>    torch.set_num_threads(int(os.environ.get(&quot;OMP_NUM_THREADS&quot;, &quot;1&quot;)))</td></tr>
-<tr class="lf-code-row" data-line="113"><td class="lf-ln lf-ln-single">113</td><td>    apply_matmul_precision(precision)</td></tr>
-<tr class="lf-code-row" data-line="114"><td class="lf-ln lf-ln-single">114</td><td>    model, _ = load_checkpoint(str(path))</td></tr>
-<tr class="lf-code-row" data-line="115"><td class="lf-ln lf-ln-single">115</td><td>    model.to(device).eval()</td></tr>
-<tr class="lf-code-row" data-line="116"><td class="lf-ln lf-ln-single">116</td><td>    with torch.inference_mode(), forward_precision(precision, device):</td></tr>
-<tr class="lf-code-row" data-line="117"><td class="lf-ln lf-ln-single">117</td><td>        model.cache_programs()</td></tr>
-<tr class="lf-code-row" data-line="118"><td class="lf-ln lf-ln-single">118</td><td></td></tr>
-<tr class="lf-code-row" data-line="119"><td class="lf-ln lf-ln-single">119</td><td>    def logits(batch: Prepared[np.ndarray]) -&gt; np.ndarray:</td></tr>
-<tr class="lf-code-row" data-line="120"><td class="lf-ln lf-ln-single">120</td><td>        if device.type == &quot;cuda&quot;:</td></tr>
-<tr class="lf-code-row" data-line="121"><td class="lf-ln lf-ln-single">121</td><td>            apply_matmul_precision(precision)</td></tr>
-<tr class="lf-code-row" data-line="122"><td class="lf-ln lf-ln-single">122</td><td>        with torch.inference_mode(), forward_precision(precision, device):</td></tr>
-<tr class="lf-code-row" data-line="123"><td class="lf-ln lf-ln-single">123</td><td>            scores, _ = model(on_device(batch, device))</td></tr>
-<tr class="lf-code-row" data-line="124"><td class="lf-ln lf-ln-single">124</td><td>        return scores.float().cpu().numpy()</td></tr>
-<tr class="lf-code-row" data-line="125"><td class="lf-ln lf-ln-single">125</td><td></td></tr>
-<tr class="lf-code-row" data-line="126"><td class="lf-ln lf-ln-single">126</td><td>    return logits</td></tr>
-<tr class="lf-code-row" data-line="127"><td class="lf-ln lf-ln-single">127</td><td></td></tr>
-</tbody></table></div></div>
+<ol>
+  <li>
+    <strong><code>op_bucket</code> steals math-SDPA conversions out of <code>attention</code>:</strong>
+    checking <code>casts_and_copies</code> before <code>parent != "other"</code> moves
+    <code>49.96 ms</code> of GPU time inside <code>policy.attention</code> (94.6% of
+    <code>trained-w160-bf16</code>'s GPU cast bucket) out of <code>attention</code> and into
+    <code>casts_and_copies</code>.
+  </li>
+  <li>
+    <strong><code>bf16-cached-autocast</code> never cached weights:</strong>
+    nesting <code>torch_forward_context</code> (which enters <code>torch.inference_mode()</code>)
+    inside <code>cached_context()</code> hits PyTorch's rule that autocast weight caching is
+    disabled outside grad mode. Both <code>w160l8</code> and <code>w384l8</code> traces show
+    bit-for-bit identical cast op counts and peak CUDA memory between <code>bf16</code> and
+    <code>bf16-cached-autocast</code>—while <code>bf16-linear-once</code> actually removed
+    <code>&gt;400</code> cast ops/call and cut <code>w384l8</code> forward time by
+    <strong>14.6%</strong> (<code>18.12 → 15.48 ms</code>) and peak VRAM by
+    <strong>54 MiB</strong> (<code>640.0 → 585.9 MiB</code>) with <code>0.0</code> logit diff.
+  </li>
+</ol>
 
-<div class="lf-codeblock" data-path="scratch/plan.md"><div class="lf-codeblock-header"><span class="lf-codeblock-path">scratch/plan.md:60-118</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-hunk"><td colspan="4">@@ -1,168 +1,191 @@</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="60"><td class="lf-ln lf-ln-old">60</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td></td></tr>
-<tr class="lf-del lf-code-row" data-old-line="61"><td class="lf-ln lf-ln-old">61</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>- **Loader &amp; precision (`manabot/eval/agent_loader.py`, `manabot/eval/agents.py`,</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="62"><td class="lf-ln lf-ln-old">62</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `manabot/policy/batching.py`, `manabot/sim/registration.py`,</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="63"><td class="lf-ln lf-ln-old">63</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `manabot/backends/torch/learner.py`):** device order `cuda -&gt; mlx -&gt; mps -&gt; cpu`</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="64"><td class="lf-ln lf-ln-old">64</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  with `MANABOT_EVAL_DEVICE` override (out of identity), and MLX requires the</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="65"><td class="lf-ln lf-ln-old">65</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  optional extra plus Metal; `load`/`load_tf32`/`load_bf16`</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="66"><td class="lf-ln lf-ln-old">66</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  accept any-batch `Prepared` and return `[batch, A]` float32 masked logits;</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="67"><td class="lf-ln lf-ln-old">67</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `concatenate` rebases `MemoryRows` (rejects `fold is not None`); `AGENTS`,</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="68"><td class="lf-ln lf-ln-old">68</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `AGENTS_TF32`, `AGENTS_BF16`, `agents_for(precision)`, and</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="69"><td class="lf-ln lf-ln-old">69</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `etude_compute_class(precision)` (float32 keeps `etude-policy-f32-auto-v1`);</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="70"><td class="lf-ln lf-ln-old">70</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `tf32` device guard in `validate_precision`.</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="71"><td class="lf-ln lf-ln-old">71</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>- **Native &amp; vector runner (`managym/`, `manabot/eval/vector.py`,</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="72"><td class="lf-ln lf-ln-old">72</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `manabot/eval/pairing.py`, `manabot/eval/match.py`,</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="73"><td class="lf-ln lf-ln-old">73</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `manabot/sim/native_game.py`):** seeded `SlotLoad.fresh(..., seed=)`,</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="74"><td class="lf-ln lf-ln-old">74</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `RecordedVectorEnv.record_in_memory`/`take_slot_record`, shared per-leg setup</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="75"><td class="lf-ln lf-ln-old">75</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  (`resolve_game_match`, `game_runtime_identities`, `arena_source_sha256`,</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="76"><td class="lf-ln lf-ln-old">76</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `set_execution_limits`), shared pairing admission/finalization, and Torch-free</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="77"><td class="lf-ln lf-ln-old">77</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  async `play_pairings` stepping up to `slots` legs on v11 CSR</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="78"><td class="lf-ln lf-ln-old">78</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `ObservationBatch -&gt; Prepared` with immediate backfill and per-match yield.</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="79"><td class="lf-ln lf-ln-old">79</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `scripts/public_api.py check` and `tests/test_package_boundaries.py` pass.</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="80"><td class="lf-ln lf-ln-old">80</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>- **Apple Silicon measurement (`experiments/eval_throughput.py`,</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="81"><td class="lf-ln lf-ln-old">81</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `experiments/reports/eval_throughput.md`):** 12 arms on M4 Max across 32</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="82"><td class="lf-ln lf-ln-old">82</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  held-out TLA trophy deals (128 games/arm, exact leg-for-leg outcome and</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="83"><td class="lf-ln lf-ln-old">83</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  128/128 replay parity). MPS vector-64 reaches 1,989 games/hr on trained</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="84"><td class="lf-ln lf-ln-old">84</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `w160l8` (2.66× CPU batch-1; forward 362.5→39.6 s, 17.1% of wall) and 1,882</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="85"><td class="lf-ln lf-ln-old">85</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  games/hr on seeded `w384l8` (2.41× CPU batch-1; forward 346.8→52.0 s, 21.3%);</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="86"><td class="lf-ln lf-ln-old">86</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  single-process `other_arena` + `replay` take ~79–83% of wall time, confirming</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="87"><td class="lf-ln lf-ln-old">87</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  multi-process game workers sharing a GPU agent (`play_many`) are needed to</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="88"><td class="lf-ln lf-ln-old">88</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  scale past ~2,000 games/hr. MLX vector-64 (float32) matches MPS within</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="89"><td class="lf-ln lf-ln-old">89</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  2% with 17–23% less forward time; managed `play_many` on MLX reaches</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="90"><td class="lf-ln lf-ln-old">90</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  ~4,700–5,100 games/hr. RunPod L4 (`966e8ff296`): CUDA vector-64 3,380</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="91"><td class="lf-ln lf-ln-old">91</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  (float32) and 3,908 (bf16) games/hr on `w384l8`, 17.3× CPU batch-1,</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="92"><td class="lf-ln lf-ln-old">92</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  limited by `other_arena`.</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="93"><td class="lf-ln lf-ln-old">93</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td></td></tr>
-<tr class="lf-del lf-code-row" data-old-line="94"><td class="lf-ln lf-ln-old">94</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>## Design notes</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="95"><td class="lf-ln lf-ln-old">95</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td></td></tr>
-<tr class="lf-del lf-code-row" data-old-line="96"><td class="lf-ln lf-ln-old">96</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>- **Precision (confirmed in steer `44a4f9bb`):** declare the agent set</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="97"><td class="lf-ln lf-ln-old">97</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  (`AGENTS`, `AGENTS_TF32`, `AGENTS_BF16`) and the tournament precision.</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="98"><td class="lf-ln lf-ln-old">98</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  The float32 compute envelope and the paired seeds stay stable across</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="99"><td class="lf-ln lf-ln-old">99</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  precision comparisons.</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="100"><td class="lf-ln lf-ln-old">100</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>- **Vector runner:** TLA trophies adapt Etude&#39;s `Matches` to</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="101"><td class="lf-ln lf-ln-old">101</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  `play_pairings`, which passes `rows=prepared.batch` to the awaited forward</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="102"><td class="lf-ln lf-ln-old">102</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  and isolates `ForwardError` to held matches drawing on that checkpoint.</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="103"><td class="lf-ln lf-ln-old">103</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  Each decision round divides its elapsed time among live slots. The game</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="104"><td class="lf-ln lf-ln-old">104</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  limit and recorded execution time use the same charge.</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="105"><td class="lf-ln lf-ln-old">105</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td></td></tr>
-<tr class="lf-del lf-code-row" data-old-line="106"><td class="lf-ln lf-ln-old">106</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>## Review record</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="107"><td class="lf-ln lf-ln-old">107</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td></td></tr>
-<tr class="lf-del lf-code-row" data-old-line="108"><td class="lf-ln lf-ln-old">108</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>The superseded 4-leg review (F1–F6 of the earlier page) is fully settled in</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="109"><td class="lf-ln lf-ln-old">109</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>passes 1–3. `scratch/concept-review.html` was rewritten at `c1df3f02c2`</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="110"><td class="lf-ln lf-ln-old">110</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>(after pass 5); every claim below was checked against the code. Placement:</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="111"><td class="lf-ln lf-ln-old">111</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td></td></tr>
-<tr class="lf-del lf-code-row" data-old-line="112"><td class="lf-ln lf-ln-old">112</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>- **Async seats, loader, game budget and ownership (F2–F5).** Pass 6 resolved</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="113"><td class="lf-ln lf-ln-old">113</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  these findings. The vector runner uses one async sampler forward per</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="114"><td class="lf-ln lf-ln-old">114</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  checkpoint, shares its preparation and sampling with scalar play, and keeps</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="115"><td class="lf-ln lf-ln-old">115</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  checkpoint admission within the game worker. Managym owns slot record</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="116"><td class="lf-ln lf-ln-old">116</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  detachment, seed continuity and opt-in decision events. Scalar and vector</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="117"><td class="lf-ln lf-ln-old">117</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  runners share attempt retention. The trophy job threads one precision</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="118"><td class="lf-ln lf-ln-old">118</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>  through the loader, environment and pairing. CUDA profiling remains deferred.</td></tr>
-<tr class="lf-add lf-code-row" data-line="60"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">60</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="61"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">61</td><td class="lf-sign">+</td><td>One standalone experiment CLI, `experiments/eval_precision_profile.py`, in the</td></tr>
-<tr class="lf-add lf-code-row" data-line="62"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">62</td><td class="lf-sign">+</td><td>shape of `experiments/eval_throughput.py` (exploratory: no prediction, the</td></tr>
-<tr class="lf-add lf-code-row" data-line="63"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">63</td><td class="lf-sign">+</td><td>report ends it). Three subcommands:</td></tr>
+<div class="lf-codeblock" data-path="experiments/eval_precision_profile.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/eval_precision_profile.py:333-356</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,849 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="333"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">333</td><td class="lf-sign">+</td><td>def op_bucket(name: str, parent: str) -&gt; str:</td></tr>
+<tr class="lf-add lf-code-row" data-line="334"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">334</td><td class="lf-sign">+</td><td>    if name in {&quot;aten::to&quot;, &quot;aten::_to_copy&quot;, &quot;aten::copy_&quot;}:</td></tr>
+<tr class="lf-add lf-code-row" data-line="335"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">335</td><td class="lf-sign">+</td><td>        return &quot;casts_and_copies&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="336"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">336</td><td class="lf-sign">+</td><td>    if name in {ATTENTION, GRU}:</td></tr>
+<tr class="lf-add lf-code-row" data-line="337"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">337</td><td class="lf-sign">+</td><td>        return name.removeprefix(&quot;policy.&quot;)</td></tr>
+<tr class="lf-add lf-code-row" data-line="338"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">338</td><td class="lf-sign">+</td><td>    if parent != &quot;other&quot;:</td></tr>
+<tr class="lf-add lf-code-row" data-line="339"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">339</td><td class="lf-sign">+</td><td>        return parent</td></tr>
+<tr class="lf-add lf-code-row" data-line="340"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">340</td><td class="lf-sign">+</td><td>    if name in {</td></tr>
+<tr class="lf-add lf-code-row" data-line="341"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">341</td><td class="lf-sign">+</td><td>        &quot;aten::linear&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="342"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">342</td><td class="lf-sign">+</td><td>        &quot;aten::addmm&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="343"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">343</td><td class="lf-sign">+</td><td>        &quot;aten::mm&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="344"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">344</td><td class="lf-sign">+</td><td>        &quot;aten::matmul&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="345"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">345</td><td class="lf-sign">+</td><td>        &quot;aten::relu&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="346"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">346</td><td class="lf-sign">+</td><td>        &quot;aten::gelu&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="347"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">347</td><td class="lf-sign">+</td><td>        &quot;aten::silu&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="348"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">348</td><td class="lf-sign">+</td><td>    }:</td></tr>
+<tr class="lf-add lf-code-row" data-line="349"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">349</td><td class="lf-sign">+</td><td>        return &quot;linear_and_mlp&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="350"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">350</td><td class="lf-sign">+</td><td>    if &quot;norm&quot; in name:</td></tr>
+<tr class="lf-add lf-code-row" data-line="351"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">351</td><td class="lf-sign">+</td><td>        return &quot;normalization&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="352"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">352</td><td class="lf-sign">+</td><td>    if name.startswith(</td></tr>
+<tr class="lf-add lf-code-row" data-line="353"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">353</td><td class="lf-sign">+</td><td>        (&quot;aten::index&quot;, &quot;aten::gather&quot;, &quot;aten::embedding&quot;, &quot;aten::scatter&quot;)</td></tr>
+<tr class="lf-add lf-code-row" data-line="354"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">354</td><td class="lf-sign">+</td><td>    ):</td></tr>
+<tr class="lf-add lf-code-row" data-line="355"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">355</td><td class="lf-sign">+</td><td>        return &quot;gather_and_index&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="356"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">356</td><td class="lf-sign">+</td><td>    return &quot;other&quot;</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="experiments/eval_precision_profile.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/eval_precision_profile.py:551-578</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,849 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="551"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">551</td><td class="lf-sign">+</td><td>    policy = load_torch_policy(checkpoint, precision, device)</td></tr>
+<tr class="lf-add lf-code-row" data-line="552"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">552</td><td class="lf-sign">+</td><td>    if variant == &quot;bf16-linear-once&quot;:</td></tr>
+<tr class="lf-add lf-code-row" data-line="553"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">553</td><td class="lf-sign">+</td><td>        linear_weights_bf16(policy)</td></tr>
+<tr class="lf-add lf-code-row" data-line="554"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">554</td><td class="lf-sign">+</td><td>    if device.type == &quot;cuda&quot;:</td></tr>
+<tr class="lf-add lf-code-row" data-line="555"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">555</td><td class="lf-sign">+</td><td>        torch.cuda.reset_peak_memory_stats(device)</td></tr>
+<tr class="lf-add lf-code-row" data-line="556"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">556</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="557"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">557</td><td class="lf-sign">+</td><td>    def cached_context() -&gt; AbstractContextManager[object]:</td></tr>
+<tr class="lf-add lf-code-row" data-line="558"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">558</td><td class="lf-sign">+</td><td>        return (</td></tr>
+<tr class="lf-add lf-code-row" data-line="559"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">559</td><td class="lf-sign">+</td><td>            forward_precision(precision, device)</td></tr>
+<tr class="lf-add lf-code-row" data-line="560"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">560</td><td class="lf-sign">+</td><td>            if variant == &quot;bf16-cached-autocast&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="561"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">561</td><td class="lf-sign">+</td><td>            else nullcontext()</td></tr>
+<tr class="lf-add lf-code-row" data-line="562"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">562</td><td class="lf-sign">+</td><td>        )</td></tr>
+<tr class="lf-add lf-code-row" data-line="563"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">563</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="564"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">564</td><td class="lf-sign">+</td><td>    calls: list[CallTiming] = []</td></tr>
+<tr class="lf-add lf-code-row" data-line="565"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">565</td><td class="lf-sign">+</td><td>    sample: list[tuple[int, HostBatch]] = []</td></tr>
+<tr class="lf-add lf-code-row" data-line="566"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">566</td><td class="lf-sign">+</td><td>    compare_bf16 = variant != &quot;bf16&quot; and device.type != &quot;cpu&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="567"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">567</td><td class="lf-sign">+</td><td>    first_logits: list[np.ndarray] = []</td></tr>
+<tr class="lf-add lf-code-row" data-line="568"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">568</td><td class="lf-sign">+</td><td>    exact = True</td></tr>
+<tr class="lf-add lf-code-row" data-line="569"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">569</td><td class="lf-sign">+</td><td>    difference = 0.0</td></tr>
+<tr class="lf-add lf-code-row" data-line="570"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">570</td><td class="lf-sign">+</td><td>    rng = Random(1)</td></tr>
+<tr class="lf-add lf-code-row" data-line="571"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">571</td><td class="lf-sign">+</td><td>    with (out / &quot;calls.jsonl&quot;).open(&quot;w&quot;) as receipt, cached_context():</td></tr>
+<tr class="lf-add lf-code-row" data-line="572"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">572</td><td class="lf-sign">+</td><td>        for repeat in range(repeats + 1):</td></tr>
+<tr class="lf-add lf-code-row" data-line="573"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">573</td><td class="lf-sign">+</td><td>            for index, batch in enumerate(inputs(policy)):</td></tr>
+<tr class="lf-add lf-code-row" data-line="574"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">574</td><td class="lf-sign">+</td><td>                logits, timing = run_call(</td></tr>
+<tr class="lf-add lf-code-row" data-line="575"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">575</td><td class="lf-sign">+</td><td>                    policy, batch, precision, device, sync, repeat</td></tr>
+<tr class="lf-add lf-code-row" data-line="576"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">576</td><td class="lf-sign">+</td><td>                )</td></tr>
+<tr class="lf-add lf-code-row" data-line="577"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">577</td><td class="lf-sign">+</td><td>                calls.append(timing)</td></tr>
+<tr class="lf-add lf-code-row" data-line="578"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">578</td><td class="lf-sign">+</td><td>                receipt.write(json.dumps({&quot;call&quot;: index, **asdict(timing)}) + &quot;\n&quot;)</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="experiments/reports/eval_precision_profile.md"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/reports/eval_precision_profile.md:57-77</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,204 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="57"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">57</td><td class="lf-sign">+</td><td>| Checkpoint and precision | Attention | Casts and copies | Linear and MLP | Normalization | Gather and index | Packed GRU | Other | Total (ms/call) |</td></tr>
+<tr class="lf-add lf-code-row" data-line="58"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">58</td><td class="lf-sign">+</td><td>| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |</td></tr>
+<tr class="lf-add lf-code-row" data-line="59"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">59</td><td class="lf-sign">+</td><td>| Trained `w160l8` float32 | 36.07 | 0.79 | 15.56 | 1.46 | 0.61 | 0.61 | 4.35 | 59.45 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="60"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">60</td><td class="lf-sign">+</td><td>| Trained `w160l8` bf16 | 72.47 | 14.09 | 5.70 | 1.40 | 0.74 | 0.77 | 5.61 | 100.77 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="61"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">61</td><td class="lf-sign">+</td><td>| Trained `w160l8` bf16 minus float32 | **+36.40** | +13.30 | −9.87 | −0.07 | +0.13 | +0.16 | +1.25 | **+41.31** |</td></tr>
+<tr class="lf-add lf-code-row" data-line="62"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">62</td><td class="lf-sign">+</td><td>| Seeded `w384l8` float32 | 33.05 | 1.45 | 41.39 | 1.41 | 0.92 | 0.51 | 7.75 | 86.48 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="63"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">63</td><td class="lf-sign">+</td><td>| Seeded `w384l8` bf16 | 7.66 | 4.29 | 9.51 | 1.25 | 0.82 | 0.39 | 6.47 | 30.40 |</td></tr>
 <tr class="lf-add lf-code-row" data-line="64"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">64</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="65"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">65</td><td class="lf-sign">+</td><td>1. `capture` plays the 32 held-out deals on the vector-64 runner under</td></tr>
-<tr class="lf-add lf-code-row" data-line="66"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">66</td><td class="lf-sign">+</td><td>   float32 and writes every host `Prepared` batch the checkpoint was asked</td></tr>
-<tr class="lf-add lf-code-row" data-line="67"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">67</td><td class="lf-sign">+</td><td>   for, in arena order, to one file per model. Three batch sets: trained</td></tr>
-<tr class="lf-add lf-code-row" data-line="68"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">68</td><td class="lf-sign">+</td><td>   `w160l8`, seeded `w160l8` (`random_checkpoint(path, 160)` already exists)</td></tr>
-<tr class="lf-add lf-code-row" data-line="69"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">69</td><td class="lf-sign">+</td><td>   and seeded `w384l8`.</td></tr>
-<tr class="lf-add lf-code-row" data-line="70"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">70</td><td class="lf-sign">+</td><td>2. `replay` loads one checkpoint under one variant and runs one batch set</td></tr>
-<tr class="lf-add lf-code-row" data-line="71"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">71</td><td class="lf-sign">+</td><td>   through it, in order, with `torch.cuda.synchronize` between transfer,</td></tr>
-<tr class="lf-add lf-code-row" data-line="72"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">72</td><td class="lf-sign">+</td><td>   forward and readback. It writes one row per call (rows, packed GRU rows,</td></tr>
-<tr class="lf-add lf-code-row" data-line="73"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">73</td><td class="lf-sign">+</td><td>   first-touch or repeat, stage seconds), then a `torch.profiler` pass with</td></tr>
-<tr class="lf-add lf-code-row" data-line="74"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">74</td><td class="lf-sign">+</td><td>   CUDA activity folded into named buckets: transfer, autocast casts</td></tr>
-<tr class="lf-add lf-code-row" data-line="75"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">75</td><td class="lf-sign">+</td><td>   (`aten::to`/`_to_copy`/`copy_` inside the forward), packed GRU, attention,</td></tr>
-<tr class="lf-add lf-code-row" data-line="76"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">76</td><td class="lf-sign">+</td><td>   linear/MLP, norm, gather/index, readback, and unattributed host time.</td></tr>
-<tr class="lf-add lf-code-row" data-line="77"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">77</td><td class="lf-sign">+</td><td>   Feeding both precisions the same float32-captured batches removes the</td></tr>
-<tr class="lf-add lf-code-row" data-line="78"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">78</td><td class="lf-sign">+</td><td>   diverging-trajectory confound.</td></tr>
-<tr class="lf-add lf-code-row" data-line="79"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">79</td><td class="lf-sign">+</td><td>3. `render_report` reads the receipts and writes the tables.</td></tr>
-<tr class="lf-add lf-code-row" data-line="80"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">80</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="81"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">81</td><td class="lf-sign">+</td><td>Variants:</td></tr>
-<tr class="lf-add lf-code-row" data-line="82"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">82</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="83"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">83</td><td class="lf-sign">+</td><td>- `float32`, `tf32`, `bf16` as the loader ships them.</td></tr>
-<tr class="lf-add lf-code-row" data-line="84"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">84</td><td class="lf-sign">+</td><td>- `bf16-cast-once`: weights cast to bfloat16 at load, GRU modules left</td></tr>
-<tr class="lf-add lf-code-row" data-line="85"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">85</td><td class="lf-sign">+</td><td>  float32, forward still under autocast. This is the candidate fix for the</td></tr>
-<tr class="lf-add lf-code-row" data-line="86"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">86</td><td class="lf-sign">+</td><td>  per-call weight casts; the replay records whether its logits equal</td></tr>
-<tr class="lf-add lf-code-row" data-line="87"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">87</td><td class="lf-sign">+</td><td>  shipped bf16 bit for bit.</td></tr>
-<tr class="lf-add lf-code-row" data-line="88"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">88</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="89"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">89</td><td class="lf-sign">+</td><td>Crosses that separate the confounds:</td></tr>
-<tr class="lf-add lf-code-row" data-line="90"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">90</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="91"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">91</td><td class="lf-sign">+</td><td>- **Trained or width?** trained `w160l8` against seeded `w160l8`, each on the</td></tr>
-<tr class="lf-add lf-code-row" data-line="92"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">92</td><td class="lf-sign">+</td><td>  trained batch set and on the seeded-`w160l8` set.</td></tr>
-<tr class="lf-add lf-code-row" data-line="93"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">93</td><td class="lf-sign">+</td><td>- **Batches or model?** seeded `w384l8` on its own set and on the trained</td></tr>
-<tr class="lf-add lf-code-row" data-line="94"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">94</td><td class="lf-sign">+</td><td>  set. `Prepared.binding` is checked in `forward_distribution`</td></tr>
-<tr class="lf-add lf-code-row" data-line="95"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">95</td><td class="lf-sign">+</td><td>  (`manabot/backends/torch/policy.py:770`); if it refuses a batch prepared</td></tr>
-<tr class="lf-add lf-code-row" data-line="96"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">96</td><td class="lf-sign">+</td><td>  for another width, each model replays only sets prepared for it and the</td></tr>
-<tr class="lf-add lf-code-row" data-line="97"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">97</td><td class="lf-sign">+</td><td>  report says the cross is by game population, not identical bytes.</td></tr>
-<tr class="lf-add lf-code-row" data-line="98"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">98</td><td class="lf-sign">+</td><td>- **Threshold.** Seeded widths 160, 256, 384 on the trained set, with the</td></tr>
-<tr class="lf-add lf-code-row" data-line="99"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">99</td><td class="lf-sign">+</td><td>  set re-chunked to 1, 4, 16 and 64 rows per call, gives the width-by-batch</td></tr>
-<tr class="lf-add lf-code-row" data-line="100"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">100</td><td class="lf-sign">+</td><td>  grid where bf16 forward time crosses float32.</td></tr>
-<tr class="lf-add lf-code-row" data-line="101"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">101</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="102"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">102</td><td class="lf-sign">+</td><td>Arena replicates: three alternating float32/bf16 repeats of the existing</td></tr>
-<tr class="lf-add lf-code-row" data-line="103"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">103</td><td class="lf-sign">+</td><td>`eval_throughput` vector-64 arm for trained `w160l8` and seeded `w384l8`</td></tr>
-<tr class="lf-add lf-code-row" data-line="104"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">104</td><td class="lf-sign">+</td><td>(12 arms of about 2.2 minutes), so the report states the spread the original</td></tr>
-<tr class="lf-add lf-code-row" data-line="105"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">105</td><td class="lf-sign">+</td><td>single arms came from. `eval_throughput` keeps its summary; its</td></tr>
-<tr class="lf-add lf-code-row" data-line="106"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">106</td><td class="lf-sign">+</td><td>`ForwardTiming` additionally writes per-call rows and seconds to</td></tr>
-<tr class="lf-add lf-code-row" data-line="107"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">107</td><td class="lf-sign">+</td><td>`forwards.jsonl` so in-arena and replayed calls can be laid side by side.</td></tr>
-<tr class="lf-add lf-code-row" data-line="108"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">108</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="109"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">109</td><td class="lf-sign">+</td><td>`torch_logits` is split so the profiler loads the model exactly as the loader</td></tr>
-<tr class="lf-add lf-code-row" data-line="110"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">110</td><td class="lf-sign">+</td><td>does (`load_torch_policy(path, precision, device)` returns the eval-mode model</td></tr>
-<tr class="lf-add lf-code-row" data-line="111"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">111</td><td class="lf-sign">+</td><td>with programs cached; `torch_logits` wraps it). No second loading path.</td></tr>
-<tr class="lf-add lf-code-row" data-line="112"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">112</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="113"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">113</td><td class="lf-sign">+</td><td>Chosen for review: profile by replaying captured batches rather than</td></tr>
-<tr class="lf-add lf-code-row" data-line="114"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">114</td><td class="lf-sign">+</td><td>instrumenting the live arena. The arena view comes from the replicates and</td></tr>
-<tr class="lf-add lf-code-row" data-line="115"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">115</td><td class="lf-sign">+</td><td>`forwards.jsonl`. Passed over: `torch.profiler` around the live arena</td></tr>
-<tr class="lf-add lf-code-row" data-line="116"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">116</td><td class="lf-sign">+</td><td>(profiler overhead distorts the host stages that dominate there) and a</td></tr>
-<tr class="lf-add lf-code-row" data-line="117"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">117</td><td class="lf-sign">+</td><td>synthetic fixed-shape microbenchmark (the local replay shows steady-state</td></tr>
-<tr class="lf-add lf-code-row" data-line="118"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">118</td><td class="lf-sign">+</td><td>shapes hide the effect).</td></tr>
+<tr class="lf-add lf-code-row" data-line="65"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">65</td><td class="lf-sign">+</td><td>On trained `w160l8`, casting projection weights once preserved all legal</td></tr>
+<tr class="lf-add lf-code-row" data-line="66"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">66</td><td class="lf-sign">+</td><td>bf16 logits exactly and moved the full-capture mean from 66.32 to 65.23 ms.</td></tr>
+<tr class="lf-add lf-code-row" data-line="67"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">67</td><td class="lf-sign">+</td><td>Keeping the autocast weight cache across calls also preserved the logits</td></tr>
+<tr class="lf-add lf-code-row" data-line="68"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">68</td><td class="lf-sign">+</td><td>and measured 65.76 ms. Both variants kept the math backend. Cast and copy</td></tr>
+<tr class="lf-add lf-code-row" data-line="69"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">69</td><td class="lf-sign">+</td><td>time includes tensor conversions inside attention that persist when the</td></tr>
+<tr class="lf-add lf-code-row" data-line="70"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">70</td><td class="lf-sign">+</td><td>weights are cached.</td></tr>
+<tr class="lf-add lf-code-row" data-line="71"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">71</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="72"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">72</td><td class="lf-sign">+</td><td>| Diagnostic variant | Trained `w160l8` (ms/call) | Seeded `w384l8` (ms/call) |</td></tr>
+<tr class="lf-add lf-code-row" data-line="73"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">73</td><td class="lf-sign">+</td><td>| --- | ---: | ---: |</td></tr>
+<tr class="lf-add lf-code-row" data-line="74"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">74</td><td class="lf-sign">+</td><td>| TF32 | 34.94 | 30.36 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="75"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">75</td><td class="lf-sign">+</td><td>| bf16, cast projections once | 65.23 | 15.48 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="76"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">76</td><td class="lf-sign">+</td><td>| bf16, keep autocast cache | 65.76 | 17.71 |</td></tr>
+<tr class="lf-add lf-code-row" data-line="77"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">77</td><td class="lf-sign">+</td><td></td></tr>
 </tbody></table></div></div>
 
 <div class="lf-before-after">
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">Before</div>
     
-    <h4>Current plan (<code>73be5ae6e8</code>)</h4>
+    <h4>Current implementation (<code>178a551d79</code>)</h4>
     <ul>
-      <li><strong>Threshold grid:</strong> 8-head widths <code>(160, 256, 384)</code> → <code>head_dim = (20, 32, 48)</code>, confounding width with <code>head_dim % 8</code>.</li>
-      <li><strong>Batch capture &amp; replay:</strong> Captures multi-row <code>w160l8</code> <code>Prepared</code> batches, then expects <code>w256l8</code>/<code>w384l8</code> to replay them (rejected by <code>Prepared.binding</code>) and re-chunks them to 1, 4, 16, 64 rows (no <code>split</code> exists in <code>batching.py</code>).</li>
-      <li><strong>Candidate fix:</strong> <code>bf16-cast-once</code> casts all non-GRU weights to bf16, which rounds <code>LayerNorm</code>, <code>Embedding</code>, and <code>cache_programs()</code> away from <code>etude-policy-bf16-auto-v1</code>.</li>
-      <li><strong>Profiler buckets:</strong> Single <code>attention</code> bucket; no SDPA kernel dispatch breakdown or peak CUDA VRAM.</li>
-      <li><strong>Rental order:</strong> 12 full 32-deal arena repeats (~30 min) bundled ahead of / alongside diagnosis.</li>
+      <li><strong><code>op_bucket</code>:</strong> <code>casts_and_copies</code> preempts <code>policy.attention</code> and <code>policy.packed_gru</code>. Report shows <code>w160l8</code> delta as <code>+36.40 ms</code> attention, <code>+13.30 ms</code> casts/copies, <code>−9.87 ms</code> MLP.</li>
+      <li><strong><code>bf16-cached-autocast</code>:</strong> Stays in CLI and report as "keep autocast cache" (<code>65.76 ms</code> / <code>17.71 ms</code>) even though <code>profile.json</code> proves zero weight casts were cached (<code>1,094</code> vs <code>1,094</code> <code>aten::copy_</code> on <code>w384l8</code>).</li>
+      <li><strong><code>bf16-linear-once</code>:</strong> Dismissed after <code>w160l8</code> stays slow; its <code>14.6%</code> speedup and <code>54 MiB</code> VRAM reduction on <code>w384l8</code> (plus GEMM kernel switch from <code>cutlass_80_wmma_32x32</code> to <code>ampere_bf16_s1688gemm_128x128</code>) go unmentioned.</li>
+      <li><strong>Capture hook:</strong> <code>ObservePrepared</code> leaks <code>ObservationSelection</code> and <code>Spec</code> through <code>vector.py</code> and <code>eval_throughput.py</code> into <code>nonlocal pending</code>.</li>
+      <li><strong>Docs:</strong> <code>docs/evaluation.md:450-456</code> lists tested head widths (<code>20, 36</code> vs <code>32, 40, 48</code>) without stating the <code>head_dim % 8 == 0</code> rule.</li>
     </ul>
   
   </div>
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">After</div>
     
-    <h4>Recommended design</h4>
+    <h4>Recommended design (no new L4 rental needed)</h4>
     <ul>
-      <li><strong>Deconfounded grid:</strong> Add one 8-aligned narrow point (<code>w160</code> with 5 heads, <code>head_dim = 32</code>, or <code>w192l8</code>, <code>head_dim = 24</code>) and one unaligned wide point (<code>w288l8</code>, <code>head_dim = 36</code>).</li>
-      <li><strong>No <code>split_prepared</code> &amp; clean cross-width replay:</strong> Keep multi-row arena batches for exact arena replay on the capturing checkpoint; capture single-row <code>Prepared</code> batches for the grid and build 1, 4, 16, 64-row calls with existing <code>batching.concatenate</code>. For cross-width replay on identical boards, assert equal <code>space.config</code>, <code>readings</code>, and <code>decision_memory</code> and explicitly re-tag <code>Prepared.binding</code> in the harness (or prepare per width from captured raw observations).</li>
-      <li><strong>Exact autocast-preserving variants:</strong> Test (a) <code>bf16-cached-autocast</code> (keeping PyTorch's <code>torch.autocast(..., cache_enabled=True)</code> open across calls—zero parameter mutation) and (b) <code>bf16-linear-once</code> (casting only <code>nn.Linear</code> and <code>nn.MultiheadAttention</code> projection weights/biases after <code>cache_programs()</code>, leaving <code>LayerNorm</code>, <code>Embedding</code>, <code>nn.GRU</code>, and bare <code>nn.Parameter</code>s float32).</li>
-      <li><strong>SDPA + memory attribution:</strong> Record dispatched SDPA kernels (<code>flash</code> vs <code>mem_efficient</code> vs <code>math</code> / <code>bmm+softmax</code> inside attention via <code>record_function</code> scopes) and <code>torch.cuda.max_memory_allocated()</code> per replay.</li>
-      <li><strong>Diagnose first, replicate second:</strong> Run the ~3-minute replay/profile pass first on L4, then run only the arena repeats needed to measure spread and verify any bit-identical fix.</li>
+      <li><strong><code>op_bucket</code>:</strong> Respect <code>ATTENTION</code>/<code>GRU</code> and <code>parent != "other"</code> before <code>casts_and_copies</code>, then recompute the bucket table offline from the retained <code>profile.json</code> traces: <code>w160l8</code> delta becomes <code>+48.14 ms</code> attention (<code>36.41 → 84.55 ms</code>), <code>+0.20 ms</code> outside casts, <code>−8.64 ms</code> MLP.</li>
+      <li><strong>Remove <code>bf16-cached-autocast</code>:</strong> Delete the no-op variant from <code>eval_precision_profile.py</code> and state in the report why PyTorch autocast does not cache weights under <code>torch.inference_mode()</code>; let <code>bf16-linear-once</code> be the sole cast-elimination measurement.</li>
+      <li><strong>Report <code>bf16-linear-once</code> completely:</strong> Note both that it leaves <code>w160l8</code> slow (math SDPA dominates) and that it cuts <code>w384l8</code> forward time by 14.6% and VRAM by 54 MiB with 0.0 logit diff on L4, while noting the GEMM kernel change as the reason to defer loader adoption to a cross-GPU parity Task.</li>
+      <li><strong>Tighten capture boundary:</strong> Remove <code>observe_prepared</code> from <code>eval_throughput.run_vector</code> (call <code>play_pairings</code> directly in <code>capture</code>), prepare <code>singles</code> synchronously inside the callback so <code>ObservationSelection</code> never escapes <code>prepare_group</code>, and key by <code>id(prepared)</code> instead of <code>nonlocal pending</code>.</li>
+      <li><strong>State the rule in docs:</strong> Update <code>docs/evaluation.md:450-456</code> to name <code>head_dim = hidden_dim // num_attention_heads</code> divisible by 8 directly alongside the tested shapes and batch thresholds.</li>
     </ul>
   
   </div>
 </div>
 
 
+<h2>Capture boundary &amp; caller guidance excerpts</h2>
+
+<div class="lf-codeblock" data-path="manabot/eval/vector.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/eval/vector.py:338-355</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -337,8 +338,16 @@ class PlayedRound:</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="337" data-line="338"><td class="lf-ln lf-ln-old">337</td><td class="lf-ln lf-ln-new">338</td><td class="lf-sign"> </td><td>    errors: dict[str, ForwardError]</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="338" data-line="339"><td class="lf-ln lf-ln-old">338</td><td class="lf-ln lf-ln-new">339</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="339" data-line="340"><td class="lf-ln lf-ln-old">339</td><td class="lf-ln lf-ln-new">340</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="341"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">341</td><td class="lf-sign">+</td><td>type ObservePrepared = Callable[</td></tr>
+<tr class="lf-add lf-code-row" data-line="342"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">342</td><td class="lf-sign">+</td><td>    [Prepared[np.ndarray], ObservationSelection, Spec], None</td></tr>
+<tr class="lf-add lf-code-row" data-line="343"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">343</td><td class="lf-sign">+</td><td>]</td></tr>
+<tr class="lf-add lf-code-row" data-line="344"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">344</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="345"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">345</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="340" data-line="346"><td class="lf-ln lf-ln-old">340</td><td class="lf-ln lf-ln-new">346</td><td class="lf-sign"> </td><td>async def step_round(</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="341"><td class="lf-ln lf-ln-old">341</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>    vector: RecordedVectorEnv, states: list[SlotState | None], space: ObservationSpace</td></tr>
+<tr class="lf-add lf-code-row" data-line="347"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">347</td><td class="lf-sign">+</td><td>    vector: RecordedVectorEnv,</td></tr>
+<tr class="lf-add lf-code-row" data-line="348"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">348</td><td class="lf-sign">+</td><td>    states: list[SlotState | None],</td></tr>
+<tr class="lf-add lf-code-row" data-line="349"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">349</td><td class="lf-sign">+</td><td>    space: ObservationSpace,</td></tr>
+<tr class="lf-add lf-code-row" data-line="350"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">350</td><td class="lf-sign">+</td><td>    observe_prepared: ObservePrepared | None = None,</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="342" data-line="351"><td class="lf-ln lf-ln-old">342</td><td class="lf-ln lf-ln-new">351</td><td class="lf-sign"> </td><td>) -&gt; PlayedRound:</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="343" data-line="352"><td class="lf-ln lf-ln-old">343</td><td class="lf-ln lf-ln-new">352</td><td class="lf-sign"> </td><td>    &quot;&quot;&quot;Choose once per live slot, omitting matches whose checkpoint failed.&quot;&quot;&quot;</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="344" data-line="353"><td class="lf-ln lf-ln-old">344</td><td class="lf-ln lf-ln-new">353</td><td class="lf-sign"> </td><td>    started = monotonic()</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="manabot/eval/vector.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/eval/vector.py:396-405</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -387,7 +396,11 @@ async def step_round(</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="387" data-line="396"><td class="lf-ln lf-ln-old">387</td><td class="lf-ln lf-ln-new">396</td><td class="lf-sign"> </td><td>                        blank[batch] = batch.blank_decision_memory()</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="388" data-line="397"><td class="lf-ln lf-ln-old">388</td><td class="lf-ln lf-ln-new">397</td><td class="lf-sign"> </td><td>                    batch = blank[batch]</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="389" data-line="398"><td class="lf-ln lf-ln-old">389</td><td class="lf-ln lf-ln-new">398</td><td class="lf-sign"> </td><td>                coords.append((batch, index))</td></tr>
+<tr class="lf-add lf-code-row" data-line="399"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">399</td><td class="lf-sign">+</td><td>            selection = ObservationSelection(spec.space, tuple(coords))</td></tr>
+<tr class="lf-add lf-code-row" data-line="400"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">400</td><td class="lf-sign">+</td><td>            prepared = prepare_batch(selection, spec)</td></tr>
+<tr class="lf-add lf-code-row" data-line="401"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">401</td><td class="lf-sign">+</td><td>            if observe_prepared is not None:</td></tr>
+<tr class="lf-add lf-code-row" data-line="402"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">402</td><td class="lf-sign">+</td><td>                observe_prepared(prepared, selection, spec)</td></tr>
+<tr class="lf-add lf-code-row" data-line="403"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">403</td><td class="lf-sign">+</td><td>            return prepared</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="391" data-line="404"><td class="lf-ln lf-ln-old">391</td><td class="lf-ln lf-ln-new">404</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="392" data-line="405"><td class="lf-ln lf-ln-old">392</td><td class="lf-ln lf-ln-new">405</td><td class="lf-sign"> </td><td>        async def sample_group(</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="experiments/eval_precision_profile.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/eval_precision_profile.py:127-179</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,849 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="127"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">127</td><td class="lf-sign">+</td><td>    pending: tuple[HostBatch, ObservationSelection, Spec] | None = None</td></tr>
+<tr class="lf-add lf-code-row" data-line="128"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">128</td><td class="lf-sign">+</td><td>    count = 0</td></tr>
+<tr class="lf-add lf-code-row" data-line="129"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">129</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="130"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">130</td><td class="lf-sign">+</td><td>    def observe(batch: HostBatch, selection: ObservationSelection, spec: Spec) -&gt; None:</td></tr>
+<tr class="lf-add lf-code-row" data-line="131"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">131</td><td class="lf-sign">+</td><td>        nonlocal pending</td></tr>
+<tr class="lf-add lf-code-row" data-line="132"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">132</td><td class="lf-sign">+</td><td>        assert pending is None, &quot;capture expects one checkpoint per round&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="133"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">133</td><td class="lf-sign">+</td><td>        pending = batch, selection, spec</td></tr>
+<tr class="lf-add lf-code-row" data-line="134"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">134</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="135"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">135</td><td class="lf-sign">+</td><td>    with NamedTemporaryFile(dir=batches.parent, suffix=&quot;.partial&quot;) as partial:</td></tr>
+<tr class="lf-add lf-code-row" data-line="136"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">136</td><td class="lf-sign">+</td><td>        with gzip.GzipFile(fileobj=partial, mode=&quot;wb&quot;, compresslevel=1) as stream:</td></tr>
+<tr class="lf-add lf-code-row" data-line="137"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">137</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="138"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">138</td><td class="lf-sign">+</td><td>            def record(inputs: list[object]) -&gt; list[object]:</td></tr>
+<tr class="lf-add lf-code-row" data-line="139"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">139</td><td class="lf-sign">+</td><td>                nonlocal pending, count</td></tr>
+<tr class="lf-add lf-code-row" data-line="140"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">140</td><td class="lf-sign">+</td><td>                assert (</td></tr>
+<tr class="lf-add lf-code-row" data-line="141"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">141</td><td class="lf-sign">+</td><td>                    pending is not None and len(inputs) == 1 and inputs[0] is pending[0]</td></tr>
+<tr class="lf-add lf-code-row" data-line="142"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">142</td><td class="lf-sign">+</td><td>                )</td></tr>
+<tr class="lf-add lf-code-row" data-line="143"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">143</td><td class="lf-sign">+</td><td>                batch, selection, spec = pending</td></tr>
+<tr class="lf-add lf-code-row" data-line="144"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">144</td><td class="lf-sign">+</td><td>                pending = None</td></tr>
+<tr class="lf-add lf-code-row" data-line="145"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">145</td><td class="lf-sign">+</td><td>                if count == 0:</td></tr>
+<tr class="lf-add lf-code-row" data-line="146"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">146</td><td class="lf-sign">+</td><td>                    pickle.dump(</td></tr>
+<tr class="lf-add lf-code-row" data-line="147"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">147</td><td class="lf-sign">+</td><td>                        (</td></tr>
+<tr class="lf-add lf-code-row" data-line="148"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">148</td><td class="lf-sign">+</td><td>                            ref.artifact.sha256,</td></tr>
+<tr class="lf-add lf-code-row" data-line="149"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">149</td><td class="lf-sign">+</td><td>                            spec.model,</td></tr>
+<tr class="lf-add lf-code-row" data-line="150"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">150</td><td class="lf-sign">+</td><td>                            spec.space.config,</td></tr>
+<tr class="lf-add lf-code-row" data-line="151"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">151</td><td class="lf-sign">+</td><td>                            dict(spec.tables.layout.readings),</td></tr>
+<tr class="lf-add lf-code-row" data-line="152"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">152</td><td class="lf-sign">+</td><td>                        ),</td></tr>
+<tr class="lf-add lf-code-row" data-line="153"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">153</td><td class="lf-sign">+</td><td>                        stream,</td></tr>
+<tr class="lf-add lf-code-row" data-line="154"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">154</td><td class="lf-sign">+</td><td>                        protocol=5,</td></tr>
+<tr class="lf-add lf-code-row" data-line="155"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">155</td><td class="lf-sign">+</td><td>                    )</td></tr>
+<tr class="lf-add lf-code-row" data-line="156"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">156</td><td class="lf-sign">+</td><td>                outputs = forward(inputs)</td></tr>
+<tr class="lf-add lf-code-row" data-line="157"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">157</td><td class="lf-sign">+</td><td>                singles = (</td></tr>
+<tr class="lf-add lf-code-row" data-line="158"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">158</td><td class="lf-sign">+</td><td>                    (batch,)</td></tr>
+<tr class="lf-add lf-code-row" data-line="159"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">159</td><td class="lf-sign">+</td><td>                    if batch.batch == 1</td></tr>
+<tr class="lf-add lf-code-row" data-line="160"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">160</td><td class="lf-sign">+</td><td>                    else tuple(</td></tr>
+<tr class="lf-add lf-code-row" data-line="161"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">161</td><td class="lf-sign">+</td><td>                        prepare_batch(</td></tr>
+<tr class="lf-add lf-code-row" data-line="162"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">162</td><td class="lf-sign">+</td><td>                            ObservationSelection(selection.space, (coordinate,)), spec</td></tr>
+<tr class="lf-add lf-code-row" data-line="163"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">163</td><td class="lf-sign">+</td><td>                        )</td></tr>
+<tr class="lf-add lf-code-row" data-line="164"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">164</td><td class="lf-sign">+</td><td>                        for coordinate in selection.coordinates</td></tr>
+<tr class="lf-add lf-code-row" data-line="165"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">165</td><td class="lf-sign">+</td><td>                    )</td></tr>
+<tr class="lf-add lf-code-row" data-line="166"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">166</td><td class="lf-sign">+</td><td>                )</td></tr>
+<tr class="lf-add lf-code-row" data-line="167"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">167</td><td class="lf-sign">+</td><td>                pickle.dump(</td></tr>
+<tr class="lf-add lf-code-row" data-line="168"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">168</td><td class="lf-sign">+</td><td>                    (batch, singles, checked_logits(outputs, batch)),</td></tr>
+<tr class="lf-add lf-code-row" data-line="169"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">169</td><td class="lf-sign">+</td><td>                    stream,</td></tr>
+<tr class="lf-add lf-code-row" data-line="170"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">170</td><td class="lf-sign">+</td><td>                    protocol=5,</td></tr>
+<tr class="lf-add lf-code-row" data-line="171"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">171</td><td class="lf-sign">+</td><td>                )</td></tr>
+<tr class="lf-add lf-code-row" data-line="172"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">172</td><td class="lf-sign">+</td><td>                count += 1</td></tr>
+<tr class="lf-add lf-code-row" data-line="173"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">173</td><td class="lf-sign">+</td><td>                return outputs</td></tr>
+<tr class="lf-add lf-code-row" data-line="174"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">174</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="175"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">175</td><td class="lf-sign">+</td><td>            agents = (local_forward(record), build(heuristic, {}))</td></tr>
+<tr class="lf-add lf-code-row" data-line="176"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">176</td><td class="lf-sign">+</td><td>            source = LocalMatches([(match, agents) for match in matches])</td></tr>
+<tr class="lf-add lf-code-row" data-line="177"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">177</td><td class="lf-sign">+</td><td>            games = asyncio.run(</td></tr>
+<tr class="lf-add lf-code-row" data-line="178"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">178</td><td class="lf-sign">+</td><td>                run_vector(source, specs, slots, out, observe_prepared=observe)</td></tr>
+<tr class="lf-add lf-code-row" data-line="179"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">179</td><td class="lf-sign">+</td><td>            )</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="docs/evaluation.md"><div class="lf-codeblock-header"><span class="lf-codeblock-path">docs/evaluation.md:447-458</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -447,6 +447,14 @@ it never selects an action. `build(player, leaves)` creates the heuristic or</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="447" data-line="447"><td class="lf-ln lf-ln-old">447</td><td class="lf-ln lf-ln-new">447</td><td class="lf-sign"> </td><td>checkpoint sampler without importing Torch. Each decision&#39;s recorded seed</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="448" data-line="448"><td class="lf-ln lf-ln-old">448</td><td class="lf-ln lf-ln-new">448</td><td class="lf-sign"> </td><td>controls NumPy PCG64 sampling in the game process.</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="449" data-line="449"><td class="lf-ln lf-ln-old">449</td><td class="lf-ln lf-ln-new">449</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="450"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">450</td><td class="lf-sign">+</td><td>For padded TLA evaluation on an NVIDIA L4 with Torch 2.15.0+cu132, keep</td></tr>
+<tr class="lf-add lf-code-row" data-line="451"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">451</td><td class="lf-sign">+</td><td>float32 for 20- or 36-wide attention heads. Those bf16 shapes used the</td></tr>
+<tr class="lf-add lf-code-row" data-line="452"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">452</td><td class="lf-sign">+</td><td>SDPA math backend. Bfloat16 used memory-efficient attention with 32-,</td></tr>
+<tr class="lf-add lf-code-row" data-line="453"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">453</td><td class="lf-sign">+</td><td>40- and 48-wide heads. It was faster at 4, 16 and 64 rows per call for</td></tr>
+<tr class="lf-add lf-code-row" data-line="454"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">454</td><td class="lf-sign">+</td><td>`w256l8` and `w384l8`, and at 16 and 64 rows for the aligned 160-wide</td></tr>
+<tr class="lf-add lf-code-row" data-line="455"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">455</td><td class="lf-sign">+</td><td>four- and five-head controls. See the</td></tr>
+<tr class="lf-add lf-code-row" data-line="456"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">456</td><td class="lf-sign">+</td><td>[L4 evaluation precision profile](../experiments/reports/eval_precision_profile.md).</td></tr>
+<tr class="lf-add lf-code-row" data-line="457"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">457</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="450" data-line="458"><td class="lf-ln lf-ln-old">450</td><td class="lf-ln lf-ln-new">458</td><td class="lf-sign"> </td><td>A checkpoint with a decision-memory encoder has its log prepared with the</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="451" data-line="459"><td class="lf-ln lf-ln-old">451</td><td class="lf-ln lf-ln-new">459</td><td class="lf-sign"> </td><td>observation. The loader joins these memory rows and rebuilds their packed</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="452" data-line="460"><td class="lf-ln lf-ln-old">452</td><td class="lf-ln lf-ln-new">460</td><td class="lf-sign"> </td><td>sequence schedule when Etude sends multiple inputs. A seat whose</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="manabot/infra/config.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/infra/config.py:341-348</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="341"><td class="lf-ln lf-ln-single">341</td><td># The narrowest `ModelConfig.hidden_dim` whose MLX forwards default to</td></tr>
+<tr class="lf-code-row" data-line="342"><td class="lf-ln lf-ln-single">342</td><td># bfloat16 (`manabot.backends.mlx.arrays.default_precision`); torch settings</td></tr>
+<tr class="lf-code-row" data-line="343"><td class="lf-ln lf-ln-single">343</td><td># state their precision. BF16 learner updates were</td></tr>
+<tr class="lf-code-row" data-line="344"><td class="lf-ln lf-ln-single">344</td><td># first faster than float32 at this width on an L4 with bucketed shapes</td></tr>
+<tr class="lf-code-row" data-line="345"><td class="lf-ln lf-ln-single">345</td><td># (experiments/reports/cuda_precision.md); learning evidence at w384l8 is in</td></tr>
+<tr class="lf-code-row" data-line="346"><td class="lf-ln lf-ln-single">346</td><td># experiments/reports/bf16_behavior_logs.md. Narrower models and CPU stay float32.</td></tr>
+<tr class="lf-code-row" data-line="347"><td class="lf-ln lf-ln-single">347</td><td>BF16_MIN_HIDDEN_DIM = 256</td></tr>
+<tr class="lf-code-row" data-line="348"><td class="lf-ln lf-ln-single">348</td><td></td></tr>
+</tbody></table></div></div>
+
 <h2>Walking one interaction: normal, failure, recovery, and counterexamples</h2>
 
-<h3>Normal path (revised)</h3>
+<h3>Normal path: capturing and auditing an L4 profile</h3>
 <ol>
-  <li><strong>Capture (local or L4, float32):</strong> Run 32 held-out deals once per model to save exact arena multi-row <code>Prepared</code> calls (for arena-order replay) plus a pool of 1-row <code>Prepared</code> inputs from the trained <code>w160l8</code> games (composed into 1, 4, 16, 64-row batches with <code>batching.concatenate</code>).</li>
-  <li><strong>Diagnose on L4 (~3 min):</strong> Replay the captured sets through <code>float32</code>, <code>tf32</code>, <code>bf16</code>, <code>bf16-cached-autocast</code>, and <code>bf16-linear-once</code> on trained <code>w160l8</code>, seeded <code>w160l8</code>, <code>w160</code> (5 heads, <code>head_dim = 32</code>), <code>w256l8</code>, <code>w288l8</code> (<code>head_dim = 36</code>), and <code>w384l8</code>. Record per-call stage times, bucket totals (including <code>record_function</code>-scoped attention with SDPA kernel names), peak CUDA VRAM, and max/exact logit diff vs shipped <code>bf16</code>.</li>
-  <li><strong>Confirm in arena:</strong> If a bit-identical fix removes the penalty, apply it in <code>agent_loader.py</code> and run alternating arena replicates before/after; otherwise run the arena replicates to report the real spread and document the exact L4 rule in <code>docs/evaluation.md#etude-agents</code> (for example, requiring both <code>head_dim % 8 == 0</code> and sufficient width/batch).</li>
+  <li><strong>Capture:</strong> <code>capture()</code> runs <code>play_pairings</code> on 32 deals in float32. Inside <code>observe</code>, 1-row <code>singles</code> are prepared immediately while <code>selection</code> is live and stored under <code>id(prepared)</code>; <code>record</code> pops them, runs <code>forward</code>, and streams <code>(batch, singles, logits)</code> to a temp gzip file linked atomically on completion.</li>
+  <li><strong>Replay &amp; bucket attribution:</strong> <code>replay()</code> runs uninstrumented repeats through <code>load_torch_policy</code> + <code>torch_forward_context</code>, profiles 4 deterministic calls with <code>profile_modules</code>, and partitions trace time with parent-first <code>op_bucket</code> so every scoped module owns its internal casts.</li>
+  <li><strong>Caller decision:</strong> An engineer reading <code>docs/evaluation.md#etude-agents</code> checks <code>head_dim % 8 == 0</code> and expected rows/call before picking <code>AGENTS_BF16</code> vs default float32.</li>
 </ol>
 
-<h3>Where the current plan fails</h3>
+<h3>Failure, recovery, and counterexamples tested</h3>
 <ul>
-  <li><strong>Cross-width binding failure:</strong> <code>replay --checkpoint seeded-w384.safetensors --batches trained-w160.batches</code> raises <code>ValueError("observation was admitted for a different policy configuration")</code> at <code>manabot/backends/torch/policy.py:771</code> because <code>admission.binding()</code> hashes <code>hidden_dim</code>.</li>
-  <li><strong>Re-chunking gap:</strong> Slicing a 24-row <code>Prepared</code> batch down to 4 rows has no helper in <code>manabot/policy/batching.py</code>; naive slicing corrupts flat <code>link_targets</code>, <code>legal_batches</code>, <code>facts.programs</code>, <code>effects</code>, and <code>memory</code> schedules.</li>
-  <li><strong>False parity rejection:</strong> Casting all non-GRU weights to bf16 changes <code>LayerNorm</code> and <code>token_embedding</code>, altering <code>cache_programs()</code> outputs and failing bit-exactness against <code>etude-policy-bf16-auto-v1</code> even if eliminating repeated <code>Linear</code> casts would have been bit-identical.</li>
-  <li><strong>Misleading docs rule:</strong> Publishing "use bf16 above width 256" when the cliff is <code>head_dim % 8 == 0</code> misleads anyone evaluating <code>w288l8</code> (<code>head_dim = 36</code>) or <code>w192l8</code> (<code>head_dim = 24</code>).</li>
-</ul>
-
-<h3>What must survive vs what changes on purpose</h3>
-<ul>
-  <li><strong>Must survive:</strong> <code>float32</code> remains the evaluation default; <code>etude-policy-bf16-auto-v1</code> logits stay bit-identical if any loader fix lands; <code>manabot.eval.agents</code> and <code>manabot.eval.vector</code> stay Torch-free on import; production <code>ActorCritic.forward_distribution</code> keeps strict <code>Prepared.binding</code> checks; <code>eval_throughput</code> keeps its <code>summary.json</code> schema and does no per-call disk flushes inside timed forwards.</li>
-  <li><strong>Changes on purpose:</strong> Adding <code>head_dim % 8</code> deconfounding points, 1-row grid capture via <code>concatenate</code>, <code>record_function</code>-scoped SDPA + VRAM reporting, autocast-exact cast-once variants, and profiling before the 12-arm arena sweep.</li>
-</ul>
-
-<h3>Counterexamples tested</h3>
-<ul>
-  <li><strong>What if <code>head_dim % 8</code> is <em>not</em> the cause on PyTorch 2.15 + L4?</strong> Including <code>w160</code> with 5 heads (<code>head_dim = 32</code>) and <code>w288l8</code> (<code>head_dim = 36</code>) costs &lt;60 seconds of L4 replay time and immediately falsifies the hypothesis if <code>w160</code> (<code>head_dim = 32</code>) still slows down and <code>w288l8</code> speeds up.</li>
-  <li><strong>What if <code>bf16-cached-autocast</code> is bit-identical and fast, or what if <code>torch.autocast</code> only caches per-enter?</strong> Measuring both persistent <code>autocast</code> (keeping the context alive across calls on the loader's single inference thread) and <code>Linear</code>/<code>MHA</code>-only bf16 weights tests the exact mechanism with zero guesswork—while remembering that a persistent thread-local autocast context would leak into other Torch work on the same thread if not scoped carefully, so <code>Linear</code>/<code>MHA</code>-only weights are safer for production if bit-identical.</li>
-  <li><strong>What if the slowdown is driven by trained games having denser boards / more packed-GRU facts rather than <code>head_dim</code>?</strong> Keeping the trained-vs-seeded <code>w160l8</code> batch cross plus explicit <code>record_function</code> buckets for <code>packed_gru</code>, <code>attention_sdpa</code>, and <code>autocast_casts</code> separates board density from kernel dispatch in one pass.</li>
+  <li><strong>Multi-checkpoint capture failure:</strong> Today, passing two checkpoints to <code>capture()</code> fires <code>observe_prepared</code> twice inside <code>step_round:421</code> before <code>record()</code> runs once, crashing <code>assert pending is None</code>. Keying by <code>id(prepared)</code> and preparing <code>singles</code> inside <code>observe</code> handles multiple checkpoints and ensures <code>ObservationSelection</code> never survives past <code>step_round</code>.</li>
+  <li><strong>Offline trace recomputation:</strong> Fixing <code>op_bucket</code> requires zero new L4 spend because the full Chrome traces live in <code>.runs/eval-precision-profile/l4-a468879a7a/*/profile.json</code>. Running the parent-first classifier across the four arena traces already reproduces exact totals (<code>59.45</code>, <code>100.77</code>, <code>86.48</code>, <code>30.40 ms/call</code>) with attention rising from <code>+36.40</code> to <code>+48.14 ms/call</code> on <code>w160l8</code>.</li>
+  <li><strong>Counterexample on <code>bf16-linear-once</code> parity:</strong> Although <code>max_abs_difference_from_bf16 == 0.0</code> on L4 for both <code>w160l8</code> and <code>w384l8</code>, the L4 trace shows 16 attention GEMMs changed from <code>cutlass_80_wmma_tensorop_bf16_32x32</code> to <code>ampere_bf16_s1688gemm_128x128</code>. On another GPU architecture (A40, H100) or batch size, different tile reduction order can change bf16 rounding—so shipping it inside <code>etude-policy-bf16-auto-v1</code> without cross-GPU verification risks breaking compute-class identity (irreversible once scored). Deferring it to its own Task is therefore the right call.</li>
+  <li><strong>Counterexample on <code>w160</code> 4-head / 5-head speedups:</strong> Note that <code>GameObjectAttention</code> sets <code>feedforward_dim = num_heads * embedding_dim</code> (<code>manabot/backends/torch/policy.py:1462</code>), so 4-head and 5-head controls also have narrower MLPs than 8-head <code>w160l8</code>. The report correctly compares their <em>bf16/float32 ratios</em> (within each fixed model) rather than raw milliseconds across head counts, so the MLP-width difference does not confound the SDPA backend proof.</li>
 </ul>
 
 <h2>Findings</h2>
 
 <div class="lf-decision" data-decision-id="f1">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F1: Deconfound head_dim % 8 from hidden_dim, log SDPA kernels and peak VRAM, and cite MTG-317</span>
+    <span class="lf-decision-title">F1: Remove the no-op bf16-cached-autocast variant and fix the report&#39;s cache and linear-once findings</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
   <p>
-    <strong>Scope: This work (revise plan before Pass 1).</strong>
-    <code>experiments/reports/cuda_precision.md</code> already shows <code>w160l8 padded</code> bf16 slowing
-    1.55× and doubling learner VRAM (5.3 → 10.7 GB) on an L4, pointing squarely at
-    <code>head_dim = 20</code> failing CUDA's 8-element bf16 SDPA alignment. Add an 8-aligned narrow checkpoint
-    (<code>w160</code> with 5 heads → <code>head_dim = 32</code>, or <code>w192l8</code> → <code>head_dim = 24</code>)
-    and an unaligned wide checkpoint (<code>w288l8</code> → <code>head_dim = 36</code>) to the grid, scope
-    <code>GameObjectAttention</code> / <code>packed_gru</code> / transfers with <code>torch.profiler.record_function</code>
-    in the profiler pass so <code>math</code> SDPA's <code>aten::bmm</code> + <code>aten::_softmax</code> do not
-    hide inside <code>linear/MLP</code>, and record dispatched SDPA op names and <code>torch.cuda.max_memory_allocated()</code>.
+    <strong>Scope: This work (no new L4 rental).</strong>
+    Under <code>torch.inference_mode()</code>, PyTorch's autocast weight cache is disabled; the L4
+    <code>profile.json</code> traces confirm <code>bf16-cached-autocast</code> ran the exact same
+    <code>aten::copy_</code> and <code>aten::_to_copy</code> counts and peak VRAM as shipped
+    <code>bf16</code>. Delete <code>bf16-cached-autocast</code> from
+    <code>experiments/eval_precision_profile.py</code>, correct
+    <code>experiments/reports/eval_precision_profile.md:67-77</code> so it does not claim weights
+    were cached, and report <code>bf16-linear-once</code>'s measured <code>w384l8</code> speedup
+    (<code>18.12 → 15.48 ms/call</code>, −14.6%, −54 MiB VRAM, <code>0.0</code> diff on L4)
+    alongside the GEMM kernel switch that keeps it out of <code>agent_loader.py</code> here.
   </p>
 </div>
-  <div data-choice="f1" data-label="F1: Deconfound head_dim % 8 from hidden_dim, log SDPA kernels and peak VRAM, and cite MTG-317">
+  <div data-choice="f1" data-label="F1: Remove the no-op bf16-cached-autocast variant and fix the report&#39;s cache and linear-once findings">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1390,23 +1295,24 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <div class="lf-decision" data-decision-id="f2">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F2: Fix the cross-width binding contradiction and avoid writing split_prepared</span>
+    <span class="lf-decision-title">F2: Make op_bucket respect parent scopes and regenerate the report&#39;s bucket table from retained L4 traces</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
   <p>
-    <strong>Scope: This work (revise plan before Pass 1).</strong>
-    <code>Prepared.binding</code> hashes <code>ModelConfig</code> (<code>hidden_dim</code>,
-    <code>num_attention_heads</code>), so the plan's threshold grid cannot replay <code>w160l8</code>-prepared
-    batches on <code>w256l8</code> or <code>w384l8</code> as written, and <code>manabot/policy/batching.py</code>
-    has no <code>split</code> to re-chunk multi-row batches to 1, 4, or 16 rows. Keep multi-row arena batches for
-    exact same-model replay, capture single-row <code>Prepared</code> batches for the grid (building 1, 4, 16, 64
-    via existing <code>concatenate</code>), and either prepare grid rows per target config or re-tag
-    <code>Prepared.binding</code> inside the harness only after asserting identical <code>space.config</code>,
-    <code>readings</code>, and <code>decision_memory</code>.
+    <strong>Scope: This work (offline recomputation from retained traces).</strong>
+    In <code>experiments/eval_precision_profile.py:333-339</code>, move the
+    <code>casts_and_copies</code> check below <code>ATTENTION</code>/<code>GRU</code> and
+    <code>if parent != "other": return parent</code> so math-SDPA's internal fp32/bf16 conversions
+    (<code>49.96 ms</code> of <code>52.81 ms</code> GPU cast time in
+    <code>trained-w160-bf16/profile.json</code>) stay in <code>attention</code>. Add a unit check
+    in <code>tests/eval/test_eval_precision_profile.py</code> (a nested <code>aten::to</code> inside
+    <code>policy.attention</code> charges to <code>attention</code>) and update the bucket table in
+    <code>experiments/reports/eval_precision_profile.md:57-64</code> from the saved traces
+    (<code>+48.14 ms</code> attention, <code>+0.20 ms</code> outside casts, <code>−8.64 ms</code> MLP).
   </p>
 </div>
-  <div data-choice="f2" data-label="F2: Fix the cross-width binding contradiction and avoid writing split_prepared">
+  <div data-choice="f2" data-label="F2: Make op_bucket respect parent scopes and regenerate the report&#39;s bucket table from retained L4 traces">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1416,22 +1322,24 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <div class="lf-decision" data-decision-id="f3">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F3: Align bf16-cast-once with PyTorch autocast&#39;s downcast set (and test cached autocast)</span>
+    <span class="lf-decision-title">F3: Tighten the capture boundary (remove observe_prepared from eval_throughput and eliminate nonlocal pending)</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
   <p>
-    <strong>Scope: This work (revise plan before Pass 1).</strong>
-    Casting all non-GRU weights to bf16 rounds <code>LayerNorm</code>, <code>Embedding</code>, and bare
-    <code>nn.Parameter</code>s that <code>torch.autocast</code> keeps in float32, corrupting
-    <code>cache_programs()</code> and guaranteeing non-identical logits. Restrict <code>bf16-linear-once</code>
-    to <code>nn.Linear</code> and <code>nn.MultiheadAttention</code> projection parameters (applied <em>after</em>
-    <code>cache_programs()</code>), and include a diagnostic <code>bf16-cached-autocast</code> variant that keeps
-    PyTorch's autocast context open across replayed calls to measure the upper bound of eliminating per-call
-    <code>aten::copy_</code> weight casts.
+    <strong>Scope: This work.</strong>
+    Stop threading <code>observe_prepared</code> through <code>experiments/eval_throughput.py:run_vector</code>
+    (let <code>capture</code> iterate <code>play_pairings</code> directly). Inside
+    <code>experiments/eval_precision_profile.py:capture</code>, prepare <code>singles</code>
+    synchronously inside the observer while <code>ObservationSelection</code> is live and correlate
+    with <code>record</code> via a dict keyed by <code>id(prepared)</code> rather than
+    <code>nonlocal pending</code>. Document in <code>manabot/eval/vector.py</code> that
+    <code>ObservationSelection</code> is valid only during the synchronous callback—or remove
+    <code>observe_prepared</code> from <code>vector.py</code> entirely if single-row captures are
+    taken via a separate 1-slot run.
   </p>
 </div>
-  <div data-choice="f3" data-label="F3: Align bf16-cast-once with PyTorch autocast&#39;s downcast set (and test cached autocast)">
+  <div data-choice="f3" data-label="F3: Tighten the capture boundary (remove observe_prepared from eval_throughput and eliminate nonlocal pending)">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1441,20 +1349,20 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <div class="lf-decision" data-decision-id="f4">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F4: Run the 3-minute L4 replay profile before the 12-arm arena sweep, and buffer forwards.jsonl</span>
+    <span class="lf-decision-title">F4: State the head_dim % 8 == 0 rule explicitly in docs/evaluation.md</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
   <p>
-    <strong>Scope: This work (revise plan before Pass 1).</strong>
-    Because MTG-317 already established the L4 <code>w160l8 padded</code> slowdown with &lt;2% repeat spread,
-    run the fast replay/profiler pass first so the rental immediately identifies the mechanism before spending
-    ~30 minutes on full arena host + replay runs. In <code>experiments/eval_throughput.py</code>, collect
-    <code>(rows, seconds)</code> in memory on <code>ForwardTiming</code> and write <code>forwards.jsonl</code>
-    once after the run so per-call disk writes never enter timed forwards.
+    <strong>Scope: This work.</strong>
+    <code>docs/evaluation.md:450-456</code> currently enumerates only the five tested head widths
+    (<code>20, 36</code> vs <code>32, 40, 48</code>). Name the structural condition established by
+    the profile—<code>head_dim = hidden_dim // num_attention_heads</code> must be a multiple of 8
+    to hit memory-efficient bf16 SDPA on L4 / Torch 2.15—before listing the tested batch-size
+    crossovers.
   </p>
 </div>
-  <div data-choice="f4" data-label="F4: Run the 3-minute L4 replay profile before the 12-arm arena sweep, and buffer forwards.jsonl">
+  <div data-choice="f4" data-label="F4: State the head_dim % 8 == 0 rule explicitly in docs/evaluation.md">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1464,22 +1372,20 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <div class="lf-decision" data-decision-id="f5">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F5: Keep agent_loader Torch-free on import and keep precision invocation owned in one place</span>
-    <span class="lf-decision-rec">Recommended: Fix here</span>
+    <span class="lf-decision-title">F5: Revisit BF16_MIN_HIDDEN_DIM and training precision guidance for head_dim % 8 alignment</span>
+    <span class="lf-decision-rec">Recommended: File Task</span>
   </div>
   <div class="lf-decision-body">
   <p>
-    <strong>Scope: This work (revise plan before Pass 1).</strong>
-    <code>manabot.eval.agents</code> imports <code>agent_loader</code> at module top and is tested Torch-free
-    (<code>tests/test_package_boundaries.py:260</code>). If <code>agent_loader.py</code> exposes
-    <code>load_torch_policy</code>, keep Torch/<code>ActorCritic</code> types under <code>TYPE_CHECKING</code>
-    and pair it with a shared per-call context helper (<code>apply_matmul_precision</code> +
-    <code>inference_mode</code> + <code>forward_precision</code>) so <code>torch_logits</code> and
-    <code>replay</code> do not drift—or keep <code>agent_loader.py</code> untouched until Pass 2 proves a loader
-    fix is warranted.
+    <strong>Scope: Separate outcome (deferred in <code>scratch/plan.md:245-250</code>, now confirmed by L4 evidence).</strong>
+    <code>manabot/infra/config.py:347</code> (<code>BF16_MIN_HIDDEN_DIM = 256</code>, also used by
+    MLX default precision) and <code>docs/training.md:1147</code> still frame the L4 CUDA crossover
+    strictly in terms of <code>hidden_dim</code>. File a separate Task to separate MLX's width rule
+    from CUDA's <code>head_dim % 8 == 0</code> SDPA alignment rule and review frontier model head
+    counts (e.g., 4-head <code>w160</code> vs <code>w192l8</code>).
   </p>
 </div>
-  <div data-choice="f5" data-label="F5: Keep agent_loader Torch-free on import and keep precision invocation owned in one place">
+  <div data-choice="f5" data-label="F5: Revisit BF16_MIN_HIDDEN_DIM and training precision guidance for head_dim % 8 alignment">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1489,20 +1395,20 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <div class="lf-decision" data-decision-id="f6">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">F6: Follow up on head_dim % 8 model-config guidance and BF16_MIN_HIDDEN_DIM if confirmed</span>
+    <span class="lf-decision-title">F6: Evaluate pre-casting Linear/MHA projection weights for aligned CUDA bf16 evaluation</span>
     <span class="lf-decision-rec">Recommended: File Task</span>
   </div>
   <div class="lf-decision-body">
   <p>
-    <strong>Scope: Separate outcome (only if F1 confirms <code>head_dim % 8</code> SDPA fallback).</strong>
-    If the L4 profile confirms that <code>head_dim % 8 != 0</code> drives the <code>w160l8</code> bf16 penalty
-    (in both evaluation and MTG-317 training), file a separate Task to update frontier model-width guidance and
-    revisit <code>BF16_MIN_HIDDEN_DIM = 256</code> in <code>manabot/infra/config.py:347</code>. Padding
-    <code>head_dim</code> inside <code>GameObjectAttention</code> would alter bf16 rounding and therefore require
-    a new compute class id—an irreversible identity choice once published—so it stays out of MTG-507.
+    <strong>Scope: Separate outcome (irreversible compute-class choice if rounding differs across GPUs).</strong>
+    On L4, <code>bf16-linear-once</code> cut <code>seeded w384l8</code> forward time by 14.6%
+    (<code>18.12 → 15.48 ms/call</code>) and peak VRAM by 54 MiB with <code>0.0</code> logit diff,
+    but switched 16 attention GEMMs from <code>cutlass_80_wmma_32x32</code> to
+    <code>ampere_bf16_s1688gemm_128x128</code>. File a separate Task if worth pursuing to verify
+    cross-GPU / multi-shape parity or introduce a new compute class id.
   </p>
 </div>
-  <div data-choice="f6" data-label="F6: Follow up on head_dim % 8 model-config guidance and BF16_MIN_HIDDEN_DIM if confirmed">
+  <div data-choice="f6" data-label="F6: Evaluate pre-casting Linear/MHA projection weights for aligned CUDA bf16 evaluation">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1512,32 +1418,26 @@ button.lf-btn-quiet[aria-pressed="true"] {
 
 <h2>Questions</h2>
 
-<div data-choice="q1" data-label="Q1: Grid deconfounding">
-  <p><strong>1. Should the L4 threshold grid add <code>head_dim % 8</code> control points alongside <code>(160, 256, 384)</code>?</strong></p>
-  <button data-value="1a">1a. Yes — add <code>w160</code> with 5 heads (<code>head_dim = 32</code>) and <code>w288l8</code> (<code>head_dim = 36</code>) to separate SDPA alignment from width (Recommended)</button>
-  <button data-value="1b">1b. Keep only 8-head widths <code>(160, 256, 384)</code> and inspect SDPA kernel dispatch on those three</button>
+<div data-choice="q1" data-label="Q1: Bucket attribution for casts inside Linear/MLP">
+  <p><strong>1. In F2, how should <code>op_bucket</code> classify <code>aten::to</code>/<code>copy_</code> inside <code>policy.attention</code> vs inside <code>aten::linear</code>?</strong></p>
+  <button data-value="1a">1a. Parent-first for all buckets: every bucket (<code>attention</code>, <code>linear_and_mlp</code>, <code>packed_gru</code>) owns its internal casts; <code>bf16-linear-once</code> measures weight-cast cost directly (Recommended)</button>
+  <button data-value="1b">1b. Module-scope-first only: <code>attention</code> and <code>packed_gru</code> own their internal casts, while <code>casts_and_copies</code> still captures <code>aten::linear</code> weight casts</button>
 </div>
 
-<div data-choice="q2" data-label="Q2: Cast-once variant">
-  <p><strong>2. Which cast-elimination variants should <code>replay</code> test against shipped <code>bf16</code>?</strong></p>
-  <button data-value="2a">2a. Both <code>bf16-linear-once</code> (<code>Linear</code>/<code>MHA</code> weights only, post-<code>cache_programs</code>) and <code>bf16-cached-autocast</code> (persistent autocast context) (Recommended)</button>
-  <button data-value="2b">2b. Only <code>bf16-linear-once</code> (production-safe, no thread-local autocast state)</button>
-  <button data-value="2c">2c. Keep the plan's all-non-GRU cast-once and accept non-identical logits</button>
+<div data-choice="q2" data-label="Q2: Vector runner capture seam">
+  <p><strong>2. In F3, should <code>observe_prepared</code> remain on <code>manabot.eval.vector.play_pairings</code>?</strong></p>
+  <button data-value="2a">2a. Keep <code>observe_prepared</code> on <code>vector.py</code> with a documented synchronous-only contract, drop it from <code>eval_throughput.run_vector</code>, and prepare <code>singles</code> inside the callback keyed by <code>id(prepared)</code> (Recommended)</button>
+  <button data-value="2b">2b. Remove <code>observe_prepared</code> from <code>manabot/eval/vector.py</code> altogether and capture grid single-rows in a separate 1-slot pass</button>
 </div>
 
-<div data-choice="q3" data-label="Q3: Rental execution order">
-  <p><strong>3. In what order should the L4 rental run replays vs the 12 arena replicates?</strong></p>
-  <button data-value="3a">3a. Run the ~3-minute replay/profiler pass first, then run arena replicates sized to what it finds (Recommended)</button>
-  <button data-value="3b">3b. Run all 12 arena replicates first, then replays</button>
-</div>
-
-<div data-choice="q4" data-label="Q4: Loader surface">
-  <p><strong>4. Should <code>manabot/eval/agent_loader.py</code> add <code>load_torch_policy</code> now or stay untouched until a loader fix is justified?</strong></p>
-  <button data-value="4a">4a. Split <code>load_torch_policy</code> + shared precision-context helper in <code>agent_loader.py</code> with <code>TYPE_CHECKING</code>-only Torch types (Recommended)</button>
-  <button data-value="4b">4b. Leave <code>agent_loader.py</code> untouched in Pass 1; cross-check <code>replay</code> logits against <code>torch_logits</code> in the smoke test</button>
+<div data-choice="q3" data-label="Q3: Follow-up Tasks">
+  <p><strong>3. Which follow-up Tasks should be filed from the L4 profile?</strong></p>
+  <button data-value="3a">3a. File F5 (<code>BF16_MIN_HIDDEN_DIM</code> / training <code>head_dim % 8</code> guidance) now; keep F6 (<code>bf16-linear-once</code> for wide models) as an optional idea until wide-model GPU eval becomes forward-bound (Recommended)</button>
+  <button data-value="3b">3b. File both F5 and F6</button>
+  <button data-value="3c">3c. File neither; keep the findings in the report</button>
 </div>
 </main>
-<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-507"},"directory":"/Users/jack/src/manabot.mtg-507-profile-why-l4","base":"fb1580b472","head":"73be5ae6e8","path":"scratch/concept-review.html","build_id":"a1c50c9e2130e6fe","protocol":{"revision":11,"min_revision":10}}</script>
+<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-507"},"directory":"/Users/jack/src/manabot.mtg-507-profile-why-l4","base":"659dd138fe1304368c65cf07a8ca31239b08fbdd","head":"178a551d79","path":"scratch/concept-review.html","build_id":"5e75647f0d30f605","protocol":{"revision":11,"min_revision":10}}</script>
 <script>
 (function () {
   "use strict";
