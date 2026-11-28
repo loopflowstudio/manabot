@@ -67,6 +67,11 @@ Drafted in place before implementation (read these when building and reviewing):
 
 `d6ba79690` carries one `HelpedCost` in the ordered obligations, rechecks help taps and Delve on each fork, and spends the full remainder. All 48 focused debug tests passed, including the three regression fixtures and the `{15}` rejection at 207 fork states.
 
+## Compression
+
+At `51730e1dde`, the acceptance filter plus the six mana preview tests passed
+in debug (54/54). The ten-Forest rejection still visits exactly 207 fork states.
+
 ## Delivery (after Pass 6)
 
 Refresh Academy fixtures with `uv run --extra dev python scripts/refresh_academy_fixtures.py` and verify conformance receipts. Run the full debug suites and Engine Budget. Record an Engine Budget baseline for the v36 digest change only after verifying the budget result.

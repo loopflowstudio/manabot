@@ -1,33 +1,33 @@
-at: d6ba796903547ff04ce5979cc2903d68c686ff09
+at: 51730e1dde479f94d9fac6c882b9e4125f512257
 first:
   - path: managym/README.md
-    why: Rules and offers the player will see
+    why: Payment choices and the rules behind them
   - path: docs/engine.md
-    why: State hash and snapshot replay compatibility
+    why: Snapshot replay compatibility across hash versions
   - path: managym/src/flow/game.rs
-    why: What an announced activation carries
-  - path: managym/src/flow/play.rs
-    why: Announcement, X selection, targeting and stack preparation
+    why: The finalized ability owned by an announcement
   - path: managym/src/flow/payment.rs
-    why: Announced costs and shared Delve eligibility
-  - path: managym/src/flow/mana/profile.rs
-    why: Board facts that make source order matter
-  - path: managym/src/flow/layers.rs
-    why: State read by mana ability cost reductions
+    why: Announced costs and payment completion
+  - path: managym/src/flow/play.rs
+    why: Ability ownership through targeting and stack preparation
   - path: managym/src/flow/mana.rs
-    why: Payment model, ordered obligations and native production
+    why: Payment obligations, source reservations and tap production
+  - path: managym/src/flow/mana/profile.rs
+    why: Which source changes require a game fork
   - path: managym/src/flow/mana/coupled.rs
-    why: Native steps through one remaining helped cost
+    why: Native transitions and when pure search can finish
   - path: managym/src/flow/mana/help.rs
-    why: Shared tap and Delve eligibility and pure tiers
+    why: What each tap or exile can pay
   - path: managym/src/flow/decision.rs
-    why: Replacement offers and execution share the payment check
+    why: Resuming mana choices and replacement orders
+  - path: managym/src/flow/mana/preview.rs
+    why: Previewing the chosen tap on a copy
   - path: managym/src/flow/mana/tests/manual_payment/coupled_boards.rs
-    why: Completing action offers and mixed help regressions
+    why: Boards where changing payment order changes legality
   - path: managym/src/flow/mana/tests/manual_payment.rs
-    why: Live grant loss and payment regressions
+    why: Bonus choices, lost grants and search bounds
   - path: managym/src/agent/env/snapshot.rs
-    why: Object-bound Command replay through a pending activation
+    why: Restoring a pending activation with a bound target
   - path: managym/cards/tests/cards/ody.rs
-    why: Casts with life-dependent sources and offers
+    why: Life-dependent offers with Tarnished Citadel
 hide: []
