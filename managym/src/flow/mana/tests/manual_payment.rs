@@ -309,34 +309,17 @@ fn fixed_mana_suffix_reads_life_through_damage_replacement() {
         ..Default::default()
     }];
     announce_activation(&mut game, player, source);
-    let delta = |game: &Game, permanent| {
-        game.payment_model(player, None)
-            .sources
-            .iter()
-            .find(|source| source.permanent == permanent)
-            .unwrap()
-            .abilities[0]
-            .life_delta
-    };
-    // Both root probes write only life. The replacement reads life gained
-    // this turn through the event path, outside the layer board's reads.
-    assert_eq!(delta(&game, citadel), -3);
-    assert_eq!(delta(&game, henge), 2);
     let activate = |permanent| Action::ActivateAbility {
         player,
         permanent,
         ability_index: 0,
     };
     game.tick().unwrap();
-    let mut henge_first = game.clone();
-    // The frozen estimate admits Henge first. That gain changes the
-    // Citadel's damage from 3 to 5, leaving only 1 life for the owed fee.
-    let error = step_action(&mut henge_first, activate(henge)).unwrap_err();
-    assert!(error.0.contains("empty non-terminal action space"));
-    assert_eq!(henge_first.state.players[0].life, 6);
-    assert_eq!(delta(&henge_first, citadel), -5);
+    let actions = &game.action_space().unwrap().actions;
+    assert!(actions.contains(&activate(citadel)));
+    assert!(!actions.contains(&activate(henge)));
+    assert!(game.payment_cache.borrow().coupled_searches > 0);
 
-    // The same costs complete if Citadel deals 3 before Henge gains 2.
     step_action(&mut game, activate(citadel)).unwrap();
     assert_eq!(game.state.players[0].life, 1);
     step_action(&mut game, Action::ChooseMode { player, mode: 3 }).unwrap();
@@ -400,17 +383,10 @@ fn mana_trigger_reads_keyword_changed_by_another_activation() {
     };
 
     game.tick().unwrap();
-    let mut counter_first = game.clone();
-    // The frozen witness counts Heartbeat's second {R} even after it has
-    // spent the counter that makes the Mountain match Heartbeat's predicate.
-    let error = step_action(&mut counter_first, remove_counter.clone()).unwrap_err();
-    assert!(error.0.contains("empty non-terminal action space"));
-    assert!(!counter_first
-        .characteristics(mountain)
-        .keywords
-        .has(Keyword::Trample));
+    let actions = &game.action_space().unwrap().actions;
+    assert!(actions.contains(&tap));
+    assert!(!actions.contains(&remove_counter));
 
-    // Tapping first keeps the trigger and funds the same announced activation.
     step_action(&mut game, tap).unwrap();
     assert_eq!(
         game.pending_payment(player).unwrap().receipt.mana().len(),
@@ -420,6 +396,93 @@ fn mana_trigger_reads_keyword_changed_by_another_activation() {
     step_action(&mut game, Action::ChooseMode { player, mode: 0 }).unwrap();
     assert!(game.pending_choice.is_none());
     assert_eq!(game.state.stack_objects.len(), 1);
+}
+
+#[test]
+fn coupled_payment_memoizes_citadel_orders() {
+    let player = PlayerId(0);
+    let mut game = payment_game(
+        349,
+        [
+            ("Forest", 36),
+            ("Tarnished Citadel", 2),
+            ("Angel of Vitality", 1),
+            ("Raucous Audience", 1),
+        ],
+    );
+    game.keep_opening_hands();
+    game.scenario_set_life(player, 28);
+    for name in [
+        "Tarnished Citadel",
+        "Tarnished Citadel",
+        "Angel of Vitality",
+        "Raucous Audience",
+    ] {
+        game.scenario_force_battlefield(player, name, true).unwrap();
+    }
+    assert!(!game.can_pay_with_mana_abilities(player, &ManaCost::parse("5"), None));
+    let cache = game.payment_cache.borrow();
+    assert_eq!(cache.coupled_searches, 1);
+    assert!(cache.coupled_states > 0);
+    assert!(cache.coupled_memo_hits > 0);
+}
+
+#[test]
+fn ordinary_mana_boards_stay_on_the_pure_solver() {
+    let player = PlayerId(0);
+    for (first, second, cost) in [
+        ("Tarnished Citadel", "Heartbeat of Spring", "RR"),
+        ("Sunbaked Canyon", "Heartbeat of Spring", "RR"),
+        ("Badgermole Cub", "Forest", "GG"),
+        ("Air Nomad Legacy", "Forest", "GG"),
+        ("Raucous Audience", "Forest", "GG"),
+    ] {
+        let mut game = payment_game(350, [("Mountain", 38), (first, 1), (second, 1)]);
+        game.keep_opening_hands();
+        for name in [first, second] {
+            game.scenario_force_battlefield(player, name, true).unwrap();
+        }
+        if matches!(first, "Badgermole Cub" | "Air Nomad Legacy") {
+            let mut frame =
+                EffectFrame::new(player, vec![Effect::create_tokens("token.treasure", 1)]);
+            frame.completion = crate::flow::decision::FrameCompletion::Continue;
+            game.run_frame(frame);
+        }
+        assert!(
+            game.can_pay_with_mana_abilities(player, &ManaCost::parse(cost), None),
+            "{first}"
+        );
+        assert_eq!(game.payment_cache.borrow().coupled_searches, 0, "{first}");
+    }
+}
+
+#[test]
+fn coupled_exact_batch_keeps_the_completing_tap_order() {
+    let player = PlayerId(0);
+    let mut game = payment_game(351, [("Forest", 39), ("Mountain", 1)]);
+    game.keep_opening_hands();
+    let forest = game
+        .scenario_force_battlefield(player, "Forest", true)
+        .unwrap();
+    let mountain = game
+        .scenario_force_battlefield(player, "Mountain", true)
+        .unwrap();
+    let forest_object = game.permanent_object(forest).unwrap();
+    game.state[forest_object].statics = vec![StaticAbility::continuous(
+        StaticScope::All(CardPredicate {
+            named: Some("Mountain".into()),
+            ..Default::default()
+        }),
+        Some(Condition::SourceTapped),
+        vec![Modification::LoseAllAbilities],
+    )];
+
+    let cost = ManaCost::parse("RG");
+    assert!(game.can_pay_automatic_mana(player, &cost));
+    game.produce_mana(player, &cost).unwrap();
+    assert_eq!(game.pooled_mana(player), Mana::parse("RG"));
+    assert!(game.state.permanents[forest].as_ref().unwrap().tapped);
+    assert!(game.state.permanents[mountain].as_ref().unwrap().tapped);
 }
 
 #[test]

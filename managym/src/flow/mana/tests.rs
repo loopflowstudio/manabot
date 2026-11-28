@@ -182,7 +182,7 @@ fn announced_payment_owes_life_after_mana_across_nested_callers() {
     game.activate_mana_ability(player, canyon, 0).unwrap();
     assert_eq!(game.state.players[0].life, 3);
     assert!(game.state.permanents[canyon].as_ref().unwrap().tapped);
-    assert!(game.mana_choice_completes_payment(player, &Mana::parse("R")));
+    assert!(game.mana_choice_completes_payment(player, 0));
     let mut fork = game.clone();
     for candidate in [&mut game, &mut fork] {
         candidate
@@ -419,6 +419,7 @@ thread_local! {
 
 pub(in crate::flow::mana) fn tapping_ability(outputs: Vec<Mana>) -> ManaActivation {
     ManaActivation {
+        facts: Default::default(),
         kind: ManaActivationKind::Activated(0),
         automatic: true,
         tap_source: true,
@@ -469,6 +470,7 @@ pub(super) fn life_budget(life: i32) -> super::LifeBudget {
 
 fn forests(count: usize) -> PaymentModel<'static> {
     PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(
             (0..count)
@@ -525,6 +527,7 @@ fn bounded_search(
 fn payment_shared_outputs_keep_cached_witness_after_source_change() {
     let cache = std::cell::RefCell::new(super::PaymentCache::default());
     let mut model = PaymentModel {
+        coupled: None,
         cache: Some(&cache),
         sources: Arc::new(vec![modal_source(0, &["U", "R"], "")]),
         life: life_budget(20),
@@ -553,6 +556,7 @@ fn payment_shared_outputs_keep_cached_witness_after_source_change() {
 fn payment_cache_keeps_selected_taps_and_exact_mutations() {
     let cache = std::cell::RefCell::new(super::PaymentCache::default());
     let mut model = PaymentModel {
+        coupled: None,
         cache: Some(&cache),
         sources: Arc::new(vec![source(0, Some("U"), vec![]), source(1, None, vec![])]),
         life: life_budget(3),
@@ -679,6 +683,7 @@ fn direct_payment_matches_the_search_on_fixed_sources() {
     let (mut direct, mut payable, mut waterbent) = (0, 0, 0);
     for _ in 0..20_000 {
         let mut model = PaymentModel {
+            coupled: None,
             cache: None,
             sources: Arc::new(
                 (0..rng.gen_range(0..7))
@@ -865,6 +870,7 @@ fn a_payment_scan_keeps_sources_until_its_last_guard_ends() {
 fn direct_payment_taps_in_source_order_and_keeps_waterbend_taps_it_needs() {
     // Source order, not usefulness: the Forest ahead of the Islands is tapped.
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(vec![
             source(0, Some("G"), Vec::new()),
@@ -891,6 +897,7 @@ fn direct_payment_taps_in_source_order_and_keeps_waterbend_taps_it_needs() {
     let mut creature = source(0, None, Vec::new());
     creature.waterbend = true;
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(vec![creature, source(1, Some("U"), Vec::new())]),
         life: life_budget(20),
@@ -1157,6 +1164,7 @@ fn payment_bound_does_not_search_subsets_of_alternative_taps() {
         })
         .collect();
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(sources),
         life: life_budget(20),
@@ -1205,6 +1213,7 @@ fn payment_bound_keeps_non_tapping_production_after_a_tap() {
     sacrifice.tap_source = false;
     sacrifice.sacrifice_source = true;
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(vec![ManaSource {
             permanent: PermanentId(0),
@@ -1237,6 +1246,7 @@ fn payment_bound_counts_restricted_mana_for_each_pending_purpose() {
         [0, 1, 0, 0, 0, 0],
     ));
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(Vec::new()),
         life: life_budget(20),
@@ -1263,6 +1273,7 @@ fn payment_bound_counts_spend_effect_and_combat_classes() {
     );
     pool.add(&Mana::parse("R").with_expiry(crate::state::mana::ManaExpiry::EndOfCombat));
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(Vec::new()),
         life: life_budget(20),
@@ -1311,6 +1322,7 @@ fn payment_bound_allows_restricted_mana_to_fund_a_filter() {
         ..ManaCost::parse("1")
     };
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(vec![source(0, None, vec![filter])]),
         life: life_budget(20),
@@ -1381,11 +1393,13 @@ fn automatic_prefix_lower_bound_counts_colored_convoke() {
 #[test]
 fn limited_mana_uses_preserve_grouped_witnesses() {
     let abilities = ["U", "R"].map(|output| ManaActivation {
+        facts: Default::default(),
         tap_source: false,
         limited: true,
         ..tapping_ability(vec![Mana::parse(output)])
     });
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(
             (0..3)
@@ -1522,6 +1536,7 @@ fn payment_net_bound_counts_filter_fees_and_saved_outputs() {
     for output in ["U", "UU", "UUU"] {
         for fee in ["1", "2", "3"] {
             let model = PaymentModel {
+                coupled: None,
                 cache: None,
                 sources: Arc::new(vec![
                     modal_source(0, &[output], fee),
@@ -1550,6 +1565,7 @@ fn payment_net_bound_counts_filter_fees_and_saved_outputs() {
         }
     }
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(vec![modal_source(0, &["UU"], "2")]),
         life: life_budget(3),
@@ -1753,6 +1769,7 @@ fn payment_color_bound_matches_the_search_without_it() {
             continue;
         }
         let model = PaymentModel {
+            coupled: None,
             cache: None,
             sources: Arc::new(
                 kinds
@@ -1888,6 +1905,7 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
     // On a non-creature spell with no creature filter, all 16 distinct-type
     // Courtyards behave identically and collapse into one group.
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(
             TYPES
@@ -1945,6 +1963,7 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
         };
         sources.push(source(count, None, vec![mascot]));
         let model = PaymentModel {
+            coupled: None,
             cache: None,
             sources: Arc::new(sources),
             life: life_budget(20),
@@ -1994,6 +2013,7 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
         source(2, Some("G"), vec![tapping_ability(vec![Mana::parse("U")])]),
     ];
     let rider_model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(std::mem::take(&mut rider_sources)),
         life: life_budget(20),
@@ -2047,6 +2067,7 @@ fn feasibility_projection_collapses_mixed_expiry_and_spend_effects_with_witness_
         ability
     };
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new((0..4).map(|i| source(i, None, vec![prism()])).collect()),
         life: life_budget(20),
@@ -2374,6 +2395,7 @@ fn payable_fixed_sufficient_and_useful_taps_dedup_preserve_exact_semantics() {
 #[test]
 fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
     let filter = ManaActivation {
+        facts: Default::default(),
         kind: ManaActivationKind::Activated(0),
         automatic: false,
         tap_source: true,
@@ -2388,6 +2410,7 @@ fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
         life_delta: 0,
     };
     let model = PaymentModel {
+        coupled: None,
         cache: None,
         sources: Arc::new(vec![
             source(0, None, vec![filter.clone()]),

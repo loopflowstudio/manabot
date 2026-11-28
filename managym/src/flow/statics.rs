@@ -8,6 +8,7 @@ use crate::{
         layers::{
             evaluate_board, matches_view, PredicateSource, SourceSeed, StateReads, StaticSources,
         },
+        mana::BoardArithmeticProfile,
         proposed_event::{EntryFace, ZoneEntry},
         triggers::TriggerIndex,
         turn::RecordedCast,
@@ -332,7 +333,7 @@ pub(super) struct LayerBoard {
     /// that leave the board unchanged.
     dynamic_activations: bool,
     has_activated_cost_reduction: [bool; 2],
-    pub(super) has_triggered_mana_abilities: bool,
+    pub(super) arithmetic: BoardArithmeticProfile,
 }
 
 impl LayerBoard {
@@ -456,7 +457,10 @@ impl Game {
             let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
             let mut dynamic_activations = false;
             let mut has_activated_cost_reduction = [false; 2];
-            let mut has_triggered_mana_abilities = false;
+            let mut arithmetic = BoardArithmeticProfile::default();
+            for effect in self.state.effects.as_slice() {
+                arithmetic.add_effect(&effect.modification);
+            }
             let apply_play_static =
                 |ability: &StaticAbility,
                  object_id: ObjectId,
@@ -507,13 +511,15 @@ impl Game {
                 }
                 let scan_statics = if use_seed_summaries && entry.shares_seed_details {
                     dynamic_activations |= entry.seed.has_dynamic_activations;
-                    has_triggered_mana_abilities |= entry.seed.has_triggered_mana_abilities;
+                    arithmetic.merge(entry.seed.arithmetic);
                     entry.seed.has_board_statics
                 } else {
                     dynamic_activations =
                         dynamic_activations || entry.view.has_dynamic_activations();
-                    has_triggered_mana_abilities = has_triggered_mana_abilities
-                        || !entry.view.triggered_mana_abilities.is_empty();
+                    arithmetic.merge(BoardArithmeticProfile::of(
+                        &entry.view,
+                        &self.state[permanent.object].replacement_effects,
+                    ));
                     !entry.view.static_abilities.is_empty()
                 };
                 if scan_statics && !self.is_phased_out(id) {
@@ -549,6 +555,7 @@ impl Game {
                 let has_cost_reduction = &mut has_activated_cost_reduction[controller.0];
                 let record_id = self.state[object].id;
                 for ability in self.functioning_object_statics(object) {
+                    arithmetic.add_static(ability);
                     apply_play_static(
                         ability,
                         object,
@@ -558,6 +565,11 @@ impl Game {
                         &mut land_plays_each_player,
                         has_cost_reduction,
                     );
+                }
+            }
+            for (_, object) in self.functioning_command_objects(None) {
+                for replacement in &self.state[object].replacement_effects {
+                    arithmetic.add_replacement(replacement);
                 }
             }
             static_sources.finalize_for_board(self, &objects);
@@ -588,13 +600,16 @@ impl Game {
             for permissions in &mut play_permissions {
                 permissions.extra_land_plays += land_plays_each_player;
             }
+            arithmetic.reads_tapped |= evaluated.reads.tapped;
+            arithmetic.reads_mana |= evaluated.reads.mana;
+            arithmetic.reads_life |= evaluated.reads.life;
             LayerBoard {
                 player_modifications,
                 control_changes,
                 reads: evaluated.reads,
                 dynamic_activations,
                 has_activated_cost_reduction,
-                has_triggered_mana_abilities,
+                arithmetic,
                 restrictions,
                 static_sources,
                 land_type_overwrites: evaluated.land_type_overwrites,

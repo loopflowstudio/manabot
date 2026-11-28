@@ -168,11 +168,16 @@ impl Game {
         // A deliberate tap in a payment previews its own production first.
         let offered_tap = match action {
             Action::TapForMana { permanent, .. } => {
-                if !self
-                    .payment_model(player, None)
+                let model = self.payment_model(player, None);
+                let exact = model
                     .sources
                     .iter()
-                    .any(|source| source.permanent == *permanent && source.fixed.is_some())
+                    .any(|source| source.permanent == *permanent && source.fixed.is_some());
+                let changes_layer = model
+                    .coupled()
+                    .is_some_and(|coupled| coupled.taps_change_board());
+                if !exact
+                    || changes_layer && self.clone().produce_fixed_tap(player, *permanent).is_none()
                 {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,

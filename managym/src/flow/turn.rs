@@ -89,6 +89,7 @@ pub struct PlayerControl {
     Default,
     PartialEq,
     Eq,
+    Hash,
     serde::Serialize,
     serde::Deserialize,
     schemars::JsonSchema,
@@ -154,13 +155,13 @@ impl Bending {
 }
 
 /// Each object in a hit names its exact battlefield appearance (CR 400.7).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 struct DamagePair(
     #[serde(serialize_with = "crate::state::game_object::exact")] ObjectId,
     DamageRecipient,
 );
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[serde(untagged)]
 enum DamageRecipient {
     Permanent(#[serde(serialize_with = "crate::state::game_object::exact")] ObjectId),
@@ -168,7 +169,7 @@ enum DamageRecipient {
 }
 
 /// Sorted by source then recipient, so each source's hits form one slice.
-#[derive(Clone, Debug, Default, serde::Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct DamageHistory(Vec<DamagePair>);
 
 impl DamageHistory {

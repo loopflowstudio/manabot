@@ -5,6 +5,7 @@
 use crate::{
     flow::{
         game::Game,
+        mana::BoardArithmeticProfile,
         statics::{has_board_statics, CharacteristicDetails, Characteristics, LayerBoard},
     },
     state::{
@@ -457,7 +458,7 @@ pub(super) struct SourceSeed {
     nodes_reads: StateReads,
     pub(super) has_dynamic_activations: bool,
     pub(super) has_board_statics: bool,
-    pub(super) has_triggered_mana_abilities: bool,
+    pub(super) arithmetic: BoardArithmeticProfile,
 }
 
 /// Conservative reads used for both dependency pruning and cache invalidation.
@@ -627,6 +628,46 @@ impl ReadSet {
             _ => {}
         }
     }
+}
+
+pub(super) fn payment_predicate_reads(predicate: &CardPredicate) -> StateReads {
+    let mut reads = ReadSet::default();
+    reads.predicate(predicate);
+    reads.state
+}
+
+/// Reads by a mana ability are evaluated at its actual payment step, outside
+/// the layer plans that build its source's characteristics.
+pub(super) fn mana_ability_reads(ability: &ActivatedAbilityDefinition) -> StateReads {
+    fn output_reads(reads: &mut ReadSet, output: &Effect) {
+        match output {
+            Effect::If {
+                condition,
+                then,
+                otherwise,
+            } => {
+                reads.condition(condition);
+                for output in then.iter().chain(otherwise) {
+                    output_reads(reads, output);
+                }
+            }
+            Effect::AddMana { amount, .. } | Effect::AddOneColorManaValue { amount, .. } => {
+                reads.value(amount);
+            }
+            _ => {}
+        }
+    }
+    let mut reads = ReadSet::default();
+    if let Some((output, _)) = ability.mana_parts() {
+        if let Some(condition) = &ability.condition {
+            reads.condition(condition);
+        }
+        if let Some(tap) = &ability.tap_cost {
+            reads.predicate(&tap.predicate);
+        }
+        output_reads(&mut reads, output);
+    }
+    reads.state
 }
 
 impl SourcePlan {
@@ -1485,7 +1526,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
     }
     let has_dynamic_activations = view.has_dynamic_activations();
     let has_board_statics = has_board_statics(&view.static_abilities);
-    let has_triggered_mana_abilities = !view.triggered_mana_abilities.is_empty();
+    let arithmetic = BoardArithmeticProfile::of(&view, &source.replacement_effects);
     SourceSeed {
         source: source.clone(),
         incarnation: permanent.id,
@@ -1499,7 +1540,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         nodes_reads,
         has_dynamic_activations,
         has_board_statics,
-        has_triggered_mana_abilities,
+        arithmetic,
     }
 }
 

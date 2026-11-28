@@ -18,6 +18,9 @@ impl Game {
     /// Mark what each untapped creature or artifact may pay by tapping
     /// under this cost's convoke or improvise permissions.
     pub(super) fn mark_help_taps(&self, model: &mut PaymentModel, help: Help) {
+        if let Some(coupled) = &mut model.coupled {
+            coupled.help = help;
+        }
         let tap_permissions = |source: &ManaSource| {
             let mut colors = ManaTypeSet::EMPTY;
             if !source.waterbend || !(help.convoke || help.improvise) {
@@ -63,7 +66,7 @@ impl Game {
     /// `cost` as the payment model's obligations under `permissions`: delve
     /// pays as much generic as the graveyard holds, convoke and improvise taps
     /// may pay the rest of the generic, and mana pays everything.
-    fn help_obligations(
+    pub(super) fn help_obligations(
         &self,
         player: PlayerId,
         cost: &ManaCost,
@@ -118,6 +121,7 @@ impl Game {
             model.reserve(SourceReservation::tap(permanent));
         }
         self.mark_help_taps(&mut model, permissions.help);
+        model.track_delve(cost, permissions, life);
         model.payable(
             pool.clone(),
             self.help_obligations(player, cost, permissions, life),
@@ -209,6 +213,28 @@ impl Game {
                 let asked = self.tap_payments(cost, permissions, tapped);
                 if asked.is_empty() {
                     return None;
+                }
+                if model.coupled().is_some() {
+                    let options: Vec<_> = asked
+                        .into_iter()
+                        .filter(|&payment| {
+                            let rest = cost.less_pip(payment.color);
+                            let next = permissions.after_tap(payment);
+                            let mut model = model.clone();
+                            model.track_delve(&rest, next, life);
+                            model
+                                .coupled()
+                                .unwrap()
+                                .plan(
+                                    pool.clone(),
+                                    self.help_obligations(player, &rest, next, life),
+                                    SourcePolicy::All,
+                                    Some(PaymentCandidate::HelpTap(tapped)),
+                                )
+                                .is_some()
+                        })
+                        .collect();
+                    return (!options.is_empty()).then_some((tapped, options));
                 }
                 // Tapped, the permanent is no longer a source of the model,
                 // so it pays its own pip and not a second one.

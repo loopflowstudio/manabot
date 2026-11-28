@@ -2035,13 +2035,10 @@ impl Game {
                         self.mana_tap_cost_actions(*player),
                     )
                 } else {
-                    let mut actions = self.mana_ability_actions(*player, true);
-                    if self.offers_extra_payment_taps(*player) && self.can_pay_mana_upfront(*player)
-                    {
-                        actions.push(Action::PayCost { player: *player });
-                    }
-                    self.append_mana_floats(*player, &mut actions);
-                    (ActionSpaceKind::PayOrNot, actions)
+                    (
+                        ActionSpaceKind::PayOrNot,
+                        self.mana_upfront_actions(*player),
+                    )
                 };
                 ActionSpace {
                     player: Some(*player),
@@ -2512,6 +2509,103 @@ impl Game {
         Some(space)
     }
 
+    /// Apply a mana mode and retain its next decision, before advancing the caller.
+    pub(super) fn apply_mana_choice(
+        &mut self,
+        mut suspended: SuspendedResolution,
+        mode: usize,
+    ) -> Option<usize> {
+        let Decision::ManaChoice {
+            player,
+            choices,
+            production,
+            resume,
+        } = &mut suspended.decision
+        else {
+            unreachable!("expected a mana choice");
+        };
+        let mana = &choices[mode];
+        let player = *player;
+        // A priority activation has no enclosing payment or suspended
+        // caller. Each output choice also owns the fixed bonuses it adds.
+        let before = (resume.is_none()
+            && self.pending_choice.is_none()
+            && self.mana_capture(player).is_some())
+        .then(|| self.state.players[player.0].mana_pool.total());
+        // Bonus choices only append mana. Keep the boundary from
+        // before the original output until the whole production ends.
+        let start = match production {
+            ManaProduction::Output { .. } => resume
+                .is_none()
+                .then(|| self.state.players[player.0].mana_pool.unit_count()),
+            ManaProduction::Bonus { commit_start, .. } => *commit_start,
+        };
+        let origin = match production {
+            ManaProduction::Output { source, .. } => *source,
+            ManaProduction::Bonus { source, .. } => Some(*source),
+        }
+        .map(|source| self.mana_origin(source));
+        self.state.mana_pool_mut(player).add(mana, origin);
+        // The output is produced: its triggered mana abilities
+        // trigger now (CR 106.12a) and resolve at once (CR 605.4a).
+        let next = match production {
+            ManaProduction::Output {
+                source: Some(source),
+                tapped: Some(tapped),
+            } => {
+                let bonuses = self.production_bonuses(player, tapped);
+                self.resolve_mana_bonuses(player, *source, mana, bonuses, resume.take(), start)
+            }
+            ManaProduction::Output { .. } => resume.take(),
+            ManaProduction::Bonus {
+                tapped,
+                produced,
+                pending,
+                ..
+            } => self.resolve_mana_bonuses(
+                player,
+                *tapped,
+                produced,
+                std::mem::take(pending),
+                resume.take(),
+                start,
+            ),
+        };
+        if let Some(before) = before {
+            let produced = self.state.players[player.0].mana_pool.total() - before;
+            self.mana_capture(player).unwrap().float(produced);
+        }
+        if let Some(next) = next {
+            suspended.decision = *next;
+            *self.state.suspended_decision_mut() = Some(suspended);
+            return None;
+        }
+        start
+    }
+
+    pub(super) fn apply_replacement_order(
+        &mut self,
+        mut suspended: SuspendedResolution,
+        mode: usize,
+    ) -> Result<(), AgentError> {
+        let Decision::OrderReplacement { candidates, .. } = &suspended.decision else {
+            unreachable!("expected a replacement order");
+        };
+        let Some(candidate) = candidates.get(mode) else {
+            *self.state.suspended_decision_mut() = Some(suspended);
+            return Err(AgentError("illegal replacement".into()));
+        };
+        self.choose_replacement(
+            suspended
+                .frame
+                .batch
+                .as_mut()
+                .expect("retained event batch"),
+            candidate,
+        );
+        self.run_payment_frame(suspended.frame)
+    }
+
     /// Feed a player action into the pending mid-resolution decision.
     pub(crate) fn execute_decision_action(&mut self, action: &Action) -> Result<(), AgentError> {
         let Some(suspended) = &self.state.suspended_decision else {
@@ -2531,10 +2625,10 @@ impl Game {
             Action::ChooseMode { mode, .. },
         ) = (&suspended.decision, action)
         {
-            let mana = choices
-                .get(*mode)
-                .ok_or_else(|| AgentError("illegal mana color".into()))?;
-            if !self.mana_choice_completes_payment(*player, mana) {
+            if choices.get(*mode).is_none() {
+                return Err(AgentError("illegal mana color".into()));
+            }
+            if !self.mana_choice_completes_payment(*player, *mode) {
                 return Err(AgentError("mana color cannot complete the payment".into()));
             }
         }
@@ -2689,20 +2783,8 @@ impl Game {
                 }
                 Ok(())
             }
-            (Decision::OrderReplacement { candidates, .. }, Action::ChooseMode { mode, .. }) => {
-                let Some(candidate) = candidates.get(*mode) else {
-                    *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("illegal replacement".into()));
-                };
-                self.choose_replacement(
-                    suspended
-                        .frame
-                        .batch
-                        .as_mut()
-                        .expect("retained event batch"),
-                    candidate,
-                );
-                self.run_payment_frame(suspended.frame)
+            (Decision::OrderReplacement { .. }, Action::ChooseMode { mode, .. }) => {
+                self.apply_replacement_order(suspended, *mode)
             }
             (Decision::ChoosePaymentX { player, if_paid }, Action::ChooseMode { mode, .. }) => {
                 let x = u8::try_from(*mode).ok();
@@ -2870,92 +2952,19 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (
-                Decision::ManaChoice {
-                    player,
-                    choices,
-                    production,
-                    resume,
-                },
-                Action::ChooseMode { mode, .. },
-            ) => {
-                let mana = &choices[*mode];
+            (Decision::ManaChoice { player, .. }, Action::ChooseMode { mode, .. }) => {
                 let player = *player;
-                // A priority activation has no enclosing payment or suspended
-                // caller. Each output choice also owns the fixed bonuses it adds.
-                let before = (resume.is_none()
-                    && self.pending_choice.is_none()
-                    && self.mana_capture(player).is_some())
-                .then(|| self.state.players[player.0].mana_pool.total());
-                // Bonus choices only append mana. Keep the boundary from
-                // before the original output until the whole production ends.
-                let start = match production {
-                    ManaProduction::Output { .. } => resume
-                        .is_none()
-                        .then(|| self.state.players[player.0].mana_pool.unit_count()),
-                    ManaProduction::Bonus { commit_start, .. } => *commit_start,
-                };
-                let origin = match production {
-                    ManaProduction::Output { source, .. } => *source,
-                    ManaProduction::Bonus { source, .. } => Some(*source),
+                let start = self.apply_mana_choice(suspended, *mode);
+                if self.state.suspended_decision.is_some() {
+                    return self.advance_mana_upfront();
                 }
-                .map(|source| self.mana_origin(source));
-                self.state.mana_pool_mut(player).add(mana, origin);
-                // The output is produced: its triggered mana abilities
-                // trigger now (CR 106.12a) and resolve at once (CR 605.4a).
-                let next = match production {
-                    ManaProduction::Output {
-                        source: Some(source),
-                        tapped: Some(tapped),
-                    } => {
-                        let bonuses = self.production_bonuses(player, tapped);
-                        self.resolve_mana_bonuses(
-                            player,
-                            *source,
-                            mana,
-                            bonuses,
-                            resume.take(),
-                            start,
-                        )
-                    }
-                    ManaProduction::Output { .. } => resume.take(),
-                    ManaProduction::Bonus {
-                        tapped,
-                        produced,
-                        pending,
-                        ..
-                    } => self.resolve_mana_bonuses(
-                        player,
-                        *tapped,
-                        produced,
-                        std::mem::take(pending),
-                        resume.take(),
-                        start,
-                    ),
-                };
-                if let Some(before) = before {
-                    let produced = self.state.players[player.0].mana_pool.total() - before;
-                    self.mana_capture(player).unwrap().float(produced);
-                }
-                if let Some(next) = next {
-                    suspended.decision = *next;
-                    *self.state.suspended_decision_mut() = Some(suspended);
-                    // Only an upfront payment advances here; a bonus choice
-                    // stays suspended for the chooser.
-                    self.advance_mana_upfront()?;
-                } else {
-                    // An activated mana ability retains its payer's priority;
-                    // its empty rule frame is not a resolving stack object.
-                    self.state.priority_mut().on_non_pass_action(player);
-                    // A pending bonus can supply an alternative unit for
-                    // the same pip. Commit only when production finishes.
-                    if let Some(start) = start {
-                        self.commit_produced_mana(player, start);
-                        if matches!(self.paying(), Some((payer, _, CostComponent::Mana { .. })) if payer == player)
-                        {
-                            let payment = self.pending_payment(player)?.clone();
-                            return self.advance_payment(player, payment);
-                        }
+                self.state.priority_mut().on_non_pass_action(player);
+                if let Some(start) = start {
+                    self.commit_produced_mana(player, start);
+                    if matches!(self.paying(), Some((payer, _, CostComponent::Mana { .. })) if payer == player)
+                    {
+                        let payment = self.pending_payment(player)?.clone();
+                        return self.advance_payment(player, payment);
                     }
                 }
                 Ok(())
