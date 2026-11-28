@@ -8,9 +8,9 @@ memory and cache ownership, thread safety, statistical validity and
 composability rather than human UX—while still challenging opaque wrappers,
 derived flags where Comprehensive Rules state belongs, and caps without a
 structural invariant. Judge caller-facing `managym`/`manabot` APIs by caller
-clarity: prefer one surface with unambiguous verbs over side-channel polling,
-and check parallel or unused APIs in the area to harvest what worked and
-replace or deprecate them instead of leaving two surfaces side by side. Read
+clarity. Prefer direct verbs over side-channel polling. Name a new replay
+journal operation with the same domain term as its public API. Check parallel
+APIs for behavior to retain when replacing or deprecating them. Read
 that area on a freshly fetched `origin/main`, not the branch's base: name and
 place a new surface in the vocabulary that has landed since, and plan the sync
 when it has moved.

@@ -2,9 +2,9 @@
 //! shared grouped-input driver.
 use std::collections::HashSet;
 
-use crate::agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError};
+use crate::agent::action::{Action, ActionSpace, AgentError};
 use crate::experience::ObjectRenderId;
-use crate::flow::combat::AttackTarget;
+use crate::flow::combat::{AttackTarget, DeclarationKind};
 use crate::flow::decision_group::{
     AttackerItem, BlockerItem, ChoiceCheck, DecisionChoice, DecisionGroupKind, DecisionOutcome,
     DecisionRefusal, DecisionSpec, NextStep, PlannedAttack, PlannedBlock,
@@ -12,31 +12,6 @@ use crate::flow::decision_group::{
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
 use crate::state::game_object::{PermanentId, PlayerId};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CombatRole {
-    Attackers,
-    Blockers,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct CombatGroup {
-    role: CombatRole,
-}
-
-impl CombatGroup {
-    pub(crate) const fn attackers() -> Self {
-        Self {
-            role: CombatRole::Attackers,
-        }
-    }
-
-    pub(crate) const fn blockers() -> Self {
-        Self {
-            role: CombatRole::Blockers,
-        }
-    }
-}
 
 pub(crate) enum CombatProgress {
     Attackers {
@@ -64,15 +39,15 @@ enum Answer {
     Block(Option<PermanentId>),
 }
 
-impl DecisionGroupKind for CombatGroup {
+impl DecisionGroupKind for DeclarationKind {
     type Progress = CombatProgress;
 
     fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
-        let order = game.declaration_order(self.role, viewer).ok()?;
+        let order = game.declaration_order(*self, viewer).ok()?;
         let combat = game.state.combat.as_deref()?;
-        let declined = match self.role {
-            CombatRole::Attackers => combat.declined_attackers.as_slice(),
-            CombatRole::Blockers => combat.declined_blockers.as_slice(),
+        let declined = match *self {
+            DeclarationKind::Attackers => combat.declined_attackers.as_slice(),
+            DeclarationKind::Blockers => combat.declined_blockers.as_slice(),
         };
         let active_order: Vec<PermanentId> = if declined.is_empty() {
             order
@@ -83,7 +58,7 @@ impl DecisionGroupKind for CombatGroup {
                 .zip(suppressed)
                 .filter_map(|(creature, is_suppressed)| {
                     let keep = !is_suppressed
-                        || (self.role == CombatRole::Attackers && game.must_attack(creature));
+                        || (*self == DeclarationKind::Attackers && game.must_attack(creature));
                     keep.then_some(creature)
                 })
                 .collect()
@@ -91,8 +66,8 @@ impl DecisionGroupKind for CombatGroup {
         if active_order.is_empty() {
             return None;
         }
-        match self.role {
-            CombatRole::Attackers => {
+        match *self {
+            DeclarationKind::Attackers => {
                 let can_attack: Vec<ObjectRenderId> = game
                     .declaration_targets(game.active_player())
                     .filter_map(|target| match target {
@@ -115,7 +90,7 @@ impl DecisionGroupKind for CombatGroup {
                     committed: game.declared_attackers(),
                 })
             }
-            CombatRole::Blockers => Some(DecisionSpec::DeclareBlockers {
+            DeclarationKind::Blockers => Some(DecisionSpec::DeclareBlockers {
                 declarable: active_order
                     .iter()
                     .map(|creature| {
@@ -225,13 +200,13 @@ impl DecisionGroupKind for CombatGroup {
         viewer: PlayerId,
         choice: &DecisionChoice,
     ) -> Result<Self::Progress, AgentError> {
-        let order = game.declaration_order(self.role, viewer)?;
+        let order = game.declaration_order(*self, viewer)?;
         let rules_player = game
             .action_space()
             .and_then(|space| space.actions.first().map(Action::player))
             .ok_or_else(|| AgentError("declaration has no legal actions".into()))?;
-        match (self.role, choice) {
-            (CombatRole::Attackers, DecisionChoice::DeclareAttackers { attackers }) => {
+        match (*self, choice) {
+            (DeclarationKind::Attackers, DecisionChoice::DeclareAttackers { attackers }) => {
                 let to_entry = |attack: PlannedAttack, force_committed: bool| {
                     let perm = game
                         .permanent_by_render_id(attack.creature)
@@ -269,7 +244,7 @@ impl DecisionGroupKind for CombatGroup {
                     normalizer: AttackPlanNormalizer::new(order, working_attackers),
                 })
             }
-            (CombatRole::Blockers, DecisionChoice::DeclareBlockers { blocks }) => {
+            (DeclarationKind::Blockers, DecisionChoice::DeclareBlockers { blocks }) => {
                 let to_entry = |block: PlannedBlock, force_committed: bool| {
                     let blocker = game
                         .permanent_by_render_id(block.blocker)
@@ -309,7 +284,7 @@ impl DecisionGroupKind for CombatGroup {
         progress: &Self::Progress,
     ) -> bool {
         position
-            .asked_creature(self.role, viewer)
+            .asked_creature(*self, viewer)
             .is_some_and(|asked| progress.remaining().contains(&asked))
     }
 
@@ -380,7 +355,7 @@ impl DecisionGroupKind for CombatGroup {
         _choice: &DecisionChoice,
         progress: &Self::Progress,
     ) -> (DecisionOutcome, Option<DecisionRefusal>) {
-        let outcome = live.read_combat_outcome(self.role, position, obs_events_from);
+        let outcome = live.read_combat_outcome(*self, position, obs_events_from);
         let refused = match (progress, &outcome) {
             (
                 CombatProgress::Attackers { normalizer, .. },
@@ -404,7 +379,7 @@ impl Game {
     /// The creature asked now, then those the engine will ask after it.
     fn declaration_order(
         &self,
-        role: CombatRole,
+        role: DeclarationKind,
         viewer: PlayerId,
     ) -> Result<Vec<PermanentId>, AgentError> {
         let combat = self
@@ -416,54 +391,21 @@ impl Game {
             .asked_creature(role, viewer)
             .ok_or_else(|| AgentError("declaration names no creature".into()))?;
         let queue = match role {
-            CombatRole::Attackers => &combat.attackers_to_declare,
-            CombatRole::Blockers => &combat.blockers_to_declare,
+            DeclarationKind::Attackers => &combat.attackers_to_declare,
+            DeclarationKind::Blockers => &combat.blockers_to_declare,
         };
         Ok(std::iter::once(current)
             .chain(queue.iter().rev().copied())
             .collect())
     }
 
-    fn asked_creature(&self, role: CombatRole, viewer: PlayerId) -> Option<PermanentId> {
+    fn asked_creature(&self, role: DeclarationKind, viewer: PlayerId) -> Option<PermanentId> {
         let space = self.action_space()?;
         if space.player != Some(viewer) {
             return None;
         }
-        let rules_player = space.actions.first().map(Action::player)?;
-        self.asked_creature_for_rules_player(role, rules_player)
-    }
-
-    fn asked_creature_for_rules_player(
-        &self,
-        role: CombatRole,
-        rules_player: PlayerId,
-    ) -> Option<PermanentId> {
-        let space = self.action_space()?;
-        let expected_kind = match role {
-            CombatRole::Attackers => ActionSpaceKind::DeclareAttacker,
-            CombatRole::Blockers => ActionSpaceKind::DeclareBlocker,
-        };
-        if space.kind != expected_kind {
-            return None;
-        }
-        space
-            .actions
-            .iter()
-            .find_map(|action| match (action, role) {
-                (
-                    Action::DeclareAttacker {
-                        player, permanent, ..
-                    },
-                    CombatRole::Attackers,
-                ) if *player == rules_player => Some(*permanent),
-                (
-                    Action::DeclareBlocker {
-                        player, blocker, ..
-                    },
-                    CombatRole::Blockers,
-                ) if *player == rules_player => Some(*blocker),
-                _ => None,
-            })
+        let (current_role, _, creature) = space.declarer()?;
+        (role == current_role).then_some(creature)
     }
 
     fn permanent_render_id(&self, permanent: PermanentId) -> ObjectRenderId {
@@ -602,7 +544,7 @@ impl Game {
     /// before any later turn could declare again.
     fn read_combat_outcome(
         &self,
-        role: CombatRole,
+        role: DeclarationKind,
         position: &Game,
         from: usize,
     ) -> DecisionOutcome {
@@ -613,7 +555,7 @@ impl Game {
                     attackers,
                     permanent_defenders,
                     ..
-                } if role == CombatRole::Attackers => {
+                } if role == DeclarationKind::Attackers => {
                     return DecisionOutcome::DeclareAttackers {
                         attackers: attackers
                             .iter()
@@ -629,7 +571,9 @@ impl Game {
                             .collect(),
                     };
                 }
-                GameEvent::BlockersDeclared { assignments } if role == CombatRole::Blockers => {
+                GameEvent::BlockersDeclared { assignments }
+                    if role == DeclarationKind::Blockers =>
+                {
                     return DecisionOutcome::DeclareBlockers {
                         blocks: assignments
                             .iter()
@@ -646,10 +590,10 @@ impl Game {
             }
         }
         match role {
-            CombatRole::Attackers => DecisionOutcome::DeclareAttackers {
+            DeclarationKind::Attackers => DecisionOutcome::DeclareAttackers {
                 attackers: Vec::new(),
             },
-            CombatRole::Blockers => DecisionOutcome::DeclareBlockers { blocks: Vec::new() },
+            DeclarationKind::Blockers => DecisionOutcome::DeclareBlockers { blocks: Vec::new() },
         }
     }
 
@@ -763,10 +707,13 @@ impl DeclarationCursor {
     fn advance(
         &mut self,
         game: &Game,
-        role: CombatRole,
+        role: DeclarationKind,
         player: PlayerId,
     ) -> Option<(PermanentId, &[PermanentId])> {
-        let asked = game.asked_creature_for_rules_player(role, player)?;
+        let (current_role, rules_player, asked) = game.action_space()?.declarer()?;
+        if (current_role, rules_player) != (role, player) {
+            return None;
+        }
         let rel = self.order[self.cursor..]
             .iter()
             .position(|creature| *creature == asked)?;
@@ -842,7 +789,9 @@ impl AttackPlanNormalizer {
         game: &Game,
         player: PlayerId,
     ) -> Option<NormalizedAttackStep> {
-        let (asked, remaining) = self.cursor.advance(game, CombatRole::Attackers, player)?;
+        let (asked, remaining) = self
+            .cursor
+            .advance(game, DeclarationKind::Attackers, player)?;
         let attack = if let Some(entry) = self
             .planned
             .iter_mut()
@@ -919,7 +868,9 @@ impl BlockPlanNormalizer {
         game: &Game,
         player: PlayerId,
     ) -> Option<NormalizedBlockStep> {
-        let (asked, remaining) = self.cursor.advance(game, CombatRole::Blockers, player)?;
+        let (asked, remaining) = self
+            .cursor
+            .advance(game, DeclarationKind::Blockers, player)?;
 
         let entry_pos = if let Some(pos) = self
             .planned

@@ -173,3 +173,15 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   Snapshots from the 0.2.6 wheel are refused with `card_digest mismatch` on
   any later main (card definitions moved); a cross-version replay check needs
   a replay written by the base revision.
+- Counterfactual state edits (`GameStateEdit`, `Env.edit_game_state`,
+  `RestoreOptions(game_state_edits=)`): play an authored game
+  (`authored_deck_setup("elemental-world-v2", "elemental_gr")` vs `_gw`, seed 7,
+  80% non-pass random) to a turn-6+ `Priority` with two opposing creatures
+  (38 steps), then run each edit on `env.clone_env()` and step 30 random
+  actions after it; the original `state_digest()` must not move. Gray Ogre /
+  Hill Giant mirrors (seed 11, always attack) reach `DeclareBlocker` by turn 7.
+  For Academy, a snapshot replay that ends at the edit shows the edited board
+  but no branch note (the note rides the next recorded choice): step 25
+  actions past the edit before `to_replay_json()`, then the History panel
+  shows **Branch · game state edited**. Only the branch kind reaches the
+  browser, never edit ids or destinations.

@@ -479,6 +479,7 @@ impl<'a> ReferenceCensus<'a> {
             blockers_to_declare: _,  // vouched candidate list for DeclareBlockers
             declined_attackers: _,   // vouched symmetry-breaking list for DeclareAttackers
             declined_blockers: _,    // vouched symmetry-breaking list for DeclareBlockers
+            detached_declarers: _,   // already excluded from declaration candidates
         } = combat;
         for &id in first_strikers {
             self.mark_permanent(id);

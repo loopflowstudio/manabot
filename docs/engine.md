@@ -469,6 +469,7 @@ The Torch wrapper and the capture wrapper are separate Python classes:
 | A fixed viewer's observation | `Env.observation_for_player(player_index)` |
 | Encoded fixed-viewer observations for all or selected slots, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
 | Live snapshots and batched slot loading (`GameSnapshot`, `RestoreOptions`, `SlotLoad`) | `Env.snapshot` / `restore`; `VectorEnv.snapshot_slots`, `slot_metadata`, `load_slots_into_buffers` ([Batched slot loading and snapshots](engine-python.md#batched-slot-loading-and-snapshots)) |
+| Counterfactual state edits (`GameStateEdit`) | `Env.edit_game_state`; `RestoreOptions.exact(game_state_edits=...)` ([Counterfactual state edits](engine-python.md#counterfactual-state-edits)) |
 | Revision-bound Commands, decision captures, search forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
 | Batched readable observations | `managym.VectorEnv.reset_all` / `step` |
 | Caller-owned NumPy buffers, per-slot setups, sparse slot loading and partial stepping | Native `VectorEnv` buffer methods |

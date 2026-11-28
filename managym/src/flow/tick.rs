@@ -10,7 +10,12 @@ use crate::{
         proposed_event::EventBinding,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
-    state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    state::{
+        card::StaticAbility,
+        game_object::{PermanentId, PlayerId},
+        permanent::CounterKind,
+        zone::ZoneType,
+    },
 };
 
 impl Game {
@@ -352,6 +357,7 @@ impl Game {
                 let combat = self.state.combat.get_or_insert_default();
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
                     combat.declined_attackers.clear();
+                    combat.detached_declarers.clear();
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
                     let first = std::mem::take(&mut combat.already_attacking);
@@ -400,42 +406,14 @@ impl Game {
                     }
                     return None;
                 };
-                let must_attack = self.must_attack(attacker);
-                let suppress_attack =
-                    !must_attack && self.declined_interchangeable_attacker(attacker);
-                let actions = if suppress_attack {
-                    vec![Action::DeclareAttacker {
-                        player: active,
-                        permanent: attacker,
-                        attack: None,
-                    }]
-                } else {
-                    let mut targets = self.declaration_targets(active);
-                    targets
-                        .next()
-                        .map(Some)
-                        .into_iter()
-                        .chain((!must_attack).then_some(None))
-                        .chain(targets.map(Some))
-                        .map(|attack| Action::DeclareAttacker {
-                            player: active,
-                            permanent: attacker,
-                            attack,
-                        })
-                        .collect()
-                };
-                Some(ActionSpace {
-                    player: Some(active),
-                    kind: ActionSpaceKind::DeclareAttacker,
-                    actions,
-                    focus: Vec::new(),
-                })
+                Some(self.declare_attacker_action_space(active, attacker))
             }
             StepKind::DeclareBlockers => {
                 let defending = self.non_active_player();
                 let combat = self.state.combat.get_or_insert_default();
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
                     combat.declined_blockers.clear();
+                    combat.detached_declarers.clear();
                     let assignments: Vec<_> = self
                         .state
                         .combat
@@ -464,13 +442,7 @@ impl Game {
                     }
                     return None;
                 };
-                let actions = self.block_actions(defending, blocker);
-                Some(ActionSpace {
-                    player: Some(defending),
-                    kind: ActionSpaceKind::DeclareBlocker,
-                    actions,
-                    focus: Vec::new(),
-                })
+                Some(self.declare_blocker_action_space(defending, blocker))
             }
             StepKind::CombatDamage => {
                 // CR 510.1 — Assign and deal combat damage.
@@ -497,6 +469,55 @@ impl Game {
                 None
             }
             _ => None,
+        }
+    }
+
+    pub(super) fn declare_attacker_action_space(
+        &self,
+        active: PlayerId,
+        attacker: PermanentId,
+    ) -> ActionSpace {
+        let must_attack = self.must_attack(attacker);
+        let suppress_attack = !must_attack && self.declined_interchangeable_attacker(attacker);
+        let actions = if suppress_attack {
+            vec![Action::DeclareAttacker {
+                player: active,
+                permanent: attacker,
+                attack: None,
+            }]
+        } else {
+            let mut targets = self.declaration_targets(active);
+            targets
+                .next()
+                .map(Some)
+                .into_iter()
+                .chain((!must_attack).then_some(None))
+                .chain(targets.map(Some))
+                .map(|attack| Action::DeclareAttacker {
+                    player: active,
+                    permanent: attacker,
+                    attack,
+                })
+                .collect()
+        };
+        ActionSpace {
+            player: Some(active),
+            kind: ActionSpaceKind::DeclareAttacker,
+            actions,
+            focus: Vec::new(),
+        }
+    }
+
+    pub(super) fn declare_blocker_action_space(
+        &self,
+        defending: PlayerId,
+        blocker: PermanentId,
+    ) -> ActionSpace {
+        ActionSpace {
+            player: Some(defending),
+            kind: ActionSpaceKind::DeclareBlocker,
+            actions: self.block_actions(defending, blocker),
+            focus: Vec::new(),
         }
     }
 

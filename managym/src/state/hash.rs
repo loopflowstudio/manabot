@@ -6,7 +6,7 @@
 //! can therefore hash alike, as before the identity split; a future hash
 //! version must encode the complete identities rather than these projections.
 
-use std::fmt;
+use std::{collections::BTreeSet, fmt};
 
 use rand::RngCore;
 use serde::Serialize;
@@ -177,6 +177,8 @@ struct CanonicalCombat {
     declined_attackers: Vec<PermanentId>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     declined_blockers: Vec<PermanentId>,
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    detached_declarers: BTreeSet<PermanentId>,
 }
 
 impl From<&CombatState> for CanonicalCombat {
@@ -202,6 +204,7 @@ impl From<&CombatState> for CanonicalCombat {
             blockers_to_declare: combat.blockers_to_declare.clone(),
             declined_attackers: combat.declined_attackers.clone(),
             declined_blockers: combat.declined_blockers.clone(),
+            detached_declarers: combat.detached_declarers.clone(),
         }
     }
 }
