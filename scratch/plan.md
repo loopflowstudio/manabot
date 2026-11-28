@@ -296,7 +296,6 @@ failure used an injected native receipt. Its step failure used a real native
 rejection that the bounded replay CLI matched after slot 0 took another step.
 The shared editable Etude checkout acquired merge conflicts during verification.
 The 13 eval and training checks passed with a clean archive of `d2dd820a`.
-Ship review is next.
 
 Pass 4 passed 32 debug Rust vector tests, 16 focused Python tests,
 42 package-boundary tests and the public API check. The four historical
@@ -317,6 +316,10 @@ Recorded verbatim in `scratch/ship-review-notes.md`:
 7. **Academy Watch native-seat import** (`b97d43c7c`, choice `3b`) verified retained games with their original seat policies and projected both seats through Academy Commands. Four retained MPS legs imported and Chromium followed both choosers.
 
 8. **Replay import fixes** (`2192a34b3c`, review Q1 1a) added a native committed-choice log, stored the stop in Academy decision coordinates, and marked the first affected choice across `ForceAction` boundaries. Nine cases failed before the fix. After rebuilding cp313, 19 Academy record tests, two card reducer tests, five package-boundary tests, the focused debug Rust test and the public API check passed. The four retained MPS legs imported through Academy HTTP with both acting seats and 92, 362, 251 and 444 choices.
+
+The concept review at `d470b1bc5e` (whole area at `64fa41b261`, against
+`origin/main` `606e79e90a`) found Pass 7's three mismatches resolved and no new
+findings. Nothing remains to build; ship review is next.
 
 ## Deferred findings
 
