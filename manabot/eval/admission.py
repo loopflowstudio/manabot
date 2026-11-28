@@ -70,7 +70,6 @@ def register_checkpoint(
         agent, Match(match).to_rust(), allow_deck_repetition=allow_deck_repetition
     )
     runtime = runtime_fingerprints(
-        197 if training_seed is None else training_seed,
         match_config=match,
         observation_space=space,
     )

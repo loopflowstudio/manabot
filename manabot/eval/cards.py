@@ -195,7 +195,7 @@ def run(args: argparse.Namespace) -> None:
                 mapping,
                 match_id=game.game,
                 winner=game.winner,
-                reason=game.trace.audit.get("termination_reason"),
+                reason=game.trace.metadata.get("termination_reason"),
             )
         )
         args.out.write_text(log)

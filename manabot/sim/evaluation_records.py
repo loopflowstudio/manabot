@@ -43,15 +43,15 @@ def stored_game(game: dict[str, Any]) -> dict[str, Any]:
 
 def bind_record(game: dict[str, Any], record: GameRecord) -> None:
     """Freeze settled runner metadata alongside the capture's native inputs."""
-    metadata = evaluation_metadata(game)
-    record.context["evaluation"] = metadata
+    record.context["evaluation"] = deepcopy(evaluation_metadata(game))
     game["record"] = record.model_dump(mode="json", by_alias=True)
     game["game_trace_sha256"] = record.sha256
 
 
 def evaluation_metadata(game: dict[str, Any]) -> dict[str, Any]:
+    """Select the runner fields copied into capture context."""
     return {
-        k: deepcopy(v)
+        k: v
         for k, v in game.items()
         if k
         not in {
@@ -103,18 +103,10 @@ class DecisionIdentity:
         }
 
 
-def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, Any]:
-    """Derive a retained-trace-shaped view carrying its canonical ``record``.
-
-    Projection invokes no engine and never rewrites persisted evidence.
-    """
-    if not is_record(data):
-        return data
+def evaluation_inputs(data: dict[str, Any]) -> tuple[dict[str, Any], int]:
     # Offline reports project retained JSON without probing the native runtime.
-    # Identity-sensitive consumers pass the validated GameRecord's digest.
     if len(data["games"]) != 1:
         raise ValueError("evaluation audit requires exactly one game")
-    game = deepcopy(data["context"]["evaluation"])
     inputs = data["games"][0]
     count = inputs.get("committed")
     if count is None:
@@ -125,13 +117,52 @@ def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, 
         inputs["digests"]
     ) != len(inputs["actions"]):
         raise ValueError("evaluation inputs lack aligned digests or annotations")
+    return inputs, count
+
+
+def evaluation_outcome(
+    data: dict[str, Any], inputs: dict[str, Any], committed: int
+) -> dict[str, Any]:
+    metadata = data["context"]["evaluation"]
     end = inputs.get("end")
     # The record keeps the engine's ending; a runner failure (context) voids the
     # result even after a terminal step, as retained failure rows do.
-    game["terminated"] = (
-        game.get("failure") is None and end is not None and end["status"] == "complete"
+    terminated = (
+        metadata.get("failure") is None
+        and end is not None
+        and end["status"] == "complete"
     )
-    game["winner"] = end.get("winner") if game["terminated"] else None
+    game = {
+        **metadata,
+        "terminated": terminated,
+        "winner": end.get("winner") if terminated else None,
+    }
+    if committed < len(inputs["actions"]) and game.get("failure") is None:
+        game["failure"] = (
+            f"{data['error_class']}: {data['error']}"
+            if data.get("error_class") is not None
+            else "execution_outcome_unknown"
+        )
+    return game
+
+
+def recorded_metadata(data: dict[str, Any]) -> dict[str, Any]:
+    """Read a retained game's setup and outcome without projecting its actions."""
+    return (
+        evaluation_outcome(data, *evaluation_inputs(data)) if is_record(data) else data
+    )
+
+
+def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, Any]:
+    """Derive a retained-trace-shaped view carrying its canonical ``record``.
+
+    Projection invokes no engine and never rewrites persisted evidence.
+    """
+    if not is_record(data):
+        return data
+    inputs, count = evaluation_inputs(data)
+    game = deepcopy(evaluation_outcome(data, inputs, count))
+    end = inputs.get("end")
     game["initial_state_digest"] = (
         inputs["digests"][0]
         if inputs["digests"]
@@ -175,12 +206,6 @@ def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, 
         else:
             game["pending_decision"] = decision
     game["decisions"] = decisions
-    if "pending_decision" in game and game.get("failure") is None:
-        game["failure"] = (
-            f"{data['error_class']}: {data['error']}"
-            if data.get("error_class") is not None
-            else "execution_outcome_unknown"
-        )
     game["record"] = data
     if digest is not None:
         game["game_trace_sha256"] = digest

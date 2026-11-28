@@ -72,7 +72,6 @@ from manabot.sim.evaluation_records import (
     set_execution_limits,
 )
 from manabot.sim.native_game import (
-    arena_source_sha256,
     game_runtime_identities,
     resolve_game_match,
 )
@@ -181,7 +180,6 @@ def admit_active_match(
     agents: Sequence[object],
     spec: PairingSpec,
     *,
-    arena_source: str,
     output_dir: Path | None,
     read: CheckpointReader,
 ) -> tuple[ActiveMatch, deque[PendingLeg]]:
@@ -250,9 +248,7 @@ def admit_active_match(
         )
         game["observation_hypers"] = space.config.model_dump()
         set_execution_limits(game, registrations, spec.max_commands, spec.game_seconds)
-        game["runtime_identities"] = game_runtime_identities(
-            game["deal_seed"], resolved_match, space, arena_source
-        )
+        game["runtime_identities"] = game_runtime_identities(resolved_match, space)
         players = game["seat_players"]
         a, b = (
             seat.player_policy if isinstance(seat, NativeHeuristic) else "agent"
@@ -527,7 +523,6 @@ async def play_pairings(
     if slots < 1:
         raise ValueError("slots must be at least 1")
 
-    arena_source = arena_source_sha256()
     read = checkpoint_reader(2 * slots)
     # A held deal owns its unseated legs until its last slot finishes or fails.
     held: dict[ActiveMatch, deque[PendingLeg]] = {}
@@ -586,7 +581,6 @@ async def play_pairings(
                         match,
                         agents,
                         spec,
-                        arena_source=arena_source,
                         output_dir=output_dir,
                         read=read,
                     )

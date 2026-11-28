@@ -12,7 +12,7 @@ from pydantic import JsonValue, model_validator
 
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import StrictModel, canonical_json, canonical_sha256
-from manabot.sim.evaluation_records import audit_view, is_record
+from manabot.sim.evaluation_records import is_record, recorded_metadata
 from manabot.sim.replay import replay_game
 from managym.card_capture import CapturedCards, Seat
 from managym.recording import GameRecord
@@ -27,8 +27,8 @@ class GameTrace(StrictModel):
     data: dict[str, JsonValue]
 
     @property
-    def audit(self) -> dict[str, JsonValue]:
-        return audit_view(self.data, digest=self.sha256)
+    def metadata(self) -> dict[str, JsonValue]:
+        return recorded_metadata(self.data)
 
     @property
     def sha256(self) -> str | None:
@@ -62,7 +62,7 @@ class GameEvidence(StrictModel):
 
     @model_validator(mode="after")
     def bound(self) -> GameEvidence:
-        trace = dict(self.trace.audit)
+        trace = self.trace.metadata
         digest = self.trace.sha256
         unsigned = dict(self.trace.data)
         unsigned.pop("game_trace_sha256", None)
@@ -110,13 +110,13 @@ class EvidenceRef(StrictModel):
 def capture_verified_game(
     trace: GameTrace, *, reduction: Reduction | None = None
 ) -> GameEvidence:
-    data = trace.audit
+    data = trace.metadata
     identities = data.get("runtime_identities")
     if not isinstance(identities, dict) or not isinstance(
         identities.get("content_digest"), str
     ):
         raise ValueError("card capture requires recorded runtime/content identity")
-    receipt, captured = replay_game(data, capture_cards=True, reduction=reduction)
+    receipt, captured = replay_game(trace.data, capture_cards=True, reduction=reduction)
     if captured is None:
         raise ValueError("native capture unavailable")
     failure = data.get("failure")
@@ -145,7 +145,7 @@ def capture_verified_game(
             winner=data["winner"],
             outcome=outcome,
             trace=trace,
-            trace_sha256=data["game_trace_sha256"],
+            trace_sha256=trace.sha256,
             replay=replay,
             replay_sha256=canonical_sha256(replay),
             cards=captured,

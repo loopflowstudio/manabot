@@ -787,7 +787,11 @@ carries them. Tests load the INT-6 fixture's key and anchors through
 Ordinary evaluation games are retained as canonical managym records in
 `games/<cell-id>.jsonl`, with finalized per-deal shards in `games/deals/`. Evaluation
 setup, participant and runtime identities stay in private record context;
-player ordinals, policy seeds, latencies, inference ids and local-update
+the worker fingerprints its engine and catalog once per process and binds
+each game's matchup and observation ABI separately. Scalar journals freeze
+that context at setup and refresh it when the game closes.
+
+Player ordinals, policy seeds, latencies, inference ids and local-update
 receipts stay in decision annotations (scalar records also retain viewer-frame
 hashes, chosen offers and action-space kinds, while vector records write compact
 annotations without per-decision viewer frames). Card eligibility and Etude

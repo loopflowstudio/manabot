@@ -197,11 +197,14 @@ def replay_game(
     reduction: Reduction | None = None,
 ) -> tuple[ReplayReceipt, dict[str, Any] | None]:
     """Verify one game, optionally retaining native facts from the same replay."""
-    if is_record(game):
-        game = audit_view(game, digest=GameRecord.model_validate(game).sha256)
-    if "record" in game:
+    canonical = game if is_record(game) else game.get("record")
+    if canonical is not None:
+        record = GameRecord.model_validate(canonical)
+        original = audit_view(canonical, digest=record.sha256)
         return _replay_record(
-            game,
+            original if canonical is game else game,
+            record,
+            original,
             require_terminal=require_terminal,
             capture_cards=capture_cards,
             reduction=reduction,
@@ -223,14 +226,14 @@ def replay_game(
 
 def _replay_record(
     game: dict[str, Any],
+    record: GameRecord,
+    original: dict[str, Any],
     *,
     require_terminal: bool,
     capture_cards: bool,
     reduction: Reduction | None = None,
 ) -> tuple[ReplayReceipt, dict[str, Any] | None]:
-    record = GameRecord.model_validate(game["record"])
     counts = asdict(ReplayReceipt(games=1))
-    original = audit_view(game["record"])
     if evaluation_metadata(game) != record.context.get("evaluation"):
         counts["trace_mismatches"] += 1
     if "match_hypers" in game:
@@ -241,7 +244,7 @@ def _replay_record(
                 counts["trace_mismatches"] += 1
     if game["decisions"] != original["decisions"]:
         counts["trace_mismatches"] += 1
-    if game.get("game_trace_sha256") != record.sha256:
+    if game.get("game_trace_sha256") != original["game_trace_sha256"]:
         counts["trace_mismatches"] += 1
     walker = walk(record, capture_cards=capture_cards or reduction is not None)
     if reduction is not None:

@@ -12,6 +12,7 @@ recreate their root.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
@@ -27,8 +28,8 @@ from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import (
     RECORDED_ASSET_MANIFEST_HASH,
+    arena_source_sha256,
     runtime_fingerprints,
-    source_bundle_sha256,
 )
 from manabot.policy.protocol import BackendName, SimulationBackend
 from manabot.sim.agent import GamePlayer
@@ -139,15 +140,11 @@ def resolve_game_match(
     return resolved
 
 
-def arena_source_sha256() -> str:
-    return source_bundle_sha256(Path(__file__).resolve().parents[1].rglob("*.py"))
-
-
 def game_runtime_identities(
-    seed: int, match: MatchConfig | None, space: ObservationSpace, arena_source: str
+    match: MatchConfig | None, space: ObservationSpace
 ) -> dict[str, Any]:
-    return runtime_fingerprints(seed, match_config=match, observation_space=space) | {
-        "arena_source_sha256": arena_source,
+    return runtime_fingerprints(match_config=match, observation_space=space) | {
+        "arena_source_sha256": arena_source_sha256(),
     }
 
 
@@ -274,9 +271,7 @@ def execute_game(
                 send(("match", game["match_hypers"]))
         game["observation_hypers"] = space.config.model_dump()
         send(("observation", game["observation_hypers"]))
-        game["runtime_identities"] = game_runtime_identities(
-            game["deal_seed"], match, space, arena_source_sha256()
-        )
+        game["runtime_identities"] = game_runtime_identities(match, space)
         send(("identities", game["runtime_identities"]))
         with perf.span("native_reset_and_encoding"):
             memory = space.config
@@ -288,12 +283,14 @@ def execute_game(
                     game["deal_seed"],
                     journal_path=capture_path,
                     context={"source_kind": "evaluation"},
-                    context_provider=lambda: {"evaluation": evaluation_metadata(game)},
                     failure_directory=capture_path.parent,
                     # The journal must replay the log the players observe.
                     decision_memory=memory.max_decision_records > 0,
                     decision_memory_include_own=memory.decision_memory_include_own,
                 )
+                capture.frozen_context = {
+                    "evaluation": deepcopy(evaluation_metadata(game))
+                }
             env, obs = replay_environment(game, space, capture=capture)
         if capture is None:
             game["initial_state_digest"] = env._engine.state_digest()
@@ -445,6 +442,9 @@ def execute_game(
     if env is not None:
         if env.obs_space.config.action_overflow == "first-legal":
             game["policy_action_cutoff"] = env._capture.policy_action_report()
+        if capture is not None:
+            # The close journal also retains the runner's ending and integrity.
+            capture.frozen_context = {"evaluation": deepcopy(evaluation_metadata(game))}
         env.close(reason=game["termination_reason"])
         if capture is not None:
             # The journal includes a rejected/pending call; viewing never executes it.
