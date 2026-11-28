@@ -388,18 +388,6 @@ impl Game {
         }
     }
 
-    /// Retain a token's original definition for later attribution.
-    pub(super) fn capture_quiet_token(&mut self, object: ObjectId) {
-        if self.card_capture.is_none() && self.statistics.is_none() {
-            return;
-        }
-        let data = snapshot(self, object);
-        if let Some(stats) = &mut self.statistics {
-            stats.register(&data);
-        }
-        self.capture_originals.insert(data.copy, data);
-    }
-
     pub(crate) fn capture_object_move(
         &mut self,
         object: ObjectId,

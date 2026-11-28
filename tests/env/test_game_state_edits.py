@@ -13,6 +13,7 @@ from managym.decision import Command, DecisionFrame
 from managym.possible_worlds import PossibleWorldSpace
 from managym.recording import GameStateEdits, RecordedVectorEnv, read_record
 from managym.replay import walk
+from managym.statistics import reduce_cards
 
 
 def chooser(env: managym.Env) -> managym.Observation:
@@ -337,6 +338,7 @@ def test_battlefield_additions_round_trip_at_declare_attackers(tmp_path: Path) -
     before = root.to_replay_json()
     edit = managym.GameStateEdit
     seat = obs.agent.player_index
+    land = next(p for p in obs.agent_permanents if p.characteristics.card_types.is_land)
     edits = [
         edit.create_token("token.spirit", seat),
         edit.add_to_battlefield(hand["Gray Ogre"].id, tapped=True),
@@ -344,6 +346,7 @@ def test_battlefield_additions_round_trip_at_declare_attackers(tmp_path: Path) -
             obs.opponent.player_index, "Hill Giant", controller=seat, ready=False
         ),
         edit.add_to_battlefield(hand["Pacifism"].id, attached_to=host.id),
+        edit.move_permanent(land.id),
     ]
     with pytest.raises(managym.AgentError, match="attachment"):
         env.edit_game_state([*edits, edit.move_permanent(host.id)])
@@ -409,13 +412,27 @@ def test_battlefield_additions_round_trip_at_declare_attackers(tmp_path: Path) -
         "add_to_battlefield",
         "add_from_library",
         "add_to_battlefield",
+        "move_permanent",
     ]
     assert intervention.model_dump() == json.loads(raw)["interventions"][0]
-    replay = walk(record)
+    replay = walk(record, capture_cards=True)
     for _ in replay:
         pass
     assert replay.stop is not None and replay.stop.status == "interrupted"
     assert replay.env.state_digest() == branch.state_digest()
+    cards = replay.cards()
+    assert {
+        ("Spirit", None, "Battlefield"),
+        ("Gray Ogre", "Hand", "Battlefield"),
+        ("Hill Giant", "Library", "Battlefield"),
+        ("Pacifism", "Hand", "Battlefield"),
+        ("Mountain", "Battlefield", "Graveyard"),
+    } <= {
+        (move.card.name, move.from_, move.card.zone)
+        for move in cards.capture.moves
+        if move.cause == "move"
+    }
+    assert any(row.name == "Spirit" and row.seat == seat for row in reduce_cards(cards))
 
     options = managym.RestoreOptions.determinize(seat, 19, game_state_edits=edits)
     sampled = root.restore(options)

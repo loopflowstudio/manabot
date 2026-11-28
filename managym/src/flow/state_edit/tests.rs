@@ -1,11 +1,14 @@
 use super::{GameStateEdit::*, PermanentDestination::*};
 use crate::{
-    agent::policy_history::{HistoryReference, HISTORY_LIMIT},
+    agent::{
+        observation::Observation,
+        policy_history::{HistoryReference, HISTORY_LIMIT},
+    },
     flow::{
-        card_capture::{snapshots, CaptureMode},
+        card_capture::{snapshots, CaptureMode, CardCapture},
         combat::{AttackTarget, CombatState},
         game::Game,
-        statistics::Statistics,
+        statistics::{reduce_capture, Statistics},
         trigger::ExileLink,
     },
     state::{
@@ -29,6 +32,7 @@ fn game() -> Game {
         ("Gleaming Barrier", 1),
         ("Liliana, Dreadhorde General", 1),
         ("Impact Tremors", 1),
+        ("Banishing Light", 1),
         ("Leaves from the Vine", 1),
         ("Lightning Bolt", 1),
     ]
@@ -44,6 +48,7 @@ fn game() -> Game {
         false,
     );
     game.keep_opening_hands();
+    game.refresh_priority_actions(HERO);
     game
 }
 
@@ -171,7 +176,7 @@ fn quiet_entry_preserves_hand_and_library_knowledge_and_retires_history_links() 
         .state
         .card_of(game.permanent_object(pinned).unwrap())
         .unwrap();
-    game.apply_game_state_edits(&[MovePermanent {
+    game.edit_game_state(&[MovePermanent {
         permanent: observed_id(&game, pinned),
         to: LibraryBottom,
     }])
@@ -238,6 +243,7 @@ fn quiet_entry_refuses_invalid_batches_without_publishing_changes() {
     let host = put_on_board(&mut game, HERO, "Gray Ogre");
     let land = put_on_board(&mut game, HERO, "Mountain");
     game.refresh_priority_actions(HERO);
+    enable_exposure_and_statistics(&mut game);
     let id = |name| {
         let object = outside_battlefield(&game, HERO, name);
         game.state[object].id.0 as i32
@@ -246,14 +252,20 @@ fn quiet_entry_refuses_invalid_batches_without_publishing_changes() {
     let host_id = observed_id(&game, host);
     let ogre = game.state[game.permanent_object(host).unwrap()].id.0 as i32;
     let before = game.state.deterministic_hash();
+    let mut probe = game.clone();
+    probe.edit_game_state(&[token("token.spirit")]).unwrap();
+    let added = observed_id(&probe, PermanentId(game.state.permanents.len()));
     for invalid in [
+        vec![SetTapped {
+            permanent: added,
+            tapped: true,
+        }],
         vec![token("Spirit")],
         vec![token("lea.lightning_bolt")],
         vec![add_card(id("Lightning Bolt"), None)],
         vec![add_card(ogre, None)],
         vec![add_card(pacifism, None)],
         vec![add_card(pacifism, Some(-1))],
-        vec![add_card(pacifism, Some(observed_id(&game, land)))],
         vec![
             add_card(pacifism, Some(host_id)),
             add_card(pacifism, Some(host_id)),
@@ -270,7 +282,18 @@ fn quiet_entry_refuses_invalid_batches_without_publishing_changes() {
         edits.extend(invalid);
         assert!(game.edit_game_state(&edits).is_err(), "{edits:?}");
         assert_eq!(game.state.deterministic_hash(), before);
+        assert!(game.card_capture.as_ref().unwrap().moves.is_empty());
     }
+    let illegal_aura = add_card(pacifism, Some(observed_id(&game, land)));
+    let error = game.edit_game_state(&[illegal_aura]).unwrap_err();
+    assert!(error.0.contains(&format!("\"Pacifism\" (card {pacifism})")));
+    assert_eq!(game.state.deterministic_hash(), before);
+}
+
+fn enable_exposure_and_statistics(game: &mut Game) {
+    let initial = snapshots(game);
+    game.statistics = Some(Statistics::new(&initial, true));
+    game.card_capture = Some(CardCapture::new(game, initial, CaptureMode::Exposure));
 }
 
 #[test]
@@ -278,18 +301,30 @@ fn quiet_token_records_its_later_sacrifice_resolution() {
     use crate::state::mana::Mana;
 
     let mut game = game();
-    let initial = snapshots(&game);
-    game.statistics = Some(Statistics::new(&initial, true));
-    game.card_capture = Some(crate::flow::card_capture::CardCapture::new(
-        &game,
-        initial,
-        CaptureMode::Exposure,
-    ));
-    game.refresh_priority_actions(HERO);
-    let moves = game.card_capture.as_ref().unwrap().moves.len();
-    game.edit_game_state(&[token("token.clue")]).unwrap();
-    assert_eq!(game.card_capture.as_ref().unwrap().moves.len(), moves);
-    let clue = game.iter_battlefield_permanents(HERO).next().unwrap();
+    enable_exposure_and_statistics(&mut game);
+    game.edit_game_state(&[token("token.clue"), token("token.spirit")])
+        .unwrap();
+    let (clue, spirit) = {
+        let mut tokens = game.iter_battlefield_permanents(HERO);
+        (tokens.next().unwrap(), tokens.next().unwrap())
+    };
+    let spirit_object = game.permanent_object(spirit).unwrap();
+    let removal = MovePermanent {
+        permanent: observed_id(&game, spirit),
+        to: Exile,
+    };
+    game.edit_game_state(&[removal]).unwrap();
+    let capture = game.card_capture.as_ref().unwrap();
+    let [clue_entry, spirit_entry, spirit_exit] = capture.moves.as_slice() else {
+        panic!("expected two token entries and one exit");
+    };
+    for movement in [clue_entry, spirit_entry] {
+        assert_eq!(movement.from, None);
+        assert_eq!(movement.object.zone, Some(ZoneType::Battlefield));
+    }
+    assert_eq!(spirit_exit.object.copy, spirit_object.slot());
+    assert_eq!(spirit_exit.from, Some(ZoneType::Battlefield));
+    assert_eq!(spirit_exit.object.zone, None);
     for _ in 0..2 {
         game.state.mana_pool_mut(HERO).add(&Mana::parse("C"), None);
     }
@@ -298,6 +333,13 @@ fn quiet_token_records_its_later_sacrifice_resolution() {
     let rows = game.statistics.as_ref().unwrap().rows();
     let row = rows.iter().find(|row| row.name == "Clue").unwrap();
     assert_eq!(row.resolutions, Some(1));
+    let retained =
+        reduce_capture(&serde_json::to_string(game.card_capture.as_ref().unwrap()).unwrap())
+            .unwrap();
+    assert_eq!(
+        serde_json::to_value(rows).unwrap(),
+        serde_json::to_value(retained).unwrap()
+    );
 }
 
 #[test]
@@ -326,7 +368,7 @@ fn quiet_graveyard_move_keeps_a_full_history_without_firing_death_triggers() {
     );
     let events = game.state.events.len();
 
-    game.apply_game_state_edits(&[MovePermanent {
+    game.edit_game_state(&[MovePermanent {
         permanent,
         to: Graveyard,
     }])
@@ -377,7 +419,7 @@ fn quiet_move_preserves_exile_cards_and_defers_an_unattached_aura() {
         returns: true,
     });
 
-    game.apply_game_state_edits(&[MovePermanent {
+    game.edit_game_state(&[MovePermanent {
         permanent: observed_id(&game, source),
         to: Exile,
     }])
@@ -392,6 +434,40 @@ fn quiet_move_preserves_exile_cards_and_defers_an_unattached_aura() {
         .state
         .zones
         .contains(aura_arrival, ZoneType::Graveyard, OPPONENT));
+}
+
+#[test]
+fn quiet_exile_departure_clears_observed_link() {
+    let mut game = game();
+    let light = put_on_board(&mut game, HERO, "Banishing Light");
+    let source = game.permanent_object(light).unwrap();
+    let ogre = put_on_board(&mut game, OPPONENT, "Gray Ogre");
+    let exiled = game.move_object(game.permanent_object(ogre).unwrap(), ZoneType::Exile);
+    let link = ExileLink {
+        source,
+        ability_set: AbilitySet::Printed(game.state[source].definition_id),
+        exiled_object: exiled,
+        returns: true,
+    };
+    game.state.exile_links.push(link.clone());
+    let has_link = |game: &Game| {
+        Observation::for_player(game, HERO)
+            .agent_permanents
+            .iter()
+            .find(|permanent| permanent.id == observed_id(game, light))
+            .unwrap()
+            .has_exile_link
+    };
+
+    assert!(has_link(&game));
+    let add = add_card(game.state[exiled].id.0 as i32, None);
+    game.edit_game_state(&[add]).unwrap();
+    assert!(game.state.exile_links.is_empty());
+    assert!(!has_link(&game));
+
+    // The projection also ignores a stale link pending normal pruning.
+    game.state.exile_links.push(link);
+    assert!(!has_link(&game));
 }
 
 #[test]
@@ -413,7 +489,7 @@ fn quiet_move_retires_combatants_and_defenders() {
     game.declare_blocker(blocker, Some(blocked)).unwrap();
     let life = game.state.players[OPPONENT.0].life;
 
-    game.apply_game_state_edits(&[walker, removed, blocker].map(|id| MovePermanent {
+    game.edit_game_state(&[walker, removed, blocker].map(|id| MovePermanent {
         permanent: observed_id(&game, id),
         to: LibraryBottom,
     }))
@@ -440,7 +516,7 @@ fn library_bottom_keeps_existing_knowledge_and_pins_the_card() {
         .card_of(game.permanent_object(ogre).unwrap())
         .unwrap();
 
-    game.apply_game_state_edits(&[MovePermanent {
+    game.edit_game_state(&[MovePermanent {
         permanent: observed_id(&game, ogre),
         to: LibraryBottom,
     }])
@@ -470,8 +546,9 @@ fn bottoming_a_melded_permanent_places_both_physical_cards() {
     let second = game.state.card_of(partner).unwrap();
     game.move_object(partner, ZoneType::Exile);
     game.state.zones.join_melded_card(object, second);
+    enable_exposure_and_statistics(&mut game);
 
-    game.apply_game_state_edits(&[MovePermanent {
+    game.edit_game_state(&[MovePermanent {
         permanent: observed_id(&game, first),
         to: LibraryBottom,
     }])
@@ -481,6 +558,22 @@ fn bottoming_a_melded_permanent_places_both_physical_cards() {
     assert_eq!(game.state.card_of(library[0]), Some(second));
     assert_eq!(game.state.card_of(library[1]), Some(primary));
     assert!(game.state.zones.melded_card(object).is_none());
+    let capture = game.card_capture.as_ref().unwrap();
+    let [first_move, second_move] = capture.moves.as_slice() else {
+        panic!("expected both physical cards to move");
+    };
+    for (movement, object) in [(first_move, object), (second_move, partner)] {
+        assert_eq!(movement.object.copy, object.slot());
+        assert_eq!(movement.from, Some(ZoneType::Battlefield));
+        assert_eq!(movement.object.zone, Some(ZoneType::Library));
+        let original = capture
+            .initial
+            .iter()
+            .find(|snapshot| snapshot.copy == movement.object.copy)
+            .unwrap();
+        assert_eq!(original.zone, movement.from);
+        assert_eq!(movement.object.incarnation, original.incarnation + 1);
+    }
 }
 
 #[test]
@@ -527,11 +620,11 @@ fn scalar_edits_preserve_turn_facts_and_validate_the_entire_batch() {
         ],
         vec![life.clone(), SetLife { player: 2, life: 5 }],
     ] {
-        assert!(game.apply_game_state_edits(&edits).is_err());
+        assert!(game.edit_game_state(&edits).is_err());
         assert_eq!(game.state.deterministic_hash(), before);
     }
 
-    game.apply_game_state_edits(&[
+    game.edit_game_state(&[
         life,
         damage,
         SetTapped {
@@ -574,7 +667,7 @@ fn scalar_edits_preserve_turn_facts_and_validate_the_entire_batch() {
         EffectDuration::UntilYourNextTurn,
     );
     assert!(game
-        .apply_game_state_edits(&[remove])
+        .edit_game_state(&[remove])
         .unwrap_err()
         .0
         .contains("phased out"));

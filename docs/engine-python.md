@@ -668,11 +668,12 @@ as a 0/0). Added permanents never enter attacking or blocking.
 
 Edits preserve turn, stack, mana, decision memory and the 32-row policy-history
 window. Moving a permanent or a card expires its live object links in policy
-history, and quiet moves produce no departure or arrival events. Added Auras
-must satisfy the state-based Aura rule on the layered board after the whole
-batch finishes; other state-based actions—including lethal damage, 0 toughness,
-the legend rule, and existing Auras whose host moved—wait until the next
-ordinary check.
+history. Native card capture records quiet zone changes when enabled,
+including during replay with `walk(record, capture_cards=True)`. The engine
+checks added Auras against the state-based Aura rule on the layered board
+after the whole batch. Other state-based actions, including lethal damage,
+0 toughness, the legend rule, and existing Auras whose host moved, wait until
+the next ordinary check.
 
 During declarations, newly eligible creatures (including ready creatures added
 in the batch) join the remaining prompts. The current declarer must stay
