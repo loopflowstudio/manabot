@@ -53,15 +53,28 @@ Drafted in place before implementation (read these when building and reviewing):
 - `managym/README.md` — owned non-mana activations, coupled `PaymentModel` fork search and `OrderReplacement` filtering, fixed-tap bonus choices in manual/automatic payment, and `needs_choice` on hovered fixed taps that open a bonus choice.
 - `docs/engine.md` — `MATCH_STATE_HASH_VERSION` v35 → v36 and snapshot restore compatibility.
 
-## Post-implementation concept review (`scratch/concept-review.html`, at `b0cd922864`)
+## Post-implementation concept reviews
 
-Passes 1 and 4 and the memo key/replacement-order design were judged aligned. Four findings land in Pass 5; the three review questions are adopted headless with the recommended option (1a, 2a, 3a), **made for review, not settled**. Passed over: 1b (every ability Sensitive; breaks the 207-state `{15}` bound), 2b (leave Delve unchecked, separate Task), 3b (per-call recompute, rely on Engine Budget). F5 (hash v36) needs no code: origin/main is at v35 with MTG-500 merged, so v36 stays.
+- At `b0cd922864`: four findings, all closed by Pass 5. Questions 1a/2a/3a adopted headless, **made for review, not settled** (passed over: 1b every ability Sensitive, breaks the 207-state `{15}` bound; 2b leave Delve unchecked; 3b per-call recompute).
+- At `52fb812008` (`scratch/concept-review.html`): everything aligned except helped costs inside `CoupledSearch` (F1 → Pass 6). F2 (hash v36 and all headless choices) needs no code; question 2a ("confirm v36 and the implemented model") is adopted headless for review and belongs to `ship-review`. Question 1a adopted headless for review; passed over 1b (patch `try_help_taps` to scan every `Obligation::Pay` and keep `DelveCost`), which keeps the dual representation and its `paying_delve_cost` / `saved_delve` flags.
 
 ## Pass 5 · Close the coupled authority's gaps
 
-`0f32a515a1` classifies each payment model once, handles stateful taps and fee discounts, retains completing choice taps during resolution, shares the upfront guard, and checks native Delve exiles for both offers and execution. All 45 focused tests passed across the filtered run and follow-ups, including the `{15}` rejection at 207 fork states.
+`0f32a515a1` classifies each payment model once, handles stateful taps and fee discounts, retains completing choice taps during resolution, shares the upfront guard, and checks native Delve exiles for both offers and execution. 45 focused tests passed, including the `{15}` rejection at 207 fork states.
 
-## Delivery (after Pass 5)
+## Pass 6 · One helped cost in the coupled search (next)
+
+`CoupledSearch` (`managym/src/flow/mana/coupled.rs`) represents a helped cost twice: the pure solver's flattened `tap_obligations` tiers (`mana.rs` ≈6481) plus a Delve-only `DelveCost` recovered by suffix matching (`coupled.rs` ≈175, flags ≈765–861). Three legal casts are pruned:
+
+1. Improvise / Waterbend / off-color Convoke tap needed before a `tapped`-reading source (`{T}: Add {G}` if you control a tapped artifact, else `{C}`; cast `{1}{G}` Improvise or Waterbend 1): `try_help_taps` reads only `obligations.first()` (`Pay {G}, Taps::None`) and returns `None`.
+2. Convoke-then-sacrifice + Delve where `stateful_delve()` is false (empty graveyard, Mountain, red `Sacrifice: Add {R}` creature, `{2}{R}{R}` Delve + Convoke): `next_delve` is gated on `stateful_delve()`, so Delve is dropped after the convoke tap.
+3. Spending the colored tier first on a `stateful_delve()` board (`{2}{G}{G}` Delve + Improvise, one graveyard card): `saved_delve = None` strips Delve from the generic tail.
+
+Build: rename `DelveCost` → `HelpedCost { cost, permissions, life }`, attached whenever `help != Help::default() || waterbend > 0` on a coupled model and ignored under `SourcePolicy::FixedOnly`. `help_obligations` builds tiers only for the pure handoff. Native steps try every legal Convoke (colored or generic), Improvise and Waterbend tap and every `DelveExile` (when the fork's profile is `stateful_delve()`) against the unsplit cost via `after_pip`, never dropping Delve; spending pays the whole remaining cost (less graveyard cards when not `stateful_delve()`), then `PayLife`. Delete `paying_delve_cost`, `saved_delve` and the suffix match. `CoupledMemoKey` hashes `(cost, permissions.waterbend)`.
+
+Tests: the three positions above as fixtures in `managym/src/flow/mana/tests/manual_payment/coupled_boards.rs` (castable, only completing first steps offered, completes), plus the existing acceptance filter and the `{15}` 207-state bound unchanged. Teaches whether one cost record suffices for every help kind on coupled boards.
+
+## Delivery (after Pass 6)
 
 Refresh Academy fixtures with `uv run --extra dev python scripts/refresh_academy_fixtures.py` and verify conformance receipts. Run the full debug suites and Engine Budget. Record an Engine Budget baseline for the v36 digest change only after verifying the budget result.
 
