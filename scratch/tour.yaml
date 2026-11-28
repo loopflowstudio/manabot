@@ -1,29 +1,29 @@
-at: 8534640962b5182ab76df49a1d35864229789ce2
+at: 8dc6d5f6e3abc5ab7d9946b388b4603f986a96fe
 first:
   - path: docs/engine-python.md
-    why: Live edit examples and the entry contract
+    why: Live edit example and quiet entry behavior
   - path: managym/__init__.pyi
-    why: Public constructors and keyword defaults
+    why: Constructor signatures and defaults
   - path: managym/src/flow/state_edit.rs
-    why: Replay variants and the single-pass rollback transaction
-  - path: managym/recording.py
-    why: Strict Python models for each replay variant
-  - path: managym/src/python/bindings.rs
-    why: Constructor validation and round-trippable representations
+    why: Journal variants, atomic edits, and final Aura checks
   - path: managym/src/flow/zones.rs
     why: Shared departure knowledge and permanent installation
-  - path: managym/src/flow/card_capture.rs
-    why: Shared capture records and token attribution
+  - path: managym/src/flow/scenario.rs
+    why: Scenario setup uses the same installation
   - path: managym/src/agent/observation.rs
-    why: Exile link visibility follows the live appearance
+    why: Exile links follow the live appearance
+  - path: managym/src/python/bindings.rs
+    why: Constructor validation and printable calls
+  - path: managym/recording.py
+    why: Strict Python models for journaled edits
   - path: tests/env/test_game_state_edits.py
-    why: Combat offers, cold replay, card facts, and vector restore
+    why: Combat offers, cold replay, and scalar/vector restore parity
   - path: managym/src/flow/state_edit/tests.rs
-    why: Aura legality, exile links, meld, and statistics parity
+    why: Attachment legality, knowledge, and card capture
   - path: managym/src/agent/env/state_edit_tests.rs
-    why: Refreshed combat offers and cold replay
+    why: Declaration refresh and replay at the next command
   - path: tests/academy/test_game_records.py
-    why: Academy imports the token edit and marks the branch
+    why: Academy displays the recorded branch
 hide:
   - path: tests/public_api.json
-    why: Generated snapshot of the three constructor signatures
+    why: Generated snapshot of the constructor signatures
