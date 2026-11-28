@@ -7,7 +7,7 @@ use crate::support::{
         force_new_card_in_hand,
     },
     inspect::{card_of, offer_labels, tapped, top_spell},
-    play::{cast_card, choose, pass_until, pay_rest, resolve_everything},
+    play::{activate, cast_card, choose, choose_mode, pass_until, pay_rest, resolve_everything},
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
@@ -16,6 +16,7 @@ use managym::{
         mana::Color,
         payment::{How, Toward},
         permanent::CounterKind,
+        player::ManaPayment,
         zone::ZoneType,
     },
 };
@@ -61,6 +62,46 @@ fn doubling_season_doubles_entry_lore_and_tokens_but_not_precombat_lore() {
         2
     );
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+}
+
+#[test]
+fn guardian_of_vitu_ghazi_can_activate_airship_engine_room_before_convoking() {
+    for payment in [ManaPayment::Manual, ManaPayment::Auto] {
+        let mut s = five_color_unfunded_setup(&["Guardian of Vitu-Ghazi", "Airship Engine Room"]);
+        s.allow_priority_floats();
+        s.game_mut().mana_payment[0] = payment;
+        s.game_mut().skip_trivial = false;
+        let convoker = s.force_permanent_on_battlefield(0, "Guardian of Vitu-Ghazi");
+        let room = s.force_permanent_on_battlefield(0, "Airship Engine Room");
+        for _ in 0..5 {
+            s.force_permanent_on_battlefield(0, "Mountain");
+        }
+        s.force_permanent_on_battlefield(0, "Forest");
+        let guardian = force_new_card_in_hand(&mut s, 0, "Guardian of Vitu-Ghazi");
+
+        cast_card(&mut s, guardian);
+        activate(&mut s, room, 1);
+        if payment == ManaPayment::Manual {
+            choose_mode(&mut s, 0); // The Room pays one generic pip with blue.
+        }
+        choose(
+            &mut s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == convoker),
+        );
+        if s.game().state.stack_objects.is_empty() {
+            pay_rest(&mut s);
+        }
+        let spent = &top_spell(&s).spent;
+        assert_eq!(spent.total(), 7);
+        assert_eq!(spent.amounts()[Color::Blue as usize], 1);
+        assert_eq!(spent.amounts()[Color::Green as usize], 1);
+        assert_eq!(
+            spent
+                .contributed(How::Tapped, Toward::Convoke)
+                .collect::<Vec<_>>(),
+            [card_of(&s, convoker)]
+        );
+    }
 }
 
 /// A green-white creature convoking for {6}{G}{W} pays either colored pip

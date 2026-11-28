@@ -288,20 +288,17 @@ impl Game {
             })
     }
 
-    /// The most life `player` can pay: none other than 0 while their life
-    /// total can't change (CR 119.8).
-    pub(crate) fn payable_life(&self, player: PlayerId) -> i32 {
-        if self.life_total_cant_change(player) {
-            0
-        } else {
-            self.state.players[player.0].life
+    pub(super) fn life_budget(&self, player: PlayerId) -> super::mana::LifeBudget {
+        super::mana::LifeBudget {
+            life: self.state.players[player.0].life,
+            cant_change: self.life_total_cant_change(player),
         }
     }
 
-    /// CR 119.4: a player may pay life only with a life total at least the
-    /// amount; any player may pay 0.
+    /// CR 119.4: paying zero is always legal. Positive payments require life
+    /// that can change (CR 119.8), at least equal to the amount.
     pub(crate) fn can_pay_life(&self, player: PlayerId, life: u32) -> bool {
-        life == 0 || self.payable_life(player) >= life as i32
+        life == 0 || self.life_budget(player).can_pay(life)
     }
 
     /// Whether the permanent is phased out (CR 702.26b): the one authority

@@ -671,11 +671,7 @@ impl ClassSearch<'_, '_> {
 impl PaymentModel<'_> {
     /// This board after tapping `taps`.
     pub(super) fn tapped(&self, taps: impl Iterator<Item = usize>) -> PaymentModel<'_> {
-        let mut after = PaymentModel {
-            sources: self.sources.clone(),
-            life: self.life,
-            cache: self.cache,
-        };
+        let mut after = self.clone();
         for index in taps {
             after.reserve(SourceReservation::tap(self.sources[index].permanent));
         }
@@ -856,7 +852,7 @@ mod tests {
                 .map(|(index, output)| source(index, Some(output), Vec::new()))
                 .collect::<Vec<_>>()
                 .into(),
-            life: 20,
+            life: super::super::tests::life_budget(20),
             cache: None,
         }
     }

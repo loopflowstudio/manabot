@@ -1527,7 +1527,7 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
         .create_token("token.beast_4_4_g_trample", PlayerId(1))
         .unwrap();
     game.clear_published_decision();
-    game.finish_action_step();
+    game.finish_action_step().unwrap();
 
     // Priority must offer ability 3 even though x_min = 0 has no legal target budget.
     let activate = Action::ActivateAbility {
@@ -1693,7 +1693,7 @@ fn fixed_deal_damage_in_divided_clause_does_not_redeal_divided_shares() {
         );
     }
     game.clear_published_decision();
-    game.finish_action_step();
+    game.finish_action_step().unwrap();
 
     step_action(
         &mut game,
