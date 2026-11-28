@@ -27,6 +27,7 @@ fail admission. `OPENROUTER_API_KEY` comes from the environment and is never
 written.
 """
 
+import asyncio
 from collections.abc import Sequence
 from decimal import Decimal
 import os
@@ -108,7 +109,11 @@ def output() -> Path:
     return Path(os.environ.get("ETUDE_OUTPUT_DIR", ROOT / ".runs/llm_claude"))
 
 
-def play(match: Match[Game], agents: Sequence[object]) -> Result:
+async def play(match: Match[Game], agents: Sequence[object]) -> Result:
+    return await asyncio.to_thread(play_match, match)
+
+
+def play_match(match: Match[Game]) -> Result:
     """One game: Claude through OpenRouter against the checkpoint on the CPU."""
     _, llm, checkpoint = seated(match)
     backend = resolve("torch")

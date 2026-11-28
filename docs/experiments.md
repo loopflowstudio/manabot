@@ -52,12 +52,15 @@ eval checkpoint-pairs: 24 new, 0 running, 0 failed, running elemental/evals-1a2b
 Each tournament keeps its own results below that run, keyed by tournament and
 match as before, so reports and `statsdb` queries read them unchanged. The
 run's hour and dollar limits are the sums of its jobs', and `--max-usd` admits
-it as one run. A game is `play(match, agents)`: one object per seated player,
-in seat order. Etude decides how many games play at once from the machine's
-CPUs and memory; an eval job declares no worker count. Every job uses the
-same `manabot.eval.agents.AGENTS`; Etude owns model loading, batching and
-residency. The loader only forwards Prepared rows to masked logits; each
-game-side agent owns host preparation and seeded sampling. New evaluation
+it as one run. Declare an async `play(match, agents)` for one match at a time,
+with agent objects in seat order, or an async generator `play_many(matches)`
+that draws matches and yields their results as slots finish. Etude sizes
+the game processes from the machine's resources. The TLA trophy vector
+runner manages 64 game slots per process.
+`manabot.eval.agents.AGENTS` loads checkpoints in float32. Etude owns model
+loading, batching and residency. The [loader](evaluation.md#etude-agents)
+forwards Prepared rows to masked logits. Each game-side agent owns host
+preparation and seeded sampling. New evaluation
 seatings use one config per native game group and `games=1`, under fresh
 `agents-v1` tournament names. Retained schedules and results keep their keys.
 Cooperative game limits and Command caps remain in the native loop; a true

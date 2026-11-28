@@ -33,7 +33,7 @@ from etude.train.tracking import track
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import DECKS, PACK
-from manabot.eval.agents import AGENTS
+from manabot.eval.agents import AGENTS, play_scalar
 from manabot.eval.pairing import play_pairing
 from manabot.experiment.setup import machine_setup
 from manabot.infra.config import ModelConfig, ObservationConfig
@@ -443,7 +443,11 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     ]
 
 
-def play(match: Match, agents: Sequence[object]) -> Result:
+async def play(match: Match, agents: Sequence[object]) -> Result:
+    return await play_scalar(play_match, match, agents)
+
+
+def play_match(match: Match, agents: Sequence[object]) -> Result:
     """Validate pilot conditions and delegate the paired deal to the shared arena."""
     conditions = Conditions.model_validate(match.config)
     pairing = Pairing(

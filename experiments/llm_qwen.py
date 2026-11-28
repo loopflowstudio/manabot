@@ -26,6 +26,7 @@ Setup installs the game environment, the pinned vLLM environment
 (`configs/llm/vllm-0.17.1-linux.lock`) and the model snapshot.
 """
 
+import asyncio
 from collections.abc import Sequence
 from functools import partial
 import os
@@ -102,7 +103,11 @@ def output() -> Path:
     return Path(os.environ.get("ETUDE_OUTPUT_DIR", ROOT / ".runs/llm_qwen"))
 
 
-def play(match: Match[Game], agents: Sequence[object]) -> Result:
+async def play(match: Match[Game], agents: Sequence[object]) -> Result:
+    return await asyncio.to_thread(play_match, match)
+
+
+def play_match(match: Match[Game]) -> Result:
     """One game: a client of the shared server against the checkpoint on the CPU."""
     _, llm, checkpoint = seated(match)
     backend = resolve("torch")

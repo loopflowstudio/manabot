@@ -804,14 +804,30 @@ class MLXActorCritic(nn.Module):
             return table.at[mx.array(programs.rows)].add(encoded)
 
     def cache_programs(self) -> None:
-        """Encode the catalog once for inference with fixed weights (collection)."""
-        programs = self.programs()
-        if programs is not None:
-            mx.eval(programs)
-            self._static.cache["programs"] = programs
+        """Encode the catalog once on the inference device for fixed weights."""
+        with mx.stream(self.inference_device):
+            programs = self.programs()
+            if programs is not None:
+                mx.eval(programs)
+                self._static.cache["programs"] = programs
 
     def clear_cache(self) -> None:
         self._static.cache.clear()
+
+    def prepare_inference(self) -> None:
+        """Keep only compute weights on the fixed-weight inference device."""
+        self.clear_cache()
+        with mx.stream(self.inference_device):
+            self.set_dtype(precision_dtype(self.precision))
+            mx.eval(self.parameters())
+        self.cache_programs()
+
+    def evaluate_logits(self, batch: Prepared[np.ndarray]) -> np.ndarray:
+        """Evaluate and transfer only policy logits to the host."""
+        with mx.stream(self.inference_device):
+            logits, _ = self.forward_distribution(batch)
+            mx.eval(logits)
+        return to_numpy(logits)
 
     def evaluate(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         """Evaluated logits [B,A] and values [B] as NumPy (`BackendPolicy.evaluate`)."""

@@ -172,8 +172,10 @@ message naming both versions. An unavailable device fails explicitly. Float64
 loss and diagnostic arithmetic runs on the host with gradients preserved; no
 automatic operator fallback is enabled. Precision follows the
 [one rule for every GPU backend](#reduced-precision); TF32 is CUDA-only. Belief
-inputs and frozen opponents are unsupported on MPS. Evaluation and search stay
-on CPU. On Apple Silicon, the local, baseline, Elemental, `belief_policy` and
+inputs and frozen opponents are unsupported on MPS. Training monitoring and
+search use CPU. Managed Etude evaluation selects its own
+[inference device](evaluation.md#etude-agents). On Apple Silicon, the local,
+baseline, Elemental, `belief_policy` and
 `belief_sampler` recipes accept `backend="mlx"` for tracked damped and PPO
 self-play and belief sampler fitting. They read and write the same portable
 policy (`.safetensors`) and belief sampler (`belief.safetensors`) containers,
@@ -998,8 +1000,9 @@ what a run has published, oldest first, the same records evaluation reads.
 Checkpoints are evaluated by Etude, in their own jobs whose compute is
 counted apart from training. An experiment file's `eval_jobs(state)` returns the
 benchmarks it wants for the checkpoints its runs have recorded, played by
-manabot's `play(match, agents)` function (`manabot.eval.monitor.play`), and
-each pass plays only the matches that are new. The file's eval jobs that can
+an async `play(match, agents)` callback or the streaming
+`play_many(matches)` callback used for TLA trophies. Each pass plays only
+the matches that are new. The file's eval jobs that can
 share a machine play together as one run, `EXPERIMENT/evals-DIGEST`
 ([experiments](experiments.md#what-an-experiment-is)):
 

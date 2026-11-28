@@ -1,7 +1,8 @@
 """One Elemental evaluation match: failed groups stay in the denominator, rows mirror seats."""
 
+import asyncio
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from etude.checkpoints import CheckpointRef
 from etude.errors import RetryRequested
@@ -121,18 +122,25 @@ def test_match_retry_preserves_failure_journal(
         monkeypatch.delenv("ETUDE_OUTPUT_DIR", raising=False)
     opponent = build(match.players[1], {})
 
-    def failed_forward(rows: list[Prepared]) -> list[np.ndarray]:
+    async def failed_forward(
+        inputs: list[object], *, rows: int | None = None
+    ) -> list[object]:
+        assert rows == len(inputs) == 1
         raise error_type("controlled failure")
 
-    def forward(rows: list[Prepared]) -> list[np.ndarray]:
-        return [np.zeros(row.legal.shape[1], dtype=np.float32) for row in rows]
+    async def forward(inputs: list[object], *, rows: int | None = None) -> list[object]:
+        assert rows == len(inputs) == 1
+        return [
+            np.zeros(cast(Prepared, item).legal.shape, dtype=np.float32)
+            for item in inputs
+        ]
 
     native = error_type in (managym.AgentError, PanicException)
     with pytest.raises(
         ValueError if native else error_type,
         match="no valid replayed games" if native else "controlled failure",
     ):
-        elemental_play.play(match, [failed_forward, opponent])
+        asyncio.run(elemental_play.play(match, [failed_forward, opponent]))
     root = elemental_play.evidence_directory() / match.key
     retained = {p: p.read_bytes() for p in root.rglob("failures/*.jsonl")}
     assert len(retained) == 1
@@ -140,7 +148,7 @@ def test_match_retry_preserves_failure_journal(
         assert error_type.__name__ in next(iter(retained.values())).decode()
         assert list(root.rglob("rows.json"))
 
-    result = elemental_play.play(match, [forward, opponent])
+    result = asyncio.run(elemental_play.play(match, [forward, opponent]))
     [behaviour] = result.tables["behaviour"]
     assert (behaviour["seat"], behaviour["game_seat"], behaviour["deal"]) == (0, 1, 7)
     assert behaviour["unit"] == match.config.kind and behaviour["games"] == 1

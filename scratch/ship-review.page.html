@@ -1,0 +1,196 @@
+<header>
+  <h1>GPU-batched trophy evaluation</h1>
+  <p>MTG-497 · <a href="https://github.com/loopflowstudio/manabot/pull/638">PR #638</a> · <code>0f885b1f43</code></p>
+  <p>The ship-review fixes are in the PR. The remaining release gate is a published Etude SDK 0.5.0 and a fresh locked verification run.</p>
+</header>
+
+<section id="outcome">
+  <h2>What was built</h2>
+  <p>A TLA trophy evaluation can keep up to 64 native games in flight per Etude game process. A finished game frees its slot for the next compatible game. Each deal still crosses both decks and seats, and Etude receives its result after all four games settle and replay. Automatic runtime selection is CUDA, MLX, MPS, then CPU. On Apple Silicon, MLX is selected when the optional extra and Metal are available.</p>
+  <p><strong>How to try it</strong> <code>uv run --no-sync python -m experiments.eval_throughput --output-dir ".runs/ship-review-$(date +%s)" --device mlx --runner vector --slots 64 --deals 4 --checkpoint .runs/eval-throughput/policy/00002000-raw.safetensors</code></p>
+  <p>Use the fetched TLA corpus and trained checkpoint, the MLX extra, and an editable Etude checkout with the async API. Select <code>mps</code> or <code>cpu</code> on a host without MLX. The command writes <code>summary.json</code> and per-deal evidence in <code>arena/</code>. <a href="../experiments/reports/eval_throughput.md#reproduce">Setup and reproduction</a></p>
+
+  <h3>Post-compression QA on M4 Max</h3>
+  <p>The trained float32 checkpoint produced the same actions, digests and endings on the eight shared legs across CPU scalar, CPU vector with three slots, and MLX vector with 64 slots. The three-slot run exercised backfill. Both managed Metal runs completed two deals and replayed all eight games. Float32 took 15.8 s and bf16 took 15.5 s. They used the same player seeds, and bf16 recorded <code>etude-policy-bf16-auto-v1</code>. The CLI now reports an invalid deal count in one line. <a href="qa.html">QA scenarios and receipts</a></p>
+  <details>
+    <summary>Four-deal MLX receipt and CLI output</summary>
+    <pre><code>{
+  "deals": 4,
+  "device": "mlx",
+  "precision": "float32",
+  "runner": "vector",
+  "slots": 64,
+  "seconds": 28.78772687498713,
+  "games_per_hour": 2000.8526637109048,
+  "forward_calls": 400,
+  "mean_rows_per_forward": 3.535,
+  "max_rows_per_forward": 11,
+  "largest_stage": "replay"
+}</code></pre>
+    <pre><code>eval_throughput.py: error: --deals must be between 1 and 32</code></pre>
+    <p>All 16 games replayed. This small run includes startup and replay costs. <a href="../.runs/qa-pass9/w160-mlx-64/summary.json">Local receipt</a></p>
+  </details>
+
+  <h3>Live resume of a named benchmark</h3>
+  <p>The first launch of <code>stored-trophy-deal</code> scored one deal for the trained <code>w160l8</code> checkpoint in an isolated local Etude store. After adding the seeded <code>w384l8</code>, the second launch loaded only that checkpoint and played its four legs. The first result’s <code>plays.parquet</code> still matched its recorded SHA256. All eight games replayed. Colab, floor and frontier snapshot returns were also checked against stored R2 history at planning time. <a href="../.lf/qa/evaluation.md">Resume procedure</a> · <a href="../.runs/qa/named-trophy-resume/">Local receipts</a></p>
+  <pre><code>eval stored-trophy-deal: 1 new, 0 running, 0 failed, 1 played
+eval stored-trophy-deal: nothing to play</code></pre>
+
+  <h3>Gate 1 rerun with zero-copy input arrays</h3>
+  <p>The full M4 Max rerun used Etude 6db832 at <code data-no-check>d876a7b</code> and Manabot’s contiguous preparation at <code>f3b00a8467</code>. Each arm ran 32 deals with 64 slots, one game process and 15 inference threads. The trained <code>w160l8</code> has 6.49M parameters. The seeded <code>w384l8</code> has 33.75M random parameters and makes fewer checkpoint decisions.</p>
+  <table>
+    <caption>Managed float32 Gate 1</caption>
+    <thead><tr><th scope="col">Checkpoint</th><th scope="col">Backend</th><th scope="col">EXP-77 socket games/hr</th><th scope="col">Zero-copy direct games/hr</th><th scope="col">Mean rows per forward</th><th scope="col">Arrays passed by pointer</th><th scope="col">In-band MB</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Trained <code>w160l8</code></th><td>MLX</td><td>4,749</td><td>4,818</td><td>16.61</td><td>56,979</td><td>14.23</td></tr>
+      <tr><th scope="row">Trained <code>w160l8</code></th><td>MPS</td><td>4,009</td><td>4,522</td><td>16.61</td><td>56,979</td><td>14.23</td></tr>
+      <tr><th scope="row">Seeded <code>w384l8</code></th><td>MLX</td><td>4,930</td><td>5,486</td><td>12.11</td><td>45,563</td><td>11.79</td></tr>
+      <tr><th scope="row">Seeded <code>w384l8</code></th><td>MPS</td><td>4,377</td><td>4,865</td><td>12.11</td><td>45,563</td><td>11.79</td></tr>
+    </tbody>
+  </table>
+  <p>All 512 rerun games matched the corresponding original direct arms on seeds, actions, offers, frame and state digests, and scores. Every arm recorded zero copied input arrays and zero socket bytes. The remaining in-band bytes carry Python structure. A separate 64-row compact-attention input preserved the addresses of all 68 array leaves it contained. The timings come from separate runs and include game work and result delivery, so the throughput differences cannot be attributed to transport alone. <a href="../experiments/reports/eval_throughput.md#gate-1-with-zero-copy-inputs">Gate 1 revisions, measurements and receipts</a></p>
+
+  <h3>Standalone accelerator measurements</h3>
+  <table>
+    <caption>Games/hour and mean checkpoint rows per forward over 128 games per arm</caption>
+    <thead><tr><th scope="col">Host and model</th><th scope="col">CPU scalar</th><th scope="col">GPU vector-64 float32</th><th scope="col">CUDA vector-64 bf16</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">M4 Max · trained</th><td>749 · 1</td><td>MPS 1,989 · 15.78<br>MLX 2,033 · 15.78</td><td>—</td></tr>
+      <tr><th scope="row">M4 Max · seeded</th><td>782 · 1</td><td>MPS 1,882 · 8.72<br>MLX 1,915 · 8.72</td><td>—</td></tr>
+      <tr><th scope="row">L4 · trained</th><td>293 · 1</td><td>3,648 · 18.59</td><td>3,192 · 18.66</td></tr>
+      <tr><th scope="row">L4 · seeded</th><td>195 · 1</td><td>3,380 · 9.91</td><td>3,908 · 9.91</td></tr>
+    </tbody>
+  </table>
+  <p>Float32 GPU arms matched their CPU baselines leg for leg. All games replayed, including the trained L4 bf16 arm, which matched 117 of 128 float32 action traces and 127 of 128 scores. The full panels were captured at the revisions in the report. The later M4 Max smoke matched the pass 8 smoke. The older standalone receipts precede the engine-base update and game-budget alignment, and CUDA was last measured before compression. <a href="../experiments/reports/eval_throughput.md">Per-arm evidence</a> · <a href="qa.html">Post-compression comparison</a></p>
+</section>
+
+<section id="implementation">
+  <h2>How it works</h2>
+  <h3>Etude streams deals into the native arena</h3>
+  <lf-diff path="experiments/tla_trophies.py" lines="236-255">
+    <lf-note line="245">Closing the callback also closes the game stream.</lf-note>
+    <lf-note line="255">The historical float32 name is reused. Reduced-precision jobs get their own report and tournament name.</lf-note>
+  </lf-diff>
+
+  <h3>The game worker prepares one batch per checkpoint</h3>
+  <lf-diff path="manabot/eval/vector.py" lines="390-430">
+    <lf-note line="404">Memory blanking is a seat choice, including when two seats share weights.</lf-note>
+    <lf-note line="422">Each seat samples its own legal row using its recorded seed.</lf-note>
+  </lf-diff>
+  <lf-diff path="manabot/eval/agents.py" lines="114-154">
+    <lf-note line="148">The host-admitted batch is ready before the sampler awaits Etude. Malformed logits are reported against this checkpoint.</lf-note>
+  </lf-diff>
+  <details>
+    <summary>Contiguous arrays for direct transport</summary>
+    <p>The five original strided arrays were <code>relation_rows</code>, <code>name_rows</code>, <code>group_last</code>, <code>compact_attention.batches</code> and <code>compact_attention.slots</code>. Gate 1 also found a sixth, <code>effects.detail_kinds</code>, on rounds with live effects. The final preparation paths produce contiguous storage for all six. Compression converts lookup columns directly, removing intermediate copies.</p>
+    <lf-diff path="manabot/policy/prepare.py" lines="975-987"></lf-diff>
+    <lf-diff path="manabot/policy/prepare.py" lines="1030-1040"></lf-diff>
+    <lf-diff path="manabot/policy/prepare.py" lines="1085-1091"></lf-diff>
+    <lf-diff path="manabot/policy/prepare.py" lines="1361-1374"></lf-diff>
+  </details>
+
+  <h3>Each match owns its queued legs and its failure</h3>
+  <lf-diff path="manabot/eval/vector.py" lines="515-563">
+    <lf-note line="529">A compatible match supplies its next queued leg. On a fresh vector, the oldest waiting deal picks the layout.</lf-note>
+  </lf-diff>
+  <lf-diff path="manabot/eval/vector.py" lines="725-735">
+    <lf-note line="730">Removing the affected match also removes its queued legs. Slots belonging to unrelated checkpoints stay live.</lf-note>
+  </lf-diff>
+  <lf-diff path="manabot/eval/vector.py" lines="626-655">
+    <lf-note line="635">The seed travels with the deal to the free slot.</lf-note>
+    <lf-note line="654">Etude receives held failures before the runner requests replacement grants.</lf-note>
+  </lf-diff>
+  <p>The pass 7 regression reproduced a negative grant with 10 failures and nine slots. After admission and reuse adopted one layout key, the final nine-slot test queues eight healthy deals with a genuinely different layout, fails two deals sharing one checkpoint, and checks that both errors arrive before a new grant. The unrelated active deal completes and replays all four legs, and the deferred deals succeed. The checkpoint failure is injected in the fixture. <a href="../tests/eval/test_vector_eval.py#L869">Final regression</a></p>
+</section>
+
+<section id="contracts">
+  <h2>Key data structures and APIs</h2>
+  <dl>
+    <dt><code>Deal</code> and <code>PairingSpec</code></dt>
+    <dd><code>Deal</code> supplies the trophy pools, seed and precision. Scalar and vector play share <code>PairingSpec</code> for the matchup, four-leg crossing, limits and precision.</dd>
+    <dt><code>Matches.take(n)</code> and <code>play_many</code></dt>
+    <dd>Etude grants matches with seat agents. The async generator yields <code>(match, Result | Exception)</code> when a deal settles. Scalar jobs declare an async <code>play</code> callback.</dd>
+    <dt><code>ObservationBatch</code>, <code>ObservationSelection</code> and <code>Prepared</code></dt>
+    <dd>Managym supplies packed v11 observation rows. The worker gathers checkpoint-specific row coordinates, resolves joins and legal masks through <code>prepare_batch</code>, and sends <code>Forward([prepared], rows=prepared.batch)</code>. Backends return float32 masked logits with shape <code>[batch, action slots]</code>.</dd>
+    <dt><code>ActiveMatch</code>, <code>PendingLeg</code> and <code>VectorLayout</code></dt>
+    <dd>A match holds its pending legs in grant order. One compatibility key governs admission and reuse from buffer shapes, overflow policy and vector-wide decision-memory settings. Mana payment stays a seat setting.</dd>
+    <dt><code>EvalTarget</code> and <code>AGENTS</code>, <code>AGENTS_BF16</code>, <code>AGENTS_TF32</code></dt>
+    <dd><code>EvalTarget</code> names the internal runtime choice behind <code>MANABOT_EVAL_DEVICE</code>. Job declarations select the agent set and persist precision in the compute class. TF32 requires CUDA.</dd>
+    <dt><code>SlotLoad.fresh(..., seed=...)</code> and <code>RecordedVectorEnv.take_slot_record</code></dt>
+    <dd>Seeded slot loads preserve the deal’s identity during backfill. The recorder detaches the finished game before slot reuse. The <code>managym-game-v1</code> record carries Commands, offers, live viewer frame evidence and digests. The Etude result retains outcome, behaviour and card evidence.</dd>
+  </dl>
+  <details>
+    <summary>The existing backend input contract</summary>
+    <lf-file path="manabot/policy/prepare.py" lines="652-682"></lf-file>
+  </details>
+</section>
+
+<section id="invariants">
+  <h2>Trade-offs and invariants going forward</h2>
+  <ul>
+    <li><strong>Stable seeds and evidence.</strong> Float32 retains its existing environment and compute-class identities. BF16 and TF32 use suffixed tournament names and carry declared precision. The paired-deal and player seeds stay stable across precisions. A precision can choose a different action and still replay the exact action it recorded. Scalar and vector evidence is compared field by field because raw record hashes also contain runner mode and timings.</li>
+    <li><strong>Optional inference and training extensions.</strong> Evaluation keeps eager Torch. On MPS, full-graph compilation failed the binding check. A permissive run matched eager logits within <code>1e-5</code>, took 19.0 s on the first call, and took 1.620 s over 36 warm calls versus 1.315 s eager. Checkpoints carry no training-precision field, so evaluation precision stays a job declaration with float32 as the default. Evaluation joins ordinary memory rows. Training’s retained memory fold trees keep their own preparation and checkpoint compatibility. <a href="../experiments/reports/eval_throughput.md#torch-compilation-on-mps">Compilation probe</a> · <a href="../manabot/policy/batching.py#L182">Fold-tree boundary</a></li>
+    <li><strong>Scheduling and limits.</strong> The oldest held deal chooses the next vector layout after a drain. Each game’s 120-second gameplay budget accrues its share of live round time. The throughput CLI uses the same budget. The Command cap and Etude job deadline also bound a trophy run.</li>
+    <li><strong>Data boundaries.</strong> The game worker caches metadata by path, SHA256 and size under Etude’s immutable artifact contract, forwards prepared observations, and delivers viewer-safe replay evidence. Run <code>lf security-review</code> before delivery to check artifact admission and the observation and evidence boundaries.</li>
+  </ul>
+
+  <h3>Engine Budget on <code>0f885b1f43</code></h3>
+  <table>
+    <caption>Same-runner reference <code>4c85b7f32</code> and PR candidate</caption>
+    <thead><tr><th scope="col">Metric</th><th scope="col">Reference</th><th scope="col">Candidate</th><th scope="col">Change</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Steps throughput</th><td>17,687.6/s</td><td>17,993.6/s</td><td>+1.73%</td></tr>
+      <tr><th scope="row">Search total</th><td>110.467 s</td><td>110.944 s</td><td>+0.43% time</td></tr>
+      <tr><th scope="row">Worst search reply</th><td>2.924 s</td><td>2.954 s</td><td>+1.05% time</td></tr>
+      <tr><th scope="row">Digests</th><td>Steps and search seeds 1–3</td><td>All identical</td><td>0 changes</td></tr>
+    </tbody>
+  </table>
+  <p>The artifact reports the same 119,453 steps over 512 games. Each search seed had 40 decisions and identical action counts and score digests. Per-simulation times were 7.147 → 7.155 ms over 6,208 simulations, 4.327 → 4.350 ms over 7,424, and 4.871 → 4.907 ms over 6,976. Seed 3 still had the worst reply. The search differences are small timing increases on the same trajectories. The native step checks a flag before copying decision events, with the copy already used for native heuristic play. Seed bookkeeping and detaching the completed recording run at slot replacement. The benchmark does not isolate a cause for the timing differences. <a href="https://github.com/loopflowstudio/manabot/actions/runs/46095850847/job/140827067691">Engine Budget job</a> · <a href="https://github.com/loopflowstudio/manabot/actions/runs/46095850847/artifacts/15243691834">Per-seed and per-sample artifact</a></p>
+  <lf-diff path="managym/src/agent/env.rs" lines="735-762">
+    <lf-note line="750">Vector recording opts in to the same post-step chooser events used in scalar trace evidence.</lf-note>
+  </lf-diff>
+</section>
+
+<section id="findings">
+  <h2>Findings</h2>
+  <p>The five original transport copies and the sixth exposed by live effects, named benchmark resume, batch-preparation ownership, the internal runtime type and queued failure isolation are resolved in this PR. Earlier dispositions sent host work and the L4 bf16 profile to existing Tasks. The separate slow-slot timeout and the standalone historical trophy identity conflict were dropped. The conflict already reproduces on main. <a href="concept-review.html">Concept review</a> · <a href="plan.md">Plan and deferred findings</a> · <a href="questions.md">Working decisions</a></p>
+
+  <lf-component name="decision" id="sdk-release" title="Published Etude SDK and locked CI" recommendation="Fix here">
+    <p>PyPI still lists 0.4.7 and has no 0.5.0 distribution. On this PR head, locked integration and clean package installs fail before execution on async Etude imports including <code>ForwardError</code>, <code>ModelForward</code> and <code>Matches</code>. Editable 6db832 supplied those APIs for QA. Once 0.5.0 publishes, update the three dependency bounds and exact play-runtime pin in <code>pyproject.toml</code>, run <code>uv lock --upgrade-package etude-sdk</code>, and rerun locked sync, managed evaluation and clean package installation with the published wheel. <a href="https://pypi.org/project/etude-sdk/">PyPI</a> · <a href="https://github.com/loopflowstudio/manabot/actions/runs/46095850847/job/140827067765">Locked evaluation failure</a> · <a href="https://github.com/loopflowstudio/manabot/actions/runs/46095850792/job/140828314018">Package installation failure</a></p>
+  </lf-component>
+
+  <lf-component name="decision" id="stored-traces" title="Viewer evidence and game-side throughput" recommendation="Drop">
+    <p><a href="loopflow://manabot/task/MTG-506">MTG-506</a> already owns game-side throughput, including replay and retention, repeated metadata and frame work, and native heuristic stepping. Work outside forward round trips took 56–67% of the zero-copy Gate 1 arms. Arena work and replay took 72–89% of the L4 GPU arms. Keep the current live frame evidence in this PR. Question 1 decides the storage contract for that follow-up.</p>
+  </lf-component>
+
+  <lf-component name="decision" id="l4-bf16" title="Trained L4 bf16 performance" recommendation="Drop">
+    <p><a href="loopflow://manabot/task/MTG-507">MTG-507</a> already owns the profile. The trained arm’s forward time rose from 24.0 to 40.5 s in bf16, while the wider seeded arm fell from 29.5 to 12.6 s. The measured result stays in the report and float32 stays the default. <a href="../experiments/reports/eval_throughput.md#runpod-l4">L4 evidence</a></p>
+  </lf-component>
+
+  <lf-component name="decision" id="final-panels" title="Full throughput panels on the locked release candidate" recommendation="Drop">
+    <p>Post-compression QA exercised the current runner on Apple Silicon. Published throughput figures remain tied to their measured revisions and full CUDA runs predate compression. A full rerun would update the figures for this release candidate. The managed smoke and locked checks are already part of the SDK gate. Question 3.</p>
+  </lf-component>
+
+  <lf-component name="decision" id="etude-placement" title="Etude shared GPU placement and cache residency" recommendation="Drop">
+    <p>Etude owns shared Apple GPU placement and the <code>Forwards._evict</code> edge case where the only resident checkpoint can be evicted. QA exercised shared Metal with the editable SDK. In direct mode each game process can hold a checkpoint copy. <code>MANABOT_EVAL_DEVICE=cpu</code> remains available on memory-constrained hosts. <a href="plan.md">Etude companion and cache findings</a></p>
+  </lf-component>
+</section>
+
+<section id="questions">
+  <h2>Decisions for Jack</h2>
+  <div data-choice="q1" data-label="1 · Stored decision evidence">
+    <p><strong>1. What should MTG-506 retain for each stored decision?</strong></p>
+    <button data-value="1a">1a · Keep live viewer frame evidence and remove redundant work around it</button>
+    <button data-value="1b">1b · Store compact decision annotations and reconstruct viewer evidence on replay</button>
+  </div>
+  <div data-choice="q2" data-label="2 · Precision-specific tournament names">
+    <p><strong>2. Which names should Etude use when you first score reduced-precision trophies?</strong> The name becomes part of the stored benchmark identity after scoring.</p>
+    <button data-value="2a">2a · Use the implemented -bf16 and -tf32 suffixes and keep the existing float32 name</button>
+    <button data-value="2b">2b · Choose different reduced-precision names before any such tournament is scored</button>
+  </div>
+  <div data-choice="q3" data-label="3 · Throughput evidence at release">
+    <p><strong>3. Do you need games/hour measured on the locked release candidate?</strong></p>
+    <button data-value="3a">3a · Keep the revisioned panels and rerun the managed smoke with the published SDK</button>
+    <button data-value="3b">3b · Repeat the complete M4 Max and CUDA panels after the SDK pin and update the report</button>
+  </div>
+</section>

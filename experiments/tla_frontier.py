@@ -83,7 +83,7 @@ from etude.train.tracking import track
 from pydantic import BaseModel, ConfigDict, Field
 
 from experiments import tla_frontier
-from manabot.eval.agents import AGENTS, game_players, registration
+from manabot.eval.agents import AGENTS, play_scalar, registration
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.setup import machine_setup
@@ -92,6 +92,7 @@ from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.runtime import regime_tag
 from manabot.policy.checkpoint import read_container
+from manabot.sim.agent import GamePlayer
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
 from manabot.training.decks import UniformDecks
@@ -1053,7 +1054,11 @@ def _registration(
     ), path
 
 
-def play(match: Match[Pair], agents: Sequence[object]) -> Tables:
+async def play(match: Match[Pair], agents: Sequence[object]) -> Tables:
+    return await play_scalar(play_match, match, agents)
+
+
+def play_match(match: Match[Pair], agents: Sequence[GamePlayer]) -> Tables:
     """One sampled pair/deal, four policy/deck/seat legs, with failure denominators."""
     protocol = PROTOCOL
     pair = Pair.model_validate(match.config)
@@ -1100,7 +1105,7 @@ def play(match: Match[Pair], agents: Sequence[object]) -> Tables:
         agents=dict(
             zip(
                 ("candidate", "opponent"),
-                game_players(match.players, agents),
+                agents,
                 strict=True,
             )
         ),

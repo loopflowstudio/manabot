@@ -56,7 +56,7 @@ def test_bf16_autocasts_gpu_forwards(device: str) -> None:
     assert (context.device, context.fast_dtype) == (device, torch.bfloat16)
 
 
-@pytest.mark.parametrize("precision", ["bf16", "bfloat16", "fp32"])
+@pytest.mark.parametrize("precision", ["tf32", "bf16", "bfloat16", "fp32"])
 def test_cpu_refuses_unsupported_torch_precision(precision: str) -> None:
     declared = cast(Precision, precision)  # unchecked input from a caller
     with pytest.raises(ValueError, match="precision"):
@@ -66,6 +66,14 @@ def test_cpu_refuses_unsupported_torch_precision(precision: str) -> None:
     )
     with pytest.raises(ValueError, match="precision"):
         Learner(agent, "cpu", minibatch_rows=1, precision=declared)
+
+
+@pytest.mark.parametrize("device", ["cpu", "mps"])
+def test_tf32_requires_cuda(device: str) -> None:
+    with pytest.raises(ValueError, match="precision tf32 requires CUDA"):
+        torch_learner.validate_precision("tf32", torch.device(device))
+    with pytest.raises(ValueError, match="precision tf32 requires CUDA"):
+        torch_learner.forward_precision("tf32", torch.device(device))
 
 
 @pytest.mark.parametrize("kind", ["scalar", "categorical_wdl"])

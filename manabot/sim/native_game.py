@@ -11,8 +11,8 @@ recreate their root.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from dataclasses import asdict
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
 import tempfile
@@ -24,6 +24,7 @@ from manabot.backends import local_cpu_backend
 from manabot.env.failures import ScalarCapture
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig
+from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import (
     RECORDED_ASSET_MANIFEST_HASH,
     runtime_fingerprints,
@@ -37,12 +38,13 @@ from manabot.sim.evaluation_records import (
     evaluation_metadata,
     finalize_game,
 )
-from manabot.sim.frames import build_viewer_frame, decision_row
+from manabot.sim.frames import build_viewer_frame, command_for_offer, offer_evidence
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration, require_open_decklists
 from manabot.sim.replay import replay_environment
 from manabot.sim.supervision import failure_record, is_game_error
+import managym
 from managym.bots import BeliefSummary
 from managym.decision import Command, DecisionFrame
 from managym.experience import UNVERSIONED_CONTENT_HASH
@@ -107,6 +109,104 @@ class _InChildPlayers:
         self._backend.seed(seed)
 
 
+def resolve_game_match(
+    game: dict[str, Any],
+    match: MatchConfig,
+    registrations: Sequence[PlayerRegistration],
+    spaces: Mapping[str, ObservationSpace | None],
+) -> MatchConfig:
+    """Record and return the leg's seat-specific native mana settings."""
+    defaults = ObservationConfig()
+    trained = {
+        registration.player_id: space.config
+        for registration in registrations
+        if registration.player_spec["kind"] in {"checkpoint", "etude_checkpoint"}
+        and (space := spaces[registration.player_id]) is not None
+    }
+    seats = [trained.get(player_id, defaults) for player_id in game["seat_players"]]
+    resolved = match.model_copy(
+        update={
+            "mana_payment": tuple(seat.mana_payment for seat in seats),
+            "mana_floats": tuple(seat.mana_floats for seat in seats),
+        }
+    )
+    # Include both seats' settings even when they match the defaults.
+    game["match_hypers"] = resolved.model_dump(mode="json") | {
+        "mana_payment": list(resolved.mana_payment),
+        "mana_floats": list(resolved.mana_floats),
+    }
+    return resolved
+
+
+def arena_source_sha256() -> str:
+    return source_bundle_sha256(Path(__file__).resolve().parents[1].rglob("*.py"))
+
+
+def game_runtime_identities(
+    seed: int, match: MatchConfig | None, space: ObservationSpace, arena_source: str
+) -> dict[str, Any]:
+    return runtime_fingerprints(seed, match_config=match, observation_space=space) | {
+        "arena_source_sha256": arena_source,
+    }
+
+
+@dataclass(frozen=True)
+class ArenaDecision:
+    """A live viewer frame and the sampling identity of its acting player."""
+
+    frame: dict[str, Any]
+    player_id: str
+    player_seed: int
+    ordinal: int
+
+    @property
+    def policy_seed(self) -> int:
+        return (self.player_seed + self.ordinal) % (2**63)
+
+    def evidence(self, offer: dict[str, Any], elapsed: float) -> dict[str, Any]:
+        return {
+            **offer_evidence(self.frame, offer),
+            "revision": self.frame["revision"],
+            "player_id": self.player_id,
+            "player_seed": self.player_seed,
+            "player_decision_ordinal": self.ordinal,
+            "policy_rng_seed": self.policy_seed,
+            "latency_seconds": elapsed,
+        }
+
+
+def arena_decision(
+    game: dict[str, Any],
+    raw: managym.Observation,
+    revision: int,
+    counts: Mapping[str, int],
+) -> ArenaDecision:
+    frame = build_viewer_frame(
+        raw,
+        match_id=game["match_id"],
+        revision=revision,
+        content_hash=UNVERSIONED_CONTENT_HASH,
+        asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
+    )
+    if frame["projection"]["opponent"].get("hand"):
+        game["integrity"]["private_exposures"] += 1
+        raise RuntimeError("viewer frame exposes a private hand")
+    player_id = game["seat_players"][int(raw.agent.player_index)]
+    return ArenaDecision(
+        frame, player_id, game["player_seeds"][player_id], counts[player_id]
+    )
+
+
+def chosen_offer(
+    game: dict[str, Any], decision: ArenaDecision, action: int
+) -> dict[str, Any]:
+    for offer in decision.frame["offers"]:
+        if int(offer["id"]) == action:
+            return offer
+    game["integrity"]["illegal_actions"] += 1
+    raise RuntimeError(f"illegal offer {action}")
+
+
 def execute_game(
     game: dict[str, Any],
     registrations: list[PlayerRegistration],
@@ -134,9 +234,6 @@ def execute_game(
     )
     try:
         built = {}
-        # A checkpoint plays with the decision settings it trained under;
-        # every other player keeps manual payment and no floats.
-        trained: dict[str, ObservationConfig] = {}
         in_child = _InChildPlayers(backend_factory)
         match = (
             MatchConfig.model_validate(game["match_hypers"])
@@ -160,12 +257,6 @@ def execute_game(
                         seed=game["player_seeds"][responsible],
                         checkpoint_path=checkpoint_paths.get(responsible),
                     )
-            player_space = built[responsible][1]
-            if (
-                registration.player_spec["kind"] in {"checkpoint", "etude_checkpoint"}
-                and player_space is not None
-            ):
-                trained[responsible] = player_space.config
         responsible = None
         send(("phase", None))
         spaces = [space for _, space in built.values() if space is not None]
@@ -173,30 +264,19 @@ def execute_game(
             raise ValueError("players have different observation ABIs")
         space = spaces[0] if spaces else ObservationSpace()
         if match is not None:
-            seats = [trained.get(p, ObservationConfig()) for p in game["seat_players"]]
-            match = match.model_copy(
-                update={
-                    "mana_payment": tuple(seat.mana_payment for seat in seats),
-                    "mana_floats": tuple(seat.mana_floats for seat in seats),
-                }
+            previous = game["match_hypers"]
+            match = resolve_game_match(
+                game,
+                match,
+                registrations,
+                {name: item[1] for name, item in built.items()},
             )
-            # Record both seats' settings, defaults included.
-            resolved = match.model_dump(mode="json") | {
-                "mana_payment": list(match.mana_payment),
-                "mana_floats": list(match.mana_floats),
-            }
-            if resolved != game["match_hypers"]:
-                game["match_hypers"] = resolved
-                send(("match", resolved))
+            if game["match_hypers"] != previous:
+                send(("match", game["match_hypers"]))
         game["observation_hypers"] = space.config.model_dump()
         send(("observation", game["observation_hypers"]))
-        game["runtime_identities"] = runtime_fingerprints(
-            game["deal_seed"],
-            match_config=match,
-            observation_space=space,
-        )
-        game["runtime_identities"]["arena_source_sha256"] = source_bundle_sha256(
-            sorted(Path(__file__).resolve().parents[1].rglob("*.py"))
+        game["runtime_identities"] = game_runtime_identities(
+            game["deal_seed"], match, space, arena_source_sha256()
         )
         send(("identities", game["runtime_identities"]))
         with perf.span("native_reset_and_encoding"):
@@ -235,24 +315,14 @@ def execute_game(
                 break
             raw = env.last_raw_obs
             actor = int(raw.agent.player_index)
-            player_id = game["seat_players"][actor]
             frame_started = time.monotonic()
-            frame = build_viewer_frame(
-                raw,
-                match_id=game["match_id"],
-                revision=revision,
-                content_hash=UNVERSIONED_CONTENT_HASH,
-                asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
-            )
+            turn = arena_decision(game, raw, revision, decision_counts)
+            player_id = turn.player_id
             perf.record("frame_projection", frame_started)
-            if frame["projection"]["opponent"].get("hand"):
-                game["integrity"]["private_exposures"] += 1
-                raise RuntimeError("viewer frame exposes a private hand")
             pre_digest = env._engine.state_digest()
             responsible = player_id
             send(("phase", player_id))
-            ordinal = decision_counts[player_id]
-            policy_seed = (game["player_seeds"][player_id] + ordinal) % (2**63)
+            policy_seed = turn.policy_seed
             if agents is None and registrations[actor].runner_kind == "checkpoint":
                 in_child.seed(policy_seed)
             started = time.perf_counter()
@@ -266,22 +336,15 @@ def execute_game(
             if env._engine.state_digest() != pre_digest:
                 game["integrity"]["root_mutations"] += 1
                 raise RuntimeError("player mutated the authoritative root")
-            offers = {int(offer["id"]): offer for offer in frame["offers"]}
-            if action not in offers:
-                game["integrity"]["illegal_actions"] += 1
-                raise RuntimeError(f"illegal offer {action}")
+            offer = chosen_offer(game, turn, action)
             perf.record("command_validation", validation_started)
             responsible = None
             send(("phase", None))
-            decision = {
-                **decision_row(env, frame, action, retain_digest=capture is None),
-                "revision": revision,
-                "player_id": player_id,
-                "player_seed": game["player_seeds"][player_id],
-                "player_decision_ordinal": ordinal,
-                "policy_rng_seed": policy_seed,
-                "latency_seconds": elapsed,
-            }
+            command = command_for_offer(turn.frame, offer)
+            decision = turn.evidence(offer, elapsed)
+            decision.update(command=command, command_sha256=canonical_sha256(command))
+            if capture is None:
+                decision["pre_state_digest"] = pre_digest
             player = built[player_id][0]
             if in_child.observes_steps(player) and player.last_receipt is not None:
                 # Arena traces are private. Advice uses the explicit public projection.

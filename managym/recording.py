@@ -43,6 +43,7 @@ class RecordingOptions(TypedDict, total=False):
     games_path: Path | None
     statistics_path: Path | None
     record_fraction: float
+    record_in_memory: bool
     journal_path: Path | None
     context: dict[str, object] | None
     context_provider: Callable[[], dict[str, object]]
@@ -642,6 +643,7 @@ class _Capture:
         games_path: Path | None = None,
         statistics_path: Path | None = None,
         record_fraction: float = 1.0,
+        record_in_memory: bool = False,
         journal_path: Path | None = None,
         context: dict[str, object] | None = None,
         context_provider: Callable[[], dict[str, object]] = dict,
@@ -653,6 +655,7 @@ class _Capture:
         self.producer = "capture"
         self.games_path = games_path
         self.record_fraction = record_fraction
+        self.record_in_memory = record_in_memory
         self.statistics_path = statistics_path
         self._outputs: dict[Path, BinaryIO] = {}
         self._statistics_generations: dict[int, int] = {}
@@ -709,7 +712,8 @@ class _Capture:
     @property
     def _recording(self) -> bool:
         return self.record_fraction > 0 and (
-            self.games_path is not None
+            self.record_in_memory
+            or self.games_path is not None
             or (self._game_journal is not None and not self._automatic_journal)
         )
 
@@ -1239,6 +1243,7 @@ _VECTOR_READS = frozenset(
         "current_game_generations",
         "decision_memory_counts",
         "decision_memory_cursors",
+        "decision_observations",
         "current_game_seeds",
         "next_fresh_seeds",
         "snapshot_slots",
@@ -1318,6 +1323,7 @@ class RecordedVectorEnv(_Capture):
         stream_offset: int = 0,
         decision_memory_include_own: bool = False,
         decision_memory: bool = False,
+        decision_events: bool = False,
         reducers: list[Reducer[Any]] | None = None,
         **recording: Unpack[RecordingOptions],
     ) -> None:
@@ -1338,6 +1344,7 @@ class RecordedVectorEnv(_Capture):
         self.native = managym.VectorEnv(
             num_envs=num_envs,
             decision_memory=self.decision_memory,
+            decision_events=decision_events or bool(reducers),
             decision_memory_include_own=decision_memory_include_own,
             seed=seed,
             skip_trivial=skip_trivial,
@@ -1553,6 +1560,39 @@ class RecordedVectorEnv(_Capture):
 
     def _record_of(self, game: GameInputs) -> GameRecord:
         return self._evidence_for([game], "step")
+
+    def take_slot_record(
+        self,
+        slot: int,
+        *,
+        end: GameEnd | None = None,
+        info: dict[str, Any] | None = None,
+    ) -> GameRecord:
+        """Detach an in-memory game's record before reusing its slot.
+
+        A runner may settle an opening terminal or impose its own stop. Native
+        isolated failures supply their error metadata in the step receipt.
+        """
+        game = self.games[slot]
+        record = self._record_of(game)
+        if end is not None:
+            record.games[0].end = end
+        if info is not None and info.get("game_error"):
+            record.execution_outcome = "failed"
+            record.error_class = str(info.get("game_error_class", "AgentError"))
+            record.error = str(info["game_error"])
+            if info.get("game_error_trace"):
+                record.traceback = str(info["game_error_trace"])
+        else:
+            record.execution_outcome = "last_command_succeeded"
+        self.games[slot] = GameInputs(
+            stream=game.stream,
+            seed=game.seed,
+            players=[],
+            decision_memory=game.decision_memory,
+            decision_memory_include_own=game.decision_memory_include_own,
+        )
+        return record
 
     def game_inputs(self, slot: int) -> GameInputs:
         """Join a detached branch's native replay prefix to its attempted suffix."""

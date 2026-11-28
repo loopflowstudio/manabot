@@ -92,39 +92,46 @@ def build_viewer_frame(
 
 
 def build_command(frame: dict[str, Any], action: int) -> dict[str, Any]:
-    offer_ids = {int(offer["id"]) for offer in frame["offers"]}
-    if action not in offer_ids:
-        raise RuntimeError(f"teacher action {action} is absent from legal offers")
+    for offer in frame["offers"]:
+        if int(offer["id"]) == action:
+            return command_for_offer(frame, offer)
+    raise RuntimeError(f"teacher action {action} is absent from legal offers")
+
+
+def command_for_offer(frame: dict[str, Any], offer: dict[str, Any]) -> dict[str, Any]:
     command = Command(
         command_id=f"{frame['match_id']}:{frame['revision']}",
         match_id=str(frame["match_id"]),
         expected_revision=int(frame["revision"]),
         prompt_id=int(frame["prompt"]["id"]),
-        offer_id=action,
+        offer_id=int(offer["id"]),
         answers=[],
     )
     return command.model_dump(mode="json")
 
 
-def decision_row(
-    env: Env, frame: dict[str, Any], offer_id: int, *, retain_digest: bool = True
-) -> dict[str, Any]:
+def offer_evidence(frame: dict[str, Any], offer: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "actor": frame["prompt"]["actor"],
+        "action_space_kind": frame["action_space"],
+        "frame_sha256": canonical_sha256(frame),
+        "chosen_offer": offer,
+    }
+
+
+def decision_row(env: Env, frame: dict[str, Any], offer_id: int) -> dict[str, Any]:
     """Build pre-command evidence without stepping or acknowledging the Command.
 
     The caller owns execution and adds post_state_digest only after success.
     Keeping these separate preserves durable evidence of rejected Commands.
-    Captured callers leave state digests to the capture with retain_digest=False.
     """
     offer = next((o for o in frame["offers"] if int(o["id"]) == offer_id), None)
     if offer is None:
         raise ValueError(f"action not offered: {offer_id}")
-    command = build_command(frame, offer_id)
+    command = command_for_offer(frame, offer)
     return {
-        "actor": int(env.last_raw_obs.agent.player_index),
-        "action_space_kind": frame["action_space"],
-        "frame_sha256": canonical_sha256(frame),
+        **offer_evidence(frame, offer),
         "command": command,
         "command_sha256": canonical_sha256(command),
-        "chosen_offer": offer,
-        **({"pre_state_digest": env._engine.state_digest()} if retain_digest else {}),
+        "pre_state_digest": env._engine.state_digest(),
     }

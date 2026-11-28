@@ -1,8 +1,9 @@
 """Join already prepared full-layout rows without repeating host preparation.
 
-Flat object, frame, action and program indexes are rebased into the joined
-batch. Packed recurrent schedules are rebuilt from their retained lengths.
-Catalog programs are shared by rows of the same checkpoint.
+Flat object, frame, action, program, effect and decision-memory indexes are
+rebased into the joined batch. Packed recurrent schedules are rebuilt from
+their retained lengths; folded decision-memory trees are rejected. Catalog
+programs are shared by rows of the same checkpoint.
 """
 
 from dataclasses import fields, replace
@@ -10,6 +11,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from manabot.policy.decision_memory import MemoryRows
 from manabot.policy.prepare import (
     EffectRoutes,
     FactPrograms,
@@ -30,11 +32,14 @@ def concatenate(rows: list[Prepared[np.ndarray]]) -> Prepared[np.ndarray]:
     batch_offset = action_offset = 0
     for row in rows:
         if (
-            row.binding != first.binding
+            row.batch < 1
+            or row.binding != first.binding
             or row.validity.shape[1:] != first.validity.shape[1:]
             or row.relation_features.shape[1:] != first.relation_features.shape[1:]
             or row.facts.kinds.shape[1:] != first.facts.kinds.shape[1:]
+            or row.legal.shape[1:] != first.legal.shape[1:]
             or row.packed_attention is not None
+            or row.compact_attention is not None
             or row.facts.compact
             or row.attention_columns is not None
             or row.live_index is not None
@@ -168,6 +173,48 @@ def concatenate(rows: list[Prepared[np.ndarray]]) -> Prepared[np.ndarray]:
                 detail_offset += len(e.detail_rows)
             batch_offset += row.batch
         effects = rebuild(EffectRoutes, effect_rows, schedule=pack(lengths))
+    memory_rows = [row.memory for row in rows]
+    memory: MemoryRows[np.ndarray] | None = None
+    if any(m is not None for m in memory_rows):
+        if any(m is None for m in memory_rows):
+            raise ValueError("prepared optional layouts differ")
+        present = cast(list[MemoryRows[np.ndarray]], memory_rows)
+        if any(m.fold is not None for m in present):
+            raise ValueError("batched inference cannot join folded decision memory")
+        shifted_memory: list[MemoryRows[np.ndarray]] = []
+        memory_lengths: list[int] = []
+        batch_offset = record_offset = reference_offset = 0
+        for row, m in zip(rows, present, strict=True):
+            if len(m.lengths) != row.batch:
+                raise ValueError("decision-memory lengths differ from batch size")
+            shifted_memory.append(
+                replace(
+                    m,
+                    detail_references=m.detail_references + reference_offset,
+                    member_references=m.member_references + reference_offset,
+                    member_groups=m.member_groups + record_offset * 3,
+                    record_batches=m.record_batches + batch_offset,
+                )
+            )
+            memory_lengths.extend(m.lengths)
+            batch_offset += row.batch
+            record_offset += len(m.numbers)
+            reference_offset += len(m.reference_numbers)
+        lengths_tuple = tuple(memory_lengths)
+        lengths_array = np.array(lengths_tuple, np.int64)
+        nonempty = np.flatnonzero(lengths_array).astype(np.int64)
+        memory = cast(
+            MemoryRows[np.ndarray],
+            rebuild(
+                MemoryRows,
+                shifted_memory,
+                nonempty_batches=nonempty,
+                schedule=pack(lengths_array[nonempty]),
+                lengths=lengths_tuple,
+                width=max(1, max(lengths_tuple, default=0)),
+                fold=None,
+            ),
+        )
     return cast(
         Prepared[np.ndarray],
         rebuild(
@@ -179,5 +226,6 @@ def concatenate(rows: list[Prepared[np.ndarray]]) -> Prepared[np.ndarray]:
             programs=first.programs,
             facts=facts_joined,
             effects=effects,
+            memory=memory,
         ),
     )

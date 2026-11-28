@@ -51,6 +51,48 @@ class ActionCutoffSample(BaseModel):
     game: _GameInputs
 
 
+@dataclass
+class PolicyActionCutoffs:
+    """Count first-legal decisions and retain at most four exact replay prefixes."""
+
+    counts: dict[str, ActionCutoffCounts] = field(default_factory=dict)
+    samples: list[ActionCutoffSample] = field(default_factory=list)
+
+    def record(
+        self, count: int, kind: str, capacity: int, game: Callable[[], _GameInputs]
+    ) -> int:
+        if kind not in self.counts:
+            self.counts[kind] = ActionCutoffCounts()
+        counts = self.counts[kind]
+        counts.decisions += 1
+        retained = managym.policy_action_count(count, capacity, "first-legal")
+        dropped = count - retained
+        if dropped:
+            counts.overflows += 1
+            counts.dropped_actions += dropped
+            if len(self.samples) < 4:
+                self.samples.append(
+                    ActionCutoffSample(
+                        original_count=count,
+                        retained_count=retained,
+                        dropped_count=dropped,
+                        decision_kind=kind,
+                        game=game().model_copy(deep=True),
+                    )
+                )
+        return dropped
+
+    def report(self) -> dict[str, object]:
+        return {
+            "schema": "policy-action-cutoff-v1",
+            "policy": "first-legal",
+            "counts_by_kind": {
+                kind: counts.model_dump() for kind, counts in self.counts.items()
+            },
+            "samples": [sample.model_dump(mode="json") for sample in self.samples],
+        }
+
+
 class NativeTrainingTrace(BaseModel):
     model_config = ConfigDict(extra="forbid")
     player_configs: list[_PlayerSetup]
@@ -245,8 +287,7 @@ class _TrainingCapture:
                 "statistics_path",
                 self.scope.directory.parent / "statistics" / f"{uuid4().hex}.jsonl",
             )
-        self._policy_counts: dict[str, ActionCutoffCounts] = {}
-        self._policy_samples: list[ActionCutoffSample] = []
+        self._cutoffs = PolicyActionCutoffs()
         self._policy_path: Path | None = None
         super().__init__(*args, **kwargs)
 
@@ -275,30 +316,16 @@ class _TrainingCapture:
         flush exact aggregate frequencies at collector/game close. The complete
         native action set is never changed here.
         """
-        if kind not in self._policy_counts:
-            self._policy_counts[kind] = ActionCutoffCounts()
-        counts = self._policy_counts[kind]
-        counts.decisions += 1
-        retained = managym.policy_action_count(count, capacity, "first-legal")
-        if retained == count:
+
+        def prefix() -> _GameInputs:
+            if isinstance(self, recording.RecordedVectorEnv):
+                return self.game_inputs(game.stream - self.games[0].stream)
+            return game
+
+        dropped = self._cutoffs.record(count, kind, capacity, prefix)
+        if not dropped:
             return
-        counts.overflows += 1
-        counts.dropped_actions += count - retained
-        if len(self._policy_samples) < 4:
-            self._policy_samples.append(
-                ActionCutoffSample(
-                    original_count=count,
-                    retained_count=retained,
-                    dropped_count=count - retained,
-                    decision_kind=kind,
-                    game=(
-                        self.game_inputs(game.stream - self.games[0].stream)
-                        if isinstance(self, recording.RecordedVectorEnv)
-                        else game
-                    ).model_copy(deep=True),
-                )
-            )
-        overflows = sum(counts.overflows for counts in self._policy_counts.values())
+        overflows = sum(counts.overflows for counts in self._cutoffs.counts.values())
         if overflows & (overflows - 1) == 0:
             self.flush_policy_actions()
             getLogger(__name__).info(
@@ -307,8 +334,8 @@ class _TrainingCapture:
                     {
                         "overflows": overflows,
                         "original_count": count,
-                        "retained_count": retained,
-                        "dropped_count": count - retained,
+                        "retained_count": count - dropped,
+                        "dropped_count": dropped,
                         "decision_kind": kind,
                         "seed": game.seed,
                         "stream": game.stream,
@@ -319,21 +346,13 @@ class _TrainingCapture:
 
     def policy_action_report(self) -> dict[str, object]:
         return {
-            "schema": "policy-action-cutoff-v1",
-            "policy": "first-legal",
-            "counts_by_kind": {
-                kind: counts.model_dump()
-                for kind, counts in self._policy_counts.items()
-            },
-            "samples": [
-                sample.model_dump(mode="json") for sample in self._policy_samples
-            ],
+            **self._cutoffs.report(),
             "identities": self.identities,
             **self._coordinates(),
         }
 
     def flush_policy_actions(self) -> None:
-        if not self._policy_counts:
+        if not self._cutoffs.counts:
             return
         if self._policy_path is None:
             scope = _scope.get() or self.scope

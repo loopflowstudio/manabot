@@ -159,7 +159,7 @@ impl PySlotLoad {
     /// A fresh game using the setup already configured for this slot.
     #[getter]
     fn uses_slot_setup(&self) -> bool {
-        matches!(self.0, SlotLoad::Fresh(_, None))
+        matches!(self.0, SlotLoad::Fresh(_, None, _))
     }
 
     /// Detached replay authority for a recording wrapper, including the intervention.
@@ -175,13 +175,17 @@ impl PySlotLoad {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (slot, player_configs=None))]
-    fn fresh(slot: usize, player_configs: Option<Bound<'_, PyAny>>) -> PyResult<Self> {
+    #[pyo3(signature = (slot, player_configs=None, *, seed=None))]
+    fn fresh(
+        slot: usize,
+        player_configs: Option<Bound<'_, PyAny>>,
+        seed: Option<u64>,
+    ) -> PyResult<Self> {
         let setup = player_configs
             .as_ref()
             .map(super::bindings::game_setup)
             .transpose()?;
-        Ok(Self(SlotLoad::Fresh(slot, setup)))
+        Ok(Self(SlotLoad::Fresh(slot, setup, seed)))
     }
 
     #[staticmethod]
@@ -239,7 +243,7 @@ impl PyVectorEnv {
     }
 
     #[new]
-    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
+    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None, decision_memory_include_own=false, decision_memory=false, decision_events=false))]
     fn new(
         num_envs: usize,
         seed: u64,
@@ -249,11 +253,15 @@ impl PyVectorEnv {
         player_policies: Option<Vec<String>>,
         decision_memory_include_own: bool,
         decision_memory: bool,
+        decision_events: bool,
     ) -> PyResult<Self> {
         let policies = parse_player_policies(player_policies, opponent_policy)?;
         let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policies)
             .with_decision_memory(decision_memory)
             .with_decision_memory_include_own(decision_memory_include_own);
+        if decision_events {
+            inner.enable_decision_events();
+        }
         if let Some(stride) = seed_stride {
             inner = inner.with_seed_stride(stride).map_err(map_agent_err)?;
         }

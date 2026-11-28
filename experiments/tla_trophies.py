@@ -4,13 +4,15 @@ Every checkpoint plays the same held-out deals with seats and decks crossed.
 The published pool snapshot supplies both populations on the worker.
 """
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import aclosing
 from decimal import Decimal
 from functools import cache
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from etude.eval.game import Matches as MatchStream
 from etude.eval.records import (
     Benchmark,
     CheckpointSlot,
@@ -24,17 +26,20 @@ from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.report import Curve, Matches, Report, Score
 from etude.spec import Input, Variable
 from etude.train.tracking import track
+from pydantic import Field
 
 from experiments.mana_taps import OBSERVATION
 from experiments.tla_frontier import HEURISTIC, learning, model
 from manabot.data import load_manifest
-from manabot.eval.agents import AGENTS
-from manabot.eval.pairing import play_pairing
+from manabot.eval.agents import agents_for
+from manabot.eval.pairing import PairingSpec
+from manabot.eval.vector import play_pairings
 from manabot.experiment.setup import machine_setup
 from manabot.infra.identity import StrictModel
 from manabot.pools import Pool, PoolCorpus, PoolSplit
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import DeckMatchup
+from manabot.sim.registration import EvalPrecision
 from manabot.training.decks import UniformDecks
 from manabot.training.panels import ML, PERF
 from manabot.training.report import behaviour_curves
@@ -63,13 +68,16 @@ def corpus_input() -> Input:
     )
 
 
+def corpus_path() -> Path:
+    directory = os.environ.get("ETUDE_INPUTS_DIR")
+    return Path(directory) / "pools.json" if directory else ROOT / POOLS
+
+
 @cache
 def playable(split: PoolSplit) -> tuple[Pool, ...]:
-    directory = os.environ.get("ETUDE_INPUTS_DIR")
-    path = Path(directory) / "pools.json" if directory else ROOT / POOLS
     return tuple(
         p
-        for p in PoolCorpus.read(path).pools
+        for p in PoolCorpus.read(corpus_path()).pools
         if p.split == split
         and not managym.unsupported_cards([*p.cards, *p.human_build])
     )
@@ -189,33 +197,67 @@ class Deal(StrictModel):
     first: int
     second: int
     seed: int
+    # Keep float32's stored seating keys stable.
+    precision: EvalPrecision = Field(
+        default="float32", exclude_if=lambda value: value == "float32"
+    )
 
 
-def play(match: Match, agents: Sequence[object]) -> Result:
-    deal = Deal.model_validate(match.config)
-    pools = playable("held_out")
-    a, b = pools[deal.first], pools[deal.second]
-    return play_pairing(
-        match,
-        agents,
-        matchup=DeckMatchup(
-            population_sha256=corpus_input().sha256,
-            entries=(a.id, b.id),
-            lists=(deck(a), deck(b)),
-            decklists="closed",
-        ),
+def held_out_deal(index: int, precision: EvalPrecision = "float32") -> Deal:
+    return Deal(
+        first=index * 2, second=index * 2 + 1, seed=40900 + index, precision=precision
+    )
+
+
+def held_out_pairing(
+    deal: Deal,
+    pools: tuple[Pool, ...],
+    corpus_sha256: str,
+    *,
+    arena: str = "tla-trophies",
+) -> PairingSpec:
+    first, second = pools[deal.first], pools[deal.second]
+    matchup = DeckMatchup(
+        population_sha256=corpus_sha256,
+        entries=(first.id, second.id),
+        lists=(deck(first), deck(second)),
+        decklists="closed",
+    )
+    return PairingSpec(
+        matchup=matchup,
         deal=deal.seed,
         matchup_mode="cross",
         game_seconds=120,
-        arena="tla-trophies",
+        arena=arena,
+        precision=deal.precision,
     )
+
+
+def pairing_spec(match: Match) -> PairingSpec:
+    return held_out_pairing(
+        Deal.model_validate(match.config), playable("held_out"), corpus_input().sha256
+    )
+
+
+async def play_many(
+    matches: MatchStream[Deal],
+) -> AsyncIterator[tuple[Match, Result | Exception]]:
+    async with aclosing(play_pairings(matches, pairing_spec)) as stream:
+        async for outcome in stream:
+            yield outcome
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     return held_out_jobs([run for run in state.runs if run.launch == RAW_JOB])
 
 
-def held_out_jobs(runs: Sequence[TrainingRunSummary]) -> list[EvalJob]:
+def benchmark_name(precision: EvalPrecision) -> str:
+    return BENCHMARK if precision == "float32" else f"{BENCHMARK}-{precision}"
+
+
+def held_out_jobs(
+    runs: Sequence[TrainingRunSummary], *, precision: EvalPrecision = "float32"
+) -> list[EvalJob]:
     checkpoints = [c for run in runs for c in run.checkpoints]
     if not checkpoints:
         return []
@@ -228,27 +270,32 @@ def held_out_jobs(runs: Sequence[TrainingRunSummary]) -> list[EvalJob]:
         Seating(
             name=f"Held-out pair {i + 1}",
             players=(CheckpointSlot(), heuristic),
-            config=Deal(first=i * 2, second=i * 2 + 1, seed=40900 + i),
+            config=held_out_deal(i, precision),
             games=seeds,
         )
         for i in range(32)
     )
+    pools = corpus_input()
+    environment_config = {"pools": pools.sha256}
+    # Float32 keeps the stored tournaments' environment identity.
+    if precision != "float32":
+        environment_config["precision"] = precision
     return [
         EvalJob(
-            play=play,
-            agents=AGENTS,
+            play_many=play_many,
+            agents=agents_for(precision),
             checkpoints=checkpoints,
             tournament=Benchmark(
-                name=BENCHMARK,
+                name=benchmark_name(precision),
                 environment=Environment(
                     name="tla-trophies",
                     # This file and pairing.py when the stored games were played.
                     files=ENVIRONMENT_FILES,
-                    config={"pools": corpus_input().sha256},
+                    config=environment_config,
                 ),
                 seatings=seatings,
             ),
-            inputs=(corpus_input(),),
+            inputs=(pools,),
             setup=machine_setup(" --extra artifacts --extra evaluation"),
             extras=("artifacts", "evaluation"),
             max_hours=1,
@@ -258,8 +305,8 @@ def held_out_jobs(runs: Sequence[TrainingRunSummary]) -> list[EvalJob]:
     ]
 
 
-def report() -> Report:
-    matches = Matches(tournament=BENCHMARK)
+def report(*, precision: EvalPrecision = "float32") -> Report:
+    matches = Matches(tournament=benchmark_name(precision))
     return Report(
         clock="updates",
         score=Score(table="plays", value="score", reference=0.5),

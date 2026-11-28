@@ -44,12 +44,13 @@ from experiments.tla_corpus import Corpus
 from experiments.tla_frontier import HEURISTIC, learning, model
 from manabot.data import load_manifest
 from manabot.eval.admission import register_anchor
-from manabot.eval.agents import AGENTS, game_players, registration
+from manabot.eval.agents import AGENTS, play_scalar, registration
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.setup import machine_setup
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256
+from manabot.sim.agent import GamePlayer
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS
@@ -365,7 +366,11 @@ def spot_check(record: GameRecord, leg: int, replay_sha256: str) -> list[Row]:
     ]
 
 
-def play(match: Match[Deals], agents: Sequence[object]) -> Result:
+async def play(match: Match[Deals], agents: Sequence[object]) -> Result:
+    return await play_scalar(play_match, match, agents)
+
+
+def play_match(match: Match[Deals], agents: Sequence[GamePlayer]) -> Result:
     conditions = Deals.model_validate(match.config)
     if match.index is None or conditions != deals():
         raise ValueError("expected an indexed match on the fixed trophy pairs")
@@ -434,7 +439,7 @@ def play(match: Match[Deals], agents: Sequence[object]) -> Result:
         agents=dict(
             zip(
                 ("candidate", "opponent"),
-                game_players(match.players, agents),
+                agents,
                 strict=True,
             )
         ),

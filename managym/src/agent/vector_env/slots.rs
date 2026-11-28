@@ -12,17 +12,18 @@ use crate::{
 use std::{collections::HashSet, sync::Arc};
 
 /// Loading a branch never spends a fresh seed. A fresh load uses the slot's
-/// next scheduled seed and the vector's ordinary roster sampler.
+/// next scheduled seed (or an explicit seed when supplied) and the vector's
+/// ordinary roster sampler.
 #[derive(Clone)]
 pub enum SlotLoad {
-    Fresh(usize, Option<GameSetup>),
+    Fresh(usize, Option<GameSetup>, Option<u64>),
     Snapshot(usize, Arc<GameSnapshot>, RestoreOptions),
 }
 
 impl SlotLoad {
     pub fn with_slot(&self, slot: usize) -> Self {
         match self {
-            Self::Fresh(_, setup) => Self::Fresh(slot, setup.clone()),
+            Self::Fresh(_, setup, seed) => Self::Fresh(slot, setup.clone(), *seed),
             Self::Snapshot(_, source, options) => {
                 Self::Snapshot(slot, source.clone(), options.clone())
             }
@@ -31,7 +32,7 @@ impl SlotLoad {
 
     pub fn slot(&self) -> usize {
         match self {
-            Self::Fresh(slot, _) | Self::Snapshot(slot, ..) => *slot,
+            Self::Fresh(slot, ..) | Self::Snapshot(slot, ..) => *slot,
         }
     }
 }
@@ -151,11 +152,18 @@ impl VectorEnv {
     fn prepare_slot(&self, request: &SlotLoad) -> Result<SlotReplacement, AgentError> {
         let slot = request.slot();
         let previous = &self.envs[slot];
-        let rewind = matches!(request, SlotLoad::Snapshot(..))
-            && self.slots[slot] == SlotState::FreshOpening;
+        let replaces_opening = matches!(request, SlotLoad::Snapshot(..))
+            && matches!(self.slots[slot], SlotState::FreshOpening { .. });
+        let rewind = replaces_opening
+            && matches!(
+                self.slots[slot],
+                SlotState::FreshOpening {
+                    automatic_seed: true
+                }
+            );
         let mut next_seed = self.next_seeds[slot];
         let (env, obs, mut info, state, source_digest) = match request {
-            SlotLoad::Fresh(_, setup) => {
+            SlotLoad::Fresh(_, setup, explicit_seed) => {
                 if let Some(setup) = setup {
                     if !self.uniform_roster.is_empty() {
                         return Err(AgentError(
@@ -164,15 +172,26 @@ impl VectorEnv {
                     }
                     Self::validate_player_configs(setup.len())?;
                 }
-                let mut env = previous.replacement_root(next_seed);
+                let mut dealt_seed = explicit_seed.unwrap_or(next_seed);
+                let mut env = previous.replacement_root(dealt_seed);
                 let (obs, info) = Self::deal_fresh_game(
                     &self.uniform_roster,
                     &mut env,
-                    &mut next_seed,
+                    &mut dealt_seed,
                     self.seed_stride,
                     setup.as_ref().unwrap_or(&self.player_configs[slot]),
                 )?;
-                (env, obs, info, SlotState::FreshOpening, None)
+                let automatic_seed = explicit_seed.is_none();
+                if automatic_seed {
+                    next_seed = dealt_seed;
+                }
+                (
+                    env,
+                    obs,
+                    info,
+                    SlotState::FreshOpening { automatic_seed },
+                    None,
+                )
             }
             SlotLoad::Snapshot(_, source, options) => {
                 if !source.compatible(
@@ -217,14 +236,14 @@ impl VectorEnv {
             terminal,
             source_digest,
         };
-        let recording = if rewind || self.slots[slot] == SlotState::Poisoned {
+        let recording = if replaces_opening || self.slots[slot] == SlotState::Poisoned {
             Default::default()
         } else {
             previous.current_recording()?
         };
         Ok(SlotReplacement {
             setup: match request {
-                SlotLoad::Fresh(_, setup) => setup.clone(),
+                SlotLoad::Fresh(_, setup, _) => setup.clone(),
                 SlotLoad::Snapshot(..) => None,
             },
             result,

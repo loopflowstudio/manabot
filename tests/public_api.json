@@ -3702,7 +3702,7 @@
           },
           "fresh": {
             "kind": "staticmethod",
-            "signature": "(slot, player_configs=...)"
+            "signature": "(slot, player_configs=..., *, seed=...)"
           },
           "slot": {
             "kind": "property"
@@ -4022,7 +4022,7 @@
         "members": {
           "__init__": {
             "kind": "method",
-            "signature": "(self, num_envs, seed=..., skip_trivial=..., opponent_policy=..., seed_stride=..., *, decision_memory_include_own=..., decision_memory=..., player_policies=...)"
+            "signature": "(self, num_envs, seed=..., skip_trivial=..., opponent_policy=..., seed_stride=..., *, decision_memory_include_own=..., decision_memory=..., decision_events=..., player_policies=...)"
           },
           "buffered_call_timings": {
             "kind": "method",

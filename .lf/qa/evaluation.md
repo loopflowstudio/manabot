@@ -59,3 +59,49 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
   stored before a change, put the base's `pairing.py` in that directory under
   another module name. Changing an existing seating's configs raises
   `seating_conflict`; add a new seating instead.
+- Editable Etude: a plain `uv run` re-syncs the venv to the locked
+  `etude-sdk` and silently drops an editable checkout. Reinstall with
+  `uv pip install -e <etude checkout>` and run everything with
+  `uv run --no-sync` (or `.venv/bin/python`). For pytest, set `UV_NO_SYNC=1`
+  so the CLI tests' own `uv run` subprocesses keep the editable SDK too.
+- Vector trophy evaluation (`play_pairings`): drive
+  `experiments/eval_throughput.py` as in its report's Reproduce section
+  with `--deals 4` (16 games): CPU scalar about 55 s, MPS/MLX vector-64
+  about 10–12 s on the M4 Max, `--slots 3` exercises backfill. Compare arms
+  leg for leg by reading every `arena/*/games/deals/*.jsonl` record's
+  `games[].actions`, `digests` and `end` keyed by
+  `context.evaluation.(deal_seed, leg)`; float32 arms must be identical,
+  bf16 may differ. The CLI's Match differs from a managed one, so player
+  seeds (and games) differ between the CLI and a managed run of a deal.
+- Managed `play_many` locally: `etude.eval.tournament.evaluating(
+  Environment(...), experiment=..., matches=[Match(..., config=
+  held_out_deal(i).model_dump(), games=4)], directory=out / "track")` then
+  `run.play_many(experiments.tla_trophies.play_many, agents=agents_for(p))`
+  with `ETUDE_OUTPUT_DIR` set; the script needs an `if __name__ ==
+  "__main__"` guard because Etude spawns its game process. Two deals take
+  about 10 s on MPS. Explicit-match runs never resume: rerunning one
+  replays everything under a new name. A background job started with `&`
+  ignores SIGINT; to simulate Ctrl-C restore
+  `signal.signal(signal.SIGINT, signal.default_int_handler)` first.
+- Returning experiments (changes to `experiments/tla_trophies*.py`,
+  `pairing.py` or anything an `Environment` hashes): check that each stored
+  experiment still plans without conflict and without replaying, without
+  playing a game. Replace `etude.controller.advance._play_here` with a stub
+  that prints `len(spec.matches)` and returns `SimpleNamespace(played=0)`
+  per spec, then call `advance(read_experiment(Path(file),
+  experiment=name), source=storage_from_uri("r2://manabot/jobs/<name>"))`
+  under `doppler run -p manabot -c prd`. Each pass takes seconds. A healthy
+  pass prints "nothing to play" for every stored tournament.
+  `tournament_conflict` means an environment identity moved (compare
+  `stored_runs(...).tournaments[name].tournament.environment` with the
+  declaration's). Check `tla_trophies_floor`, `tla_frontier_snapshots` and
+  `experiments/tla_trophies_colab.py` under its stored experiment name
+  `tla_trophies_colab_500k_v2` (about 129 tournaments, all "nothing to
+  play"); the file's own name has no stored runs and plans 64 new matches. `tla_trophies` already conflicts on `main`.
+- To verify live resume, run a named `Benchmark` with one
+  `CheckpointSlot` seating through `uv run --no-sync etude eval FILE --source DIR`.
+  Add a distinct checkpoint to the same declaration and rerun. Expect one new
+  played deal with the new checkpoint, the old result block's checksum to
+  match and all four new legs to replay. A third pass reports
+  `nothing to play`. Use a temporary track directory and retain each run's
+  arena output separately.

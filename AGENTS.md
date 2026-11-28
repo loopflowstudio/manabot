@@ -527,7 +527,10 @@ transactional rollback snapshots must restore them. Training supplies recorder
 paths and phase markers; engine recording never discovers training scope.
 Install retained vector roots with `reset_each_into_buffers(setups, seeds=seeds)`.
 An ordinary reset followed by a seed reset creates a separate interrupted game
-in recording and statistics. Enable native statistics before the first reset.
+in recording and statistics. An explicit `SlotLoad.fresh(seed=...)` names one
+backfill game and leaves the slot's automatic seed sequence alone. Configure
+`decision_events=True` when detached decision views need the last step's events.
+Enable native statistics before the first reset.
 
 `protocol/*.schema.json` has no generator. Patch the files when a protocol
 type changes; the Rust schema tests compare them byte for byte with what
@@ -961,12 +964,17 @@ Local evaluation and reporting also read the default tracking directory alongsid
 `--source`. Set `ETUDE_TRACK_DIR` to a study-specific directory for both commands
 when smoke and full tournaments share a name.
 Etude imports evaluation callbacks by module and qualified name, including local
-runs; callbacks take `play(match, agents)`. A closure or callable instance is
-not a portable entry point. Managed jobs share `manabot.eval.agents.AGENTS`;
-`eval.agent_loader` alone chooses the framework/device, and game callbacks use
-the supplied agents in-process. Seating configs containing records with omitted fields must pass their JSON
-model dump, so a retained tournament compares alike on resume. Persistence fixtures that inject local outcomes use
-`tests/fixtures/evaluation_callbacks.py` across the real game process boundary.
+runs. Use an importable `async def play(match, agents)` or `play_many(matches)`.
+Managed jobs select their precision with `manabot.eval.agents.agents_for`.
+`eval.agent_loader` chooses the framework and device. Checkpoint seats carry
+an async forward keyed by checkpoint. Etude's in-process forward bus borrows
+C-contiguous NumPy arrays inside `Prepared`. Materialize strided lookup
+columns in host preparation so they can travel by pointer. Use `play_scalar`
+to supply synchronous players to the scalar arena. Seating configs containing
+records with omitted fields must pass their JSON model dump so a retained
+tournament compares alike on resume. Persistence fixtures that inject local
+outcomes use `tests/fixtures/evaluation_callbacks.py` across the real game
+process boundary.
 
 Etude hashes tracked source paths (`git add -N` admits new files for local
 implementation checks). Eval runs are sealed blocks: each game's card evidence

@@ -14,11 +14,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from functools import cache
-from pathlib import Path
 import random
 
 from etude.checkpoints import CheckpointRecord
-from etude.eval.match import environment
 from etude.eval.records import Aligned, Environment, Fraction, Seating
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.records import ArtifactRef
@@ -230,10 +228,16 @@ def final_seatings(template: Seating, opponent: str) -> tuple[Seating, ...]:
     )
 
 
+# tla_trophies.py and pairing.py when the stored final games were played.
+FINAL_ENVIRONMENT_FILES = (
+    "a6a2f68bc31115be5214c87909913b2f40fa5890bd13014e8d9a19a455a72bfa"
+)
+
+
 def final_environment() -> Environment:
-    return environment(
-        "tla-trophies",
-        files=[Path(trophies.__file__), trophies.ROOT / "manabot/eval/pairing.py"],
+    return Environment(
+        name="tla-trophies",
+        files=FINAL_ENVIRONMENT_FILES,
         config={"pools": trophies.corpus_input().sha256, "cards": True},
     )
 

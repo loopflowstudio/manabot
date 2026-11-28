@@ -601,7 +601,10 @@ class SlotLoad:
     def branch_root(self) -> tuple[GameSnapshot, RestoreOptions] | None: ...
     @staticmethod
     def fresh(
-        slot: int, player_configs: GameSetup | list[PlayerConfig] | None = None
+        slot: int,
+        player_configs: GameSetup | list[PlayerConfig] | None = None,
+        *,
+        seed: int | None = None,
     ) -> SlotLoad: ...
     @staticmethod
     def snapshot(
@@ -637,6 +640,7 @@ class VectorEnv:
         *,
         decision_memory_include_own: bool = False,
         decision_memory: bool = False,
+        decision_events: bool = False,
         player_policies: tuple[
             Literal["agent", "random", "heuristic"],
             Literal["agent", "random", "heuristic"],
@@ -700,7 +704,7 @@ class VectorEnv:
     def record_games(self, active: list[bool]) -> None: ...
     def state_digests(self, active: list[bool] | None = None) -> list[str | None]: ...
     def decision_observations(self, active: list[bool]) -> list[Observation | None]:
-        """Detached chooser views for active rows; does not advance games."""
+        """Detached chooser views. Opt into last-step events with decision_events."""
     def next_fresh_seeds(self) -> list[int]: ...
     def snapshot_slots(self, mask: Sequence[bool]) -> list[GameSnapshot | None]: ...
     def slot_metadata(self, mask: Sequence[bool]) -> list[SnapshotMetadata | None]: ...

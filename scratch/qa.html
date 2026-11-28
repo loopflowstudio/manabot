@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-497 QA: vector trophy evaluation</title>
+<style>
+:root{--bg:#fff;--surface:#fafaf9;--muted:#f2f2f0;--border:#dadad6;--text:#1c1c1e;--g:#46a230;--r:#e04a18;--w:#f2ad25;--u:#2f74d0}
+body{font-family:Spectral,Georgia,serif;color:var(--text);background:var(--bg);max-width:980px;margin:2rem auto;padding:0 1.2rem;line-height:1.5}
+h1{font-weight:600;margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid var(--border);padding-bottom:.2rem}
+.sub{color:#666}table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.95rem}
+th,td{border:1px solid var(--border);padding:.35rem .5rem;text-align:left;vertical-align:top}th{background:var(--muted)}
+pre{background:var(--surface);border:1px solid var(--border);padding:.6rem;overflow-x:auto;font-size:.82rem}
+.ok{color:var(--g);font-weight:600}.bad{color:var(--r);font-weight:600}.warn{color:#a0700e;font-weight:600}
+code{font-size:.88em;background:var(--muted);padding:0 .2em}
+</style></head><body>
+<h1>QA: vector trophy evaluation after compression (MTG-497)</h1>
+<p class="sub">M4 Max, 2026-11-27, branch at <code>85a3a5fb48</code> (after the two compress commits <code>3b12be84e5</code> and <code>85a3a5fb48</code>, which rewrote leg selection in <code>play_pairings</code>, the trophy pairing helper and lookup-array preparation) with editable Etude 6db832 and trained <code>w160l8</code> (<code>26ff27b7…</code>). Python changes only, so the existing debug extension was used.</p>
+
+<h2>What works now</h2>
+<ul>
+<li>The throughput CLI gives identical games leg for leg on CPU scalar, CPU vector with 3 slots (backfill) and MLX vector-64. Every game replays with zero mismatches.</li>
+<li>The current scalar games equal the pass 8 smoke receipts for deal 40900 (4/4 legs).</li>
+<li>Managed <code>play_many</code> through Etude shared Metal inference plays 2 deals in about 16 s at float32 and bf16. Every game replays. bf16 records <code>etude-policy-bf16-auto-v1</code> with the same player seeds as float32.</li>
+<li>Stored R2 experiments <code>tla_trophies_colab_500k_v2</code> (129 tournaments), <code>tla_trophies_floor</code> (39) and <code>tla_frontier_snapshots</code> (7) plan 0 new matches with no <code>tournament_conflict</code>.</li>
+<li>50 vector-eval and package-boundary tests pass. <code>scripts/public_api.py check</code> matches.</li>
+</ul>
+
+<h2>Scenario 1: throughput CLI</h2>
+<table><tr><th>Arm</th><th>Deals</th><th>Games/hr</th><th>Rows/forward (mean)</th><th>Legs identical to CPU scalar</th><th>Replay</th></tr>
+<tr><td>CPU scalar</td><td>2</td><td>698</td><td>1.0</td><td>reference</td><td class="ok">8/8 pass</td></tr>
+<tr><td>CPU vector, 3 slots</td><td>2</td><td>737</td><td>1.47</td><td class="ok">8/8</td><td class="ok">8/8 pass</td></tr>
+<tr><td>MLX vector-64</td><td>4</td><td>2,001</td><td>3.5</td><td class="ok">8/8 shared legs</td><td class="ok">16/16 pass</td></tr>
+</table>
+<p>Legs were compared on <code>games[].actions</code>, <code>digests</code> and <code>end</code>, keyed by <code>(deal_seed, leg)</code> (<code>.runs/qa-pass9/compare.py</code>). Throughput at 1–4 deals mostly measures startup and replay, not the forward path.</p>
+<p class="warn">The older 32-deal receipts in <code>.runs/eval-throughput/w160-mlx-64</code> differ from today's games on every leg (for example 184 against 257 actions). They predate the 120-second game budget and the merge of <code>main</code> at <code>659dd138fe</code>. Today's games match the pass 8 smoke, so this is not a compression regression. The 32-deal report numbers come from those older games.</p>
+
+<h2>Scenario 2: managed Etude <code>play_many</code></h2>
+<pre>etude: agents: shared inference for b00a31154abb5abc (metal); 2 game processes, slots requested by play_many; 14 inference threads
+etude: b00a31154abb5abc: 2/2 matches played, 16s elapsed
+etude: agents: stopped; 1 checkpoints loaded, 875 rows in 614 batches</pre>
+<table><tr><th>Precision</th><th>Seconds</th><th>Legs</th><th>Compute class</th><th>Replay</th></tr>
+<tr><td>float32</td><td>15.8</td><td>8</td><td><code>etude-policy-f32-auto-v1</code></td><td class="ok">all pass</td></tr>
+<tr><td>bf16</td><td>15.5</td><td>8</td><td><code>etude-policy-bf16-auto-v1</code></td><td class="ok">all pass; 7/8 legs have the same decision count as float32</td></tr>
+</table>
+
+<h2>Scenario 3: returning experiments against stored R2 runs</h2>
+<pre>tla_trophies_colab_500k_v2: 122 × "nothing to play"; new 0 tournaments 129
+tla_trophies_floor:         12 × "nothing to play" (the rest failed earlier); new 0 tournaments 39
+tla_frontier_snapshots:     7 × "nothing to play"; new 0 tournaments 7</pre>
+<p>On the first try I planned <code>tla_trophies_colab</code> under the file's own name. It has no stored eval runs, so it planned 64 new matches. The QA note now gives the stored experiment name.</p>
+
+<h2>Wrong input</h2>
+<p>Fixed: <code>--deals 99</code> printed all 32 accepted values. It now says:</p>
+<pre>eval_throughput.py: error: --deals must be between 1 and 32</pre>
+<p><code>--slots 0</code> already said <code>--slots must be positive</code>.</p>
+
+<h2>Still wrong or unchecked</h2>
+<ul>
+<li>Release is still blocked on <code>etude-sdk 0.5.0</code>. Everything above ran on the editable 6db832 checkout, because the locked 0.4.7 has no <code>play_many</code>.</li>
+<li>CUDA was not rerun after compression; no rental was used. Leg selection is shared Python, so the CPU and MLX parity covers its logic.</li>
+<li>The paths for <code>ForwardError</code> isolation and mixed layouts are covered only by <code>tests/eval/test_vector_eval.py</code>, which passed. No real run can trigger them.</li>
+<li>The 32-deal report numbers predate the merge and the game budget (see Scenario 1). Rerun them if the report must describe this exact revision.</li>
+</ul>
+</body></html>

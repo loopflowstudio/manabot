@@ -166,6 +166,8 @@ def apply_matmul_precision(precision: "Precision") -> None:
 def validate_precision(precision: str, device: torch.device) -> None:
     if precision not in ("float32", "tf32", "bf16"):
         raise ValueError(f"unsupported Torch precision: {precision!r}")
+    if precision == "tf32" and device.type != "cuda":
+        raise ValueError("precision tf32 requires CUDA")
     if precision == "bf16" and device.type not in {"cuda", "mps"}:
         raise ValueError("precision bf16 requires CUDA or MPS")
 

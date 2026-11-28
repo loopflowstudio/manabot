@@ -52,9 +52,10 @@ CUDA. All five shipped recipes (`local`, `baseline`, `elemental`,
 (with `device="mps"` or `"cpu"` for self-play).
 [MLX training and recovery](backends/mlx.md#tracked-training-and-recovery)
 
-Torch MPS self-play requires Torch 2.15 or newer. Evaluation and search run
-on CPU. The device guide covers precision, belief inputs and frozen opponents.
-[Training devices](../docs/training.md#run-training)
+Torch MPS self-play requires Torch 2.15 or newer. Training monitoring and
+search use CPU. Managed Etude evaluations choose CUDA, MLX, MPS, or CPU.
+[Training devices](../docs/training.md#run-training) ·
+[Etude agents](../docs/evaluation.md#etude-agents)
 
 The loop logs completed updates and cumulative transitions, publishes raw
 and configured EMA policies, and saves the learner, Adam, EMA and counts under
@@ -1033,12 +1034,13 @@ execution remain outside it.
 
 ### Managed evaluation inference
 
-Etude owns process allocation, model residency and batching. Every evaluation
-job uses `manabot.eval.agents.AGENTS`: the loader returns deterministic masked
-logits from Prepared rows, and Torch-free game agents prepare and sample with
-the decision seed. Native play and replay run in the Etude game process.
-Standalone local checks remain scalar. See [evaluation](../docs/evaluation.md#etude-agents)
-for failure limits and retained compute identities.
+Etude owns process allocation, model residency and batching. The loader in
+`manabot.eval.agents.AGENTS` returns deterministic masked logits from Prepared
+rows. Torch-free game agents prepare observations and sample from each
+decision seed. Native play and replay run in the Etude game process. TLA
+trophies use `play_many` to step and refill concurrent games, batching policy
+rows within each round. See [evaluation](../docs/evaluation.md#etude-agents)
+for the async callback contracts and compute identities.
 
 ### Native decision text
 

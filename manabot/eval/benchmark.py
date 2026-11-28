@@ -11,7 +11,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 import os
 from pathlib import Path
-from typing import cast
 
 from etude.eval.records import (
     Benchmark,
@@ -28,7 +27,7 @@ from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 from pydantic import BaseModel
 
-from manabot.eval.agents import AGENTS, etude_registration
+from manabot.eval.agents import AGENTS, etude_registration, play_scalar
 from manabot.eval.behaviour import checkpoint_counts
 from manabot.eval.evaluation import (
     EvaluationRequest,
@@ -130,7 +129,11 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
     )
 
 
-def play(match: Match, agents: Sequence[object]) -> Tables:
+async def play(match: Match, agents: Sequence[object]) -> Tables:
+    return await play_scalar(play_match, match, agents)
+
+
+def play_match(match: Match, agents: Sequence[GamePlayer]) -> Tables:
     """Etude game callback: one eight-leg deal of the checkpoint against its anchor."""
     if len(match.players) != 2:
         raise ValueError("expected one eight-leg checkpoint/heuristic deal")
@@ -156,7 +159,7 @@ def play_deal(
     candidate: PlayerRegistration,
     opponent: PlayerRegistration,
     checkpoint_paths: dict[str, str],
-    agents: Sequence[object],
+    agents: Sequence[GamePlayer],
 ) -> Tables:
     """Play or continue the match's deal with Etude's agents, in seating order.
 
@@ -177,8 +180,8 @@ def play_deal(
         purpose="repeated-development-comparison",
     )
     seated = {
-        candidate.player_id: cast(GamePlayer, agents[0]),
-        opponent.player_id: cast(GamePlayer, agents[1]),
+        candidate.player_id: agents[0],
+        opponent.player_id: agents[1],
     }
     result = (
         continue_evaluation(out, request=request, agents=seated)

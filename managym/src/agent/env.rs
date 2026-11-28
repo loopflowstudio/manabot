@@ -144,6 +144,7 @@ pub struct Env {
     // Observation::for_player deliberately omits events. Built-in index stepping
     // must reuse the live projection's events, especially combat declarations.
     heuristic_events: Vec<EventData>,
+    decision_events: bool,
     provenance: Option<GameProvenance>,
     reset_setup: Option<Arc<GameSetup>>,
     collect_statistics: bool,
@@ -246,6 +247,7 @@ impl Env {
             game: None,
             heuristics: [None, None],
             heuristic_events: Vec::new(),
+            decision_events: false,
             player_policies: [PlayerPolicy::Agent; 2],
             provenance: None,
             reset_setup: None,
@@ -287,6 +289,7 @@ impl Env {
             game: Some(game),
             heuristics: self.heuristics.clone(),
             heuristic_events: self.heuristic_events.clone(),
+            decision_events: self.decision_events,
             player_policies: self.player_policies,
             reset_seed: self.reset_seed,
             reset_setup: self.reset_setup.clone(),
@@ -396,11 +399,16 @@ impl Env {
         })
     }
 
+    pub(crate) fn enable_decision_events(&mut self) {
+        self.decision_events = true;
+    }
+
     pub(crate) fn replacement_root(&self, seed: u64) -> Self {
         let mut next = Self::new(seed, self.skip_trivial, self.profiler.is_enabled(), false)
             .with_player_policies(self.player_policies)
             .with_decision_memory(self.decision_memory_enabled)
             .with_decision_memory_include_own(self.decision_memory_include_own);
+        next.decision_events = self.decision_events;
         next.collect_statistics = self.collect_statistics;
         next.capture = self.capture;
         next
@@ -408,6 +416,7 @@ impl Env {
 
     /// Publish a prepared slot, moving undrained evidence only after admission.
     pub(crate) fn replace_slot(&mut self, mut next: Self, evidence: GameRecording) {
+        next.decision_events = self.decision_events;
         next.collect_statistics = self.collect_statistics;
         next.capture = self.capture;
         next.record_terminal = self.record_terminal;
@@ -728,7 +737,7 @@ impl Env {
         let done = game.step(action)?;
         let mut result = finish_game_step(game, agent, done);
         // The profiler scope borrows self, so this cannot call remember_heuristic_events.
-        if self.player_policies.contains(&PlayerPolicy::Heuristic) {
+        if self.decision_events || self.player_policies.contains(&PlayerPolicy::Heuristic) {
             self.heuristic_events.clone_from(&result.0.recent_events);
         }
         if done {
@@ -738,9 +747,19 @@ impl Env {
     }
 
     fn remember_heuristic_events(&mut self, observation: &Observation) {
-        if self.player_policies.contains(&PlayerPolicy::Heuristic) {
+        if self.decision_events || self.player_policies.contains(&PlayerPolicy::Heuristic) {
             self.heuristic_events.clone_from(&observation.recent_events);
         }
+    }
+
+    /// Current chooser view preserving the last step's emitted events, matching
+    /// what scalar `Env::reset` / `Env::step` returns to external callers.
+    pub(crate) fn decision_observation(&self) -> Result<Observation, AgentError> {
+        let mut obs = self.observation_for_player(self.current_agent_index().unwrap_or(0))?;
+        if self.decision_events {
+            obs.recent_events.clone_from(&self.heuristic_events);
+        }
+        Ok(obs)
     }
 
     fn require_external_chooser(&self) -> Result<(), AgentError> {

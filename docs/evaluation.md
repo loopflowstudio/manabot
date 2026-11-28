@@ -407,23 +407,52 @@ print(corpus.sql("""
 
 ## Etude agents
 
-Managed evaluations declare the same `manabot.eval.agents.AGENTS` on every
-`EvalJob`, and pass those agents to `active.play`. Etude owns game processes,
-checkpoint grouping, batching, model residency, retries and performance records.
-The callback is `play(match, agents)`, with objects in seat order; it runs the
-native game and Command replay in that Etude process.
+The async evaluation callbacks require Etude SDK 0.5.0. To try them before
+that release, install an editable Etude checkout that supports `play_many`
+and use `uv run --no-sync`. See the [throughput reproduction setup](../experiments/reports/eval_throughput.md#reproduce).
 
-`manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path`, chooses
-Torch and CPU or CUDA, and returns a deterministic forward:
+Managed evaluations declare an agent set from `manabot.eval.agents` on each
+`EvalJob`. Etude owns game processes, checkpoint grouping, batching, model
+residency, retries and performance records. A scalar job declares
+`async def play(match, agents)` and gets one object per seat. Use
+`play_scalar` to run the native game and Command replay in a worker thread
+while the Etude event loop handles checkpoint forwards.
+
+TLA trophy evaluation declares `play_many(matches)`. The async generator
+pulls matches into 64 native game slots, replaces finished legs as new matches
+arrive, and yields a replay-checked result for each completed deal. The
+vector runner groups v11 observations by checkpoint key and prepares one
+host batch per checkpoint per round, including seats that blank decision
+memory. It awaits `Forward([prepared], rows=prepared.batch)`. The game worker
+reuses verified checkpoint metadata across deals.
+A checkpoint forward failure settles the affected matches as errors before
+the runner requests replacements for those slots. Unrelated games continue.
+Checkpoints in one deal must agree on the vector observation layout, action
+overflow and decision-memory capture. Compatible deals share the environment
+even when their seat-specific mana settings differ. For a local Etude run,
+pass the generator and agent set to `active.play_many`. Each live decision
+round divides its elapsed time among the active slots. A game's budget and
+recorded execution time use its share. The Etude run deadline covers
+admission, replay and result delivery too.
+
+`manabot.eval.agent_loader.load(checkpoint)` reads `checkpoint.path` and
+prefers CUDA, followed by MLX, MPS, and CPU. MLX uses
+Metal on Apple Silicon and requires `uv sync --extra evaluation --extra mlx`.
+Set `MANABOT_EVAL_DEVICE` to `cuda`, `mlx`, `mps`, or `cpu` to require a
+specific runtime target. The default loader computes in float32. MLX keeps
+fixed weights in the declared dtype and transfers policy logits to the host.
+Declare `AGENTS_BF16` for bfloat16 on CUDA, MLX, or MPS with hardware support,
+or `AGENTS_TF32` for TF32 on CUDA. Each loader returns a deterministic forward
 `list[Prepared] -> list[masked logits]`, preserving length and order. Host
-preparation and admission happen once in the game-side sampler. The loader
+preparation and admission happen once in the game process. The loader
 merges admitted rows, rebasing their object, frame, fact and effect routes;
 it never selects an action. `build(player, leaves)` creates the heuristic or
 checkpoint sampler without importing Torch. Each decision's recorded seed
 controls NumPy PCG64 sampling in the game process.
 
-A checkpoint with a decision-memory encoder has its log prepared by the same
-sampler, and the loader forwards each such row as its own batch. A seat whose
+A checkpoint with a decision-memory encoder has its log prepared with the
+observation. The loader joins these memory rows and rebuilds their packed
+sequence schedule when Etude sends multiple inputs. A seat whose
 player config holds `blank_decision_memory: True` plays the same bytes with
 the log zeroed at every decision, registered as a distinct player
 ([reliance comparison](observation-and-model.md#whole-game-decision-memory));
@@ -431,19 +460,23 @@ the log zeroed at every decision, registered as a distinct player
 returns an Etude `Result` carrying outcome rows, heuristic behaviour counts
 and [card data](#card-data).
 
-Managed checkpoint registrations name `etude-policy-f32-auto-v1` and
-`numpy-pcg64-v1`. New tournaments have fresh `agents-v1` names and one native
-game group per Etude match. Frozen tournament keys, compute contracts and
-receipts are unchanged. `manabot.sim.execution` reads retained
-`shared-eval-v1` and `shared-eval-v2` records; it no longer allocates execution.
-Standalone local evaluation and training monitoring retain scalar checkpoint
-play through bounded local children.
+Managed checkpoint registrations carry the declared precision's compute class
+and `numpy-pcg64-v1`. Float32 keeps `etude-policy-f32-auto-v1`. The paired
+arena uses the same player seeds across precision settings. Trophy
+`held_out_jobs(runs, precision=...)` sets the loader, tournament environment
+and per-deal precision from one declaration. Float32 keeps the tournament name
+`tla-trophies-held-out-32`. BF16 and TF32 add their precision as a suffix.
+Pass the same precision to the trophy `report(precision=...)` to select its
+tournament. `manabot.sim.execution` reads the retained `shared-eval-v1` and
+`shared-eval-v2` records. Standalone local evaluation and training monitoring
+retain scalar checkpoint play through bounded local children.
 
 **Failure.** The game loop checks `game_seconds` between decisions and enforces
-`max_commands`. Before native execution it fsyncs the pending Command. Native
-`AgentError` and PyO3 `PanicException` produce invalid, score-null rows and retain
-the journal; later games in the group still run. Replay verifies Commands,
-not cross-device policy equivalence. Invalid rows never become forfeits.
+`max_commands`. Scalar play fsyncs the pending Command before native execution.
+The vector runner holds live records in memory and retains settled diagnostics
+when a deal completes. Native `AgentError` and PyO3 `PanicException` produce
+invalid, score-null rows and retain failure evidence. Later games continue.
+Replay checks the recorded Commands against the reconstructed game. Invalid rows never become forfeits.
 Other Python exceptions fail the match. Elemental also fails a match with no
 valid replayed games, preserving its evidence, so an all-invalid smoke cannot
 report success.

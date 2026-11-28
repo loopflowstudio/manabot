@@ -8,7 +8,7 @@ Only complete replayed deal cohorts produce paired-deal score intervals.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import fields
 from itertools import batched
@@ -16,7 +16,7 @@ import json
 import math
 from pathlib import Path
 import time
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from etude.errors import RetryRequested
@@ -193,20 +193,8 @@ def _execute_attempt(
     deadline: float | None = None,
     card_evidence_dir: Path | None = None,
 ) -> EvaluationResult:
-    """Execute in an exclusively claimed directory; retain every failure."""
-    result = EvaluationResult(
-        request=request,
-        deadline_unix=deadline,
-        evaluation_id=evaluation_id,
-        card_evidence_dir=str(card_evidence_dir)
-        if card_evidence_dir is not None
-        else None,
-    )
-    atomic_json(out_dir / "evaluation.json", result.model_dump(mode="json"))
-    started = time.perf_counter()
-    performance = EvalPerformance("evaluation")
-    try:
-        rows, trace, replay = play_cell(
+    def play() -> CellResult:
+        return play_cell(
             agents=agents,
             deadline=deadline,
             backend_name=backend_name,
@@ -223,6 +211,44 @@ def _execute_attempt(
             card_evidence_dir=card_evidence_dir,
             reducers={"play": Play()},
         )
+
+    return retain_attempt(
+        request,
+        play,
+        out_dir=out_dir,
+        evaluation_id=evaluation_id,
+        started=time.perf_counter(),
+        deadline=deadline,
+        card_evidence_dir=card_evidence_dir,
+    )
+
+
+type CellResult = tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]
+
+
+def retain_attempt(
+    request: EvaluationRequest,
+    play: Callable[[], CellResult],
+    *,
+    out_dir: Path,
+    evaluation_id: str,
+    started: float,
+    deadline: float | None = None,
+    card_evidence_dir: Path | None = None,
+) -> EvaluationResult:
+    """Retain the attempt's rows, replay and errors in its claimed directory."""
+    result = EvaluationResult(
+        request=request,
+        deadline_unix=deadline,
+        evaluation_id=evaluation_id,
+        card_evidence_dir=str(card_evidence_dir)
+        if card_evidence_dir is not None
+        else None,
+    )
+    atomic_json(out_dir / "evaluation.json", result.model_dump(mode="json"))
+    performance = EvalPerformance("evaluation")
+    try:
+        rows, trace, replay = play()
         for name, payload in (("rows", rows), ("trace", trace), ("replay", replay)):
             atomic_json(out_dir / f"{name}.json", payload)
         result.rows = [EvaluationRow.model_validate(row) for row in rows]

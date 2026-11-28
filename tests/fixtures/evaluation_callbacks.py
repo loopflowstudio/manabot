@@ -4,6 +4,8 @@ Persistence fixtures keep injected outcomes and counters in their pytest process
 The game process calls this importable bridge rather than importing a closure.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager, nullcontext
 from multiprocessing.connection import Client, Listener
@@ -18,8 +20,10 @@ from etude.eval.run import EvalRun
 from etude.jobs import Agents
 import pytest
 
+from manabot.sim.agent import GamePlayer
 
-def play_callback(match: Match, agents: Sequence[object]) -> Tables | Result:
+
+async def play_callback(match: Match, agents: Sequence[object]) -> Tables | Result:
     """Run the fixture in its owning process and retain SDK execution in a child."""
     with Client(os.environ["MANABOT_TEST_CALLBACK"], authkey=b"fixture") as connection:
         connection.send(match)
@@ -91,23 +95,27 @@ class PanicException(BaseException):
     """Controlled PyO3-shaped panic for exercising BaseException retention."""
 
 
-def play_native_case(match: Match, agents: Sequence[object]) -> Result:
+async def play_native_case(match: Match, agents: Sequence[object]) -> Result:
+    from manabot.eval.agents import play_scalar
+
+    return await play_scalar(play_native_case_scalar, match, agents)
+
+
+def play_native_case_scalar(match: Match, agents: Sequence[GamePlayer]) -> Result:
     """Run real native games with one injected player failure or clock expiry."""
     import sys
     import time
     from types import SimpleNamespace
-    from typing import cast
     from unittest.mock import patch
 
     from manabot.eval.card_evaluation import verification_spec
     from manabot.eval.match import play_cell
-    from manabot.sim.agent import GamePlayer
     import managym
 
     assert "torch" not in sys.modules, "the Etude game callback imported Torch"
     spec = verification_spec(8)
     case = str(match.config["case"])
-    first = cast(GamePlayer, agents[0])
+    first = agents[0]
 
     class Injected:
         space = first.space
@@ -131,7 +139,7 @@ def play_native_case(match: Match, agents: Sequence[object]) -> Result:
 
     built = {
         spec.players[0].player_id: Injected(),
-        spec.players[1].player_id: cast(GamePlayer, agents[1]),
+        spec.players[1].player_id: agents[1],
     }
     root = Path(os.environ["ETUDE_OUTPUT_DIR"]) / match.key
     clock = SimpleNamespace(
