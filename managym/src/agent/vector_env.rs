@@ -1067,14 +1067,10 @@ impl VectorEnv {
             }
         };
         env.prepare_root(configs, policies)?;
-        let mut open = || {
-            let obs = env.construct_root()?;
-            env.settle_opening(obs)
-        };
         if !isolated {
-            return open().map(|(obs, info)| (Some(obs), info));
+            return env.open_game().map(|(obs, info)| (Some(obs), info));
         }
-        Ok(match isolate_gameplay(open) {
+        Ok(match isolate_gameplay(|| env.open_game()) {
             Ok((obs, info)) => (Some(obs), info),
             Err(mut info) => {
                 record_failure_seat(&mut info, env);

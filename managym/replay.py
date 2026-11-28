@@ -30,6 +30,7 @@ from managym.recording import (
     GameInputs,
     GameRecord,
     Intervention,
+    NativeBoundary,
     _games_from_snapshot,
     _read_snapshots,
     runtime_identities,
@@ -461,98 +462,89 @@ def require_replay_runtime(
     return native
 
 
+def _inputs_at_boundary(
+    game: GameInputs, boundary: NativeBoundary | None, index: int
+) -> GameInputs:
+    """Keep the attempted action and frame only when the journal binds both."""
+    actions = game.actions
+    if (
+        boundary is not None
+        and boundary.phase == "executing"
+        and boundary.operation in {"step", "step_isolated", "command"}
+        and index < len(boundary.committed_counts)
+    ):
+        committed = boundary.committed_counts[index]
+        if (
+            index < len(boundary.active)
+            and boundary.active[index]
+            and index < len(boundary.pending_actions)
+            and len(actions) == committed + 1
+            and actions[-1] == boundary.pending_actions[index]
+            and game.frame is not None
+        ):
+            return game
+        actions = actions[:committed]
+    return game.model_copy(update={"actions": actions, "frame": None})
+
+
 def replay_failure_inputs(
     evidence: GameRecord, *, statistics: bool = False
 ) -> list[dict[str, object]]:
     """Replay only retained inputs. The CLI supplies the process wall-time bound."""
     boundary = evidence.boundary
-    if boundary is None:
-        if all(game.failure is None for game in evidence.games):
-            return [
-                _replay_game_inputs(evidence, game, statistics=statistics)
-                for game in evidence.games
-            ]
-        # A boundaryless vector snapshot with isolated failures: only the
-        # failed slots attempted a native call; siblings are current prefixes.
-        results = []
-        for game in evidence.games:
-            if game.failure is not None:
-                results.append(
-                    _replay_game_inputs(evidence, game, statistics=statistics)
-                )
-                continue
-            if not game.players:
-                results.append({"stream": game.stream, "status": "setup_unavailable"})
-                continue
-            sibling = game.model_copy(update={"frame": None})
-            result = _replay_game_inputs(evidence, sibling, statistics=statistics)
-            result.update(
-                at_retained_failure=False,
-                matches_binding=None,
-                matches_error=None,
-                diagnostic="Reconstructed the current known prefix; no native call was pending",
-            )
-            results.append(result)
-        return results
-    retained = evidence.model_copy(deep=True)
-    # Journal reset inputs describe the prior game, not the proposed new root.
-    # Only an active step row with its exact pre-action frame binds an attempt.
-    retained.operation = "step"
-    coordinates = {
-        "boundary_operation": boundary.operation,
-        "boundary_phase": boundary.phase,
-        "native_returned": boundary.returned,
-        "setup_known": boundary.setup_known,
-    }
+    if boundary is None and all(game.failure is None for game in evidence.games):
+        return [
+            _replay_game_inputs(evidence, game, statistics=statistics)
+            for game in evidence.games
+        ]
+
+    coordinates: dict[str, object] = {}
+    if boundary is not None:
+        coordinates = {
+            "boundary_operation": boundary.operation,
+            "boundary_phase": boundary.phase,
+            "native_returned": boundary.returned,
+            "setup_known": boundary.setup_known,
+        }
+    # Journal reset inputs describe the prior game. Only an executing step
+    # with a matching action and frame identifies a pending call in that game.
+    prefix = evidence.model_copy(update={"operation": "step"})
     results: list[dict[str, object]] = []
-    for index, game in enumerate(retained.games):
-        if game.failure is not None or evidence.failed_opening(game):
+    for index, game in enumerate(evidence.games):
+        if game.failure is not None or (
+            boundary is not None and evidence.failed_opening(game)
+        ):
             result = _replay_game_inputs(evidence, game, statistics=statistics)
             results.append({**result, **coordinates})
             continue
-        bound_step = (
-            boundary.phase == "executing"
-            and boundary.operation in {"step", "step_isolated", "command"}
-            and index < len(boundary.active)
-            and boundary.active[index]
-            and index < len(boundary.committed_counts)
-            and index < len(boundary.pending_actions)
-            and len(game.actions) == boundary.committed_counts[index] + 1
-            and game.actions[-1] == boundary.pending_actions[index]
-            and game.frame is not None
-        )
-        if not bound_step:
-            game.frame = None
-            if (
-                boundary.phase == "executing"
-                and boundary.operation in {"step", "step_isolated", "command"}
-                and index < len(boundary.committed_counts)
-            ):
-                game.actions = game.actions[: boundary.committed_counts[index]]
+
+        game = _inputs_at_boundary(game, boundary, index)
         if not game.players:
-            result = {
-                "stream": game.stream,
-                "status": "setup_unavailable",
-            }
+            result = {"stream": game.stream, "status": "setup_unavailable"}
+            if boundary is None:
+                results.append(result)
+                continue
         else:
-            result = _replay_game_inputs(retained, game, statistics=statistics)
-        result.update(
-            coordinates,
-            original_outcome=(
-                "failed"
-                if evidence.mode != "vector" and evidence.execution_outcome == "failed"
-                else "execution_outcome_unknown"
-            ),
-            diagnostic="Replay cannot settle the original interrupted call's outcome",
-        )
-        if not bound_step:
+            result = _replay_game_inputs(prefix, game, statistics=statistics)
+        if boundary is not None:
+            result.update(
+                coordinates,
+                original_outcome=(
+                    "failed"
+                    if evidence.mode != "vector"
+                    and evidence.execution_outcome == "failed"
+                    else "execution_outcome_unknown"
+                ),
+                diagnostic="Replay cannot settle the original interrupted call's outcome",
+            )
+        if game.frame is None:
             result.update(
                 at_retained_failure=False,
                 matches_binding=None,
                 matches_error=None,
                 diagnostic=(
                     "Reconstructed the current known prefix; no native call was pending"
-                    if boundary.phase == "ready"
+                    if boundary is None or boundary.phase == "ready"
                     else "Reconstructed last-known prefix; pending binding or current setup unavailable"
                 ),
             )
@@ -596,14 +588,13 @@ def _replay_game_inputs(
     if game.failure is not None:
         evidence = evidence.for_game(game)
         [game] = evidence.games
-    failed_opening = evidence.failed_opening(game)
     # A strict vector exception records the batch outcome, without proving
     # which individual streams advanced. Replay cannot fill in that history.
     # An isolated failure, at reset or step, ends its own stream as failed.
     observed_failure = game.end is not None and game.end.status == "failed"
     agreement = ReplayAgreement(
         "execution_outcome_unknown"
-        if evidence.mode == "vector" and not (failed_opening or observed_failure)
+        if evidence.mode == "vector" and not observed_failure
         else evidence.execution_outcome
     )
     # A reset/search failure has a different boundary from a rejected game

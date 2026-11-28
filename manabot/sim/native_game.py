@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from multiprocessing.connection import Connection
 from pathlib import Path
 import tempfile
@@ -36,7 +36,6 @@ from manabot.sim.agent import GamePlayer
 from manabot.sim.evaluation_records import (
     DecisionIdentity,
     bind_record,
-    decision_annotation,
     evaluation_metadata,
     finalize_game,
 )
@@ -148,26 +147,11 @@ def game_runtime_identities(
     }
 
 
-@dataclass(frozen=True)
-class ArenaDecision:
-    """A live viewer frame and the sampling identity of its acting player."""
-
-    frame: dict[str, Any]
-    identity: DecisionIdentity
-
-    def evidence(self, offer: dict[str, Any], elapsed: float) -> dict[str, Any]:
-        return {
-            **self.identity.evidence(elapsed),
-            **offer_evidence(self.frame, offer),
-        }
-
-
-def arena_decision(
+def arena_frame(
     game: dict[str, Any],
     raw: managym.Observation,
     revision: int,
-    counts: Mapping[str, int],
-) -> ArenaDecision:
+) -> dict[str, Any]:
     frame = build_viewer_frame(
         raw,
         match_id=game["match_id"],
@@ -178,24 +162,13 @@ def arena_decision(
     if frame["projection"]["opponent"].get("hand"):
         game["integrity"]["private_exposures"] += 1
         raise RuntimeError("viewer frame exposes a private hand")
-    actor = int(raw.agent.player_index)
-    player_id = game["seat_players"][actor]
-    return ArenaDecision(
-        frame,
-        DecisionIdentity(
-            actor,
-            revision,
-            player_id,
-            game["player_seeds"][player_id],
-            counts[player_id],
-        ),
-    )
+    return frame
 
 
 def chosen_offer(
-    game: dict[str, Any], decision: ArenaDecision, action: int
+    game: dict[str, Any], frame: dict[str, Any], action: int
 ) -> dict[str, Any]:
-    for offer in decision.frame["offers"]:
+    for offer in frame["offers"]:
         if int(offer["id"]) == action:
             return offer
     game["integrity"]["illegal_actions"] += 1
@@ -315,13 +288,14 @@ def execute_game(
             raw = env.last_raw_obs
             actor = int(raw.agent.player_index)
             frame_started = time.monotonic()
-            turn = arena_decision(game, raw, revision, decision_counts)
-            player_id = turn.identity.player_id
+            frame = arena_frame(game, raw, revision)
+            turn = DecisionIdentity.for_actor(game, actor, revision, decision_counts)
+            player_id = turn.player_id
             perf.record("frame_projection", frame_started)
             pre_digest = env._engine.state_digest()
             responsible = player_id
             send(("phase", player_id))
-            policy_seed = turn.identity.policy_seed
+            policy_seed = turn.policy_seed
             if agents is None and registrations[actor].runner_kind == "checkpoint":
                 in_child.seed(policy_seed)
             started = time.perf_counter()
@@ -335,26 +309,21 @@ def execute_game(
             if env._engine.state_digest() != pre_digest:
                 game["integrity"]["root_mutations"] += 1
                 raise RuntimeError("player mutated the authoritative root")
-            offer = chosen_offer(game, turn, action)
+            offer = chosen_offer(game, frame, action)
             perf.record("command_validation", validation_started)
             responsible = None
             send(("phase", None))
-            command = command_for_offer(turn.frame, offer)
-            decision = turn.evidence(offer, elapsed)
-            decision.update(command=command, command_sha256=canonical_sha256(command))
-            if capture is None:
-                decision["pre_state_digest"] = pre_digest
+            evidence = turn.evidence(elapsed) | offer_evidence(frame, offer)
+            annotation: dict[str, Any] = {"extra": {"evaluation": evidence}}
             player = built[player_id][0]
             if in_child.observes_steps(player) and player.last_receipt is not None:
                 # Arena traces are private. Advice uses the explicit public projection.
-                decision["local_update_receipt"] = player.last_receipt.to_json()
-                decision["latency_seconds"] += player.last_receipt.belief_seconds
-                decision["belief_model_mismatch"] = (
+                receipt = player.last_receipt
+                evidence["local_update_receipt"] = receipt.to_json()
+                evidence["latency_seconds"] += receipt.belief_seconds
+                evidence["belief_model_mismatch"] = (
                     "opponent_behavior_not_assumed_equal_to_frozen_policy"
                 )
-            annotation = decision_annotation(decision)
-            if in_child.observes_steps(player) and player.last_receipt is not None:
-                receipt = player.last_receipt
                 annotation.update(
                     probabilities=list(receipt.target),
                     search_scores=list(receipt.values),
@@ -374,6 +343,12 @@ def execute_game(
                 )
             # Scenarios use the parent's acknowledged Command journal. Ordinary
             # games fsync their capture journal immediately before native execution.
+            command = command_for_offer(frame, offer)
+            decision = dict(
+                evidence, command=command, command_sha256=canonical_sha256(command)
+            )
+            if capture is None:
+                decision["pre_state_digest"] = pre_digest
             game["pending_decision"] = decision
             with perf.span("command_durable_acknowledgement"):
                 send(("pending", decision))
@@ -444,6 +419,7 @@ def execute_game(
             f"{type(exc).__name__}: {exc}",
             responsible,
         )
+    record = None
     if env is not None:
         if capture is not None:
             # Capture the settled metadata in the cutoff report and close journal.
@@ -458,10 +434,12 @@ def execute_game(
                 if game.get("pending_decision")
                 else capture.snapshot()
             )
-            bind_record(game, record)
     temporary.cleanup()
     game["worker_performance"] = perf.snapshot()
-    finalize_game(game)
+    if record is None:
+        finalize_game(game)
+    else:
+        bind_record(game, record)
     send(("result", game))
 
 

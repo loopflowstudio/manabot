@@ -69,7 +69,6 @@ from manabot.sim.agent import GameChoice
 from manabot.sim.evaluation_records import (
     DecisionIdentity,
     bind_record,
-    decision_annotation,
     set_execution_limits,
 )
 from manabot.sim.native_game import (
@@ -123,7 +122,7 @@ class PendingLeg:
     game: dict[str, Any]
     setup: managym.GameSetup
     player_policies: tuple[str, str]
-    code_choices: dict[str, GameChoice]
+    choosers: dict[str, Sampler | GameChoice]
 
 
 @dataclass(eq=False)
@@ -229,6 +228,10 @@ def admit_active_match(
         inputs=inputs,
         started=time.perf_counter(),
     )
+    native_policies = {
+        name: seat.player_policy if isinstance(seat, NativeHeuristic) else "agent"
+        for name, seat in admitted.agents.items()
+    }
     legs: deque[PendingLeg] = deque()
     for item in plan.work:
         game = item.game
@@ -237,35 +240,31 @@ def admit_active_match(
         registrations = item.registrations
         match_config = MatchConfig.model_validate(game["match_hypers"])
         require_open_decklists(match_config.decklists, registrations)
+        choosers: dict[str, Sampler | GameChoice] = {}
         for registration in registrations:
             name = registration.player_id
-            agent = admitted.agents[name]
-            if isinstance(agent, Sampler):
+            seat = admitted.agents[name]
+            if isinstance(seat, Sampler):
                 inputs[name].admit(
-                    match_config, allow_deck_repetition=agent.allow_deck_repetition
+                    match_config, allow_deck_repetition=seat.allow_deck_repetition
                 )
+                choosers[name] = seat
+            elif isinstance(seat, CodeSeat):
+                choosers[name] = seat.open_game(game["player_seeds"][name])
         resolved_match = resolve_game_match(
             game, match_config, registrations, player_spaces
         )
         game["observation_hypers"] = space.config.model_dump()
         set_execution_limits(game, registrations, spec.max_commands, spec.game_seconds)
         game["runtime_identities"] = game_runtime_identities(resolved_match, space)
-        players = game["seat_players"]
-        a, b = (
-            seat.player_policy if isinstance(seat, NativeHeuristic) else "agent"
-            for seat in (admitted.agents[player] for player in players)
-        )
+        first, second = game["seat_players"]
         legs.append(
             PendingLeg(
                 active_match=active_match,
                 game=game,
                 setup=EnvMatch(resolved_match).to_rust(),
-                player_policies=(a, b),
-                code_choices={
-                    player: seat.open_game(game["player_seeds"][player])
-                    for player in players
-                    if isinstance(seat := admitted.agents[player], CodeSeat)
-                },
+                player_policies=(native_policies[first], native_policies[second]),
+                choosers=choosers,
             )
         )
     return active_match, legs
@@ -396,19 +395,15 @@ async def step_round(
         actor = actors[slot]
         assert actor in (0, 1)
         game = state.leg.game
-        player_id = game["seat_players"][actor]
-        turns[slot] = DecisionIdentity(
-            actor,
-            state.revision,
-            player_id,
-            game["player_seeds"][player_id],
-            state.decision_counts[player_id],
+        turn = DecisionIdentity.for_actor(
+            game, actor, state.revision, state.decision_counts
         )
-        seat = state.leg.active_match.admitted.agents[player_id]
-        if isinstance(seat, Sampler):
-            groups[seat.checkpoint_key].append((state, seat))
+        turns[slot] = turn
+        chooser = state.leg.choosers[turn.player_id]
+        if isinstance(chooser, Sampler):
+            groups[chooser.checkpoint_key].append((state, chooser))
         else:
-            code[slot] = state.leg.code_choices[player_id]
+            code[slot] = chooser
 
     chosen: dict[int, tuple[int, float]] = {}
     errors: dict[str, ForwardError] = {}
@@ -499,7 +494,7 @@ async def step_round(
         state = states[slot]
         assert state is not None
         actions[slot], elapsed = chosen[slot]
-        annotations[slot] = decision_annotation(turns[slot].evidence(elapsed))
+        annotations[slot] = {"extra": {"evaluation": turns[slot].evidence(elapsed)}}
         if summaries is not None:
             count, kind = summaries[slot]
             state.cutoffs.record(

@@ -256,7 +256,7 @@ an evaluation's, or a private snapshot replay exported by
 `GameSnapshot.to_replay_json()` ([Save and restore game positions](engine-python.md#save-and-restore-game-positions)).
 Records where a seat stepped natively (such as `"heuristic"` or
 `"heuristic:64"`) are currently refused by Watch; verify them with
-`python -m managym.replay`.
+`uv run --no-project python -m managym.replay <file>`.
 A record holds the seed, both setups, the actions, and any recorded boundary
 interventions (such as library reshuffles, determinizations or counterfactual
 state edits), so

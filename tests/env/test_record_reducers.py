@@ -41,6 +41,15 @@ class Choices(Reducer[int]):
         return [self.count]
 
 
+def mountain_duel() -> managym.GameSetup:
+    return managym.GameSetup(
+        [
+            managym.PlayerConfig(name=str(seat), decklist={"Mountain": 12})
+            for seat in (0, 1)
+        ]
+    )
+
+
 @pytest.mark.parametrize("load_slots", [False, True])
 def test_isolated_opening_failure_is_recorded_at_reset(
     tmp_path: Path,
@@ -59,12 +68,7 @@ def test_isolated_opening_failure_is_recorded_at_reset(
     )
     vector.set_observation_layout(step_buffers(2), layout=ObservationSpace().layout)
     native = vector.native
-    setup = managym.GameSetup(
-        [
-            managym.PlayerConfig(name=str(seat), decklist={"Mountain": 12})
-            for seat in (0, 1)
-        ]
-    )
+    setup = mountain_duel()
     policies = ("heuristic:64", "agent")
 
     class FailedOpeningReceipt:
@@ -175,12 +179,7 @@ def test_isolated_step_failure_retains_slot_evidence(
         record_fraction=record_fraction,
     )
     vector.set_observation_layout(step_buffers(2), layout=ObservationSpace().layout)
-    setup = managym.GameSetup(
-        [
-            managym.PlayerConfig(name=str(seat), decklist={"Mountain": 12})
-            for seat in (0, 1)
-        ]
-    )
+    setup = mountain_duel()
     try:
         vector.reset_each_into_buffers([setup, setup])
         vector.step_isolated_into_buffers([0, 0])
@@ -245,12 +244,7 @@ def test_isolated_step_failure_retains_slot_evidence(
 def test_boundaryless_snapshot_replays_isolated_failure_beside_siblings() -> None:
     vector = RecordedVectorEnv(num_envs=3, seed=7, record_in_memory=True)
     vector.set_observation_layout(step_buffers(3), layout=ObservationSpace().layout)
-    setup = managym.GameSetup(
-        [
-            managym.PlayerConfig(name=str(seat), decklist={"Mountain": 12})
-            for seat in (0, 1)
-        ]
-    )
+    setup = mountain_duel()
     try:
         vector.reset_each_into_buffers([setup, setup, setup])
         vector.step_isolated_into_buffers([0, 0, 0])
@@ -296,11 +290,7 @@ def test_live_reducers_equal_replayed_tables(tmp_path: Path) -> None:
     capture = ScalarCapture(
         seed=7, games_path=path, reducers=[CardPerformance(), Behaviour(), Choices()]
     )
-    players = [
-        managym.PlayerConfig(name=str(seat), decklist={"Mountain": 12})
-        for seat in (0, 1)
-    ]
-    capture.reset(env, players)
+    capture.reset(env, mountain_duel())
     decisions = 0
     while not env.is_game_over():
         capture.step(env, 0)
@@ -331,13 +321,7 @@ def test_integer_replay_restores_verified_cards_after_divergent_step(
     env.enable_exposure_capture()
     path = tmp_path / "game.jsonl"
     capture = ScalarCapture(seed=7, games_path=path)
-    capture.reset(
-        env,
-        [
-            managym.PlayerConfig(name=str(i), decklist={"Mountain": 12})
-            for i in range(2)
-        ],
-    )
+    capture.reset(env, mountain_duel())
     capture.step(env, 0)
     expected_digest = env.state_digest()
     expected_cards = json.loads(env.card_capture_json())
@@ -430,9 +414,7 @@ def test_rejected_answers_and_stale_command_do_not_reach_live_reducers(
 
     env = managym.Env(seed=7)
     capture = ScalarCapture(seed=7, reducers=[Choices()], failure_directory=tmp_path)
-    capture.reset(
-        env, [managym.PlayerConfig(str(seat), {"Mountain": 12}) for seat in (0, 1)]
-    )
+    capture.reset(env, mountain_duel())
     frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
     assert all(not offer["choices"] for offer in frame.offers)
     command = Command(

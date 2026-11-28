@@ -313,8 +313,7 @@ impl Env {
         player_configs: impl Into<GameSetup>,
     ) -> Result<(Observation, InfoDict), AgentError> {
         self.prepare_root(player_configs.into(), self.player_policies)?;
-        let observation = self.construct_root()?;
-        self.settle_opening(observation)
+        self.open_game()
     }
 
     /// Admit the setup and retire the previous game before attempting gameplay.
@@ -366,7 +365,8 @@ impl Env {
         Ok(())
     }
 
-    pub(super) fn construct_root(&mut self) -> Result<Observation, AgentError> {
+    /// Construct the admitted game and play through to its first external choice.
+    pub(super) fn open_game(&mut self) -> Result<(Observation, InfoDict), AgentError> {
         let _scope = self.profiler.track("env_reset");
         let setup = self.reset_setup.as_ref().expect("admitted reset setup");
         let mut game = Game::construct(
@@ -393,13 +393,6 @@ impl Env {
         self.game = Some(game);
         drop(_scope);
         self.remember_heuristic_events(&observation);
-        Ok(observation)
-    }
-
-    pub(super) fn settle_opening(
-        &mut self,
-        observation: Observation,
-    ) -> Result<(Observation, InfoDict), AgentError> {
         let (observation, _, _, _, info) =
             self.settle_players(observation, 0.0, false, false, empty_info_dict())?;
         Ok((observation, info))

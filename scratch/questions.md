@@ -61,6 +61,9 @@ The sync onto `85a3a5fb48` keeps MTG-497's match-owned queues and layout
 compatibility checks with MTG-506's isolated native seating. This checkout's
 plan and tour cover MTG-506. The MTG-497 versions are at the synced commit.
 
+For compression, the comparison base combines the synced MTG-497 commit
+`0f885b1f43` and main commit `606e79e90a`. This isolates MTG-506's changes.
+
 ---
 
 # MTG-497 open questions and assumptions

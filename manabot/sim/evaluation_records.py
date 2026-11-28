@@ -8,7 +8,7 @@ ordinary game. Constructed scenarios and retained traces keep their reader.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 import json
@@ -86,6 +86,15 @@ class DecisionIdentity:
     player_id: str
     player_seed: int
     ordinal: int
+
+    @classmethod
+    def for_actor(
+        cls, game: dict[str, Any], actor: int, revision: int, counts: Mapping[str, int]
+    ) -> DecisionIdentity:
+        player = game["seat_players"][actor]
+        return cls(
+            actor, revision, player, game["player_seeds"][player], counts[player]
+        )
 
     @property
     def policy_seed(self) -> int:
@@ -210,22 +219,3 @@ def audit_view(data: dict[str, Any], *, digest: str | None = None) -> dict[str, 
     if digest is not None:
         game["game_trace_sha256"] = digest
     return game
-
-
-def decision_annotation(decision: dict[str, Any]) -> dict[str, object]:
-    """Retain runner evidence; native inputs and digests have their own owner."""
-    return {
-        "extra": {
-            "evaluation": {
-                k: v
-                for k, v in decision.items()
-                if k
-                not in {
-                    "command",
-                    "command_sha256",
-                    "pre_state_digest",
-                    "post_state_digest",
-                }
-            }
-        }
-    }
