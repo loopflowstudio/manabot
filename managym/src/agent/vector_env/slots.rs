@@ -24,7 +24,9 @@ impl SlotLoad {
     pub fn with_slot(&self, slot: usize) -> Self {
         match self {
             Self::Fresh(_, setup, seed) => Self::Fresh(slot, setup.clone(), *seed),
-            Self::Snapshot(_, source, options) => Self::Snapshot(slot, source.clone(), options.clone()),
+            Self::Snapshot(_, source, options) => {
+                Self::Snapshot(slot, source.clone(), options.clone())
+            }
         }
     }
 
