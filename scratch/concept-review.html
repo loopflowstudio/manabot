@@ -1003,23 +1003,23 @@ concrete counterexamples reproduced directly on <code>HEAD</code> (<code>e9e5440
 <div class="lf-before-after">
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">Before</div>
-    
+
     <h4>Built at <code>e9e5440e8a</code> (Pass 4's reset-only assumption remains in replay agreement)</h4>
     <ul>
       <li><code>_replay_game_inputs</code> keeps <code>if evidence.mode == "vector" and not failed_opening</code>, demoting every isolated vector <code>step</code> failure to <code>original_outcome: "execution_outcome_unknown"</code> while isolated <code>reset</code> failures report <code>"failed"</code>.</li>
       <li><code>replay_failure_inputs</code> treats every <code>boundary is None</code> record as a strict batch failure, setting <code>at_retained_failure: True</code> on healthy sibling slots and raising <code>ValueError</code> on detached empty slots instead of <code>"setup_unavailable"</code>.</li>
     </ul>
-  
+
   </div>
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">After</div>
-    
+
     <h4>Recommended contract (finish Pass 5's unified <code>GameFailure</code> rule in <code>managym/replay.py</code>)</h4>
     <ul>
       <li>In <code>_replay_game_inputs</code>, recognize any per-stream observed native failure (<code>game.end is not None and game.end.status == "failed"</code> after <code>for_game()</code>, covering both isolated <code>reset</code> and isolated <code>step</code>) so both report <code>original_outcome == evidence.execution_outcome</code> (<code>"failed"</code>), while strict vector batch exceptions (<code>game.end is None</code>) keep <code>"execution_outcome_unknown"</code>.</li>
       <li>In <code>replay_failure_inputs</code> when <code>boundary is None</code> and the batch itself has no top-level failure/search (<code>evidence.error is None and evidence.error_class is None and evidence.execution_outcome != "failed" and evidence.mode != "search"</code>), route only streams with <code>game.failure is not None</code> or an uncommitted pending <code>frame</code> as failure targets; reconstruct healthy siblings with <code>at_retained_failure=False</code> (and <code>status="setup_unavailable"</code> when <code>not game.players</code>), matching the journaled <code>ready</code> path.</li>
     </ul>
-  
+
   </div>
 </div>
 
