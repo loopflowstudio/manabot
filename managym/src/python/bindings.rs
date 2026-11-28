@@ -19,7 +19,7 @@ use pyo3::{
     buffer::PyBuffer,
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
-    types::{PyDict, PyList, PyModule, PySet},
+    types::{PyDict, PyList, PyModule, PySet, PyString},
 };
 #[cfg(feature = "python")]
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,7 @@ use crate::{
         Revision,
     },
     flow::{
-        state_edit::{GameStateEdit, PermanentDestination},
+        state_edit::{validate_edit_token, GameStateEdit, PermanentDestination},
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     python::convert::info_dict_to_pydict,
@@ -63,7 +63,7 @@ use crate::{
     },
 };
 
-/// One counterfactual change, addressed by an observed permanent id or native seat.
+/// One counterfactual change, addressed by observation ids, native seats or catalog names.
 #[cfg(feature = "python")]
 #[pyclass(name = "GameStateEdit", frozen, eq, hash)]
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -74,15 +74,33 @@ impl PyGameStateEdit {
     pub(super) fn batch(edits: Vec<Self>) -> Arc<[GameStateEdit]> {
         edits.into_iter().map(|edit| edit.0).collect()
     }
+
+    fn seat(seat: isize, field: &str) -> PyResult<usize> {
+        if !(0..=1).contains(&seat) {
+            return Err(map_agent_err(AgentError(format!(
+                "game state edits: {field} must be 0 or 1"
+            ))));
+        }
+        Ok(seat as usize)
+    }
 }
 
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyGameStateEdit {
     /// The constructor call that rebuilds this edit.
-    fn __repr__(&self) -> String {
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         let py_bool = |value: bool| if value { "True" } else { "False" };
-        match self.0 {
+        let py_entry = |controller: Option<usize>, ready, tapped, attached_to: Option<i32>| {
+            let controller = controller.map_or_else(|| "None".into(), |seat| seat.to_string());
+            let attached_to = attached_to.map_or_else(|| "None".into(), |id| id.to_string());
+            format!(
+                "controller={controller}, ready={}, tapped={}, attached_to={attached_to}",
+                py_bool(ready),
+                py_bool(tapped)
+            )
+        };
+        Ok(match &self.0 {
             GameStateEdit::MovePermanent { permanent, to } => {
                 // The journal spelling of the destination is the keyword value.
                 let to = serde_json::to_value(to).expect("destination serializes");
@@ -92,7 +110,10 @@ impl PyGameStateEdit {
                 )
             }
             GameStateEdit::SetTapped { permanent, tapped } => {
-                format!("GameStateEdit.set_tapped({permanent}, {})", py_bool(tapped))
+                format!(
+                    "GameStateEdit.set_tapped({permanent}, {})",
+                    py_bool(*tapped)
+                )
             }
             GameStateEdit::SetDamage { permanent, damage } => {
                 format!("GameStateEdit.set_damage({permanent}, {damage})")
@@ -108,7 +129,95 @@ impl PyGameStateEdit {
             GameStateEdit::SetLife { player, life } => {
                 format!("GameStateEdit.set_life({player}, {life})")
             }
-        }
+            GameStateEdit::CreateToken {
+                key,
+                controller,
+                ready,
+                tapped,
+            } => format!(
+                "GameStateEdit.create_token({}, {controller}, ready={}, tapped={})",
+                PyString::new_bound(py, key).repr()?.to_str()?,
+                py_bool(*ready),
+                py_bool(*tapped)
+            ),
+            GameStateEdit::AddToBattlefield {
+                card,
+                controller,
+                ready,
+                tapped,
+                attached_to,
+            } => format!(
+                "GameStateEdit.add_to_battlefield({card}, {})",
+                py_entry(*controller, *ready, *tapped, *attached_to)
+            ),
+            GameStateEdit::AddFromLibrary {
+                player,
+                name,
+                controller,
+                ready,
+                tapped,
+                attached_to,
+            } => format!(
+                "GameStateEdit.add_from_library({player}, {}, {})",
+                PyString::new_bound(py, name).repr()?.to_str()?,
+                py_entry(*controller, *ready, *tapped, *attached_to)
+            ),
+        })
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (key, controller, *, ready=true, tapped=false))]
+    fn create_token(key: String, controller: isize, ready: bool, tapped: bool) -> PyResult<Self> {
+        let controller = Self::seat(controller, "controller")?;
+        validate_edit_token(&key).map_err(map_agent_err)?;
+        Ok(Self(GameStateEdit::CreateToken {
+            key,
+            controller,
+            ready,
+            tapped,
+        }))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (card, *, controller=None, ready=true, tapped=false, attached_to=None))]
+    fn add_to_battlefield(
+        card: i32,
+        controller: Option<isize>,
+        ready: bool,
+        tapped: bool,
+        attached_to: Option<i32>,
+    ) -> PyResult<Self> {
+        Ok(Self(GameStateEdit::AddToBattlefield {
+            card,
+            controller: controller
+                .map(|seat| Self::seat(seat, "controller"))
+                .transpose()?,
+            ready,
+            tapped,
+            attached_to,
+        }))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (player, name, *, controller=None, ready=true, tapped=false, attached_to=None))]
+    fn add_from_library(
+        player: isize,
+        name: String,
+        controller: Option<isize>,
+        ready: bool,
+        tapped: bool,
+        attached_to: Option<i32>,
+    ) -> PyResult<Self> {
+        Ok(Self(GameStateEdit::AddFromLibrary {
+            player: Self::seat(player, "player")?,
+            name,
+            controller: controller
+                .map(|seat| Self::seat(seat, "controller"))
+                .transpose()?,
+            ready,
+            tapped,
+            attached_to,
+        }))
     }
 
     #[staticmethod]
@@ -160,13 +269,8 @@ impl PyGameStateEdit {
 
     #[staticmethod]
     fn set_life(player: isize, life: i32) -> PyResult<Self> {
-        if !(0..=1).contains(&player) {
-            return Err(map_agent_err(AgentError(
-                "game state edits: player must be 0 or 1".into(),
-            )));
-        }
         Ok(Self(GameStateEdit::SetLife {
-            player: player as usize,
+            player: Self::seat(player, "player")?,
             life,
         }))
     }

@@ -230,6 +230,29 @@ class DecisionCapture:
 
 class GameStateEdit:
     @staticmethod
+    def create_token(
+        key: str, controller: int, *, ready: bool = True, tapped: bool = False
+    ) -> GameStateEdit: ...
+    @staticmethod
+    def add_to_battlefield(
+        card: int,
+        *,
+        controller: int | None = None,
+        ready: bool = True,
+        tapped: bool = False,
+        attached_to: int | None = None,
+    ) -> GameStateEdit: ...
+    @staticmethod
+    def add_from_library(
+        player: int,
+        name: str,
+        *,
+        controller: int | None = None,
+        ready: bool = True,
+        tapped: bool = False,
+        attached_to: int | None = None,
+    ) -> GameStateEdit: ...
+    @staticmethod
     def move_permanent(
         permanent: int,
         to: Literal["graveyard", "exile", "library_bottom"] = "graveyard",

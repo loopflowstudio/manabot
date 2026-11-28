@@ -96,6 +96,15 @@ fn edit_player(player: usize, seats: usize) -> Result<PlayerId, AgentError> {
     Ok(PlayerId(player))
 }
 
+pub(crate) fn validate_edit_token(key: &str) -> Result<(), AgentError> {
+    if default_content_pack().token_id(key).is_none() {
+        return Err(AgentError(format!(
+            "game state edits: unknown token key {key:?}"
+        )));
+    }
+    Ok(())
+}
+
 impl Game {
     /// Rebuild the same live decision without executing actions or running SBAs.
     pub(crate) fn edit_game_state(&mut self, edits: &[GameStateEdit]) -> Result<(), AgentError> {
@@ -356,11 +365,7 @@ impl Game {
                     ..
                 } => {
                     edit_player(controller, seats)?;
-                    if default_content_pack().token_id(key).is_none() {
-                        return Err(AgentError(format!(
-                            "game state edits: unknown token key {key:?}"
-                        )));
-                    }
+                    validate_edit_token(key)?;
                     continue;
                 }
                 GameStateEdit::AddToBattlefield {

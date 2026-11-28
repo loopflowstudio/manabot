@@ -153,6 +153,14 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   (38 steps), then run each edit on `env.clone_env()` and step 30 random
   actions after it; the original `state_digest()` must not move. Gray Ogre /
   Hill Giant mirrors (seed 11, always attack) reach `DeclareBlocker` by turn 7.
+  At `DeclareAttacker`, batch `create_token("token.spirit", seat)` with a
+  tapped creature from hand and an unready creature from the opposing library
+  under your control. Decline each attack to see the Spirit offered in the
+  remaining prompts. The tapped and unready creatures should stay out of those
+  prompts. If an Aura is in hand, add it with `attached_to` set to a surviving
+  host's `Permanent.id`. Restore the same batch with `RestoreOptions.determinize`
+  in both a scalar fork and `SlotLoad.snapshot`; compare digests before and
+  after the same action.
   For Academy, a snapshot replay that ends at the edit shows the edited board
   but no branch note (the note rides the next recorded choice): step 25
   actions past the edit before `to_replay_json()`, then the History panel
