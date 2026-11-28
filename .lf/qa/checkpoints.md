@@ -49,3 +49,20 @@ Read when the change touches checkpoint loading, input readings or files an earl
   `input_readings`: they must equal the parent's legacy readings. A copy with
   one reading renamed must show in `/api/opponents` as unavailable, naming
   the column.
+- Record-vocabulary changes (`record_vocabulary.rs`, `runtime_tokens`,
+  decision-memory names): `local.py` and baseline checkpoints bind exact decks
+  (`setups`, no `world_digest`), so they take `bind_records`, not
+  `bind_catalog`; the pinned pilots and Elemental checkpoints only cover the
+  world path. Write both kinds on the base: build its release extension in a
+  `/private/tmp` worktree with its own `CARGO_TARGET_DIR`, then from that
+  worktree with `PYTHONPATH` at it run this checkout's `.venv/bin/etude train
+  manabot/recipes/local.py --until updates=1` (about 20 s) and a `.runs/` copy
+  that sets `decision_memory="gru"`, all four `max_decision_*` capacities and
+  `collection_rows`/`bootstrap_rows`/`learner_rows` (validation refuses either
+  omission, and a refused run still takes its run name). Play two seeded
+  authored-deck games per checkpoint with `Env(decision_memory=...)` and
+  `evaluate_observation` on base, follow the same actions on HEAD and compare
+  probabilities and values (MTG-504: 387 decisions, identical). In Academy an
+  exact-deck checkpoint needs its decks:
+  `/?hero=ur_lessons&villain=gw_allies&opponent=<sha256>`. `--resume` across a
+  buffer change is refused by design (`incompatible buffer …`).

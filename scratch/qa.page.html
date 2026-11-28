@@ -1,0 +1,38 @@
+<h1>MTG-504 QA: split vocabularies, as a library user and a returning user</h1>
+
+<p>Release extension rebuilt at HEAD (the installed one predated the compress pass). A second release build of base <code>fbb4b99f0a</code> in <code>/private/tmp/mtg504-base</code> wrote the returning user's files.</p>
+
+<h2>What works now</h2>
+<ul>
+  <li><b>Acceptance probe</b>: <code>0 True 44</code>. 1,800 record names, 2,148 runtime tokens, 44 memory names. The prefix grep finds nothing.</li>
+  <li><b>Fresh library user</b>: <code>runtime_tokens()</code> is sorted and has no duplicates. Every record-name token alias is present in it. Memory names don't collide with token-namespace record names.</li>
+  <li><b>Returning user, checkpoints from before the change</b> (two seeded Elemental GR v UB games each, base engine vs HEAD following the same actions):
+    <table>
+      <tr><th>checkpoint</th><th>binding</th><th>decisions</th><th>max |Δp|, |Δv|</th></tr>
+      <tr><td>base <code>local.py</code></td><td>exact decks</td><td>387</td><td>0</td></tr>
+      <tr><td>base <code>local.py</code> + GRU decision memory</td><td>exact decks</td><td>387</td><td>0</td></tr>
+      <tr><td>mtg-497 <code>00002000-raw</code></td><td>world</td><td>411</td><td>0</td></tr>
+    </table>
+    The load logs show <code>retired 1610</code> (plain) and <code>retired 1654</code> (memory: 1610 + 44 phantom tokens), with 0 programs changed.</li>
+  <li><b>Academy</b>: <code>/api/opponents</code> lists all four pre-change checkpoints as available. In the Seat 2 setup, the exact-deck memory bot is correctly refused for the wrong decks. With its own decks (<code>?hero=ur_lessons&amp;villain=gw_allies&amp;opponent=…</code>) it plays: it kept its hand, played Plains and passed. The server log has no errors.</li>
+  <li>Training on HEAD with and without decision memory writes checkpoints that reload and replay identically.</li>
+  <li>Tests: the acceptance pytest set passed (151). <code>tests/model</code> plus the eval-admission and monitor suites passed (706). <code>public_api.py check</code> matches.</li>
+</ul>
+
+<h2>Fixed here</h2>
+<lf-component name="decision" id="f1" title="Pre-change exact-deck checkpoints did not load" recommendation="Fix here">
+<p>A checkpoint written by <code>manabot/recipes/local.py</code> (or baseline) on base, one revision before this branch, failed at HEAD with <code>size mismatch for semantic_cards.record_name_keys: 3410 vs 1800</code>. The decision-memory one failed with <code>record_token_rows 3393 vs 3349</code>. Academy listed both as available, so the failure only showed when a game started.</p>
+<p>Cause: <code>model_interface</code> returns <code>None</code> for exact-deck bindings, so <code>admit_checkpoint</code> never bound by key. The pinned pilots and the constructed test only covered world bindings.</p>
+<p>Fix: <code>bind_records</code> checks that the stored card programs equal the running pack's, then rebinds record and token rows by key through the same <code>rebind</code> that <code>bind_catalog</code> now uses. The existing retirement test is now parametrized over world and exact-deck bindings. Its exact-deck case fails without the fix.</p>
+</lf-component>
+<lf-diff path="manabot/policy/checkpoint.py"></lf-diff>
+<lf-diff path="manabot/policy/binding.py"></lf-diff>
+<lf-diff path="tests/model/test_checkpoint_binding.py"></lf-diff>
+
+<h2>Not reached, or still rough</h2>
+<ul>
+  <li><code>etude train --resume</code> of a run written on base fails with <code>learner.safetensors: incompatible buffer semantic_cards.record_name_keys</code>. Resume refuses any buffer change by design, and this was not changed. The message doesn't name the writing revision.</li>
+  <li>An Etude run refused by settings validation still takes its run name (<code>run_name_taken</code> on retry).</li>
+  <li>No debug-wheel coverage sweep in this pass: the earlier passes ran it, and this fix is Python-only.</li>
+  <li>No retained decision-memory checkpoint outside this QA run exists to pin (open question in <code>scratch/questions.md</code>).</li>
+</ul>

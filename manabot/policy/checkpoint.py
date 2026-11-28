@@ -41,7 +41,7 @@ from manabot.model.architecture import (
 )
 from manabot.model.interface import model_interface, saved_readings, world_fields
 from manabot.model.world import checkpoint_source, validate_policy_input, written_at
-from manabot.policy.binding import BindingReport, bind_catalog
+from manabot.policy.binding import BindingReport, bind_catalog, bind_records
 from manabot.policy.prepare import Layout, Tables
 from manabot.policy.readings import Readings
 
@@ -570,12 +570,17 @@ def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
         )
     if projection.shape[1] != checkpoint.dimensions().player:
         raise ValueError("checkpoint player columns differ from its projection")
-    if interface is None:
-        return checkpoint
-    if not checkpoint.model.catalog_records() and interface.writer == interface.current:
+    if not checkpoint.model.catalog_records() and (
+        interface is None or interface.writer == interface.current
+    ):
         return checkpoint
     try:
-        bound, report = bind_catalog(checkpoint, interface.writer, interface.current)
+        if interface is None:
+            bound, report = bind_records(checkpoint)
+        else:
+            bound, report = bind_catalog(
+                checkpoint, interface.writer, interface.current
+            )
     except ValueError as error:
         raise ValueError(f"{error}; {written_at(record)}") from error
     logging.getLogger(__name__).info(

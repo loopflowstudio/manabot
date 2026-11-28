@@ -31,7 +31,15 @@ import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
-def test_checkpoint_keeps_vectors_after_vocabulary_keys_retire(tmp_path: Path) -> None:
+@pytest.mark.parametrize("exact_decks", [False, True])
+def test_checkpoint_keeps_vectors_after_vocabulary_keys_retire(
+    tmp_path: Path, exact_decks: bool
+) -> None:
+    """A world-bound and an exact-deck checkpoint both rebind record rows by key."""
+    players = [
+        managym.PlayerConfig("A", {"Forest": 20, "Gray Ogre": 20}),
+        managym.PlayerConfig("B", {"Mountain": 20, "Gray Ogre": 20}),
+    ]
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=8,
@@ -52,8 +60,11 @@ def test_checkpoint_keeps_vectors_after_vocabulary_keys_retire(tmp_path: Path) -
         ),
     ).eval()
     path = tmp_path / "before-vocabulary-split.safetensors"
-    save_checkpoint(writer, space, path, player_configs=None)
+    save_checkpoint(
+        writer, space, path, player_configs=players if exact_decks else None
+    )
     record = read_checkpoint(path)
+    assert ("world_digest" in record["world_binding"]) != exact_decks
     state = record["model_state_dict"]
     weights = "semantic_cards.token_embedding.weight"
     no_memory = catalog_tables(managym.WORLD_SETUP, records=True, decision_memory=False)
@@ -89,12 +100,7 @@ def test_checkpoint_keeps_vectors_after_vocabulary_keys_retire(tmp_path: Path) -
         restored.state_dict()[weights], state[weights], atol=0, rtol=0
     )
     env = managym.Env(seed=17, decision_memory_include_own=True)
-    env.reset(
-        [
-            managym.PlayerConfig("A", {"Forest": 20, "Gray Ogre": 20}),
-            managym.PlayerConfig("B", {"Mountain": 20, "Gray Ogre": 20}),
-        ]
-    )
+    env.reset(players)
     for _ in range(4):
         env.step(0)
     batch = managym.encode_observation_batch([env], space.layout)

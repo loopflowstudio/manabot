@@ -276,6 +276,12 @@ emission guard, exact `(kind, 0x…)` diagnostics, the 44 memory names' hashes.
    names, 144 token dispositions and 1,665 record dispositions in order.
    Three registry tests and four Python row and checkpoint checks passed.
 
+6. QA: base-written exact-deck checkpoints (`local.py`, with and without
+   decision memory) failed to load at HEAD with a record-table size mismatch,
+   because exact-deck bindings skipped key binding. Fixed with
+   `binding.bind_records`, sharing `rebind` with `bind_catalog`; both now play
+   387 decisions identical to the base engine. Report in `scratch/qa.html`.
+
 Remaining: publish the PR (none exists yet) with the 0.3.0 hold notice and
 release line; merge and auto-merge stay off.
 

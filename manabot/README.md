@@ -525,7 +525,8 @@ Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
 When the binding records exact decks and sideboards, every binding field except
 the input schema must match exactly, including the content manifest. As with
-any checkpoint, the runtime input columns may extend the saved column prefixes.
+any checkpoint, the runtime input columns may extend the saved column prefixes
+and learned record rows bind by key.
 Without exact decks, the model can play any admitted deck. The card digest
 describes the cards of the writing revision.
 Loading compares input columns, token names and action kinds by name
