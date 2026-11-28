@@ -3,13 +3,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
-        observation::Observation,
-        structured_offer::{
+        decision_surface::{
             AtomicCommand, BoundTarget, Candidate, CandidateId, CandidateSource, CandidateSourceId,
-            CandidateValue, ChoiceAnswer, ChoiceStep, InteractionOffer, ObjectRenderId, OfferId,
-            OfferSubmission, OfferVerb, PromptKind, RoleId, StructuredOfferError,
-            StructuredOfferProjection, SubjectRef,
+            CandidateValue, ChoiceAnswer, ChoiceStep, DecisionOption, DecisionOptionId,
+            DecisionProjection, DecisionSubmission, DecisionSurfaceError, DecisionVerb,
+            ObjectRenderId, PromptKind, RoleId, SubjectRef,
         },
+        observation::Observation,
     },
     flow::turn::StepKind,
     state::{
@@ -41,23 +41,23 @@ fn bolt_priority_scenario() -> Scenario {
     scenario
 }
 
-fn cast_offer(set: &managym::agent::structured_offer::StructuredOfferSet) -> &InteractionOffer {
+fn cast_offer(set: &managym::agent::decision_surface::DecisionSurface) -> &DecisionOption {
     set.projection()
         .offers
         .iter()
-        .find(|offer| offer.verb == OfferVerb::Cast)
+        .find(|offer| offer.verb == DecisionVerb::Cast)
         .expect("Bolt cast offer")
 }
 
-fn pass_offer(set: &managym::agent::structured_offer::StructuredOfferSet) -> &InteractionOffer {
+fn pass_offer(set: &managym::agent::decision_surface::DecisionSurface) -> &DecisionOption {
     set.projection()
         .offers
         .iter()
-        .find(|offer| offer.verb == OfferVerb::PassPriority)
+        .find(|offer| offer.verb == DecisionVerb::PassPriority)
         .expect("pass-priority offer")
 }
 
-fn select_step(offer: &InteractionOffer) -> (RoleId, &[Candidate]) {
+fn select_step(offer: &DecisionOption) -> (RoleId, &[Candidate]) {
     let [ChoiceStep::Select {
         role,
         candidates,
@@ -133,7 +133,7 @@ fn legacy_cast_at_player(game: &mut Game, object: ObjectId, player: PlayerId) {
 }
 
 fn assert_equivalent_surface(structured: &Game, legacy: &Game) {
-    assert_eq!(structured.current_action_space, legacy.current_action_space);
+    assert_eq!(structured.action_space(), legacy.action_space());
     assert_eq!(structured.state.stack_objects, legacy.state.stack_objects);
     assert_eq!(structured.state.events, legacy.state.events);
     assert_eq!(structured.state.pending_events, legacy.state.pending_events);
@@ -170,7 +170,7 @@ fn structured_offer_bolt_cast_is_atomic_and_legacy_equivalent() {
         1
     );
 
-    let submission = OfferSubmission {
+    let submission = DecisionSubmission {
         offer_id: offer.id,
         answers: vec![ChoiceAnswer::Candidates {
             role,
@@ -223,7 +223,7 @@ fn structured_offer_pass_is_legacy_equivalent() {
     let set = root
         .structured_priority_offers()
         .expect("structured priority offers");
-    let submission = OfferSubmission {
+    let submission = DecisionSubmission {
         offer_id: pass_offer(&set).id,
         answers: Vec::new(),
     };
@@ -248,8 +248,18 @@ fn structured_offer_candidates_are_uncapped_past_legacy_tensor_width() {
     scenario.game_mut().scenario_clear_hand(PlayerId(0));
     scenario.force_card_in_hand(0, "Lightning Bolt");
     scenario.force_permanent_on_battlefield(0, "Mountain");
-    for _ in 0..33 {
-        scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+    for count in 0..33 {
+        let perm = scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+        if count > 0 {
+            scenario.game_mut().state.permanents[perm]
+                .as_mut()
+                .unwrap()
+                .counters
+                .change(
+                    managym::state::permanent::CounterKind::PlusOnePlusOne,
+                    count,
+                );
+        }
     }
     scenario
         .game_mut()
@@ -261,7 +271,11 @@ fn structured_offer_candidates_are_uncapped_past_legacy_tensor_width() {
         .structured_priority_offers()
         .expect("structured priority offers");
     let (_, candidates) = select_step(cast_offer(&set));
-    assert_eq!(candidates.len(), 35, "33 creatures plus both players");
+    assert_eq!(
+        candidates.len(),
+        35,
+        "33 distinguishable creatures plus both players"
+    );
     assert!(candidates.len() > 32);
     assert_eq!(
         candidates
@@ -270,6 +284,44 @@ fn structured_offer_candidates_are_uncapped_past_legacy_tensor_width() {
             .collect::<BTreeSet<_>>()
             .len(),
         candidates.len()
+    );
+}
+
+#[test]
+fn structured_offer_deduplicates_identical_target_candidates() {
+    let mut scenario = Scenario::new(
+        deck_of("Mountain", "Lightning Bolt"),
+        BTreeMap::from([("Gray Ogre".to_string(), 40)]),
+        182,
+    );
+    scenario.advance_to_active_step(0, StepKind::Main);
+    scenario.game_mut().scenario_clear_hand(PlayerId(0));
+    scenario.force_card_in_hand(0, "Lightning Bolt");
+    scenario.force_permanent_on_battlefield(0, "Mountain");
+    for _ in 0..5 {
+        scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+    }
+    scenario
+        .game_mut()
+        .scenario_refresh_priority()
+        .expect("priority space should refresh");
+
+    let set = scenario
+        .game()
+        .structured_priority_offers()
+        .expect("structured priority offers");
+    let (_, candidates) = select_step(cast_offer(&set));
+    assert_eq!(
+        candidates.len(),
+        3,
+        "5 identical Gray Ogres deduplicate to 1 candidate plus both players"
+    );
+    assert_eq!(
+        candidates
+            .iter()
+            .filter(|candidate| candidate.label == "Gray Ogre")
+            .count(),
+        1
     );
 }
 
@@ -283,24 +335,24 @@ fn structured_offer_rejects_fabricated_and_stale_ids_without_mutation() {
     let (role, candidates) = select_step(offer);
 
     assert_eq!(
-        set.decode(&OfferSubmission {
-            offer_id: OfferId(999),
+        set.decode(&DecisionSubmission {
+            offer_id: DecisionOptionId(999),
             answers: Vec::new(),
         }),
-        Err(StructuredOfferError::UnknownOffer(OfferId(999)))
+        Err(DecisionSurfaceError::UnknownOffer(DecisionOptionId(999)))
     );
     assert_eq!(
-        set.decode(&OfferSubmission {
+        set.decode(&DecisionSubmission {
             offer_id: offer.id,
             answers: vec![ChoiceAnswer::Candidates {
                 role,
                 candidates: vec![CandidateId(999)],
             }],
         }),
-        Err(StructuredOfferError::UnknownCandidate(CandidateId(999)))
+        Err(DecisionSurfaceError::UnknownCandidate(CandidateId(999)))
     );
     assert_eq!(
-        set.decode(&OfferSubmission {
+        set.decode(&DecisionSubmission {
             offer_id: offer.id,
             answers: vec![
                 ChoiceAnswer::Candidates {
@@ -313,10 +365,10 @@ fn structured_offer_rejects_fabricated_and_stale_ids_without_mutation() {
                 },
             ],
         }),
-        Err(StructuredOfferError::DuplicateRole(role))
+        Err(DecisionSurfaceError::DuplicateRole(role))
     );
 
-    let submission = OfferSubmission {
+    let submission = DecisionSubmission {
         offer_id: offer.id,
         answers: vec![ChoiceAnswer::Candidates {
             role,
@@ -336,21 +388,21 @@ fn structured_offer_rejects_fabricated_and_stale_ids_without_mutation() {
     let before = format!("{root:?}");
     assert!(matches!(
         root.apply_offer_submission(&set, &submission),
-        Err(StructuredOfferError::StaleOrIllegal(_))
+        Err(DecisionSurfaceError::StaleOrIllegal(_))
     ));
     assert_eq!(format!("{root:?}"), before);
 }
 
 #[test]
 fn structured_offer_game_fixture_matches_typed_wire_shape() {
-    let projection = StructuredOfferProjection {
+    let projection = DecisionProjection {
         actor: 0,
         kind: PromptKind::Priority,
         offers: vec![
-            InteractionOffer {
-                id: OfferId(0),
+            DecisionOption {
+                id: DecisionOptionId(0),
                 actor: 0,
-                verb: OfferVerb::Cast,
+                verb: DecisionVerb::Cast,
                 public_commitment: None,
                 source: Some(SubjectRef::Object {
                     id: ObjectRenderId {
@@ -388,10 +440,10 @@ fn structured_offer_game_fixture_matches_typed_wire_shape() {
                 }],
                 confirm_label: "Cast".to_string(),
             },
-            InteractionOffer {
-                id: OfferId(1),
+            DecisionOption {
+                id: DecisionOptionId(1),
                 actor: 0,
-                verb: OfferVerb::PassPriority,
+                verb: DecisionVerb::PassPriority,
                 public_commitment: None,
                 source: None,
                 label: "Pass priority".to_string(),
@@ -410,8 +462,7 @@ fn structured_offer_game_fixture_matches_typed_wire_shape() {
         fixture_value
     );
     assert_eq!(
-        serde_json::from_str::<StructuredOfferProjection>(fixture)
-            .expect("fixture should deserialize"),
+        serde_json::from_str::<DecisionProjection>(fixture).expect("fixture should deserialize"),
         projection
     );
 }
@@ -429,12 +480,12 @@ fn fixture_candidate(id: u32, subject: SubjectRef, label: &str) -> Candidate {
 #[test]
 fn compound_blockers_bind_roles_and_stop_at_priority() {
     let mut scenario = Scenario::new(
-        deck_of("Mountain", "Gray Ogre"),
+        BTreeMap::from([("Mountain".to_string(), 20), ("Hill Giant".to_string(), 20)]),
         deck_of("Mountain", "Gray Ogre"),
         991,
     );
     scenario.advance_to_active_step(0, StepKind::Main);
-    let attacker = scenario.force_permanent_on_battlefield(0, "Gray Ogre");
+    let attacker = scenario.force_permanent_on_battlefield(0, "Hill Giant");
     scenario.game_mut().state.permanents[attacker]
         .as_mut()
         .unwrap()
@@ -448,21 +499,28 @@ fn compound_blockers_bind_roles_and_stop_at_priority() {
     let root = scenario.game().clone();
     let offers = root.compound_offers().unwrap();
     let offer = &offers.projection().offers[0];
-    assert_eq!(offer.verb, OfferVerb::DeclareBlockers);
-    assert_eq!(offer.choices.len(), 3);
-    let mut answers = Vec::new();
-    for ChoiceStep::Select {
-        role, candidates, ..
-    } in &offer.choices
-    {
-        answers.push(ChoiceAnswer::Candidates {
-            role: *role,
-            candidates: vec![candidates.initial.as_ref().unwrap()[0].id],
-        });
-    }
-    let submission = OfferSubmission {
+    assert_eq!(offer.verb, DecisionVerb::DeclareBlockers);
+    // 3 identical Gray Ogres facing 1 Hill Giant fold into 1 count-based role (counts 1..=3).
+    assert_eq!(offer.choices.len(), 1);
+    let ChoiceStep::Select {
+        role,
+        candidates,
+        min,
+        max,
+        ..
+    } = &offer.choices[0];
+    assert_eq!((*min, *max), (0, 1));
+    let initial = candidates.initial.as_ref().unwrap();
+    assert_eq!(initial.len(), 3);
+    assert_eq!(initial[0].label, "1 × Gray Ogre → Hill Giant");
+    assert_eq!(initial[1].label, "2 × Gray Ogre → Hill Giant");
+    assert_eq!(initial[2].label, "3 × Gray Ogre → Hill Giant");
+    let submission = DecisionSubmission {
         offer_id: offer.id,
-        answers,
+        answers: vec![ChoiceAnswer::Candidates {
+            role: *role,
+            candidates: vec![initial[2].id],
+        }],
     };
     let mut applied = root.clone();
     applied
@@ -480,13 +538,13 @@ fn compound_blockers_bind_roles_and_stop_at_priority() {
     );
     assert!(matches!(
         applied.apply_offer_submission(&offers, &submission),
-        Err(StructuredOfferError::StaleOrIllegal(_))
+        Err(DecisionSurfaceError::StaleOrIllegal(_))
     ));
     let mut invalid = submission.clone();
     invalid.answers.push(invalid.answers[0].clone());
     assert!(matches!(
         offers.decode(&invalid),
-        Err(StructuredOfferError::DuplicateRole(_))
+        Err(DecisionSurfaceError::DuplicateRole(_))
     ));
     invalid.answers = vec![ChoiceAnswer::Candidates {
         role: RoleId(0),
@@ -494,7 +552,7 @@ fn compound_blockers_bind_roles_and_stop_at_priority() {
     }];
     assert_eq!(
         offers.decode(&invalid),
-        Err(StructuredOfferError::UnknownCandidate(CandidateId(999)))
+        Err(DecisionSurfaceError::UnknownCandidate(CandidateId(999)))
     );
 }
 
@@ -522,38 +580,38 @@ fn compound_waterbend_subset_is_order_independent_and_forced_suffix_safe() {
         let root = scenario.game().clone();
         let offers = root.compound_offers().unwrap();
         let offer = &offers.projection().offers[0];
-        assert_eq!(offer.verb, OfferVerb::PayWaterbend);
-        let ChoiceStep::Select {
+        assert_eq!(offer.verb, DecisionVerb::PayWaterbend);
+        // 1 Water Tribe Rallier + 4 identical Gray Ogres fold into 2 forced roles.
+        assert_eq!(offer.choices.len(), 2);
+        let mut answers = Vec::new();
+        for ChoiceStep::Select {
             role,
             min,
             max,
             candidates,
             ..
-        } = &offer.choices[0];
-        assert_eq!((*min, *max), (5, 5));
-        let mut selected: Vec<_> = candidates
-            .initial
-            .as_ref()
-            .unwrap()
-            .iter()
-            .map(|candidate| candidate.id)
-            .collect();
-        let submission = OfferSubmission {
-            offer_id: offer.id,
-            answers: vec![ChoiceAnswer::Candidates {
+        } in &offer.choices
+        {
+            assert_eq!((*min, *max), (1, 1));
+            let initial = candidates.initial.as_ref().unwrap();
+            assert_eq!(initial.len(), 1);
+            answers.push(ChoiceAnswer::Candidates {
                 role: *role,
-                candidates: selected.clone(),
-            }],
+                candidates: vec![initial[0].id],
+            });
+        }
+        let submission = DecisionSubmission {
+            offer_id: offer.id,
+            answers: answers.clone(),
         };
         let commands = root.compound_commands(&offers, &submission).unwrap();
-        assert_eq!(commands.len(), if skip_trivial { 4 } else { 5 });
-        selected.reverse();
-        let reversed = OfferSubmission {
+        // With skip_trivial enabled, tapping Rallier leaves 4 identical Gray
+        // Ogres whose folded 1-action prompts auto-complete as forced suffix taps.
+        assert_eq!(commands.len(), if skip_trivial { 1 } else { 5 });
+        answers.reverse();
+        let reversed = DecisionSubmission {
             offer_id: offer.id,
-            answers: vec![ChoiceAnswer::Candidates {
-                role: *role,
-                candidates: selected,
-            }],
+            answers,
         };
         assert_eq!(
             serde_json::to_value(root.compound_commands(&offers, &reversed).unwrap()).unwrap(),
@@ -609,12 +667,12 @@ fn structured_compound_menace_retains_sequential_support() {
         .projection()
         .offers
         .iter()
-        .all(|offer| offer.verb == OfferVerb::DeclareBlocker && offer.choices.is_empty()));
+        .all(|offer| offer.verb == DecisionVerb::DeclareBlocker && offer.choices.is_empty()));
     for offer in &offers.projection().offers {
         assert_eq!(
             root.compound_commands(
                 &offers,
-                &OfferSubmission {
+                &DecisionSubmission {
                     offer_id: offer.id,
                     answers: vec![]
                 }
@@ -648,7 +706,7 @@ fn structured_compound_flying_attack_has_optionless_blocker_roles() {
     let root = scenario.game();
     let offers = root.compound_offers().unwrap();
     let offer = &offers.projection().offers[0];
-    assert_eq!(offer.verb, OfferVerb::DeclareBlockers);
+    assert_eq!(offer.verb, DecisionVerb::DeclareBlockers);
     let mut answers = Vec::new();
     for ChoiceStep::Select {
         role,
@@ -668,7 +726,7 @@ fn structured_compound_flying_attack_has_optionless_blocker_roles() {
     assert_eq!(
         root.compound_commands(
             &offers,
-            &OfferSubmission {
+            &DecisionSubmission {
                 offer_id: offer.id,
                 answers
             }
@@ -711,6 +769,450 @@ fn structured_compound_waterbend_effects_or_competing_mana_stay_sequential() {
             .projection()
             .offers
             .iter()
-            .all(|offer| offer.verb != OfferVerb::PayWaterbend && offer.choices.is_empty()));
+            .all(|offer| offer.verb != DecisionVerb::PayWaterbend && offer.choices.is_empty()));
     }
+}
+
+#[test]
+fn compound_blockers_interleaved_identical_blockers_lower_in_engine_order() {
+    for skip_trivial in [false, true] {
+        // 1 attacker (count-role path): defenders enter as [Gray Ogre, Hill Giant, Gray Ogre]
+        // so identical blockers are interleaved around a distinct blocker in engine order.
+        let mut scenario = Scenario::new(
+            BTreeMap::from([("Forest".to_string(), 20), ("Craw Wurm".to_string(), 20)]),
+            BTreeMap::from([
+                ("Mountain".to_string(), 20),
+                ("Gray Ogre".to_string(), 10),
+                ("Hill Giant".to_string(), 10),
+            ]),
+            996,
+        );
+        scenario.advance_to_active_step(0, StepKind::Main);
+        scenario.game_mut().skip_trivial = skip_trivial;
+        let attacker = scenario.force_permanent_on_battlefield(0, "Craw Wurm");
+        scenario.game_mut().state.permanents[attacker]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
+        let ogre1 = scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+        let giant = scenario.force_permanent_on_battlefield(1, "Hill Giant");
+        let ogre2 = scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+        scenario.advance_to_active_step(0, StepKind::DeclareAttackers);
+        scenario.declare_attack();
+        scenario.advance_to_active_step(0, StepKind::DeclareBlockers);
+
+        let root = scenario.game().clone();
+        let combat = root.state.combat.as_ref().expect("combat active");
+        let first = root
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .find_map(|a| match a {
+                Action::DeclareBlocker { blocker, .. } => Some(*blocker),
+                _ => None,
+            })
+            .unwrap();
+        let engine_order: Vec<_> = std::iter::once(first)
+            .chain(combat.blockers_to_declare.iter().rev().copied())
+            .collect();
+        assert_eq!(engine_order.len(), 3);
+        // Verify the distinct blocker sits strictly between the two identical Gray Ogres.
+        assert_eq!(engine_order[1], giant);
+        assert!(
+            (engine_order[0] == ogre1 && engine_order[2] == ogre2)
+                || (engine_order[0] == ogre2 && engine_order[2] == ogre1)
+        );
+
+        let offers = root.compound_offers().unwrap();
+        let offer = &offers.projection().offers[0];
+        assert_eq!(offer.verb, DecisionVerb::DeclareBlockers);
+        // Role 0: count role for [Ogre1, Ogre2]; Role 1: singleton role for Hill Giant.
+        assert_eq!(offer.choices.len(), 2);
+        let ChoiceStep::Select {
+            role: ogre_role,
+            candidates: ogre_cands,
+            ..
+        } = &offer.choices[0];
+        let ChoiceStep::Select {
+            role: giant_role,
+            candidates: giant_cands,
+            ..
+        } = &offer.choices[1];
+        let ogre_list = ogre_cands.initial.as_ref().unwrap();
+        let giant_list = giant_cands.initial.as_ref().unwrap();
+        assert_eq!(ogre_list.len(), 2);
+        assert_eq!(ogre_list[0].label, "1 × Gray Ogre → Craw Wurm");
+        assert_eq!(ogre_list[1].label, "2 × Gray Ogre → Craw Wurm");
+        assert_eq!(giant_list.len(), 1);
+
+        // Exhaust all 6 schema-valid combinations (0/1/2 Ogres × 0/1 Hill Giant).
+        let events_from = root.state.observation_events.len();
+        for ogre_count in 0..=2usize {
+            for giant_blocks in [false, true] {
+                let ogre_ans = if ogre_count == 0 {
+                    vec![]
+                } else {
+                    vec![ogre_list[ogre_count - 1].id]
+                };
+                let giant_ans = if giant_blocks {
+                    vec![giant_list[0].id]
+                } else {
+                    vec![]
+                };
+                let submission = DecisionSubmission {
+                    offer_id: offer.id,
+                    answers: vec![
+                        ChoiceAnswer::Candidates {
+                            role: *ogre_role,
+                            candidates: ogre_ans,
+                        },
+                        ChoiceAnswer::Candidates {
+                            role: *giant_role,
+                            candidates: giant_ans,
+                        },
+                    ],
+                };
+                let mut applied = root.clone();
+                applied
+                    .apply_offer_submission(&offers, &submission)
+                    .unwrap_or_else(|err| {
+                        panic!(
+                            "skip_trivial={skip_trivial}, ogre_count={ogre_count}, \
+                             giant_blocks={giant_blocks} failed: {err}"
+                        )
+                    });
+                assert_ne!(
+                    applied.action_space().map(|space| space.kind),
+                    Some(ActionSpaceKind::DeclareBlocker),
+                    "skip_trivial={skip_trivial}, ogre_count={ogre_count}, \
+                     giant_blocks={giant_blocks} left a blocker undeclared"
+                );
+                let expected_total = ogre_count + usize::from(giant_blocks);
+                let actual_blockers: usize = applied.state.observation_events[events_from..]
+                    .iter()
+                    .find_map(|ev| match ev {
+                        managym::flow::event::GameEvent::BlockersDeclared { assignments } => Some(
+                            assignments
+                                .iter()
+                                .map(|(_, blockers)| blockers.len())
+                                .sum::<usize>(),
+                        ),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
+                assert_eq!(actual_blockers, expected_total);
+                let commands = root.compound_commands(&offers, &submission).unwrap();
+                assert!(!commands.is_empty());
+            }
+        }
+
+        // 2 attackers (per-blocker path): interleaved [Gray Ogre, Hill Giant, Gray Ogre]
+        // facing 2 distinct attackers (Craw Wurm + Hill Giant).
+        let mut two = Scenario::new(
+            BTreeMap::from([
+                ("Forest".to_string(), 15),
+                ("Mountain".to_string(), 15),
+                ("Craw Wurm".to_string(), 5),
+                ("Hill Giant".to_string(), 5),
+            ]),
+            BTreeMap::from([
+                ("Mountain".to_string(), 20),
+                ("Gray Ogre".to_string(), 10),
+                ("Hill Giant".to_string(), 10),
+            ]),
+            997,
+        );
+        two.advance_to_active_step(0, StepKind::Main);
+        two.game_mut().skip_trivial = skip_trivial;
+        let att0 = two.force_permanent_on_battlefield(0, "Craw Wurm");
+        let att1 = two.force_permanent_on_battlefield(0, "Hill Giant");
+        for att in [att0, att1] {
+            two.game_mut().state.permanents[att]
+                .as_mut()
+                .unwrap()
+                .summoning_sick = false;
+        }
+        let b_ogre1 = two.force_permanent_on_battlefield(1, "Gray Ogre");
+        let b_giant = two.force_permanent_on_battlefield(1, "Hill Giant");
+        let b_ogre2 = two.force_permanent_on_battlefield(1, "Gray Ogre");
+        two.advance_to_active_step(0, StepKind::DeclareAttackers);
+        two.declare_attack();
+        two.declare_attack();
+        two.advance_to_active_step(0, StepKind::DeclareBlockers);
+
+        let root2 = two.game().clone();
+        let combat2 = root2.state.combat.as_ref().expect("combat active");
+        let first2 = root2
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .find_map(|a| match a {
+                Action::DeclareBlocker { blocker, .. } => Some(*blocker),
+                _ => None,
+            })
+            .unwrap();
+        let engine_order2: Vec<_> = std::iter::once(first2)
+            .chain(combat2.blockers_to_declare.iter().rev().copied())
+            .collect();
+        assert_eq!(engine_order2[1], b_giant);
+        assert!(
+            (engine_order2[0] == b_ogre1 && engine_order2[2] == b_ogre2)
+                || (engine_order2[0] == b_ogre2 && engine_order2[2] == b_ogre1)
+        );
+
+        let offers2 = root2.compound_offers().unwrap();
+        let offer2 = &offers2.projection().offers[0];
+        assert_eq!(offer2.verb, DecisionVerb::DeclareBlockers);
+        // Grouped roles: [Ogre1, Ogre2, Hill Giant].
+        assert_eq!(offer2.choices.len(), 3);
+        let role_cands: Vec<(RoleId, &[Candidate])> = offer2
+            .choices
+            .iter()
+            .map(
+                |ChoiceStep::Select {
+                     role, candidates, ..
+                 }| (*role, candidates.initial.as_deref().unwrap()),
+            )
+            .collect();
+
+        // Test representative interleaved plans:
+        // (Ogre1 -> att0, Ogre2 -> decline, Giant -> decline)
+        // (Ogre1 -> decline, Ogre2 -> att0, Giant -> att1)
+        // (Ogre1 -> att0, Ogre2 -> att1, Giant -> decline)
+        // (all decline)
+        let plans: [([Option<usize>; 3], usize); 4] = [
+            ([Some(0), None, None], 1),
+            ([None, Some(0), Some(1)], 2),
+            ([Some(0), Some(1), None], 2),
+            ([None, None, None], 0),
+        ];
+        let events_from2 = root2.state.observation_events.len();
+        for (picks, expected_total) in plans {
+            let answers = picks
+                .iter()
+                .enumerate()
+                .map(|(idx, pick)| ChoiceAnswer::Candidates {
+                    role: role_cands[idx].0,
+                    candidates: pick
+                        .map(|p| vec![role_cands[idx].1[p].id])
+                        .unwrap_or_default(),
+                })
+                .collect();
+            let submission = DecisionSubmission {
+                offer_id: offer2.id,
+                answers,
+            };
+            let mut applied = root2.clone();
+            applied
+                .apply_offer_submission(&offers2, &submission)
+                .unwrap_or_else(|err| {
+                    panic!("skip_trivial={skip_trivial}, picks={picks:?} failed: {err}")
+                });
+            assert_ne!(
+                applied.action_space().map(|space| space.kind),
+                Some(ActionSpaceKind::DeclareBlocker),
+                "skip_trivial={skip_trivial}, picks={picks:?} left a blocker undeclared"
+            );
+            let total_blocks: usize = applied.state.observation_events[events_from2..]
+                .iter()
+                .find_map(|ev| match ev {
+                    managym::flow::event::GameEvent::BlockersDeclared { assignments } => Some(
+                        assignments
+                            .iter()
+                            .map(|(_, blockers)| blockers.len())
+                            .sum::<usize>(),
+                    ),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            assert_eq!(total_blocks, expected_total);
+        }
+    }
+}
+
+#[test]
+fn compound_waterbend_coupled_multi_class_falls_back_and_exact_cases_succeed() {
+    // 1. Announced coupled multi-class Waterbend (Water Tribe Rallier already tapped,
+    // 2 Gray Ogre + 2 Hill Giant, {3} floating -> Waterbend {5} needs min=2, max=4,
+    // total_legal=4 across two multi-member classes). Independent roles would admit
+    // illegal combinations (e.g. 0+0=0 < min 2), so compound_offers() falls back to
+    // the folded sequential ActionSpace (1 WaterbendTap per class).
+    let mut scenario = Scenario::new(
+        BTreeMap::from([
+            ("Forest".to_string(), 16),
+            ("Water Tribe Rallier".to_string(), 8),
+            ("Gray Ogre".to_string(), 8),
+            ("Hill Giant".to_string(), 8),
+        ]),
+        deck_of("Mountain", "Gray Ogre"),
+        998,
+    );
+    scenario.advance_to_active_step(0, StepKind::Main);
+    let rallier = scenario.force_permanent_on_battlefield(0, "Water Tribe Rallier");
+    scenario.game_mut().state.permanents[rallier]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    for _ in 0..2 {
+        scenario.force_permanent_on_battlefield(0, "Gray Ogre");
+        scenario.force_permanent_on_battlefield(0, "Hill Giant");
+    }
+    scenario.game_mut().state.players[0]
+        .mana_pool
+        .add(&managym::state::mana::Mana::parse("GGG"), None);
+    scenario.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        scenario.take_action_by_type(managym::agent::action::ActionType::PriorityActivateAbility)
+    );
+    assert_eq!(scenario.action_space().kind, ActionSpaceKind::Waterbend);
+
+    let root = scenario.game().clone();
+    let offers = root.compound_offers().unwrap();
+    assert_eq!(
+        offers.projection().offers.len(),
+        root.action_space().unwrap().actions.len()
+    );
+    let tap_offers: Vec<_> = offers
+        .projection()
+        .offers
+        .iter()
+        .filter(|offer| offer.verb == DecisionVerb::WaterbendTap)
+        .collect();
+    assert_eq!(
+        tap_offers.len(),
+        2,
+        "folded sequential space offers 1 tap per equivalence class (Gray Ogre, Hill Giant)"
+    );
+    assert!(offers
+        .projection()
+        .offers
+        .iter()
+        .all(|offer| offer.verb != DecisionVerb::PayWaterbend && offer.choices.is_empty()));
+    // Every projected offer decodes and applies cleanly (RaggedPolicyDecoder contract).
+    for offer in &tap_offers {
+        let mut applied = root.clone();
+        applied
+            .apply_offer_submission(
+                &offers,
+                &DecisionSubmission {
+                    offer_id: offer.id,
+                    answers: vec![],
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            applied.action_space().unwrap().kind,
+            ActionSpaceKind::Waterbend
+        );
+    }
+
+    // 2. Single-class count role (Rallier tapped, 4 Gray Ogres, {3} floating ->
+    // Waterbend {5} needs min=2, max=4 in a single class): 1 Count role where every
+    // schema-valid submission decodes and applies cleanly.
+    let mut single = Scenario::new(
+        BTreeMap::from([
+            ("Forest".to_string(), 16),
+            ("Water Tribe Rallier".to_string(), 8),
+            ("Gray Ogre".to_string(), 16),
+        ]),
+        deck_of("Mountain", "Gray Ogre"),
+        999,
+    );
+    single.advance_to_active_step(0, StepKind::Main);
+    let s_rallier = single.force_permanent_on_battlefield(0, "Water Tribe Rallier");
+    single.game_mut().state.permanents[s_rallier]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    for _ in 0..4 {
+        single.force_permanent_on_battlefield(0, "Gray Ogre");
+    }
+    single.game_mut().state.players[0]
+        .mana_pool
+        .add(&managym::state::mana::Mana::parse("GGG"), None);
+    single.game_mut().scenario_refresh_priority().unwrap();
+    assert!(single.take_action_by_type(managym::agent::action::ActionType::PriorityActivateAbility));
+    assert_eq!(single.action_space().kind, ActionSpaceKind::Waterbend);
+
+    let single_root = single.game().clone();
+    let single_offers = single_root.compound_offers().unwrap();
+    let single_offer = &single_offers.projection().offers[0];
+    assert_eq!(single_offer.verb, DecisionVerb::PayWaterbend);
+    assert_eq!(single_offer.choices.len(), 1);
+    let ChoiceStep::Select {
+        role,
+        min,
+        max,
+        candidates,
+        ..
+    } = &single_offer.choices[0];
+    assert_eq!((*min, *max), (1, 1));
+    let list = candidates.initial.as_ref().unwrap();
+    assert_eq!(list.len(), 3);
+    assert_eq!(list[0].label, "2 × Gray Ogre");
+    assert_eq!(list[1].label, "3 × Gray Ogre");
+    assert_eq!(list[2].label, "4 × Gray Ogre");
+    for cand in list {
+        let mut applied = single_root.clone();
+        applied
+            .apply_offer_submission(
+                &single_offers,
+                &DecisionSubmission {
+                    offer_id: single_offer.id,
+                    answers: vec![ChoiceAnswer::Candidates {
+                        role: *role,
+                        candidates: vec![cand.id],
+                    }],
+                },
+            )
+            .unwrap();
+        assert_ne!(
+            applied.action_space().map(|space| space.kind),
+            Some(ActionSpaceKind::Waterbend)
+        );
+    }
+
+    // 3. Resolving Waterbend {2} (Waterbending Lesson with 2 Gray Ogre + 2 Hill Giant):
+    // compound_offers() falls back cleanly to the folded sequential space (no WrongDecision).
+    let mut lesson = Scenario::new(
+        BTreeMap::from([
+            ("Island".to_string(), 16),
+            ("Waterbending Lesson".to_string(), 8),
+            ("Gray Ogre".to_string(), 8),
+            ("Hill Giant".to_string(), 8),
+        ]),
+        deck_of("Mountain", "Gray Ogre"),
+        1000,
+    );
+    lesson.advance_to_active_step(0, StepKind::Main);
+    lesson.game_mut().scenario_clear_hand(PlayerId(0));
+    lesson.force_card_in_hand(0, "Waterbending Lesson");
+    for _ in 0..2 {
+        lesson.force_permanent_on_battlefield(0, "Gray Ogre");
+        lesson.force_permanent_on_battlefield(0, "Hill Giant");
+    }
+    lesson.game_mut().state.players[0]
+        .mana_pool
+        .add(&managym::state::mana::Mana::parse("3U"), None);
+    lesson.game_mut().scenario_refresh_priority().unwrap();
+    assert!(lesson.take_action_by_type(managym::agent::action::ActionType::PriorityCastSpell));
+    pass_priority(lesson.game_mut());
+    pass_priority(lesson.game_mut());
+    assert_eq!(lesson.action_space().kind, ActionSpaceKind::Waterbend);
+    let lesson_offers = lesson.game().compound_offers().unwrap();
+    assert_eq!(
+        lesson_offers.projection().offers.len(),
+        lesson.action_space().actions.len()
+    );
+    assert_eq!(
+        lesson_offers
+            .projection()
+            .offers
+            .iter()
+            .filter(|o| o.verb == DecisionVerb::WaterbendTap)
+            .count(),
+        2
+    );
 }

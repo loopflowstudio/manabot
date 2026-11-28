@@ -21,6 +21,7 @@ pub(crate) fn joins(key: &str, policy_history: bool) -> &'static [Join] {
         "agent_permanents" | "opponent_permanents" => &[
             Object(permanent::ATTACHED_TO, 1),
             Object(permanent::BLOCKING, 1),
+            Object(permanent::ATTACKED_PERMANENT, 1),
         ],
         "stack" => &[Object(stack::SOURCE, 1)],
         "events" if policy_history => &[

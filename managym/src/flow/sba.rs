@@ -2,6 +2,7 @@
 // State-based actions.
 
 use crate::{
+    experience::PresentationRule,
     flow::{
         decision::{EffectFrame, FrameCompletion},
         game::{Game, GameOutcome, GameProcedure, LossCauses},
@@ -10,7 +11,7 @@ use crate::{
     },
     state::{
         ability::{Ability, TriggerCondition},
-        card::{Keyword, StaticAbility},
+        card::{Keyword, StateBasedAction, StaticAbility},
         game_object::{ObjectId, ObjectKind, PermanentId, PlayerId},
         permanent::CounterKind,
         stack_object::StackObject,
@@ -29,41 +30,40 @@ impl Game {
     /// Duplicate legendary names (layered `is_legendary` and `name`),
     /// grouped by controller in APNAP order.
     fn legend_groups(&self) -> Vec<Vec<ObjectId>> {
-        let mut groups = Vec::new();
-        for player in [self.active_player(), self.non_active_player()] {
-            let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
-            for (id, characteristics) in self.layer_views(self.iter_battlefield_permanents(player))
-            {
-                if characteristics
-                    .static_abilities
-                    .contains(&StaticAbility::LegendRuleDoesntApply)
-                {
-                    names.clear();
-                    break;
+        let _scan = self.board_scan();
+        self.with_layer_board(|board| {
+            let mut groups = Vec::new();
+            for player in [self.active_player(), self.non_active_player()] {
+                let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
+                for id in self.iter_battlefield_permanents(player) {
+                    let characteristics = board.view(id);
+                    if characteristics.is_legendary
+                        && !characteristics
+                            .exempt_sbas
+                            .contains(StateBasedAction::LegendRule)
+                    {
+                        let permanent = self.state.permanents[id].as_ref().expect("battlefield");
+                        names
+                            .entry(characteristics.name.clone())
+                            .or_default()
+                            .push(permanent.object);
+                    }
                 }
-                if characteristics.is_legendary {
-                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    names
-                        .entry(characteristics.name.clone())
-                        .or_default()
-                        .push(permanent.object);
-                }
+                groups.extend(names.into_values().filter(|objects| objects.len() > 1));
             }
-            groups.extend(names.into_values().filter(|objects| objects.len() > 1));
-        }
-        groups
+            groups
+        })
     }
 
     pub(crate) fn protected_from_loss(&self, player: PlayerId) -> bool {
-        self.layer_views(self.iter_battlefield_permanents(player))
-            .any(|(_, view)| {
-                view.static_abilities
-                    .contains(&StaticAbility::CantLoseAndOpponentsCantWin)
-            })
+        self.has_functioning_static(Some(player), |ability| {
+            matches!(ability, StaticAbility::CantLoseAndOpponentsCantWin)
+        })
     }
 
     pub fn lose_game(&mut self, player: PlayerId) {
         if !self.is_game_over() && !self.protected_from_loss(player) {
+            self.presentation_lost(player, None);
             let mut losses = [LossCauses::default(); 2];
             losses[player.0].instructed = true;
             self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
@@ -99,6 +99,19 @@ impl Game {
             }
         }
         if losses.iter().any(|causes| causes.any()) {
+            for (seat, causes) in losses.iter().enumerate() {
+                if !causes.any() {
+                    continue;
+                }
+                let rule = if causes.life_total {
+                    PresentationRule::ZeroLife
+                } else if causes.deck_empty {
+                    PresentationRule::EmptyLibrary
+                } else {
+                    PresentationRule::Poison
+                };
+                self.presentation_lost(PlayerId(seat), Some(rule));
+            }
             self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
             return true;
         }
@@ -108,6 +121,7 @@ impl Game {
     /// Perform one simultaneous batch, or suspend for required legend choices.
     /// Stabilization repeats changed batches before granting priority (CR 704.3).
     pub(crate) fn perform_state_based_actions(&mut self) -> SbaProgress {
+        self.remove_invalid_defenders();
         // Choose all legends before applying any of this simultaneous batch.
         // Terminal SBAs take precedence over asking a player who already lost.
         if self.is_game_over() {
@@ -158,57 +172,83 @@ impl Game {
         // Candidate discovery uses exact object identities. The mutable
         // storage slot is resolved only while inspecting the current object;
         // no later commit can accidentally follow a re-entered card.
-        let mut candidates = Vec::new();
-        for (permanent_id, characteristics) in
-            self.layer_views((0..self.state.permanents.len()).map(PermanentId))
-        {
-            let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
-            // CR 704.5f — A creature with toughness 0 or less is put into
-            // its owner's graveyard (an earthbent land losing its counters
-            // is a 0/0 and dies).
-            let zero_toughness = characteristics.is_creature() && characteristics.toughness <= 0;
-            // CR 704.5i/v. No supported battle has a defeat trigger; if one
-            // is introduced, its pending trigger must delay this battle SBA.
-            let zero_counters = (characteristics.types.is_planeswalker()
-                && permanent.counter_count(CounterKind::Loyalty) == 0)
-                || (characteristics.types.is_battle()
-                    && permanent.counter_count(CounterKind::Defense) == 0);
-            let legend_loser = legend_losers.contains(&permanent.object);
-            // CR 704.5m — An Aura attached to an illegal object or to
-            // nothing is put into its owner's graveyard.
-            let illegal_aura = self.aura_attachment_illegal(permanent_id, &characteristics);
-            let put_in_graveyard = zero_toughness || zero_counters || legend_loser || illegal_aura;
-            // CR 704.5g — Lethal damage destroys. The other graveyard SBAs
-            // above do not destroy, even when lethal damage also applies.
-            let destroy = !put_in_graveyard
-                && self.has_lethal_damage(permanent_id, &characteristics)
-                && !characteristics.keywords.has(Keyword::Indestructible);
-            if !put_in_graveyard && !destroy {
-                continue;
-            }
-            let Some(object_ref) = self.permanent_object(permanent_id) else {
-                continue;
-            };
-            candidates.push((object_ref, destroy));
-        }
-        candidates.sort_by_key(|(object_ref, _)| *object_ref);
-
-        let mut events: Vec<_> = candidates
-            .into_iter()
-            .map(|(target, destroy)| {
-                if destroy {
-                    ProposedEvent::Destroy { target }
-                } else {
-                    self.zone_move_proposal(target, ZoneType::Graveyard, Default::default())
+        let (events, rules): (Vec<_>, Vec<_>) = {
+            let _scan = self.board_scan();
+            let board = self.layer_board();
+            let mut candidates = Vec::new();
+            let mut rules = Vec::new();
+            for (permanent_id, characteristics) in board.iter() {
+                let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
+                // CR 704.5f — A creature with toughness 0 or less is put into
+                // its owner's graveyard (an earthbent land losing its counters
+                // is a 0/0 and dies).
+                let zero_toughness =
+                    characteristics.is_creature() && characteristics.toughness <= 0;
+                // CR 704.5i/v. No supported battle has a defeat trigger; if one
+                // is introduced, its pending trigger must delay this battle SBA.
+                let zero_counters = (characteristics.types.is_planeswalker()
+                    && permanent.counter_count(CounterKind::Loyalty) == 0
+                    && !characteristics
+                        .exempt_sbas
+                        .contains(StateBasedAction::ZeroLoyalty))
+                    || (characteristics.types.is_battle()
+                        && permanent.counter_count(CounterKind::Defense) == 0);
+                let legend_loser = legend_losers.contains(&permanent.object);
+                // CR 704.5m — An Aura attached to an illegal object or to
+                // nothing is put into its owner's graveyard.
+                let illegal_aura = self.aura_attachment_illegal(permanent_id, characteristics);
+                let put_in_graveyard =
+                    zero_toughness || zero_counters || legend_loser || illegal_aura;
+                // CR 704.5g — Lethal damage destroys. The other graveyard SBAs
+                // above do not destroy, even when lethal damage also applies.
+                let destroy = !put_in_graveyard
+                    && self.has_lethal_damage(permanent_id, characteristics)
+                    && !characteristics.keywords.has(Keyword::Indestructible);
+                if !put_in_graveyard && !destroy {
+                    continue;
                 }
-            })
-            .collect();
-        events.extend(
-            self.finished_sagas()
+                let Some(object_ref) = self.permanent_object(permanent_id) else {
+                    continue;
+                };
+                let rule = if zero_toughness {
+                    PresentationRule::ZeroToughness
+                } else if zero_counters && characteristics.types.is_planeswalker() {
+                    PresentationRule::ZeroLoyalty
+                } else if zero_counters {
+                    PresentationRule::ZeroDefense
+                } else if legend_loser {
+                    PresentationRule::LegendRule
+                } else if illegal_aura {
+                    PresentationRule::UnattachedAura
+                } else {
+                    PresentationRule::LethalDamage
+                };
+                rules.push((object_ref, rule));
+                candidates.push((object_ref, destroy));
+            }
+            candidates.sort_by_key(|(object_ref, _)| *object_ref);
+
+            let mut events: Vec<_> = candidates
                 .into_iter()
-                .filter_map(|id| self.permanent_object(id))
-                .map(|target| ProposedEvent::Sacrifice { target }),
-        );
+                .map(|(target, destroy)| {
+                    if destroy {
+                        ProposedEvent::Destroy { target }
+                    } else {
+                        self.zone_move_proposal(target, ZoneType::Graveyard, Default::default())
+                    }
+                })
+                .collect();
+            events.extend(
+                self.finished_sagas(&board)
+                    .into_iter()
+                    .filter_map(|id| self.permanent_object(id))
+                    .map(|target| ProposedEvent::Sacrifice { target }),
+            );
+            (events, rules)
+        };
+        for (object, rule) in rules {
+            self.presentation_rule(object, rule);
+        }
         if !events.is_empty() {
             let batch = self.event_batch(EventBinding::Deaths, events);
             let mut frame = EffectFrame::new(self.active_player(), Vec::new());
@@ -275,14 +315,20 @@ impl Game {
         let detached: Vec<PermanentId> = if attached.is_empty() {
             Vec::new()
         } else {
-            self.layer_views(attached.into_iter())
-                .filter(|(id, view)| {
+            let board = self.layer_board();
+            attached
+                .into_iter()
+                .filter(|&id| {
+                    let Some(view) = board.get(id) else {
+                        return false;
+                    };
                     !view.has_subtype("Aura")
                         && !(view.has_subtype("Equipment")
                             && !view.is_creature()
-                            && self.attached_creature(*id).is_some())
+                            && self
+                                .attached_creature(id)
+                                .is_some_and(|target| !self.protected_from_permanent(target, id)))
                 })
-                .map(|(id, _)| id)
                 .collect()
         };
         for permanent_id in detached {
@@ -301,7 +347,7 @@ impl Game {
         for (object_id, object) in self.state.latest_objects() {
             let zone = self.state.zones.zone_of(object_id);
             let ceases = match object.kind() {
-                ObjectKind::Card => false,
+                ObjectKind::Card | ObjectKind::Emblem => false,
                 ObjectKind::Token => !matches!(zone, Some(ZoneType::Battlefield) | None),
                 ObjectKind::SpellCopy if zone == Some(ZoneType::Exile) => {
                     self.preparation_source(object_id).is_none()
@@ -341,17 +387,16 @@ impl Game {
         performed
     }
 
-    fn finished_sagas(&self) -> Vec<PermanentId> {
-        self.layer_views((0..self.state.permanents.len()).map(PermanentId))
-            .filter(|(id, view)| {
-                let permanent = self.state.permanents[*id].as_ref().unwrap();
-                let Some(last) = view.final_chapter() else {
-                    return false;
-                };
-                permanent.counter_count(CounterKind::Lore) >= i32::from(last)
-                    && !self.chapter_ability_pending(permanent.object)
+    fn finished_sagas(&self, board: &crate::flow::statics::LayerBoard) -> Vec<PermanentId> {
+        board
+            .iter()
+            .filter_map(|(id, view)| {
+                let permanent = self.state.permanents[id].as_ref().unwrap();
+                let last = view.final_chapter()?;
+                (permanent.counter_count(CounterKind::Lore) >= i32::from(last)
+                    && !self.chapter_ability_pending(permanent.object))
+                .then_some(id)
             })
-            .map(|(id, _)| id)
             .collect()
     }
 
@@ -409,7 +454,232 @@ impl Game {
             return true;
         };
         !self.attached_permanent(aura).is_some_and(|object| {
-            object != aura && self.permanent_matches_spec(object, enchant, permanent.controller)
+            object != aura
+                && !self.protected_from_permanent(object, aura)
+                && self.permanent_matches_spec(object, enchant, permanent.controller)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use crate::{
+        flow::{game::Game, sba::SbaProgress},
+        state::{
+            card::{
+                CardType, PrintedCharacteristics, StateBasedAction, StaticAbility, StaticScope,
+            },
+            effect::{EffectDuration, Modification},
+            game_object::{Object, ObjectKind, PermanentId, PlayerId},
+            permanent::CounterKind,
+            player::PlayerConfig,
+            predicate::CardPredicate,
+            zone::ZoneType,
+        },
+    };
+
+    fn zero_loyalty_fixture() -> Game {
+        let deck = BTreeMap::from([
+            ("Sanctum Lurker".to_string(), 4),
+            ("The Theorist, Jace Beleren".to_string(), 4),
+            ("Swamp".to_string(), 32),
+        ]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            430_002,
+            false,
+        );
+        game.keep_opening_hands();
+        game
+    }
+
+    fn set_zero_loyalty(game: &mut Game, walker: PermanentId) {
+        let current = game.state.permanents[walker]
+            .as_ref()
+            .unwrap()
+            .counter_count(CounterKind::Loyalty);
+        if current != 0 {
+            game.state.permanents[walker]
+                .as_mut()
+                .unwrap()
+                .change_counters(CounterKind::Loyalty, -current);
+        }
+    }
+
+    #[test]
+    fn command_zone_emblem_projects_zero_loyalty_exemption_to_controllers_planeswalkers() {
+        let mut game = zero_loyalty_fixture();
+        let own_walker = game
+            .scenario_force_battlefield(PlayerId(0), "The Theorist, Jace Beleren", false)
+            .unwrap();
+        let opp_walker = game
+            .scenario_force_battlefield(PlayerId(1), "The Theorist, Jace Beleren", false)
+            .unwrap();
+        set_zero_loyalty(&mut game, own_walker);
+        set_zero_loyalty(&mut game, opp_walker);
+
+        let id = game.state.id_gen_mut().next_id();
+        let mut printed = PrintedCharacteristics::default();
+        printed.name = "Emblem — Test".into();
+        printed.statics = vec![StaticAbility::StateBasedActionDoesntApply {
+            action: StateBasedAction::ZeroLoyalty,
+            scope: StaticScope::YouControl(CardPredicate::card_type(CardType::Planeswalker)),
+        }];
+        let emblem = Object::from_definition(
+            id,
+            PlayerId(0),
+            crate::state::card::CardDefId(0),
+            std::sync::Arc::new(printed),
+            ObjectKind::Emblem,
+        );
+        let object = game.add_object(emblem);
+        game.state
+            .place_object(object, PlayerId(0), ZoneType::Command);
+
+        assert!(game
+            .characteristics(own_walker)
+            .exempt_sbas
+            .contains(StateBasedAction::ZeroLoyalty));
+        assert!(!game
+            .characteristics(opp_walker)
+            .exempt_sbas
+            .contains(StateBasedAction::ZeroLoyalty));
+        assert_eq!(game.perform_state_based_actions(), SbaProgress::Changed);
+        assert!(game.state.permanents[own_walker].is_some());
+        assert!(game.state.permanents[opp_walker].is_none());
+    }
+
+    #[test]
+    fn zero_loyalty_exemption_follows_layers_for_ability_loss_and_phasing() {
+        let mut game = zero_loyalty_fixture();
+        let lurker = game
+            .scenario_force_battlefield(PlayerId(0), "Sanctum Lurker", false)
+            .unwrap();
+        let walker = game
+            .scenario_force_battlefield(PlayerId(0), "The Theorist, Jace Beleren", false)
+            .unwrap();
+        set_zero_loyalty(&mut game, walker);
+
+        // Removing the planeswalker's own abilities keeps Sanctum Lurker's exemption.
+        let affected_walker = game.affected_permanent(walker).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_walker],
+            Modification::LoseAllAbilities,
+            EffectDuration::EndOfTurn,
+        );
+        assert!(game
+            .characteristics(walker)
+            .exempt_sbas
+            .contains(StateBasedAction::ZeroLoyalty));
+        assert_eq!(game.perform_state_based_actions(), SbaProgress::Stable);
+        assert!(game.state.permanents[walker].is_some());
+
+        // Phasing out Sanctum Lurker removes its static ability from layers.
+        let affected_lurker = game.affected_permanent(lurker).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_lurker],
+            Modification::PhasedOut,
+            EffectDuration::EndOfTurn,
+        );
+        assert!(!game
+            .characteristics(walker)
+            .exempt_sbas
+            .contains(StateBasedAction::ZeroLoyalty));
+        assert_eq!(game.perform_state_based_actions(), SbaProgress::Changed);
+        assert!(game.state.permanents[walker].is_none());
+
+        // Removing abilities from Sanctum Lurker in layer 6 also removes the exemption.
+        let mut game = zero_loyalty_fixture();
+        let lurker = game
+            .scenario_force_battlefield(PlayerId(0), "Sanctum Lurker", false)
+            .unwrap();
+        let walker = game
+            .scenario_force_battlefield(PlayerId(0), "The Theorist, Jace Beleren", false)
+            .unwrap();
+        set_zero_loyalty(&mut game, walker);
+        let affected_lurker = game.affected_permanent(lurker).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_lurker],
+            Modification::LoseAllAbilities,
+            EffectDuration::EndOfTurn,
+        );
+        assert!(!game
+            .characteristics(walker)
+            .exempt_sbas
+            .contains(StateBasedAction::ZeroLoyalty));
+        assert_eq!(game.perform_state_based_actions(), SbaProgress::Changed);
+        assert!(game.state.permanents[walker].is_none());
+    }
+
+    #[test]
+    fn legend_rule_exemption_projects_per_permanent_through_layers() {
+        let deck = std::collections::BTreeMap::from([
+            ("Island".to_string(), 30),
+            ("Sakashima of a Thousand Faces".to_string(), 4),
+            ("Rhys the Redeemed".to_string(), 4),
+        ]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("P1", deck.clone()),
+                PlayerConfig::new("P2", deck),
+            ],
+            202,
+            false,
+        );
+        let sakashima = game
+            .scenario_force_battlefield(PlayerId(0), "Sakashima of a Thousand Faces", false)
+            .unwrap();
+        let own_a = game
+            .scenario_force_battlefield(PlayerId(0), "Rhys the Redeemed", false)
+            .unwrap();
+        let own_b = game
+            .scenario_force_battlefield(PlayerId(0), "Rhys the Redeemed", false)
+            .unwrap();
+        let opp_a = game
+            .scenario_force_battlefield(PlayerId(1), "Rhys the Redeemed", false)
+            .unwrap();
+        game.scenario_force_battlefield(PlayerId(1), "Rhys the Redeemed", false)
+            .unwrap();
+
+        assert!(game
+            .characteristics(own_a)
+            .exempt_sbas
+            .contains(StateBasedAction::LegendRule));
+        assert!(game
+            .characteristics(own_b)
+            .exempt_sbas
+            .contains(StateBasedAction::LegendRule));
+        assert!(!game
+            .characteristics(opp_a)
+            .exempt_sbas
+            .contains(StateBasedAction::LegendRule));
+        // Only the opponent has a legend group; controller's Rhys pair is exempt.
+        assert_eq!(game.legend_groups().len(), 1);
+
+        // Removing Sakashima's abilities in layer 6 restores the legend rule for P0 too.
+        let affected = game.affected_permanent(sakashima).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::LoseAllAbilities,
+            EffectDuration::EndOfTurn,
+        );
+        assert!(!game
+            .characteristics(own_a)
+            .exempt_sbas
+            .contains(StateBasedAction::LegendRule));
+        assert_eq!(game.legend_groups().len(), 2);
     }
 }

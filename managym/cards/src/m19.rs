@@ -4,8 +4,8 @@ use managym_state::ability::{
     TriggerCondition, TriggerSubject, TurnStep,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-    PrintedCharacteristics, StaticAbility, StaticScope,
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, EntryChoiceKind, Keyword,
+    Keywords, PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticScope,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
@@ -13,6 +13,8 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        vivien_reid(),
+        diamond_mare(),
         leonin_vanguard(),
         volley_veteran(),
         mystic_archaeologist(),
@@ -408,6 +410,107 @@ fn kargan_dragonrider() -> CardDefinition {
                 }),
                 vec![Modification::AddKeywords(Keywords::of(&[Keyword::Flying]))],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn vivien_reid() -> CardDefinition {
+    let text_box = "+1: Look at the top four cards of your library. You may reveal a creature or land card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\n−3: Destroy target artifact, enchantment, or creature with flying.\n−8: You get an emblem with \"Creatures you control get +2/+2 and have vigilance, trample, and indestructible.\"";
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    CardDefinition {
+        key: "m19.vivien_reid",
+        scryfall_id: "681fbd66-b622-4f20-a860-f101aff21109",
+        printed: PrintedCharacteristics {
+            name: "Vivien Reid".into(),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Vivien".into()],
+            mana_cost: Some(ManaCost::parse("{3}{G}{G}")),
+            loyalty: Some(5),
+            text_box: text_box.into(),
+            activated_abilities: vec![
+                loyalty(
+                    1,
+                    vec![Effect::LookAndSelect {
+                        random_order: true,
+                        reveal: true,
+                        to_battlefield: false,
+                        look: 4.into(),
+                        min_select: 0,
+                        max_select: 1,
+                        predicate: CardPredicate {
+                            card_types_any: vec![CardType::Creature, CardType::Land],
+                            ..Default::default()
+                        },
+                        max_mana_value: None,
+                    }],
+                ),
+                loyalty(
+                    -3,
+                    vec![Effect::destroy(ObjectSelector::Target(
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                any_of: vec![
+                                    CardPredicate {
+                                        card_types_any: vec![
+                                            CardType::Artifact,
+                                            CardType::Enchantment,
+                                        ],
+                                        ..Default::default()
+                                    },
+                                    CardPredicate {
+                                        keyword: Some(Keyword::Flying),
+                                        ..CardPredicate::creature()
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                    ))],
+                ),
+                loyalty(
+                    -8,
+                    vec![Effect::CreateEmblem {
+                        key: "emblem.vivien_reid".into(),
+                    }],
+                ),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn diamond_mare() -> CardDefinition {
+    let text_box = "As this creature enters, choose a color.\nWhenever you cast a spell of the chosen color, you gain 1 life.";
+    CardDefinition {
+        key: "m19.diamond_mare",
+        scryfall_id: "ca600b3f-2c70-489b-b218-6e3245b90114",
+        printed: PrintedCharacteristics {
+            name: "Diamond Mare".into(),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            subtypes: vec!["Horse".into()],
+            power: Some(1),
+            toughness: Some(3),
+            replacement_effects: vec![ReplacementEffect::AsEntersChoose {
+                kind: EntryChoiceKind::Color,
+                look_at_opponent_hand: false,
+            }],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
+                        chosen_color: true,
+                        ..Default::default()
+                    },
+                ),
+                intervening_if: None,
+                effects: vec![Effect::gain_life(1)],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

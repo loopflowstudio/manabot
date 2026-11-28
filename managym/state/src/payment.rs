@@ -131,6 +131,43 @@ impl PaymentReceipt {
         self.0.as_deref().unwrap_or(&NOTHING)
     }
 
+    /// Visit every `ObjectId` referenced by this receipt. Exhaustive
+    /// destructuring ensures any new id-bearing field on `Paid`, `SpentMana`,
+    /// `ManaOrigin` or `Contribution` is accounted for.
+    pub fn visit_referenced_objects(&self, mut visit: impl FnMut(ObjectId)) {
+        let Some(paid) = self.0.as_deref() else {
+            return;
+        };
+        let Paid {
+            mana,
+            contributions,
+            life: _,
+        } = paid;
+        for SpentMana {
+            color: _,
+            source,
+            effect: _,
+        } in mana
+        {
+            if let Some(ManaOrigin {
+                object,
+                definition: _,
+            }) = source
+            {
+                visit(*object);
+            }
+        }
+        for Contribution {
+            object,
+            how: _,
+            toward: _,
+            after_mana: _,
+        } in contributions
+        {
+            visit(*object);
+        }
+    }
+
     /// Nothing was paid: no mana, no contributing object and no life.
     pub fn is_empty(&self) -> bool {
         self.0.is_none()

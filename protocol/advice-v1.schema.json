@@ -25,6 +25,44 @@
       "title": "AbiIdentity",
       "type": "object"
     },
+    "AbilityGrantView": {
+      "additionalProperties": false,
+      "properties": {
+        "counter": {
+          "default": false,
+          "title": "Counter",
+          "type": "boolean"
+        },
+        "effect_timestamp": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect Timestamp"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "title": "AbilityGrantView",
+      "type": "object"
+    },
     "AdviceRequest": {
       "additionalProperties": false,
       "description": "The sole POST /api/advice body, bridging legacy and advice-v1 callers.",
@@ -1710,6 +1748,22 @@
           "title": "Actor",
           "type": "integer"
         },
+        "announcing": {
+          "anyOf": [
+            {
+              "enum": [
+                "spell",
+                "activated_ability"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Announcing"
+        },
         "chosen_mode": {
           "anyOf": [
             {
@@ -1737,6 +1791,13 @@
             }
           ],
           "title": "Mana Cost"
+        },
+        "paid": {
+          "items": {
+            "$ref": "#/$defs/PaidView"
+          },
+          "title": "Paid",
+          "type": "array"
         },
         "pending": {
           "items": {
@@ -2126,6 +2187,31 @@
           "title": "Actor",
           "type": "integer"
         },
+        "aliases": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "object": "#/$defs/ObjectSubject",
+                "player": "#/$defs/PlayerSubject",
+                "stack": "#/$defs/StackSubject"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ObjectSubject"
+              },
+              {
+                "$ref": "#/$defs/StackSubject"
+              },
+              {
+                "$ref": "#/$defs/PlayerSubject"
+              }
+            ]
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
         "choices": {
           "items": {
             "discriminator": {
@@ -2248,6 +2334,51 @@
       "title": "InteractionOffer",
       "type": "object"
     },
+    "KeywordAbilityView": {
+      "additionalProperties": false,
+      "properties": {
+        "effect_timestamp": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect Timestamp"
+        },
+        "granted": {
+          "default": false,
+          "title": "Granted",
+          "type": "boolean"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "KeywordAbilityView",
+      "type": "object"
+    },
     "LegacyCardTypesView": {
       "additionalProperties": false,
       "properties": {
@@ -2307,18 +2438,20 @@
           "default": null
         },
         "cast_permissions": {
-          "type": "array",
           "items": {
             "$ref": "#/$defs/LegacyCastPermissionView"
-          }
+          },
+          "title": "Cast Permissions",
+          "type": "array"
         },
         "counters": {
-          "description": "Counters on the card off the battlefield (\"with a stash counter on it\").",
-          "type": "object",
           "additionalProperties": {
-            "type": "integer",
-            "format": "int32"
-          }
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          },
+          "title": "Counters",
+          "type": "object"
         },
         "face_down": {
           "default": false,
@@ -2352,6 +2485,20 @@
           "minimum": -2147483648,
           "title": "Power",
           "type": "integer"
+        },
+        "printed_loyalty": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Loyalty"
         },
         "registry_key": {
           "maximum": 4294967295,
@@ -2429,11 +2576,16 @@
           "type": "boolean"
         },
         "condition": {
-          "description": "What must hold for the player to use it.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
         },
         "cost": {
           "anyOf": [
@@ -2448,7 +2600,8 @@
           "title": "Cost"
         },
         "face_down": {
-          "description": "Face down in exile without Foretell.",
+          "default": false,
+          "title": "Face Down",
           "type": "boolean"
         },
         "flash": {
@@ -2457,9 +2610,13 @@
           "type": "boolean"
         },
         "flashback": {
+          "default": false,
+          "title": "Flashback",
           "type": "boolean"
         },
         "follows_source_controller": {
+          "default": false,
+          "title": "Follows Source Controller",
           "type": "boolean"
         },
         "foretold": {
@@ -2468,11 +2625,18 @@
           "type": "boolean"
         },
         "on_adventure": {
+          "default": false,
+          "title": "On Adventure",
           "type": "boolean"
         },
         "own_turn_only": {
           "default": false,
           "title": "Own Turn Only",
+          "type": "boolean"
+        },
+        "play_lands": {
+          "default": false,
+          "title": "Play Lands",
           "type": "boolean"
         },
         "player_id": {
@@ -2482,6 +2646,8 @@
           "type": "integer"
         },
         "prepared": {
+          "default": false,
+          "title": "Prepared",
           "type": "boolean"
         },
         "source_permanent_id": {
@@ -2619,24 +2785,25 @@
           "type": "boolean"
         },
         "ability_resolutions": {
-          "type": "array",
           "items": {
-            "type": "array",
             "maxItems": 2,
             "minItems": 2,
             "prefixItems": [
               {
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
               },
               {
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
               }
-            ]
-          }
+            ],
+            "type": "array"
+          },
+          "title": "Ability Resolutions",
+          "type": "array"
         },
         "attached_to": {
           "anyOf": [
@@ -2652,12 +2819,33 @@
           "default": null,
           "title": "Attached To"
         },
+        "attacked_permanent": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attacked Permanent"
+        },
         "attacked_this_turn": {
+          "default": false,
+          "title": "Attacked This Turn",
           "type": "boolean"
         },
         "attacking": {
           "default": false,
           "title": "Attacking",
+          "type": "boolean"
+        },
+        "attacks_despite_defender": {
+          "default": false,
+          "title": "Attacks Despite Defender",
           "type": "boolean"
         },
         "base_power": {
@@ -2686,6 +2874,11 @@
           ],
           "title": "Base Toughness"
         },
+        "blocked": {
+          "default": false,
+          "title": "Blocked",
+          "type": "boolean"
+        },
         "blocking": {
           "anyOf": [
             {
@@ -2700,14 +2893,26 @@
           "default": null,
           "title": "Blocking"
         },
+        "chosen": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chosen"
+        },
         "combat_damage_to_players": {
-          "type": "array",
           "items": {
-            "type": "integer",
-            "format": "uint8",
             "maximum": 255,
-            "minimum": 0
-          }
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Combat Damage To Players",
+          "type": "array"
         },
         "controller_id": {
           "maximum": 4294967295,
@@ -2778,8 +2983,23 @@
           "type": "array"
         },
         "entered_this_turn": {
-          "description": "It entered the battlefield during this turn.",
+          "default": false,
+          "title": "Entered This Turn",
           "type": "boolean"
+        },
+        "entry_controller_id": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entry Controller Id"
         },
         "exhausted_abilities": {
           "default": 0,
@@ -2793,7 +3013,14 @@
           "title": "Exile If Dies This Turn",
           "type": "boolean"
         },
+        "face_down": {
+          "default": false,
+          "title": "Face Down",
+          "type": "boolean"
+        },
         "first_strike_participant": {
+          "default": false,
+          "title": "First Strike Participant",
           "type": "boolean"
         },
         "granted_firebending": {
@@ -2802,6 +3029,13 @@
           "minimum": 0,
           "title": "Granted Firebending",
           "type": "integer"
+        },
+        "hexproof_from": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Hexproof From",
+          "type": "array"
         },
         "id": {
           "maximum": 4294967295,
@@ -2825,6 +3059,40 @@
           ],
           "default": null,
           "title": "Is Token"
+        },
+        "keyword_abilities": {
+          "items": {
+            "$ref": "#/$defs/KeywordAbilityView"
+          },
+          "title": "Keyword Abilities",
+          "type": "array"
+        },
+        "keyword_grants": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/AbilityGrantView"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyword Grants"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "loyalty_activated_this_turn": {
+          "default": false,
+          "title": "Loyalty Activated This Turn",
+          "type": "boolean"
         },
         "name": {
           "anyOf": [
@@ -2862,6 +3130,34 @@
             }
           ],
           "title": "Power"
+        },
+        "printed_loyalty": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Loyalty"
+        },
+        "protection_from": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Protection From",
+          "type": "array"
+        },
+        "restrictions": {
+          "items": {
+            "$ref": "#/$defs/RestrictionView"
+          },
+          "title": "Restrictions",
+          "type": "array"
         },
         "summoning_sick": {
           "title": "Summoning Sick",
@@ -2971,12 +3267,21 @@
           "default": null,
           "title": "Combat Mana"
         },
+        "command": {
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          },
+          "title": "Command",
+          "type": "array"
+        },
         "counters": {
-          "type": "object",
           "additionalProperties": {
-            "type": "integer",
-            "format": "int32"
-          }
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          },
+          "title": "Counters",
+          "type": "object"
         },
         "effects": {
           "items": {
@@ -3040,6 +3345,11 @@
           ],
           "default": null,
           "title": "Hand Only Until"
+        },
+        "hexproof": {
+          "default": false,
+          "title": "Hexproof",
+          "type": "boolean"
         },
         "id": {
           "maximum": 4294967295,
@@ -3280,22 +3590,23 @@
           "type": "integer"
         },
         "spent_graveyard_types": {
-          "type": "array",
           "items": {
-            "type": "array",
             "maxItems": 2,
             "minItems": 2,
             "prefixItems": [
               {
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
               },
               {
                 "type": "string"
               }
-            ]
-          }
+            ],
+            "type": "array"
+          },
+          "title": "Spent Graveyard Types",
+          "type": "array"
         },
         "stack": {
           "items": {
@@ -3668,6 +3979,32 @@
       "title": "OrderChoiceStep",
       "type": "object"
     },
+    "PaidView": {
+      "additionalProperties": false,
+      "description": "One object's payment toward the pending cost, and what remains of it.",
+      "properties": {
+        "object": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionObjectView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "phrase": {
+          "title": "Phrase",
+          "type": "string"
+        }
+      },
+      "required": [
+        "phrase"
+      ],
+      "title": "PaidView",
+      "type": "object"
+    },
     "PaymentChoiceStep": {
       "additionalProperties": false,
       "properties": {
@@ -3723,6 +4060,17 @@
       ],
       "title": "PaymentPlanCandidateValue",
       "type": "object"
+    },
+    "PermanentRestriction": {
+      "enum": [
+        "cant_be_blocked",
+        "cant_block",
+        "cant_attack_or_block",
+        "doesnt_untap",
+        "must_attack"
+      ],
+      "title": "PermanentRestriction",
+      "type": "string"
     },
     "PersonalAudience": {
       "additionalProperties": false,
@@ -3858,9 +4206,11 @@
           "type": "integer"
         },
         "creatures_died": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Creatures Died",
+          "type": "integer"
         },
         "land_entered": {
           "default": false,
@@ -3868,15 +4218,18 @@
           "type": "boolean"
         },
         "life_gained": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Life Gained",
+          "type": "integer"
         },
         "life_gains": {
-          "description": "Separate occurrences, independent of the amount gained.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Life Gains",
+          "type": "integer"
         },
         "life_lost": {
           "default": 0,
@@ -3885,21 +4238,33 @@
           "title": "Life Lost",
           "type": "integer"
         },
+        "loyalty_abilities_activated": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Loyalty Abilities Activated",
+          "type": "integer"
+        },
         "mana_spent_casting": {
-          "description": "Mana spent by this player to cast spells this turn.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Mana Spent Casting",
+          "type": "integer"
         },
         "nonland_permanents_left": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Nonland Permanents Left",
+          "type": "integer"
         },
         "permanents_left": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Permanents Left",
+          "type": "integer"
         },
         "permanents_sacrificed": {
           "default": 0,
@@ -3909,6 +4274,8 @@
           "type": "integer"
         },
         "warped_this_turn": {
+          "default": false,
+          "title": "Warped This Turn",
           "type": "boolean"
         }
       },
@@ -3952,6 +4319,16 @@
           ],
           "default": null,
           "title": "Effect"
+        },
+        "expiry": {
+          "default": "step",
+          "enum": [
+            "step",
+            "end_of_combat",
+            "end_of_turn"
+          ],
+          "title": "Expiry",
+          "type": "string"
         },
         "mana": {
           "maxItems": 6,
@@ -4047,6 +4424,31 @@
         "instruction"
       ],
       "title": "PromptView",
+      "type": "object"
+    },
+    "RestrictionView": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PermanentRestriction"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "RestrictionView",
       "type": "object"
     },
     "SampledWorldRobustness": {
@@ -4269,9 +4671,11 @@
           "title": "Ability Index"
         },
         "ability_resolutions": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Ability Resolutions",
+          "type": "integer"
         },
         "chosen_mode": {
           "anyOf": [
@@ -4288,13 +4692,13 @@
           "title": "Chosen Mode"
         },
         "combat_damage_to_players": {
-          "type": "array",
           "items": {
-            "type": "integer",
-            "format": "uint8",
             "maximum": 255,
-            "minimum": 0
-          }
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Combat Damage To Players",
+          "type": "array"
         },
         "controller": {
           "maximum": 255,
@@ -4303,11 +4707,13 @@
           "type": "integer"
         },
         "flashback": {
-          "description": "A spell cast with flashback, exiled as it leaves the stack.",
+          "default": false,
+          "title": "Flashback",
           "type": "boolean"
         },
         "from_prepared": {
-          "description": "A spell cast from a prepared copy; its stack copies are not.",
+          "default": false,
+          "title": "From Prepared",
           "type": "boolean"
         },
         "id": {
@@ -4325,9 +4731,11 @@
           "type": "string"
         },
         "mana_spent": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Mana Spent",
+          "type": "integer"
         },
         "source_permanent": {
           "anyOf": [
@@ -4342,6 +4750,31 @@
           ],
           "default": null,
           "title": "Source Permanent"
+        },
+        "targets": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "object": "#/$defs/ObjectSubject",
+                "player": "#/$defs/PlayerSubject",
+                "stack": "#/$defs/StackSubject"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ObjectSubject"
+              },
+              {
+                "$ref": "#/$defs/StackSubject"
+              },
+              {
+                "$ref": "#/$defs/PlayerSubject"
+              }
+            ]
+          },
+          "title": "Targets",
+          "type": "array"
         },
         "x": {
           "anyOf": [

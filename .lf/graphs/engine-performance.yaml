@@ -1,7 +1,6 @@
 - loop:
-    - loop:
-        - graph: engine-optimization
-        - pr-publish
-        - interactive: demo
-    - graph: deliver
-    - interactive: verify
+    - graph: engine-optimization
+    - compress
+    - pr-publish
+    - interactive: ship-review
+- graph: deliver

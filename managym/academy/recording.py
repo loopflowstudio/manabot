@@ -1,8 +1,10 @@
-"""Bounded read projections over retained Academy recordings.
+"""Positions and event prefixes over retained Academy recordings.
 
-Recording owns positions, viewer event prefixes and legacy transition joins. It
-never executes a game. ReadCache validates once per persisted revision; access
-is checked separately on every request, including cache hits.
+Recording joins retained decisions and presentation tracks into positions. A
+played game also re-executes (`record_of`, `ReplayedViews`), so Review shows
+the person's own view at every position, and both hands once the game is
+complete; the stored track stays the fallback wherever re-execution stops.
+ReadCache validates once per persisted revision.
 """
 
 from bisect import bisect_right
@@ -10,28 +12,49 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
 from threading import RLock
 from time import monotonic
 from typing import Any, Literal
 
+import managym
+from managym.academy.attempts import AttemptStore, RetainedAttempt
 from managym.academy.replay_index import (
     CanonicalReplayV1,
     DecisionAddressV2,
+    DecisionSource,
     ReplayDecision,
     canonical_projection_sha256,
     load_canonical_replay,
     project_replay,
 )
-from managym.academy.trace import load_trace, normalize_observation_to_hero
+from managym.academy.trace import (
+    GameConfig,
+    academy_actions,
+    human_seat_at,
+    load_legacy_trace,
+    normalize_observation_to_hero,
+)
 from managym.experience import PresentationEvent
-from managym.experience_projection import redact_observation
+from managym.experience_projection import decision_surface_view, redact_observation
+from managym.recording import GameEnd, GameInputs, GameRecord, PlayerSetup
+from managym.replay import ReplayStop, walk
 
-# Native decision-context stages that continue announcing a spell or ability
-# (`managym/src/decision_context.rs`): the move is named once it is on the stack.
+# Native decision-context stages that continue announcing a spell, ability, or
+# choice-of-color mana tap (`managym/src/decision_context.rs`): the move is
+# named once it completes.
 ANNOUNCING_STAGES = frozenset(
-    {"payment", "additional_cost", "targets", "mode", "announcement"}
+    {
+        "payment",
+        "additional_cost",
+        "targets",
+        "target_shares",
+        "mode",
+        "announcement",
+        "mana_color",
+    }
 )
 # Stages of a choice made while a spell or ability resolves, or while combat
 # damage is assigned (the suspended decisions of `decision_context.rs`). Mana
@@ -45,12 +68,15 @@ RESOLVING_STAGES = frozenset(
         "surveil",
         "order_library_bottom",
         "order_library_top",
+        "entry_choice",
+        "order_entry_choices",
         "order_replacement",
         "order_melded_cards",
         "manifest_dread",
         "resolution_payment",
         "private_search",
         "name_card",
+        "choose_creature_type",
         "resolution_mode",
         "discard",
         "select_cards",
@@ -59,8 +85,11 @@ RESOLVING_STAGES = frozenset(
         "retarget",
         "choose_to_exile",
         "keep_creatures",
+        "keep_permanents",
         "linked_exile",
         "split_revealed",
+        "partition_piles",
+        "choose_pile",
     }
 )
 
@@ -78,10 +107,14 @@ class OwnStep:
     # What the choice is for: the resolving spell or ability, by its label.
     source: str | None = None
 
-    def groups_with(self, stage: str | None, source: str | None) -> bool:
-        """Whether another consecutive choice by this actor belongs to the same move."""
+    def continues_with(self, stage: str | None, source: str | None) -> bool:
+        """Whether a following choice by this actor belongs to the same move."""
         if self.stage == "order_triggers":
             return stage == self.stage
+        if self.stage == "mana_color":
+            return stage == "resolution_payment"
+        if stage == "mana_color":
+            return self.stage in {"priority", "payment", "resolution_payment"}
         return (
             self.stage in RESOLVING_STAGES
             and stage in RESOLVING_STAGES
@@ -89,7 +122,12 @@ class OwnStep:
         )
 
 
-def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
+def own_steps(
+    events: Sequence[Mapping[str, Any]],
+    index: int,
+    *,
+    seat_swaps: Sequence[int] = (),
+) -> list[OwnStep]:
     """The person's own steps of the move that `events[index]` (theirs) ends.
 
     Trigger ordering takes one step per trigger placed, and a resolving spell's
@@ -115,9 +153,12 @@ def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
     current = events[index]
     if "actions" not in current or "action" not in current:
         return []
+    swaps = frozenset(seat_swaps)
     last = step(current)
     run = [last]
     for previous in reversed(range(len(events))[:index]):
+        if (previous + 1) in swaps:
+            break
         event = events[previous]
         if (
             "actions" not in event
@@ -126,9 +167,13 @@ def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
         ):
             break
         earlier = step(event)
-        if not last.groups_with(earlier.stage, earlier.source):
+        if not earlier.continues_with(run[-1].stage, run[-1].source):
             break
         run.append(earlier)
+        # A standalone mana_color choice only pairs with the single tap that
+        # opened it; resolution_payment continues grouping earlier taps/choices.
+        if last.stage == "mana_color":
+            break
     run.reverse()
     return run
 
@@ -141,12 +186,225 @@ class Position:
     decision: ReplayDecision | None = None
 
 
+def record_of(attempt: RetainedAttempt) -> GameRecord:
+    """Recover engine inputs from a private Academy Play attempt."""
+    trace = attempt.trace
+    config = GameConfig(**trace["config"])
+    if config.watch_players is not None or type(config.seed) is not int:
+        raise ValueError("Expected a played game with a retained deal seed")
+    world = json.loads(attempt.world_json)
+    ending = trace["end_reason"]
+    setup = config.to_rust()
+    return GameRecord(
+        mode="scalar",
+        operation="step",
+        games=[
+            GameInputs(
+                seed=config.seed,
+                players=[
+                    PlayerSetup.retain(player, config.decklists, taps, payment)
+                    for player, taps, payment in zip(
+                        setup, setup.mana_floats, setup.mana_payment, strict=True
+                    )
+                ],
+                actions=[event["action"] for event in trace["events"]],
+                end=GameEnd(status="complete", winner=trace["winner"])
+                if ending == "game_over"
+                else GameEnd(status="interrupted", reason=ending),
+            )
+        ],
+        identities={
+            "card_digest": world["content_digest"],
+            "engine_extension_sha256": world.get("rules_binary_sha256"),
+        },
+        context={},
+        seconds=0,
+    )
+
+
+# What re-executing a played game raises where this build cannot: a row
+# without the inputs, another world or card set, a refused step.
+REEXECUTION_ERRORS = (KeyError, TypeError, ValueError, managym.AgentError)
+
+
+def acting_seat(event: dict[str, Any], human_seat: int) -> int:
+    """The native seat that took a stored step."""
+    return human_seat if event["actor"] == "hero" else 1 - human_seat
+
+
+def step_matches(
+    observation: managym.Observation, event: dict[str, Any], human_seat: int
+) -> bool:
+    """Whether a re-executed position is the stored step's: the same seat acts
+    and the stored action has the stored description. A cheap check for walks
+    that read no boards (analysis, numbers); `ReplayedViews` also checks boards."""
+    if observation.game_over or int(observation.agent.player_index) != acting_seat(
+        event, human_seat
+    ):
+        return False
+    actions = academy_actions(observation, human_seat)
+    return (
+        0 <= event["action"] < len(actions)
+        and actions[event["action"]]["description"] == event["action_description"]
+    )
+
+
+def recorded_build(world_json: str) -> str:
+    """The build that recorded a game, in words: its world label where an older
+    row has one, else its rules binary."""
+    world = json.loads(world_json)
+    if world.get("world_version"):
+        return str(world["world_version"])
+    rules = world.get("rules_binary_sha256")
+    return f"rules {str(rules)[:12]}" if rules else "an unknown build"
+
+
+class ReplayedViews:
+    """Each seat's board at the positions of a played game, by re-executing it.
+
+    Invariant: a board is exposed only after every step before it re-executed
+    to the stored acting board and action description, and the final board
+    also to the stored final board and result. The walk advances only as far
+    as a read asks (`board`), so opening a long game costs nothing up front.
+    `person[i]` and `opponent[i]` are the boards before event `i`; a verified
+    game has one more, after its last event. Opponent boards exist only for an
+    authoritatively complete game, the one case where both hands may show.
+    """
+
+    def __init__(self, attempt: RetainedAttempt, human_seat: int) -> None:
+        self.trace = attempt.trace
+        self.events: list[dict[str, Any]] = attempt.trace["events"]
+        self.final = attempt.trace["final_observation"]
+        self.human_seat = human_seat
+        self.seat_swaps: tuple[int, ...] = tuple(attempt.trace.get("seat_swaps") or ())
+        self._swap_set = frozenset(self.seat_swaps)
+        self.complete = attempt.trace["end_reason"] == "game_over"
+        self.build = recorded_build(attempt.world_json)
+        self.person: list[dict[str, Any]] = []
+        self.opponent: list[dict[str, Any]] = []
+        self._pre_swap: dict[int, dict[str, Any]] = {}
+        self.stop: ReplayStop | None = None
+        self._lock = RLock()
+        try:
+            self._walker = walk(record_of(attempt))
+        except REEXECUTION_ERRORS as error:
+            self._diverge(type(error).__name__)
+        else:
+            self._decisions = iter(self._walker)
+
+    def _seat_at(self, index: int | None) -> int:
+        if self.seat_swaps:
+            return human_seat_at(self.trace, index)
+        return self.human_seat
+
+    def board(
+        self,
+        index: int,
+        *,
+        viewer: int | None = None,
+    ) -> dict[str, Any] | None:
+        """The verified board before event `index`, or None where none verified."""
+        with self._lock:
+            while len(self.person) <= index and self._advance():
+                pass
+            if index >= len(self.person):
+                return None
+            if viewer is None:
+                return self.person[index]
+            seat = self._seat_at(None if index == len(self.events) else index)
+            if viewer == seat:
+                return self.person[index]
+            if self.complete:
+                return self.opponent[index]
+            return self._pre_swap.get(index)
+
+    def _advance(self) -> bool:
+        """Verify and keep one more position; False once the walk has stopped."""
+        if self.stop is not None:
+            return False
+        index = len(self.person)
+        env = self._walker.env
+        try:
+            if index == len(self.events):
+                if next(self._decisions, None) is not None or self._walker.stop is None:
+                    return self._diverge("the game continues past its stored track")
+                if self._walker.stop.status == "diverged":
+                    return self._diverge(self._walker.stop.reason or "diverged")
+                seat = self._seat_at(None)
+                final = decision_surface_view(env, seat)
+                if final != self.final:
+                    return self._diverge("the final board differs")
+                self._keep(final, None, env, seat, index)
+                self.stop = self._walker.stop
+                return False
+            event = self.events[index]
+            observation = self._walker.observation
+            seat = self._seat_at(index)
+            actor = acting_seat(event, seat)
+            if observation.game_over or int(observation.agent.player_index) != actor:
+                return self._diverge("another player acts")
+            acting = decision_surface_view(env, actor)
+            if acting != event["observation"]:
+                return self._diverge("the board differs")
+            # The board before this step is verified whatever its action does.
+            self._keep(acting if actor == seat else None, acting, env, seat, index)
+            if not step_matches(observation, event, seat):
+                return self._diverge("the action differs")
+            if next(self._decisions, None) is None:
+                stop = self._walker.stop
+                return self._diverge(stop.reason if stop and stop.reason else "stopped")
+            return True
+        except REEXECUTION_ERRORS as error:
+            # Native errors may name private cards: keep only the kind.
+            return self._diverge(type(error).__name__)
+
+    def _keep(
+        self,
+        person: dict[str, Any] | None,
+        acting: dict[str, Any] | None,
+        env: managym.Env,
+        seat: int,
+        index: int,
+    ) -> None:
+        """Append this position's boards, projecting only those not yet known."""
+        self.person.append(person or decision_surface_view(env, seat))
+        other = acting if acting is not None and person is None else None
+        if self.complete:
+            self.opponent.append(other or decision_surface_view(env, 1 - seat))
+        elif index in self._swap_set and index > 0 and self._seat_at(index - 1) != seat:
+            # Consequences of the last pre-swap event belong to the previous seat.
+            self._pre_swap[index] = other or decision_surface_view(env, 1 - seat)
+
+    def _diverge(self, reason: str) -> bool:
+        verified = len(self.person)
+        self.stop = ReplayStop(
+            "diverged",
+            verified,
+            f"Your own view is replayed through step {verified} ({reason}); later "
+            f"boards are as recorded. Recorded with {self.build}.",
+        )
+        return False
+
+
 class Recording:
-    def __init__(self, trace_id: str, payload: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        trace_id: str,
+        payload: dict[str, Any],
+        attempt: RetainedAttempt | None = None,
+    ) -> None:
         self.id = trace_id
         self.payload = payload
-        self.human_seat = payload["config"].get("human_seat", 0)
+        self.starting_human_seat = int(payload["config"].get("human_seat", 0))
+        self.seat_swaps: list[int] = list(payload.get("seat_swaps") or ())
+        self.human_seat = human_seat_at(payload, None)
         self.watch = bool(payload["config"].get("watch_players"))
+        # A played game re-executes to each seat's own view at every position.
+        self.views = (
+            ReplayedViews(attempt, self.starting_human_seat)
+            if attempt is not None and not self.watch
+            else None
+        )
         self.completed_mirror = bool(
             payload["config"].get("mirror") is not None
             and payload.get("end_reason") == "game_over"
@@ -167,11 +425,16 @@ class Recording:
                 for key in ("phase", "step")
             ):
                 raise ValueError("recording_board_unavailable")
+            required_zones = ("hand", "battlefield", "graveyard", "exile", "stack")
             for side in ("agent", "opponent"):
                 player = observation.get(side)
-                if not isinstance(player, dict) or any(
-                    not isinstance(player.get(zone), list)
-                    for zone in ("hand", "battlefield", "graveyard", "exile", "stack")
+                if (
+                    not isinstance(player, dict)
+                    or not isinstance(player.get("command", []), list)
+                    or any(
+                        not isinstance(player.get(zone), list)
+                        for zone in required_zones
+                    )
                 ):
                     raise ValueError("recording_board_unavailable")
         self.replay: CanonicalReplayV1 | None = (
@@ -205,7 +468,10 @@ class Recording:
         for i, event in enumerate(payload["events"]):
             row = decisions.get(i)
             if row and (
-                self.watch or self.completed_mirror or row.viewer == self.human_seat
+                self.watch
+                or self.completed_mirror
+                or row.source == DecisionSource.CLIENT
+                or (not self.seat_swaps and row.viewer == self.human_seat)
             ):
                 self.positions.append(
                     Position(
@@ -229,19 +495,84 @@ class Recording:
 
         self.event_by_revision = {revision: i for i, revision in self.revisions.items()}
         self._narrations: dict[int, str | None] = {}
-        self._boards: dict[int, dict[str, Any]] = {}
-        self._events_by_revision: dict[int, list[PresentationEvent]] | None = None
+        self._boards: dict[tuple[int, int], dict[str, Any]] = {}
+        self._events_by_revision: dict[int, dict[int, list[PresentationEvent]]] = {}
 
-    def _board(self, position: Position) -> dict[str, Any]:
+    def _seat_for(self, position: Position) -> int:
+        return human_seat_at(
+            self.payload, None if position.kind == "state" else position.event_index
+        )
+
+    # The 12 original pre-history presentation kinds; any other kind guarantees
+    # a recording carries modern track history (immune to drift as kinds grow).
+    _LEGACY_PRESENTATION_KINDS = frozenset(
+        {
+            "cast",
+            "targeted",
+            "resolved",
+            "damage",
+            "destroyed",
+            "died",
+            "attack_group",
+            "blocked",
+            "turn_started",
+            "land_played",
+            "discarded",
+            "revealed",
+        }
+    )
+
+    def has_track_history(self) -> bool:
+        """Whether this recording carries per-event labels, causes, rules or modern move kinds."""
+        return any(
+            event.labels is not None
+            or event.cause is not None
+            or event.rule is not None
+            or event.kind.kind not in self._LEGACY_PRESENTATION_KINDS
+            for events in self.tracks.values()
+            for event in events
+        )
+
+    def can_reveal(self, position: Position) -> bool:
+        """Both hands at `position`: every Watch position whose board has a
+        captured spectator hand, or any position of an authoritatively complete
+        played game."""
+        if self.views is not None:
+            return self.views.complete
+        return self.watch and self._watch_hands(position) is not None
+
+    def _watch_hands(self, position: Position) -> dict[int, list[Any]] | None:
+        """Each seat's hand on a Watch board, or None where none was captured.
+
+        Event `i` stores both hands of the board before it, so the board after
+        step `i` reads event `i + 1`; the board past the last event reads the
+        stored final hand, which records before it was introduced lack.
+        """
+        events = self.payload["events"]
+        index = position.event_index + (position.kind == "consequences")
+        if index < len(events):
+            analysis = events[index].get("analysis_observation")
+            if not analysis:
+                return None
+            return {
+                analysis[side]["player_index"]: analysis[side]["hand"]
+                for side in ("agent", "opponent")
+            }
+        hand = self.payload.get("final_opponent_hand")
+        return None if hand is None else {1 - self.human_seat: hand}
+
+    def _board(self, position: Position, viewer: int | None = None) -> dict[str, Any]:
         """The recorded person's redacted board at `position`. Callers must not mutate it."""
         index = position.event_index + (position.kind == "consequences")
-        if index not in self._boards:
-            self._boards[index] = person_board(
+        seat = self._seat_for(position) if viewer is None else viewer
+        key = (index, seat)
+        if key not in self._boards:
+            self._boards[key] = person_board(
                 self._raw_board(position),
-                self.human_seat,
+                seat,
                 winner=self.payload.get("winner"),
             )
-        return self._boards[index]
+        return self._boards[key]
 
     def _cursor(self, position: Position, viewer: int) -> int:
         if position.kind == "choice" and position.decision:
@@ -275,18 +606,14 @@ class Recording:
         return {
             "key": position.key,
             "kind": position.kind,
+            # The trace event a choice decides or a consequence follows; joins
+            # an analysis (`analysis.AnalysedDecision.event`).
+            "event": position.event_index,
             "turn": turn.get("turn_number"),
             "phase": turn.get("phase"),
             "step": turn.get("step"),
             "actor": row.viewer if row else None,
-            "can_reveal": bool(
-                position.kind == "choice"
-                and row
-                and self.watch
-                and self.payload["events"][position.event_index].get(
-                    "analysis_observation"
-                )
-            ),
+            "can_reveal": self.can_reveal(position),
             "automatic": bool(self.payload["events"][position.event_index].get("auto"))
             if position.kind == "consequences"
             else False,
@@ -301,6 +628,15 @@ class Recording:
             if position.kind == "choice" and row
             else self._description(position),
             "value": self._value(position),
+            # How an imported record changed the position before this choice.
+            "branched": self.payload["events"][position.event_index].get("branched")
+            if position.kind == "choice"
+            else None,
+            # The person chose here with a live analysis shown.
+            "analysis_shown": position.kind == "choice"
+            and bool(
+                self.payload["events"][position.event_index].get("analysis_shown")
+            ),
         }
 
     def _description(self, position: Position) -> str | None:
@@ -322,26 +658,29 @@ class Recording:
     def _narration(self, index: int) -> str | None:
         """The move at event `index`, as the recorded person saw it (`narrate_move`)."""
         if index not in self._narrations:
+            seat = human_seat_at(self.payload, index)
             revision = self.revisions.get(index)
-            events = self._transition_events(revision) if revision is not None else []
+            events = (
+                self._transition_events(revision, seat) if revision is not None else []
+            )
             self._narrations[index] = narrate_move(
-                self._board(Position("", "choice", index)),
-                self._board(Position("", "consequences", index)),
+                self._board(Position("", "choice", index), seat),
+                self._board(Position("", "consequences", index), seat),
                 [event.kind.model_dump(mode="json") for event in events],
-                own_steps(self.payload["events"], index)
+                own_steps(self.payload["events"], index, seat_swaps=self.seat_swaps)
                 if self.payload["events"][index].get("actor") == "hero"
                 else (),
             )
         return self._narrations[index]
 
-    def _transition_events(self, revision: int) -> list[PresentationEvent]:
-        if self._events_by_revision is None:
-            self._events_by_revision = {}
-            for event in self.tracks.get(self.human_seat, []):
-                self._events_by_revision.setdefault(event.from_revision, []).append(
-                    event
-                )
-        return self._events_by_revision.get(revision, [])
+    def _transition_events(self, revision: int, viewer: int) -> list[PresentationEvent]:
+        by_revision = self._events_by_revision.get(viewer)
+        if by_revision is None:
+            by_revision = {}
+            for event in self.tracks.get(viewer, []):
+                by_revision.setdefault(event.from_revision, []).append(event)
+            self._events_by_revision[viewer] = by_revision
+        return by_revision.get(revision, [])
 
     def _value(self, position: Position) -> float | None:
         """The chooser's recorded value at a choice, as `read` returns it in `outputs`."""
@@ -365,6 +704,12 @@ class Recording:
         # Names come from the event's own retained transition. A later board,
         # including spectator analysis, must never fill historical private facts.
         labels: dict[str, dict[str, str]] = {"objects": {}, "players": {}, "stacks": {}}
+        if event.labels is not None:
+            return {
+                "objects": dict(event.labels.objects),
+                "players": {"0": "Seat 1", "1": "Seat 2"},
+                "stacks": dict(event.labels.stacks),
+            }
         index = self.event_by_revision.get(event.from_revision)
         if index is None:
             return labels
@@ -373,9 +718,9 @@ class Recording:
         before = (
             row.frame.projection.model_dump(mode="json")
             if row and row.viewer == viewer
-            else self._board(Position("", "choice", index))
+            else self._board(Position("", "choice", index), viewer)
         )
-        after = self._board(Position("", "consequences", index))
+        after = self._board(Position("", "consequences", index), viewer)
         names: dict[str, str] = {}
         stacks: dict[str, str] = {}
         for observation, private in (
@@ -390,7 +735,7 @@ class Recording:
                         labels["players"][str(key)] = (
                             f"Seat {seat + 1}" if seat is not None else "Player"
                         )
-                zones = ["battlefield", "graveyard", "exile", "stack"]
+                zones = ["battlefield", "graveyard", "exile", "command", "stack"]
                 if private and seat == viewer:
                     zones.extend(["hand", "inspected"])
                 for zone in zones:
@@ -459,7 +804,7 @@ class Recording:
     ) -> dict[str, Any]:
         position = self.by_key[key]
         row = position.decision if position.kind == "choice" else None
-        viewer = row.viewer if row else self.human_seat
+        viewer = row.viewer if row else self._seat_for(position)
         cursor = self._cursor(position, viewer)
         end = min(cursor, before) if before is not None else cursor
         start = max(0, end - history_limit)
@@ -468,15 +813,44 @@ class Recording:
         decision = (
             {**row.model_dump(mode="json"), "address": position.key} if row else None
         )
+        index = position.event_index + (position.kind == "consequences")
+        # Your own view after any step comes from the replayed game; the stored
+        # track holds the next actor's view, which hides your hand.
+        replayed = (
+            self.views.board(index, viewer=viewer) if self.views and not row else None
+        )
         observation = (
             row.frame.projection.model_dump(mode="json")
             if row
-            else deepcopy(self._board(position))
+            else deepcopy(replayed or self._board(position, viewer))
         )
-        event = self.payload["events"][position.event_index] if row else {}
-        analysis = event.get("analysis_observation") if self.watch else None
-        if reveal and analysis is None:
-            raise ValueError("spectator_view_unavailable")
+        event = (
+            self.payload["events"][position.event_index]
+            if position.event_index < len(self.payload["events"])
+            else {}
+        )
+        other = (
+            self.views.board(index, viewer=1 - viewer)
+            if self.views and self.views.complete
+            else None
+        )
+        revealed_board: dict[str, Any] | None = None
+        if reveal:
+            if other is not None:
+                revealed_board = with_both_hands(
+                    observation, {1 - viewer: other["agent"]["hand"]}
+                )
+            elif self.watch:
+                # A Watch choice keeps its own stored spectator board; every
+                # other revealed board patches only the hands onto this
+                # position's redacted board so it keeps its orientation and
+                # never takes another step's decision context or inspected cards.
+                if row:
+                    revealed_board = event.get("analysis_observation")
+                elif (hands := self._watch_hands(position)) is not None:
+                    revealed_board = with_both_hands(observation, hands)
+            if revealed_board is None:
+                raise ValueError("spectator_view_unavailable")
         transition_start = cursor
         if position.kind == "consequences":
             revision = self.revisions.get(position.event_index)
@@ -484,27 +858,36 @@ class Recording:
                 transition_start = bisect_right(
                     self.track_revisions.get(viewer, []), revision
                 )
-        note_key = (
-            f"replay-{position.event_index}"
-            if position.kind == "consequences"
-            else position.key
+        boards = (
+            deepcopy(event.get("boards", []))
+            if position.kind == "consequences" and not self.watch
+            else []
         )
         return {
             **self.metadata(position),
             "description": self._description(position),
-            "note_key": note_key,
-            "observation": deepcopy(analysis) if reveal else observation,
+            "observation": deepcopy(revealed_board)
+            if revealed_board is not None
+            else observation,
             "decision": decision,
-            "outputs": deepcopy(event.get("bot_decision")),
+            "outputs": deepcopy(event.get("bot_decision")) if row else None,
             "viewer": viewer,
             "revealed": reveal,
-            "can_reveal": analysis is not None,
+            "can_reveal": other is not None
+            if self.views
+            else self.can_reveal(position),
+            # Why your own view is the stored track's here, when the game could
+            # not be replayed this far; None where it was.
+            "views_stopped": self.views.stop.reason
+            if self.views and not row and replayed is None and self.views.stop
+            else None,
             "history": [event.model_dump(mode="json") for event in events],
             "history_labels": [self._history_labels(event, viewer) for event in events],
             "history_before": start if start else None,
             "cursor": cursor,
             "transition_start": transition_start,
             "consequences_recorded": bool(self.replay) or bool(track),
+            "boards": boards,
         }
 
 
@@ -528,7 +911,11 @@ class ReadCache:
             if cached and cached[0] == stamp:
                 self.entries.move_to_end(key)
                 return cached[2]
-            recording = Recording(trace_id, load_trace(trace_id, directory))
+            attempt = AttemptStore(directory / "play.sqlite").load_attempt(trace_id)
+            payload = (
+                attempt.trace if attempt else load_legacy_trace(trace_id, directory)
+            )
+            recording = Recording(trace_id, payload, attempt)
             self.entries[key] = (stamp, now + 60, recording)
             while len(self.entries) > 2:
                 self.entries.popitem(last=False)
@@ -539,6 +926,20 @@ read_cache = ReadCache()
 
 
 # ———————————————— Narrating a move
+
+
+def with_both_hands(
+    board: dict[str, Any], hands: dict[int, list[Any]]
+) -> dict[str, Any]:
+    """`board` with each seat in `hands` holding that hand face-up. Only the
+    hands change; the board is not mutated."""
+    revealed = dict(board)
+    for side in ("agent", "opponent"):
+        player = board[side]
+        hand = hands.get(player.get("player_index"))
+        if hand is not None:
+            revealed[side] = {**player, "hand": hand, "hand_hidden_count": 0}
+    return revealed
 
 
 def person_board(
@@ -583,7 +984,7 @@ def narrate_move(
         card["id"]: card["name"]
         for board in (before, after)
         for side_name in ("agent", "opponent")
-        for zone in ("battlefield", "graveyard", "exile", "stack", "hand")
+        for zone in ("battlefield", "graveyard", "exile", "command", "stack", "hand")
         for card in board.get(side_name, {}).get(zone, [])
         if isinstance(card, dict) and card.get("name") and "id" in card
     }
@@ -648,8 +1049,8 @@ def narrate_move(
     continues = following.get("actor") == actor and (
         following.get("stage") in ANNOUNCING_STAGES
         or (
-            own
-            and own[-1].groups_with(
+            bool(own)
+            and own[-1].continues_with(
                 following.get("stage"), (following.get("source") or {}).get("label")
             )
         )
@@ -659,13 +1060,89 @@ def narrate_move(
         # modes, the next trigger to place).
         return None
     if own:
-        return _own_move(context, own)
+        return _own_move(context, own, before=before, after=after, side=side)
     if context.get("stage") != "priority":
         return None
     return "Pass priority"
 
 
-def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
+_TAP_OFFER = re.compile(r"^Tap (.+) for (.+)$")
+_MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
+
+
+def _pool_delta_mana(
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+    side: str | None,
+) -> str | None:
+    """Mana symbols added to `side`'s pool between `before` and `after`, if any."""
+    if side is None:
+        return None
+    prev_player = before.get(side)
+    next_player = after.get(side)
+    if not isinstance(prev_player, Mapping) or not isinstance(next_player, Mapping):
+        return None
+    prev_mana = prev_player.get("mana")
+    next_mana = next_player.get("mana")
+    if (
+        not isinstance(prev_mana, Sequence)
+        or not isinstance(next_mana, Sequence)
+        or len(prev_mana) < len(_MANA_SYMBOLS)
+        or len(next_mana) < len(_MANA_SYMBOLS)
+    ):
+        return None
+    prev_lesson = prev_player.get("lesson_mana") or (0,) * len(_MANA_SYMBOLS)
+    next_lesson = next_player.get("lesson_mana") or (0,) * len(_MANA_SYMBOLS)
+    symbols: list[str] = []
+    for index, symbol in enumerate(_MANA_SYMBOLS):
+        before_count = int(prev_mana[index]) + int(prev_lesson[index])
+        after_count = int(next_mana[index]) + int(next_lesson[index])
+        delta = after_count - before_count
+        if delta > 0:
+            symbols.append(f"{{{symbol}}}" * delta)
+    return "".join(symbols) or None
+
+
+def _resolved_mana_tap(
+    tap_chosen: str,
+    color_chosen: str | None,
+    source_label: str | None,
+    delta_mana: str | None = None,
+) -> str:
+    """Combine a choice-of-color mana tap with the mana actually added."""
+    added = (
+        color_chosen.removeprefix("Add ")
+        if color_chosen and color_chosen.startswith("Add ")
+        else delta_mana
+    )
+    match = _TAP_OFFER.fullmatch(tap_chosen)
+    if match:
+        name, offer = match.groups()
+        if added and (
+            color_chosen is not None
+            or "/" in offer
+            or "any color" in offer
+            or "mana" in offer
+        ):
+            return f"Tap {name} for {added}"
+        return tap_chosen
+    if color_chosen and added:
+        if tap_chosen.startswith("Activate ability: "):
+            name = tap_chosen.removeprefix("Activate ability: ")
+            return f"Activate {name} for {added}"
+        if source_label:
+            return f"Tap {source_label} for {added}"
+    return color_chosen or tap_chosen
+
+
+def _own_move(
+    context: dict[str, Any],
+    own: Sequence[OwnStep],
+    *,
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+    side: str | None = None,
+) -> str | None:
     """The person's own move that left nothing on the board to name it by."""
     last = own[-1]
     stage = context.get("stage")
@@ -678,6 +1155,10 @@ def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
         if last.chosen == "Decline Learn":
             return "Declined to learn"
         return f"Learn: {last.chosen[:1].lower()}{last.chosen[1:]}"
+    if stage == "mana_color":
+        source = (context.get("source") or {}).get("label")
+        tap_chosen = own[-2].chosen if len(own) >= 2 else ""
+        return _resolved_mana_tap(tap_chosen, last.chosen, source)
     if last.stage in RESOLVING_STAGES:
         return _resolution(own)
     source = (context.get("source") or {}).get("label")
@@ -693,6 +1174,10 @@ def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
         return None
     if stage == "priority" and last.action_type == "PRIORITY_PASS_PRIORITY":
         return "Pass priority"
+    if _TAP_OFFER.fullmatch(last.chosen):
+        return _resolved_mana_tap(
+            last.chosen, None, source, _pool_delta_mana(before, after, side)
+        )
     # A choice while something resolves ("Put Island into your hand") is
     # named as the person made it.
     return last.chosen
@@ -709,6 +1194,19 @@ def _resolution(own: Sequence[OwnStep]) -> str:
     index = 0
     while index < len(own):
         step = own[index]
+        if (
+            index + 1 < len(own)
+            and own[index + 1].stage == "mana_color"
+            and (
+                _TAP_OFFER.fullmatch(step.chosen) or step.chosen.startswith("Activate ")
+            )
+        ):
+            resolved = _resolved_mana_tap(
+                step.chosen, own[index + 1].chosen, own[index + 1].source
+            )
+            phrases.append(f"{resolved[:1].lower()}{resolved[1:]}")
+            index += 2
+            continue
         if step.stage in ("order_library_bottom", "order_library_top"):
             run = [step]
             while index + 1 < len(own) and own[index + 1].stage == step.stage:
@@ -785,7 +1283,7 @@ def _new_cards(
     old, new = before.get(side, {}), after.get(side, {})
     seen = {
         card.get("id")
-        for zone in ("battlefield", "graveyard", "exile", "stack")
+        for zone in ("battlefield", "graveyard", "exile", "command", "stack")
         for card in old.get(zone, [])
     }
     for zone in ("stack", "battlefield", "graveyard", "exile"):

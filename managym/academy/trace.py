@@ -5,6 +5,8 @@ Trace dataclasses, viewer projection, and SQLite/legacy JSON readers.
 
 from __future__ import annotations
 
+from bisect import bisect_right
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
@@ -18,9 +20,10 @@ from pydantic import TypeAdapter
 
 import managym
 from managym.academy.append_json import encode_list, splice
+from managym.academy.step_boards import WireStepBoard
 from managym.bots import BotDecision
 from managym.disclosure import DecklistDisclosure
-from managym.experience_projection import redact_observation
+from managym.experience_projection import describe_actions, redact_observation
 from managym.replay import ReplayStop
 from managym.search import SearchConfig
 
@@ -53,10 +56,10 @@ class GameConfig:
     # Historical checkpoint provenance, or a managym-policy-1 descriptor with
     # complete provider/runner/config/artifact identity. Read without a loader.
     opponent_checkpoint: dict[str, Any] | None = None
-    # Priority-stop configuration at game start (MTGO-style auto-pass).
+    # Priority-stop configuration, as last set in the game (`set_stops`), so a
+    # game continued from its record stops where the person asked.
     # ``stops`` maps "my"/"opponent" to the stop step names that surface;
-    # None means the server defaults. set_stops updates the live session,
-    # not this record.
+    # None means the server defaults.
     stops: dict[str, list[str]] | None = None
     stop_on_stack: bool = True  # always surface when the stack is non-empty
     auto_pass: bool = True  # master switch; False = surface every window
@@ -72,6 +75,13 @@ class GameConfig:
     # JSON form), admitted by the world. Viewer exports strip them.
     hero_source: dict[str, Any] | None = None
     villain_source: dict[str, Any] | None = None
+    # Registered deck pool keys ("pool:<id>") when decks were sampled from a pool.
+    hero_deck_pool: str | None = None
+    villain_deck_pool: str | None = None
+    # The person sees the bot's hand in Play, as last set in the game
+    # (`set_open_hands`). It changes what the play socket sends beside a
+    # frame, never a frame, a recording or what the bot observes.
+    open_hands: bool = False
 
     # The human controller owns this mode, independent of the chosen seat.
     mana_payment: managym.ManaPayment = "manual"
@@ -91,12 +101,19 @@ class GameConfig:
             raise ValueError("Search requires open decklists.")
 
     def to_record(self) -> dict[str, Any]:
-        """Omit default-off mana offers from retained game configuration."""
+        """Omit default-off mana offers, absent pool keys and closed hands from
+        retained config."""
         config = asdict(self)
         if self.mana_payment == "manual":
             del config["mana_payment"]
         if self.mana_floats == "off":
             del config["mana_floats"]
+        if self.hero_deck_pool is None:
+            del config["hero_deck_pool"]
+        if self.villain_deck_pool is None:
+            del config["villain_deck_pool"]
+        if not self.open_hands:
+            del config["open_hands"]
         return config
 
     def to_rust(self) -> managym.GameSetup:
@@ -199,15 +216,61 @@ class TraceEvent:
     # traces omit this field and remain valid because replay treats it as an
     # empty sequence.
     presentation: list[dict[str, Any]] = field(default_factory=list)
+    # Per-line mid-step boards for Review, patched back from the transition's
+    # post-step board for the recorded person's seat (outside replay identity).
+    boards: list[WireStepBoard] = field(default_factory=list)
     bot_decision: BotDecision | None = None
     # Authority-private analysis view; never included in ordinary trace reads.
     analysis_observation: dict[str, Any] | None = None
+    # When the step was committed, UTC ISO 8601. None in traces that predate it.
+    committed_at: str | None = None
+    # The person committed this decision with a policy's live reading of it
+    # shown (`LiveAnalysis`). Stored only when true; absent reads as false.
+    analysis_shown: bool = False
+    # The person committed this decision while seeing the bot's hand
+    # (`GameConfig.open_hands`). Stored only when true; absent reads as false.
+    open_hands: bool = False
+    # Branch operations before this step, in order. Only their kinds are public.
+    branched: list[str] | None = None
+
+
+BRANCHING_INTERVENTIONS = (
+    "determinize",
+    "shuffle_libraries",
+    "reseed",
+    "game_state_edits",
+)
+
+
+def academy_actions(obs: managym.Observation, human_seat: int) -> list[dict[str, Any]]:
+    """Relabel player targets by role without changing card names or native offers."""
+    actions = describe_actions(obs)
+    labels = {
+        int(player.id): "Hero" if int(player.player_index) == human_seat else "Villain"
+        for player in (obs.agent, obs.opponent)
+    }
+    for row in actions:
+        focus = row["focus"]
+        if row["type"] == "CHOOSE_TARGET" and len(focus) == 1 and focus[0] in labels:
+            if row["description"] in {"Target Hero", "Target Villain"}:
+                row["description"] = f"Target {labels[focus[0]]}"
+    return actions
 
 
 @dataclass(frozen=True)
 class RecordingImport:
     stop: ReplayStop
     build_differs: bool
+
+
+@dataclass(frozen=True)
+class PlayedFrom:
+    """A game played on from another: its first `event` steps are that game's
+    (`trace_id`), replayed through the Command path, and the person chooses
+    from that decision on."""
+
+    trace_id: str
+    event: int
 
 
 @dataclass
@@ -223,6 +286,14 @@ class Trace:
     # applied. Legacy traces omit it.
     canonical_replay: dict[str, Any] | None = None
     recording_import: RecordingImport | None = None
+    played_from: PlayedFrom | None = None
+    # A Watch's other hand on the final board, for the spectator view past the
+    # last event. Authority-private like `analysis_observation`; absent from
+    # played games and from Watch records written before it existed.
+    final_opponent_hand: list[dict[str, Any]] | None = None
+    # Event indices (`len(events)`) at which the pilot swapped seats mid-game;
+    # omitted from serialized JSON when empty so unswapped traces stay identical.
+    seat_swaps: list[int] = field(default_factory=list)
 
     def to_record(self) -> dict[str, Any]:
         """Borrow JSON payloads for immediate, read-only persistence.
@@ -237,6 +308,16 @@ class Trace:
             record.pop("recording_import")
         else:
             record["recording_import"] = asdict(self.recording_import)
+        if self.played_from is None:
+            record.pop("played_from")
+        else:
+            record["played_from"] = asdict(self.played_from)
+        if self.final_opponent_hand is None:
+            record.pop("final_opponent_hand")
+        if not self.seat_swaps:
+            record.pop("seat_swaps")
+        else:
+            record["seat_swaps"] = list(self.seat_swaps)
         record["config"] = self.config.to_record()
         record["mana_payment"] = list(
             self.config.by_seat(self.config.mana_payment, "manual")
@@ -272,13 +353,38 @@ class Trace:
 
 
 def event_record(event: TraceEvent) -> dict[str, Any]:
-    """One event as its stored record (borrowed, like `Trace.to_record`)."""
-    return {
+    """One event as its stored record (borrowed, like `Trace.to_record`).
+    `analysis_shown` and `open_hands` are written only when true, so a game
+    played without them keeps its row."""
+    record = {
         **{item.name: getattr(event, item.name) for item in fields(event)},
         "bot_decision": (
             None if event.bot_decision is None else asdict(event.bot_decision)
         ),
     }
+    if not event.boards:
+        record.pop("boards", None)
+    if not event.analysis_shown:
+        del record["analysis_shown"]
+    if not event.open_hands:
+        del record["open_hands"]
+    return record
+
+
+def stored_event(record: dict[str, Any]) -> TraceEvent:
+    """A stored event record as the event a live game holds, for a game
+    continued from its record. Payloads stay the stored JSON values (a bot
+    decision's factors and belief are dicts); fields this build does not know
+    are dropped."""
+    names = {item.name for item in fields(TraceEvent)}
+    values = {key: value for key, value in record.items() if key in names}
+    decision = values.get("bot_decision")
+    if decision is not None:
+        known = {item.name for item in fields(BotDecision)}
+        values["bot_decision"] = BotDecision(
+            **{key: value for key, value in decision.items() if key in known}
+        )
+    return TraceEvent(**values)
 
 
 def utc_now_iso() -> str:
@@ -298,7 +404,11 @@ def load_trace(trace_id: str, trace_dir: Path | None = None) -> dict[str, Any]:
     recorded = AttemptStore(target_dir / "play.sqlite").load(trace_id)
     if recorded is not None:
         return recorded
-    path = _trace_path(trace_id, target_dir)
+    return load_legacy_trace(trace_id, target_dir)
+
+
+def load_legacy_trace(trace_id: str, trace_dir: Path) -> dict[str, Any]:
+    path = _trace_path(trace_id, trace_dir)
     if not path.exists():
         raise FileNotFoundError(f"Trace not found: {trace_id}")
     with path.open("r", encoding="utf-8") as handle:
@@ -341,6 +451,14 @@ def list_trace_summaries(trace_dir: Path | None = None) -> list[dict[str, Any]]:
     return summaries
 
 
+def human_seat_at(trace: Mapping[str, Any], event_index: int | None = None) -> int:
+    """Native seat the human piloted at `event_index` (or at game end when None)."""
+    seat = int(trace["config"].get("human_seat", 0))
+    swaps = trace.get("seat_swaps") or ()
+    flips = len(swaps) if event_index is None else bisect_right(swaps, event_index)
+    return seat ^ (flips & 1)
+
+
 def normalize_observation_to_hero(
     observation: dict[str, Any], human_seat: int, *, winner: int | None
 ) -> None:
@@ -378,6 +496,7 @@ def prepare_trace_payload(
     # ``reveal_hidden`` is a legacy post-game observation aid. It never grants
     # access to the mixed-view canonical authority artifact.
     prepared.pop("canonical_replay", None)
+    prepared.pop("final_opponent_hand", None)
     for event in prepared.get("events", []):
         event.pop("analysis_observation", None)
     config = prepared.get("config", {})
@@ -392,35 +511,45 @@ def prepare_trace_payload(
         # still expose exactly the public information in the shared contract.
         for key in ("hero_deck", "villain_deck", "hero_sideboard", "villain_sideboard"):
             config[key] = {}
-    reveal_hidden = (
-        reveal_hidden
-        and payload.get("end_reason") == "game_over"
-        and bool(payload.get("final_observation", {}).get("game_over"))
+    finished = payload.get("end_reason") == "game_over" and bool(
+        payload.get("final_observation", {}).get("game_over")
     )
+    reveal_hidden = reveal_hidden and finished
     if config.get("decklists") == "closed" and not reveal_hidden:
-        config["villain_deck"] = {}
-        config["villain_sideboard"] = {}
-        config["villain_deck_name"] = "closed"
+        starting_seat = int(config.get("human_seat", 0))
+        bot_role = (
+            "villain" if human_seat_at(prepared, None) == starting_seat else "hero"
+        )
+        config[f"{bot_role}_deck"] = {}
+        config[f"{bot_role}_sideboard"] = {}
         config.pop("asset_pack", None)
+        # A finished game names the deck, as its players do; the list itself
+        # stays with the hidden hands.
+        if not finished:
+            config[f"{bot_role}_deck_name"] = "closed"
 
-    observations = [
-        event.get("observation", {}) for event in prepared.get("events", [])
-    ]
-    observations.append(prepared.get("final_observation", {}))
-
+    events = prepared.get("events", [])
     if not reveal_hidden:
-        for event in prepared.get("events", []):
+        for event in events:
             if event.get("actor") == "villain":
                 event["actions"] = []
                 event["action"] = -1
                 event["action_description"] = "Opponent decision"
                 event.pop("bot_decision", None)
 
-    for observation in observations:
+    for index, event in enumerate(events):
+        observation = event.get("observation", {})
         normalize_observation_to_hero(
-            observation, config.get("human_seat", 0), winner=prepared.get("winner")
+            observation, human_seat_at(prepared, index), winner=prepared.get("winner")
         )
         if not reveal_hidden:
             redact_observation(observation)
+
+    final_observation = prepared.get("final_observation", {})
+    normalize_observation_to_hero(
+        final_observation, human_seat_at(prepared, None), winner=prepared.get("winner")
+    )
+    if not reveal_hidden:
+        redact_observation(final_observation)
 
     return prepared

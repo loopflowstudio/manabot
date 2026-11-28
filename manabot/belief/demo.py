@@ -61,8 +61,10 @@ def runtime_env() -> tuple[Env, managym.Observation]:
         seed=19,
         enable_profiler=False,
     )
-    env.reset(seed=19)
-    return env, env.last_raw_obs
+    observation, _ = env.reset(seed=19)
+    while env.last_raw_obs.turn.turn_number == 0:
+        observation, *_ = env.step(keep_opening_index(env.last_raw_obs))
+    return env, observation
 
 
 def _schema_and_agent(
@@ -77,11 +79,16 @@ def _schema_and_agent(
     )
     card_vocab_size = 1 + max(row.card_def_id for row in schema.rows)
     backend.seed(19)
+    # With 2*|catalog| belief rows and PPO's 0.01 policy-head gain, a 1-layer
+    # 8-dim untrained policy can quantize a single-card belief intervention
+    # below float32 softmax precision. Two 16-dim layers keep the policy delta
+    # cleanly resolved across seeds as the card catalog grows.
     policy_value = backend.runtime.create_policy(
         ObservationSpace(),
         ModelConfig(
-            hidden_dim=8,
+            hidden_dim=16,
             num_attention_heads=2,
+            attention_layers=2,
             belief_count_buckets=schema.count_buckets,
             belief_card_vocab_size=card_vocab_size,
         ),

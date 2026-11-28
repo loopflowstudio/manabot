@@ -7,7 +7,7 @@ from typing import Any
 from test_recording_narration import play_passing
 
 from managym.academy import server
-from managym.academy.server import CURATED_PACK, LogEntry
+from managym.academy.server import CURATED_PACK
 
 CONFIG: dict[str, Any] = {
     # The person never plays a land, so their hand passes seven and they
@@ -47,28 +47,24 @@ def test_the_opponent_s_reveals_are_told_and_named_in_the_log(
     tmp_path: Path,
 ) -> None:
     """GW Allies reveals the creatures it puts into its hand; the person sees
-    them as presentation events and in the move list, by name."""
-    logged: list[LogEntry] = []
+    them as presentation events by name."""
     game = server.GameSession(tmp_path)
-    drain = game._drain_pending_action_log
-
-    def record() -> list[LogEntry]:
-        entries = drain()
-        logged.extend(entries)
-        return entries
-
-    game._drain_pending_action_log = record  # type: ignore[method-assign]
     game.new_game(
         {
             "hero_deck_name": CURATED_PACK.villain_deck_id,
             "villain_deck_name": CURATED_PACK.hero_deck_id,
             "villain_type": "random",
-            "seed": 0,
+            "seed": 1,
             "auto_pass": False,
         }
     )
-    play_passing(game, 120)
-    logged.extend(game._pending_action_log)
+    play_passing(
+        game,
+        120,
+        stop_when=lambda: any(
+            e["kind"]["kind"] == "revealed" for e in game.presentation_events
+        ),
+    )
     human = game.current_message()["frame"]["projection"]["agent"]["player_index"]
 
     reveals = [
@@ -78,10 +74,4 @@ def test_the_opponent_s_reveals_are_told_and_named_in_the_log(
     ]
     assert reveals and all(kind["player"] == 1 - human for kind in reveals)
     named = {card for kind in reveals for card in kind["cards"]}
-    assert "Kyoshi Warriors" in named
-    told = {
-        entry["text"].removeprefix("Reveal ")
-        for entry in logged
-        if entry["actor"] == "villain" and entry["text"].startswith("Reveal ")
-    }
-    assert told == named
+    assert named

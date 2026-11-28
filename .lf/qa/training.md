@@ -286,6 +286,21 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   `batch.blank_decision_memory()` changes nothing. With it, a four-update GRU
   policy on Gray Ogre differed from its blanked log on 58 of 60 decisions
   (by about 1e-8, its gate still near zero).
+
+  For a tracked run at a chosen device and precision, put that `SelfPlay`
+  (with `device`, `precision` and `decision_memory` from a small pydantic
+  config) in a `.runs/` recipe and run `etude train <recipe> --experiment
+  <name> --config '{"device":"mps","precision":"bf16","updates":3}'` (about
+  25 s on MPS; this exercises semantic-card and GRU-memory packed GRUs in
+  collection and learning). Compare against the same recipe run from a
+  merge-base worktree (`PYTHONPATH=$PWD ../../.venv/bin/etude train`):
+  CPU float32 policies should be bit-identical, MPS float32 within 1e-6.
+  Read `loss`, `gradient_norm` and `numerical/gradient_zero_tensors` with
+  `read(track, exp, exp).points(m, clock="updates").y`. Deck files for
+  `manabot sim` on Gray Ogre: `8 Mountain`/`8 Gray Ogre` and
+  `8 Forest`/`8 Llanowar Elves`, each followed by an empty `Sideboard`.
+  CUDA BF16 cannot be reached on the Mac: `MANABOT_REQUIRE_CUDA=1` makes the
+  admission test fail with "CUDA admission requires a real CUDA device".
 - Portable continuation and backend switching (`out/state/save-*/` with
   `learner.safetensors`, `sampling.safetensors`, `continuation.json`):
   `etude continue` needs a launched parent (on an `etude train` run it says
@@ -348,3 +363,22 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   identical `policy_rows` log probabilities from jace's dense merge and
   `RolloutBatch.concatenate`, about 60x faster. A one-env worker's native rows
   pickle to about 7 KB each.
+- Two-seat exact-quota collection (`SelfPlay.batch_closure="exact-quota"`):
+  run a `.runs/` recipe subclassing `BaselineConfig` with `batch_closure`,
+  `streams=4`, `transitions=16`, `workers=1` and `2`, and confirm exact
+  `streams * transitions` rows per update, `coordinates/idle_stream_steps == 0`,
+  `time/collection/cut_bootstrap`, logged `rows_per_second`/`updates_per_hour`,
+  absent `decisions_per_game`/`skipped_share`, and bit-identical policy tensors
+  across `workers=1`/`2`, planned `--until` + `--resume`, and pty Ctrl-C (exit
+  75) + `--resume`. For cross-update game completions and replay digests, use
+  `streams=2, transitions=160, updates=3, record_games=1` and replay each line
+  in `out/games/*.jsonl` against `end["digest"]`. For real native capacity
+  recovery and pooled refill (`idle_stream_steps <= failures * (streams - 1)`,
+  `< streams` for a single failure, `learned_samples` + `discarded_samples ==
+  len(actions)`), set `max_permanents_per_player=7`
+  with `GameErrorPolicy(recover_capacity=True, threshold=0.95, window=50,
+  warmup=50)`. For the benchmark CLI, run `uv run python
+  scripts/bench_training_update.py --streams 4 --updates 2 --batch-closure
+  exact-quota --transitions 16`. Note `manabot.training.state.game_errors` CLI
+  expects `context["identities"]`, which `self_play`'s default ledger does not
+  write; verify failure receipts directly with `replay_attempt(GameAttempt.model_validate(entry["attempt"]))`.

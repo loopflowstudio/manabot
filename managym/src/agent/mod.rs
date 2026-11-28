@@ -2,6 +2,7 @@ pub(crate) mod ability_description;
 pub mod action;
 pub mod continuation;
 pub mod decision_memory;
+pub mod decision_surface;
 pub(crate) mod effect_execution;
 pub mod env;
 pub mod heuristic;
@@ -17,7 +18,6 @@ pub mod policy_history;
 pub mod record_vocabulary;
 pub mod rollout_pool;
 pub mod shared_effects;
-pub mod structured_offer;
 pub mod vector_env;
 
 pub use env::{BranchMode, GameSnapshot, RestoreOptions, SnapshotMetadata};

@@ -11,6 +11,5 @@ cargo test --manifest-path managym/Cargo.toml public_commitment --no-fail-fast
 uv run --extra dev pytest -q \
   tests/semantic/test_decision_contract.py \
   tests/belief/test_player.py \
-  tests/belief/test_tracker.py \
-  tests/academy/test_public_commitment_parity.py
+  tests/belief/test_tracker.py
 uv run --extra dev python -m conformance.public_commitment_parity verify

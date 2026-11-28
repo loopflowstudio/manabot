@@ -31,6 +31,29 @@
     "landmarks"
   ],
   "$defs": {
+    "AbilityGrantView": {
+      "type": "object",
+      "properties": {
+        "counter": {
+          "type": "boolean"
+        },
+        "effect_timestamp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "AnalysisBudgetIdentity": {
       "type": "object",
       "properties": {
@@ -1013,6 +1036,13 @@
           "maximum": 255,
           "minimum": 0
         },
+        "aliases": {
+          "description": "Live in-zone copies folded into this offer, omitted when empty.\nOutside-game sideboard copies stay engine-internal for lowering.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SubjectRef"
+          }
+        },
         "choices": {
           "type": "array",
           "items": {
@@ -1067,6 +1097,35 @@
         "confirm_label",
         "action_type",
         "focus"
+      ]
+    },
+    "KeywordAbilityView": {
+      "type": "object",
+      "properties": {
+        "effect_timestamp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "granted": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "label"
       ]
     },
     "KnowledgeScope": {
@@ -1177,6 +1236,13 @@
         },
         "power": {
           "type": "integer",
+          "format": "int32"
+        },
+        "printed_loyalty": {
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "int32"
         },
         "registry_key": {
@@ -1417,6 +1483,15 @@
           "format": "uint32",
           "minimum": 0
         },
+        "attacked_permanent": {
+          "description": "The permanent this creature is attacking.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "attacked_this_turn": {
           "type": "boolean"
         },
@@ -1424,11 +1499,17 @@
           "description": "Attacking in the current combat.",
           "type": "boolean"
         },
+        "attacks_despite_defender": {
+          "type": "boolean"
+        },
         "base_power": {
           "$ref": "#/$defs/RequiredNullable5"
         },
         "base_toughness": {
           "$ref": "#/$defs/RequiredNullable5"
+        },
+        "blocked": {
+          "type": "boolean"
         },
         "blocking": {
           "description": "The attacking permanent this one blocks.",
@@ -1438,6 +1519,12 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "chosen": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "combat_damage_to_players": {
           "type": "array",
@@ -1510,6 +1597,15 @@
           "description": "It entered the battlefield during this turn.",
           "type": "boolean"
         },
+        "entry_controller_id": {
+          "description": "Public player ID of the controller this permanent entered under (CR 110.2), omitted while unchanged.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "exhausted_abilities": {
           "description": "Exhaust abilities this object has used (CR 702.177a).",
           "type": "integer",
@@ -1532,6 +1628,12 @@
           "format": "uint32",
           "minimum": 0
         },
+        "hexproof_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "id": {
           "type": "integer",
           "format": "uint32",
@@ -1547,12 +1649,30 @@
             "null"
           ]
         },
+        "keyword_abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeywordAbilityView"
+          }
+        },
+        "keyword_grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/AbilityGrantView"
+          }
+        },
         "keywords": {
           "description": "Keywords it has after continuous effects, in keyword declaration order.",
           "type": "array",
           "items": {
             "type": "string"
           }
+        },
+        "loyalty_activated_this_turn": {
+          "type": "boolean"
         },
         "name": {
           "$ref": "#/$defs/RequiredNullable3"
@@ -1570,6 +1690,25 @@
         },
         "power": {
           "$ref": "#/$defs/RequiredNullable5"
+        },
+        "printed_loyalty": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "protection_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "restrictions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RestrictionView"
+          }
         },
         "summoning_sick": {
           "type": "boolean"
@@ -1651,6 +1790,12 @@
           ],
           "format": "int32"
         },
+        "command": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          }
+        },
         "counters": {
           "type": "object",
           "additionalProperties": {
@@ -1705,6 +1850,9 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "hexproof": {
+          "type": "boolean"
         },
         "id": {
           "type": "integer",
@@ -2068,6 +2216,16 @@
         "phrase"
       ]
     },
+    "PermanentRestriction": {
+      "type": "string",
+      "enum": [
+        "cant_be_blocked",
+        "cant_block",
+        "cant_attack_or_block",
+        "doesnt_untap",
+        "must_attack"
+      ]
+    },
     "PlayerControlView": {
       "description": "Public player-control effects in creation order. Effective distinguishes\nthe last-created active effect from another whose interval also runs now.",
       "type": "object",
@@ -2150,6 +2308,12 @@
           "format": "uint32",
           "minimum": 0
         },
+        "loyalty_abilities_activated": {
+          "description": "Loyalty abilities this player activated (CR 606), wherever their\nsources are now.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "mana_spent_casting": {
           "description": "Mana spent by this player to cast spells this turn.",
           "type": "integer",
@@ -2189,6 +2353,9 @@
             "string",
             "null"
           ]
+        },
+        "expiry": {
+          "type": "string"
         },
         "mana": {
           "type": "array",
@@ -2355,6 +2522,24 @@
       "maximum": 255,
       "minimum": 0
     },
+    "RestrictionView": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PermanentRestriction"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ]
+    },
     "ScheduleView": {
       "description": "Public committed scheduling only; absent on historical projections that\ndid not record it. Order is execution order, independently in each domain.",
       "type": "object",
@@ -2501,6 +2686,13 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "targets": {
+          "description": "What the spell or ability targets, in the order chosen. A target the\nviewer cannot name as a public object, stack entry or player is left out.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SubjectRef"
+          }
         },
         "x": {
           "description": "The announced value of X, when one was announced above zero.",

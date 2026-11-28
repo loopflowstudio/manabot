@@ -28,12 +28,11 @@ infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config vars)
 keeps manabot names. Frozen evidence — experiment IDs, contracts,
 receipts, wandb history — is never renamed, and neither are the compatibility
 surfaces that predate the Academy name: the `x-etude-*` wire headers,
-`etude.*` browser storage keys and schema identifiers. Hosted services are
-`academy-play` and `fantasia-website`, with deployment secrets in Doppler
-`manabot/prd` (Jack Heart, 2026-10-14). `etude.gg` and its legacy aliases
-redirect to `manabot.gg`, preserving paths and queries; hosted play is
-available at both `play.manabot.gg` and `academy.manabot.gg` (equivalent
-addresses selected by Jack Heart, 2026-10-14). Namecheap is the registrar and
+`etude.*` browser storage keys and schema identifiers. The hosted website is
+`fantasia-website` (`manabot.gg`), with deployment secrets in Doppler
+`manabot/prd` (Jack Heart, 2026-10-14); `etude.gg` and its legacy aliases
+redirect to `manabot.gg`, preserving paths and queries. Academy runs locally
+and has no hosted play service. Namecheap is the registrar and
 Cloudflare manages DNS. "Sepia Etude" remains the name of the visual language.
 
 Name a thing for what it is where it is produced (`catalog_tokens`,
@@ -45,10 +44,11 @@ domain unit (`decision_weights`, `SnapshotScorer`). Do not reuse established
 terms (`recipe` for training recipes, `manifest` for content packs, `replay`
 for seed-and-action replays) for unrelated concepts, even internally, and avoid
 duplicating module filenames across packages. When renaming or replacing a
-published API, convert remaining callers, emit a `DeprecationWarning` targeting
-the next minor release (e.g. `0.3.0` on `0.2.x`), and tag the whole deletable
-compatibility graph with that version so rollover finds it; serialized keys,
-checkpoint fields and frozen evidence keep their spelling.
+published API, rename surviving core modules and functions into the new
+vocabulary, convert callers, and keep the old names only on thin compatibility
+wrappers emitting a `DeprecationWarning` targeting the next minor release (e.g.
+`0.3.0` on `0.2.x`), tagged as one deletable compatibility graph; serialized
+keys, checkpoint fields and frozen evidence keep their spelling.
 
 Published library API and patch-clean `main`: `manabot`'s published surface is
 the fifteen modules in `PUBLIC_MODULES` (`scripts/public_api.py`, mirrored in
@@ -83,30 +83,49 @@ source-byte identities. Keep wheel exclusions narrow: `**/cards/**` and
 
 ## Academy's shared decision surface
 
-Jack Heart's direction (2026-10-21): Academy should make the acting agent's
-viewer-safe observations and complete legal action space understandable to a
-human. Navigation, grouping and labels may clarify that shared contract; they
-must not hide strategic choices, silently select actions, reveal unavailable
-information or introduce human-only game semantics. Evaluate awkward decisions
-at the shared observation/action authority rather than disguising them in the
-browser. Preserve Command binding, stale rejection, actual pending decisions on
-reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
-explicit shared action and cannot erase committed costs or revealed information.
-Configured priority-stop automation must remain identifiable as automation,
-separate from deliberate human decisions.
-Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
-`GameConfig.human_seat` orders them at the native boundary. Record and project
-actual native seats; Watch keeps its two-seat acting-view contract.
-Academy resume credentials and the started-launch marker live in browser
-`sessionStorage`. Keep them scoped together; a launch must not resume another
-tab's or another launch's game.
-Game-file imports send original JSON source spans: JavaScript numeric parsing and
-re-encoding can round u64 identities and invalidate retained digests.
-Watch history is the selected acting viewer's recorded track strictly before
-that decision's `presentation_cursor`; spectator reveal never supplies history
-labels. Event emphasis stays separate from choice focus and lane navigation.
-This direction does not approve a particular redesign or change frozen worlds,
-checkpoints or experiment evidence.
+Academy makes the acting agent's viewer-safe observations and complete legal
+action space understandable to a human. Navigation, grouping and labels may
+clarify that shared contract; they must not hide strategic choices, silently
+select actions, reveal unavailable information or introduce human-only game
+semantics. Fix awkward decisions at the shared authority rather than disguising
+them in the browser. Preserve Command binding, stale rejection, actual pending
+decisions on reconnect, replay/fork identity and accessibility. Cancellation or
+undo requires an explicit shared action and cannot erase committed costs or
+revealed information. Keep priority-stop automation distinct from deliberate
+human decisions. Live grouped decisions (combat declarations on the board,
+Scry, Surveil, and OrderLibrary in `ArrangePanel`, and `PartitionPiles` in the
+two-pile partition panel) are drafted whole and committed in one `decision_group_command`
+compiled to sequential native `Action`s with no engine action-space change:
+fold raw single-step offers under a collapsed disclosure while drafting (not
+beside the draft), and keep them listed in Replay and Study where recorded
+policy probabilities attach. Play's retained `hero_*`/`villain_*` setup fields name
+human/opponent roles; `GameConfig.human_seat` orders them at the native
+boundary. Record and project actual native seats; Watch keeps its two-seat
+acting-view contract. A game is named by its id and nothing else identifies a
+player or grants access: `/?game=<id>` resumes it, the server rebuilds one that
+left memory from its stored record, and a launch starts one game however often
+its address is opened. `localStorage['academy.game']` holds only the unfinished
+game `/` returns to; each tab keeps its Command in flight and last frame in
+`sessionStorage['academy.tab.<game>']`, so two tabs never overwrite each
+other's submission. First-visit setup defaults never replace a matchup the
+address or the game just played chose.
+Game-file imports send original JSON source spans: JS numeric re-encoding can
+round u64 identities and invalidate digests. Watch history is the selected
+acting viewer's recorded track strictly before that decision's
+`presentation_cursor`; spectator reveal never supplies history labels. Event
+emphasis stays separate from choice focus and lane navigation; show transient
+board deltas (damage, life changes, touched outlines) only on the stop and turn
+they happen, clearing them at now and across turns. Frame policy comparisons
+neutrally. Default trained policies to `PolicyDescriptor.recommended` before the
+first eligible one. Reserve preview space so hover never shifts layout, render
+braced mana/tap symbols (`{W}`–`{G}`, `{T}`, `{Q}`) through `ManaText`/`Pips`
+rather than raw text, and fit primary views into one 1280×800 screen with
+floating board overlays closed by default. Show each offer once in a panel,
+never as a list row and a button together. Ring, lift or outline a card only
+for a live offer on it. Hold the next choices until the walk has caught up to
+the position they belong to. Draw hidden cards as card backs deep enough to
+read as cards. In Play your hand stays out and no strip, chart or tray covers
+it.
 
 ## Style
 
@@ -463,14 +482,25 @@ Env dispatch, observations and Command/offer actors read that chooser directly;
 never remap it again. Player control grants in-game inspection through native
 `shares_information`, never private sideboard access or outside-game selection.
 
+A `ForPlayer` instruction changes who performs its effects. The resolving
+spell or ability keeps its controller across that scope and any choice in
+it. Discard replacements use that controller to determine who caused the
+discard, including a discard paid during resolution.
+
 Native `semantic_decision_frame_json` and `execute_semantic_command_json`
-use action-aligned `structured_search_offers`: these offers have no choices
-and reject nonempty `Command.answers`. Compound submissions belong to the
-separate `compound_offers` / `step_structured` API. Do not infer supported
-atomic answers from the `Command` field alone, or pass compound offer ids to
-the semantic executor. Recording preserves the original native Command and
-its object preconditions; Academy's presentation Command has a separate
-revision scope.
+project the action-aligned `decision_surface` (no choices; rejects nonempty
+`Command.answers`; prefer `decision` / `decision_group` vocabulary over `offer`
+in new core engine code). Grouped input (`flow/decision_group/`,
+`managym.decision_group`, Academy `decision_group_command`) compiles a typed
+choice to sequential native `Action`s on a clone before stepping the live game
+without widening action spaces, observations or digests. Recording preserves
+the original native Command and its object preconditions; Academy's
+presentation Command has a separate revision scope.
+
+Native snapshot v1 cold replay reads action indices or Commands. Issued object
+candidates bind the entire action-aligned offer projection, and the final state
+digest includes the current action space. When changing declaration offers,
+exercise a recorded object-bound Command through cold restore.
 
 Native heuristic selection consumes the live viewer `Observation`, including
 `action_space.focus` (source identity for target/cost decisions). Canonical viewer
@@ -586,6 +616,12 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
+- Each Academy e2e spec belongs to one Playwright config
+  (`academy/ui/playwright.*.config.ts` `testMatch`) with its own fixture
+  server; under another config it fails for want of fixtures. Run a spec with
+  its config: release after `npm run build`, launch and policy after
+  `ACADEMY_STATIC_BUILD=1 npm run build`. A failed launch run leaves a taken
+  run name in `test-results/launch/`; delete it before rerunning.
 
 ### Card definitions
 
@@ -610,9 +646,9 @@ a variant of `StaticAbility` or `AdditionalCost`, never a new field. Add the
 function to its set file's `cards()`. New behavior is a new rules-type variant
 (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
 card-specific logic. Rebuild the extension after card changes. A new definition
-shifts the name-ordered definition ids: refresh Academy fixtures with
-`uv run python scripts/refresh_academy_fixtures.py` (labels stay unchanged) and
-the catalog-dependent state-hash pin in `managym/cards/tests/cards/lea.rs`.
+shifts the name-ordered definition ids. Refresh Academy fixtures with
+`uv run --extra dev python scripts/refresh_academy_fixtures.py`. The script
+replays each recorded offer and checks its label before writing the new digests.
 
 Tokens are not cards (CR 108.2, 111.1). Each is a `TokenDefinition` (`key`,
 an optional `scryfall_id` and `printed`) in `managym/cards/src/tokens.rs`,
@@ -636,7 +672,10 @@ checks names, sets and token printings online, never in CI, and skips tokens
 without an id.
 
 Subtypes stay printed names; `managym/state/src/subtype.rs` is the one CR 205.3
-table of their categories. Add a new subtype there (the cards crate's
+table of their categories. Its creature list follows CR 205.3m, including legal
+choices absent from the installed cards. Use the rules list for updates;
+Scryfall’s creature-type catalog also includes names outside that list.
+Add a new subtype there (the cards crate's
 `every_authored_subtype_has_a_category` fails otherwise), and read creature
 types through `is_creature_type`, never by excluding other subtypes.
 
@@ -696,6 +735,8 @@ then overruns into the next priority. Read a new card's printing with `curl`
 from `api.scryfall.com` (the framework Python has no CA bundle), two seconds
 apart on `cards/search`, and append its row to
 `managym/tests/fixtures/scryfall_cards.json` with the fixture's eight fields.
+Append the text: the fixture repeats some names, so loading and re-dumping
+the JSON silently drops rows.
 
 Funded fixtures must finish native spending decisions before passing priority
 or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve
@@ -737,11 +778,12 @@ in layer, dependency and timestamp order; callers read its fields, and rules
 questions (`permanent_can_tap`, lethal damage) use it rather than re-deriving.
 Its `activated_abilities` follow layer/timestamp order; activation, payment and
 offer code indexes only that list, never `card.activated_abilities`. Resolution
-consumes the effects captured at activation. `flow/layers.rs::Context` evaluates
+consumes the effects captured at activation. `flow/layers.rs::evaluate_board` evaluates
 the board without calling the public view; `flow/statics.rs` caches that board
 and finalizes activation costs and dynamic mana outputs. Each immutable view is
 shared as an `Arc<Characteristics>`. Whole-board readers use `characteristics_many`
-(or internal `layer_views` when activation finalization is unnecessary), preserving
+(or internal `with_layer_board`/`with_layer_view` for non-reentrant borrowed reads
+and `layer_views` when activation finalization is unnecessary), preserving
 their input order and validating the shared board once per immutable scan.
 `Game::state` is a `TrackedState` with
 `Revisions` (`characteristics`, `mana_pools`, `tapped`, `triggers`): `DerefMut`
@@ -760,6 +802,11 @@ live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
 facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
+Stacked abilities keep an exact source object across zone changes.
+Live trigger and layer sources use the exact object. Battlefield triggers retain
+their source’s battlefield LKI. Command-zone emblems get their controller from
+their zone and their abilities from the emblem definition. Their display label
+is separate from their rules name.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
 exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.

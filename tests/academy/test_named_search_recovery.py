@@ -62,7 +62,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
     case: Literal["installed", "large-search", "large-policy"],
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     config = {
         "hero_deck": {"Swamp": 24, "The Rise of Sozin": 12},
         "villain_deck": {"Plains": 20, "Gray Ogre": 20},
@@ -110,7 +110,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             if case != "installed":
                 # Inject a scenario root in native authority only. Rebuild the
                 # server's cached prompt from that root before reconnecting.
-                game = server.SESSION_REGISTRY[initial["session_id"]].game
+                game = server.LIVE_GAMES[initial["game"]].game
                 assert game.env is not None
                 catalog = game.env.scenario_naming_vocabulary()
                 game.obs = game.env.observation_for_player(0)
@@ -188,15 +188,14 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                 socket.send_json(
                     {
                         "type": "resume",
-                        "session_id": initial["session_id"],
-                        "resume_token": initial["resume_token"],
+                        "game": initial["game"],
                     }
                 )
                 recovered_name = ExperienceFrame.model_validate(
                     settled_message(socket)["recovery"]["frame"]
                 )
                 assert recovered_name == frame
-                game = server.SESSION_REGISTRY[initial["session_id"]].game
+                game = server.LIVE_GAMES[initial["game"]].game
                 assert game.env is not None
                 assert not decision_surface_view(game.env, 0)["agent"].get("inspected")
                 name_offer = (
@@ -230,8 +229,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             assert (
@@ -275,10 +273,25 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             assert result["status"] == "accepted"
             pending = ExperienceFrame.model_validate(result["update"]["frame"])
             assert pending.action_space == "LOOK_AND_SELECT"
-            assert [
-                o.focus for o in pending.offers if o.action_type == "SELECT_CARD"
-            ] == [o.focus for o in choices[1:]]
-            game = server.SESSION_REGISTRY[initial["session_id"]].game
+            before_ids = {
+                member
+                for o in choices
+                for member in [
+                    o.focus[0],
+                    *(a.id.entity for a in o.aliases if a.kind == "object"),
+                ]
+            }
+            after_ids = {
+                member
+                for o in pending.offers
+                if o.action_type == "SELECT_CARD"
+                for member in [
+                    o.focus[0],
+                    *(a.id.entity for a in o.aliases if a.kind == "object"),
+                ]
+            }
+            assert after_ids == before_ids - {chosen.focus[0]}
+            game = server.LIVE_GAMES[initial["game"]].game
             assert game.env is not None
             assert game.obs is not None and game.trace is not None
             assert any(f.decision == 25 and f.mode == 3 for f in game.obs.continuation)
@@ -294,8 +307,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             recovery = settled_message(socket)["recovery"]

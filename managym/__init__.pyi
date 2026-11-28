@@ -20,6 +20,12 @@ import numpy as np
 from managym.disclosure import DecklistDisclosure, DecklistSampling
 
 from . import format as format
+from .decision_group import (
+    Choice,
+    Decision,
+    DecisionAddress,
+    DecisionPreview,
+)
 from .statistics import GameStatistics
 
 NATIVE_ALLOCATOR: Literal["system", "mimalloc"]
@@ -145,7 +151,10 @@ class CatalogTokens(TypedDict):
     definition_ref_target_rows: list[int]
 
 def catalog_tokens() -> CatalogTokens:
-    """Tokenized rules text of every catalog definition, rows by CardDefId."""
+    """Printed rules spans for cards, tokens and back faces, indexed by CardDefId.
+
+    Runtime-only program symbols come from ``record_vocabulary()``.
+    """
 
 def card_definitions_json() -> str:
     """Every catalog definition as the JSON its catalog tokens serialize."""
@@ -159,9 +168,12 @@ def catalog_token_renames() -> tuple[
     """Historical catalog tokens and record names with their optional successors."""
 
 def record_vocabulary() -> list[tuple[str, str, int, int | None, int | None]]:
-    """Every name fact/shared-effect encoders hash, as `(namespace, name,
-    value, token_kind, token_value)`; the token is card text's for the same
-    concept. Namespaces: `token`, `name`, `restriction`."""
+    """Every name fact/shared-effect encoders hash and runtime-only program
+    tokens, as `(namespace, name, value, token_kind, token_value)`.
+
+    When present, `(token_kind, token_value)` is the learning token shared with
+    printed card text or appended for runtime-only program symbols. Namespaces:
+    `token`, `name`, `restriction`."""
 
 class PreparedPossibleWorldMaterializer:
     @property
@@ -184,6 +196,23 @@ class PreparedPossibleWorldMaterializer:
 
 class DecisionCapture:
     def to_json(self) -> str: ...
+
+class GameStateEdit:
+    @staticmethod
+    def move_permanent(
+        permanent: int,
+        to: Literal["graveyard", "exile", "library_bottom"] = "graveyard",
+    ) -> GameStateEdit: ...
+    @staticmethod
+    def set_tapped(permanent: int, tapped: bool) -> GameStateEdit: ...
+    @staticmethod
+    def set_damage(permanent: int, damage: int) -> GameStateEdit: ...
+    @staticmethod
+    def set_counters(permanent: int, kind: str, count: int) -> GameStateEdit: ...
+    @staticmethod
+    def set_life(player: int, life: int) -> GameStateEdit: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
 
 class GameSnapshot:
     @property
@@ -208,6 +237,7 @@ class RestoreOptions:
         reseed: int | None = None,
         enable_decision_memory: bool | None = None,
         forced_first_action: int | None = None,
+        game_state_edits: Sequence[GameStateEdit] | None = None,
     ) -> RestoreOptions: ...
     @staticmethod
     def shuffle_libraries(
@@ -215,6 +245,7 @@ class RestoreOptions:
         *,
         enable_decision_memory: bool | None = None,
         forced_first_action: int | None = None,
+        game_state_edits: Sequence[GameStateEdit] | None = None,
     ) -> RestoreOptions: ...
     @staticmethod
     def determinize(
@@ -223,6 +254,7 @@ class RestoreOptions:
         *,
         enable_decision_memory: bool | None = None,
         forced_first_action: int | None = None,
+        game_state_edits: Sequence[GameStateEdit] | None = None,
     ) -> RestoreOptions: ...
 
 class SnapshotMetadata:
@@ -249,6 +281,7 @@ class SnapshotMetadata:
 
 class Env:
     def snapshot(self) -> GameSnapshot: ...
+    def edit_game_state(self, edits: Sequence[GameStateEdit]) -> Observation: ...
     def __init__(
         self,
         seed: int = 0,
@@ -277,34 +310,54 @@ class Env:
     def step(
         self, action: int | None = None
     ) -> Tuple[Observation, float, bool, bool, Dict[str, Any]]: ...
-    def compound_offers(self) -> StructuredOfferSet: ...
+    def decision_surface(self) -> DecisionSurface: ...
+    @deprecated("use Env.decision / Env.preview / Env.submit; removed in 0.3.0")
+    def compound_offers(self) -> DecisionSurface: ...
+    @deprecated("use Env.decision / Env.preview / Env.submit; removed in 0.3.0")
     def compound_commands_json(
-        self, offers: StructuredOfferSet, submission_json: str
+        self, offers: DecisionSurface, submission_json: str
     ) -> str: ...
-    def structured_offers(self) -> StructuredOfferSet: ...
-    def structured_search_offers(self) -> StructuredOfferSet: ...
+    @deprecated("use Env.decision / Env.preview / Env.submit; removed in 0.3.0")
+    def structured_offers(self) -> DecisionSurface: ...
+    @deprecated("use Env.decision_surface or Env.decision; removed in 0.3.0")
+    def structured_search_offers(self) -> DecisionSurface: ...
     def search_context_json(self, include_witness: bool = True) -> str: ...
     def search_witness_json(self) -> str: ...
+    @deprecated("use Env.decision / Env.preview / Env.submit; removed in 0.3.0")
     def step_structured(
-        self, offers: StructuredOfferSet, submission_json: str
+        self, offers: DecisionSurface, submission_json: str
     ) -> Tuple[Observation, float, bool, bool, Dict[str, Any], int]: ...
+    @deprecated("use Env.submit; removed in 0.3.0")
     def step_legacy_submission(
-        self, offers: StructuredOfferSet, submission_json: str
+        self, offers: DecisionSurface, submission_json: str
     ) -> Tuple[Observation, float, bool, bool, Dict[str, Any], int]: ...
     # Read-only automatic payment plan (managym.payment).
     def payment_preview_json(
         self, viewer: int, revision: int, fingerprint: str, action_index: int
     ) -> str: ...
+    @deprecated("use Env.preview; removed in 0.3.0")
     def combat_preview_json(
         self, viewer: int, revision: int, fingerprint: str, plan_json: str
     ) -> str: ...
+    # Unified interactive decision surface over sequential Actions (managym.decision_group).
+    def decision(self, viewer: int | None = None) -> Decision | None: ...
+    def preview(
+        self, choice: Choice, *, at: DecisionAddress | None = None
+    ) -> DecisionPreview: ...
+    def submit(
+        self, choice: Choice, *, at: DecisionAddress | None = None
+    ) -> Tuple[Observation, float, bool, bool, Dict[str, Any]]: ...
     # Shared semantic decision contract (managym.decision). JSON mirrors of
     # DecisionFrame / composite Observation / {receipt, observation}.
     def semantic_decision_frame_json(self) -> str: ...
     def player_controls_json(self) -> str: ...
     def public_schedule_json(self) -> str: ...
+    def permanent_details_json(self, viewer: int) -> str: ...
     def decision_context_json(self, viewer: int) -> str: ...
     def decision_offer_subjects_json(self, viewer: int) -> str: ...
+    def enable_presentation(self) -> None: ...
+    def presentation_facts_json(self, viewer: int) -> str: ...
+    def take_presentation_positions(self) -> list[Env]: ...
     def presentation_subjects_json(self) -> str: ...
     def semantic_observation_json(self, viewer: int) -> str: ...
     def semantic_viewer_state_hash(self, viewer: int) -> str: ...
@@ -393,8 +446,11 @@ class Env:
         """Record/detail/reference/member counts for each viewer, transport only."""
         ...
 
-class StructuredOfferSet:
+class DecisionSurface:
     def projection_json(self) -> str: ...
+
+@deprecated("use DecisionSurface; removed in 0.3.0")
+class StructuredOfferSet(DecisionSurface): ...
 
 class SelectedBranchRuntime:
     def __init__(self, match_id: str, audit: bool = False) -> None: ...
@@ -885,6 +941,7 @@ class Keywords:
     menace: bool
     hexproof: bool
     indestructible: bool
+    changeling: bool
 
 class Player:
     player_index: int
@@ -905,6 +962,7 @@ class Player:
     remaining_sideboard_counts: Optional[Dict[int, int]]
     keeps_red_mana: bool
     counters: dict[str, int]
+    hexproof: bool
     no_maximum_hand_size: bool
     # What this player has done this turn.
     turn_history: PlayerTurnHistory
@@ -941,6 +999,7 @@ class PlayerTurnHistory:
     permanents_left: int
     nonland_permanents_left: int
     warped_this_turn: bool
+    loyalty_abilities_activated: int
     life_lost: int
 
 class RestrictedMana:
@@ -951,9 +1010,10 @@ class RestrictedMana:
     mana: tuple[int, int, int, int, int, int]
 
 class PooledManaClass:
-    """One pooled class with a spend effect or combat expiry."""
+    """One pooled class with a spend effect or non-step expiry."""
 
     combat: bool
+    expiry: str
     restriction: str | None
     effect: str | None
     mana: tuple[int, int, int, int, int, int]
@@ -991,6 +1051,7 @@ class ObservationCharacteristics:
     text_box: str
     power: int
     toughness: int
+    printed_loyalty: int | None
     is_legendary: bool
     is_ally: bool
     is_lesson: bool
@@ -1017,6 +1078,8 @@ class Card:
     x: Optional[int]
     # A graveyard card put there from the battlefield this turn (input v10).
     from_battlefield_this_turn: bool
+    # A graveyard card put there from any zone this turn (input v11).
+    put_into_graveyard_this_turn: bool
     # Counters on the card off the battlefield ("with a stash counter on it").
     counters: dict[str, int]
 
@@ -1096,10 +1159,15 @@ class Permanent:
     has_exile_link: bool
     exile_if_dies_this_turn: bool
     attacking: bool
+    blocked: bool
+    entry_controller_id: int | None
     first_strike_participant: bool
     exhausted_abilities: int
+    attacked_permanent: int | None
+    loyalty_activated_this_turn: bool
     once_each_turn_used: int
     granted_firebending: int
+    chosen: str | None
     temp_subtypes: List[str]
     # Counters other than +1/+1 by kind (stun, fire, double_strike, quest, finality, conqueror, lore, minus_one_minus_one, age, ice, ...).
     counters: dict[str, int]
@@ -1110,6 +1178,8 @@ class Permanent:
     creature_types: List[str] | None
     is_granted_land: bool
     blocking: int | None
+    hexproof_from: list[str]
+    protection_from: list[str]
     abilities_lost: bool
     # Face down (CR 708.2); a face-up copy of a manifest is nameless, not face down.
     face_down: bool
@@ -1151,6 +1221,8 @@ class Action:
     # The tap pays part of the cost itself (convoke, improvise, waterbend)
     # rather than making mana; both are TAP_FOR_COST.
     pays_directly: bool
+    # True for fixed-source mana taps and mana-producing activated abilities.
+    is_mana_ability: bool
     # mode_index is an announced number (X, a replicate count, a payment's X)
     # rather than an option index.
     # The printed spell cast: 0 front face, 1 Adventure, 2 Omen.
@@ -1160,6 +1232,7 @@ class Action:
     # The permission a play uses (play_route_code); None for an ordinary hand play.
     play_route: int | None
     announces_x: bool
+    division_amount: int | None
 
 class ActionSpace:
     action_space_type: ActionSpaceEnum
@@ -1253,6 +1326,7 @@ class ObservationCapacity(ValueError):
     """An observation does not fit its buffers (message
     ``observation capacity exceeded: <field> <actual> > <capacity>``)."""
 
+__version__: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
 # Most options one naming prompt offers; larger scopes publish groups first.
@@ -1267,6 +1341,7 @@ class ClauseTarget:
     legal_at_resolution_start: bool | None
     reference: VisibleReference
     clause: int
+    division: int
 
 class ContinuationFrame:
     effect_execution: list[tuple[int, int]]
@@ -1303,9 +1378,11 @@ class ContinuationFrame:
     triggering_amount: int
     resolutions_this_turn: int
     x: int
+    division_remaining: int
     granted_keywords: list[bool]
     delayed_frequency: int | None
     this_turn: bool
+    until_next_turn: bool
 
 def validate_observation_json(text: str, *, schema_version: int = 8) -> None: ...
 def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...

@@ -376,3 +376,134 @@ fn foundations_5f_twinblade_paladin() {
     assert_eq!(s.life(0), 22);
     assert!(!keywords(&s, paladin).has(Keyword::DoubleStrike));
 }
+
+/// Drakuseth's attack trigger deals 4 damage to one target and 3 to each
+/// of up to two other targets: the primary target is never offered again,
+/// and with 16 creatures a side plus both players each clause is still one
+/// short sequence of choices.
+#[test]
+fn drakuseth_target_relation_keeps_its_secondary_targets_distinct() {
+    use crate::support::{
+        game::{clear_summoning_sickness, deck, Scenario},
+        inspect::offered_targets,
+        play::{attack_with, pass_until},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind, flow::turn::StepKind, state::game_object::PlayerId,
+    };
+    // Enough Ogres for 16 a side beyond the opening hand.
+    let cards = deck(&[
+        ("Mountain", 10),
+        ("Gray Ogre", 30),
+        ("Hill Giant", 2),
+        ("Drakuseth, Maw of Flames", 1),
+    ]);
+    let mut s = Scenario::new(cards.clone(), cards, 161);
+    s.advance_to_active_step(0, StepKind::Main);
+    let drakuseth = s.force_permanent_on_battlefield(0, "Drakuseth, Maw of Flames");
+    clear_summoning_sickness(&mut s, drakuseth);
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let ogres: Vec<_> = (0..16)
+        .flat_map(|_| {
+            [
+                s.force_permanent_on_battlefield(0, "Gray Ogre"),
+                s.force_permanent_on_battlefield(1, "Gray Ogre"),
+            ]
+        })
+        .collect();
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, drakuseth);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    // Drakuseth, the Giant, 32 Ogres and both players (16 friendly + 16 enemy Ogres fold).
+    assert_eq!(
+        crate::support::inspect::offered_targets_with_aliases(&s).len(),
+        36
+    );
+    let opponent = Target::Player(PlayerId(1));
+    assert!(s.choose_target(opponent));
+    let secondary = crate::support::inspect::offered_targets_with_aliases(&s);
+    assert_eq!(secondary.len(), 35);
+    assert!(!secondary.contains(&opponent));
+    assert!(s.choose_target(Target::Permanent(giant)));
+    let last = crate::support::inspect::offered_targets_with_aliases(&s);
+    assert!(!last.contains(&opponent) && !last.contains(&Target::Permanent(giant)));
+    let enemy_ogre_target = offered_targets(&s)
+        .into_iter()
+        .find(|t| matches!(t, Target::Permanent(id) if ogres.iter().skip(1).step_by(2).any(|o| o == id)))
+        .unwrap();
+    let Target::Permanent(killed_ogre) = enemy_ogre_target else {
+        unreachable!()
+    };
+    assert!(s.choose_target(enemy_ogre_target));
+    let life = s.life(1);
+    settle(&mut s);
+    assert_eq!(s.life(1), life - 4);
+    assert!(s.game().state.permanents[giant].is_none());
+    assert!(s.game().state.permanents[killed_ogre].is_none());
+    let surviving_ogre = ogres
+        .iter()
+        .skip(1)
+        .step_by(2)
+        .copied()
+        .find(|&o| o != killed_ogre)
+        .unwrap();
+    assert!(s.game().state.permanents[surviving_ogre].is_some());
+}
+
+#[test]
+fn angel_of_vitality_replaces_lifelink_before_damage_commits() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{attack_with, choose_mode, pass_until},
+    };
+    use managym::{agent::action::ActionSpaceKind, flow::turn::StepKind};
+    let mut s = five_color_setup(&["Healer's Hawk", "Angel of Vitality"]);
+    let hawk = s.force_permanent_on_battlefield(0, "Healer's Hawk");
+    let angel = s.force_permanent_on_battlefield(0, "Angel of Vitality");
+    s.force_permanent_on_battlefield(0, "Angel of Vitality");
+    s.game_mut().state.players[0].life = 24;
+    clear_summoning_sickness(&mut s, hawk);
+    assert_eq!(s.game().characteristics(angel).pt(), (2, 2));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, hawk);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    s.assert_life(1, 20);
+    for mode in 0..2 {
+        let mut branch = s.clone();
+        choose_mode(&mut branch, mode);
+        branch.assert_life(1, 19);
+        branch.assert_life(0, 27);
+        assert_eq!(branch.game().characteristics(angel).pt(), (4, 4));
+    }
+}
+
+#[test]
+fn angel_of_vitality_moves_elenda_across_each_life_threshold() {
+    use crate::support::{game::clear_summoning_sickness, play::attack_with};
+    use managym::{flow::turn::StepKind, state::card::Keyword};
+
+    for (life, before, after, had_menace) in [(19, 4, 5, false), (28, 5, 10, true)] {
+        let mut s = five_color_setup(&[
+            "Elenda, Saint of Dusk",
+            "Angel of Vitality",
+            "Healer's Hawk",
+        ]);
+        let elenda = s.force_permanent_on_battlefield(0, "Elenda, Saint of Dusk");
+        s.force_permanent_on_battlefield(0, "Angel of Vitality");
+        let hawk = s.force_permanent_on_battlefield(0, "Healer's Hawk");
+        clear_summoning_sickness(&mut s, hawk);
+        s.game_mut().state.players[0].life = life;
+        let view = s.game().characteristics(elenda);
+        assert_eq!(view.pt(), (before, before));
+        assert_eq!(view.keywords.has(Keyword::Menace), had_menace);
+
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, hawk);
+        s.advance_to_active_step(0, StepKind::PostcombatMain);
+        s.assert_life(0, life + 2);
+        s.assert_life(1, 19);
+        let view = s.game().characteristics(elenda);
+        assert_eq!(view.pt(), (after, after));
+        assert!(view.keywords.has(Keyword::Menace));
+    }
+}

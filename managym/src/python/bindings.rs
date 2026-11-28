@@ -29,6 +29,7 @@ use serde_json::{json, Value};
 use crate::{
     agent::{
         action::{ActionSpaceKind, ActionType, AgentError},
+        decision_surface::{DecisionOptionId, DecisionSubmission, DecisionSurface},
         env::{Env, HandSnapshot, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
@@ -45,16 +46,129 @@ use crate::{
         Command as ExperienceCommand, CommandId, MatchId, OfferId as ExperienceOfferId, PromptId,
         Revision,
     },
-    flow::turn::{PhaseKind, PlayerTurnHistory, StepKind},
+    flow::{
+        state_edit::{GameStateEdit, PermanentDestination},
+        turn::{PhaseKind, PlayerTurnHistory, StepKind},
+    },
     python::convert::info_dict_to_pydict,
     search_state::SearchStateWitness,
     state::{
         deck::Deck,
         mana::ManaCost,
+        permanent::CounterKind,
         player::{DecklistDisclosure, PlayerConfig},
         zone::ZoneType,
     },
 };
+
+/// One counterfactual change, addressed by an observed permanent id or native seat.
+#[cfg(feature = "python")]
+#[pyclass(name = "GameStateEdit", frozen, eq, hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(super) struct PyGameStateEdit(GameStateEdit);
+
+#[cfg(feature = "python")]
+impl PyGameStateEdit {
+    pub(super) fn batch(edits: Vec<Self>) -> Arc<[GameStateEdit]> {
+        edits.into_iter().map(|edit| edit.0).collect()
+    }
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyGameStateEdit {
+    /// The constructor call that rebuilds this edit.
+    fn __repr__(&self) -> String {
+        let py_bool = |value: bool| if value { "True" } else { "False" };
+        match self.0 {
+            GameStateEdit::MovePermanent { permanent, to } => {
+                // The journal spelling of the destination is the keyword value.
+                let to = serde_json::to_value(to).expect("destination serializes");
+                format!(
+                    "GameStateEdit.move_permanent({permanent}, to='{}')",
+                    to.as_str().unwrap_or_default()
+                )
+            }
+            GameStateEdit::SetTapped { permanent, tapped } => {
+                format!("GameStateEdit.set_tapped({permanent}, {})", py_bool(tapped))
+            }
+            GameStateEdit::SetDamage { permanent, damage } => {
+                format!("GameStateEdit.set_damage({permanent}, {damage})")
+            }
+            GameStateEdit::SetCounters {
+                permanent,
+                counter,
+                count,
+            } => format!(
+                "GameStateEdit.set_counters({permanent}, '{}', {count})",
+                counter.name()
+            ),
+            GameStateEdit::SetLife { player, life } => {
+                format!("GameStateEdit.set_life({player}, {life})")
+            }
+        }
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (permanent, to="graveyard"))]
+    fn move_permanent(permanent: i32, to: &str) -> PyResult<Self> {
+        let to = PermanentDestination::deserialize(serde::de::value::StrDeserializer::<
+            serde::de::value::Error,
+        >::new(to))
+        .map_err(|err| map_agent_err(AgentError(format!("game state edits: {err}"))))?;
+        Ok(Self(GameStateEdit::MovePermanent { permanent, to }))
+    }
+
+    #[staticmethod]
+    fn set_tapped(permanent: i32, tapped: bool) -> Self {
+        Self(GameStateEdit::SetTapped { permanent, tapped })
+    }
+
+    #[staticmethod]
+    fn set_damage(permanent: i32, damage: i32) -> PyResult<Self> {
+        if damage < 0 {
+            return Err(map_agent_err(AgentError(
+                "game state edits: damage must be nonnegative".into(),
+            )));
+        }
+        Ok(Self(GameStateEdit::SetDamage { permanent, damage }))
+    }
+
+    #[staticmethod]
+    fn set_counters(permanent: i32, kind: &str, count: i32) -> PyResult<Self> {
+        if count < 0 {
+            return Err(map_agent_err(AgentError(
+                "game state edits: counter count must be nonnegative".into(),
+            )));
+        }
+        let counter = CounterKind::ALL
+            .into_iter()
+            .find(|counter| counter.name() == kind)
+            .ok_or_else(|| {
+                map_agent_err(AgentError(format!(
+                    "game state edits: unknown counter {kind:?}"
+                )))
+            })?;
+        Ok(Self(GameStateEdit::SetCounters {
+            permanent,
+            counter,
+            count,
+        }))
+    }
+
+    #[staticmethod]
+    fn set_life(player: isize, life: i32) -> PyResult<Self> {
+        if !(0..=1).contains(&player) {
+            return Err(map_agent_err(AgentError(
+                "game state edits: player must be 0 or 1".into(),
+            )));
+        }
+        Ok(Self(GameStateEdit::SetLife {
+            player: player as usize,
+            life,
+        }))
+    }
+}
 
 #[cfg(feature = "python")]
 #[pymethods]
@@ -898,6 +1012,8 @@ pub struct PyPlayer {
     #[pyo3(get, set)]
     pub no_maximum_hand_size: bool,
     #[pyo3(get, set)]
+    pub hexproof: bool,
+    #[pyo3(get, set)]
     pub combat_mana: i32,
     #[pyo3(get)]
     pub mana: [i32; 6],
@@ -1083,14 +1199,16 @@ pub struct PyRestrictedMana {
     pub mana: [i32; 6],
 }
 
-/// Pooled mana of one class with a spend effect or combat expiry: its qualifiers,
-/// amounts by W/U/B/R/G/C and learning-token program.
+/// Pooled mana of one class with a spend effect or non-step expiry: its
+/// qualifiers, amounts by W/U/B/R/G/C and learning-token program.
 #[cfg(feature = "python")]
 #[pyclass(name = "PooledManaClass")]
 #[derive(Clone)]
 pub struct PyPooledManaClass {
     #[pyo3(get)]
     pub combat: bool,
+    #[pyo3(get)]
+    pub expiry: String,
     #[pyo3(get)]
     pub restriction: Option<String>,
     #[pyo3(get)]
@@ -1106,6 +1224,7 @@ impl From<PooledManaClassData> for PyPooledManaClass {
     fn from(value: PooledManaClassData) -> Self {
         Self {
             combat: value.combat,
+            expiry: value.expiry,
             restriction: value.restriction,
             effect: value.effect,
             mana: value.mana,
@@ -1119,6 +1238,7 @@ impl From<PyPooledManaClass> for PooledManaClassData {
     fn from(value: PyPooledManaClass) -> Self {
         Self {
             combat: value.combat,
+            expiry: value.expiry,
             restriction: value.restriction,
             effect: value.effect,
             mana: value.mana,
@@ -1174,6 +1294,7 @@ impl From<PlayerData> for PyPlayer {
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
+            hexproof: value.hexproof,
             no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
@@ -1219,6 +1340,7 @@ impl From<PyPlayer> for PlayerData {
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
+            hexproof: value.hexproof,
             no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
@@ -1364,6 +1486,8 @@ pub struct PyKeywords {
     pub hexproof: bool,
     #[pyo3(get, set)]
     pub indestructible: bool,
+    #[pyo3(get, set)]
+    pub changeling: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1384,6 +1508,7 @@ impl From<KeywordData> for PyKeywords {
             menace: value.menace,
             hexproof: value.hexproof,
             indestructible: value.indestructible,
+            changeling: value.changeling,
         }
     }
 }
@@ -1439,6 +1564,10 @@ impl PyObservationCharacteristics {
     #[getter]
     fn power(&self) -> i32 {
         self.data.power
+    }
+    #[getter]
+    fn printed_loyalty(&self) -> Option<i32> {
+        self.data.printed_loyalty
     }
     #[getter]
     fn toughness(&self) -> i32 {
@@ -1569,6 +1698,14 @@ impl PyCard {
     fn set_from_battlefield_this_turn(&mut self, value: bool) {
         self.data.from_battlefield_this_turn = value;
     }
+    #[getter]
+    fn put_into_graveyard_this_turn(&self) -> bool {
+        self.data.put_into_graveyard_this_turn
+    }
+    #[setter]
+    fn set_put_into_graveyard_this_turn(&mut self, value: bool) {
+        self.data.put_into_graveyard_this_turn = value;
+    }
     /// Counters on the card off the battlefield, by kind name.
     #[getter]
     fn counters(&self) -> BTreeMap<String, i32> {
@@ -1687,6 +1824,7 @@ impl From<PyKeywords> for KeywordData {
             menace: value.menace,
             hexproof: value.hexproof,
             indestructible: value.indestructible,
+            changeling: value.changeling,
         }
     }
 }
@@ -1817,6 +1955,14 @@ impl PyPermanent {
         self.data.exile_if_dies_this_turn = value;
     }
     #[getter]
+    fn blocked(&self) -> bool {
+        self.data.blocked
+    }
+    #[getter]
+    fn entry_controller_id(&self) -> Option<i32> {
+        self.data.entry_controller_id
+    }
+    #[getter]
     fn first_strike_participant(&self) -> bool {
         self.data.first_strike_participant
     }
@@ -1837,6 +1983,10 @@ impl PyPermanent {
         self.data.exhausted_abilities = value;
     }
     #[getter]
+    fn loyalty_activated_this_turn(&self) -> bool {
+        self.data.loyalty_activated_this_turn
+    }
+    #[getter]
     fn once_each_turn_used(&self) -> i32 {
         self.data.once_each_turn_used
     }
@@ -1851,6 +2001,15 @@ impl PyPermanent {
     #[setter]
     fn set_granted_firebending(&mut self, value: i32) {
         self.data.granted_firebending = value;
+    }
+    #[getter]
+    fn chosen(&self) -> Option<String> {
+        use crate::state::permanent::EntryChoice;
+        self.data.chosen.as_ref().map(|choice| match choice {
+            EntryChoice::Color(c) => format!("color {c:?}"),
+            EntryChoice::CreatureType(s) => format!("creature type {s}"),
+            EntryChoice::CardName(s) => format!("card name {s}"),
+        })
     }
     #[getter]
     fn temp_subtypes(&self) -> Vec<String> {
@@ -1901,12 +2060,24 @@ impl PyPermanent {
         self.data.is_granted_land = value;
     }
     #[getter]
+    fn attacked_permanent(&self) -> Option<i32> {
+        self.data.attacked_permanent
+    }
+    #[getter]
     fn blocking(&self) -> Option<i32> {
         self.data.blocking
     }
     #[setter]
     fn set_blocking(&mut self, value: Option<i32>) {
         self.data.blocking = value;
+    }
+    #[getter]
+    fn hexproof_from(&self) -> Vec<String> {
+        self.data.hexproof_from.clone()
+    }
+    #[getter]
+    fn protection_from(&self) -> Vec<String> {
+        self.data.protection_from.clone()
     }
     #[getter]
     fn abilities_lost(&self) -> bool {
@@ -2047,9 +2218,15 @@ pub struct PyAction {
     /// The tap pays part of the cost itself rather than making mana.
     #[pyo3(get)]
     pub pays_directly: bool,
+    /// The action is a mana ability (fixed-source tap or mana activation).
+    #[pyo3(get)]
+    pub is_mana_ability: bool,
     /// `mode_index` is an announced number (X, a replicate count).
     #[pyo3(get)]
     pub announces_x: bool,
+    /// Announced divided share assigned to the current target during `DivideAmount`.
+    #[pyo3(get)]
+    pub division_amount: Option<i32>,
     /// The printed spell cast: 0 front face, 1 Adventure, 2 Omen.
     #[pyo3(get)]
     pub spell_profile: u8,
@@ -2174,7 +2351,9 @@ impl From<ActionOption> for PyAction {
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
+            is_mana_ability: value.is_mana_ability,
             announces_x: value.announces_x,
+            division_amount: value.division_amount,
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
@@ -2198,7 +2377,9 @@ impl From<PyAction> for ActionOption {
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
+            is_mana_ability: value.is_mana_ability,
             announces_x: value.announces_x,
+            division_amount: value.division_amount,
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
@@ -3069,15 +3250,15 @@ impl PyEnv {
 /// to the public projection, so Python can submit IDs but cannot forge engine
 /// identities from presentation values.
 #[cfg(feature = "python")]
-#[pyclass(name = "StructuredOfferSet", frozen)]
+#[pyclass(name = "DecisionSurface", frozen)]
 #[derive(Clone)]
-pub struct PyStructuredOfferSet {
-    inner: StructuredOfferSet,
+pub struct PyDecisionSurface {
+    inner: DecisionSurface,
 }
 
 #[cfg(feature = "python")]
 #[pymethods]
-impl PyStructuredOfferSet {
+impl PyDecisionSurface {
     fn projection_json(&self) -> PyResult<String> {
         serde_json::to_string(self.inner.projection())
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
@@ -3217,7 +3398,7 @@ impl PySelectedBranchRuntime {
         #[cfg(feature = "benchmark")]
         let validation_timer = crate::benchmark_search::Timer::new("command_validation");
         let current_revision = env.selected_revision().map_err(map_agent_err)?;
-        let current_offers = env.structured_search_offers().map_err(map_agent_err)?;
+        let current_offers = env.decision_surface().map_err(map_agent_err)?;
         let current_offer = current_offers
             .projection()
             .offers
@@ -3278,8 +3459,8 @@ impl PySelectedBranchRuntime {
             offer_id: ExperienceOfferId(expected_offer_id),
             answers: Vec::new(),
         };
-        let submission = OfferSubmission {
-            offer_id: StructuredOfferId(command.offer_id.0),
+        let submission = DecisionSubmission {
+            offer_id: DecisionOptionId(command.offer_id.0),
             answers: Vec::new(),
         };
         #[cfg(feature = "benchmark")]
@@ -3542,33 +3723,48 @@ impl PyEnv {
     }
 
     /// Return the exact structured projection for the current supported
-    /// priority or attacker decision.
-    fn structured_offers(&self) -> PyResult<PyStructuredOfferSet> {
+    /// priority or attacker decision. Deprecated; removed in 0.3.0.
+    fn structured_offers(&self, py: Python<'_>) -> PyResult<PyDecisionSurface> {
+        warn_deprecated(
+            py,
+            "Env.structured_offers is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
         let env = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        Ok(PyStructuredOfferSet {
+        Ok(PyDecisionSurface {
             inner: env.structured_offers().map_err(map_agent_err)?,
         })
     }
 
-    fn compound_offers(&self) -> PyResult<PyStructuredOfferSet> {
+    /// Deprecated; removed in 0.3.0.
+    fn compound_offers(&self, py: Python<'_>) -> PyResult<PyDecisionSurface> {
+        warn_deprecated(
+            py,
+            "Env.compound_offers is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
         let env = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        Ok(PyStructuredOfferSet {
+        Ok(PyDecisionSurface {
             inner: env.compound_offers().map_err(map_agent_err)?,
         })
     }
 
+    /// Deprecated; removed in 0.3.0.
     fn compound_commands_json(
         &self,
-        offers: &PyStructuredOfferSet,
+        py: Python<'_>,
+        offers: &PyDecisionSurface,
         submission_json: &str,
     ) -> PyResult<String> {
-        let submission: OfferSubmission = serde_json::from_str(submission_json)
+        warn_deprecated(
+            py,
+            "Env.compound_commands_json is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
+        let submission: DecisionSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(error.to_string()))?;
         let env = self
             .inner
@@ -3580,16 +3776,24 @@ impl PyEnv {
         serde_json::to_string(&commands).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    /// Complete action-aligned structured surface used by the selected
-    /// production search backend.
-    fn structured_search_offers(&self) -> PyResult<PyStructuredOfferSet> {
+    /// Complete action-aligned decision surface for the current prompt.
+    fn decision_surface(&self) -> PyResult<PyDecisionSurface> {
         let env = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        Ok(PyStructuredOfferSet {
-            inner: env.structured_search_offers().map_err(map_agent_err)?,
+        Ok(PyDecisionSurface {
+            inner: env.decision_surface().map_err(map_agent_err)?,
         })
+    }
+
+    /// Deprecated alias for `Env.decision_surface`; removed in 0.3.0.
+    fn structured_search_offers(&self, py: Python<'_>) -> PyResult<PyDecisionSurface> {
+        warn_deprecated(
+            py,
+            "Env.structured_search_offers is deprecated and removed in 0.3.0; use Env.decision_surface or Env.decision",
+        )?;
+        self.decision_surface()
     }
 
     /// Read-only revision, offer, and witness context for differential audit.
@@ -3605,7 +3809,7 @@ impl PyEnv {
         } else {
             Value::Null
         };
-        let offers = env.structured_search_offers().map_err(map_agent_err)?;
+        let offers = env.decision_surface().map_err(map_agent_err)?;
         serde_json::to_string(&json!({
             "revision": revision,
             "prompt_id": revision,
@@ -3627,14 +3831,19 @@ impl PyEnv {
     }
 
     /// Apply an ID-only submission through the atomic structured path.
+    /// Deprecated; removed in 0.3.0.
     fn step_structured(
         &self,
         py: Python<'_>,
-        offers: &PyStructuredOfferSet,
+        offers: &PyDecisionSurface,
         submission_json: &str,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
+        warn_deprecated(
+            py,
+            "Env.step_structured is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
         self.reject_guarded_mutation("direct Env.step_structured")?;
-        let submission: OfferSubmission = serde_json::from_str(submission_json)
+        let submission: DecisionSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
         let mut env = self
             .inner
@@ -3655,14 +3864,19 @@ impl PyEnv {
     }
 
     /// Apply the same semantic submission by walking the positional prompts.
+    /// Deprecated; removed in 0.3.0.
     fn step_legacy_submission(
         &self,
         py: Python<'_>,
-        offers: &PyStructuredOfferSet,
+        offers: &PyDecisionSurface,
         submission_json: &str,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
+        warn_deprecated(
+            py,
+            "Env.step_legacy_submission is deprecated and removed in 0.3.0; use Env.submit",
+        )?;
         self.reject_guarded_mutation("Env.step_legacy_submission")?;
-        let submission: OfferSubmission = serde_json::from_str(submission_json)
+        let submission: DecisionSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
         let mut env = self
             .inner
@@ -3774,6 +3988,24 @@ impl PyEnv {
             .map_err(map_agent_err)
     }
 
+    /// Apply an atomic batch and return the refreshed live decision.
+    fn edit_game_state(
+        &self,
+        py: Python<'_>,
+        edits: Vec<PyGameStateEdit>,
+    ) -> PyResult<PyObservation> {
+        self.reject_guarded_mutation("Env.edit_game_state")?;
+        let edits = PyGameStateEdit::batch(edits);
+        py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .edit_game_state(edits)
+                .map(PyObservation::from)
+                .map_err(map_agent_err)
+        })
+    }
+
     /// Save this live boundary for independent continuations.
     fn snapshot(&self, py: Python<'_>) -> PyResult<super::snapshot_bindings::PyGameSnapshot> {
         py.allow_threads(|| {
@@ -3854,14 +4086,19 @@ impl PyEnv {
     }
 
     /// Read-only whole combat declaration preview for a JSON plan; see
-    /// `managym.combat`.
+    /// `managym.combat`. Deprecated in favor of `Env.preview` (removed in 0.3.0).
     fn combat_preview_json(
         &self,
+        py: Python<'_>,
         viewer: usize,
         revision: u64,
         fingerprint: &str,
         plan_json: &str,
     ) -> PyResult<String> {
+        warn_deprecated(
+            py,
+            "Env.combat_preview_json is deprecated and removed in 0.3.0; use Env.preview",
+        )?;
         let plan: crate::flow::combat_preview::CombatPlan = serde_json::from_str(plan_json)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
         let env = self
@@ -3874,6 +4111,73 @@ impl PyEnv {
         serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Active decision for `viewer` (defaults to the current actor), or `None`
+    /// if the game is over or `viewer` is not the acting player. See `managym.decision_group`.
+    #[pyo3(signature = (viewer=None))]
+    fn decision(&self, py: Python<'_>, viewer: Option<usize>) -> PyResult<PyObject> {
+        let decision = {
+            let env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.decision(viewer).map_err(map_agent_err)?
+        };
+        let Some(decision) = decision else {
+            return Ok(py.None());
+        };
+        to_group_model(py, "parse_decision", &decision)
+    }
+
+    /// Read-only preview of a single offer id (`int`) or grouped `Choice`.
+    /// Pass `at=decision.address` for optimistic concurrency. See `managym.decision_group`.
+    #[pyo3(signature = (choice, *, at=None))]
+    fn preview(
+        &self,
+        py: Python<'_>,
+        choice: Bound<'_, PyAny>,
+        at: Option<Bound<'_, PyAny>>,
+    ) -> PyResult<PyObject> {
+        let (parsed_choice, parsed_at) = parse_choice_and_address(py, choice, at)?;
+        let preview = {
+            let env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.preview(parsed_at.as_ref(), &parsed_choice)
+                .map_err(map_agent_err)?
+        };
+        to_group_model(py, "parse_preview", &preview)
+    }
+
+    /// Validate on a clone and commit a single offer id (`int`) or complete
+    /// grouped `Choice` atomically, returning `(obs, reward, done, trunc, info)`.
+    #[pyo3(signature = (choice, *, at=None))]
+    fn submit(
+        &self,
+        py: Python<'_>,
+        choice: Bound<'_, PyAny>,
+        at: Option<Bound<'_, PyAny>>,
+    ) -> PyResult<(PyObservation, f64, bool, bool, PyObject)> {
+        self.reject_guarded_mutation("Env.submit")?;
+        let (parsed_choice, parsed_at) = parse_choice_and_address(py, choice, at)?;
+        let (obs, reward, terminated, truncated, info) = {
+            let mut env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.submit(parsed_at.as_ref(), &parsed_choice)
+                .map_err(map_agent_err)?
+        };
+        let py_dict = info_dict_to_pydict(py, &info);
+        Ok((
+            PyObservation::from(obs),
+            reward,
+            terminated,
+            truncated,
+            py_dict.into_any().unbind(),
+        ))
+    }
+
     /// Shared semantic DecisionFrame for the current revision, as canonical
     /// JSON. See `managym.decision.DecisionFrame`.
     fn semantic_decision_frame_json(&self) -> PyResult<String> {
@@ -3883,6 +4187,45 @@ impl PyEnv {
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         let frame = env.semantic_decision_frame().map_err(map_agent_err)?;
         serde_json::to_string(&frame).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Tell this game's facts from now on (Academy); see
+    /// `managym/src/flow/presentation.rs`.
+    fn enable_presentation(&self) -> PyResult<()> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_presentation()
+            .map_err(map_agent_err)
+    }
+
+    /// Read this viewer's committed lines without consuming the step.
+    fn presentation_facts_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let facts = env.presentation_facts(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&facts).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Clear the step and take its boards after reading both viewers.
+    fn take_presentation_positions(&self) -> PyResult<Vec<PyEnv>> {
+        let positions = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .take_presentation_positions()
+            .map_err(map_agent_err)?;
+        let positions = positions
+            .into_iter()
+            .map(|env| PyEnv {
+                inner: Arc::new(Mutex::new(env)),
+                selected_guard: false,
+                prepared_lease: None,
+            })
+            .collect();
+        Ok(positions)
     }
 
     /// Public event identities used to explain a committed transition.
@@ -3920,6 +4263,15 @@ impl PyEnv {
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         let controls = env.player_controls().map_err(map_agent_err)?;
         serde_json::to_string(&controls).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn permanent_details_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let details = env.permanent_details(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&details).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
     fn decision_context_json(&self, viewer: usize) -> PyResult<String> {
@@ -4569,7 +4921,7 @@ fn catalog_tokens(py: Python<'_>) -> PyResult<PyObject> {
         "registry_names",
         content
             .definitions()
-            .map(|definition| definition.name.clone())
+            .map(|definition| definition.registry_name().to_owned())
             .collect::<Vec<_>>(),
     )?;
     out.set_item("token_kind", catalog.token_kind)?;
@@ -4833,6 +5185,7 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("NATIVE_ALLOCATOR", crate::allocator::NAME)?;
     m.add("ALLOCATION_COUNTING", crate::allocator::COUNTING)?;
     m.add(
@@ -4911,12 +5264,14 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStackObject>()?;
     m.add_class::<PyEventData>()?;
 
-    m.add_class::<PyStructuredOfferSet>()?;
+    m.add_class::<PyDecisionSurface>()?;
+    m.add("StructuredOfferSet", m.getattr("DecisionSurface")?)?;
     m.add_class::<PySelectedBranchRuntime>()?;
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyDecisionCapture>()?;
     m.add_class::<PyEnv>()?;
     m.add_class::<super::snapshot_bindings::PyGameSnapshot>()?;
+    m.add_class::<PyGameStateEdit>()?;
     m.add_class::<super::snapshot_bindings::PyRestoreOptions>()?;
     m.add_class::<super::snapshot_bindings::PySnapshotMetadata>()?;
     m.add_class::<crate::python::heuristic_bindings::PyHeuristic>()?;
@@ -4997,6 +5352,51 @@ pub(crate) fn python_game_setup(
         .getattr("GameSetup")?
         .call((players,), Some(&kwargs))?
         .unbind())
+}
+
+#[cfg(feature = "python")]
+fn to_group_model<T: serde::Serialize>(
+    py: Python<'_>,
+    parser_name: &str,
+    value: &T,
+) -> PyResult<PyObject> {
+    let raw =
+        serde_json::to_string(value).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    Ok(py
+        .import_bound("managym.decision_group")?
+        .getattr(parser_name)?
+        .call1((raw,))?
+        .unbind())
+}
+
+#[cfg(feature = "python")]
+fn parse_group_json<T: serde::de::DeserializeOwned>(
+    group_mod: &Bound<'_, PyModule>,
+    dumper_name: &str,
+    value: Bound<'_, PyAny>,
+) -> PyResult<T> {
+    let raw: String = group_mod.getattr(dumper_name)?.call1((value,))?.extract()?;
+    serde_json::from_str(&raw).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
+#[cfg(feature = "python")]
+fn parse_choice_and_address(
+    py: Python<'_>,
+    choice: Bound<'_, PyAny>,
+    at: Option<Bound<'_, PyAny>>,
+) -> PyResult<(
+    crate::flow::decision_group::DecisionChoice,
+    Option<crate::flow::decision_group::DecisionAddress>,
+)> {
+    let group_mod = py.import_bound("managym.decision_group")?;
+    let parsed_choice = parse_group_json(&group_mod, "dump_choice", choice)?;
+    let parsed_at = match at {
+        Some(value) if !value.is_none() => {
+            Some(parse_group_json(&group_mod, "dump_address", value)?)
+        }
+        _ => None,
+    };
+    Ok((parsed_choice, parsed_at))
 }
 
 #[cfg(feature = "python")]

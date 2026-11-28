@@ -25,9 +25,15 @@ pub struct SpellOnStack {
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
     pub targets: Vec<Target>,
+    /// Positional CR 601.2d division. Copies retain it through retargeting.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_shares: Vec<u8>,
     /// Which targeting requirement (index into the card's
     /// `target_requirements()`) each entry of `targets` was chosen for.
     pub target_req_indices: Vec<usize>,
+    /// Announced divided amounts aligned with `targets` (CR 601.2d); empty when undivided.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_divisions: Vec<i32>,
     /// Whether the kicker cost was paid while casting (CR 702.33).
     pub kicked: bool,
     /// The value of X announced while casting (CR 107.3); its mana value
@@ -41,12 +47,21 @@ pub struct SpellOnStack {
     pub spent: PaymentReceipt,
 }
 
+/// The choices and face to copy if the triggering spell has left the stack.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CopiableSpell {
+    pub spell: SpellOnStack,
+    pub values: super::game_object::CopiableValues,
+}
+
 /// A spell as it is on the stack or last existed there (CR 608.2h): what
 /// "its controller", "the mana spent to cast that spell" and "its mana value"
 /// read after the spell is countered, resolves or otherwise leaves. Copies of
 /// spells are spells too (CR 707.10); one cast without paying mana spent none.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellLki {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub copiable: Option<std::sync::Arc<CopiableSpell>>,
     #[serde(serialize_with = "super::game_object::exact")]
     pub object: ObjectId,
     pub definition_id: CardDefId,
@@ -88,17 +103,28 @@ pub struct ActivatedAbilityOnStack {
     /// every target is clause 0.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub target_req_indices: Vec<usize>,
+    /// Announced divided amounts aligned with `targets` (CR 602.2b); empty when undivided.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_divisions: Vec<i32>,
     /// Exact object attached to the source when the ability was activated.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "crate::game_object::exact")]
     pub attached: Option<ObjectId>,
     /// The announced value of X (CR 602.2b, 601.2b).
     #[serde(skip_serializing_if = "crate::is_zero")]
-    pub x: u8,
+    pub x: i32,
+    /// A loyalty ability's signed loyalty-counter change paid as its cost
+    /// (CR 606.4); `None` for any other ability.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loyalty_change: Option<i32>,
     /// For an ability granted by an attached permanent: that exact object and
     /// its grant, fixed at activation (`ability_index` names the grantee's list).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub granted_by: Option<AbilityGrant>,
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited this
+    /// activated ability, or `None` for printed / Layer-1 copied abilities.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acquired: Option<super::ability::GrantKey>,
     /// What activating it paid (CR 602.2b): the mana spent and the objects
     /// tapped, sacrificed, discarded or exiled for its cost.
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
@@ -151,7 +177,7 @@ pub struct TriggeredAbilityOnStack {
     pub kicked: bool,
     /// The ability's X (`PendingTrigger::x`).
     #[serde(skip_serializing_if = "crate::is_zero")]
-    pub x: u8,
+    pub x: i32,
     /// The mana spent to cast the permanent whose entering triggered this,
     /// for its own "mana spent to cast" (`PendingTrigger::spent`).
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
@@ -163,6 +189,10 @@ pub struct TriggeredAbilityOnStack {
     /// Non-printed triggers (delayed, reflexive, granted, firebending)
     /// resolve these effects instead of `Object::abilities[ability_index]`.
     pub inline_effects: Option<Vec<Effect>>,
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited this
+    /// triggered ability, or `None` for printed / Layer-1 copied abilities.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acquired: Option<super::ability::GrantKey>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -253,9 +283,9 @@ impl StackObject {
         }
     }
 
-    pub fn x(&self) -> u8 {
+    pub fn x(&self) -> i32 {
         match self {
-            Self::Spell(spell) => spell.x,
+            Self::Spell(spell) => i32::from(spell.x),
             Self::ActivatedAbility(ability) => ability.x,
             Self::TriggeredAbility(trigger) => trigger.x,
         }
@@ -266,6 +296,14 @@ impl StackObject {
             Self::Spell(spell) => &spell.target_req_indices,
             Self::ActivatedAbility(ability) => &ability.target_req_indices,
             Self::TriggeredAbility(trigger) => &trigger.target_req_indices,
+        }
+    }
+
+    pub fn target_divisions(&self) -> &[i32] {
+        match self {
+            Self::Spell(spell) => &spell.target_divisions,
+            Self::ActivatedAbility(ability) => &ability.target_divisions,
+            Self::TriggeredAbility(_) => &[],
         }
     }
 

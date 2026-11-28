@@ -23,6 +23,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         bat(),
         bear(),
         cat(),
+        cat_2_2_w(),
         lifelink_cat(),
         clue(),
         dragon(),
@@ -58,6 +59,8 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         dog_1_1_w(),
         beast_3_3_g(),
         beast_4_4_g(),
+        beast_4_4_g_trample(),
+        leviathan_8_8_u_hexproof(),
         villain(),
         zeppelin(),
         zombie(),
@@ -68,6 +71,52 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         inkling(),
         red_white_spirit(),
         rat(),
+        jace(),
+        token(
+            "token.ninja_2_1_u",
+            "aeec04b1-475c-4e55-b72f-327ea5258146",
+            creature(
+                face("Ninja", [CardType::Creature], &["Ninja"], ""),
+                2,
+                1,
+                [Color::Blue],
+            ),
+        ),
+        token(
+            "token.ajanis_pridemate",
+            "b0819e8e-fb7e-43c7-a7cf-d768f43193ac",
+            PrintedCharacteristics {
+                abilities: vec![Ability::when_you_gain_life(Effect::put_counters(
+                    ObjectSelector::This,
+                    managym_state::permanent::CounterKind::PlusOnePlusOne,
+                    1,
+                ))],
+                ..creature(
+                    face(
+                        "Ajani's Pridemate",
+                        [CardType::Creature],
+                        &["Cat", "Soldier"],
+                        "Whenever you gain life, put a +1/+1 counter on this token.",
+                    ),
+                    2,
+                    2,
+                    [Color::White],
+                )
+            },
+        ),
+        token(
+            "token.illusion_1_1_u",
+            "7bda0b63-fd0f-495d-9eb0-20057571c0ee",
+            creature(
+                face("Illusion", [CardType::Creature], &["Illusion"], ""),
+                1,
+                1,
+                [Color::Blue],
+            ),
+        ),
+        phyrexian_goblin_1_1_r(),
+        raccoon_3_3_g(),
+        cat_beast_2_2_w(),
     ]
 }
 
@@ -114,6 +163,24 @@ fn creature(
     }
 }
 
+fn jace() -> TokenDefinition {
+    let text_box = "−1: Surveil 1. (Look at the top card of your library. You may put that card into your graveyard.)\n−3: Draw a card.";
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    token(
+        "token.jace",
+        "8d1e424f-6407-4f8c-bed2-eaf148237c81",
+        PrintedCharacteristics {
+            loyalty: Some(0),
+            color_override: Some(Colors::from_iter([Color::Blue])),
+            activated_abilities: vec![
+                loyalty(-1, vec![Effect::Surveil { count: 1 }]),
+                loyalty(-3, vec![Effect::DrawCards { count: 1.into() }]),
+            ],
+            ..face("Jace", [CardType::Planeswalker], &["Jace"], text_box)
+        },
+    )
+}
+
 fn goblin() -> TokenDefinition {
     token(
         "token.goblin_1_1_r",
@@ -135,6 +202,19 @@ fn cat() -> TokenDefinition {
             face("Cat", [CardType::Creature], &["Cat"], ""),
             1,
             1,
+            [Color::White],
+        ),
+    )
+}
+
+fn cat_2_2_w() -> TokenDefinition {
+    token(
+        "token.cat_2_2_w",
+        "5252ab51-43e8-4b24-9830-de0ad9b9d3dc",
+        creature(
+            face("Cat", [CardType::Creature], &["Cat"], ""),
+            2,
+            2,
             [Color::White],
         ),
     )
@@ -647,6 +727,43 @@ fn beast_4_4_g() -> TokenDefinition {
     )
 }
 
+fn beast_4_4_g_trample() -> TokenDefinition {
+    token(
+        "token.beast_4_4_g_trample",
+        "859bda9a-fa90-4ad3-b0c1-6fc62e27c12f",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Trample]),
+            ..creature(
+                face("Beast", [CardType::Creature], &["Beast"], "Trample"),
+                4,
+                4,
+                [Color::Green],
+            )
+        },
+    )
+}
+
+fn leviathan_8_8_u_hexproof() -> TokenDefinition {
+    token(
+        "token.leviathan_8_8_u_hexproof",
+        "a4339d5a-7c07-4326-b0e6-d2519332803d",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Hexproof]),
+            ..creature(
+                face(
+                    "Leviathan",
+                    [CardType::Creature],
+                    &["Leviathan"],
+                    "Hexproof",
+                ),
+                8,
+                8,
+                [Color::Blue],
+            )
+        },
+    )
+}
+
 fn beast_3_3_g() -> TokenDefinition {
     token(
         "token.beast_3_3_g",
@@ -827,6 +944,50 @@ fn fractal() -> TokenDefinition {
             0,
             0,
             [Color::Green, Color::Blue],
+        ),
+    )
+}
+
+fn phyrexian_goblin_1_1_r() -> TokenDefinition {
+    token(
+        "token.phyrexian_goblin_1_1_r",
+        "3663e79b-2bf9-44af-a638-c0ad9067d8d4",
+        creature(
+            face(
+                "Phyrexian Goblin",
+                [CardType::Creature],
+                &["Phyrexian", "Goblin"],
+                "",
+            ),
+            1,
+            1,
+            [Color::Red],
+        ),
+    )
+}
+
+fn raccoon_3_3_g() -> TokenDefinition {
+    token(
+        "token.raccoon_3_3_g",
+        "af257e8b-9bed-4c6b-9510-11fe950fa80e",
+        creature(
+            face("Raccoon", [CardType::Creature], &["Raccoon"], ""),
+            3,
+            3,
+            [Color::Green],
+        ),
+    )
+}
+
+fn cat_beast_2_2_w() -> TokenDefinition {
+    token(
+        "token.cat_beast_2_2_w",
+        "e2c91781-acf9-4cff-be1a-85148ad2a683",
+        creature(
+            face("Cat Beast", [CardType::Creature], &["Cat", "Beast"], ""),
+            2,
+            2,
+            [Color::White],
         ),
     )
 }

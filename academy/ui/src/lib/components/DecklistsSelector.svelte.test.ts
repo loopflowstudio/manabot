@@ -9,22 +9,23 @@ function optionTag(body: string, value: string): string {
   return match[0];
 }
 
-it('closed decklists disable the search opponents with the reason', () => {
+it('omits standalone rollout Search opponents from the default picker while retaining legacy selections', () => {
   const { body } = render(PlayerPicker, {
     props: { value: 'random', decklists: 'closed' },
   });
-  for (const value of ['search-16', 'search-64', 'search-256']) {
-    const option = optionTag(body, value);
-    expect(option).toContain('disabled');
-    expect(option).toContain('— needs open decklists');
-  }
-  for (const value of ['random', 'passive']) {
+  expect(body).not.toContain('value="search-64"');
+  for (const value of ['policy', 'random', 'passive']) {
     expect(optionTag(body, value)).not.toContain('disabled');
   }
+  const legacyClosed = render(PlayerPicker, {
+    props: { value: 'search-64', decklists: 'closed' },
+  }).body;
+  expect(optionTag(legacyClosed, 'search-64')).toContain('disabled');
+  expect(optionTag(legacyClosed, 'search-64')).toContain('— needs open decklists');
 });
 
-it('open decklists offer the search opponents', () => {
-  const { body } = render(PlayerPicker, { props: { decklists: 'open' } });
+it('retains a legacy search selection enabled on open decklists', () => {
+  const { body } = render(PlayerPicker, { props: { value: 'search-64', decklists: 'open' } });
   const option = optionTag(body, 'search-64');
   expect(option).not.toContain('disabled');
   expect(option).not.toContain('needs open decklists');
@@ -32,7 +33,7 @@ it('open decklists offer the search opponents', () => {
 
 it('a search opponent disables closed decklists with the reason', () => {
   const { body } = render(DecklistsSelector, {
-    props: { value: 'open', opponent: 'search-64' },
+    props: { value: 'open', players: ['random', 'search-64'] },
   });
   const closed = optionTag(body, 'closed');
   expect(closed).toContain('disabled');
@@ -41,7 +42,7 @@ it('a search opponent disables closed decklists with the reason', () => {
 
 it('a non-search opponent offers closed decklists', () => {
   for (const opponent of ['random', 'passive', 'policy:abc'] as const) {
-    const { body } = render(DecklistsSelector, { props: { value: 'open', opponent } });
+    const { body } = render(DecklistsSelector, { props: { value: 'open', players: [opponent] } });
     expect(optionTag(body, 'closed')).not.toContain('disabled');
   }
 });

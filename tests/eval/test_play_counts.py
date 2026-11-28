@@ -137,8 +137,9 @@ def test_play_counts_one_opportunity_per_own_turn() -> None:
 def test_replayed_chump_blocks_count_committed_assignments(
     tmp_path: Path, mandatory: bool
 ) -> None:
-    # Each deck casts one creature. The Spider attacks under Taunting Challenge;
-    # the Inspector has menace and the lone Lions' chosen assignment is cleared.
+    # Each deck casts one creature. The Spider attacks under Taunting Challenge
+    # (forced block skipped as trivial, still committed); the Inspector has
+    # menace so the lone Lions has no legal block offer and commits none.
     attack_turn, attacker, deck = (
         (9, "Giant Spider", {"Forest": 9, "Giant Spider": 3, "Taunting Challenge": 3})
         if mandatory
@@ -195,7 +196,7 @@ def test_replayed_chump_blocks_count_committed_assignments(
     checkpoint = checkpoint_counts((attack, block), game_seat=1)
     assert attack.attackers_committed == attack.attackers_declared == 1
     assert checkpoint["seat"] == 0 and checkpoint["game_seat"] == 1
-    assert block.blockers_offered == block.blockers_declared == int(not mandatory)
+    assert block.blockers_offered == block.blockers_declared == 0
     assert checkpoint["blockers_committed"] == int(mandatory)
     assert checkpoint["chump_blocks"] == int(mandatory)
     if mandatory:

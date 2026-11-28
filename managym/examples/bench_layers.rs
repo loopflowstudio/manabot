@@ -77,7 +77,7 @@ fn root() -> (Env, PermanentId) {
             old.owner,
             old.definition_id,
             Arc::new(definition),
-            !old.is_card(),
+            old.kind(),
         );
         game.state[object_id] = object;
     }
@@ -217,9 +217,9 @@ fn payment_surface(env: &mut Env) -> serde_json::Value {
     let game = env.fixture_game_mut();
     serde_json::json!({
         "digest": digest,
-        "legal_actions": game.current_action_space,
+        "legal_actions": game.action_space(),
         "players": game.state.players.iter().map(|p| serde_json::json!({
-            "life":p.life, "mana":p.mana_pool, "combat_mana":p.combat_mana_pool,
+            "life":p.life, "mana":p.mana_pool,
         })).collect::<Vec<_>>(),
         "permanents":game.state.permanents.iter().enumerate().filter_map(|(id,p)| {
             p.as_ref().map(|p| serde_json::json!({"id":id,"card":p.object,"tapped":p.tapped}))
@@ -244,8 +244,7 @@ fn payment(
     for decision in 0..8 {
         let actions = env
             .fixture_game_mut()
-            .current_action_space
-            .as_ref()
+            .action_space()
             .unwrap()
             .actions
             .clone();

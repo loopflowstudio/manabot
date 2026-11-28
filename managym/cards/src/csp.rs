@@ -2,8 +2,8 @@
 use managym_state::{
     ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-        ReplacementEffect,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, EntryScope,
+        PrintedCharacteristics, ReplacementEffect,
     },
     mana::{Color, ManaCost},
     permanent::CounterKind,
@@ -24,9 +24,10 @@ fn dark_depths() -> CardDefinition {
             types: CardTypes::new([CardType::Land]),
             supertypes: vec!["Legendary".into(), "Snow".into()],
             replacement_effects: vec![ReplacementEffect::EntersWithCounters {
-                if_cast: false,
+                on: EntryScope::This,
+                condition: None,
                 kind: CounterKind::Ice,
-                count: 10,
+                count: 10.into(),
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{3}"),

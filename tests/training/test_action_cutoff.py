@@ -34,8 +34,67 @@ from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.rollout_arrays import trajectory_rows
 
 
+def _distinct_filler_creatures(count: int) -> list[str]:
+    defs = json.loads(managym.card_definitions_json())
+    disallowed = (
+        "foretell",
+        "adventure",
+        "omen",
+        "cycling",
+        "channel",
+        "warp",
+        "plot",
+        "evoke",
+        "prototype",
+        "spree",
+        "offspring",
+        "kicker",
+        "exhaust",
+        "bestow",
+        "additional cost",
+        "double strike",
+        "flying",
+        "deathtouch",
+        "lifelink",
+        "hexproof",
+        "indestructible",
+        "trample",
+        "first strike",
+        "vigilance",
+        "menace",
+        "reach",
+        "flash",
+        "haste",
+    )
+    fillers = [
+        card["name"]
+        for card in defs
+        if not card["is_token"]
+        and card["types"]["types"] == ["Creature"]
+        and card["name"] not in ("Hill Giant", "Shivan Dragon")
+        and card["mana_cost"] is not None
+        and 1 <= card["mana_cost"]["mana_value"] <= 3
+        and card["mana_cost"]["cost"][5] == 0
+        and all(v <= 2 for v in card["mana_cost"]["cost"][:5])
+        and not card["targeting"]
+        and not card["activated_abilities"]
+        and (card.get("power") or 0) <= 2
+        and (card.get("toughness") or 0) <= 2
+        and not any(word in card.get("text_box", "").lower() for word in disallowed)
+    ]
+    assert len(fillers) >= count
+    return fillers[:count]
+
+
 def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
-    deck = {"Mountain": 10, "Gray Ogre": 64, "Hill Giant": 1, "Shivan Dragon": 1}
+    basics = ("Plains", "Island", "Swamp", "Mountain", "Forest")
+    fillers = _distinct_filler_creatures(64)
+    deck = {
+        **{land: 4 for land in basics},
+        "Hill Giant": 1,
+        "Shivan Dragon": 1,
+        **{name: 1 for name in fillers},
+    }
     space = ObservationSpace(
         ObservationConfig(
             max_cards_per_player=128, max_actions=64, action_overflow="first-legal"
@@ -56,20 +115,22 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
             engine = env._engine
             engine.scenario_clear_hand(actor)
             engine.scenario_force_card_in_hand(actor, "Hill Giant")
-            for _ in range(64):
-                engine.scenario_force_card_in_hand(actor, "Gray Ogre")
+            for name in fillers:
+                engine.scenario_force_card_in_hand(actor, name)
             engine.scenario_force_card_in_hand(actor, "Shivan Dragon")
-            for _ in range(6):
-                engine.scenario_force_battlefield(actor, "Mountain")
+            for land in basics:
+                for _ in range(2):
+                    engine.scenario_force_battlefield(actor, land)
             raw = env._last_obs = engine.scenario_refresh()
             obs = observation_arrays(space, raw)
-            assert len(raw.action_space.actions) == 67
+            total_actions = len(raw.action_space.actions)
+            assert total_actions >= 67
             assert obs["actions_valid"].sum() == 64
             frame = json.loads(engine.semantic_decision_frame_json())
             before = engine.state_digest()
             unrestricted = HeuristicPlayer().act(env, raw)
             retained = HeuristicPlayer(max_actions=64).act(env, raw)
-            assert unrestricted == 65 and retained == 0
+            assert unrestricted == total_actions - 2 and retained == 0
             cards = {card.id: card.characteristics.name for card in raw.agent_cards}
             assert (
                 cards[raw.action_space.actions[unrestricted].focus[0]]
@@ -78,7 +139,7 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
             assert cards[raw.action_space.actions[retained].focus[0]] == "Hill Giant"
             assert engine.state_digest() == before
             assert json.loads(engine.semantic_decision_frame_json()) == frame
-            assert len(env.last_raw_obs.action_space.actions) == 67
+            assert len(env.last_raw_obs.action_space.actions) == total_actions
             # Execute the exact retained offer, without clamping or remapping.
             decision = DecisionFrame.from_json(engine.semantic_decision_frame_json())
             command = Command(
@@ -94,7 +155,11 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
     report = json.loads(path.read_bytes())
     assert report["counts_by_kind"] == {
         "Modal": {"decisions": 2, "overflows": 0, "dropped_actions": 0},
-        "Priority": {"decisions": 1, "overflows": 1, "dropped_actions": 3},
+        "Priority": {
+            "decisions": 1,
+            "overflows": 1,
+            "dropped_actions": total_actions - 64,
+        },
     }
     assert report["samples"][0]["game"]["actor"] == actor
 
@@ -108,9 +173,14 @@ def test_collector_uses_configured_prefix_and_one_masked_distribution(
         ObservationConfig(max_actions=2, action_overflow="first-legal")
     )
     agent = ActorCritic(space, ModelConfig(hidden_dim=8, attention_on=False))
-    match = Match(
-        MatchConfig(hero_deck={"Mountain": 30}, villain_deck={"Mountain": 30})
-    )
+    distinct_lands = {
+        "Mountain": 6,
+        "Forest": 6,
+        "Plains": 6,
+        "Island": 6,
+        "Swamp": 6,
+    }
+    match = Match(MatchConfig(hero_deck=distinct_lands, villain_deck=distinct_lands))
     with capture_scope(CaptureScope(tmp_path)):
         collector = open_collector(
             space,
@@ -155,9 +225,14 @@ def test_scalar_evaluation_cutoff_is_diagnostic_not_game_truncation(
     space = ObservationSpace(
         ObservationConfig(max_actions=2, action_overflow="first-legal")
     )
-    match = Match(
-        MatchConfig(hero_deck={"Mountain": 30}, villain_deck={"Mountain": 30})
-    )
+    distinct_lands = {
+        "Mountain": 6,
+        "Forest": 6,
+        "Plains": 6,
+        "Island": 6,
+        "Swamp": 6,
+    }
+    match = Match(MatchConfig(hero_deck=distinct_lands, villain_deck=distinct_lands))
     with capture_scope(CaptureScope(tmp_path)):
         env = Env(match, space, Reward(RewardConfig()), seed=213)
         try:

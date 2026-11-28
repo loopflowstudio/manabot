@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import type { SharedTableControlEvent } from './shared-table-protocol';
 import { gameStore } from './game.svelte';
 import { LIGHTNING_BOLT_PRESENTATION } from './presentation-fixtures';
 import { presentationPlayer } from './presentation.svelte';
@@ -33,7 +32,7 @@ function frameAt(revision: number): ExperienceFrame {
   };
 }
 
-function deliver(controller: GameSocketController, message: ServerMessage | SharedTableControlEvent): void {
+function deliver(controller: GameSocketController, message: ServerMessage): void {
   const testController = controller as unknown as {
     handleRawMessage(raw: string): void;
   };
@@ -84,8 +83,7 @@ describe('parseServerMessage', () => {
         },
       },
       actions: [],
-      session_id: 'session-id',
-      resume_token: 'token',
+      game: 'game-id',
     });
 
     const parsed = parseServerMessage(payload);
@@ -160,21 +158,40 @@ describe('GameSocketController offline gameplay', () => {
       villain_type: 'policy', opponent_sha256: 'exact-id', decklists: 'closed',
     } });
   });
-  it('keeps the reason and does not redeal a launch the server ended', () => {
+  it('keeps the reason and the last board when the server ends a broken game', () => {
     const controller = new GameSocketController();
-    const internals = controller as unknown as { launchId: string | null; outboundQueue: ClientMessage[] };
+    const internals = controller as unknown as { game: string | null; outboundQueue: ClientMessage[] };
     const recovery = structuredClone(boltProtocolFixture.recovery);
     deliver(controller, { type: 'observation', data: recovery.frame.projection,
-      actions: [], recovery } as ServerMessage);
-    internals.launchId = 'launch-1';
-    internals.outboundQueue.length = 0;
+      actions: [], recovery, game: recovery.frame.match_id } as ServerMessage);
+    expect(internals.game).toBe(recovery.frame.match_id);
     const reason = 'The opponent could not continue this game: Policy returned a stale decision binding.';
-    deliver(controller, { type: 'error', message: reason, session_ended: true });
+    deliver(controller, { type: 'error', message: reason, game_stopped: true });
     expect(gameStore.errorMessage).toBe(reason);
     expect(gameStore.protocolFrame).toEqual(recovery.frame);
-    expect(gameStore.resumeFailed).toBe(true);
-    expect(internals.launchId).toBeNull();
-    expect(internals.outboundQueue.filter(message => message.type === 'new_game')).toHaveLength(0);
+    expect(gameStore.stopped).toBe(true);
+    // Nothing resumes or redeals it.
+    expect(internals.game).toBeNull();
+    expect(internals.outboundQueue).toEqual([]);
+  });
+  it('reads a refusal as its sentence, without the code it carries', () => {
+    const controller = new GameSocketController();
+    gameStore.newGamePending = false;
+    controller.sendNewGame({ launch: 'gone' });
+    deliver(controller, { type: 'error', message: 'launch_unknown: This launch is unknown; run the launch command again or choose a new game.' });
+    expect(gameStore.errorMessage).toBe('This launch is unknown; run the launch command again or choose a new game.');
+    expect(gameStore.newGamePending).toBe(false);
+  });
+  it('starts a rematch from the game on the board, by its id', () => {
+    const controller = new GameSocketController();
+    const queue = (controller as unknown as { outboundQueue: ClientMessage[] }).outboundQueue;
+    gameStore.leaveGame();
+    controller.sendRematch('swap_sides');
+    expect(queue).toEqual([]);
+    gameStore.applyGame({ game: 'game-a', setup: {} });
+    controller.sendRematch('swap_sides', { seed: null });
+    expect(queue).toEqual([{ type: 'rematch', game: 'game-a', intent: 'swap_sides', config: { seed: null } }]);
+    gameStore.leaveGame();
   });
   it('does not queue offer commands or F6 against a future recovered frame', () => {
     gameStore.prepareForNewGame();
@@ -203,22 +220,20 @@ describe('GameSocketController offline gameplay', () => {
 });
 
 describe('unresolved Command recovery', () => {
-  function pendingController(grant?: number) {
+  function pendingController() {
     const controller = new GameSocketController();
     const sent: string[] = [];
-    const request = { type: 'command' as const,
-      ...(grant === undefined ? {} : { grant_revision: grant }),
-      command: structuredClone(boltProtocolFixture.command) };
+    const request = { type: 'command' as const, command: structuredClone(boltProtocolFixture.command) };
     const state = controller as unknown as {
       pendingCommand: typeof request | null;
       pendingResume: boolean;
+      game: string | null;
       socket: { send(raw: string): void; close(): void };
       reconcileCommand(recovery: RecoveryEnvelope): void;
     };
     state.pendingCommand = request;
     state.socket = { send: raw => sent.push(raw), close: () => {} };
-    gameStore.prepareForNewGame();
-    gameStore.table = null;
+    gameStore.leaveGame();
     gameStore.beginCommand();
     return { controller, state, request, sent };
   }
@@ -245,8 +260,8 @@ describe('unresolved Command recovery', () => {
     expect(gameStore.commandPending).toBe(false);
   });
 
-  it.each(['revision', 'prompt', 'match', 'grant'])('does not replay a stale %s or infer execution from a missing receipt', kind => {
-    const { state, sent } = pendingController(kind === 'grant' ? 99 : undefined);
+  it.each(['revision', 'prompt', 'match'])('does not replay a stale %s or infer execution from a missing receipt', kind => {
+    const { state, sent } = pendingController();
     const recovery = structuredClone(boltProtocolFixture.recovery);
     recovery.accepted_commands = [];
     if (kind === 'revision') recovery.frame.revision += 1;
@@ -259,15 +274,20 @@ describe('unresolved Command recovery', () => {
     expect(gameStore.commandPending).toBe(false);
   });
 
-  it('interrupts an expired launched session without queuing a replacement', () => {
+  it('drops the board of a game the server will not take up, and says why', () => {
     const { controller, state, sent } = pendingController();
     gameStore.applyFrame(boltProtocolFixture.recovery.frame);
+    state.game = 'game-a';
     state.pendingResume = true;
-    deliver(controller, {type: 'error', message: 'Session expired.'});
+    deliver(controller, {type: 'error', message: 'game_stopped: That game stopped and cannot be resumed.'});
     expect(sent).toEqual([]);
-    expect(gameStore.protocolFrame?.match_id).toBe(boltProtocolFixture.command.match_id);
-    expect(gameStore.resumeFailed).toBe(true);
+    expect(gameStore.protocolFrame).toBeNull();
+    expect(gameStore.resumeRefused).toEqual({ game: 'game-a', code: 'game_stopped', message: 'That game stopped and cannot be resumed.' });
+    expect(gameStore.stopped).toBe(false);
     expect(gameStore.commandPending).toBe(false);
+    expect(state.game).toBeNull();
+    expect(state.pendingCommand).toBeNull();
+    gameStore.resumeRefused = null;
   });
 });
 
@@ -297,29 +317,6 @@ describe('GameSocketController presentation seam', () => {
     expect(presentationPlayer.events.map(({ seq }) => seq)).toEqual([900, 901, 902, 903, 904]);
   });
 
-  it('keeps transient narration outside the canonical frame DTO', () => {
-    gameStore.prepareForNewGame();
-    presentationPlayer.clear();
-    gameStore.applyFrame(frameAt(42));
-    const controller = new GameSocketController();
-
-    deliver(controller, {
-      type: 'command_outcome',
-      status: 'accepted',
-      update: {
-        base_revision: 42,
-        frame: frameAt(43),
-        presentation: LIGHTNING_BOLT_PRESENTATION.events,
-        receipt: null,
-        log: [{ actor: 'villain', turn: 4, text: 'Pass priority' }],
-        auto_passed: 2,
-      },
-    });
-
-    expect(gameStore.actionLog.map(({ actor, turn, text }) => ({ actor, turn, text })))
-      .toContainEqual({ actor: 'villain', turn: 4, text: 'Pass priority' });
-  });
-
   it('commits the FrameUpdate before enqueueing its semantic events', () => {
     gameStore.prepareForNewGame();
     presentationPlayer.clear();
@@ -338,8 +335,8 @@ describe('GameSocketController presentation seam', () => {
     });
 
     expect(gameStore.protocolFrame?.revision).toBe(43);
-    expect(presentationPlayer.currentEvent?.seq).toBe(902);
-    expect(presentationPlayer.currentEvent?.to_revision).toBe(
+    expect(presentationPlayer.events.map(event => event.seq)).toEqual([900, 901, 902, 903, 904]);
+    expect(presentationPlayer.events.at(-1)?.to_revision).toBe(
       gameStore.protocolFrame?.revision,
     );
   });
@@ -363,13 +360,17 @@ describe('GameSocketController presentation seam', () => {
       },
     });
 
-    expect(gameStore.actionLog.map((entry) => entry.text).join('\n')).not.toContain(
-      'Hero life:',
-    );
-    expect(presentationPlayer.currentEvent?.kind.kind).toBe('resolved');
+    expect(gameStore.historyNotes).toEqual([]);
+    expect(presentationPlayer.events.map(event => event.kind.kind)).toEqual([
+      'cast',
+      'targeted',
+      'resolved',
+      'damage',
+      'died',
+    ]);
   });
 
-  it('same-match recovery merges unseen tail events and never repeats seen motion', () => {
+  it('same-match recovery merges unseen tail events without duplicating seen facts', () => {
     gameStore.prepareForNewGame();
     presentationPlayer.clear();
     gameStore.applyFrame(frameAt(42));
@@ -385,10 +386,8 @@ describe('GameSocketController presentation seam', () => {
     deliver(controller, { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
     expect(gameStore.protocolFrame?.revision).toBe(43);
     expect(presentationPlayer.events.map(event => event.seq)).toEqual([900, 901, 902, 903, 904]);
-    expect(presentationPlayer.currentEvent?.seq).toBe(903);
     deliver(controller, { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
     expect(presentationPlayer.events).toHaveLength(5);
-    expect(presentationPlayer.currentEvent).toBeNull();
   });
 
   it('keeps a committed frame when optional theater is malformed', () => {
@@ -411,7 +410,7 @@ describe('GameSocketController presentation seam', () => {
     });
 
     expect(gameStore.protocolFrame?.revision).toBe(43);
-    expect(presentationPlayer.currentEvent).toBeNull();
+    expect(presentationPlayer.incomplete).toBe(true);
     expect(gameStore.errorMessage).toMatch(/Presentation stream rejected/);
   });
 
@@ -434,7 +433,7 @@ describe('GameSocketController presentation seam', () => {
     });
 
     expect(gameStore.protocolFrame?.revision).toBe(43);
-    expect(presentationPlayer.currentEvent).toBeNull();
+    expect(presentationPlayer.incomplete).toBe(true);
     expect(gameStore.errorMessage).toMatch(/Presentation cursor gap/);
   });
 
@@ -483,48 +482,241 @@ it('retains retry and work metadata when first recovery resets match state', () 
   const work = {scope: 'match' as const, setup_id: null, loading_seat: null, operation_id: 'search', sequence: 1, kind: 'search' as const, started_at: 1,
     match_id: recovery.frame.match_id, revision: recovery.frame.revision, chooser: 1, state: 'failed' as const};
   deliver(controller, {type: 'observation', data: recovery.frame.projection, actions: [], recovery,
-    session_id: 'retry-table', resume_token: 'credential', mirror_retry: retry, work});
+    game: recovery.frame.match_id, mirror_retry: retry, work});
   expect(gameStore.protocolFrame?.match_id).toBe(retry.match_id);
   expect(gameStore.searchRetry).toEqual(retry);
   expect(gameStore.work).toEqual(work);
 });
 
-it('ends a watcher wait when a newer setup stage fails without replacing authority', () => {
+it('ends a wait when a newer setup stage fails without replacing the frame', () => {
   const controller = new GameSocketController();
   gameStore.prepareForNewGame();
-  gameStore.applyFrame(frameAt(43), 'table-1', 'token');
+  gameStore.applyGame({ game: 'game-1' });
+  gameStore.applyFrame(frameAt(43));
   gameStore.newGamePending = false;
   const frame = gameStore.protocolFrame;
   const work = {scope: 'match' as const, setup_id: null, loading_seat: null, operation_id: 'advance', sequence: 1, kind: 'advance' as const, started_at: 1,
     match_id: frame!.match_id, revision: 43, chooser: null, state: 'running' as const};
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work});
+  deliver(controller, {type: 'work_status', game: 'game-1', work});
   const loading = {scope: 'setup' as const, setup_id: 'next-game', loading_seat: null, operation_id: 'load', sequence: 2, kind: 'load' as const, started_at: 2,
     match_id: null, revision: null, chooser: null, state: 'running' as const};
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work: loading});
+  deliver(controller, {type: 'work_status', game: 'game-1', work: loading});
   expect(gameStore.work?.operation_id).toBe('advance');
-  deliver(controller, {type: 'work_status', session_id: 'other-table', work: {...loading, state: 'failed'}});
+  deliver(controller, {type: 'work_status', game: 'other-game', work: {...loading, state: 'failed'}});
   expect(gameStore.work?.state).toBe('running');
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work: {...loading, state: 'failed'}});
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work});
+  deliver(controller, {type: 'work_status', game: 'game-1', work: {...loading, state: 'failed'}});
+  deliver(controller, {type: 'work_status', game: 'game-1', work});
   expect(gameStore.work?.state).toBe('failed');
   expect(gameStore.protocolFrame).toBe(frame);
   expect(gameStore.submissionAccepted).toBe(false);
   gameStore.work = null;
+  gameStore.leaveGame();
 });
 
-it('ignores work from another table, revision or earlier operation', () => {
+it('ignores work from another game, revision or earlier operation', () => {
   gameStore.prepareForNewGame();
-  gameStore.applyFrame(frameAt(43), 'table-1', 'credential');
+  gameStore.applyGame({ game: 'game-1' });
+  gameStore.applyFrame(frameAt(43));
   gameStore.newGamePending = false;
   const controller = new GameSocketController();
   const work = {scope: 'match' as const, setup_id: null, loading_seat: null, operation_id: 'op-3', sequence: 3, kind: 'choose' as const, started_at: 1,
     match_id: gameStore.protocolFrame!.match_id, revision: 43, chooser: 1, state: 'running' as const};
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work});
+  deliver(controller, {type: 'work_status', game: 'game-1', work});
   expect(gameStore.work?.operation_id).toBe('op-3');
-  deliver(controller, {type: 'work_status', session_id: 'other-table', work: {...work, operation_id: 'foreign'}});
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work: {...work, operation_id: 'old', sequence: 2}});
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work: {...work, operation_id: 'old-frame', revision: 42}});
+  deliver(controller, {type: 'work_status', game: 'other-game', work: {...work, operation_id: 'foreign'}});
+  deliver(controller, {type: 'work_status', game: 'game-1', work: {...work, operation_id: 'old', sequence: 2}});
+  deliver(controller, {type: 'work_status', game: 'game-1', work: {...work, operation_id: 'old-frame', revision: 42}});
   expect(gameStore.work?.operation_id).toBe('op-3');
   expect(controller.sendAction(boltProtocolFixture.command.offer_id)).toBe(false);
   gameStore.work = null;
+  gameStore.leaveGame();
+});
+
+describe('grouped decisions in GameSocketController', () => {
+  it('tracks liveDecisionGroup on observation and frame hash changes', () => {
+    gameStore.prepareForNewGame();
+    const controller = new GameSocketController();
+    const recovery = structuredClone(boltProtocolFixture.recovery);
+    const frame = recovery.frame;
+    const scryGroup = {
+      match_id: frame.match_id,
+      revision: frame.revision,
+      prompt_id: frame.prompt!.id,
+      frame_hash: frame.frame_hash,
+      kind: 'scry' as const,
+      items: [{ item: { entity: 1, incarnation: 0 }, label: 'Island' }, { item: { entity: 2, incarnation: 0 }, label: 'Opt' }],
+      committed_top: [],
+      committed_bottom: [],
+    };
+    deliver(controller, {
+      type: 'observation',
+      data: frame.projection,
+      actions: [],
+      recovery,
+      decision_group: null,
+    });
+    expect(gameStore.liveDecisionGroup).toBeNull();
+
+    deliver(controller, {
+      type: 'observation',
+      data: frame.projection,
+      actions: [],
+      recovery,
+      decision_group: scryGroup,
+    });
+    expect(gameStore.liveDecisionGroup).toEqual(scryGroup);
+
+    // Mismatched frame hash is ignored.
+    deliver(controller, {
+      type: 'observation',
+      data: frame.projection,
+      actions: [],
+      recovery,
+      decision_group: { ...scryGroup, frame_hash: 'wrong-hash' },
+    });
+    expect(gameStore.liveDecisionGroup).toBeNull();
+  });
+
+  it('reconciles a pending decision_group_command by accepted_commands and frame_hash', () => {
+    const controller = new GameSocketController();
+    const sent: string[] = [];
+    const recovery = structuredClone(boltProtocolFixture.recovery);
+    const frame = recovery.frame;
+    const request = {
+      type: 'decision_group_command' as const,
+      command: {
+        command_id: 'grp-pending-1',
+        match_id: frame.match_id,
+        expected_revision: frame.revision,
+        prompt_id: frame.prompt!.id,
+        frame_hash: frame.frame_hash,
+        plan: { kind: 'declare_attackers' as const, attackers: [] },
+      },
+    };
+    const state = controller as unknown as {
+      pendingCommand: typeof request | null;
+      socket: { send(raw: string): void; close(): void };
+      reconcileCommand(env: RecoveryEnvelope): void;
+    };
+    state.socket = { send: raw => sent.push(raw), close: () => {} };
+    gameStore.prepareForNewGame();
+
+    // Resends exact envelope when address and frame_hash match.
+    state.pendingCommand = request;
+    gameStore.beginCommand();
+    recovery.accepted_commands = [];
+    state.reconcileCommand(recovery);
+    expect(sent.map(raw => JSON.parse(raw))).toEqual([request]);
+    expect(gameStore.commandPending).toBe(true);
+
+    // Refuses to resend when frame_hash drifted.
+    sent.length = 0;
+    state.pendingCommand = request;
+    gameStore.beginCommand();
+    state.reconcileCommand({ ...recovery, frame: { ...frame, frame_hash: 'drifted-hash' } });
+    expect(sent).toEqual([]);
+    expect(state.pendingCommand).toBeNull();
+    expect(gameStore.commandPending).toBe(false);
+
+    // Retires cleanly when already recorded in accepted_commands.
+    sent.length = 0;
+    state.pendingCommand = request;
+    gameStore.beginCommand();
+    state.reconcileCommand({
+      ...recovery,
+      accepted_commands: [{
+        command_id: request.command.command_id,
+        actor: 0,
+        accepted_at: frame.revision,
+        resulting_revision: frame.revision + 2,
+        resulting_frame_hash: 'after',
+      }],
+    });
+    expect(sent).toEqual([]);
+    expect(state.pendingCommand).toBeNull();
+    expect(gameStore.commandPending).toBe(false);
+  });
+});
+
+describe('open hands', () => {
+  const hand = [{ id: 7, name: 'Lightning Bolt' }] as unknown as import('./types').CardState[];
+
+  it('keeps the hand a recovery came with, though the recovery resets the match', () => {
+    gameStore.prepareForNewGame();
+    const recovery = { ...structuredClone(boltProtocolFixture.recovery), frame: frameAt(43) };
+    const controller = new GameSocketController();
+    deliver(controller, { type: 'observation', data: recovery.frame.projection, actions: [], recovery, open_hand: { revision: 43, hand } });
+    expect(gameStore.openHand).toEqual({ revision: 43, hand });
+  });
+
+  it('follows the switch, and a reply without the hand turns it off', () => {
+    gameStore.prepareForNewGame();
+    const controller = new GameSocketController();
+    deliver(controller, { type: 'open_hands_state', open_hand: { revision: 42, hand } });
+    expect(gameStore.openHand?.revision).toBe(42);
+    deliver(controller, { type: 'open_hands_state', open_hand: null });
+    expect(gameStore.openHand).toBeNull();
+  });
+
+  it('is off at the start of the next game', () => {
+    gameStore.openHand = { revision: 42, hand };
+    gameStore.prepareForNewGame();
+    expect(gameStore.openHand).toBeNull();
+  });
+});
+
+describe('live analysis across Swap sides', () => {
+  const point = { event: 3, at: 1, score: 70, semantic: 'signed_outcome' };
+
+  function recoveryAt(revision: number, swapped: boolean): RecoveryEnvelope {
+    const frame = frameAt(revision);
+    if (swapped) {
+      const { agent, opponent } = frame.projection;
+      frame.projection = { ...frame.projection, agent: opponent, opponent: agent };
+    }
+    return { ...structuredClone(boltProtocolFixture.recovery), frame };
+  }
+
+  function showing(): void {
+    gameStore.prepareForNewGame();
+    gameStore.applyFrame(frameAt(42));
+    gameStore.liveAnalysis = { ...gameStore.liveAnalysis, shown: true, points: [point] };
+  }
+
+  it('starts the line again from the new seat', () => {
+    showing();
+    const recovery = recoveryAt(43, true);
+    deliver(new GameSocketController(), { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
+    expect(gameStore.observation?.agent.player_index).toBe(1);
+    expect(gameStore.liveAnalysis.points).toEqual([]);
+  });
+
+  it('keeps the line while the seat stays', () => {
+    showing();
+    const recovery = recoveryAt(43, false);
+    deliver(new GameSocketController(), { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
+    expect(gameStore.liveAnalysis.points).toEqual([point]);
+  });
+
+  it('drops old-seat automation notes on swap and keeps swap dividers monotonic across a swap back', () => {
+    showing();
+    gameStore.addHistoryNote('you', 1, 905, 'Pass turn');
+    const controller = new GameSocketController();
+    const firstSwap = recoveryAt(43, true);
+    firstSwap.presentation_cursor = 900;
+    firstSwap.presentation_tail = LIGHTNING_BOLT_PRESENTATION.events.slice(0, 4); // seq 900..903
+    deliver(controller, { type: 'observation', data: firstSwap.frame.projection, actions: [], recovery: firstSwap });
+    expect(gameStore.historyNotes.map(note => [note.actor, note.text, note.afterSeq])).toEqual([
+      ['note', 'Swapped sides', 903],
+    ]);
+
+    const swapBack = recoveryAt(44, false);
+    swapBack.presentation_cursor = 900;
+    swapBack.presentation_tail = LIGHTNING_BOLT_PRESENTATION.events.slice(0, 2); // seq 900..901
+    deliver(controller, { type: 'observation', data: swapBack.frame.projection, actions: [], recovery: swapBack });
+    expect(gameStore.historyNotes.map(note => [note.actor, note.text, note.afterSeq])).toEqual([
+      ['note', 'Swapped sides', 901],
+      ['note', 'Swapped sides', 901],
+    ]);
+  });
 });

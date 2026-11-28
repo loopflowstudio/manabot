@@ -19,6 +19,7 @@ pub mod flow;
 pub mod format;
 pub mod infra;
 pub mod match_fixtures;
+mod permanent_details;
 pub mod possible_worlds;
 pub mod python;
 pub mod search_state;

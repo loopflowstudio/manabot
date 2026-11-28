@@ -104,6 +104,12 @@ impl<T: ExactIds> ExactIds for Option<T> {
     }
 }
 
+impl<T: ExactIds + ?Sized> ExactIds for &T {
+    fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        (**self).serialize_exact(serializer)
+    }
+}
+
 impl<T: ExactIds> ExactIds for [T] {
     fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.collect_seq(self.iter().map(Exact))
@@ -604,6 +610,8 @@ pub enum ObjectKind {
     /// A copy of a spell (CR 707.10), made on the stack. It ceases to exist
     /// in any zone but the stack (CR 704.5e).
     SpellCopy,
+    /// An emblem in the command zone (CR 114).
+    Emblem,
 }
 
 /// A raw face: a catalog row id and its printed characteristics, before any
@@ -694,15 +702,11 @@ impl Object {
         owner: PlayerId,
         definition_id: CardDefId,
         definition: Arc<PrintedCharacteristics>,
-        is_token: bool,
+        kind: ObjectKind,
     ) -> Self {
         Self {
             id,
-            kind: if is_token {
-                ObjectKind::Token
-            } else {
-                ObjectKind::Card
-            },
+            kind,
             definition_id,
             registry_key: PublicId(definition_id.0),
             owner,
@@ -718,19 +722,32 @@ impl Object {
     pub fn token_with_copiable_values(
         id: PublicId,
         owner: PlayerId,
-        (definition_id, definition): Face,
-        faces: Option<TransformingFaces>,
-        copy: Option<crate::effect::CopyEffect>,
+        values: &CopiableValues,
         exceptions: &[crate::effect::CopyException],
     ) -> Self {
-        let mut token = Self::from_definition(id, owner, definition_id, definition, true);
-        token.form = Some(Box::new(ObjectForm {
-            faces,
-            copy,
-            ..Default::default()
-        }));
+        let mut token = Self::from_copiable_values(id, owner, values);
+        token.kind = ObjectKind::Token;
         token.apply_copy_exceptions(exceptions);
         token
+    }
+
+    /// Reconstruct the shown face and copy exceptions of a retained appearance.
+    pub fn from_copiable_values(id: PublicId, owner: PlayerId, values: &CopiableValues) -> Self {
+        let mut object = Self::from_definition(
+            id,
+            owner,
+            values.definition_id.unwrap_or(CardDefId::ANONYMOUS),
+            Arc::clone(&values.definition.printed),
+            values.definition.kind,
+        );
+        if values.faces.is_some() || values.copy.is_some() {
+            object.form = Some(Box::new(ObjectForm {
+                faces: values.faces.clone(),
+                copy: values.copy.clone(),
+                ..Default::default()
+            }));
+        }
+        object
     }
 
     /// Enter as a copy of `source` (CR 707.5): take its shown copiable values
@@ -789,6 +806,39 @@ impl Object {
     /// Face down (CR 708.2).
     pub fn is_face_down(&self) -> bool {
         self.form.as_deref().is_some_and(|form| form.face_down)
+    }
+
+    /// Whether two objects are identical in everything except their unique `id`
+    /// and neither is face down. Exhaustive destructuring ensures any new field
+    /// on `Object` is explicitly classified.
+    pub fn same_object_identity(&self, other: &Self) -> bool {
+        let Self {
+            id: _, // unique per object
+            kind,
+            definition_id,
+            registry_key,
+            owner,
+            definition,
+            form,
+        } = self;
+        let Self {
+            id: _,
+            kind: other_kind,
+            definition_id: other_def,
+            registry_key: other_reg,
+            owner: other_owner,
+            definition: other_printed,
+            form: other_form,
+        } = other;
+        if self.is_face_down() || other.is_face_down() {
+            return false;
+        }
+        kind == other_kind
+            && definition_id == other_def
+            && registry_key == other_reg
+            && owner == other_owner
+            && form == other_form
+            && (Arc::ptr_eq(definition, other_printed) || definition == other_printed)
     }
 
     /// The base that a zone move restores, including fixture edits. It never
@@ -998,10 +1048,6 @@ impl Object {
 
     pub fn shares_definition_with(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.definition, &other.definition)
-    }
-
-    pub fn has_subtype(&self, subtype: &str) -> bool {
-        self.subtypes.iter().any(|s| s == subtype)
     }
 
     pub fn is_legendary(&self) -> bool {

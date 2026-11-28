@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run --python 3.13 --locked --only-group play-runtime
+#!/usr/bin/env -S uv run --python 3.13 --locked --no-default-groups --group play-runtime
 """Install and launch the human-vs-bot table through the supported wrapper.
 
     ./scripts/play [--demo learn] [--port 8000] [--frontend-port 5173] [--no-frontend]
@@ -53,7 +53,8 @@ UV_RUNTIME = [
     "--python",
     PYTHON_VERSION,
     "--locked",
-    "--only-group",
+    "--no-default-groups",
+    "--group",
     "play-runtime",
 ]
 # The checkpoint opponent's modules load lazily, only when a game selects it.

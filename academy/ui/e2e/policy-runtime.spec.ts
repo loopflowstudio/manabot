@@ -20,7 +20,6 @@ for (const theme of ['light', 'dark'] as const) {
     }));
     await page.goto(addresses.refused);
     await expect(page.getByText(/restore the pinned artifact and runner/).first()).toBeVisible();
-    await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
     await expect(page.getByTestId('checkpoint-select')).toHaveValue(`policy:${addresses.ids['refused-config']}`);
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByText(/restore the pinned artifact and runner/).first()).toBeVisible();
@@ -64,7 +63,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(selections.nth(0)).toHaveValue(`policy:${addresses.ids.independent}`);
     await expect(selections.nth(1)).toHaveValue(`policy:${addresses.ids.baseline}`);
     await expect(selections.nth(0)).toContainText('Independent');
-    await page.getByText('Browse decks and cards', {exact:true}).click();
+    await page.getByText('Browse bundled decks and cards', {exact:true}).click();
     await page.getByText('Other decks', { exact: true }).click();
     await page.getByTestId('browse-interactive').click();
     await page.getByTestId('assign-deck-villain').click();

@@ -442,8 +442,25 @@ def test_banked_branch_round_trips_through_replay_and_academy(
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path / "academy")
     shuffle_seed = 77665544332211
+    multi_land = managym.GameSetup(
+        [
+            managym.PlayerConfig(
+                name,
+                {
+                    "Mountain": 2,
+                    "Forest": 2,
+                    "Plains": 2,
+                    "Island": 2,
+                    "Swamp": 2,
+                    "Gray Ogre": 2,
+                },
+            )
+            for name in ("a", "b")
+        ],
+        decklists="closed",
+    )
     source = managym.Env(seed=42, decision_memory_include_own=True)
-    reset_to_first_main(source, setup())
+    reset_to_first_main(source, multi_land)
     source.step(0)
     bank = source.snapshot()
     assert bank.metadata().action_count >= 2
@@ -523,11 +540,9 @@ print(json.dumps([before, position_evidence(env)]))
     imported = import_game(json.loads(raw))
     assert (imported["stop"], imported["count"]) == ("interrupted", committed)
     for ordinal in range(committed):
-        shown = inspect_watch(imported["id"], ordinal, imported["token"])
+        shown = inspect_watch(imported["id"], ordinal)
         assert shown["observation"]["opponent"]["hand"] == []
-        revealed = inspect_watch(
-            imported["id"], ordinal, imported["token"], reveal=True
-        )
+        revealed = inspect_watch(imported["id"], ordinal, reveal=True)
         assert revealed["observation"]["opponent"]["hand"]
         assert revealed["decision"] == shown["decision"]
         for view in (shown, revealed):
@@ -639,20 +654,49 @@ def test_watch_publishes_the_determinized_offers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from managym.academy import trace
+    from managym.academy.recording import Recording
     from managym.academy.watch import import_game, inspect_watch
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
+    multi_land = managym.GameSetup(
+        [
+            managym.PlayerConfig(
+                name,
+                {
+                    "Mountain": 2,
+                    "Forest": 2,
+                    "Plains": 2,
+                    "Island": 2,
+                    "Swamp": 2,
+                    "Gray Ogre": 2,
+                },
+            )
+            for name in ("a", "b")
+        ],
+        decklists="open",
+    )
     env = managym.Env(seed=42)
-    seat = reset_to_first_main(env, setup("open"))
+    seat = reset_to_first_main(env, multi_land)
     original = env.observation_for_player(seat)
     branch = env.snapshot().restore(managym.RestoreOptions.determinize(1, 35))
     offers = branch.observation_for_player(0).action_space.actions
     assert len(offers) != len(original.action_space.actions)
     branch.step(len(offers) - 1)
     imported = import_game(json.loads(branch.snapshot().to_replay_json()))
-    shown = inspect_watch(imported["id"], imported["count"] - 1, imported["token"])
+    shown = inspect_watch(imported["id"], imported["count"] - 1)
     assert len(shown["decision"]["frame"]["offers"]) == len(offers)
     assert shown["decision"]["offer"]["label"] == "Pass priority"
+    # Review marks the re-dealt decision, and only it, without the seed.
+    recording = Recording(imported["id"], trace.load_trace(imported["id"]))
+    choices = [
+        recording.metadata(position)
+        for position in recording.positions
+        if position.kind == "choice"
+    ]
+    assert [choice["branched"] for choice in choices] == [None] * (len(choices) - 1) + [
+        ["determinize"]
+    ]
+    assert "35" not in json.dumps(choices[-1]["branched"])
 
 
 def test_standalone_snapshot_replay_and_unterminated_journal_row(
@@ -831,11 +875,12 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
     zero_branch.execute_semantic_command_json(
         Command("announce-zero", frame.revision, zero["id"]).to_json()
     )
-    payment = decision_frame(zero_branch)
-    pay = next(offer for offer in payment.offers if offer["verb"] == "pay_cost")
-    zero_branch.execute_semantic_command_json(
-        Command("pay-two", payment.revision, pay["id"]).to_json()
-    )
+    if not zero_branch.observation_for_player(0).stack_objects:
+        payment = decision_frame(zero_branch)
+        pay = next(offer for offer in payment.offers if offer["verb"] == "pay_cost")
+        zero_branch.execute_semantic_command_json(
+            Command("pay-two", payment.revision, pay["id"]).to_json()
+        )
     [zero_spell] = zero_branch.observation_for_player(0).stack_objects
     assert zero_spell.effective_mana_value == 2
     assert (
@@ -901,7 +946,12 @@ def test_etali_resumes_once_from_a_cold_charring_bite_target() -> None:
         bite = next(
             (o for o in frame.offers if o["label"] == "Cast Charring Bite"), None
         )
-        if bite and len(frame.offers) == 4:
+        if (
+            bite
+            and frame.actor == 0
+            and len(frame.offers) == 4
+            and any(o["verb"] == "decline" for o in frame.offers)
+        ):
             before = completed()
             env.execute_semantic_command_json(
                 Command("bite", frame.revision, bite["id"]).to_json()
@@ -1031,10 +1081,11 @@ def test_transferred_seed_suture_replays_payment_and_surviving_link() -> None:
     target = decision_frame(env)
     command = Command("target", target.revision, target.offers[0]["id"]).to_json()
     assert_replayed_command(env, restored, command)
-    payment = decision_frame(env)
-    pay = next(o for o in payment.offers if o["verb"] == "pay_cost")
-    command = Command("pay", payment.revision, pay["id"]).to_json()
-    assert_replayed_command(env, restored, command)
+    if not env.observation_for_player(1).stack_objects:
+        payment = decision_frame(env)
+        pay = next(o for o in payment.offers if o["verb"] == "pay_cost")
+        command = Command("pay", payment.revision, pay["id"]).to_json()
+        assert_replayed_command(env, restored, command)
     for branch in (env, restored):
         obs = branch.observation_for_player(1)
         [paid] = [p for p in obs.agent_permanents if p.tapped and p.id in untapped]

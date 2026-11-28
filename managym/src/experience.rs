@@ -212,6 +212,10 @@ pub enum ChoiceStep {
 pub struct InteractionOffer {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subjects: Vec<OfferSubjectView>,
+    /// Live in-zone copies folded into this offer, omitted when empty.
+    /// Outside-game sideboard copies stay engine-internal for lowering.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<SubjectRef>,
     pub id: OfferId,
     pub actor: PlayerId,
     pub verb: OfferVerb,
@@ -299,6 +303,8 @@ pub struct LegacyCardTypesView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyCardView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub printed_loyalty: Option<i32>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub text_box: String,
     pub id: u32,
@@ -415,9 +421,66 @@ pub struct ContinuousEffectView {
     pub timestamp: u32,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AbilityGrantView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_timestamp: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub counter: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeywordAbilityView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_timestamp: Option<u32>,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub granted: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PermanentRestriction {
+    CantBeBlocked,
+    CantBlock,
+    CantAttackOrBlock,
+    DoesntUntap,
+    MustAttack,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RestrictionView {
+    pub kind: PermanentRestriction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+pub struct PermanentDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyword_grants: Option<std::collections::BTreeMap<String, AbilityGrantView>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keyword_abilities: Vec<KeywordAbilityView>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacks_despite_defender: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restrictions: Vec<RestrictionView>,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub printed_loyalty: Option<i32>,
+    #[serde(flatten)]
+    pub details: PermanentDetails,
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub transforms: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -432,11 +495,15 @@ pub struct LegacyPermanentView {
     /// "Once each turn" abilities this object has used this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: u32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub loyalty_activated_this_turn: bool,
     /// Firebending granted until end of turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_firebending: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub temp_subtypes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chosen: Option<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub text_box: String,
     pub id: u32,
@@ -472,12 +539,24 @@ pub struct LegacyPermanentView {
     pub attacking: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub first_strike_participant: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub blocked: bool,
+    /// Public player ID of the controller this permanent entered under (CR 110.2), omitted while unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_controller_id: Option<u32>,
     /// The attacking permanent this one blocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<u32>,
+    /// The permanent this creature is attacking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attacked_permanent: Option<u32>,
     /// It has lost all abilities.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hexproof_from: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub protection_from: Vec<String>,
     /// Face down (CR 708.2).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub face_down: bool,
@@ -539,6 +618,11 @@ pub struct PooledManaView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restriction: Option<String>,
     pub combat: bool,
+    #[serde(
+        default = "crate::agent::observation::default_mana_expiry",
+        skip_serializing_if = "crate::agent::observation::is_step_mana_expiry"
+    )]
+    pub expiry: String,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -560,6 +644,8 @@ pub struct LegacyPlayerView {
     pub hand_only_until: Option<u32>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_maximum_hand_size: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hexproof: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub combat_mana: Option<i32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -613,6 +699,8 @@ pub struct LegacyPlayerView {
     pub hand: Vec<LegacyCardView>,
     pub graveyard: Vec<LegacyCardView>,
     pub exile: Vec<LegacyCardView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub command: Vec<LegacyCardView>,
     pub stack: Vec<LegacyCardView>,
     pub battlefield: Vec<LegacyPermanentView>,
 }
@@ -662,6 +750,10 @@ pub struct StackEntryView {
     pub ability_index: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chosen_mode: Option<u32>,
+    /// What the spell or ability targets, in the order chosen. A target the
+    /// viewer cannot name as a public object, stack entry or player is left out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub targets: Vec<SubjectRef>,
     /// The announced value of X, when one was announced above zero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x: Option<u32>,
@@ -912,6 +1004,12 @@ pub enum PresentationKind {
         object: ObjectRenderId,
         player: PlayerId,
     },
+    /// The card is named only for a viewer who saw it enter the hand.
+    Drew {
+        player: PlayerId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        object: Option<ObjectRenderId>,
+    },
     /// Cards a player discarded (CR 701.9a), named as the graveyard objects
     /// they became.
     Discarded {
@@ -925,6 +1023,123 @@ pub enum PresentationKind {
         cards: Vec<String>,
         player: PlayerId,
     },
+    /// An activated ability put on the stack (CR 602.2) from `source`.
+    Activated {
+        source: ObjectRenderId,
+        controller: PlayerId,
+        stack: StackRenderId,
+    },
+    /// A triggered ability put on the stack (CR 603.3) from `source`.
+    Triggered {
+        source: ObjectRenderId,
+        controller: PlayerId,
+        stack: StackRenderId,
+    },
+    /// An activated or triggered ability began to resolve (CR 608.2).
+    AbilityResolved {
+        source: ObjectRenderId,
+        stack: StackRenderId,
+    },
+    /// A spell or ability left the stack without resolving (CR 701.6a, 608.2b).
+    Countered {
+        stack: StackRenderId,
+    },
+    /// A player passed priority (CR 117.3d).
+    Passed {
+        player: PlayerId,
+    },
+    /// Counters put on a permanent (CR 122.6); `total` is its count after.
+    Counters {
+        object: ObjectRenderId,
+        counter: String,
+        count: i32,
+        total: i32,
+    },
+    /// A player searched their library (CR 701.23).
+    Searched {
+        player: PlayerId,
+    },
+    /// A player scried (CR 701.22) or surveilled (CR 701.25).
+    Looked {
+        player: PlayerId,
+        action: LookAction,
+    },
+    /// Permanents a player sacrificed (CR 701.17a).
+    Sacrificed {
+        objects: Vec<ObjectRenderId>,
+        player: PlayerId,
+    },
+    /// A player lost the game (CR 104.3).
+    Lost {
+        player: PlayerId,
+    },
+    /// A player's life total changed other than by damage (CR 119.3,
+    /// 119.4): `amount` is signed (positive gained, negative lost) and
+    /// `total` the life total after.
+    Life {
+        player: PlayerId,
+        amount: i32,
+        total: i32,
+    },
+    /// Permanents or cards exiled face up (CR 406.1).
+    Exiled {
+        objects: Vec<ObjectRenderId>,
+    },
+    /// Tokens created on the battlefield (CR 111.1).
+    TokenCreated {
+        objects: Vec<ObjectRenderId>,
+        player: PlayerId,
+    },
+    /// One or more permanents' power and/or toughness were modified by a
+    /// resolving spell or ability (CR 613.4c).
+    PtChanged {
+        objects: Vec<ObjectRenderId>,
+        power: i32,
+        toughness: i32,
+    },
+    /// Control of a battlefield permanent changed (CR 108.4, 613.1b);
+    /// `returned` is true when an expiring control effect handed it back.
+    ControlChanged {
+        object: ObjectRenderId,
+        controller: PlayerId,
+        returned: bool,
+    },
+}
+
+/// Which library-looking keyword action `PresentationKind::Looked` tells.
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LookAction {
+    Scry,
+    Surveil,
+}
+
+/// The state-based, turn-based, or resolution rule (CR 704.5, 504, 514,
+/// 608.2b) that did what an event tells, when no player chose it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PresentationRule {
+    DrawStep,
+    Cleanup,
+    LethalDamage,
+    ZeroToughness,
+    ZeroLoyalty,
+    ZeroDefense,
+    LegendRule,
+    UnattachedAura,
+    ZeroLife,
+    EmptyLibrary,
+    Poison,
+    IllegalTargets,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PresentationLabels {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub objects: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub stacks: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -941,6 +1156,14 @@ pub struct PresentationEvent {
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub sound: RequiredNullable<String>,
     pub kind: PresentationKind,
+    /// The earlier event on this viewer's track this one follows from;
+    /// absent for a move or a turn heading. `group` is its root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cause: Option<PresentationSeq>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule: Option<PresentationRule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub labels: Option<PresentationLabels>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

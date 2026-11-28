@@ -306,7 +306,7 @@ def fact_vocabulary(
         raise ValueError("fact kind carries no detail")
     spaces = RecordNamespace
     catalog.require_names(
-        np.where(kinds == FACT_SET_NAME, spaces.NAME, spaces.TOKEN)[named],
+        np.where(np.isin(kinds, NAME_ID_KINDS), spaces.NAME, spaces.TOKEN)[named],
         ident[named],
     )
     catalog.require_names(

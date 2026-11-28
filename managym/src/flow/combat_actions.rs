@@ -1,6 +1,7 @@
 // combat_actions.rs
 // Combat declaration and resolution methods on Game.
 
+use crate::flow::combat::AttackTarget;
 use crate::state::card::Keyword;
 use crate::{
     agent::action::AgentError,
@@ -8,6 +9,7 @@ use crate::{
         decision::{Decision, EffectFrame, FrameCompletion, SuspendedResolution},
         game::{CombatDamagePass, Game},
         proposed_event::{EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent},
+        statics::Characteristics,
     },
     state::{
         card::{BlockRestriction, Restriction, StaticAbility},
@@ -17,38 +19,112 @@ use crate::{
 };
 
 impl Game {
-    fn combat_condition_met(&self, id: PermanentId) -> bool {
-        let Some(permanent) = self.state.permanents[id].as_ref() else {
-            return false;
-        };
-        if self.has_restriction(id, Restriction::CantAttackOrBlock) {
-            return false;
-        }
-        self.characteristics(id)
-            .static_abilities
-            .iter()
-            .all(|ability| match ability {
-                StaticAbility::CantAttackOrBlockUnlessYouControlAnother(predicate) => self
-                    .battlefield_permanents(permanent.controller)
-                    .into_iter()
+    pub(crate) fn cant_attack_or_block(
+        &self,
+        id: PermanentId,
+        view: &Characteristics,
+        controller: PlayerId,
+    ) -> bool {
+        self.has_restriction(id, Restriction::CantAttackOrBlock)
+            || view.static_abilities.iter().any(|ability| match ability {
+                StaticAbility::CantAttackOrBlockUnlessYouControlAnother(predicate) => !self
+                    .iter_battlefield_permanents(controller)
                     .any(|other| other != id && self.permanent_matches_predicate(other, predicate)),
-                _ => true,
+                _ => false,
             })
+    }
+
+    pub(crate) fn attacks_despite_defender(
+        &self,
+        view: &Characteristics,
+        controller: PlayerId,
+    ) -> bool {
+        view.keywords.has(Keyword::Defender) && view.static_abilities.iter().any(|ability| matches!(ability,
+            StaticAbility::AttacksDespiteDefender(condition) if self.check_static_condition(condition, controller)))
+    }
+
+    pub(crate) fn cant_block_unconditionally(
+        &self,
+        id: PermanentId,
+        view: &Characteristics,
+    ) -> bool {
+        self.cant_block(id) || view.static_abilities.iter().any(|ability| matches!(ability,
+            StaticAbility::BlockRestriction(BlockRestriction::CantBlock(predicate)) if *predicate == CardPredicate::default()))
+    }
+
+    pub(crate) fn cant_be_blocked_unconditionally(
+        &self,
+        id: PermanentId,
+        view: &Characteristics,
+        controller: PlayerId,
+    ) -> bool {
+        self.cant_be_blocked(id) || view.static_abilities.iter().any(|ability| matches!(ability,
+            StaticAbility::CantBeBlockedIf(condition) if self.check_static_condition(condition, controller)))
+    }
+
+    /// Defenders a creature can attack in a two-player game (CR 508.1b, 508.4).
+    pub(crate) fn attack_targets(
+        &self,
+        player: PlayerId,
+    ) -> impl Iterator<Item = AttackTarget> + '_ {
+        let opponent = self.next_player(player);
+        std::iter::once(AttackTarget::Player(opponent)).chain(
+            self.layer_views(self.iter_battlefield_permanents(opponent))
+                .filter_map(|(id, view)| {
+                    view.types.is_planeswalker().then(|| {
+                        AttackTarget::Permanent(self.permanent_object(id).expect("battlefield"))
+                    })
+                }),
+        )
+    }
+
+    pub(crate) fn declaration_targets(
+        &self,
+        player: PlayerId,
+    ) -> impl Iterator<Item = AttackTarget> + '_ {
+        self.attack_targets(player).filter(|&target| {
+            let AttackTarget::Permanent(object) = target else {
+                return true;
+            };
+            let id = self.state.permanent_of(object).expect("offered defender");
+            !self.has_restriction(id, Restriction::CantBeAttackedByMoreThanOne)
+                || !self.state.combat.iter().any(|c| {
+                    c.attack_targets[c.already_attacking..]
+                        .iter()
+                        .any(|(_, d)| *d == Some(target))
+                })
+        })
+    }
+
+    pub(crate) fn attack_target_subject(
+        &self,
+        defender: AttackTarget,
+    ) -> Option<crate::state::target::Target> {
+        use crate::state::target::Target;
+        match defender {
+            AttackTarget::Player(player) => Some(Target::Player(player)),
+            AttackTarget::Permanent(object) => {
+                self.state.permanent_of(object).map(Target::Permanent)
+            }
+        }
     }
 
     pub(crate) fn declare_attacker(
         &mut self,
         permanent_id: PermanentId,
-        attack: bool,
+        attack: Option<AttackTarget>,
     ) -> Result<(), AgentError> {
-        if !attack {
+        let Some(target) = attack else {
             if self.permanent_can_attack(permanent_id) && self.must_attack(permanent_id) {
                 return Err(AgentError(
                     "creature attacks each combat if able".to_string(),
                 ));
             }
+            if let Some(combat) = self.state.combat.as_mut() {
+                combat.declined_attackers.push(permanent_id);
+            }
             return Ok(());
-        }
+        };
 
         let has_vigilance = {
             if self.state.permanents[permanent_id].is_none() {
@@ -70,7 +146,7 @@ impl Game {
             self.tap_permanent(permanent_id, false);
         }
         if let Some(combat) = self.state.combat.as_mut() {
-            combat.attackers.push(permanent_id);
+            combat.attack_targets.push((permanent_id, Some(target)));
             combat.attacker_to_blockers.entry(permanent_id).or_default();
             if let Some(exposure) = self.exposure_mut() {
                 exposure.combat.attackers.push(permanent_id);
@@ -96,10 +172,15 @@ impl Game {
                     .entry(attacker_id)
                     .or_default()
                     .push(blocker);
+                if !combat.blocked.contains(&attacker_id) {
+                    combat.blocked.push(attacker_id);
+                }
                 if let Some(exposure) = self.exposure_mut() {
                     exposure.combat.blocks.push((blocker, attacker_id));
                 }
             }
+        } else if let Some(combat) = self.state.combat.as_mut() {
+            combat.declined_blockers.push(blocker);
         }
         Ok(())
     }
@@ -112,10 +193,8 @@ impl Game {
             CombatDamagePass::NormalWithFirstStrike
         } else {
             let first_strikers: Vec<_> = combat
-                .attackers
-                .iter()
-                .chain(combat.attacker_to_blockers.values().flatten())
-                .copied()
+                .attackers()
+                .chain(combat.attacker_to_blockers.values().flatten().copied())
                 .filter(|id| {
                     self.still_in_combat(*id)
                         && self.creature_deals_damage_in_pass(*id, CombatDamagePass::FirstStrike)
@@ -160,6 +239,38 @@ impl Game {
         self.state.permanents[permanent_id].is_some() && !self.is_phased_out(permanent_id)
     }
 
+    fn is_valid_permanent_defender(&self, object: crate::state::game_object::ObjectId) -> bool {
+        self.state.permanent_of(object).is_some_and(|id| {
+            self.still_in_combat(id)
+                && self.characteristics(id).types.is_planeswalker()
+                && self.state.permanents[id].as_ref().unwrap().controller
+                    == self.non_active_player()
+        })
+    }
+
+    pub(crate) fn remove_invalid_defenders(&mut self) {
+        let Some(combat) = &self.state.combat else {
+            return;
+        };
+        let mut removed = Vec::new();
+        for &(_, target) in &combat.attack_targets {
+            if let Some(AttackTarget::Permanent(object)) = target {
+                if !self.is_valid_permanent_defender(object) {
+                    removed.push(object);
+                }
+            }
+        }
+        if removed.is_empty() {
+            return;
+        }
+        // Only borrow tracked state mutably when a defender actually leaves so
+        // no-op checks preserve layer caches.
+        let combat = self.state.combat.as_mut().expect("checked above");
+        for object in removed {
+            combat.remove_defender(object);
+        }
+    }
+
     /// One combat damage step (CR 510.2): every assignment is dealt, then
     /// the creatures that dealt damage to a player are announced together
     /// for "deals combat damage to a player" triggers.
@@ -170,10 +281,18 @@ impl Game {
     ) -> Result<EventBatch, Box<Decision>> {
         let combat = self.state.combat.as_ref().expect("combat damage step");
         let mut choices = assignments.iter().copied();
-        let defender = self.non_active_player();
         let mut events = Vec::new();
 
-        for attacker_id in combat.attackers.iter().copied() {
+        for attacker_id in combat.attackers() {
+            let defender = match combat.defender(attacker_id) {
+                Some(AttackTarget::Player(player)) => Some(ProposedDamageTarget::Player(player)),
+                Some(AttackTarget::Permanent(object))
+                    if self.is_valid_permanent_defender(object) =>
+                {
+                    Some(ProposedDamageTarget::Object(object))
+                }
+                _ => None,
+            };
             if !self.still_in_combat(attacker_id) {
                 continue;
             }
@@ -191,7 +310,6 @@ impl Game {
                 .get(&attacker_id)
                 .map(Vec::as_slice)
                 .unwrap_or_default();
-            let was_blocked = !declared_blockers.is_empty();
             let blockers: Vec<PermanentId> = declared_blockers
                 .iter()
                 .copied()
@@ -218,7 +336,7 @@ impl Game {
                 continue;
             }
             let mut remaining_damage = attacker_power;
-            let mut can_trample = attacker_has_trample;
+            let mut can_trample = attacker_has_trample && defender.is_some();
             for (index, &blocker_id) in blockers.iter().enumerate() {
                 if remaining_damage <= 0 {
                     break;
@@ -271,10 +389,12 @@ impl Game {
                 remaining_damage -= assigned;
             }
 
-            if !was_blocked || (can_trample && remaining_damage > 0) {
+            if let Some(target) = defender.filter(|_| {
+                !combat.is_blocked(attacker_id) || (can_trample && remaining_damage > 0)
+            }) {
                 events.push(ProposedEvent::Damage {
                     source: attacker_ref,
-                    target: ProposedDamageTarget::Player(defender),
+                    target,
                     amount: remaining_damage,
                     combat: true,
                 });
@@ -322,12 +442,11 @@ impl Game {
         };
         let view = self.characteristics(permanent_id);
         let defender_applies = view.keywords.has(Keyword::Defender)
-            && !view.static_abilities.iter().any(|ability| matches!(ability,
-                StaticAbility::AttacksDespiteDefender(condition) if self.check_static_condition(condition, permanent.controller)));
+            && !self.attacks_despite_defender(&view, permanent.controller);
         view.is_creature()
             && self.permanent_can_tap(permanent_id)
             && !defender_applies
-            && self.combat_condition_met(permanent_id)
+            && !self.cant_attack_or_block(permanent_id, &view, permanent.controller)
             && self
                 .state
                 .turn
@@ -353,15 +472,8 @@ impl Game {
         let view = self.characteristics(id);
         !permanent.tapped
             && view.is_creature()
-            && self.combat_condition_met(id)
-            && !self.cant_block(id)
-            && !view.static_abilities.iter().any(|ability| {
-                matches!(
-                    ability,
-                    StaticAbility::BlockRestriction(BlockRestriction::CantBlock(predicate))
-                        if *predicate == CardPredicate::default()
-                )
-            })
+            && !self.cant_attack_or_block(id, &view, permanent.controller)
+            && !self.cant_block_unconditionally(id, &view)
     }
 
     pub(crate) fn blocker_can_block_attacker(
@@ -391,18 +503,17 @@ impl Game {
             .static_abilities
             .iter()
             .any(|ability| match ability {
-                StaticAbility::CantBeBlockedIf(condition) => {
-                    self.check_static_condition(condition, attacker.controller)
-                }
                 StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(predicate)) => {
                     self.permanent_matches_predicate(blocker_id, predicate)
                 }
-                _ => false,
+                _ => ability.protects_from(|quality| {
+                    quality.matches(&blocker_view.colors, &blocker_view.types)
+                }),
             })
         {
             return false;
         }
-        if self.cant_be_blocked(attacker_id) {
+        if self.cant_be_blocked_unconditionally(attacker_id, &attacker_view, attacker.controller) {
             return false;
         }
         // Blockers are declared one at a time; a second blocker is refused.
@@ -417,8 +528,8 @@ impl Game {
             return false;
         }
 
-        let attacker_keywords = self.characteristics(attacker_id).keywords;
-        let blocker_keywords = self.characteristics(blocker_id).keywords;
+        let attacker_keywords = attacker_view.keywords;
+        let blocker_keywords = blocker_view.keywords;
         if attacker_keywords.has(Keyword::Flying)
             && !(blocker_keywords.has(Keyword::Flying) || blocker_keywords.has(Keyword::Reach))
         {
@@ -426,39 +537,5 @@ impl Game {
         }
 
         true
-    }
-
-    pub(crate) fn cleanup_illegal_menace_blocks(&mut self) {
-        let attackers = match self.state.combat.as_ref() {
-            Some(combat) => combat.attackers.clone(),
-            None => return,
-        };
-        for attacker_id in attackers {
-            if self.state.permanents[attacker_id].is_none() {
-                continue;
-            }
-            if !self
-                .characteristics(attacker_id)
-                .keywords
-                .has(Keyword::Menace)
-            {
-                continue;
-            }
-            let Some(combat) = self.state.combat.as_mut() else {
-                return;
-            };
-            let Some(blockers) = combat.attacker_to_blockers.get_mut(&attacker_id) else {
-                continue;
-            };
-            if blockers.len() == 1 {
-                blockers.clear();
-                if let Some(exposure) = self.exposure_mut() {
-                    exposure
-                        .combat
-                        .blocks
-                        .retain(|&(_, target)| target != attacker_id);
-                }
-            }
-        }
     }
 }

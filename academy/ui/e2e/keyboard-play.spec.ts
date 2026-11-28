@@ -8,6 +8,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { CONTROLS } from '../src/lib/board/region';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 /**
  * The region holding focus, by its accessible name, and the focused control:
  * its name and its position among the region's visible controls (the set the
@@ -73,11 +76,10 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const sent: string[] = [];
   page.on('websocket', socket => socket.on('framesent', frame => {
-    if (String(frame.payload).includes('"type":"command"')) sent.push(String(frame.payload));
+    const payload = String(frame.payload);
+    if (payload.includes('"type":"command"') || payload.includes('"type":"decision_group_command"')) sent.push(payload);
   }));
-  // Beats are tested on their own; here every Space is a move.
-  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'off'));
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').focus();
   await page.getByTestId('opponent-select').selectOption('random');
@@ -88,6 +90,10 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-testid=game][data-live=true]')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('action-option').first()).toContainText('Keep hand');
+  // A mulligan is answers alone: its list has no fold, and no button repeats a row.
+  await expect(page.getByTestId('legal-choice-count')).toBeVisible();
+  await expect(page.getByTestId('choices-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('prompt-action')).toHaveCount(0);
   await page.keyboard.press('1');
   await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', 'PRIORITY');
 
@@ -104,7 +110,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   }
   const regions = stops.slice(0, stops.indexOf(stops[0], 1) > 0 ? stops.indexOf(stops[0], 1) : stops.length);
   expect(new Set(regions).size).toBe(regions.length);
-  for (const name of [/battlefield$/, /^Your battlefield$/, /^Your hand/, /^Decision$/, /^All legal choices$/, /^Moves$/]) {
+  for (const name of [/battlefield$/, /^Your battlefield$/, /^Your hand/, /^Decision$/, /^All legal choices$/, /^History$/]) {
     expect(regions.some(region => name.test(region)), `${name} in ${regions.join(' → ')}`).toBe(true);
   }
 
@@ -124,6 +130,8 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   for (let decision = 0; decision < 40 && (byEnter < 3 || bySpace < 6); decision += 1) {
     await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
     if (await page.getByTestId('result-card').isVisible()) break;
+    // Beats are tested on their own; here every key is a move, so wait out any active walk.
+    await expect(page.locator('[data-testid=walk-bar][data-walking=true]')).toHaveCount(0, { timeout: 30_000 });
     const before = await revision(page);
     const commands = sent.length;
     const space = await page.getByTestId('action-panel').getAttribute('data-action-space-kind');
@@ -132,7 +140,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
     if (target && await reach(page, target[0], target[1])) {
       await page.keyboard.press('Enter');
       byEnter += 1;
-      // An attack is drafted on the board; Space confirms it, one Command per creature asked.
+      // An attack is drafted on the board; Space confirms it in one atomic decision_group_command.
       if (space === 'DECLARE_ATTACKER') {
         await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
         await page.keyboard.press('Space');
@@ -144,8 +152,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
       bySpace += 1;
     }
     await expect.poll(() => revision(page), { timeout: 30_000 }).toBeGreaterThan(before);
-    if (space === 'DECLARE_ATTACKER') expect(sent.length).toBeGreaterThan(commands);
-    else expect(sent.length).toBe(commands + 1);
+    expect(sent.length).toBe(commands + 1);
     // Focus stays on the board after the move.
     await expect.poll(async () => page.evaluate(() => document.activeElement !== document.body)).toBe(true);
   }
@@ -155,7 +162,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
 
 test('? opens the sheet of the board\'s keys, and Esc returns to the hint', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
@@ -164,7 +171,7 @@ test('? opens the sheet of the board\'s keys, and Esc returns to the hint', asyn
   await page.keyboard.press('?');
   const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
   await expect(sheet).toBeVisible();
-  for (const key of ['Space', '1–9', 'Enter', 'Tab', 'F6', 'Esc']) await expect(sheet.locator('kbd', { hasText: key }).first()).toBeVisible();
+  for (const key of ['Space', '1–9', 'Enter', 'Tab', 'Shift', 'Esc']) await expect(sheet.locator('kbd', { hasText: key }).first()).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await expect(page.getByTestId('keys-hint')).toBeFocused();

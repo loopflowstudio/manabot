@@ -21,7 +21,7 @@ DEFAULT_RECEIPT_PATH = (
 )
 AUTHORITY_RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-battlefield-history.json"
+    / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-planeswalkers.json"
 )
 FIXED_TIME = "2026-11-24T00:00:00+00:00"
 MATCH_SEED = 0
@@ -241,6 +241,9 @@ def play_fixed_authored_match(
             "villain_type": "random",
             "seed": seed,
             "auto_pass": False,
+            # Pin the stops echoed in the retained authority receipt's frame_hash
+            # (auto_pass=False keeps stops inert during the match).
+            "stops": {"my": ["main1", "main2"], "opponent": ["end_step"]},
         }
     )
     frame = message["frame"]
@@ -364,6 +367,10 @@ def _ledger(
                 },
                 "semantic_events": semantic_events,
                 "presentation_events": transition.presentation_events,
+                "presentation_events_by_viewer": {
+                    "0": transition.viewer_presentation_events[0],
+                    "1": transition.viewer_presentation_events[1],
+                },
                 "encountered_definition_ids": transition.encountered_definition_ids,
                 "encountered_programs": encountered_programs,
             }

@@ -140,7 +140,7 @@ fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creature
     use crate::support::{
         game::{five_color_unfunded_setup, force_new_card_in_hand},
         inspect::{card_of, offered_cards, top_activation},
-        play::{activate, cast_card, choose, select_card},
+        play::{activate, cast_card, select_card},
     };
     use managym::{
         agent::action::Action,
@@ -182,13 +182,6 @@ fn cultivators_caravan_mana_names_the_caravan_and_crew_names_the_tapped_creature
 
         // {G} for Llanowar Elves can only come from the Caravan's green mode.
         cast_card(&mut s, spell);
-        if !auto {
-            choose(
-                &mut s,
-                |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == caravan),
-            );
-            choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
-        }
         let Some(StackObject::Spell(cast)) = s.game().state.stack_objects.last() else {
             panic!("Llanowar Elves is on the stack, auto={auto}")
         };

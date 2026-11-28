@@ -110,6 +110,7 @@ fn spell_events_are_observable_for_creature_spells() {
                 to,
                 controller,
                 face_down,
+                ..
             } if s.game().state.card_id(*object_id) == card => {
                 Some((*object_id, *departed, *from, *to, *controller, *face_down))
             }

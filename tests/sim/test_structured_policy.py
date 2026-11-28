@@ -145,14 +145,46 @@ def _decode_verb(
     return batch, submission.to_json()
 
 
+_DISTINCT_CREATURES = (
+    "Gray Ogre",
+    "Wind Drake",
+    "Boggart Brute",
+    "Llanowar Elves",
+    "Water Tribe Rallier",
+    "Invasion Reinforcements",
+    "Compassionate Healer",
+    "Earth Kingdom Jailer",
+    "White Lotus Reinforcements",
+    "Earth King's Lieutenant",
+    "Kyoshi Warriors",
+    "Badgermole Cub",
+    "South Pole Voyager",
+    "Tiger-Seal",
+    "Otter-Penguin",
+    "Fire Nation Cadets",
+    "First-Time Flyer",
+)
+
+
 def test_bound_bridge_applies_35_target_cast_through_both_abis() -> None:
-    structured, _ = _engine()
+    target_deck: dict[str, int] = {"Mountain": 6}
+    for name in _DISTINCT_CREATURES:
+        target_deck[name] = 2
+    structured = managym.Env(seed=189, skip_trivial=False)
+    observation, _ = structured.reset(
+        [
+            managym.PlayerConfig("structured", {"Lightning Bolt": 4, "Mountain": 36}),
+            managym.PlayerConfig("legacy", target_deck),
+        ]
+    )
+    keep_opening_hands(structured, observation)
     structured.scenario_clear_hand(0)
     structured.scenario_clear_hand(1)
     structured.scenario_force_card_in_hand(0, "Lightning Bolt")
     structured.scenario_force_battlefield(0, "Mountain")
-    for _ in range(33):
-        structured.scenario_force_battlefield(1, "Gray Ogre")
+    for idx in range(33):
+        name = _DISTINCT_CREATURES[idx // 2]
+        structured.scenario_force_battlefield(1, name, ready=(idx % 2 == 0))
     structured.scenario_refresh()
 
     legacy = structured.clone_env()
@@ -169,6 +201,21 @@ def test_bound_bridge_applies_35_target_cast_through_both_abis() -> None:
     assert legacy_result[5] == 2
     assert structured.state_digest() == legacy.state_digest()
     assert structured_result[0].toJSON() == legacy_result[0].toJSON()
+
+
+def test_bound_bridge_deduplicates_identical_target_and_attacker_candidates() -> None:
+    structured, _ = _engine()
+    structured.scenario_clear_hand(0)
+    structured.scenario_clear_hand(1)
+    structured.scenario_force_card_in_hand(0, "Lightning Bolt")
+    structured.scenario_force_battlefield(0, "Mountain")
+    for _ in range(5):
+        structured.scenario_force_battlefield(1, "Gray Ogre")
+    structured.scenario_refresh()
+
+    offers = structured.structured_offers()
+    batch = flatten_projection(json.loads(offers.projection_json()))
+    assert batch.max_candidate_count == 3
 
 
 def test_bound_bridge_rejects_fabricated_and_stale_ids_without_mutation() -> None:
@@ -188,17 +235,21 @@ def test_bound_bridge_rejects_fabricated_and_stale_ids_without_mutation() -> Non
 
 
 def test_bound_bridge_applies_one_of_64_attacker_declarations() -> None:
+    attacker_names = _DISTINCT_CREATURES[:6]
+    attacker_deck: dict[str, int] = {"Mountain": 28}
+    for name in attacker_names:
+        attacker_deck[name] = 2
     structured = managym.Env(seed=190, skip_trivial=False)
     observation, _ = structured.reset(
         [
-            managym.PlayerConfig("structured", {"Gray Ogre": 36, "Mountain": 4}),
+            managym.PlayerConfig("structured", attacker_deck),
             managym.PlayerConfig("legacy", {"Gray Ogre": 36, "Mountain": 4}),
         ]
     )
     keep_opening_hands(structured, observation)
     structured.scenario_clear_hand(0)
-    for _ in range(6):
-        structured.scenario_force_battlefield(0, "Gray Ogre", ready=True)
+    for name in attacker_names:
+        structured.scenario_force_battlefield(0, name, ready=True)
     observation = structured.scenario_refresh()
 
     for _ in range(100):

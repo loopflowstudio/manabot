@@ -48,7 +48,7 @@ pub(super) struct BoundaryIntervention {
     pub op: Intervention,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub(super) enum Intervention {
     Reseed { seed: u64 },
@@ -56,6 +56,7 @@ pub(super) enum Intervention {
     Determinize { viewer: usize, seed: u64 },
     SetDecisionMemory { enabled: bool },
     ForceAction { action: usize },
+    GameStateEdits { edits: Arc<[GameStateEdit]> },
 }
 
 impl GameProvenance {

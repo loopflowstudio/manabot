@@ -53,6 +53,9 @@ pub enum CounterKind {
     /// exiled cards that have one.
     Stash,
     Revival,
+    Wish,
+    Divinity,
+    Fellowship,
 }
 
 impl CounterKind {
@@ -76,6 +79,9 @@ impl CounterKind {
             CounterKind::Poison => "poison",
             CounterKind::Plan => "plan",
             CounterKind::Revival => "revival",
+            CounterKind::Wish => "wish",
+            CounterKind::Divinity => "divinity",
+            CounterKind::Fellowship => "fellowship",
             CounterKind::Incubation => "incubation",
             CounterKind::Page => "page",
             CounterKind::Soul => "soul",
@@ -93,7 +99,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 23] = [
+    pub const ALL: [CounterKind; 26] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -117,6 +123,9 @@ impl CounterKind {
         CounterKind::Bait,
         CounterKind::Stash,
         CounterKind::Revival,
+        CounterKind::Wish,
+        CounterKind::Divinity,
+        CounterKind::Fellowship,
     ];
 }
 
@@ -208,8 +217,18 @@ fn serialize_spell_entry<S: serde::Serializer>(
     map.end()
 }
 
+/// The answer belonging to this battlefield incarnation (CR 614.12a).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum EntryChoice {
+    Color(crate::mana::Color),
+    CreatureType(String),
+    CardName(String),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Permanent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chosen: Option<std::sync::Arc<EntryChoice>>,
     /// Number of transformations of this incarnation (CR 701.27f).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
@@ -222,6 +241,10 @@ pub struct Permanent {
     #[serde(rename = "card")]
     pub object: ObjectId,
     pub controller: PlayerId,
+    /// In a two-seat game this bit and the current controller retain the
+    /// entry controller (CR 110.2) across any number of layer-2 changes.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub control_differs_from_entry: bool,
     pub tapped: bool,
     pub summoning_sick: bool,
     pub damage: i32,
@@ -257,12 +280,14 @@ pub struct Permanent {
     /// Once-per-object abilities (indices into the effective activated
     /// abilities) this object has activated; a new object starts fresh
     /// (CR 400.7).
-    #[serde(rename = "exhausted", skip_serializing_if = "Vec::is_empty")]
-    pub spent_abilities: Vec<usize>,
+    #[serde(rename = "exhausted", skip_serializing_if = "<[usize]>::is_empty")]
+    pub spent_abilities: Box<[usize]>,
     /// "Once each turn" abilities this object has activated this turn,
     /// cleared at cleanup.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub activated_this_turn: Vec<usize>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub loyalty_activated_this_turn: bool,
 }
 
 impl Permanent {
@@ -270,37 +295,66 @@ impl Permanent {
         turn != 0 && self.entry_turn == turn
     }
 
-    pub fn can_pay_counters(&self, ability: &ActivatedAbilityDefinition) -> bool {
-        ability
+    /// Loyalty left for a loyalty symbol after other source-counter costs.
+    pub fn available_loyalty(&self, ability: &ActivatedAbilityDefinition) -> i32 {
+        let reserved = ability
             .remove_counters
-            .is_none_or(|(kind, count)| self.counter_count(kind) >= i32::from(count))
+            .filter(|(kind, _)| *kind == CounterKind::Loyalty)
+            .map_or(0, |(_, count)| i32::from(count));
+        self.counter_count(CounterKind::Loyalty) - reserved
+    }
+
+    pub fn can_pay_counters(&self, ability: &ActivatedAbilityDefinition) -> bool {
+        if let Some((kind, count)) = ability.remove_counters {
+            if self.counter_count(kind) < i32::from(count) {
+                return false;
+            }
+        }
+        ability.loyalty.is_none_or(|loyalty| {
+            let removed = -loyalty.counter_change(i32::from(ability.x_min)).min(0);
+            self.available_loyalty(ability) >= removed
+        })
     }
 
     /// Whether this object has used up the ability: a once-per-object
     /// ability ever (CR 702.177a, 602.5b), "once each turn" already this
     /// turn (CR 602.5b).
     pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {
-        (ability.once_per_object() && self.spent_abilities.contains(&index))
+        (self.loyalty_activated_this_turn && ability.loyalty.is_some())
+            || (ability.once_per_object() && self.spent_abilities.contains(&index))
             || (ability.once_each_turn && self.activated_this_turn.contains(&index))
     }
 
     /// Record an activation against the ability's use limits.
     pub fn record_activation(&mut self, index: usize, ability: &ActivatedAbilityDefinition) {
+        self.loyalty_activated_this_turn |= ability.loyalty.is_some();
         if ability.once_per_object() {
-            self.spent_abilities.push(index);
+            let mut spent = std::mem::take(&mut self.spent_abilities).into_vec();
+            spent.push(index);
+            self.spent_abilities = spent.into_boxed_slice();
         }
         if ability.once_each_turn {
             self.activated_this_turn.push(index);
         }
     }
 
+    pub fn entry_controller(&self) -> PlayerId {
+        if self.control_differs_from_entry {
+            PlayerId(1 - self.controller.0)
+        } else {
+            self.controller
+        }
+    }
+
     pub fn new(id: PublicId, object_id: ObjectId, object: &Object) -> Self {
         Self {
+            chosen: None,
             transforms: 0,
             manifested: false,
             id,
             object: object_id,
             controller: object.owner,
+            control_differs_from_entry: false,
             tapped: false,
             // CR 302.6: control since the turn began, whatever the
             // permanent is now; `permanent_can_tap` reads whether it is a
@@ -316,8 +370,9 @@ impl Permanent {
             attacking: false,
             spell_entry: Default::default(),
             attached_to: None,
-            spent_abilities: Vec::new(),
+            spent_abilities: Default::default(),
             activated_this_turn: Vec::new(),
+            loyalty_activated_this_turn: false,
         }
     }
 
@@ -370,5 +425,6 @@ impl Permanent {
     pub fn clear_turn_history(&mut self) {
         self.dealt_damage_this_turn = false;
         self.activated_this_turn.clear();
+        self.loyalty_activated_this_turn = false;
     }
 }

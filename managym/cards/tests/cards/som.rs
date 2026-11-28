@@ -47,11 +47,11 @@ fn steel_hellkite_spends_its_own_activation_and_destroys_exact_mana_value() {
     let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
     let own = s
         .game_mut()
-        .create_token("token.food", PlayerId(0), false)
+        .create_token("token.food", PlayerId(0))
         .unwrap();
     let target = s
         .game_mut()
-        .create_token("token.food", PlayerId(1), false)
+        .create_token("token.food", PlayerId(1))
         .unwrap();
     s.set_player_mana_pool(0, "2");
     let saved = s.game().clone();
@@ -102,7 +102,7 @@ fn steel_hellkite_spends_its_own_activation_and_destroys_exact_mana_value() {
     choose_mode(&mut s, 0);
     let fresh = s
         .game_mut()
-        .create_token("token.food", PlayerId(1), false)
+        .create_token("token.food", PlayerId(1))
         .unwrap();
     settle(&mut s);
     assert!(s.game().state.permanents[fresh].is_some());
@@ -273,4 +273,73 @@ fn a_countered_x_spell_keeps_its_stack_mana_value_for_its_cast_trigger() {
     settle(&mut s);
     s.assert_life(0, 15);
     s.assert_life(1, 20);
+}
+
+#[test]
+fn genesis_wave_simultaneous_entry_and_graveyard_rest() {
+    use crate::support::game::{five_color_setup, move_to_hand, pin_top};
+    use crate::support::inspect::{offered_cards, zone_of};
+    use crate::support::play::{
+        cast_card, choose, choose_mode, pass_until, select_card, settle, spend_colorless,
+    };
+    use managym::agent::action::{Action, ActionSpaceKind};
+    use managym::state::zone::ZoneType;
+
+    // Top 5 for X = 5:
+    // - Impact Tremors (MV 2 enchantment; triggers whenever a creature you control enters!)
+    // - Gray Ogre (MV 3 creature; enters simultaneously so Impact Tremors sees it!)
+    // - Hill Giant (MV 4 creature; eligible, left unselected -> graveyard)
+    // - Lightning Bolt (Instant -> ineligible -> graveyard)
+    // - Steel Hellkite (MV 6 permanent -> MV > X -> ineligible -> graveyard)
+    let mut s = five_color_setup(&[
+        "Genesis Wave",
+        "Impact Tremors",
+        "Gray Ogre",
+        "Hill Giant",
+        "Lightning Bolt",
+        "Steel Hellkite",
+    ]);
+    s.set_player_mana_pool(0, "5GGG");
+    let top = pin_top(
+        &mut s,
+        &[
+            "Impact Tremors",
+            "Gray Ogre",
+            "Hill Giant",
+            "Lightning Bolt",
+            "Steel Hellkite",
+        ],
+    );
+    let wave = move_to_hand(&mut s, "Genesis Wave");
+    cast_card(&mut s, wave);
+    // Choose X = 5.
+    choose_mode(&mut s, 5);
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+
+    let names: Vec<_> = offered_cards(&s)
+        .into_iter()
+        .map(|id| s.game().state[id].name.clone())
+        .collect();
+    assert_eq!(names.len(), 3);
+    assert!(names.iter().any(|n| n == "Impact Tremors"));
+    assert!(names.iter().any(|n| n == "Gray Ogre"));
+    assert!(names.iter().any(|n| n == "Hill Giant"));
+    assert!(!names.iter().any(|n| n == "Lightning Bolt"));
+    assert!(!names.iter().any(|n| n == "Steel Hellkite"));
+
+    // Select Impact Tremors and Gray Ogre; decline further picks (leaving Hill Giant unselected).
+    select_card(&mut s, top[0]);
+    select_card(&mut s, top[1]);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+
+    assert_eq!(s.battlefield_permanents_named(0, "Impact Tremors").len(), 1);
+    assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 1);
+    // Simultaneous entry: Impact Tremors saw Gray Ogre enter (1 damage -> opponent at 19).
+    s.assert_life(1, 19);
+    // Unselected eligible + ineligible cards all went to graveyard.
+    assert_eq!(zone_of(&s, top[2]), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, top[3]), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, top[4]), Some(ZoneType::Graveyard));
 }

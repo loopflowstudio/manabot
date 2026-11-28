@@ -85,3 +85,31 @@ fn massacre_wurm_drains_the_controller_of_each_opposing_creature_that_dies() {
     s.assert_life(1, 14);
     s.assert_life(0, 20);
 }
+
+#[test]
+fn slagstorm_mode_damages_each_creature_or_each_player_in_one_batch() {
+    use crate::support::inspect::permanent;
+    use managym::state::player::ManaPayment;
+
+    // Mode 0: 3 damage to every creature.
+    let mut s = five_color_setup(&["Slagstorm", "Gray Ogre", "Craw Wurm"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    cast(&mut s, "Slagstorm");
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert!(s.game().state.permanents[ours].is_none());
+    assert_eq!(permanent(&s, theirs).damage, 3);
+    assert_eq!((s.life(0), s.life(1)), (20, 20));
+
+    // Mode 1: 3 damage to each player in one batch.
+    let mut s = five_color_setup(&["Slagstorm", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Slagstorm");
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    assert_eq!(permanent(&s, ogre).damage, 0);
+    assert_eq!((s.life(0), s.life(1)), (17, 17));
+}

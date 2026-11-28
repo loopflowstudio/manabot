@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 // Regression test for the frozen-DOM bug: the play page was compiled in Svelte
 // legacy mode, so every read of the runes-based gameStore was untracked and the
 // UI never re-rendered after the initial paint. These assertions are all about
@@ -32,7 +35,7 @@ function collectConsoleErrors(page: Page): string[] {
 test('play page reacts to the full game loop', async ({ page }) => {
   const consoleErrors = collectConsoleErrors(page);
 
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
 
   // 1. Connection badge must leave its initial "connecting"/"disconnected"
   // state. With the frozen DOM it stayed "disconnected" forever.
@@ -47,9 +50,45 @@ test('play page reacts to the full game loop', async ({ page }) => {
   await expect(page.getByTestId('game')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('region', { name: 'Your battlefield' })).toBeVisible();
   await expect(page.getByTestId('turn-number')).toContainText('Turn');
+  // Both hands are ribbons on the board's edges: your hand stays out along the bottom, and the opponent's is one back per hidden card along the top.
+  await expect(page.getByTestId('hand-ribbon')).toHaveCount(2);
+  const topRibbon = page.locator('[data-testid="hand-ribbon"][data-ribbon="top"]');
+  await expect(page.locator('[data-testid="hand-ribbon"][data-ribbon="bottom"]')).toHaveAttribute('data-out', 'true');
+  await expect(topRibbon.getByTestId('card-back')).toHaveCount(7);
 
-  // That matchup is the next tab's "Play again": one click from home reaches
-  // its first decision, and the rest of the test plays that game.
+  // Open hands turns the backs into the opponent's cards, out over the top
+  // edge; a reload keeps them, and the bar's chip turns them back.
+  await page.getByTestId('game-menu').click();
+  await page.getByTestId('open-hands').click();
+  await expect(topRibbon).toHaveAttribute('data-out', 'true');
+  await expect(topRibbon.locator('.ribbon-card.face')).toHaveCount(7);
+  await expect(topRibbon.getByTestId('card-back')).toHaveCount(0);
+  // Tuck hand on the opponent's plate uncovers the lands under it: the cards
+  // draw back to their name bars inside the top reserve.
+  await page.getByTestId('hand-toggle').click();
+  await expect(topRibbon).toHaveAttribute('data-out', 'false');
+  await expect.poll(async () => {
+    const rows = (await page.locator('.half.opponent .rows').boundingBox())!;
+    const card = (await topRibbon.locator('.ribbon-card.face').last().boundingBox())!;
+    return Math.round(card.y + card.height - rows.y);
+  }).toBeLessThanOrEqual(1);
+  await page.getByTestId('hand-toggle').click();
+  await expect(topRibbon).toHaveAttribute('data-out', 'true');
+  await page.reload();
+  await expect(topRibbon.locator('.ribbon-card.face')).toHaveCount(7, { timeout: 15_000 });
+  await page.getByTestId('chip-open-hands').click();
+  await expect(topRibbon.getByTestId('card-back')).toHaveCount(7);
+  await expect(page.getByTestId('chip-open-hands')).toHaveCount(0);
+  await page.getByTestId('game-menu').click();
+  await page.getByTestId('open-hands').click();
+  await expect(page.getByTestId('chip-open-hands')).toBeVisible();
+
+  // New game leaves that game unfinished in History and frees Play; its matchup
+  // is the next tab's "Play again": one click from setup reaches its first
+  // decision, and the rest of the test plays that game.
+  await page.getByTestId('game-menu').click();
+  await page.getByTestId('new-game').click();
+  await expect(page.getByTestId('home')).toBeVisible();
   const game = await page.context().newPage();
   const gameErrors = collectConsoleErrors(game);
   await game.goto('/');
@@ -58,6 +97,9 @@ test('play page reacts to the full game loop', async ({ page }) => {
   await game.getByTestId('play-again').click();
   await expect(game.getByTestId('game')).toBeVisible({ timeout: 15_000 });
   await expect(game.getByTestId('deck-names')).toContainText('vs Random');
+  // Play again starts blind, though the game it repeats was left with open hands on.
+  await expect(game.locator('[data-testid="hand-ribbon"][data-ribbon="top"]').getByTestId('card-back')).toHaveCount(7);
+  await expect(game.getByTestId('chip-open-hands')).toHaveCount(0);
   await page.close();
 
   const board = game.getByTestId('game');

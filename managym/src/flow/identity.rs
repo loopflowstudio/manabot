@@ -147,6 +147,11 @@ impl Game {
     pub(crate) fn unnamed_label(&self, object: ObjectId) -> &'static str {
         if self.observed_face_down(object) {
             FACE_DOWN_NAME
+        } else if let Some(label) = self
+            .observed_source_definition(object)
+            .and_then(|id| default_content_pack().definition(id)?.label)
+        {
+            label
         } else {
             NAMELESS_PERMANENT_NAME
         }
@@ -171,7 +176,7 @@ impl Game {
                 let definition = self.observed_source_definition(object)?;
                 default_content_pack()
                     .definition(definition)
-                    .map(|row| row.printed.name.clone())
+                    .map(|row| row.registry_name().to_owned())
             })
             .unwrap_or_else(|| self.unnamed_label(object).to_owned())
     }
@@ -260,7 +265,7 @@ impl Game {
     }
 
     pub fn action_space(&self) -> Option<&ActionSpace> {
-        self.current_action_space.as_ref()
+        self.published_decision.as_ref().map(|d| &d.space)
     }
 
     pub fn active_player(&self) -> PlayerId {
@@ -272,8 +277,7 @@ impl Game {
     }
 
     pub fn agent_player(&self) -> PlayerId {
-        self.current_action_space
-            .as_ref()
+        self.action_space()
             .and_then(|space| space.player)
             .unwrap_or(PlayerId(0))
     }

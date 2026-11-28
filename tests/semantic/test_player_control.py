@@ -160,6 +160,9 @@ def test_delegated_search_keeps_viewer_and_resource_ownership(
         assert projection.opponent.player_index == victim
         if context.stage == "private_search":
             break
+        if context.stage == "payment":
+            _choose(env, managym.ActionEnum.PAY_COST)
+            continue
         own_response |= "chooses for" not in context.instruction
         _choose(env, managym.ActionEnum.PRIORITY_PASS_PRIORITY)
     else:
@@ -264,7 +267,6 @@ def test_controlled_flameshape_cards_keep_their_terms_for_the_controller() -> No
         raise AssertionError("the controlled turn never offered Flameshape")
     assert env.current_agent_index() == 0
     step(managym.ActionEnum.PRIORITY_CAST_SPELL, "Cast Flameshape")
-    step(managym.ActionEnum.PAY_COST)
     for _ in range(10):
         projection = LegacyHeroObservation.model_validate(decision_surface_view(env, 0))
         exiled = [c for c in projection.agent.inspected or [] if c.face_down]

@@ -25,23 +25,23 @@ describe('paymentPlan', () => {
     const plan = paymentPlan(preview('exact', [[mountain, [0, 0, 0, 1, 0, 0]], [island, [0, 1, 0, 0, 0, 0]]]), pay)!;
     expect([...plan.sources]).toEqual([[mountain, { order: 1, output: '{R}' }], [island, { order: 2, output: '{U}' }]]);
     expect(plan.names).toEqual(['Mountain', 'Island']);
-    expect(payLabel('{1}{U}', plan, null)).toBe('Pay {1}{U} · Mountain, Island');
+    expect(payLabel('{1}{U}', plan, null)).toBe('Auto pay {1}{U} · Mountain, Island');
   });
 
   it('counts repeated sources on the button', () => {
     const plan = paymentPlan(preview('exact', [[island, [0, 1, 0, 0, 0, 0]], [mountain, [0, 0, 0, 1, 0, 0]], [117, [0, 0, 0, 1, 0, 0]], [99, [0, 0, 0, 1, 0, 0]]]), pay)!;
-    expect(payLabel('{3}{U}', plan, null)).toBe('Pay {3}{U} · Island, Mountain ×3');
+    expect(payLabel('{3}{U}', plan, null)).toBe('Auto pay {3}{U} · Island, Mountain ×3');
   });
 
   it('marks nothing unless the preview is exact', () => {
     expect(paymentPlan(preview('needs_choice', [[mountain, [0, 0, 0, 1, 0, 0]]]), pay)).toBeNull();
     expect(paymentPlan(null, pay)).toBeNull();
-    expect(payLabel('{1}{U}', null, null)).toBe('Pay {1}{U}');
+    expect(payLabel('{1}{U}', null, null)).toBe('Auto pay {1}{U}');
   });
 
   it('says floating mana pays when no source is tapped', () => {
     const answer = preview('exact', [], [0, 2, 0, 0, 0, 0]);
-    expect(payLabel('{1}{U}', paymentPlan(answer, pay), answer)).toBe('Pay {1}{U} · floating mana');
+    expect(payLabel('{1}{U}', paymentPlan(answer, pay), answer)).toBe('Auto pay {1}{U} · floating mana');
   });
 
   it('writes pools as symbols in WUBRGC order', () => {

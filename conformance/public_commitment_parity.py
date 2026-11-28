@@ -368,7 +368,7 @@ def _run_live(
         )
         original_factory = server._new_game_session
         server._new_game_session = lambda: session
-        server.SESSION_REGISTRY.clear()
+        server.LIVE_GAMES.clear()
         try:
             with TestClient(server.app) as client:
                 with client.websocket_connect("/ws/play") as websocket:
@@ -401,7 +401,7 @@ def _run_live(
                         payload = {"frame": payload["update"]["frame"]}
         finally:
             server._new_game_session = original_factory
-            server.SESSION_REGISTRY.clear()
+            server.LIVE_GAMES.clear()
 
         stream: list[dict[str, Any]] = []
         for ordinal, (row, recorded) in enumerate(
@@ -515,7 +515,7 @@ def _source_manifest() -> dict[str, Any]:
         "managym/decision.py",
         "managym/possible_worlds.py",
         "managym/src/agent/env.rs",
-        "managym/src/agent/structured_offer.rs",
+        "managym/src/agent/decision_surface.rs",
         "managym/src/decision.rs",
         "managym/src/possible_worlds.rs",
         "managym/src/python/bindings.rs",
@@ -523,7 +523,6 @@ def _source_manifest() -> dict[str, Any]:
         "scripts/verify-public-commitment-parity",
         "tests/belief/test_player.py",
         "tests/belief/test_tracker.py",
-        "tests/academy/test_public_commitment_parity.py",
         "tests/sim/test_conditional_search.py",
     )
     files = [

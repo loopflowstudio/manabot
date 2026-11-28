@@ -193,7 +193,7 @@ fn silencer_and_fynn_count_artifact_creature_hits() {
         let silencer = s.force_permanent_on_battlefield(0, "Virulent Silencer");
         let attacker = if token {
             s.game_mut()
-                .create_token("token.ballistic_boulder", PlayerId(0), false)
+                .create_token("token.ballistic_boulder", PlayerId(0))
                 .unwrap()
         } else {
             silencer
@@ -246,7 +246,7 @@ fn silencer_requires_combat_damage_to_the_player() {
         agent::action::ActionSpaceKind,
         state::{
             ability::Actor,
-            card::{DamageTransform, ReplacementEffect},
+            card::{DamageRecipient, DamageSource, DamageTransform, ReplacementEffect},
         },
     };
 
@@ -259,9 +259,9 @@ fn silencer_requires_combat_damage_to_the_player() {
             let object = card_of(&s, defender);
             s.game_mut().state[object].replacement_effects =
                 vec![ReplacementEffect::ModifyDamage {
-                    creature_source: false,
-                    source_by: Actor::AnyPlayer,
-                    recipient_by: Actor::You,
+                    source: DamageSource::any(Actor::AnyPlayer),
+                    recipient: DamageRecipient::any(Actor::You),
+                    combat: None,
                     transform: DamageTransform::Prevent(2),
                 }];
         }

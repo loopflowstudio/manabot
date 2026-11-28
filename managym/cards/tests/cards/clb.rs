@@ -3,7 +3,7 @@
 use crate::support::{
     game::{five_color_unfunded_setup, force_new_card_in_hand},
     inspect::{card_of, offer_labels, permanent_named, tapped, top_spell},
-    play::{cast_card, choose, pay_rest, settle, tap_for_mana},
+    play::{cast_card, choose, settle, tap_for_mana},
 };
 use managym::{
     agent::action::Action,
@@ -34,12 +34,6 @@ fn carnelian_orb_gives_haste_only_to_a_dragon_its_mana_paid_for() {
         }
         let dragon = force_new_card_in_hand(&mut s, 0, "Shivan Dragon");
         cast_card(&mut s, dragon);
-        if !auto {
-            tap_for_mana(&mut s, orb);
-            if s.game().state.stack_objects.is_empty() {
-                pay_rest(&mut s);
-            }
-        }
         let spell = top_spell(&s);
         assert_eq!(spell.spent.total(), 6, "auto={auto}");
         let from_orb: Vec<_> = spell
@@ -90,12 +84,6 @@ fn carnelian_orb_gives_haste_only_to_a_dragon_its_mana_paid_for() {
         }
         let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
         cast_card(&mut s, ogre);
-        if !auto {
-            tap_for_mana(&mut s, orb);
-            if s.game().state.stack_objects.is_empty() {
-                pay_rest(&mut s);
-            }
-        }
         let spell = top_spell(&s);
         assert!(tapped(&s, orb));
         assert_eq!(spell.spent.total(), 3);

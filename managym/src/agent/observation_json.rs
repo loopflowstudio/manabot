@@ -161,6 +161,9 @@ impl Serialize for ActionJson<'_> {
         if value.announces_x {
             map.serialize_entry("announces_x", &true)?;
         }
+        if let Some(amount) = value.division_amount {
+            map.serialize_entry("division_amount", &amount)?;
+        }
         if value.pays_directly {
             map.serialize_entry("pays_directly", &true)?;
         }
@@ -223,6 +226,12 @@ impl Serialize for CardJson<'_> {
         map.serialize_entry("name", &value.name)?;
         map.serialize_entry("owner_id", &value.owner_id)?;
         map.serialize_entry("power", &value.power)?;
+        if let Some(loyalty) = value.printed_loyalty {
+            map.serialize_entry("printed_loyalty", &loyalty)?;
+        }
+        if value.put_into_graveyard_this_turn {
+            map.serialize_entry("put_into_graveyard_this_turn", &true)?;
+        }
         map.serialize_entry("registry_key", &value.registry_key)?;
         map.serialize_entry("text_box", &value.text_box)?;
         map.serialize_entry("toughness", &value.toughness)?;
@@ -820,6 +829,8 @@ pub(super) struct WireCardData {
     pub text_box: String,
     pub power: i32,
     pub toughness: i32,
+    #[serde(default)]
+    pub printed_loyalty: Option<i32>,
     /// Set for an object that is no card: a token or a copy of a spell.
     pub is_token: bool,
     pub is_legendary: bool,
@@ -853,9 +864,13 @@ pub(super) struct WireCardData {
     #[serde(default)]
     pub x: Option<i32>,
     /// A graveyard card that was put there from the battlefield this turn
-    /// (`TurnState::graveyard_from_battlefield`); policy input v10.
+    /// (`TurnState::graveyard_arrivals`); policy input v10.
     #[serde(default)]
     pub from_battlefield_this_turn: bool,
+    /// A graveyard card that was put there from any zone this turn
+    /// (`TurnState::graveyard_arrivals`); policy input v11.
+    #[serde(default)]
+    pub put_into_graveyard_this_turn: bool,
     /// Counters on the card off the battlefield, by kind name.
     #[serde(default)]
     pub counters: BTreeMap<String, i32>,
@@ -864,6 +879,8 @@ pub(super) struct WireCardData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WirePermanentData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chosen: Option<crate::state::permanent::EntryChoice>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub front_mana_value: Option<u8>,
     /// Effective colors when a layer changes the copiable colors.
@@ -899,6 +916,10 @@ pub(super) struct WirePermanentData {
     pub attacking: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub first_strike_participant: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_controller_id: Option<i32>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub blocked: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -908,6 +929,8 @@ pub(super) struct WirePermanentData {
     /// each turn" options taken.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: i32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub loyalty_activated_this_turn: bool,
     /// Firebending granted until end of turn, summed over grants.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_firebending: i32,
@@ -935,10 +958,16 @@ pub(super) struct WirePermanentData {
     /// The attacking creature this one blocks (CR 509.1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attacked_permanent: Option<i32>,
     /// It has lost all abilities (CR 613.1f), until end of turn or while an
     /// Aura sets its characteristics.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hexproof_from: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub protection_from: Vec<String>,
     /// Face down (CR 708.2); omitted when face up.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub face_down: bool,
@@ -1047,12 +1076,14 @@ impl From<WireCardData> for CardData {
                 .collect(),
             x: w.x,
             from_battlefield_this_turn: w.from_battlefield_this_turn,
+            put_into_graveyard_this_turn: w.put_into_graveyard_this_turn,
             counters: w.counters,
             characteristics: CharacteristicsData {
                 name: w.name,
                 text_box: w.text_box,
                 power: w.power,
                 toughness: w.toughness,
+                printed_loyalty: w.printed_loyalty,
                 is_legendary: w.is_legendary,
                 is_ally: w.is_ally,
                 is_lesson: w.is_lesson,
@@ -1072,6 +1103,7 @@ impl From<WirePermanentData> for PermanentData {
     fn from(w: WirePermanentData) -> Self {
         let card = w.card;
         Self {
+            chosen: w.chosen,
             front_mana_value: w.front_mana_value,
             colors: w.colors,
             keyword_counter_timestamps: w.keyword_counter_timestamps,
@@ -1087,10 +1119,13 @@ impl From<WirePermanentData> for PermanentData {
             is_animated: w.is_animated,
             has_exile_link: w.has_exile_link,
             exile_if_dies_this_turn: w.exile_if_dies_this_turn,
+            blocked: w.blocked,
+            entry_controller_id: w.entry_controller_id,
             first_strike_participant: w.first_strike_participant,
             attacking: w.attacking,
             exhausted_abilities: w.exhausted_abilities,
             once_each_turn_used: w.once_each_turn_used,
+            loyalty_activated_this_turn: w.loyalty_activated_this_turn,
             granted_firebending: w.granted_firebending,
             temp_subtypes: w.temp_subtypes,
             counters: w.counters,
@@ -1099,7 +1134,10 @@ impl From<WirePermanentData> for PermanentData {
             creature_types: w.creature_types,
             is_granted_land: w.is_granted_land,
             blocking: w.blocking,
+            attacked_permanent: w.attacked_permanent,
             abilities_lost: w.abilities_lost,
+            hexproof_from: w.hexproof_from,
+            protection_from: w.protection_from,
             face_down: w.face_down,
             combat_damage_to_players: w.combat_damage_to_players,
             damaged_permanents: w.damaged_permanents,
@@ -1139,6 +1177,7 @@ impl PermanentData {
             cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
+            put_into_graveyard_this_turn: false,
             counters: BTreeMap::new(),
             characteristics: self.characteristics.clone(),
         })
@@ -1148,6 +1187,7 @@ impl PermanentData {
 impl Serialize for PermanentData {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         WirePermanentData {
+            chosen: self.chosen.clone(),
             front_mana_value: self.front_mana_value,
             colors: self.colors.clone(),
             keyword_counter_timestamps: self.keyword_counter_timestamps.clone(),
@@ -1163,10 +1203,13 @@ impl Serialize for PermanentData {
             is_animated: self.is_animated,
             has_exile_link: self.has_exile_link,
             exile_if_dies_this_turn: self.exile_if_dies_this_turn,
+            blocked: self.blocked,
+            entry_controller_id: self.entry_controller_id,
             first_strike_participant: self.first_strike_participant,
             attacking: self.attacking,
             exhausted_abilities: self.exhausted_abilities,
             once_each_turn_used: self.once_each_turn_used,
+            loyalty_activated_this_turn: self.loyalty_activated_this_turn,
             granted_firebending: self.granted_firebending,
             temp_subtypes: self.temp_subtypes.clone(),
             counters: self.counters.clone(),
@@ -1175,7 +1218,10 @@ impl Serialize for PermanentData {
             creature_types: self.creature_types.clone(),
             is_granted_land: self.is_granted_land,
             blocking: self.blocking,
+            attacked_permanent: self.attacked_permanent,
             abilities_lost: self.abilities_lost,
+            hexproof_from: self.hexproof_from.clone(),
+            protection_from: self.protection_from.clone(),
             face_down: self.face_down,
             combat_damage_to_players: self.combat_damage_to_players.clone(),
             damaged_permanents: self.damaged_permanents.clone(),
@@ -1254,6 +1300,7 @@ impl SpellData {
             cast_permissions: vec![],
             x: self.has_announced_x.then_some(x),
             from_battlefield_this_turn: false,
+            put_into_graveyard_this_turn: false,
             counters: BTreeMap::new(),
             characteristics: self.characteristics.clone(),
         }

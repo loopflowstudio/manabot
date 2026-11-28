@@ -3,20 +3,14 @@ extends: builtin
 ---
 ## In this repository
 
-**A card slice is a cohort.** When the plan cuts cards into slices, build the
-whole next slice in this pass: the shared primitive and every card it unlocks,
-or the whole group of cards that already compose. Don't stop after one card
-because it works; every pass cold-starts a fresh session, syncs and realigns.
-
 **Read the slice, not the history.** Read the plan's next slice and the files
 it names. Finished slices are one line each and their detail is in git.
 
-**Compose orthogonal primitives.** When a slice needs engine support, reshape
-how effects, triggers, replacements, conditions and selectors compose rather
-than adding a specialized type or variant that fuses multiple orthogonal axes.
+**Build native code once per pass.** Finish Rust edits before running the
+slice's focused `cargo test` filter. Rebuild the Python extension only when a
+named Python check reads changed native state, and only once. After a failure,
+rerun what failed, not the whole list.
 
-**Build native code once per pass.** Finish the slice's Rust edits, then run
-its focused filter (`cargo test --manifest-path managym/Cargo.toml -p
-managym-cards --test cards <set>::`). Rebuild the extension, as AGENTS.md
-describes, only when a named Python check reads the changed native state, and
-only once. After a failure, rerun what failed, not the whole list.
+When the next slice is blocked on another Task's pending release, record the
+unblocking artifact and first command in `scratch/plan.md` and return `advance`
+without waiting.

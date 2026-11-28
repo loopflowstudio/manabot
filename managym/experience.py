@@ -218,6 +218,11 @@ class InteractionOffer(ProtocolModel):
     subjects: list[OfferSubjectView] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    # Live in-zone copies folded into this offer (omitted when empty); folded
+    # sideboard LearnTakeLesson copies stay engine-internal for lowering.
+    aliases: list[SubjectRef] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     id: UInt32
     actor: UInt8
     verb: OfferVerb
@@ -354,12 +359,20 @@ class PlayerTurnHistoryView(ProtocolModel):
     life_gained: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     creatures_died: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
-    nonland_permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    nonland_permanents_left: UInt32 = Field(
+        default=0, exclude_if=lambda value: not value
+    )
     warped_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    loyalty_abilities_activated: UInt32 = Field(
+        default=0, exclude_if=lambda value: not value
+    )
     life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
 class LegacyCardView(ProtocolModel):
+    printed_loyalty: Int32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
     registry_key: UInt32
@@ -413,11 +426,57 @@ class CopyView(ProtocolModel):
     )
 
 
+class AbilityGrantView(ProtocolModel):
+    effect_timestamp: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    counter: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
+class KeywordAbilityView(ProtocolModel):
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    effect_timestamp: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    label: str
+    granted: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
+class PermanentRestriction(str, Enum):
+    CANT_BE_BLOCKED = "cant_be_blocked"
+    CANT_BLOCK = "cant_block"
+    CANT_ATTACK_OR_BLOCK = "cant_attack_or_block"
+    DOESNT_UNTAP = "doesnt_untap"
+    MUST_ATTACK = "must_attack"
+
+
+class RestrictionView(ProtocolModel):
+    kind: PermanentRestriction
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
 class LegacyPermanentView(ProtocolModel):
+    printed_loyalty: Int32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    keyword_grants: dict[str, AbilityGrantView] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    keyword_abilities: list[KeywordAbilityView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    attacks_despite_defender: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    restrictions: list[RestrictionView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     types: LegacyCardTypesView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     is_token: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    chosen: str | None = Field(default=None, exclude_if=lambda value: value is None)
     temp_subtypes: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
@@ -426,6 +485,9 @@ class LegacyPermanentView(ProtocolModel):
     )
     transforms: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     exhausted_abilities: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    loyalty_activated_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     once_each_turn_used: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     granted_firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     text_box: str = Field(default="", exclude_if=lambda value: not value)
@@ -450,12 +512,25 @@ class LegacyPermanentView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     is_granted_land: bool = Field(default=False, exclude_if=lambda value: not value)
+    blocked: bool = Field(default=False, exclude_if=lambda value: not value)
+    entry_controller_id: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     first_strike_participant: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
     attacking: bool = Field(default=False, exclude_if=lambda value: not value)
+    attacked_permanent: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     blocking: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
+    )
+    hexproof_from: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    protection_from: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
     )
     abilities_lost: bool = Field(default=False, exclude_if=lambda value: not value)
     face_down: bool = Field(default=False, exclude_if=lambda value: not value)
@@ -502,6 +577,9 @@ class PooledManaView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     combat: bool
+    expiry: Literal["step", "end_of_combat", "end_of_turn"] = Field(
+        default="step", exclude_if=lambda value: value == "step"
+    )
 
 
 class LegacyPlayerView(ProtocolModel):
@@ -578,6 +656,7 @@ class LegacyPlayerView(ProtocolModel):
     spells_cast: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     extra_turns: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     additional_combats: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    hexproof: bool = Field(default=False, exclude_if=lambda value: not value)
     no_maximum_hand_size: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
@@ -586,13 +665,18 @@ class LegacyPlayerView(ProtocolModel):
     )
     hand: list[LegacyCardView]
     graveyard: list[LegacyCardView]
+    command: list[LegacyCardView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     exile: list[LegacyCardView]
     stack: list[LegacyCardView]
     battlefield: list[LegacyPermanentView]
 
 
 class LegacyTurnView(ProtocolModel):
-    creature_died_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    creature_died_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     turn_number: UInt32
     phase: str
     step: str
@@ -618,6 +702,10 @@ class StackEntryView(ProtocolModel):
     )
     chosen_mode: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
+    )
+    # What the spell or ability targets, in the order chosen.
+    targets: list[SubjectRef] = Field(
+        default_factory=list, exclude_if=lambda value: not value
     )
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
     # A spell cast from a prepared copy; its stack copies are not.
@@ -810,6 +898,12 @@ class LandPlayedPresentation(ProtocolModel):
     player: UInt8
 
 
+class DrewPresentation(ProtocolModel):
+    kind: Literal["drew"]
+    player: UInt8
+    object: ObjectRenderId | None = Field(default=None, exclude_if=lambda v: v is None)
+
+
 class DiscardedPresentation(ProtocolModel):
     kind: Literal["discarded"]
     objects: list[ObjectRenderId]
@@ -820,6 +914,98 @@ class RevealedPresentation(ProtocolModel):
     kind: Literal["revealed"]
     cards: list[str]
     player: UInt8
+
+
+class ActivatedPresentation(ProtocolModel):
+    kind: Literal["activated"]
+    source: ObjectRenderId
+    controller: UInt8
+    stack: UInt64
+
+
+class TriggeredPresentation(ProtocolModel):
+    kind: Literal["triggered"]
+    source: ObjectRenderId
+    controller: UInt8
+    stack: UInt64
+
+
+class AbilityResolvedPresentation(ProtocolModel):
+    kind: Literal["ability_resolved"]
+    source: ObjectRenderId
+    stack: UInt64
+
+
+class CounteredPresentation(ProtocolModel):
+    kind: Literal["countered"]
+    stack: UInt64
+
+
+class PassedPresentation(ProtocolModel):
+    kind: Literal["passed"]
+    player: UInt8
+
+
+class CountersPresentation(ProtocolModel):
+    kind: Literal["counters"]
+    object: ObjectRenderId
+    counter: str
+    count: Int32
+    total: Int32
+
+
+class SearchedPresentation(ProtocolModel):
+    kind: Literal["searched"]
+    player: UInt8
+
+
+class LookedPresentation(ProtocolModel):
+    kind: Literal["looked"]
+    player: UInt8
+    action: Literal["scry", "surveil"]
+
+
+class SacrificedPresentation(ProtocolModel):
+    kind: Literal["sacrificed"]
+    objects: list[ObjectRenderId]
+    player: UInt8
+
+
+class LostPresentation(ProtocolModel):
+    kind: Literal["lost"]
+    player: UInt8
+
+
+class LifePresentation(ProtocolModel):
+    kind: Literal["life"]
+    player: UInt8
+    amount: Int32
+    total: Int32
+
+
+class ExiledPresentation(ProtocolModel):
+    kind: Literal["exiled"]
+    objects: list[ObjectRenderId]
+
+
+class TokenCreatedPresentation(ProtocolModel):
+    kind: Literal["token_created"]
+    objects: list[ObjectRenderId]
+    player: UInt8
+
+
+class PtChangedPresentation(ProtocolModel):
+    kind: Literal["pt_changed"]
+    objects: list[ObjectRenderId]
+    power: Int32
+    toughness: Int32
+
+
+class ControlChangedPresentation(ProtocolModel):
+    kind: Literal["control_changed"]
+    object: ObjectRenderId
+    controller: UInt8
+    returned: bool
 
 
 PresentationKind: TypeAlias = Annotated[
@@ -833,13 +1019,52 @@ PresentationKind: TypeAlias = Annotated[
     | BlockedPresentation
     | TurnStartedPresentation
     | LandPlayedPresentation
+    | DrewPresentation
     | DiscardedPresentation
-    | RevealedPresentation,
+    | RevealedPresentation
+    | ActivatedPresentation
+    | TriggeredPresentation
+    | AbilityResolvedPresentation
+    | CounteredPresentation
+    | PassedPresentation
+    | CountersPresentation
+    | SearchedPresentation
+    | LookedPresentation
+    | SacrificedPresentation
+    | LostPresentation
+    | LifePresentation
+    | ExiledPresentation
+    | TokenCreatedPresentation
+    | PtChangedPresentation
+    | ControlChangedPresentation,
     Field(discriminator="kind"),
 ]
 
+PresentationRule: TypeAlias = Literal[
+    "draw_step",
+    "cleanup",
+    "lethal_damage",
+    "zero_toughness",
+    "zero_loyalty",
+    "zero_defense",
+    "legend_rule",
+    "unattached_aura",
+    "zero_life",
+    "empty_library",
+    "poison",
+    "illegal_targets",
+]
+
+
+class PresentationLabels(ProtocolModel):
+    objects: dict[str, str] = Field(default_factory=dict, exclude_if=lambda v: not v)
+    stacks: dict[str, str] = Field(default_factory=dict, exclude_if=lambda v: not v)
+
 
 class PresentationEvent(ProtocolModel):
+    labels: PresentationLabels | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     seq: UInt64
     from_revision: UInt64
     to_revision: UInt64
@@ -849,6 +1074,10 @@ class PresentationEvent(ProtocolModel):
     suggested_ms: UInt32
     sound: str | None
     kind: PresentationKind
+    cause: UInt64 | None = Field(default=None, exclude_if=lambda value: value is None)
+    rule: PresentationRule | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class CommandReceipt(ProtocolModel):

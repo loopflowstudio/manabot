@@ -26,7 +26,7 @@ pub struct GameSnapshot {
     memory_enabled: bool,
     include_own: bool,
     history: HistoryWindow,
-    action_space: Option<ActionSpace>,
+    published_decision: Option<crate::flow::game::PublishedDecision>,
     pending_choice: Option<PendingChoice>,
     epoch: u64,
     candidates: BTreeMap<ObjectCandidateAddress, ObjectId>,
@@ -55,11 +55,12 @@ pub enum BranchMode {
     Determinize { viewer: usize, seed: u64 },
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct RestoreOptions {
     pub mode: BranchMode,
     pub enable_decision_memory: Option<bool>,
     pub forced_first_action: Option<usize>,
+    pub game_state_edits: Option<Arc<[GameStateEdit]>>,
 }
 
 impl RestoreOptions {
@@ -68,6 +69,7 @@ impl RestoreOptions {
             mode: BranchMode::Exact { reseed },
             enable_decision_memory: None,
             forced_first_action: None,
+            game_state_edits: None,
         }
     }
 }
@@ -100,7 +102,7 @@ impl Env {
             .ok_or_else(|| AgentError("snapshot before reset".into()))?;
         Ok(SnapshotMetadata::from_position(
             &game.state,
-            game.current_action_space.as_ref(),
+            game.action_space(),
         ))
     }
 
@@ -116,7 +118,7 @@ impl Env {
             memory_enabled: game.decision_memory_enabled,
             include_own: game.decision_memory_include_own,
             history: game.policy_history.clone(),
-            action_space: game.current_action_space.clone(),
+            published_decision: game.published_decision.clone(),
             pending_choice: game.pending_choice.clone(),
             epoch: game.decision_epoch,
             candidates: game.semantic_object_candidates.borrow().clone(),
@@ -138,13 +140,18 @@ impl Env {
 impl GameSnapshot {
     /// Materialize a new live game generation, continuing both viewer logs.
     pub fn restore(&self, options: RestoreOptions) -> Result<Env, AgentError> {
+        let edits = options.game_state_edits.filter(|edits| !edits.is_empty());
+        if edits.is_some() && options.forced_first_action.is_some() {
+            return Err(AgentError(
+                "game_state_edits cannot be combined with forced_first_action".into(),
+            ));
+        }
         if let BranchMode::Determinize { viewer, .. } = options.mode {
             self.state.sampling_viewer(viewer)?;
         }
         let forced = if let Some(index) = options.forced_first_action {
             let space = self
-                .action_space
-                .as_ref()
+                .action_space()
                 .filter(|_| !self.state.is_game_over())
                 .ok_or_else(|| {
                     AgentError("forced_first_action requires a non-terminal decision".into())
@@ -158,6 +165,9 @@ impl GameSnapshot {
             None
         };
         let mut env = self.live_env();
+        if let Some(edits) = edits {
+            env.apply_intervention(Intervention::GameStateEdits { edits })?;
+        }
         let intervention = match options.mode {
             BranchMode::Exact { reseed } => reseed.map(|seed| Intervention::Reseed { seed }),
             BranchMode::ShuffleLibraries { seed } => Some(Intervention::ShuffleLibraries { seed }),
@@ -205,7 +215,7 @@ impl GameSnapshot {
             decision_memory_enabled: self.memory_enabled,
             decision_memory_include_own: self.include_own,
             policy_history: self.history.clone(),
-            current_action_space: self.action_space.clone(),
+            published_decision: self.published_decision.clone(),
             pending_choice: self.pending_choice.clone(),
             decision_epoch: self.epoch,
             semantic_object_candidates: self.candidates.clone().into(),
@@ -218,6 +228,7 @@ impl GameSnapshot {
             payment_cache: Default::default(),
             payment_sources: Default::default(),
             statistics: None,
+            presentation: None,
             card_capture: None,
             capture_originals: Default::default(),
             capture_drawing: None,
@@ -236,13 +247,17 @@ impl GameSnapshot {
         }
     }
 
+    fn action_space(&self) -> Option<&ActionSpace> {
+        self.published_decision.as_ref().map(|d| &d.space)
+    }
+
     pub fn metadata(&self) -> SnapshotMetadata {
-        SnapshotMetadata::from_position(&self.state, self.action_space.as_ref())
+        SnapshotMetadata::from_position(&self.state, self.action_space())
     }
 
     /// Read the saved decision owner without collecting the board summary.
     pub fn acting_player(&self) -> Option<usize> {
-        snapshot_chooser(self.action_space.as_ref(), self.state.is_game_over())
+        snapshot_chooser(self.action_space(), self.state.is_game_over())
     }
 
     pub fn seed(&self) -> u64 {
@@ -253,7 +268,7 @@ impl GameSnapshot {
         self.digest.get_or_init(|| {
             state_digest(
                 &self.state,
-                &self.action_space,
+                self.action_space(),
                 &self.pending_choice,
                 self.skip_trivial,
                 self.skipped,
@@ -263,7 +278,7 @@ impl GameSnapshot {
 
     pub(crate) fn compatible(
         &self,
-        options: RestoreOptions,
+        options: &RestoreOptions,
         policies: [PlayerPolicy; 2],
         skip_trivial: bool,
         memory: bool,
@@ -326,7 +341,7 @@ impl SnapshotMetadata {
 
 pub(super) fn state_digest(
     state: &TrackedState,
-    actions: &Option<ActionSpace>,
+    actions: Option<&ActionSpace>,
     pending: &Option<PendingChoice>,
     skip_trivial: bool,
     skipped: usize,
@@ -439,7 +454,12 @@ mod card_history_tests {
             .scenario_force_battlefield(actor, "Drake Hatcher", true)
             .unwrap();
         game.state.combat = Some(Box::new(CombatState {
-            attackers: vec![source],
+            attack_targets: vec![(
+                source,
+                Some(crate::flow::combat::AttackTarget::Player(
+                    game.next_player(actor),
+                )),
+            )],
             ..Default::default()
         }));
         let combat = env.snapshot().unwrap();
@@ -504,7 +524,7 @@ mod card_history_tests {
             .scenario_force_battlefield(actor, "Steel Hellkite", true)
             .unwrap();
         let source = game.permanent_object(hit).unwrap();
-        let token = game.create_token("token.food", actor, false).unwrap();
+        let token = game.create_token("token.food", actor).unwrap();
         for (permanent, combat) in [(other, false), (hit, true)] {
             assert!(
                 game.commit_damage(
@@ -551,7 +571,14 @@ mod card_history_tests {
                 .unwrap();
             let game = branch.game.as_mut().unwrap();
             game.move_object(source, ZoneType::Graveyard);
-            game.change_control(token, victim);
+            let affected = game.affected_permanent(token);
+            game.apply_continuous(
+                None,
+                victim,
+                affected,
+                crate::state::effect::Modification::Control,
+                crate::state::effect::EffectDuration::Indefinite,
+            );
             let pending = branch.snapshot().unwrap();
             let mut restored = pending.restore(RestoreOptions::default()).unwrap();
             assert_eq!(

@@ -99,9 +99,7 @@ fn trigger_source_snapshot_keeps_v16_bytes_after_departure() {
     let object = game.move_object(object, ZoneType::Graveyard);
     let object = game.move_object(object, ZoneType::Battlefield);
     assert!(object.generation() > 0);
-    let source = TriggerSourceSnapshot {
-        lki: game.snapshot_current_permanent(object).unwrap(),
-    };
+    let source = TriggerSourceSnapshot::from(game.snapshot_current_permanent(object).unwrap());
     let expected = format!(
         "{{\"card\":{},\"controller\":0,\"lki\":{}}}",
         object.slot(),
@@ -110,8 +108,8 @@ fn trigger_source_snapshot_keeps_v16_bytes_after_departure() {
     assert_eq!(serde_json::to_string(&source).unwrap(), expected);
 
     game.move_object(object, ZoneType::Graveyard);
-    assert!(game.state.object(source.lki.object).is_err());
-    assert_eq!(source.lki.object, object);
+    assert!(game.state.object(source.object).is_err());
+    assert_eq!(source.object, object);
     assert_eq!(serde_json::to_string(&source).unwrap(), expected);
 }
 
@@ -159,8 +157,11 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
         Some(first)
     );
     let sources = game.trigger_ability_sources(&event);
-    assert!(sources.iter().any(|source| source.lki.object == original));
-    assert!(!sources.iter().any(|source| source.lki.permanent == second));
+    assert!(sources.iter().any(|source| source.object == original));
+    assert!(!sources.iter().any(|source| source
+        .lki
+        .as_ref()
+        .is_some_and(|lki| lki.permanent == second)));
     assert!(game.state.object(*became).is_err());
     let fork = game.clone();
     assert_eq!(
@@ -173,7 +174,7 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
     assert!(!game
         .trigger_ability_sources(hand_event)
         .iter()
-        .any(|source| source.lki.object == object));
+        .any(|source| source.object == object));
 }
 
 #[test]
@@ -216,7 +217,7 @@ fn stack_target_mana_value_boundaries_have_explicit_expected_choices() {
             land,
         ] {
             assert_eq!(
-                game.target_is_legal(target, &spec, PlayerId(0)),
+                game.test_target_is_legal(target, &spec, PlayerId(0)),
                 expected.contains(&target)
             );
         }
@@ -472,12 +473,12 @@ fn audit_spell_or_permanent_must_respect_opponents_hexproof() {
     // CR 702.11b applies regardless of the wording used to target the object.
     // A creature-only restriction and a spell-or-permanent restriction must
     // both exclude this opposing Ogre; changing spec cannot bypass hexproof.
-    assert!(!game.target_is_legal(permanent, &TargetSpec::Creature, PlayerId(1)));
+    assert!(!game.test_target_is_legal(permanent, &TargetSpec::Creature, PlayerId(1)));
     let spec = TargetSpec::SpellOrPermanent { min_mana_value: 3 };
     assert!(!game
         .legal_targets_for_spec(&spec, PlayerId(1))
         .contains(&permanent));
-    assert!(!game.target_is_legal(permanent, &spec, PlayerId(1)));
+    assert!(!game.test_target_is_legal(permanent, &spec, PlayerId(1)));
 }
 
 #[test]
@@ -526,7 +527,7 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
             ];
             for (spec, expected) in cases {
                 assert_eq!(
-                    game.target_is_legal(target, &spec, controller),
+                    game.test_target_is_legal(target, &spec, controller),
                     expected,
                     "{owner:?} {controller:?} {spec:?}"
                 );
@@ -541,8 +542,12 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
             .scenario_force_battlefield(owner, "Mountain", true)
             .unwrap();
         grant_hexproof(&mut game, land);
-        assert!(game.target_is_legal(Target::Permanent(land), &TargetSpec::LandYouControl, owner));
-        assert!(!game.target_is_legal(
+        assert!(game.test_target_is_legal(
+            Target::Permanent(land),
+            &TargetSpec::LandYouControl,
+            owner
+        ));
+        assert!(!game.test_target_is_legal(
             Target::Permanent(land),
             &TargetSpec::SpellOrPermanent { min_mana_value: 0 },
             PlayerId(1 - owner.0)
@@ -641,8 +646,8 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
         let replacement = game.state.permanent_of(game.state.now(object)).unwrap();
         assert_ne!(game.state.now(object), before);
         assert_ne!(replacement, id);
-        assert!(!game.target_is_legal(Target::Permanent(id), &spec, controller));
-        assert!(game.target_is_legal(Target::Permanent(replacement), &spec, controller));
+        assert!(!game.test_target_is_legal(Target::Permanent(id), &spec, controller));
+        assert!(game.test_target_is_legal(Target::Permanent(replacement), &spec, controller));
         game.resolve_top_of_stack();
         assert_eq!(
             game.state.zones.zone_of(game.state.now(object)),
@@ -754,7 +759,7 @@ fn trigger_order_large_menu_is_complete_and_empty_singleton_are_forced() {
         .collect();
     let space = game.flush_triggers().unwrap();
     assert_eq!(space.actions.len(), 65);
-    game.current_action_space = Some(space);
+    game.set_unfolded_action_space(Some(space));
     let observation = crate::agent::observation::Observation::new(&game, std::iter::empty());
     assert_eq!(observation.action_space.actions.len(), 65);
     assert!(
@@ -798,7 +803,8 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
     third.id = TriggerId(902);
     third.context = Some(Target::StackSpell(other));
     game.state.pending_triggers = vec![first, second, third];
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let observation = Observation::for_player(&game, PlayerId(0));
     let frames: Vec<_> = observation
         .action_space
@@ -816,7 +822,8 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
     for trigger in &mut game.state.trigger_placement.as_mut().unwrap().remaining {
         trigger.id.0 += 10_000;
     }
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let renumbered = Observation::for_player(&game, PlayerId(0));
     assert_eq!(
         encoded,
@@ -845,7 +852,8 @@ fn trigger_order_target_resume_and_nested_fork_preserve_round() {
     ];
     game.state.pending_triggers[0].source_identity =
         AbilitySource::new(source, game.state.live(game.state.now(source)));
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let root = witness(&game);
     let mut branch = game.clone();
     let outer = branch.clone();
@@ -920,6 +928,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
         source,
         vec![Effect::Move {
             unrevealed: false,
+            face_down: false,
             library_end: None,
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,
@@ -933,7 +942,8 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     );
     delayed.ability_index = usize::MAX; // Inline effects do not reference a card slot.
     game.state.pending_triggers = vec![dies, enters, delayed];
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let observation = Observation::for_player(&game, PlayerId(0));
     let labels: Vec<_> = observation
         .action_space
@@ -951,7 +961,8 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
         .all(|label| !label.contains(&game.state[source].text_box)));
     for id in 0..2 {
         game.choose_trigger(PlayerId(0), TriggerId(id)).unwrap();
-        game.current_action_space = game.flush_triggers();
+        let space = game.flush_triggers();
+        game.set_unfolded_action_space(space);
     }
     let stack = Observation::for_player(&game, PlayerId(1));
     let descriptions: Vec<_> = stack
@@ -985,16 +996,12 @@ fn retained_departure_predicate_uses_departing_copy_after_reentry() {
             card_type: Some(CardType::Land),
             ..Default::default()
         }));
-    let printed = TriggerSourceSnapshot {
-        lki: game.snapshot_current_permanent(object).unwrap(),
-    };
+    let printed = TriggerSourceSnapshot::from(game.snapshot_current_permanent(object).unwrap());
     assert_eq!(game.additional_trigger_times(&printed), 0);
 
     let template = game.state[grantor].clone();
     game.state[object].become_copy_of(&template, &[]);
-    let source = TriggerSourceSnapshot {
-        lki: game.snapshot_current_permanent(object).unwrap(),
-    };
+    let source = TriggerSourceSnapshot::from(game.snapshot_current_permanent(object).unwrap());
     let graveyard = game.move_object(object, ZoneType::Graveyard);
     assert_eq!(game.additional_trigger_times(&source), 1);
     let reentered = game.move_object(graveyard, ZoneType::Battlefield);
@@ -1021,6 +1028,7 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
             2,
             ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 0 }),
         )]],
+        min: 0,
         up_to: None,
         unchosen: false,
     }];
@@ -1054,13 +1062,15 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
     assert!(label.contains("Gray Ogre"));
     // Make the choice through placement, using the departed source's face.
     game.choose_trigger(PlayerId(0), trigger_id).unwrap();
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let context = game.decision_context(PlayerId(0)).unwrap();
     assert_eq!(context.stage, "trigger_mode");
     assert!(context.instruction.contains("Gray Ogre"));
     assert_eq!(game.action_space().unwrap().actions.len(), 1);
     game.choose_trigger_mode(PlayerId(0), 0).unwrap();
-    game.current_action_space = game.flush_triggers();
+    let space = game.flush_triggers();
+    game.set_unfolded_action_space(space);
     let context = game.decision_context(PlayerId(0)).unwrap();
     assert_eq!(context.stage, "trigger_targets");
     assert!(context.instruction.contains("Gray Ogre"));
@@ -1114,7 +1124,7 @@ fn retained_departure_spell_delayed_and_child_reflexive_keep_one_source() {
         expiry: DelayedExpiry::Never,
     };
     game.move_object(bolt, ZoneType::Graveyard);
-    game.fire_delayed_trigger(&delayed, None);
+    game.fire_delayed_trigger(&delayed, None, None);
     let pending = game.state.pending_triggers.last().unwrap();
     assert_eq!(pending.source_identity, source);
     game.place_triggered_ability_on_stack(pending.clone());
@@ -1179,7 +1189,7 @@ fn retained_departure_recorded_card_and_spell_predicates_ignore_later_copy() {
     };
     let mut frame = EffectFrame::new(PlayerId(1), vec![]);
     frame.this_way = vec![bolt];
-    frame.context_target = Some(Target::StackSpell(bolt));
+    frame.context = Some(Target::StackSpell(bolt));
     assert!(game.check_condition(
         &Condition::CardsThisWayMatch(predicate.clone()),
         PlayerId(1),
@@ -1243,6 +1253,77 @@ fn shared_creature_type_clause_binds_trigger_targets_and_retargeting() {
     );
 }
 
+/// New targets are judged as one assignment (CR 115.7e). A copy of
+/// "4 damage to any target and 3 to another target" may swap its two
+/// targets, which a check of each slot against the others' old targets
+/// would reject; once the first slot takes the second's object, the second
+/// must change. "Change the target" keeps the other slots, so it never
+/// offers an object another slot holds.
+#[test]
+fn copy_targets_change_as_one_assignment() {
+    use crate::state::ability::TargetRelation;
+    let (mut game, source, _, Target::Permanent(a), _) = fixture() else {
+        unreachable!()
+    };
+    let b = game
+        .scenario_force_battlefield(PlayerId(1), "Gray Ogre", true)
+        .unwrap();
+    let (a, b) = (Target::Permanent(a), Target::Permanent(b));
+    game.state.pending_triggers.push(trigger(
+        source,
+        vec![
+            Effect::TargetClause {
+                requirement: TargetRequirement::one(TargetSpec::Creature),
+                effects: vec![],
+            },
+            Effect::TargetClause {
+                requirement: TargetRequirement {
+                    relation: Some(TargetRelation::DistinctFromEarlier),
+                    ..TargetRequirement::up_to(1, TargetSpec::Creature)
+                },
+                effects: vec![],
+            },
+        ],
+        0,
+    ));
+    assert!(game.flush_triggers().is_some());
+    game.choose_trigger_target(PlayerId(0), a).unwrap();
+    // The second clause no longer offers the first clause's target.
+    assert_eq!(
+        game.flush_triggers().unwrap().actions,
+        [
+            crate::agent::action::Action::ChooseTarget {
+                player: PlayerId(0),
+                target: b,
+            },
+            crate::agent::action::Action::Decline {
+                player: PlayerId(0)
+            },
+        ]
+    );
+    assert!(game.choose_trigger_target(PlayerId(0), a).is_err());
+    game.choose_trigger_target(PlayerId(0), b).unwrap();
+    assert!(game.flush_triggers().is_none());
+    let original = game.state.stack_objects.last().unwrap().as_target();
+
+    // "Change the target" of one slot: the other slot's object is taken.
+    assert_eq!(game.retarget_offer(original, &[], false), (vec![], false));
+
+    let copy = game.copy_stack_object(original, PlayerId(0)).unwrap();
+    assert_eq!(game.retarget_offer(copy, &[], true), (vec![b], true));
+    assert_eq!(game.retarget_offer(copy, &[b], true), (vec![a], false));
+    assert_eq!(game.retarget_offer(copy, &[a], true), (vec![], true));
+    assert!(game
+        .next_retarget(PlayerId(0), copy, vec![b], true)
+        .is_some());
+    // Publishing writes both targets at once.
+    assert!(game
+        .next_retarget(PlayerId(0), copy, vec![b, a], true)
+        .is_none());
+    let copied = &game.state.stack_objects[game.stack_index_of(copy).unwrap()];
+    assert_eq!(copied.targets(), [b, a]);
+}
+
 #[test]
 fn graveyard_target_rechecks_live_source_power_for_retarget_and_resolution() {
     use crate::state::{game_object::AbilitySource, permanent::CounterKind};
@@ -1281,7 +1362,9 @@ fn graveyard_target_rechecks_live_source_power_for_retarget_and_resolution() {
         .unwrap();
     assert!(game.flush_triggers().is_none());
     let stack = game.state.stack_objects.last().unwrap().as_target();
-    assert!(game.next_retarget(player, stack, 0, true).is_some());
+    assert!(game
+        .next_retarget(player, stack, Vec::new(), true)
+        .is_some());
     assert_eq!(
         game.retarget_candidates(stack, 0),
         vec![Target::GraveyardCard(second)]
@@ -1330,6 +1413,324 @@ fn exude_toxin_target_threshold_uses_the_announced_x() {
                 .contains(&target),
             x == 1
         );
-        assert_eq!(game.target_is_legal(target, &spec, PlayerId(1)), x == 1);
+        assert_eq!(
+            game.test_target_is_legal(target, &spec, PlayerId(1)),
+            x == 1
+        );
     }
+}
+
+fn step_action(game: &mut Game, target: &crate::agent::action::Action) {
+    let index = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| a == target)
+        .unwrap_or_else(|| panic!("action {target:?} not offered"));
+    game.step(index).unwrap();
+}
+
+fn resolve_stack(game: &mut Game) {
+    while !game.state.stack_objects.is_empty() {
+        let player = game.state.priority.holder;
+        step_action(game, &crate::agent::action::Action::PassPriority { player });
+    }
+}
+
+fn chandra_with_granted_ability(
+    seed: u64,
+    loyalty: i32,
+    ability: crate::state::card::ActivatedAbilityDefinition,
+) -> (Game, PermanentId) {
+    use crate::{agent::action::Action, flow::turn::StepKind, state::permanent::CounterKind};
+
+    let deck = BTreeMap::from([
+        ("Chandra, Flameshaper".to_string(), 4),
+        ("Mountain".to_string(), 36),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        seed,
+        false,
+    );
+    game.keep_opening_hands();
+    while !(game.active_player() == PlayerId(0)
+        && game.state.turn.current_step_kind() == StepKind::Main)
+    {
+        let pass_index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap_or(0);
+        game.step(pass_index).unwrap();
+    }
+    let chandra = game
+        .scenario_force_battlefield(PlayerId(0), "Chandra, Flameshaper", false)
+        .unwrap();
+    // `scenario_force_battlefield` bypasses ETB replacement, so seed loyalty directly.
+    game.state.permanents[chandra]
+        .as_mut()
+        .unwrap()
+        .change_counters(CounterKind::Loyalty, loyalty);
+    let affected = game.affected_permanent(chandra).unwrap();
+    game.apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::GrantActivated(Box::new(ability)),
+        EffectDuration::Indefinite,
+    );
+    (game, chandra)
+}
+
+#[test]
+fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x() {
+    use crate::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncodeError, ObservationEncoderConfig},
+            observation_layout::{action, relation},
+        },
+        state::card::{ActivatedAbilityDefinition, LoyaltyCost},
+    };
+
+    // Grant −X: deal X damage divided among at least 1 target creature.
+    let ability = ActivatedAbilityDefinition {
+        loyalty: Some(LoyaltyCost::MinusX),
+        effects: vec![Effect::TargetClause {
+            requirement: TargetRequirement {
+                min: 1,
+                max: TargetRequirement::ANY_NUMBER,
+                division: Some(EffectValue::X),
+                ..TargetRequirement::one(TargetSpec::Creature)
+            },
+            effects: vec![Effect::deal_damage(
+                EffectValue::TargetDivision,
+                ObjectSelector::Targets(TargetSpec::Creature),
+            )],
+        }],
+        ..Default::default()
+    };
+    let (mut game, chandra) = chandra_with_granted_ability(430_001, 5, ability);
+    let b1 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
+        .unwrap();
+    let b2 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
+        .unwrap();
+    let b3 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
+        .unwrap();
+    game.clear_published_decision();
+    game.finish_action_step();
+
+    // Priority must offer ability 3 even though x_min = 0 has no legal target budget.
+    let activate = Action::ActivateAbility {
+        player: PlayerId(0),
+        permanent: chandra,
+        ability_index: 3,
+    };
+    assert!(
+        game.action_space().unwrap().actions.contains(&activate),
+        "−X ability with min=1 and division=X must be offered at priority"
+    );
+
+    // Activate: X = 0 must be omitted; only 1..=5 are offered.
+    step_action(&mut game, &activate);
+    let x_obs = Observation::for_player(&game, PlayerId(0));
+    let x_modes: Vec<usize> = x_obs
+        .action_space
+        .actions
+        .iter()
+        .map(|a| a.mode_index.unwrap())
+        .collect();
+    assert_eq!(x_modes, vec![1, 2, 3, 4, 5], "X = 0 must be filtered out");
+    assert!(x_obs
+        .action_space
+        .actions
+        .iter()
+        .all(|a| a.announces_x && a.division_amount.is_none()));
+    assert!(game
+        .execute_action(&Action::ChooseMode {
+            player: PlayerId(0),
+            mode: 0,
+        })
+        .is_err());
+
+    // Encoder raises a typed Capacity error when X offers exceed max_actions.
+    let tight = ObservationEncoderConfig {
+        max_actions: 4,
+        ..ObservationEncoderConfig::default()
+    };
+    assert_eq!(
+        encode(&x_obs, &tight),
+        Err(ObservationEncodeError::Capacity {
+            field: "actions",
+            capacity: 4,
+            actual: 5,
+        })
+    );
+
+    // Announce X = 5 and target all three Beasts -> enters DivideAmount (remaining = 5).
+    step_action(
+        &mut game,
+        &Action::ChooseMode {
+            player: PlayerId(0),
+            mode: 5,
+        },
+    );
+    for target in [b1, b2, b3] {
+        step_action(
+            &mut game,
+            &Action::ChooseTarget {
+                player: PlayerId(0),
+                target: Target::Permanent(target),
+            },
+        );
+    }
+
+    // First division decision: remaining = 5 across 3 targets -> offers 1..=3.
+    let div1 = Observation::for_player(&game, PlayerId(0));
+    assert_eq!(div1.action_space.action_space_type, ActionSpaceKind::Modal);
+    let ann1 = div1.continuation.iter().find(|f| f.kind == 4).unwrap();
+    assert_eq!(ann1.x, 5, "DivideAmount preserves real announced X");
+    assert_eq!(ann1.division_remaining, 5);
+    assert_eq!(div1.action_space.actions.len(), 3);
+    let enc1 = encode(&div1, &ObservationEncoderConfig::default()).unwrap();
+    let header1 = &enc1.relations[..relation::WIDTH];
+    assert_eq!(header1[relation::X], 5.0);
+    assert_eq!(header1[relation::DIVISION], 5.0);
+    for (idx, offer) in div1.action_space.actions.iter().enumerate() {
+        let amt = (idx + 1) as i32;
+        assert!(
+            !offer.announces_x,
+            "division action must not alias announces_x"
+        );
+        assert_eq!(offer.division_amount, Some(amt));
+        let row = &enc1.actions[idx * action::WIDTH..(idx + 1) * action::WIDTH];
+        assert_eq!(row[action::HAS_X], 0.0);
+        assert_eq!(row[action::X], 0.0);
+        assert_eq!(row[action::DIVISION], amt as f32);
+    }
+
+    // Assign 2 to b1 -> second division decision has remaining = 3 while frame.x stays 5!
+    step_action(
+        &mut game,
+        &Action::ChooseMode {
+            player: PlayerId(0),
+            mode: 2,
+        },
+    );
+    let div2 = Observation::for_player(&game, PlayerId(0));
+    let ann2 = div2.continuation.iter().find(|f| f.kind == 4).unwrap();
+    assert_eq!(ann2.x, 5, "frame.x stays 5 after remaining drops to 3");
+    assert_eq!(ann2.division_remaining, 3);
+    assert_eq!(ann2.targets[0].division, 2);
+    let enc2 = encode(&div2, &ObservationEncoderConfig::default()).unwrap();
+    assert_eq!(enc2.relations[relation::X], 5.0);
+    assert_eq!(enc2.relations[relation::DIVISION], 3.0);
+
+    // Assign 1 to b2 -> b3 automatically receives 2; resolve stack.
+    step_action(
+        &mut game,
+        &Action::ChooseMode {
+            player: PlayerId(0),
+            mode: 1,
+        },
+    );
+    resolve_stack(&mut game);
+    assert_eq!(game.state.permanents[b1].as_ref().unwrap().damage, 2);
+    assert_eq!(game.state.permanents[b2].as_ref().unwrap().damage, 1);
+    assert_eq!(game.state.permanents[b3].as_ref().unwrap().damage, 2);
+}
+
+#[test]
+fn fixed_deal_damage_in_divided_clause_does_not_redeal_divided_shares() {
+    use crate::{
+        agent::action::Action,
+        state::card::{ActivatedAbilityDefinition, LoyaltyCost},
+    };
+
+    // Clause divides 4 among up to 2 targets, then ALSO deals 1 fixed damage to those targets.
+    let ability = ActivatedAbilityDefinition {
+        loyalty: Some(LoyaltyCost::Fixed(-2)),
+        effects: vec![Effect::TargetClause {
+            requirement: TargetRequirement {
+                division: Some(EffectValue::Fixed(4)),
+                ..TargetRequirement::up_to(2, TargetSpec::Creature)
+            },
+            effects: vec![
+                Effect::deal_damage(
+                    EffectValue::TargetDivision,
+                    ObjectSelector::Targets(TargetSpec::Creature),
+                ),
+                Effect::deal_damage(1, ObjectSelector::Targets(TargetSpec::Creature)),
+            ],
+        }],
+        ..Default::default()
+    };
+    let (mut game, chandra) = chandra_with_granted_ability(430_002, 6, ability);
+    let b1 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
+        .unwrap();
+    let b2 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
+        .unwrap();
+    // Give both Beasts +0/+3 so they survive 4+ damage and exact damage can be asserted.
+    for id in [b1, b2] {
+        let affected = game.affected_permanent(id).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(1),
+            [affected],
+            Modification::pump(0, 3),
+            EffectDuration::EndOfTurn,
+        );
+    }
+    game.clear_published_decision();
+    game.finish_action_step();
+
+    step_action(
+        &mut game,
+        &Action::ActivateAbility {
+            player: PlayerId(0),
+            permanent: chandra,
+            ability_index: 3,
+        },
+    );
+    for target in [b1, b2] {
+        step_action(
+            &mut game,
+            &Action::ChooseTarget {
+                player: PlayerId(0),
+                target: Target::Permanent(target),
+            },
+        );
+    }
+    // Assign 3 to b1 (auto-assigns 1 to b2).
+    step_action(
+        &mut game,
+        &Action::ChooseMode {
+            player: PlayerId(0),
+            mode: 3,
+        },
+    );
+    resolve_stack(&mut game);
+    assert_eq!(
+        game.state.permanents[b1].as_ref().unwrap().damage,
+        4,
+        "b1 takes divided 3 + fixed 1 = 4, not 3 + 3"
+    );
+    assert_eq!(
+        game.state.permanents[b2].as_ref().unwrap().damage,
+        2,
+        "b2 takes divided 1 + fixed 1 = 2"
+    );
 }

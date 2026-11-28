@@ -1,42 +1,61 @@
 /**
- * The opponent's moves are read out one beat at a time before the decision:
- * each long enough to read, the decision's choices wait beneath it, the first
- * input ends the reading without acting; damage marks summing the window and
- * the result card wait with it; and reduced motion reads none (the
- * recap still lists every fact). Playwright waits on a click at a held choice, as
- * it treats `aria-disabled` as not yet enabled.
+ * The opponent's turn walks on the table one kept board stop at a time:
+ * steady-height caption and scrubber in `.bottom`, pointer rest on the caption
+ * holds, clicking a tick holds at that stop, "Show their turn again" replays
+ * from the turn's first stop, Space and clicking the earlier board only return
+ * to now without acting, upcoming legal choices wait in the rail while the
+ * walk is catching up (and return live on manual lookback, where pressing a
+ * choice or number key returns to now and commits), selecting a history line +
+ * ← → + Esc move the same cursor, and reduced motion never auto-walks while
+ * still allowing manual stepping.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { showEachCreaturesChoice } from './fixtures/combat';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 /**
- * Start a game against the random opponent on a fixed deal: ordinary play
- * draws a new seed, and some deals end before the opponent's moves reach the
- * recap at one of your decisions.
+ * Start a seeded game against the random opponent, counting the commands sent.
+ * Seed 1 reaches a past board (an opponent window of several moves) at the
+ * fourth decision under `playUntil`'s choices.
  */
-async function startAgainstRandom(page: Page, sent: { count: number }): Promise<void> {
+async function startAgainstRandom(page: Page, seed = 1): Promise<{ count: number }> {
+  const sent = { count: 0 };
   await page.routeWebSocket('**/ws/play', socket => {
     const server = socket.connectToServer();
     socket.onMessage(message => {
       if (typeof message !== 'string') { server.send(message); return; }
       const payload = JSON.parse(message);
-      if (payload.type === 'new_game') payload.config.seed = 0;
+      if (payload.type === 'new_game') payload.config.seed = seed;
       if (payload.type === 'command') sent.count += 1;
       server.send(JSON.stringify(payload));
     });
   });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('game')).toBeVisible();
+  return sent;
 }
 
-/** Decide until `until` holds, preferring lands, spells and attacks so the game moves. */
-async function playUntil(page: Page, until: () => Promise<boolean>, limit: number): Promise<number> {
+/**
+ * Decide until `until` returns a truthy result, preferring lands, spells and
+ * attacks so the game moves. Throws, naming why, when the game ends or the
+ * budget runs out first.
+ */
+async function playUntil<T>(page: Page, until: () => Promise<T | null | false>, limit: number): Promise<T> {
   for (let decisions = 0; decisions < limit; decisions += 1) {
     await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
-    if (await until()) return decisions;
-    if (await page.getByTestId('result-card').isVisible()) return decisions;
+    const result = await until();
+    if (result) return result;
+    if (await page.getByTestId('result-card').isVisible()) throw new Error(`the game ended after ${decisions} decisions before the awaited state`);
+    if (await page.locator('[data-testid=walk-bar][data-walking=true]').count()) {
+      await page.keyboard.press('Space');
+      await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+    }
+    await showEachCreaturesChoice(page);
     const rows = page.getByTestId('action-option');
     const labels = await rows.allTextContents();
     let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast |Attack with /.test(label));
@@ -46,156 +65,229 @@ async function playUntil(page: Page, until: () => Promise<boolean>, limit: numbe
     await rows.nth(Math.max(0, pick)).click();
     await expect.poll(async () => Number(await page.locator('main').getAttribute('data-frame-revision')), { timeout: 30_000 }).toBeGreaterThan(revision);
   }
-  return limit;
+  throw new Error(`no awaited state within the ${limit}-decision budget`);
 }
 
-/** What the page showed in the instant before a press during a beat. */
-interface Seen { text: string; inPanel: boolean; held: boolean; onStep: boolean; outlined: number; windowMarks: number }
+interface WalkSnapshot {
+  caption: string;
+  walking: boolean;
+  ticks: number;
+  moveTicks: number;
+  optionsShown: number;
+  skipVisible: boolean;
+  onStep: boolean;
+  outlined: number;
+  windowMarks: number;
+  topBar: string;
+  walkBarHeight: number;
+}
 
-/**
- * Press during a beat in one task, so the beat cannot end between reading the
- * page and the press: a held number key, or activation of the first choice
- * with or without a pointer. Null when no beat was showing.
- */
-async function pressDuringBeat(page: Page, how: 'key' | 'pointer' | 'activation'): Promise<Seen | null> {
-  return page.evaluate(how => {
-    const beat = document.querySelector('[data-testid=beat]');
-    if (!beat) return null;
-    const row = document.querySelector<HTMLElement>('[data-testid=action-option]')!;
+async function snapshotWhileWalking(page: Page): Promise<WalkSnapshot | null> {
+  return page.evaluate(() => {
+    const bar = document.querySelector<HTMLElement>('[data-testid=walk-bar][data-walking=true]');
+    if (!bar) return null;
+    const caption = bar.querySelector('[data-testid=walk-caption]')?.textContent?.trim() ?? '';
     const board = document.querySelector('[data-testid=game-board]')!;
-    const seen = {
-      text: beat.textContent ?? '',
-      inPanel: beat.closest('[data-testid=action-panel]') !== null,
-      held: row.getAttribute('aria-disabled') === 'true',
+    const topBar = document.querySelector('[data-testid=turn-number]')?.textContent?.trim() ?? '';
+    return {
+      caption,
+      walking: bar.getAttribute('data-walking') === 'true',
+      ticks: bar.querySelectorAll('[data-testid=walk-tick]').length,
+      moveTicks: bar.querySelectorAll('[data-testid=walk-tick][data-move-start=true]').length,
+      optionsShown: document.querySelectorAll('[data-testid=action-option], [data-testid=primary-action]').length,
+      skipVisible: document.querySelector('[data-testid=walk-skip]') !== null,
       onStep: board.getAttribute('data-board') === 'step',
       outlined: board.querySelectorAll('[data-testid=board-card][data-offer-count]:not([data-offer-count="0"])').length,
-      windowMarks: document.querySelectorAll('[data-testid=player-damage], [data-testid=damage-dealt], [data-testid=result-card]').length,
+      windowMarks: document.querySelectorAll('[data-testid=player-damage], [data-testid=damage-dealt], [data-testid=result-card], [data-testid=recent]').length,
+      topBar,
+      walkBarHeight: Math.round(bar.getBoundingClientRect().height),
     };
-    if (how === 'key') {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true, repeat: true }));
-    } else if (how === 'pointer') {
-      row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-      row.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
-    } else row.click();
-    return seen;
-  }, how);
+  });
 }
 
-test('the opponent\'s moves are read out before the decision, and the first press ends the reading without acting', async ({ page }, testInfo) => {
+test('the board walks the opponent turn with a steady-height caption and scrubber; Space returns to now and reveals choices', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  // The slow pace leaves time to read a beat before it ends by itself.
-  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
+  await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
+  const sent = await startAgainstRandom(page);
+
   const main = page.locator('main');
-  let seen: Seen | null = null;
-  let before = 0;
-  let revision: string | null = null;
-  // A number key during a beat ends the reading and chooses nothing.
-  await playUntil(page, async () => {
-    before = sent.count;
-    revision = await main.getAttribute('data-frame-revision');
-    seen = await pressDuringBeat(page, 'key');
-    return seen !== null;
-  }, 120);
-  const read = seen as Seen | null;
-  expect(read).not.toBeNull();
-  expect(read!.text).toMatch(/ cast | played | discarded | attacked with | dealt | died| blocked /);
-  expect(read!.text).toMatch(/\d+ of \d+ · Space to skip/);
-  // The beat headed the decision block, and the choices beneath it waited, still listed.
-  expect(read!.inPanel).toBe(true);
-  expect(read!.held).toBe(true);
-  // A beat is shown on the board it happened on, when that is not the frame's
-  // own: a past board, with no card outlined (its offers belong to the frame).
-  if (read!.onStep) expect(read!.outlined).toBe(0);
-  // Damage marks, which add up the whole window, and the result card wait with the decision.
-  expect(read!.windowMarks).toBe(0);
   const board = page.getByTestId('game-board');
-  await expect(page.getByTestId('beat')).toHaveCount(0);
-  // Ending the reading shows the frame's own board, with the live decision.
+  let seen: WalkSnapshot | null = null;
+  let beforeSpace = 0;
+  let revision: string | null = null;
+
+  await playUntil(page, async () => {
+    beforeSpace = sent.count;
+    revision = await main.getAttribute('data-frame-revision');
+    seen = await snapshotWhileWalking(page);
+    if (!seen) return false;
+    // Number keys do not blindly commit hidden upcoming moves while catching up.
+    await page.keyboard.press('1');
+    // Immediately press Space while walking: returns to now and sends nothing.
+    await page.keyboard.press('Space');
+    return true;
+  }, 120);
+
+  expect(seen).not.toBeNull();
+  expect(seen!.walking).toBe(true);
+  expect(seen!.caption).toMatch(/ cast | played | discarded | attacked with | dealt | died| blocked | activated |Trigger/i);
+  expect(seen!.ticks).toBeGreaterThanOrEqual(1);
+  expect(seen!.moveTicks).toBeGreaterThanOrEqual(1);
+  // Upcoming legal choices wait in the rail until the walk catches up.
+  expect(seen!.optionsShown).toBe(0);
+  expect(seen!.skipVisible).toBe(true);
+  // A past board has no live card offers outlined, and window totals/result card wait.
+  if (seen!.onStep) expect(seen!.outlined).toBe(0);
+  expect(seen!.windowMarks).toBe(0);
+  // The top bar names the cursor and Esc for now.
+  expect(seen!.topBar).toContain('Esc for now');
+
+  // Space returned to now without submitting any Command and revealed the legal choices.
   await expect(board).toHaveAttribute('data-board', 'frame');
-  await expect(page.getByTestId('action-option').first()).not.toHaveAttribute('aria-disabled', 'true');
-  expect(sent.count).toBe(before);
+  await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+  await expect(page.getByTestId('action-option').first()).toBeVisible();
+  expect(sent.count).toBe(beforeSpace);
   await expect(main).toHaveAttribute('data-frame-revision', revision!);
-  // The next press acts.
+
+  // Steady height: `.walk-bar` does not reflow when the walk ends.
+  const idleHeight = Math.round((await page.getByTestId('walk-bar').boundingBox())!.height);
+  expect(idleHeight).toBe(seen!.walkBarHeight);
+
+  // "Show their turn again" replays from the turn's first stop; hovering the caption holds.
+  await page.getByTestId('walk-replay').click();
+  await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'true');
+  await expect(board).toHaveAttribute('data-board', 'step');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.getByTestId('walk-caption').hover();
+  await expect(page.getByTestId('walk-caption')).toHaveAttribute('data-holding', 'true');
+  await expect(page.getByTestId('walk-count')).toHaveText(/^\d+ of \d+ · holding$/);
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: testInfo.outputPath('walk-holding-wash.png') });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: testInfo.outputPath('walk-holding-night.png') });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.mouse.move(2, 2);
+
+  // Clicking a scrubber tick puts the cursor on that stop and holds (walking = false).
+  await page.getByTestId('walk-tick').first().click();
+  await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+  await expect(board).toHaveAttribute('data-board', 'step');
+  await expect(page.getByTestId('turn-number')).toContainText('Esc for now');
+
+  // Pressing a number key while looking back returns to now AND commits immediately.
+  const beforeNum = sent.count;
+  const revBeforeNum = await main.getAttribute('data-frame-revision');
   await page.keyboard.press('1');
-  await expect.poll(() => sent.count).toBe(before + 1);
-  await page.screenshot({ path: testInfo.outputPath('after-skip.png') });
-  // Every fact read out stays in the recap.
-  await expect(page.getByTestId('recent')).toBeVisible();
+  await expect.poll(() => sent.count, { timeout: 15_000 }).toBe(beforeNum + 1);
+  await expect(main).not.toHaveAttribute('data-frame-revision', revBeforeNum!, { timeout: 15_000 });
+  await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true', { timeout: 15_000 });
+  // Once any resulting walk finishes (or is skipped with Esc), History holds the moves at now.
+  if (await board.getAttribute('data-board') === 'step') {
+    await page.keyboard.press('Escape');
+  }
+  await expect(board).toHaveAttribute('data-board', 'frame');
+  await expect(page.getByTestId('game-log')).toBeVisible();
+
+  // Pace control defaults to Study (1.4s), switches to Quick (0.7s) and Off.
+  const pace = page.getByTestId('walk-pace');
+  await expect(pace.locator('[data-pace=study]')).toHaveAttribute('aria-pressed', 'true');
+  await pace.locator('[data-pace=quick]').click();
+  await expect(pace.locator('[data-pace=quick]')).toHaveAttribute('aria-pressed', 'true');
+  await pace.locator('[data-pace=off]').click();
+  await expect(pace.locator('[data-pace=off]')).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('pressing the board or activating a choice ends the reading without acting', async ({ page }) => {
+test('clicking the earlier board returns to now; selecting a history line and arrows step kept boards', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
+  await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
+  const sent = await startAgainstRandom(page);
+
   const board = page.getByTestId('game-board');
-  await playUntil(page, async () => await board.getAttribute('data-board') === 'step', 160);
+  await playUntil(
+    page,
+    async () =>
+      await board.getAttribute('data-board') === 'step'
+      && (await page.locator('[data-testid=game-log] button[data-history-seq]').count()) >= 2,
+    160,
+  );
   await expect(board).toHaveAttribute('data-board', 'step');
-  await page.screenshot({ path: test.info().outputPath('step-board.png') });
-  const before = sent.count;
-  // A press on a past board commits nothing: its cards had no offers when pressed.
-  const card = board.getByTestId('board-card').first();
-  await card.click();
+  await page.screenshot({ path: testInfo.outputPath('step-board.png') });
+
+  // Clicking a card on an earlier board returns to now and commits nothing.
+  const beforeBoardClick = sent.count;
+  await board.getByTestId('board-card').first().click();
   await expect(board).toHaveAttribute('data-board', 'frame');
-  await expect(page.getByTestId('beat')).toHaveCount(0);
-  expect(sent.count).toBe(before);
-  // A held choice can also be activated without pointer events by assistive technology.
-  for (const how of ['pointer', 'activation'] as const) {
-    let heldBefore = 0;
-    let seen = false;
-    await playUntil(page, async () => {
-      heldBefore = sent.count;
-      seen = await pressDuringBeat(page, how) !== null;
-      return seen;
-    }, 160);
-    expect(seen).toBe(true);
-    await expect(page.getByTestId('beat')).toHaveCount(0);
-    await expect(board).toHaveAttribute('data-board', 'frame');
-    expect(sent.count).toBe(heldBefore);
-  }
+  await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+  expect(sent.count).toBe(beforeBoardClick);
+
+  // Selecting a history line in the rail puts the cursor on that line's kept board.
+  const lines = page.locator('[data-testid=game-log] button[data-history-seq]');
+  const count = await lines.count();
+  expect(count).toBeGreaterThanOrEqual(2);
+  await lines.nth(0).click();
+  await expect(board).toHaveAttribute('data-board', 'step');
+  await expect(lines.nth(0)).toHaveAttribute('aria-current', 'true');
+  await expect(page.getByTestId('turn-number')).toContainText('Esc for now');
+
+  // → steps forward one history line; ← steps back; Esc returns to now.
+  const firstSeq = await page.getByTestId('walk-bar').getAttribute('data-cursor');
+  await page.keyboard.press('ArrowRight');
+  const nextSeq = await page.getByTestId('walk-bar').getAttribute('data-cursor');
+  expect(nextSeq).not.toBe(firstSeq);
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-cursor', firstSeq!);
+  await page.keyboard.press('Escape');
+  await expect(board).toHaveAttribute('data-board', 'frame');
+  await expect(page.getByTestId('turn-number')).not.toContainText('Esc for now');
+
+  // After Esc clears a clicked history line, Space must not jump back to that history line.
+  await page.keyboard.press('Space');
+  await expect(board).toHaveAttribute('data-board', 'frame');
 });
 
-test('reduced motion reads out no beats', async ({ page }) => {
+test('reduced motion does not auto-walk, while scrubber and Show their turn again still work by hand', async ({ page }) => {
   test.setTimeout(180_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
-  let opponentFacts = 0;
+  await startAgainstRandom(page);
   await playUntil(page, async () => {
-    expect(await page.getByTestId('beat').count()).toBe(0);
-    opponentFacts = await page.locator('[data-testid=recent-fact].theirs').count();
-    return opponentFacts > 0;
+    expect(await page.locator('[data-testid=walk-bar][data-walking=true]').count()).toBe(0);
+    return await page.locator('[data-testid=game-log] [data-testid=log-entry][data-actor=opponent]').count() > 0;
   }, 120);
-  expect(opponentFacts).toBeGreaterThan(0);
-  await expect(page.getByTestId('beat')).toHaveCount(0);
+  await expect(page.getByTestId('game-board')).toHaveAttribute('data-board', 'frame');
+  await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+  // Manual replay steps to stop 0 and holds without auto-advancing.
+  await page.getByTestId('walk-replay').click();
+  await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+  await expect(page.getByTestId('game-board')).toHaveAttribute('data-board', 'step');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('game-board')).toHaveAttribute('data-board', 'frame');
 });
 
-test('the Menu turns the reading off, and the browser remembers it', async ({ page }) => {
+test('a reload never walks turns already shown, and the next opponent turn still walks', async ({ page }) => {
   test.setTimeout(180_000);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
-  await page.getByTestId('game-menu').click();
-  const pace = page.getByTestId('beat-pace');
-  await expect(pace.getByRole('radio', { name: 'Quick' })).toBeChecked();
-  await pace.getByRole('radio', { name: 'Off' }).check();
-  await page.getByTestId('game-menu').click();
-  let opponentFacts = 0;
-  await playUntil(page, async () => {
-    expect(await page.getByTestId('beat').count()).toBe(0);
-    opponentFacts = await page.locator('[data-testid=recent-fact].theirs').count();
-    return opponentFacts > 0;
-  }, 120);
-  expect(opponentFacts).toBeGreaterThan(0);
+  await startAgainstRandom(page);
+  await playUntil(page, async () => (await page.locator('[data-testid=walk-bar][data-walking=true]').count()) > 0, 120);
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false', { timeout: 30_000 });
+  const shownLines = await page.locator('[data-testid=game-log] button[data-history-seq]').count();
+
   await page.reload();
   await expect(page.getByTestId('game')).toBeVisible();
-  await page.getByTestId('game-menu').click();
-  await expect(page.getByTestId('beat-pace').getByRole('radio', { name: 'Off' })).toBeChecked();
+  await expect(page.locator('[data-testid=game-log] button[data-history-seq]')).toHaveCount(shownLines);
+  for (let sample = 0; sample < 8; sample += 1) {
+    expect(await page.locator('[data-testid=walk-bar][data-walking=true]').count()).toBe(0);
+    await expect(page.getByTestId('game-board')).toHaveAttribute('data-board', 'frame');
+    await page.waitForTimeout(200);
+  }
+
+  let walked = false;
+  await playUntil(page, async () => {
+    walked = (await page.locator('[data-testid=walk-bar][data-walking=true]').count()) > 0;
+    return walked;
+  }, 120);
+  expect(walked).toBe(true);
 });

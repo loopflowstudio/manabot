@@ -11,7 +11,7 @@ use crate::{
         game::Game,
     },
     state::{
-        game_object::{ObjectId, PlayerId, Target},
+        game_object::{ObjectId, PlayerId, PublicId, Target},
         zone::ZoneType,
     },
 };
@@ -121,6 +121,30 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
     }
 }
 
+/// A departed appearance keeps its historical definition and zone. Its live
+/// object link cannot follow the physical card or its battlefield alias.
+pub(crate) fn expire_links(game: &mut Game, id: PublicId, battlefield_alias: Option<PublicId>) {
+    let matches = |reference: &HistoryReference| {
+        matches!(reference, HistoryReference::Card { context_id: Some(context), .. }
+            if *context == id.0 as i32 || battlefield_alias.is_some_and(|alias| *context == alias.0 as i32))
+    };
+    if game
+        .policy_history
+        .iter()
+        .any(|row| matches(&row.source) || matches(&row.target))
+    {
+        for row in Arc::make_mut(&mut game.policy_history) {
+            for reference in [&mut row.source, &mut row.target] {
+                if matches(reference) {
+                    if let HistoryReference::Card { context_id, .. } = reference {
+                        *context_id = None;
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Update the derived suffix at the same append that owns the committed ledger.
 /// Work is bounded by 4*HISTORY_LIMIT reference comparisons plus the current
 /// event's target count, independent of game length. Clones share
@@ -133,31 +157,11 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
         ..
     } = event
     {
-        let id = game.state[*object].id.0 as i32;
-        let battlefield_alias = departed
+        let id = game.state[*object].id;
+        let alias = departed
             .and_then(|id| game.object_lki(id))
-            .map(|lki| lki.presentation_id.0 as i32);
-        // Every real zone move creates a new incarnation. The old reference
-        // keeps its public definition/zone but cannot follow the physical card.
-        let matches = |reference: &HistoryReference| {
-            matches!(reference,
-            HistoryReference::Card { context_id: Some(context), .. } if *context == id || Some(*context) == battlefield_alias)
-        };
-        if game
-            .policy_history
-            .iter()
-            .any(|row| matches(&row.source) || matches(&row.target))
-        {
-            for row in Arc::make_mut(&mut game.policy_history) {
-                for reference in [&mut row.source, &mut row.target] {
-                    if matches(reference) {
-                        if let HistoryReference::Card { context_id, .. } = reference {
-                            *context_id = None;
-                        }
-                    }
-                }
-            }
-        }
+            .map(|lki| lki.presentation_id);
+        expire_links(game, id, alias);
     }
     let unknown = HistoryReference::Unavailable;
     let (kind, amount, source, targets) = match event {
@@ -478,7 +482,7 @@ mod tests {
     #[test]
     fn observations_share_bounded_suffix_and_forks_isolate_it() {
         let mut game = game();
-        game.create_token("token.ally", PlayerId(0), false);
+        game.create_token("token.ally", PlayerId(0));
         let token = game.state.zones.latest().last().unwrap();
         let permanent = game.state.permanent_of(token).unwrap();
         game.emit(GameEvent::DamageDealt {

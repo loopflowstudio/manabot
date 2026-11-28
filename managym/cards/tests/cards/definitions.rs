@@ -10,14 +10,13 @@
 
 use managym::state::{
     ability::{Ability, Actor, Condition, Effect, TriggerCondition, TurnStep},
-    card::{
-        CardType, PrintedCharacteristics, StaticAbility, StaticPtBuff, StaticScope, StaticTypeGrant,
-    },
+    card::{CardType, PrintedCharacteristics, StaticAbility, StaticScope, StaticTypeGrant},
+    effect::Modification,
     permanent::CounterKind,
     predicate::CardPredicate,
     subtype::subtype_category,
 };
-use managym_cards::{catalog, token_catalog};
+use managym_cards::{catalog, emblem_catalog, token_catalog};
 use serde_json::Value;
 
 /// Where a condition sits: an `Effect::If` condition may ask anything; an
@@ -83,11 +82,21 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                             walk(inner, format!("{child}/{part}"), place, found);
                         }
                     }
+                    ("EntersWithCounters", Value::Object(entry)) => {
+                        if let Some(condition) = entry.get("condition") {
+                            walk(
+                                condition,
+                                format!("{child}/condition"),
+                                Place::SourceStatic,
+                                found,
+                            );
+                        }
+                    }
                     ("intervening_if", _) => walk(field, child, Place::InterveningIf, found),
                     // A state trigger (CR 603.8) asks its condition of its source.
                     ("State", _) => walk(field, child, Place::SourceStatic, found),
                     (
-                        "TypeGrant" | "SetsLandType" | "PtBuff" | "KeywordGrant" | "Continuous",
+                        "TypeGrant" | "SetsLandType" | "KeywordGrant" | "Continuous",
                         Value::Object(ability),
                     ) => {
                         // Layers ask a battlefield grant's condition of its
@@ -114,12 +123,13 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
     }
 }
 
-/// The printed characteristics of every card face and token.
+/// The printed characteristics of every card face, token and emblem.
 fn authored_definitions() -> impl Iterator<Item = &'static PrintedCharacteristics> {
     catalog()
         .iter()
         .flat_map(|card| std::iter::once(&card.printed).chain(card.back_face.as_deref()))
         .chain(token_catalog().iter().map(|token| &token.printed))
+        .chain(emblem_catalog().iter().map(|emblem| &emblem.printed))
 }
 
 #[test]
@@ -215,15 +225,11 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     // Beastmaster Ascension: layers ask a buff's condition of its source.
     let source_buff = PrintedCharacteristics {
         name: "Witness".into(),
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::This,
-            condition: Some(fire.clone()),
-            power: 1,
-            toughness: 1,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
+        statics: vec![StaticAbility::continuous(
+            StaticScope::This,
+            Some(fire.clone()),
+            vec![Modification::pump(1, 1)],
+        )],
         ..Default::default()
     };
     assert!(misplaced_resolution_conditions(&source_buff).is_empty());
@@ -277,7 +283,11 @@ fn tla_allocation_has_every_face_and_fixed_token_in_the_catalog() {
                     .find(|token| token.name == name)
                     .unwrap_or_else(|| panic!("undefined allocated token {name}"));
                 let id = catalog.token_id(token.key).unwrap();
-                assert!(catalog.definition(id).unwrap().is_token, "{name}");
+                assert!(
+                    catalog.definition(id).unwrap().kind
+                        == managym_state::game_object::ObjectKind::Token,
+                    "{name}"
+                );
             }
             "copy_marker" => {
                 markers += 1;

@@ -228,7 +228,13 @@ def test_mixed_disclosure_reads_as_a_share_of_the_games(tmp_path: Path) -> None:
     assert sum(disclosure.values()) == games == collector.stats.games
     assert ("skip_trivial", None, "true", games, 1.0) in shares
     # Disclosure varied, so only the setting every game shared reads as always.
-    assert corpus.sql(ALWAYS).fetchall() == [("skip_trivial", None, "true")]
+    assert corpus.sql(ALWAYS).fetchall() == [
+        ("mana_floats", 0, "off"),
+        ("mana_floats", 1, "off"),
+        ("mana_payment", 0, "manual"),
+        ("mana_payment", 1, "manual"),
+        ("skip_trivial", None, "true"),
+    ]
 
 
 def test_a_game_without_setting_counts_leaves_coverage_unknown(tmp_path: Path) -> None:
@@ -381,10 +387,22 @@ def test_pretrained_corpus_follows_the_published_parent_checkpoint(
     assert corpus.sql(CHANGED).fetchall() == [
         ("first", "parent", "decklists", None, "open", 1, 1, 2),
         ("second", "child", "decklists", None, "closed", 1, 1, 2),
+        *(
+            (experiment, run, setting, seat, value, 1, 1, 2)
+            for setting, value in (("mana_floats", "off"), ("mana_payment", "manual"))
+            for seat in (0, 1)
+            for experiment, run in (("first", "parent"), ("second", "child"))
+        ),
         ("first", "parent", "skip_trivial", None, "true", 1, 1, 2),
         ("second", "child", "skip_trivial", None, "true", 1, 1, 2),
     ]
-    assert corpus.sql(ALWAYS).fetchall() == [("skip_trivial", None, "true")]
+    assert corpus.sql(ALWAYS).fetchall() == [
+        ("mana_floats", 0, "off"),
+        ("mana_floats", 1, "off"),
+        ("mana_payment", 0, "manual"),
+        ("mana_payment", 1, "manual"),
+        ("skip_trivial", None, "true"),
+    ]
     assert corpus.sql(
         """select distinct board, card from deck_cards where copies > 0
         order by card""",

@@ -25,7 +25,7 @@ def runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.delenv("ACADEMY_PLAY_CHECKPOINTS", raising=False)
     monkeypatch.setenv("MANABOT_RUNS_DIR", str(tmp_path / ".runs"))
     monkeypatch.setattr("managym.academy.opponent._registry", None)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     # Catalog checkpoints sample their actions; fix the game's length.
     torch.manual_seed(0)
     current = tmp_path / ".runs" / "self-play" / "step_0.pt"
@@ -75,7 +75,7 @@ def test_catalog_lists_admissible_and_refused_checkpoints(runs: Path) -> None:
     assert "differs from this runtime in policy_input_version" in older["reason"]
 
 
-def test_catalog_lists_policies_etude_trained_here(
+def test_catalog_skips_ambient_etude_home_until_configured(
     runs: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "etude"))
@@ -84,8 +84,17 @@ def test_catalog_lists_policies_etude_trained_here(
     with TestClient(app) as client:
         catalog = client.get("/api/opponents").json()
     shas = {entry["sha256"] for entry in catalog["opponents"] if entry["available"]}
-    assert _id(trained) in shas
+    assert _id(trained) not in shas
     assert _id(runs / "self-play" / "step_0.pt") in shas
+
+    monkeypatch.setenv("ACADEMY_PLAY_CHECKPOINTS", str(trained))
+    monkeypatch.setattr("managym.academy.opponent._registry", None)
+    with TestClient(app) as client:
+        explicit = client.get("/api/opponents").json()
+    explicit_shas = {
+        entry["sha256"] for entry in explicit["opponents"] if entry["available"]
+    }
+    assert _id(trained) in explicit_shas
 
 
 @pytest.mark.parametrize("kind", ["heuristic", "greedy"])
@@ -171,7 +180,7 @@ def test_chosen_checkpoint_plays_either_deck_and_is_recorded(
                 choice = actions[rng.randrange(len(actions))]
                 websocket.send_json({"type": "action", "index": choice["index"]})
                 payload = settled_message(websocket)
-    assert payload["table"]["opponent"]["sha256"] == sha256
+    assert payload["opponent"]["sha256"] == sha256
 
     [(_, trace)] = _recorded_traces(trace_store.TRACES_DIR)
     config = trace["config"]
@@ -387,7 +396,7 @@ def test_setup_preview_names_bound_decks_without_loading(runs: Path) -> None:
         assert refused["compatible"] is False
         assert "was trained on ur_lessons vs gw_allies" in refused["reason"]
         config.update(hero_deck="ur_lessons", villain_deck="gw_allies")
-        assert client.post("/api/policies/check", json=config).json() == {
-            "compatible": True,
-            "reason": None,
-        }
+        checked = client.post("/api/policies/check", json=config).json()
+        assert checked["compatible"] is True
+        assert checked["reason"] is None
+        assert checked["fit"]["status"] == "unknown"

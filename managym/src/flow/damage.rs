@@ -25,24 +25,51 @@ pub(crate) struct LifelinkGain {
 }
 
 impl Game {
-    /// Commit each lifelink source's total from one simultaneous damage
-    /// event as a single gain, in first-damage order: a creature that deals
-    /// damage to several recipients at once gains life once (CR 119.9), and
-    /// two lifelink sources are two gains.
-    pub(crate) fn commit_lifelink_gains(&mut self, gains: impl IntoIterator<Item = LifelinkGain>) {
+    /// CR 119.9, 120.3f: one gain per source across simultaneous recipients.
+    /// Compute these results after damage prevention but before committing any
+    /// member, so a gain's replacement choice also suspends the damage.
+    pub(super) fn lifelink_gains(
+        &self,
+        events: &[super::proposed_event::PendingEvent],
+    ) -> Vec<LifelinkGain> {
         let mut totals: Vec<LifelinkGain> = Vec::new();
-        for gain in gains {
-            match totals.iter_mut().find(|total| total.source == gain.source) {
-                Some(total) => total.amount = total.amount.saturating_add(gain.amount),
-                None => totals.push(gain),
+        for event in events {
+            let ProposedEvent::Damage {
+                source: Some(source),
+                amount,
+                target,
+                ..
+            } = event.event
+            else {
+                continue;
+            };
+            if amount <= 0
+                || self.damage_is_prevented(target)
+                || !self.source_keywords(source).has(Keyword::Lifelink)
+            {
+                continue;
+            }
+            let Some(controller) = self.source_controller(source) else {
+                continue;
+            };
+            if let Some(total) = totals.iter_mut().find(|total| total.source == source) {
+                total.amount = total.amount.saturating_add(amount);
+            } else {
+                totals.push(LifelinkGain {
+                    source,
+                    controller,
+                    amount,
+                });
             }
         }
-        for total in totals {
-            self.commit_life_change(total.controller, total.amount);
-        }
+        totals
     }
 
-    /// Excess after replacement, measured against the pre-commit creature.
+    fn damage_is_prevented(&self, target: ProposedDamageTarget) -> bool {
+        matches!(target, ProposedDamageTarget::Player(player) if self.player_has(player, &crate::state::effect::Modification::ProtectionFromEverything))
+    }
+
+    /// Excess after replacement, measured against each applicable type (CR 120.10).
     /// Deathtouch makes one remaining damage lethal (CR 120.4a).
     fn excess_for_damage(
         &self,
@@ -54,16 +81,23 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return 0;
         };
-        if !view.is_creature() {
-            return 0;
+        let mut excess = 0;
+        if view.is_creature() {
+            let remaining = (view.toughness - permanent.damage).max(0);
+            let lethal = if deathtouch {
+                remaining.min(1)
+            } else {
+                remaining
+            };
+            excess = excess.max(amount - lethal);
         }
-        let remaining = (view.toughness - permanent.damage).max(0);
-        let lethal = if deathtouch {
-            remaining.min(1)
-        } else {
-            remaining
-        };
-        (amount - lethal).max(0)
+        if view.types.is_planeswalker() {
+            excess = excess.max(amount - permanent.counter_count(CounterKind::Loyalty));
+        }
+        if view.types.is_battle() {
+            excess = excess.max(amount - permanent.counter_count(CounterKind::Defense));
+        }
+        excess
     }
 
     pub(crate) fn commit_damage(
@@ -74,35 +108,22 @@ impl Game {
         combat: bool,
     ) -> EventResult {
         let mut result = EventResult::default();
-        if amount <= 0 {
+        if amount <= 0 || self.damage_is_prevented(target) {
             return result;
         }
         let keywords = source
             .map(|object| self.source_keywords(object))
             .unwrap_or_default();
         let source_has_deathtouch = keywords.has(Keyword::Deathtouch);
-        let lifelink = source
-            .filter(|_| keywords.has(Keyword::Lifelink))
-            .and_then(|source| {
-                self.source_controller(source)
-                    .map(|controller| LifelinkGain {
-                        source,
-                        controller,
-                        amount,
-                    })
-            });
         let combat_source = combat
             .then(|| source.and_then(|object_ref| self.object_event_ref(object_ref)))
             .flatten();
 
         match target {
             ProposedDamageTarget::Player(player) => {
-                // Protection from everything prevents all damage (CR 702.16e).
-                if self.has_protection_from_everything(player) {
-                    return result;
-                }
                 // Damage is still dealt to a player whose life total can't
                 // change; only the life loss doesn't happen (CR 119.7).
+                self.player_damage_capture(source, player, amount);
                 let locked = self.life_total_cant_change(player);
                 let Some(life) = self.state.life_mut(player) else {
                     return result;
@@ -165,8 +186,8 @@ impl Game {
                 if view.is_creature() {
                     self.state
                         .mark_damage(permanent_id, amount, source_has_deathtouch);
-                } else if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                    permanent.dealt_damage_this_turn = true;
+                } else {
+                    self.state.mark_dealt_damage(permanent_id);
                 }
                 if view.types.is_planeswalker() {
                     self.commit_counter_change(object_ref, CounterKind::Loyalty, -amount, None);
@@ -190,9 +211,6 @@ impl Game {
             }
         }
 
-        // The batch commits the gain: one source's damage dealt at the same
-        // time is one life-gain event (CR 120.3f, 119.9).
-        result.lifelink = lifelink;
         result.combat_damage = source
             .filter(|_| combat)
             .map(|source| (source, amount as u32));
@@ -204,20 +222,21 @@ impl Game {
         self.apply_immediate_event(ProposedEvent::LifeChange { player, delta })
     }
 
+    pub(super) fn can_gain_life(&self, player: PlayerId) -> bool {
+        !self.life_total_cant_change(player)
+            && !self.has_functioning_static(None, |ability| {
+                matches!(ability, StaticAbility::PlayersCantGainLife)
+            })
+    }
+
     /// Apply the change and return the signed amount that actually occurred.
     pub(crate) fn commit_life_change(&mut self, player: PlayerId, delta: i32) -> i32 {
-        if self.life_total_cant_change(player) {
-            return 0;
-        }
-        if delta > 0
-            && [PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
-                self.layer_views(self.iter_battlefield_permanents(owner))
-                    .any(|(_, view)| {
-                        view.static_abilities
-                            .contains(&StaticAbility::PlayersCantGainLife)
-                    })
-            })
-        {
+        let blocked = if delta > 0 {
+            !self.can_gain_life(player)
+        } else {
+            self.life_total_cant_change(player)
+        };
+        if delta == 0 || blocked {
             return 0;
         }
         let Some(life) = self.state.life_mut(player) else {
@@ -249,7 +268,7 @@ impl Game {
     /// grants to a resolving spell (Lo and Li's Lesson spells).
     fn source_keywords(&self, source: ObjectId) -> Keywords {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return self.layer_view(permanent_id).keywords;
+            return self.with_layer_view(permanent_id, |v| v.keywords);
         }
         if let Some(lki) = self.object_lki(source) {
             return lki.keywords;
@@ -261,18 +280,8 @@ impl Game {
     }
 
     pub(crate) fn source_controller(&self, source: ObjectId) -> Option<PlayerId> {
-        self.damage_source_facts(source)
-            .map(|(controller, _)| controller)
-    }
-
-    /// Read controller and creature status from the same incarnation of the source.
-    pub(crate) fn damage_source_facts(&self, source: ObjectId) -> Option<(PlayerId, bool)> {
         if let Ok(id) = self.lookup_current_permanent(source) {
-            let permanent = self.state.permanents[id].as_ref()?;
-            return Some((
-                permanent.controller,
-                self.permanent_is_battlefield_creature(id),
-            ));
+            return Some(self.state.permanents[id].as_ref()?.controller);
         }
         if let Some(controller) = self
             .spell_on_stack(source)
@@ -284,19 +293,19 @@ impl Game {
                     .map(|spell| spell.controller)
             })
         {
-            return Some((
-                controller,
-                self.state.source_base(source).1.types.is_creature(),
-            ));
+            return Some(controller);
         }
         self.object_lki(source)
-            .map(|lki| (lki.controller, lki.was_creature()))
+            .map(|lki| lki.controller)
             .or_else(|| {
-                let (_, owner, _) = self.state.objects.provenance(source)?;
-                Some((owner, self.state.source_base(source).1.types.is_creature()))
+                self.state
+                    .objects
+                    .provenance(source)
+                    .map(|(_, owner, _)| owner)
             })
     }
 
+    #[cfg(test)]
     pub(crate) fn gain_life(&mut self, player: PlayerId, amount: i32) {
         if amount > 0 {
             self.change_life(player, amount);
@@ -324,7 +333,9 @@ impl Game {
             if self.state.permanents[permanent_id]
                 .as_ref()
                 .is_some_and(|permanent| {
-                    !permanent.activated_this_turn.is_empty() || permanent.dealt_damage_this_turn
+                    permanent.loyalty_activated_this_turn
+                        || !permanent.activated_this_turn.is_empty()
+                        || permanent.dealt_damage_this_turn
                 })
             {
                 self.state.clear_permanent_turn_history(permanent_id);

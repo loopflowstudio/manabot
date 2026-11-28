@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PermanentState } from '$lib/types';
 import type { CardFace } from '$lib/card-faces.svelte';
-import { counterTerms, keywordsOf, labelText, permissionTerms, ptProvenance, signed, statusesOf } from './inspect';
+import { counterTerms, labelText, permissionTerms, ptProvenance, signed } from './inspect';
 
 const face: CardFace = { cost: '{G}{W}', colors: ['G', 'W'], type_line: 'Creature — Human Soldier Ally', keywords: ['trample'], power: 1, toughness: 1 };
 function permanent(extra: Partial<PermanentState>): PermanentState {
@@ -48,33 +48,6 @@ describe('ptProvenance', () => {
     const types = { is_creature: false, is_land: true, is_spell: false, is_artifact: false, is_enchantment: false, is_planeswalker: false, is_battle: false };
     expect(ptProvenance(permanent({ name: 'Island', power: 0, toughness: 0, types }), null)).toBeNull();
   });
-});
-
-describe('keywordsOf', () => {
-  it("takes which keywords it has from the projection, and says why", () => {
-    const granted = permanent({ keywords: ['flying', 'trample', 'vigilance'], effects: [
-      { modification: 'AddKeywords', keywords: ['flying'], duration: 'EndOfTurn', source: 'Yip Yip!', timestamp: 2 },
-    ] });
-    // Field order from the projection; vigilance is granted by an ability the effect records do not name.
-    expect(keywordsOf(granted, face)).toEqual([
-      { keyword: 'flying', source: 'Yip Yip!, until end of turn' },
-      { keyword: 'trample', source: null },
-      { keyword: 'vigilance', source: 'Another ability' },
-    ]);
-  });
-
-  it('shows no printed keyword the projection says it lost', () => {
-    expect(keywordsOf(permanent({ abilities_lost: true }), face)).toEqual([]);
-    expect(keywordsOf(permanent({ effects: [{ modification: 'LoseKeywords', keywords: ['trample'], duration: 'EndOfTurn', timestamp: 3 }] }), face)).toEqual([]);
-  });
-});
-
-it('gives a saddled Mount its status in words', () => {
-  expect(statusesOf(permanent({ effects: [
-    { modification: 'Saddled', duration: 'EndOfTurn', source: 'Guidelight Pathmaker', timestamp: 7 },
-    { modification: 'ModifyPt', power: 1, toughness: 1, duration: 'EndOfTurn', timestamp: 8 },
-  ] }))).toEqual(['Saddled until end of turn']);
-  expect(statusesOf(permanent({}))).toEqual([]);
 });
 
 it('signs P/T changes as rules text does', () => {

@@ -263,6 +263,15 @@ def test_registered_puct_completes_games_and_replays(tmp_path: Path) -> None:
         assert game.get("terminated"), game.get("failure")
         assert all(v == 0 for v in game["integrity"].values())
         finalize_game(game)
-        assert audit_view(stored_game(game))["decisions"] == game["decisions"]
-        games.append(game)
+        record = stored_game(game)
+        projected = audit_view(record)["decisions"]
+        assert [
+            {
+                k: v
+                for k, v in row.items()
+                if k not in {"pre_state_digest", "post_state_digest"}
+            }
+            for row in projected
+        ] == game["decisions"]
+        games.append(record)
     assert replay_games(games).passed

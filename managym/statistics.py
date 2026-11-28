@@ -254,6 +254,78 @@ class Behaviour(Reducer[BehaviourRow]):
 
 
 @dataclass(frozen=True)
+class TotalsRow:
+    """What one seat did over `games` games. `turns` counts game turns (both
+    players'), as the turn number the game ended on. Damage counts are None for
+    a capture written before damage was counted."""
+
+    seat: int
+    games: int = 0
+    turns: int = 0
+    spells_cast: int = 0
+    cards_drawn: int = 0
+    damage_dealt: int | None = None
+    damage_taken: int | None = None
+
+
+class Totals(Reducer[TotalsRow]):
+    """Per seat: turns, spells cast, cards drawn and damage dealt and taken.
+
+    A spell cast is a card put on the stack (CR 601.2a), so copies of spells,
+    which are never cast, do not count. A draw is a library card drawn into
+    hand (CR 121.1), after the opening hand. Damage counts damage dealt to
+    players (CR 120.3a): taken from any source, dealt by a seat's sources to
+    the other player. Interrupted games count up to where they stopped.
+    """
+
+    def end(self, result: "ReplayStop", capture: CapturedCards) -> list[TotalsRow]:
+        moves = capture.capture.moves
+        exposure = capture.capture.exposure
+        dealt = exposure.player_damage_dealt if exposure else None
+        taken = exposure.player_damage_taken if exposure else None
+        return [
+            TotalsRow(
+                seat,
+                games=1,
+                turns=capture.turn,
+                spells_cast=sum(
+                    move.controller == seat
+                    and move.card.zone == "Stack"
+                    and move.from_ is not None
+                    for move in moves
+                ),
+                cards_drawn=sum(
+                    move.controller == seat and move.cause == "draw" for move in moves
+                ),
+                damage_dealt=None if dealt is None else dealt[seat],
+                damage_taken=None if taken is None else taken[seat],
+            )
+            for seat in (0, 1)
+        ]
+
+    def finish(self, rows: list[TotalsRow]) -> list[TotalsRow]:
+        def total(values: list[int | None]) -> int | None:
+            known = [value for value in values if value is not None]
+            return sum(known) if len(known) == len(values) else None
+
+        tables = []
+        for seat in (0, 1):
+            mine = [row for row in rows if row.seat == seat]
+            tables.append(
+                TotalsRow(
+                    seat,
+                    games=sum(row.games for row in mine),
+                    turns=sum(row.turns for row in mine),
+                    spells_cast=sum(row.spells_cast for row in mine),
+                    cards_drawn=sum(row.cards_drawn for row in mine),
+                    damage_dealt=total([row.damage_dealt for row in mine]),
+                    damage_taken=total([row.damage_taken for row in mine]),
+                )
+            )
+        return tables
+
+
+@dataclass(frozen=True)
 class CardRow:
     seat: int
     card: str

@@ -61,6 +61,27 @@ fn cityscape_leveler_cast_trigger_destroys_and_pays_the_controller_a_tapped_powe
 }
 
 #[test]
+fn cityscape_leveler_attack_trigger_declined_leaves_itself_and_makes_no_powerstone() {
+    use crate::support::{game::clear_summoning_sickness, play::settle};
+    use managym::agent::action::ActionType;
+
+    let mut s = five_color_setup(&["Cityscape Leveler"]);
+    let leveler = s.force_permanent_on_battlefield(0, "Cityscape Leveler");
+    clear_summoning_sickness(&mut s, leveler);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, leveler);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Cityscape Leveler"),
+        vec![leveler]
+    );
+    assert!(powerstones(&s, 0).is_empty());
+    assert!(powerstones(&s, 1).is_empty());
+}
+
+#[test]
 fn powerstone_mana_pays_for_artifact_spells_but_not_nonartifact_spells() {
     for (pool, name, castable) in [
         ("1R", "Gray Ogre", false),
@@ -71,7 +92,7 @@ fn powerstone_mana_pays_for_artifact_spells_but_not_nonartifact_spells() {
         let mut s = five_color_unfunded_setup(&["Cityscape Leveler", "Gray Ogre"]);
         s.force_card_in_hand(0, name);
         s.game_mut()
-            .create_token("token.powerstone", PlayerId(0), false)
+            .create_token("token.powerstone", PlayerId(0))
             .expect("powerstone");
         s.set_player_mana_pool(0, pool);
         s.game_mut().scenario_refresh_priority().unwrap();
@@ -220,4 +241,49 @@ fn foundations_5e_deadly_riposte() {
 #[test]
 fn foundations_5g_obliterating_bolt() {
     crate::assert_damage_exiles_creature_or_planeswalker("Obliterating Bolt", 4);
+}
+
+#[test]
+fn demolition_field_destroys_nonbasic_and_lets_both_players_search_untapped_basics() {
+    use crate::support::{
+        inspect::{card_of, library_card, tapped},
+        play::{activate, choose, select_card, settle},
+    };
+    use managym::{agent::action::Action, state::player::ManaPayment};
+
+    let mut s = five_color_setup(&["Demolition Field", "Azorius Guildgate"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let field = s.force_permanent_on_battlefield(0, "Demolition Field");
+    let field_card = card_of(&s, field);
+    let basic = s.force_permanent_on_battlefield(1, "Plains");
+    let gate = s.force_permanent_on_battlefield(1, "Azorius Guildgate");
+    let gate_card = card_of(&s, gate);
+
+    activate(&mut s, field, 0);
+    let offers = offered_targets(&s);
+    assert!(offers.contains(&Target::Permanent(gate)));
+    assert!(!offers.contains(&Target::Permanent(basic)));
+    assert!(s.choose_target(Target::Permanent(gate)));
+    assert_eq!(zone_of(&s, field_card), Some(ZoneType::Graveyard));
+
+    // Target's controller (player 1) may search for an untapped basic.
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    let their_basic = library_card(&s, 1, "Island");
+    select_card(&mut s, their_basic);
+
+    // Controller (player 0) may search for an untapped basic.
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    let our_basic = library_card(&s, 0, "Forest");
+    select_card(&mut s, our_basic);
+    settle(&mut s);
+
+    assert_eq!(zone_of(&s, gate_card), Some(ZoneType::Graveyard));
+    let their_perm = crate::support::inspect::permanent_of(&s, their_basic).unwrap();
+    let our_perm = crate::support::inspect::permanent_of(&s, our_basic).unwrap();
+    assert!(!tapped(&s, their_perm));
+    assert!(!tapped(&s, our_perm));
 }

@@ -52,7 +52,11 @@ def test_attachment_link_is_a_join_not_a_numeric_feature() -> None:
     attached = encode(raw, space)
     torch.manual_seed(5)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
-    assert len(agent.link_to_target) == len(agent.link_from_target) == 2
+    assert (
+        len(agent.link_to_target)
+        == len(agent.link_from_target)
+        == len(PERMANENT_LINK_INDEXES)
+    )
     with torch.no_grad():
         # Zero-initialized joins leave the initial function unchanged.
         same = [
@@ -77,10 +81,12 @@ def test_object_permutation_preserves_learned_permanent_links(column: int) -> No
     space, raw, host = _attached_observation()
     first, second = raw.agent_permanents
     second.attached_to = None
-    if column == PERMANENT_ATTACHED_INDEX:
+    if column == PERMANENT_LINK_INDEXES[0]:
         second.attached_to = first.id
-    else:
+    elif column == PERMANENT_LINK_INDEXES[1]:
         second.blocking = first.id
+    else:
+        second.attacked_permanent = first.id
     raw.agent_permanents = [first, second]
     torch.manual_seed(5)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))

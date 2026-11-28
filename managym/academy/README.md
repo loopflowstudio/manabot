@@ -31,28 +31,48 @@ pending choice with the same legal offers and permitted information.
 
 ## Modules
 
-- **`server.py`**: FastAPI WebSocket server (`/ws/play`) — sessions,
-  authoritative game loop, viewer-safe observation serialization
-- **`presentation.py`**: semantic presentation events (combat, turn
-  transitions, spell sequences, land plays, discards and reveals) derived from engine
-  events
+- **`server.py`**: FastAPI WebSocket server (`/ws/play`) — live games keyed by
+  game id, authoritative game loop, rebuild-from-record resume, viewer-safe
+  observation serialization
+- **`play_protocol.py`**: Pydantic models for `/ws/play` requests (`resume`,
+  `new_game`, `rematch`, `swap_sides`, `command`, `decision_group_command`,
+  `action`, `pass_turn`, `retry_mirror`, `set_stops`, `show_analysis`,
+  `set_open_hands`)
+- **`presentation.py`**: per-viewer semantic presentation projection (moves,
+  consequences, causes, rules, and viewer-safe per-event labels) derived from
+  the engine's unhashed presentation sink
 - **`curated_pack.py`**: the frozen curated matchup asset pack
 - **`study_protocol.py`**: viewer-safe study artifacts and decision evidence
 - **`study_branch.py`**: source-bound historical forks, native structured
   execution, typed failure, and consuming exact-return receipts
-- **`trace.py` / `attempts.py`**: viewer-safe trace projection and SQLite human
-  attempts/feedback (`ACADEMY_TRACES_DIR/play.sqlite`, default `academy/traces/`).
+- **`trace.py` / `attempts.py`**: viewer-safe trace projection and SQLite game
+  store (`ACADEMY_TRACES_DIR/play.sqlite`, default `academy/traces/`).
   New records have one SQLite authority; legacy JSON remains readable.
-  `attempt_players` identifies both seats with stable public IDs, types, recorded
-  names, decks and bot versions. Game resume credentials and browser player credentials
-  remain private authorization values. Shared history applies permissions in SQL
-  before filtering/pagination; only completed shared replays are readable by
-  nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
+  `attempt_players` identifies both seats with public IDs, types, recorded
+  names, decks and bot versions (the human seat is `"You"`, `human:local`).
+  A closed opponent's deck reads `closed` in those rows until the game is
+  `completed` (`CLOSED_DECK_SQL`), the rule the live frame and setup echo also
+  follow. Games in memory are a cache: played games with no connection leave it
+  after 15 idle minutes or beyond `IDLE_GAMES_KEPT`, payment and decision-group
+  previews never rebuild one, and a finished game is never taken up again.
+  Every saved game in `traces_dir` is readable and every unfinished played game
+  stays resumable across idle eviction and server restarts, with no credentials
+  or privacy gates. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
   validation from human play; absent provenance is unknown.
   A live game is saved when its match, revision or event count changes, not on
   every projection, and each event, decision and presentation event is
   encoded to JSON once (`append_json.py`); the stored bytes are what
   `json.dumps` of the whole record gives.
+- **`recording.py`**: positions over retained recordings; `record_of(attempt)`
+  builds the engine's `GameRecord` from a played game's stored seed, setups
+  and actions, so a played game is re-executed like any other record.
+- **`analysis.py`**: a policy's reading of a played game's deliberate human
+  decisions across whichever seats the person piloted (`analyse_game`), saved
+  per decision in the `analyses` and `analysed_decisions` tables beside the
+  game, never in its trace; and the same reading during play (`LiveAnalysis`).
+- **`numbers.py`**: a played game's numbers (`game_numbers`), reduced with
+  `managym.statistics` over one re-execution and saved in
+  `attempts.numbers_json` (cleared on append when a resumed game moves on).
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
@@ -101,7 +121,8 @@ same-origin under `/api/card-art/`; the browser never contacts Scryfall. It
 fetches only names a viewer's frame or deck list already holds and never
 warms the cache from a decklist, so a closed list causes no request. Missing
 art keeps the procedural card treatment, `ACADEMY_CARD_ART=off` disables
-fetching, and artist credits are in the footer. See
+fetching, and artist credits live in the Board's Settings → View and the setup
+screen. See
 [card art](../../docs/academy.md#card-art).
 
 The Learn demo opens `/?demo=learn`: click a Lesson in the tray to take it, an
@@ -111,18 +132,32 @@ its [evidence and remaining integration work](https://github.com/loopflowstudio/
 are separate from complete-game replay certification.
 
 Live play renders the board (`academy/ui/src/lib/board/`): one window with the
-board, the hand and a rail holding the stack, the decision and every legal
-offer by number. `boardView` places each offer exactly once in that list and
-at least once on the card or player it acts on, as a prompt button (pass, pay,
-declines and combat answers without another creature) or in a tray for subjects
-the board does not draw. A card with one offer commits it on click; several
-open at the card. Number keys, Space (primary) and F6 act from the keyboard. Rows size
+board, both hands as upright 1:1 ribbons on its bottom and top edges (the
+opponent's as card backs plus rules-revealed cards, or full face-up cards while
+Open hands is on) and a rail holding the stack, the decision and every legal
+offer by number. Off-board offers such as Lessons sit in a board-level tray.
+`yourHand` says how the bottom hand behaves: `"out"` (Play and Study)
+keeps it out all the time, in depth the battlefield reserves under your rows,
+and takes drags from it; `"tucked"` (Watch, Review and **See its line**) tucks
+both hands over a fixed two-half battlefield, and the active seat's glides in
+with its offers and recorded probabilities on those cards. `boardView` places
+each offer exactly once in that list and, where it acts on one, on its card or
+player, or in the tray for subjects the board does not draw; pass and pay are
+the primary button, and the rail's other prompt buttons (declines, combat
+answers without another creature) show only while the list is folded. A card with one offer commits it on click; several
+open at the card. Pointer drag routes through the same offer and combat-draft
+paths: drag playable cards from hand onto the battlefield, pull lines from
+sources to legal targets or blockers to attackers, and drag a marquee across
+battlefield rows to add drafted attackers. Number keys, Space (primary) and F6
+act from the keyboard. Rows size
 their cards with `fitRow`, piling identical permanents, keeping a tapped card's
 sideways width and wrapping before scrolling. See [playing on the board](../../docs/academy.md#playing-on-the-board).
 Priority stops are set on the bottom step bar (off, every time or once)
-and in the top bar's Menu; see
+and in the top bar's Menu; default stops include active combat (**Declare
+attackers** and **Declare blockers** while creatures are attacking) and
+require a non-mana legal play. See
 [priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
-stack responses and F6. Recorded policy/search evidence is attached to the
+stack responses, **Full control** and F6. Recorded policy/search evidence is attached to the
 decision it describes; the live board has no example Advice panel. Replay,
 Watch and Study keep the earlier lane board and choice panel until they move to
 the board. Public mana pools, spending restrictions and chooser-only inspected
@@ -131,16 +166,35 @@ details were not recorded.
 
 Academy uses native trivial-decision skipping, like every game runner: the
 engine resolves sole legal actions for either seat, so no forced prompt reaches
-a person or a policy. Disable **Use priority stops** to surface every priority
-window that offers a real choice. Priority stop/F6 automation retains its
-Commands and is marked **auto** in the move list; traces from before native
+a person or a policy. Turn off **Auto-pass outside stops** to enter **Full
+control** and surface every priority window that offers a real choice
+(including empty combat and mana-only floats). Priority stop/F6 automation retains its
+Commands and is marked **auto** in the history; traces from before native
 skipping keep their recorded forced **Auto** steps. Training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
 `decision_context_json` summarizes already-observed choices and the current
 continuation; `decision_offer_subjects_json` binds the exact rule entity,
-incarnation and board display ID. These read-only projections introduce no legal
-actions or editable payment transaction. Other viewers receive only public
-ownership/kind and committed facts. Retained frames omit these optional fields.
+incarnation and board display ID; `Env.decision` carries any viewer-visible
+folded copies on `Offer.aliases` (copied to `InteractionOffer.aliases` on the
+experience wire) so every copy on the board or in hand stays interactive and
+sends the canonical Command;
+`permanent_details_json` attaches effective
+battlefield details (Layer 6 keyword abilities, overridden Defender and active
+combat/untap restrictions) by public permanent ID. Each keyword ability
+instance has a label and an optional `granted` flag, so a creature can carry
+two different Ward costs. A granted trigger carries the granting permanent’s
+public effective name in `source` or the resolved record’s `effect_timestamp`.
+For evergreen keywords, `keyword_grants` maps each external grant to its
+`source`, `effect_timestamp` or `counter: true`. An empty map means the
+effective keywords come from the permanent itself, including its conditional
+abilities. Each restriction names its `kind` and, for an external static rule,
+the permanent imposing it. Inspect combines these sources with recorded effects.
+Firebending X keeps its printed X because its trigger
+determines the amount on resolution. The details travel with `decision_surface_view` without altering
+`Observation` or default `serialize_observation()`. These read-only projections
+introduce no legal actions or editable payment transaction. Other viewers
+receive only public ownership/kind and committed facts. Earlier recordings
+can omit these optional fields.
 
 For Precision, click **Start game**, inspect **Deadly Precision**, then explicitly
 choose its cast offer and an Inspector target. In the Treasure demo, reserve that
@@ -158,17 +212,24 @@ evidence. Start game repeats the selected prefix.
 Replay labels recorded actions and automated passes separately. Live, Watch,
 Replay and Study use the same decision renderer. Study executes the exact semantic
 offer on a retained isolated root, then **Return to recorded decision** restores
-its original address/frame/Command; **Return to live** is a separate destination.
-Expired roots remain unavailable rather than being reconstructed from the screen.
+its original address/frame/Command.
+Expired roots remain unavailable rather than being reconstructed from the screen;
+resuming a played game rebuilds its Study roots for every recorded decision.
 
-After resolving a spell, open **History and settings** to read its recorded
-consequences by turn. Earlier/later pages and **Latest** let you read older
-events without being pulled away by incoming or recovered rows. Gaps appear
-inline and turn context stays unknown until the next recorded turn change. Narration can be paused,
-accelerated or skipped while the pending choice remains usable. Reloaded active
-games label unavailable earlier history; older recordings without event data say
-**Consequences not recorded**. See
-[reading consequences and controlling narration](../../docs/academy.md#reading-consequences-and-controlling-narration)
+The rail's **History** lists everything that happened, in order: each move
+with what followed from it indented beneath, and the rule that did it ("died ·
+lethal damage"). Select a line, or step with ← and →, to see the board as it
+was after it; Esc or Space returns to now without acting while the rail's
+pending choice stays live. After a move (yours or the opponent's) the board walks its unread board stops
+one kept board at a time (lines noted inside one whole-state boundary,
+including simultaneous rules events or effects of one resolution, share a stop)
+with a caption, pace control and scrubber under the board (plus a breakdown
+table for combats with three or more creatures); clicking a tick or resting on
+the caption holds, and **Replay turn** replays the turn. Reloaded active games keep the lines with their card names intact
+and say **Board not kept for this step** for earlier ones; Play recordings retain
+per-line `boards` patches for Review (Watch stores none), and recordings made before moves were
+recorded as events read as a flat list. See
+[reading the history](../../docs/academy.md#reading-the-history)
 for controls, exact-subject inspection and Replay/Study behavior.
 
 Long action lists have an optional **Find an action** filter. See the
@@ -182,7 +243,7 @@ uv run uvicorn managym.academy.server:app --port 8000
 ```
 
 The [local challenger workflow](../../docs/academy.md#playing-a-trained-challenger)
-covers the built same-origin server, feedback, and read-only SQL.
+covers the built same-origin server and read-only SQL.
 
 Play and both Watch seats use the same registered policy picker and
 `managym.policy` registry/session lifecycle
@@ -240,20 +301,19 @@ proofs (launch, offline reload, accessibility, release prompts) are under
 
 ## Watch and recorded bot decisions
 
-Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed;
-`managym academy watch --player X --player Y` opens it with the seats selected
-(`&seat1=…&seat2=…`) and leaves Start to the person. Trained checkpoints, in
-one seat or both, and the random, greedy, heuristic and search anchors use
-GameSession's normal Command authority. Live production is separate from
-recorded playback. The shared replay viewer walks choices, recorded
-consequences and result/latest-state positions for
-human games, Watch and imported games. At a live Watch's latest position,
-Continue requests one decision and Play can continue production. Browsing
-earlier positions reads saved data without rerunning a policy. Completed games
-open from Games in the same viewer. See the
+Switch to **Watch Bot vs Bot** on the Play setup screen (`/`) to select both
+seats, decks and a deal seed; `managym academy watch --player X --player Y`
+opens setup in Watch mode with the seats selected and leaves Start to the
+person. Trained checkpoints, in one seat or both, and the random, greedy,
+heuristic and search anchors use GameSession's normal Command authority. Live
+production is separate from recorded playback. The shared replay viewer walks
+choices, recorded consequences and result/latest-state positions for human
+games, Watch and imported games. At a live Watch's latest position, Continue
+requests one decision and Play can continue production. Browsing earlier
+positions reads saved data without rerunning a policy. Saved games open from
+**History** (`/games`) in the same viewer. See the
 [replay guide](../../docs/academy.md#inspect-a-replay) for navigation, speed,
-perspective, reload and recovery. Watch credentials stay in the tab's
-`sessionStorage`; saved position URLs carry no credentials.
+perspective, reload and recovery.
 
 Opening card details or reading earlier history pauses replay. Close the details
 when ready, then press **Play** to resume. Returning to **Latest** does not start
@@ -281,26 +341,228 @@ and an acting-view belief summary, never private sampled hands or branch audits.
 choice time. Traces from the removed compound-decision policies may retain
 conditional root-sequence factors and values; these remain labeled separately
 from native microchoice marginals. Anchors without critics have no value estimate. Watch's acting-view
-inspection endpoint never returns the full mixed canonical replay. The separate
-private analysis observation supplies **Show both hands**, available explicitly
-for authorized bot spectators, including during active watches. Every read,
-including completed inspection, follows the recording's participant/shared
-access rules; finishing does not make a private recording public. Active Watch
-inspection also requires its watch credential. Choices default to the acting
-bot's view, independently of the stable seat-0 board orientation. Consequence
-and result boards use the authorized recorded seat-0 view where actor-private
-post-action snapshots are absent, with the perspective explicitly labeled.
-Unavailable views stay unavailable. Ordinary trace reads always strip the
-analysis snapshot, and bot inputs, decision evidence and acting-view history
+inspection endpoint never returns the full mixed canonical replay. Watch defaults
+to fixed seats (Seat 1 bottom, Seat 2 top) with **Show both hands** on across
+every position: choices read their own `analysis_observation`, consequences read
+`events[i + 1]["analysis_observation"]`, and the final position reads
+`Trace.final_opponent_hand`. `Recording.read(..., reveal=True)` starts from the
+redacted position board and merges only the hands by seat (`with_both_hands`),
+preserving board orientation and never leaking a later step's `decision_context`
+or inspected cards. Older Watch records without `final_opponent_hand` fall back
+to the acting view at their last position (`can_reveal` false). Completed played
+games (`end_reason == "game_over"`) continue to supply **Show both hands** via
+`ReplayedViews`, while unfinished played games never reveal both hands. Ordinary
+trace reads (`prepare_trace_payload`) strip both `analysis_observation` and
+`final_opponent_hand`, and bot inputs, decision evidence and acting-view history
 retain their acting-view scope.
 
 **Try another line** uses retained Study roots from either acting seat, executes
 one exact semantic Command on an isolated branch, and returns to the recorded
-decision. It does not advance the watched match. Roots and active controllers
-have the ordinary game-session lifetime; saved completed inspection remains
-available after the session expires, while a fresh Study fork requires retained
-roots. Existing structured Study receipts and frozen `erd1` evidence keep their
-original command bindings.
+decision. It does not advance the watched match. Roots and active Watch
+controllers live in server memory; saved inspection remains available after
+idle eviction or a server restart, while a fresh Study fork requires retained
+roots (resuming a played game rebuilds its Study roots). Existing structured
+Study receipts and frozen `erd1` evidence keep their original command bindings.
+
+## Reading a played game
+
+A played game retains the boards, seed, both setups and the action at each
+step. `ReplayedViews` re-executes it with `managym.replay.RecordWalker` as far
+as a read asks, so opening a long game costs nothing up front and each step
+forward adds one or two projections. [Guide](../../docs/academy.md#inspect-a-replay)
+
+A played game has no state digests, so the walk checks itself against the
+stored track: each step's acting-seat board and action description must equal
+what was stored, and the final board and result must too. At the first
+difference the walk stops; replayed views are used up to it and the stored
+track after it, and the read's `views_stopped` says how far the view was
+replayed. A game from another world or card set is not walked. The stored
+boards stay the authority for what the person saw; replayed views are never
+written back. Narration of the opponent's moves reads the stored track.
+
+A reading from the person's seat contains nothing that seat did not see. The
+opponent's view, for **Show both hands**, exists only for an authoritatively
+complete game (`end_reason == "game_over"`). Each `TraceEvent` records
+`committed_at`, its commit time in UTC; nothing shows it yet.
+
+### Analysis lifecycle
+
+`POST /api/traces/{id}/analyses {"policy": <Policy ID>}` loads a fresh
+`PolicyRunner` in the person's seat and walks the game on a daemon thread; `GET`
+lists the game's analyses with their decisions so far, reading only their rows,
+so Review follows a running analysis with it.
+`GET /api/traces/{id}/analyses/policies`, read once when Review opens,
+re-executes the game to list the eligible policies, the default (the
+opponent's own policy, else the recommended one), why none may run and the events an analysis of the
+person's seat reads. Eligible means registered, admitted for the game's decks, with an
+artifact and no Search composition: Search plays out from the walk's real
+hidden cards. Admission takes seconds with many checkpoints and reads only the
+registered policies and each seat's deck, sideboard and world, so
+`PolicyAdmissions` admits each (registered policies, setups) once per process,
+for every game with those decks, Review and Play alike; loading a runner still
+admits it again. Unfinished played games can be analysed on explicit request
+(Review does not start analysis automatically while a game is unfinished); one
+analysis runs per game per process (`analysis_running`).
+
+At each of the seat's deliberate decisions (automation is skipped) the runner
+is called on the walk's observation and Env, its `BotDecision` kept as a
+`DecisionAnnotation` plus the value semantic, its sampled action discarded.
+The walk checks each step's actor and action description, not whole boards.
+Each offer's estimate after it is read through the session's history-free
+`evaluate` at the next decision on a clone: the seat's own value when it
+chooses next, else the opponent's negated, in a world `determinize`d from the
+seat's perspective. Closed decklists cannot be re-dealt, so those estimates
+are absent. A manabot value belongs to the chooser, so no value is read from
+a seat that is not choosing.
+
+A runner error or divergence stops the analysis with its reason; saved
+decisions stay. A `running` row whose process is gone reads as stopped.
+
+`POST /api/traces/{id}/analyses/{analysis}/line {"event": <analysed event>}`
+(`agent_line`) re-executes the game to that decision with a fresh runner of the
+analysing policy in the seat and the game's own opponent
+(`build_villain_policy`) in the other, plays the analysis's first choice on a
+copy and continues with the policy's first choice and the opponent's own
+choice to the end of the next turn (`LINE_TURNS`), the end of the game or
+`MAX_LINE_STEPS`. A recurrent policy is asked at each of its seat's earlier
+decisions so it has its history. Each step returns the seat's own
+`decision_surface_view`; the opponent's actions are named only for a complete
+game. The line is computed per request in the real game's world and never
+saved. Key moments are derived in the client from the analysis
+(`keyMoments`).
+
+### Resuming and playing on from a decision
+
+Resuming an unfinished game (`resume {"game": <id>}`) uses
+`replay_stored_steps` to drive `env.step` through the stored events (checking
+each step's actor, action and description, feeding a recurrent opponent's
+memory, and cloning a Study root at each recorded decision) without
+re-recording frames or presentation. The server installs the stored events,
+canonical decisions and presentation unchanged, reopens the row with
+`AttemptStore.reopen` (advancing `revision` by 1 so any Command held from
+before the rebuild is stale), advances `_next_prompt_id` past every stored
+prompt id, and calls `_advance()` (so a game stopped during the bot's turn
+receives its reply now), keeping the same game id and a byte-identical stored
+prefix. Missing policy load refuses without marking divergence (leaving the
+game unfinished); engine divergence refuses with
+`"no longer plays as recorded at step N"` and marks `record_diverged`.
+
+`new_game {"played_from": {"trace_id", "event"}}` starts a new Play game from
+any of the person's deliberate decisions (`actor` hero, not `auto`) of any
+saved played game, finished or unfinished. It takes the source's setup and seed
+(`setup_draft` plus the seed), replays the opening steps through the Command
+path (`_play_recorded_prefix`) so the new game has its own frames and Command
+ids, persists the prefix once, and continues against a fresh opponent policy.
+`Trace.played_from` names the source and step (written only when set);
+`GameNumbers.played_from` copies the step and the recording index returns it
+with the turn it starts on.
+
+### Swapping sides mid-game
+
+The `swap_sides` request (`SwapSidesMessage`, bound to `match_id`,
+`expected_revision` and an idempotent `request_id`) flips seats in place on the
+live `GameSession` without restarting the engine or mutating `GameConfig`.
+Before mutating session state, `GameSession.swap_sides` builds and admits a
+replacement villain policy for the human's old seat; stateless policies observe
+the live `Env` directly (decision memory is already captured for both native
+seats), while `recurrent=True` policies warm up over `managym.replay.walk` of
+the game so far. Any admission or load failure closes the disposable policy and
+leaves the live game untouched at the same revision.
+
+On commit, the session flips `human_seat` and `deck_names`, appends
+`len(trace.events)` to `Trace.seat_swaps` (omitted from JSON when empty),
+refreshes presentation state from the new seat's canonical track, bumps the
+protocol revision so in-flight Commands for the old seat are rejected as stale,
+updates active `attempt_players` atomically in `AttemptStore.save`, immediately
+broadcasts the committed flipped board (with `work.state == "running"` and
+active live-analysis policy metadata), then advances if the bot is now to act
+and restarts `LiveAnalysis` for the new seat if live analysis was on. Every
+reader (`ReplayedViews`, `Recording`, `prepare_trace_payload`, `game_numbers`,
+`analyse_game`, `agent_line`, `LiveAnalysis`, and `_play_recorded_prefix`)
+resolves the human seat at step `i` through `human_seat_at(trace, i)` in
+`trace.py`. `Recording` and `GET /api/traces/{id}/decisions`
+(`play_decisions_with_addresses`) include all `DecisionSource.CLIENT` decisions
+across both seats and exclude `DecisionSource.POLICY` rows;
+`/api/traces/{id}/recording` exposes `seat_swaps` and `starting_human_seat`.
+Native mana payment and float modes remain on their starting seats.
+
+### Analysis while you play
+
+The `show_analysis {"shown": true, "policy": <Policy ID or null>}` request
+answers `analysis_state` with the policy shown,
+the policies that may read the game (`analysing_policies`, from
+`PolicyAdmissions`) and why none may. The connection admits them off the game
+lock before dispatching the request, so the first Show analysis of a game's
+decks never holds play while checkpoints are admitted. Showing starts a `LiveAnalysis` on its own daemon
+thread: it loads a fresh runner, walks the game so far with `recorded_steps`
+(asking the runner at each earlier deliberate human decision in that seat, plus
+any other step in that seat when recurrent, so decision memory matches), then applies each step the game commits and
+reads each decision the game publishes to the person (`_publish_current_prompt`)
+with `read_decision`. Steps and decisions reach the worker in the game's order
+on one queue; the worker never reads the game's Env, so nothing it does holds
+the game lock or a frame.
+
+Each reading goes to the active socket as its own
+`{"type": "analysis", "policy", "event", "revision", "annotation", "semantic",
+"after"}` message (or `{"stopped": reason}`), scheduled on the server loop
+without waiting. The client draws it only while its frame's revision matches.
+Once a send completes the event is `shown`, and committing that decision stores
+`analysis_shown: true` on its `TraceEvent`. The field is written only when true,
+so a game played without analysis saves the same row as before. Frames carry
+`analysis: {"policy"}` only while it is shown, so a reload reads the switch.
+`show_analysis {"shown": false}` closes the worker; a new game or a closed
+game closes it too. `GameNumbers.analysis_shown` counts the marked decisions
+and the Review position index exposes `analysis_shown` per choice.
+
+### Open hands while you play
+
+`GameConfig.open_hands` (default `False`, omitted from `to_record()` when false)
+controls whether the human player sees the bot's hand in Play. During a live
+Play session, `set_open_hands {"open": bool}` on `/ws/play` toggles it on the
+session and persists the updated `GameConfig` so resume, rematch and swap sides
+keep the current setting (refused in Watch; allowed in both open- and
+closed-decklist Play games). After game over, `set_open_hands` still answers
+with the bot's remaining hand as a peek without modifying the saved trace
+config.
+
+Every frame-bearing `/ws/play` reply (`observation`, `game_over` and
+`command_outcome`, including cached reconnect recovery) and the toggle's own
+`{"type": "open_hands_state"}` reply carry the side-channel field
+`open_hand: {"revision": int, "hand": CardState[]} | null` attached in
+`_reply` (`OPEN_HAND_REPLIES`), computed directly from the bot seat's
+`env.observation_for_player`. A frame-bearing reply is named by its type, not
+by a top-level `frame` key: an accepted Command's frame is nested in
+`command_outcome.update.frame`. `set_stops` answers an `observation`, so it
+carries the hand; `analysis_state` does not. The `open_hands_state` reply also
+carries `setup`, like every reply, so Rematch and Swap play/draw read the
+setting as last left; the client's saved Play again matchup drops it, and a
+game played on from another starts with it off while each prefix event keeps
+its source's `open_hands` mark. The client has no separate flag: the switch and the top-bar chip
+are on while `gameStore.openHand` is not null, and the opponent's plate then
+offers Show hand / Tuck hand over the face-up ribbon (tucked, it shows its
+cards' name bars in the depth the top rows always keep clear; turning open hands on again brings it out). Each plate's
+toggle acts on its own seat (`RibbonOverrides` in `board/view.ts`); only a live
+offer on a hand card holds a ribbon out. The
+client draws `open_hand` in place of top-ribbon card backs only at now
+(`activeCursor === null`) when `open_hand.revision` matches the current frame
+revision; beat playback and history lookback draw that historical board's own
+opponent hand and backs. `ExperienceFrame`, `frame_hash`, `ReplayDecision`,
+`DecisionAddressV2`, step boards, `/api/traces/{id}` and the bot's own engine
+observation never carry `open_hand`. Each deliberate human decision committed
+while on records `TraceEvent.open_hands: true` (omitted when false), and
+`GameNumbers.open_hands` counts those decisions for Review.
+
+### Numbers
+
+`game_numbers` walks a played game (finished or unfinished) once with
+`Behaviour` and `Totals` (`managym.statistics`), checking each step's actor and
+action description as an analysis does, and saves the result in
+`attempts.numbers_json`. `AttemptStore.save` clears `numbers_json` whenever new
+events are appended on resume so the next read recounts fresh numbers. A failed
+count never affects the saved game. `GET /api/traces/{id}/numbers` returns it,
+counting a game saved before numbers were on its first read; a game that does
+not re-execute here or a Watch game reads `null`. `GET /api/traces` rows carry
+`numbers` from the column and never re-execute.
 
 
 ## Elemental roster
@@ -338,14 +600,13 @@ existing server; another worktree's server is not evidence for this source.
 
 ```bash
 ACADEMY_API_PORT=8123 ACADEMY_FRONTEND_PORT=5293 \
-  npm --prefix academy/ui run test:e2e -- testing-house.spec.ts
+  npm --prefix academy/ui run test:e2e -- input-recovery.spec.ts
 ```
 
 For a built SPA, set an absolute `ACADEMY_FRONTEND_BUILD` for build and ASGI,
 a separate `ACADEMY_TRACES_DIR`, and
 `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`. Keep existing human-play
-stores and sibling servers untouched. Shared-history proofs use separate
-browser identities and cover private unfinished replays and participant feedback.
+stores and sibling servers untouched.
 For release-config proofs, set an absolute `ACADEMY_RELEASE_PROOF_DIR` per
 subprocess; both browser artifacts and its trace store live below that directory.
 Finish frontend generation and builds before starting the proof servers.

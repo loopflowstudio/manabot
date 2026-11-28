@@ -1,9 +1,12 @@
 //! Fate Reforged.
 use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec},
+    ability::{
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost,
+        PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition, TurnStep,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
+        PrintedCharacteristics, Restriction, StaticAbility, StaticRestriction, StaticScope,
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
@@ -11,7 +14,53 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![valorous_stance(), humble_defector()]
+    vec![flamewake_phoenix(), valorous_stance(), humble_defector()]
+}
+
+fn flamewake_phoenix() -> CardDefinition {
+    let text_box = "Flying, haste\nThis creature attacks each combat if able.\nFerocious — At the beginning of combat on your turn, if you control a creature with power 4 or greater, you may pay {R}. If you do, return this card from your graveyard to the battlefield.";
+    CardDefinition {
+        key: "frf.flamewake_phoenix",
+        scryfall_id: "fefd5848-9fe1-4129-a5d7-e51606bf76ef",
+        printed: PrintedCharacteristics {
+            name: "Flamewake Phoenix".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Phoenix".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Haste]),
+            statics: vec![StaticAbility::Restriction(StaticRestriction {
+                scope: StaticScope::This,
+                unless: None,
+                kind: Restriction::AttacksEachCombat,
+            })],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::InGraveyard {
+                    condition: Box::new(TriggerCondition::beginning_of(
+                        TurnStep::Combat,
+                        Actor::You,
+                    )),
+                },
+                intervening_if: Some(Condition::ControlsAtLeast {
+                    count: 1,
+                    distinct_names: false,
+                    predicate: CardPredicate {
+                        min_power: Some(4),
+                        ..CardPredicate::creature()
+                    },
+                }),
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::parse("{R}")),
+                    if_paid: vec![Effect::return_to_battlefield(ObjectSelector::This, false)],
+                    if_declined: vec![],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn humble_defector() -> CardDefinition {

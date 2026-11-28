@@ -19,7 +19,7 @@ use crate::{
         CardData, CastPermissionData, ContinuousEffectData, EventData, Observation, PermanentData,
         PlayerData, RestrictedManaData, StackObjectData, StackObjectKindData, TurnData,
     },
-    cards::tokens::name_value,
+    cards::{content_pack::default_content_pack, tokens::name_value},
     flow::turn::{PhaseKind, StepKind},
     state::mana::{ManaCost, ManaRestriction},
 };
@@ -64,14 +64,20 @@ pub enum FactKind {
     /// A rules program in learning tokens (detail: token value, values:
     /// token kind and ordinal): a copy exception's payload under its
     /// `Modification` id, a player's pooled mana with a spend effect or combat expiry
-    /// under `POOLED_MANA`, or a permanent's ward price that is not a mana
-    /// value under `WARD`.
+    /// under `POOLED_MANA`, a permanent's ward price that is not a mana
+    /// value under `WARD`, or a permanent's `StaticAbility::HexproofFrom` /
+    /// `StaticAbility::Protection` source quality.
     EffectProgram = 11,
     EffectiveColor = 12,
     KeywordCounterTimestamp = 13,
     ContinuationProgram = 14,
     AbilityResolution = 15,
     TriggeringAmount = 16,
+    /// A keyword outside the fixed evergreen columns, joined to its object.
+    Keyword = 17,
+    ChosenColor = 18,
+    ChosenSubtype = 19,
+    ChosenName = 20,
 }
 
 impl FactKind {
@@ -83,7 +89,7 @@ impl FactKind {
         }
     }
 
-    pub const ALL: [FactKind; 15] = [
+    pub const ALL: [FactKind; 19] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -99,6 +105,10 @@ impl FactKind {
         FactKind::ContinuationProgram,
         FactKind::AbilityResolution,
         FactKind::TriggeringAmount,
+        FactKind::Keyword,
+        FactKind::ChosenColor,
+        FactKind::ChosenSubtype,
+        FactKind::ChosenName,
     ];
 }
 
@@ -462,8 +472,9 @@ pub fn encode_rows(
         out.write(Table::PlayerTurnState, 0, seat, &row)?;
         for (slot, card) in cards.iter().enumerate() {
             let mut row = [Cell::ZERO; CARD_DIM];
-            encode_card_features(card, mine, &context, &mut row);
-            out.write(card_table, 0, slot, &row)?;
+            let row = &mut row[..config.card_dim()];
+            encode_card_features(card, mine, &context, config.layout, row);
+            out.write(card_table, 0, slot, row)?;
             out.write(
                 Table::SemanticCards,
                 seat,
@@ -481,10 +492,11 @@ pub fn encode_rows(
             for (i, card) in obs.agent_sideboard.iter().enumerate() {
                 let slot = cards.len() + i;
                 let mut row = [Cell::ZERO; CARD_DIM];
+                let row = &mut row[..config.card_dim()];
                 for column in [card::IS_MINE, card::OUTSIDE, card::VALID] {
                     row[column] = Integer(1);
                 }
-                out.write(card_table, 0, slot, &row)?;
+                out.write(card_table, 0, slot, row)?;
                 out.write(
                     Table::SemanticCards,
                     seat,
@@ -501,6 +513,7 @@ pub fn encode_rows(
                 row[permanent::COMBAT_DAMAGE_TO_ME],
                 row[permanent::COMBAT_DAMAGE_TO_OPPONENT],
             ] = combat_damage_flags(&permanent.combat_damage_to_players);
+            row[permanent::ATTACKED_PERMANENT] = link(permanent.attacked_permanent);
             row[permanent::ATTACHED_TO] = link(permanent.attached_to);
             row[permanent::BLOCKING] = link(permanent.blocking);
             row[permanent::TIMESTAMP] = Integer(ranks[&permanent.timestamp()]);
@@ -622,6 +635,8 @@ fn turn_state_row(player: &PlayerData) -> [Cell; TURN_STATE_DIM] {
     row[turn_state::PERMANENTS_LEFT] = Integer(i64::from(history.permanents_left));
     row[turn_state::NONLAND_PERMANENTS_LEFT] = Integer(i64::from(history.nonland_permanents_left));
     row[turn_state::WARPED_THIS_TURN] = flag(history.warped_this_turn);
+    row[turn_state::LOYALTY_ABILITIES_ACTIVATED] =
+        Integer(i64::from(history.loyalty_abilities_activated));
     row[turn_state::LIFE_LOST] = Scalar(player.turn_history.life_lost as f32 / 20.0);
     row[turn_state::SPELLS_CAST] = Scalar(player.spells_cast as f32 / 10.0);
     for class in player
@@ -735,6 +750,7 @@ fn encode_player_features(player: &PlayerData, turn: &TurnData, out: &mut [Cell]
         }
     }
     out[player::HAND_ONLY] = flag(player.hand_only_until.is_some());
+    out[player::HEXPROOF] = flag(player.hexproof);
     out[player::NO_MAXIMUM_HAND_SIZE] = flag(player.no_maximum_hand_size);
     out[player::STEP_FIRST_STRIKE_COMBAT_DAMAGE] =
         flag(turn.step == StepKind::FirstStrikeCombatDamage);
@@ -760,7 +776,13 @@ struct CardContext {
     turn_number: u32,
 }
 
-fn encode_card_features(card: &CardData, is_mine: Cell, context: &CardContext, out: &mut [Cell]) {
+fn encode_card_features(
+    card: &CardData,
+    is_mine: Cell,
+    context: &CardContext,
+    layout: InputLayout,
+    out: &mut [Cell],
+) {
     let zone_index = (card.zone as i32 & 0xFF) as usize;
     if zone_index < ZONE_DIM {
         out[card::ZONE_LIBRARY + zone_index] = Integer(1);
@@ -826,6 +848,10 @@ fn encode_card_features(card: &CardData, is_mine: Cell, context: &CardContext, o
         out[card::X] = Scalar(x as f32 / 10.0);
     }
     out[card::VALID] = Integer(1);
+    if layout == InputLayout::OneToken {
+        out[card::PUT_INTO_GRAVEYARD_THIS_TURN] = flag(card.put_into_graveyard_this_turn);
+        out[card::PRINTED_LOYALTY] = Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
+    }
 }
 
 fn encode_permanent_features(permanent: &PermanentData, is_mine: Cell, out: &mut [Cell]) {
@@ -869,6 +895,8 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: Cell, out: &mut
     out[permanent::ABILITIES_LOST] = flag(permanent.abilities_lost);
     out[permanent::DEALT_DAMAGE_THIS_TURN] = flag(permanent.dealt_damage_this_turn);
     let card = &permanent.characteristics;
+    out[permanent::PRINTED_LOYALTY] = Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
+    out[permanent::LOYALTY_ACTIVATED_THIS_TURN] = flag(permanent.loyalty_activated_this_turn);
     out[permanent::ATTACKED_THIS_TURN] = flag(permanent.attacked_this_turn);
     out[permanent::ENTERED_THIS_TURN] = flag(permanent.entered_this_turn);
     out[permanent::MANA_VALUE] = Scalar(f32::from(permanent.mana_value()) / 10.0);
@@ -886,6 +914,12 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: Cell, out: &mut
         flag(card.ward_cost > 0 || !card.ward_program.is_empty() || card.ward_life > 0);
     out[permanent::WARD_COST] = Scalar(card.ward_cost as f32 / 10.0);
     out[permanent::VALID] = Integer(1);
+    out[permanent::BLOCKED] = flag(permanent.blocked);
+    out[permanent::CONTROL_DIFFERS_FROM_ENTRY] = flag(
+        permanent
+            .entry_controller_id
+            .is_some_and(|id| id != permanent.controller_id),
+    );
     out[permanent::FIRST_STRIKE_PARTICIPANT] = flag(permanent.first_strike_participant);
     out[permanent::FACE_DOWN] = flag(permanent.face_down);
 }
@@ -928,6 +962,7 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [Ce
     out[stack::ABILITY_RESOLUTIONS] = Integer(i64::from(object.ability_resolutions));
     if let Some(card) = &object.spell {
         out[stack::CAST_FROM_GRAVEYARD] = flag(card.cast_from_graveyard);
+        out[stack::PRINTED_LOYALTY] = Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
         out[stack::IS_COPY] = flag(card.is_copy);
         out[stack::MANA_VALUE] = Scalar(card.mana_cost.mana_value as f32 / 10.0);
         out[stack::POWER] = Scalar(card.power as f32 / 10.0);
@@ -951,7 +986,7 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [Ce
 }
 
 /// The id of an `EffectProgram` on a player that states pooled mana with a
-/// spend effect or combat expiry (`PooledManaClassData::program`).
+/// spend effect or non-step expiry (`PooledManaClassData::program`).
 pub const POOLED_MANA: &str = "PooledMana";
 
 /// The id of an effect program that states a permanent's ward price when
@@ -998,8 +1033,29 @@ fn facts(obs: &Observation) -> Vec<Fact> {
             );
         }
     }
-    // Counters on a visible card off the battlefield ("with a stash counter").
+    for item in &obs.stack_objects {
+        if item
+            .spell
+            .as_ref()
+            .is_some_and(|spell| spell.keywords.changeling)
+            || item
+                .granted_keywords
+                .as_ref()
+                .is_some_and(|keywords| keywords.changeling)
+        {
+            push(
+                item.stack_object_id,
+                FactKind::Keyword,
+                name_value("changeling"),
+                1,
+            );
+        }
+    }
+    // Counters and changeling on a visible card off the battlefield.
     for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
+        if card.keywords.changeling {
+            push(card.id, FactKind::Keyword, name_value("changeling"), 1);
+        }
         for (kind, count) in &card.counters {
             push(
                 card.id,
@@ -1012,6 +1068,9 @@ fn facts(obs: &Observation) -> Vec<Fact> {
     let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
     for permanent in permanents() {
         let object = permanent.id;
+        if permanent.keywords.changeling {
+            push(object, FactKind::Keyword, name_value("changeling"), 1);
+        }
         if permanent.plus1_counters > 0 {
             push(
                 object,
@@ -1044,6 +1103,25 @@ fn facts(obs: &Observation) -> Vec<Fact> {
                     name_value(&format!("Color::{color}")),
                     1,
                 );
+            }
+        }
+        if let Some(choice) = permanent
+            .chosen
+            .as_ref()
+            .filter(|_| layout == InputLayout::OneToken)
+        {
+            use crate::state::permanent::EntryChoice;
+            let fact = match choice {
+                EntryChoice::Color(c) => {
+                    Some((FactKind::ChosenColor, name_value(&format!("Color::{c:?}"))))
+                }
+                EntryChoice::CreatureType(s) => Some((FactKind::ChosenSubtype, name_value(s))),
+                EntryChoice::CardName(s) => default_content_pack()
+                    .catalog_name(s)
+                    .map(|name| (FactKind::ChosenName, name_value(name))),
+            };
+            if let Some((kind, id)) = fact {
+                push(object, kind, id, 1);
             }
         }
         for subtype in &permanent.temp_subtypes {
@@ -1165,6 +1243,29 @@ fn facts(obs: &Observation) -> Vec<Fact> {
                 values: [kind as i64, ordinal as i64],
                 effect: None,
             });
+        }
+    }
+    for permanent in permanents() {
+        for (ability, qualities) in [
+            ("StaticAbility::HexproofFrom", &permanent.hexproof_from),
+            ("StaticAbility::Protection", &permanent.protection_from),
+        ] {
+            for (ordinal, quality) in qualities.iter().enumerate() {
+                let token = crate::state::card::SourceQuality::from_wire_name(quality)
+                    .map(crate::state::card::SourceQuality::token_name);
+                let detail = token.as_deref().unwrap_or(quality.as_str());
+                out.push(Fact {
+                    object: permanent.id,
+                    kind: FactKind::EffectProgram,
+                    id: name_value(ability),
+                    detail: name_value(detail),
+                    values: [
+                        crate::cards::tokens::TokenKind::Variant as i64,
+                        ordinal as i64,
+                    ],
+                    effect: None,
+                });
+            }
         }
     }
     permission_facts(obs, &mut out);
@@ -1514,6 +1615,9 @@ fn encode_actions(
         row[action::QUOTA_TYPE] = Integer(i64::from(action.quota_type.unwrap_or_default()));
         row[action::SPELL_PROFILE] = Integer(i64::from(action.spell_profile));
         row[action::PLAY_ROUTE] = Integer(i64::from(action.play_route.unwrap_or_default()));
+        if let Some(amount) = action.division_amount {
+            row[action::DIVISION] = Integer(i64::from(amount));
+        }
         out.write(Table::Actions, 0, action_index, &row)?;
         out.write(Table::NameCandidates, 0, action_index, &name_row)?;
         focus.fill(Integer(-1));
@@ -1743,7 +1847,9 @@ mod tests {
                         ability_index: None,
                         continuation_index: None,
                         pays_directly: false,
+                        is_mana_ability: false,
                         announces_x: false,
+                        division_amount: None,
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
@@ -1761,7 +1867,9 @@ mod tests {
                         ability_index: None,
                         continuation_index: None,
                         pays_directly: false,
+                        is_mana_ability: false,
                         announces_x: false,
+                        division_amount: None,
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
@@ -1779,7 +1887,9 @@ mod tests {
                         ability_index: None,
                         continuation_index: None,
                         pays_directly: false,
+                        is_mana_ability: false,
                         announces_x: false,
+                        division_amount: None,
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
@@ -1815,6 +1925,7 @@ mod tests {
                 hand_only_until: None,
                 spent_graveyard_types: vec![],
                 counters: Default::default(),
+                hexproof: false,
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
@@ -1855,6 +1966,7 @@ mod tests {
                 hand_only_until: None,
                 spent_graveyard_types: vec![],
                 counters: Default::default(),
+                hexproof: false,
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
@@ -1930,7 +2042,9 @@ mod tests {
                 ability_index: None,
                 continuation_index: None,
                 pays_directly: false,
+                is_mana_ability: false,
                 announces_x: false,
+                division_amount: None,
                 spell_profile: 0,
                 route_mana_value: None,
                 quota_type: None,
@@ -1959,6 +2073,7 @@ mod tests {
         CardData {
             characteristics: crate::agent::observation::CharacteristicsData {
                 name: format!("Card {id}"),
+                printed_loyalty: None,
                 text_box: String::new(),
                 power,
                 toughness,
@@ -2001,6 +2116,7 @@ mod tests {
             cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
+            put_into_graveyard_this_turn: false,
             counters: Default::default(),
         }
     }
@@ -2008,6 +2124,7 @@ mod tests {
     fn make_permanent(id: i32, mine: bool) -> PermanentData {
         PermanentData {
             colors: None,
+            chosen: None,
             keyword_counter_timestamps: Default::default(),
             id,
             registry_key: 0,
@@ -2211,7 +2328,9 @@ mod tests {
                 ability_index: None,
                 continuation_index: None,
                 pays_directly: false,
+                is_mana_ability: false,
                 announces_x: false,
+                division_amount: None,
                 spell_profile: 0,
                 route_mana_value: None,
                 quota_type: None,

@@ -401,7 +401,19 @@ fn snapshot(
             .iter()
             .map(|trigger| trigger.ability.clone())
             .collect();
-        printed.activated_abilities = view.activated_abilities.clone();
+        printed.activated_abilities = view
+            .activated_abilities
+            .iter()
+            .cloned()
+            .map(|mut ability| {
+                // `layers` stamps activation pricing context and grantor storage
+                // provenance onto live battlefield views; printed snapshots carry
+                // neither.
+                ability.mana_cost.purpose = crate::state::mana::SpendingContext::Resolving;
+                ability.granted_by = None;
+                ability
+            })
+            .collect();
         if !tapped {
             for ability in &view.mana_abilities {
                 mana.push(ability.mana.mana.map(u32::from));
@@ -923,8 +935,18 @@ pub(crate) fn capture(
             true
         }
         Action::PassPriority { .. } => true,
-        Action::DeclareAttacker { attack, .. } => {
-            choice.declared = Some(*attack);
+        Action::DeclareAttacker {
+            permanent, attack, ..
+        } => {
+            choice.declared = Some(attack.is_some());
+            if let Some(crate::flow::combat::AttackTarget::Permanent(defender)) = attack {
+                let attacker = game
+                    .permanent_object(*permanent)
+                    .expect("declared attacker");
+                choice.references.extend(
+                    [attacker, *defender].map(|object| reference(game, object, viewer, true)),
+                );
+            }
             true
         }
         Action::DeclareBlocker { attacker, .. } => {
@@ -959,8 +981,18 @@ pub(crate) fn capture(
                         false
                     }
                 }
+                Some(Decision::ChooseEntryValue { scope, .. }) => {
+                    // Tree navigation groups are UI splits, not game choices.
+                    let Some(crate::cards::names::NameOption::Name(row)) = scope.option(*mode)
+                    else {
+                        return None;
+                    };
+                    choice.mode = Some(row as u32);
+                    true
+                }
                 Some(
-                    Decision::Modal { .. }
+                    Decision::OrderEntryChoices { .. }
+                    | Decision::Modal { .. }
                     | Decision::ManaChoice { .. }
                     | Decision::ManaSpend { .. }
                     | Decision::ChoosePaymentX { .. },
@@ -1135,7 +1167,7 @@ mod tests {
     }
 
     fn pending_pass(game: &Game) -> Option<PendingDecision> {
-        let space = game.current_action_space.as_ref().unwrap();
+        let space = game.action_space().unwrap();
         capture(
             game,
             space,
@@ -1173,8 +1205,7 @@ mod tests {
         assert!(pending_pass(&game.rollback_snapshot()).is_some());
         game.decision_memory_enabled = false;
         let pass = game
-            .current_action_space
-            .as_ref()
+            .action_space()
             .unwrap()
             .actions
             .iter()
@@ -1190,8 +1221,7 @@ mod tests {
         assert!(first.step(usize::MAX).is_err());
         assert!(first.decision_memory.iter().all(DecisionLog::is_empty));
         let pass = first
-            .current_action_space
-            .as_ref()
+            .action_space()
             .unwrap()
             .actions
             .iter()
@@ -1254,7 +1284,7 @@ mod tests {
     fn decision_memory_pass_filter_is_public_and_forced_choices_are_omitted() {
         let mut game = game();
         assert!(pending_pass(&game).is_some());
-        let mut space = game.current_action_space.as_ref().unwrap().clone();
+        let mut space = game.action_space().unwrap().clone();
         space
             .actions
             .retain(|action| matches!(action, Action::PassPriority { .. }));
@@ -1358,7 +1388,7 @@ mod tests {
             duration: PlayerControlDuration::NextTurn,
             active: true,
         });
-        let space = game.current_action_space.as_ref().unwrap().clone();
+        let space = game.action_space().unwrap().clone();
         game.publish_action_space(space);
         let pending = pending_pass(&game).expect("seat zero still has the resources");
         assert_eq!(
@@ -1518,5 +1548,147 @@ mod tests {
         assert!(own.response[0].description.is_empty());
         game.move_object(hidden, ZoneType::Graveyard);
         assert!(own.response[0].definition.is_none());
+    }
+
+    #[test]
+    fn choose_entry_value_skips_group_navigation_and_records_canonical_leaf_row() {
+        use crate::{
+            cards::names::{NameOption, NameScope},
+            flow::{
+                decision::{Decision, EffectFrame, SuspendedResolution},
+                proposed_event::EntryQuestion,
+            },
+            state::{card::EntryChoiceKind, subtype::creature_type_names},
+        };
+        let mut game = game();
+        let object = game
+            .state
+            .latest_objects()
+            .find(|(_, row)| row.owner == PlayerId(0))
+            .unwrap()
+            .0;
+        let target_row = creature_type_names()
+            .iter()
+            .position(|&name| name == "Goblin")
+            .unwrap();
+        let set_scope = |game: &mut Game, scope: NameScope| {
+            *game.state.suspended_decision_mut() = Some(SuspendedResolution {
+                frame: EffectFrame::new(PlayerId(0), Vec::new()),
+                decision: Decision::ChooseEntryValue {
+                    player: PlayerId(0),
+                    question: EntryQuestion {
+                        object,
+                        kind: EntryChoiceKind::CreatureType,
+                    },
+                    scope,
+                },
+            });
+            ActionSpace {
+                player: Some(PlayerId(0)),
+                kind: ActionSpaceKind::Modal,
+                actions: (0..scope.option_count())
+                    .map(|mode| Action::ChooseMode {
+                        player: PlayerId(0),
+                        mode,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            }
+        };
+
+        let mut scope = NameScope {
+            start: 0,
+            end: creature_type_names().len(),
+        };
+        assert!(!scope.is_leaf());
+        while !scope.is_leaf() {
+            let space = set_scope(&mut game, scope);
+            let (group_mode, child) = (0..scope.option_count())
+                .find_map(|i| match scope.option(i) {
+                    Some(NameOption::Group(g)) if (g.start..g.end).contains(&target_row) => {
+                        Some((i, g))
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            assert!(
+                capture(&game, &space, &space.actions[group_mode]).is_none(),
+                "non-leaf group clicks must not emit a decision-memory record"
+            );
+            scope = child;
+        }
+        let leaf_mode = (0..scope.option_count())
+            .find(|&i| scope.option(i) == Some(NameOption::Name(target_row)))
+            .unwrap();
+        let leaf_space = set_scope(&mut game, scope);
+        let captured = capture(&game, &leaf_space, &leaf_space.actions[leaf_mode])
+            .expect("leaf entry choice is recorded");
+        assert_eq!(captured.record.choice.kind.as_deref(), Some("ChooseMode"));
+        assert_eq!(captured.record.choice.mode, Some(target_row as u32));
+    }
+
+    #[test]
+    fn activated_ability_snapshot_strips_runtime_purpose_and_grantor() {
+        use crate::state::{
+            card::AbilityGrant,
+            effect::{EffectDuration, Modification},
+            mana::SpendingContext,
+        };
+        let players: Vec<PlayerConfig> = (0..2)
+            .map(|seat| {
+                PlayerConfig::new(
+                    format!("seat{seat}"),
+                    [("Kyoshi Village".into(), 20), ("Mountain".into(), 20)].into(),
+                )
+            })
+            .collect();
+        let mut game = Game::new(players, 111, true);
+        game.keep_opening_hands();
+        game.decision_memory_enabled = true;
+        let land = game
+            .state
+            .latest_objects()
+            .find(|(_, data)| data.owner == PlayerId(0) && data.name == "Kyoshi Village")
+            .unwrap()
+            .0;
+        let grantor = game
+            .state
+            .latest_objects()
+            .find(|(_, data)| data.owner == PlayerId(0) && data.name == "Mountain")
+            .unwrap()
+            .0;
+        let land = game.move_object(land, ZoneType::Battlefield);
+        let grantor = game.move_object(grantor, ZoneType::Battlefield);
+        let land_perm = game.state.permanent_of(land).unwrap();
+        assert!(game
+            .characteristics(land_perm)
+            .activated_abilities
+            .iter()
+            .all(|ability| matches!(ability.mana_cost.purpose, SpendingContext::Activate { .. })));
+
+        let unmodified = snapshot(&game, land, PlayerId(0), true);
+        assert!(crate::agent::record_vocabulary::missing_program_tokens(&unmodified.program).is_empty());
+        assert!(!unmodified.description.contains("SpendingObject"));
+
+        let affected_land = game.affected_permanent(land_perm).unwrap();
+        let mut granted = game.characteristics(land_perm).activated_abilities[0].clone();
+        granted.granted_by = Some(AbilityGrant { grantor, index: 0 });
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_land],
+            Modification::GrantActivated(Box::new(granted)),
+            EffectDuration::Indefinite,
+        );
+        let view = game.characteristics(land_perm);
+        assert!(view
+            .activated_abilities
+            .iter()
+            .any(|ability| ability.granted_by.is_some()));
+
+        let reference = snapshot(&game, land, PlayerId(0), true);
+        assert!(crate::agent::record_vocabulary::missing_program_tokens(&reference.program).is_empty());
+        assert!(!reference.description.contains("SpendingObject"));
+        assert!(!reference.description.contains("AbilityGrant"));
     }
 }

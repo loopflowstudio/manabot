@@ -50,7 +50,7 @@ impl GameSnapshot {
                 else {
                     break;
                 };
-                env.apply_intervention(item.op).map_err(|error| {
+                env.apply_intervention(item.op.clone()).map_err(|error| {
                     AgentError(format!(
                         "snapshot intervention at action {action_index}: {error}"
                     ))

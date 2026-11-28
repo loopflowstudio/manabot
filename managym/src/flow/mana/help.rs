@@ -37,26 +37,24 @@ impl Game {
         }
     }
 
-    /// `cost` as the payment model's obligations under `help`, `waterbend`
-    /// of its generic still payable by waterbending: delve pays as much
-    /// generic as the graveyard holds, convoke and improvise taps may pay the
-    /// rest of the generic, and mana pays everything.
+    /// `cost` as the payment model's obligations under `permissions`: delve
+    /// pays as much generic as the graveyard holds, convoke and improvise taps
+    /// may pay the rest of the generic, and mana pays everything.
     pub(super) fn help_obligations(
         &self,
         player: PlayerId,
         cost: &ManaCost,
-        help: Help,
-        waterbend: u8,
+        permissions: CostPermissionContext,
     ) -> Vec<Obligation> {
-        let cost = match help.delve {
+        let cost = match permissions.help.delve {
             Some(spell) => {
                 let cards = self.graveyard_payers(player, spell).len();
                 cost.reduced_generic(cards.min(usize::from(u8::MAX)) as u8)
             }
             None => cost.clone(),
         };
-        let waterbend = waterbend.min(cost.generic());
-        let keyword = if help.convoke || help.improvise {
+        let waterbend = permissions.waterbend.min(cost.generic());
+        let keyword = if permissions.help.convoke || permissions.help.improvise {
             cost.generic() - waterbend
         } else {
             0
@@ -65,8 +63,8 @@ impl Game {
     }
 
     /// The creatures that may pay colored pips under `help` and `model`,
-    /// each with its colors: none unless the cost has convoke.
-    fn convokers(&self, model: &PaymentModel, help: Help) -> Vec<(PermanentId, Vec<Color>)> {
+    /// each with its 6-bit color mask: none unless the cost has convoke.
+    fn convokers(&self, model: &PaymentModel, help: Help) -> Vec<(PermanentId, ManaTypeSet)> {
         if !help.convoke {
             return Vec::new();
         }
@@ -76,30 +74,32 @@ impl Game {
             .filter(|source| source.keyword)
             .filter_map(|source| {
                 let view = self.characteristics(source.permanent);
-                view.is_creature()
-                    .then(|| (source.permanent, view.colors.iter().copied().collect()))
+                view.is_creature().then(|| {
+                    let mut mask = ManaTypeSet::EMPTY;
+                    for &color in &view.colors {
+                        mask.insert(ManaTypeSet::of(color));
+                    }
+                    (source.permanent, mask)
+                })
             })
             .collect()
     }
 
-    /// Can `cost` be paid from `model` with mana and `help`, `waterbend` of
-    /// its generic still payable by waterbending?
-    #[allow(clippy::too_many_arguments)]
+    /// Can `cost` be paid from `model` with mana and `permissions`?
     fn helped_payable(
         &self,
         player: PlayerId,
         pool: &Mana,
         model: &mut PaymentModel,
-        convokers: &[(PermanentId, Vec<Color>)],
+        convokers: &[(PermanentId, ManaTypeSet)],
         cost: &ManaCost,
-        help: Help,
-        waterbend: u8,
+        permissions: CostPermissionContext,
     ) -> bool {
         self.convoke_search(model, cost, convokers, &mut |model, cost| {
             model
                 .payable(
                     pool.clone(),
-                    self.help_obligations(player, cost, help, waterbend),
+                    self.help_obligations(player, cost, permissions),
                     SourcePolicy::All,
                 )
                 .then_some(())
@@ -107,38 +107,33 @@ impl Game {
         .is_some()
     }
 
-    /// Can `player` pay `cost` with mana and `help`, `pool` in their pool
-    /// and `waterbend` of its generic payable by waterbending? `tapped` is a
-    /// permanent the operation taps anyway, which pays nothing else.
+    /// Can `player` pay `cost` with mana and `permissions`, `pool` in their pool?
     pub(crate) fn payable_with_help(
         &self,
         player: PlayerId,
         pool: &Mana,
         cost: &ManaCost,
-        help: Help,
-        waterbend: u8,
-        tapped: Option<PermanentId>,
+        permissions: CostPermissionContext,
     ) -> bool {
         let mut model = self.payment_model(player, None);
-        if let Some(permanent) = tapped {
+        if let Some(permanent) = permissions.reserved_tap {
             model.reserve(SourceReservation::tap(permanent));
         }
-        self.mark_help_taps(&mut model, help);
-        let convokers = self.convokers(&model, help);
-        self.helped_payable(player, pool, &mut model, &convokers, cost, help, waterbend)
+        self.mark_help_taps(&mut model, permissions.help);
+        let convokers = self.convokers(&model, permissions.help);
+        self.helped_payable(player, pool, &mut model, &convokers, cost, permissions)
     }
 
-    /// What tapping `tapped` may pay of `cost` under `help`, before asking
-    /// whether the rest stays payable: by convoke an owed pip of one of its
-    /// colors or {1}, by improvise {1}, and {1} of the waterbend part while
-    /// `waterbend` of it is left. Each reason is its own payment, since the
-    /// receipt keeps it: a creature that could convoke or waterbend {1}
+    /// What tapping `tapped` may pay of `cost` under `permissions`, before
+    /// asking whether the rest stays payable: by convoke an owed pip of one of
+    /// its colors or {1}, by improvise {1}, and {1} of the waterbend part while
+    /// `permissions.waterbend` is left. Each reason is its own payment, since
+    /// the receipt keeps it: a creature that could convoke or waterbend {1}
     /// offers both.
     fn tap_payments(
         &self,
         cost: &ManaCost,
-        help: Help,
-        waterbend: u8,
+        permissions: CostPermissionContext,
         tapped: PermanentId,
     ) -> Vec<TapPayment> {
         let view = self.characteristics(tapped);
@@ -146,7 +141,7 @@ impl Game {
         let generic = cost.generic() > 0;
         let mut payments = Vec::new();
         let mut pay = |toward: Toward, color: Color| payments.push(TapPayment { toward, color });
-        if help.convoke && creature {
+        if permissions.help.convoke && creature {
             for color in view.colors.iter() {
                 if cost.cost[*color as usize] > 0 {
                     pay(Toward::Convoke, *color);
@@ -156,20 +151,18 @@ impl Game {
                 pay(Toward::Convoke, Color::Generic);
             }
         }
-        if help.improvise && artifact && generic {
+        if permissions.help.improvise && artifact && generic {
             pay(Toward::Improvise, Color::Generic);
         }
-        if waterbend > 0 && (creature || artifact) && generic {
+        if permissions.waterbend > 0 && (creature || artifact) && generic {
             pay(Toward::Waterbend, Color::Generic);
         }
         payments
     }
 
     /// What each of `candidates` may pay of `cost` by one direct tap under
-    /// `help` (`tap_payments`) such that the rest stays payable, `waterbend`
-    /// of its generic still payable by waterbending. `also_tapped` is a
-    /// permanent the operation taps anyway. A candidate with no such payment
-    /// is left out.
+    /// `permissions` (`tap_payments`) such that the rest stays payable. A
+    /// candidate with no such payment is left out.
     ///
     /// One decision's candidates are judged against one model, each tap
     /// reserved for its own question and then restored. The debug oracle
@@ -178,40 +171,39 @@ impl Game {
         &self,
         player: PlayerId,
         cost: &ManaCost,
-        help: Help,
-        waterbend: u8,
+        permissions: CostPermissionContext,
         candidates: &[PermanentId],
-        also_tapped: Option<PermanentId>,
     ) -> Vec<(PermanentId, Vec<TapPayment>)> {
+        let _scan = self.board_scan();
         let model_for = |tapped: Option<PermanentId>| {
             let mut model = self.payment_model(player, None);
-            for permanent in also_tapped.into_iter().chain(tapped) {
+            for permanent in permissions.reserved_tap.into_iter().chain(tapped) {
                 model.reserve(SourceReservation::tap(permanent));
             }
-            self.mark_help_taps(&mut model, help);
-            let convokers = self.convokers(&model, help);
+            self.mark_help_taps(&mut model, permissions.help);
+            let convokers = self.convokers(&model, permissions.help);
             (model, convokers)
         };
         let (mut model, convokers) = model_for(None);
         let pool = self.pooled_mana(player);
         // The payments of `asked` that leave the rest payable from `model`.
         let keeping_payable = |model: &mut PaymentModel,
-                               convokers: &[(PermanentId, Vec<Color>)],
+                               convokers: &[(PermanentId, ManaTypeSet)],
                                asked: &[TapPayment]| {
             asked
                 .iter()
                 .copied()
                 .filter(|payment| {
-                    let left = waterbend - u8::from(payment.toward == Toward::Waterbend);
+                    let next_permissions = permissions.after_tap(*payment);
                     let rest = cost.less_pip(payment.color);
-                    self.helped_payable(player, &pool, model, convokers, &rest, help, left)
+                    self.helped_payable(player, &pool, model, convokers, &rest, next_permissions)
                 })
                 .collect::<Vec<_>>()
         };
         candidates
             .iter()
             .filter_map(|&tapped| {
-                let asked = self.tap_payments(cost, help, waterbend, tapped);
+                let asked = self.tap_payments(cost, permissions, tapped);
                 if asked.is_empty() {
                     return None;
                 }
@@ -262,7 +254,7 @@ impl Game {
         &self,
         model: &mut PaymentModel,
         cost: &ManaCost,
-        convokers: &[(PermanentId, Vec<Color>)],
+        convokers: &[(PermanentId, ManaTypeSet)],
         attempt: &mut dyn FnMut(&PaymentModel, &ManaCost) -> Option<T>,
     ) -> Option<T> {
         if let Some(found) = attempt(model, cost) {
@@ -276,14 +268,11 @@ impl Game {
             {
                 continue;
             }
-            for color in colors
-                .iter()
-                .filter(|color| cost.cost[**color as usize] > 0)
-            {
+            for color in colors.iter().filter(|&slot| cost.cost[slot] > 0) {
                 let found = model.with_tapped(*permanent, |model| {
                     self.convoke_search(
                         model,
-                        &cost.less_pip(*color),
+                        &cost.less_pip(Color::from_index(color as u8)),
                         &convokers[position + 1..],
                         attempt,
                     )

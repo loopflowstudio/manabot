@@ -14,12 +14,19 @@ from managym.payment import PaymentPreview, preview_payment
 from tests.academy.socket_messages import settled_message
 
 
+def _keep_hands(env: managym.Env, obs: managym.Observation) -> managym.Observation:
+    while obs.turn.turn_number == 0:
+        obs, *_ = env.step(0)
+    return obs
+
+
 def _root(game: server.GameSession) -> ExperienceFrame:
-    assert game.env is not None
+    assert game.env is not None and game.obs is not None
+    game.obs = _keep_hands(game.env, game.obs)
     game.env.scenario_clear_hand(0)
     game.env.scenario_force_card_in_hand(0, "Ancestral Recall")
-    for _ in range(2):
-        game.env.scenario_force_battlefield(0, "Island", ready=True)
+    game.env.scenario_force_battlefield(0, "Island", ready=True)
+    game.env.scenario_force_battlefield(0, "Tranquil Cove", ready=True)
     game.obs = game.env.scenario_refresh()
     game.published_prompt = None
     return ExperienceFrame.model_validate(game._wire_message()["frame"])
@@ -30,7 +37,7 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json(
@@ -38,7 +45,8 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                     "type": "new_game",
                     "config": {
                         "hero_deck": {
-                            "Island": 24,
+                            "Island": 20,
+                            "Tranquil Cove": 4,
                             "Ancestral Recall": 8,
                             "Prophetic Prism": 8,
                         },
@@ -50,7 +58,7 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 }
             )
             initial = settled_message(websocket)
-            record = server.SESSION_REGISTRY[initial["session_id"]]
+            record = server.LIVE_GAMES[initial["game"]]
             frame = _root(record.game)
             assert frame.prompt is not None
             cast = next(
@@ -58,7 +66,7 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 for offer in frame.offers
                 if offer.label == "Cast Ancestral Recall"
             )
-            endpoint = f"/api/sessions/{record.session_id}/payment-preview"
+            endpoint = f"/api/games/{initial['game']}/payment-preview"
             request = {
                 "match_id": frame.match_id,
                 "revision": frame.revision,
@@ -66,35 +74,13 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 "frame_hash": frame.frame_hash,
                 "offer_id": cast.id,
             }
-            headers = {"x-etude-participant-token": initial["resume_token"]}
-            assert client.post(endpoint, json=request).status_code == 403
-            assert (
-                client.post(
-                    endpoint,
-                    json=request,
-                    headers={"x-etude-participant-token": "wrong"},
-                ).status_code
-                == 403
-            )
-            record.participants["watcher"] = server.ParticipantLease(
-                viewer_id="watcher",
-                resume_token="watcher-test-token",
-                role=server.ViewerRole.WATCHER,
-            )
-            assert (
-                client.post(
-                    endpoint,
-                    json=request,
-                    headers={"x-etude-participant-token": "watcher-test-token"},
-                ).status_code
-                == 403
-            )
-            del record.participants["watcher"]
+            unknown = "/api/games/no-such-game/payment-preview"
+            assert client.post(unknown, json=request).status_code == 404
             assert record.game.env is not None
             before = record.game.env.search_witness_json()
             prompt_count = record.game._next_prompt_id
             decisions = len(record.game.canonical_decisions)
-            response = client.post(endpoint, json=request, headers=headers)
+            response = client.post(endpoint, json=request)
             assert response.status_code == 200, response.text
             preview = response.json()["preview"]
             assert preview["state"] == "exact"
@@ -112,10 +98,7 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 {"offer_id": -1},
             ):
                 assert (
-                    client.post(
-                        endpoint, json={**request, **change}, headers=headers
-                    ).status_code
-                    == 409
+                    client.post(endpoint, json={**request, **change}).status_code == 409
                 )
             proposed = {
                 source["source"]["id"]["entity"] for source in preview["sources"]
@@ -146,17 +129,13 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 "frame_hash": payment.frame_hash,
                 "offer_id": pay.id,
             }
-            plan = client.post(endpoint, json=address, headers=headers).json()[
-                "preview"
-            ]
+            plan = client.post(endpoint, json=address).json()["preview"]
             assert proposed == {s["source"]["id"]["entity"] for s in plan["sources"]}
             paid = choose(payment, pay.id)
             assert {
                 p.id for p in paid.projection.agent.battlefield if p.tapped
             } == proposed
-            assert (
-                client.post(endpoint, json=address, headers=headers).status_code == 409
-            )
+            assert client.post(endpoint, json=address).status_code == 409
 
 
 def _native_preview(env: managym.Env, index: int) -> PaymentPreview:
@@ -174,7 +153,7 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
     None
 ):
     env = managym.Env(seed=165)
-    env.reset(
+    obs, _ = env.reset(
         [
             managym.PlayerConfig(
                 "payer",
@@ -192,6 +171,7 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
             ),
         ]
     )
+    _keep_hands(env, obs)
     env.scenario_clear_hand(0)
     for card in ("Wan Shi Tong, Librarian", "Firebending Lesson", "Swampsnare Trap"):
         env.scenario_force_card_in_hand(0, card)
@@ -228,12 +208,13 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
 
 def test_unaffordable_kicker_does_not_hide_the_exact_base_payment() -> None:
     env = managym.Env(seed=165)
-    env.reset(
+    obs, _ = env.reset(
         [
             managym.PlayerConfig("payer", {"Mountain": 32, "Firebending Lesson": 8}),
             managym.PlayerConfig("other", {"Forest": 32, "Llanowar Elves": 8}),
         ]
     )
+    _keep_hands(env, obs)
     env.scenario_clear_hand(0)
     env.scenario_force_card_in_hand(0, "Firebending Lesson")
     env.scenario_force_battlefield(0, "Mountain", ready=True)
@@ -274,12 +255,13 @@ def test_preview_preserves_followups_and_reserves_activation_source(
     expected: list[str],
 ) -> None:
     env = managym.Env(seed=165)
-    env.reset(
+    obs, _ = env.reset(
         [
             managym.PlayerConfig("payer", dict.fromkeys(hand + lands, 8)),
             managym.PlayerConfig("other", {"Island": 32, "Spectral Sailor": 8}),
         ]
     )
+    _keep_hands(env, obs)
     # A real response on the stack keeps forced passes from reaching untap.
     env.scenario_force_card_in_hand(1, "Spectral Sailor")
     env.scenario_force_battlefield(1, "Island", ready=True)

@@ -94,7 +94,8 @@ pub enum Action {
     DeclareAttacker {
         player: PlayerId,
         permanent: PermanentId,
-        attack: bool,
+        #[serde(serialize_with = "crate::flow::combat::serialize_attack")]
+        attack: Option<crate::flow::combat::AttackTarget>,
     },
     DeclareBlocker {
         player: PlayerId,

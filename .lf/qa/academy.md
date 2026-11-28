@@ -10,6 +10,17 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   an opponent read-out only ends the read-out. If a click stalls while
   previewing an offer, check whether the rows move under the pointer.
 - Capture tapped lands with a `fullPage` screenshot.
+- Offer text starts with its shortcut number ("1 Play Forest"), so match
+  offers unanchored, never `/^Play/`. A game's presentation events are in
+  `<traces-dir>/play.sqlite`, `attempts.trace_json` → `events[].presentation`;
+  feed them to `walkStops`/`buildCombatTable` in a scratch Vitest to explain
+  a walk caption offline. Giant Spider (2/4) against Hill Giant + Lightning Bolt
+  (`--opponent search --sims 8 --seed 7`) gives surviving damaged creatures,
+  turn-boundary damage and 3–5-creature combats within 19 turns.
+  Gray Ogre + Lightning Bolt against Vengeful Bloodwitch + Lightning Bolt
+  (same opponent, `--seed 11`) gives signed +1/−1 plate deltas on trigger
+  stops and a "did not resolve · illegal targets" fizzle within 14 turns.
+  Under reduced motion nothing walks automatically, by design.
 - Academy policy/session recovery: build the static SPA before browser servers
   (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
   `npm --prefix academy/ui run test:e2e -- --config playwright.policy.config.ts`
@@ -19,7 +30,6 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `ACADEMY_SEARCH_PORT`. The release config covers unified replay, session
   continuation and laptop navigation. Keep generation/builds finished while
   browser proofs run; rebuilding replaces chunks under a preview server.
-  Combat remains ordinary per-creature offers, including nonparticipation.
   A swapped human is native seat 1; check player-target role labels against
   actual native seats. Floating mana has its own disclosure outside player
   status; status retains full policy identity and provenance.
@@ -60,13 +70,9 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   etude train run>`; `GET /api/opponents` lists what the picker shows (an
   unreadable file is omitted, not listed; a refused one is listed with
   `available: false` and its reason). The list is read at launch: restart
-  the server after adding checkpoints. The launch opens inside a game, so
-  **Start game** on the New game page and **Start next game** raise a browser
-  confirm ("Stop the current game and start a new session?"). Playwright
-  dismisses it by default and the click then does nothing: register
-  `page.on('dialog', d => d.accept())` first. The launch root shows a "Ready to play"
-  card; its "Set up a different game" link opens the picker with
-  `[data-testid=opponent-select]`. Check the header names the
+  the server after adding checkpoints. No action raises a confirm dialog:
+  "New game" opens setup in place and the game left stays unfinished in
+  History. Check the header names the
   chosen policy before reading the opponent's plays. When this checkout has no
   `academy/ui/node_modules`, keep the script under `.runs/` and load Playwright
   from a sibling checkout with `createRequire('<sibling>/academy/ui/')('playwright')`.
@@ -90,16 +96,56 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Stall checks: `"stall_seconds": 0.3` in the local recipe config and
   `touch <out>/diagnostics.request` exercise the watchdog without load; read
   `escalations.jsonl` for one line per real stall.
+- Source launch (no installed `managym` distribution, as `scripts/play` runs):
+  `UV_PROJECT_ENVIRONMENT=<ignored .runs dir>/play-venv uv run --python 3.13
+  --locked --only-group play-runtime python -c 'import importlib.metadata as m;
+  m.version("managym")'` raises `PackageNotFoundError` there, so that venv
+  reproduces it. Start the API from it with `ACADEMY_CARD_ART_DIR=<empty .runs
+  dir>` and curl `/api/card-art/art/<slug>.jpg`: a cold card must return 200
+  JPEG and write `<scryfall id>-art.jpg` plus its credit JSON. On the table,
+  art is CSS backgrounds, not `<img>`: count `/api/card-art` responses and
+  `requestfailed` events instead of `document.images`. The same venv runs the
+  release Playwright config as `VIRTUAL_ENV` (the dev `.venv` lacks uvicorn);
+  scope it with `ACADEMY_RELEASE_API_PORT`, `ACADEMY_RELEASE_FRONTEND_PORT`
+  and `ACADEMY_RELEASE_PROOF_DIR`. `opponent-beats.spec.ts` took 2.3–3.1 min
+  per run at load ~200.
+- A fresh browser context on `/` of the dev table opens setup directly
+  (Play vs Bot / Watch Bot vs Bot, **Deal & Play**); there is no "Set up a
+  different game" link to press first.
+- Hand ribbons and open hands: Watch starts at `/?watch=1` → **Start watching**;
+  **Continue** advances one decision, **Next**/**Previous** step positions.
+  Read the halves with `[data-plate-side="opponent"]`'s `data-player-index`,
+  `[data-testid=hand-ribbon][data-ribbon=top|bottom]` (`data-out`),
+  `card-back`, `plate-choosing` and `hand-toggle`. In Play, the
+  `setup-open-hands` switch can be `check()`ed, but the live
+  `open-hands` switch in Settings reverts until the server replies: `click()`
+  it and wait, never `check()`. Opening the same `?game=` in a second context
+  takes the game, so the first tab's switch goes disabled. To see what a
+  frame change animates, hook `Element.prototype.animate` in
+  `addInitScript` and log calls inside `[data-testid=hand-ribbon]`; polling
+  rects misses the 180 ms travels. Passing every offer against the default
+  bot ends a game in seconds, which reaches the result card (**Rematch**,
+  **Swap play/draw**, **Deal new decks**) quickly. Review's open-hands count is
+  under Settings → This game (`open-hands-count`). Settings is the
+  `game-menu` `<summary>`, not a button named Settings. Watch's Continue/Next
+  is `[data-testid=replay-transport] button[title^="Next position"]`; wait for
+  it to enable between presses (its label flips Continue ↔ Next). The short
+  case is Play at 1280×800 with **Decisions** open (board ≈531 px): check each
+  `[data-testid=player-plate]` has `scrollHeight == clientHeight` and that the
+  opponent's land row is not cut under the top ribbon's peek.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
-  path), open the frontend URL, press Start game, play a land and Pass Turn.
+  path), open the frontend URL, press Deal & Play (the landing's start button;
+  mocked e2e setups at `/?setup=1` still say Start game), play a land and Pass Turn.
   Stop with SIGINT to the `scripts/play.py` Python process (`pgrep -f
   'scripts/play.py'`); SIGINT to the `./scripts/play` shell wrapper's PID
   leaves both servers running. To play specific cards, open "Import decklist
   files", check "Use imported decks for the next game", set both files
   (`setInputFiles` with counted lines such as `4 Heartbeat of Spring`), press
-  "Check decklists", wait for `Ready —`, pick the `passive` opponent and press
-  Start game; imported decks take any number of copies.
+  "Check decklists", wait for `Ready —`, pick the `passive` opponent with
+  `getByTestId('opponent-select').selectOption('passive')`, set
+  `getByLabel('Mana payment')` to `auto` so scripts need not pay, and press
+  Deal & Play; imported decks take any number of copies.
   Under heavy host load the first frontend probe in `scripts/play.py` keeps a
   fixed 30-second deadline whatever `--ready-timeout` says, so the launch
   fails with `ready.timeout`. Then start the two servers as it does: from the
@@ -113,27 +159,29 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Without a connected browser, run a Node Playwright script from `academy/ui`
   (`import { chromium } from '@playwright/test'`; a fresh worktree first needs
   `npm ci` there, about a minute; Chromium is cached; delete the script
-  afterwards). Click only `[data-testid=action-option]:not([disabled])`
-  offers (the configured-launch table has no `action-panel` wrapper; a
-  mulligan's "Keep hand" is an offer too): other buttons open the deck picker
-  or start a game. Triggered abilities
+  afterwards). Click only offers: `[data-testid=action-option]` rows (the
+  "All legal choices" list sits outside `action-panel`, so a selector scoped
+  to the panel misses discard and other list-only prompts) and the panel's
+  `primary-action` button (`prompt-action` buttons appear only while Choices
+  is folded); other buttons open the deck
+  picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
   The configured-launch table (`managym academy play`) has no Rematch in its
   header, so detect the end by the right panel's "Game over — no next
   decision." text (or one Rematch button), not by counting two Rematch
   buttons, and bound play loops by time, since the bot can win first. Live bot work
-  ("Searching · Seat 2") shows in the table masthead. Opening `/games?session=`
-  needs the owner credential from the same browser profile; a fresh browser
-  context gets 403. Games-page Replay links are labelled `Replay game <id>`;
+  ("Searching · Seat 2") shows in the table masthead. Nothing needs a
+  credential: any browser context opens any game, and a 403 is a real failure.
+  Games-page Replay links are labelled `Replay game <id>`;
   select them with `locator('a', {hasText: /^Replay$/})`. The game-over
   dialog moves focus and scrolls the table, so screenshot it as it is.
   For a demo with specific cards, check that art for an uncached card loads
   through the same launch the person will use. Hover a card name to read
-  `[data-testid=card-rules-text]`. During an active decision, move the pointer
-  between offers and tab through them. Keep the prompt, committed facts and
-  hints distinct, and check that changing a preview leaves the action buttons
-  in place. For a multi-step payment, make a contribution and check that the
+  `[data-testid=card-rules-text]`. During an active decision, hover cards and
+  offers and tab through them. Keep the prompt, committed facts and hints
+  distinct, and check that changing a preview leaves adjacent panels and action
+  buttons in place. For a multi-step payment, make a contribution and check that the
   panel shows what committed, what remains payable and what is still floating.
 - Live network recovery: browser offline emulation may leave an existing
   WebSocket connected. To prove recovery, put a local TCP forwarder between the
@@ -153,8 +201,7 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   with `managym academy --policy <file>.json play|watch`. A checkpoint trained
   before syncing main can pass the picker yet fail Start with "Failed to load
   the selected opponent." (catalog vocabulary grew); retrain rather than debug
-  it. Watch resume tokens live in that tab's storage, so reopen a live Watch
-  trace in the same browser context. A completed Play game's evidence opens
+  it. A completed Play game's evidence opens
   from `/replay?trace=<id>` (ids from `/api/traces`) via "Inspect bot search".
   An Elemental recipe policy (`etude train manabot/recipes/elemental.py
   --config '{"updates": 2, "streams": 4}' --until updates=1`, about 10 s)
@@ -168,15 +215,47 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
 - Record `uptime` when the Academy table stalls or Vite fails startup. MTG-320
   QA observed both at load averages around 300, but did not establish a cause.
   Repeat on an idle host before attributing a stall to the change or to load.
-- Combat drafts (`[data-testid=combat-draft]`, `POST
-  /api/sessions/<id>/combat-preview`): the draft appears only after the
-  preview answers, so wait for it before clicking creatures; without a preview
-  (a mocked socket with no route) the table keeps one creature at a time.
-  `[data-draft]` on a card is `can`, `in` or `armed`; confirm only once the
-  primary has `data-draft-ready=true`. Collect creature ids before clicking:
-  a locator over `[data-draft=can]` shifts as cards are drafted.
+- Grouped decisions (combat drafts, Scry, Surveil, OrderLibrary): the live
+  `decision_group` arrives beside the frame; drafts preview through `POST
+  /api/games/<game>/decision-group-preview` and Confirm sends one `decision_group_command`
+  WebSocket message (count `framesent` types). `[data-draft]` on a card is
+  `can`, `in` or `armed`; confirm only once `[data-testid=primary-action]` has
+  `data-draft-ready=true`. Collect creature ids before clicking: a locator over
+  `[data-draft=can]` shifts as cards are drafted. A creature cast this turn is
+  its own pile, so "Attack with 4" can sit beside "3 of 3 Raging Goblin".
+  For library groups, import `12 Island / 12 Swamp / 20 Bilbo Baggins,
+  Burglar / 16 Diresight` against `60 Plains` with `--opponent passive`:
+  Take a Glance ({U}, Scry 2) is castable on turn 1 and Diresight (Surveil 2,
+  then OrderLibrary when both are kept) on turn 3. Drive
+  `[data-testid=arrange-panel]` by its buttons (`Put X on top|bottom`,
+  `Put X in graveyard`, `Add X to order`) and `[data-testid=arrange-confirm]`;
+  the raw per-card offers are in the closed `[data-testid=per-creature-choices]`.
+  One raw step on Scry 2 leaves one card, below the group threshold, so the
+  panel gives way to raw offers. Recorded rows are per native step with
+  command ids `authority.decision_group.<id>.<n>` in
+  `canonical_replay.decisions` of `<traces>/play.sqlite`. Land and spell offers
+  are `[data-testid=action-option]` rows in "All legal choices", not in
+  `[data-testid=action-panel]`. Placed rows move with `Move X to
+  top|bottom` and `Unplace X`. Raging Goblin attacks need a script that plays
+  Mountains, or the game decks out with no combat. To exercise an authority
+  rejection from the real browser, `page.routeWebSocket(/.*/, ws => …)` with
+  `ws.connectToServer()` and rewrite one outgoing `decision_group_command` plan (empty
+  `bottom` on Scry 2): the server answers `rejected` with "Place remaining
+  cards before confirming", the game stays at the Scry, and Confirm stays
+  disabled until the draft is edited.
+- PartitionPiles live: import `24 Island / 36 Curator of Destinies` against
+  `60 Plains`, passive opponent, automatic mana; a script that clicks "Keep",
+  "Play Island" and "Cast Curator of Destinies" reaches the split in about a
+  minute. The `decision_group` arrives while the board still walks the cast and
+  trigger: `[data-testid=partition-panel]` (like ArrangePanel) is absent and
+  the rail Confirm is disabled until the walk ends, so detect the decision from
+  received WebSocket messages (`decision_group.kind === 'partition_piles'`), never by
+  clicking `primary-action` as "pass" — it becomes the split's Confirm. Toggle
+  a card with its `[data-testid=partition-card] [data-testid=board-card]`.
+  Recorded rows are `Put <card> in the face-down|face-up pile` under
+  `authority.decision_group.<id>.<n>`, then the opponent's `Choose … pile`.
 - Payment previews (`[data-testid=payment-preview]`, `POST
-  /api/sessions/<id>/payment-preview`): the panel exists only once a payment
+  /api/games/<game>/payment-preview`): the panel exists only once a payment
   offer has been previewed in the current decision, so read it with a count
   check. Arrival focus previews the first offer as soon as a game starts; a
   `page.route` for failure or delay must be installed before Start game.
@@ -192,9 +271,12 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   all-sources cast (turn 3), a real source-choice prompt with triggered mana
   (turn 5, after earthbending the Mountain) and a Bolt target → payment flow
   (turn 7). Cub's earthbend trigger asks for a land target after it resolves.
-  Each new browser context starts a new game from the same launch URL.
-  **Open replay** is a link, not a button. Read the resume credentials from
-  `sessionStorage['etude.gui.resume']` to probe the route from the page.
+  A launch starts one game: every context that opens its URL takes up that
+  same game (the last one opened holds it), and once the game is over the
+  URL opens its Replay. Restart the server for a fresh launch id.
+  **Open replay** is a link, not a button. The tab's game is
+  `localStorage['academy.game']`; its in-flight Command and last frame are
+  `sessionStorage['academy.tab.<game>']`.
 - Search (search-capable policy in Play/Watch): `uv run etude train
   manabot/recipes/local.py` gives a compatible
   `out/policies/<update>-raw.safetensors` in about 90 s; save `{"provider": "manabot",
@@ -214,8 +296,7 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   (`events[].bot_decision.mirror`). To probe reconnect, click an offer that hands
   priority to the bot and reload about 1.5 s later while the table shows
   `Search W×D· N s`; the game must stay `active` and resume at the
-  committed state. A reload before the first response has no resume
-  credentials and launches a new game by design.
+  committed state.
 - Live Academy QA without fixtures: build first, then start the ordinary
   `managym.academy.server:app` with `ACADEMY_TRACES_DIR` pointing into an ignored
   `.runs/` directory and `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.
@@ -250,8 +331,11 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   prefix; require committed facts to remain, with unique rows and no old motion.
   Let keyboard Home scrolling settle before measuring a reading anchor. Prompt
   kinds in frames are lowercase; `data-action-space-kind` uses uppercase names
-  such as `CHOOSE_TARGET` and `LOOK_AND_SELECT`. Identical card copies have
-  separate cast offers, so choose an explicit occurrence in browser scripts.
+  such as `CHOOSE_TARGET` and `LOOK_AND_SELECT`. Identical card copies fold
+  into one canonical offer with `aliases[]`; click or drag any copy (for fanned
+  cards in a hand ribbon, wait for animations to settle and grab the uncovered
+  left slice `x + 14`; in a battlefield pile, index 0 sits on top so later
+  copies expose their right edge `width - 6`).
   In Replay, open Consequences with a real pointer click at the final frame;
   setting `<details>.open` cannot detect a hand overflowing over its summary.
   Check the hand ends above history. Recorded terminal results have no next-game
@@ -280,3 +364,221 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   header's "New game" (selects, then "Start game") and click
   `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
   `os.killpg(pid, SIGINT)`.
+- Manual mana payments in a real game: `managym academy play --deck <f>
+  --opponent-deck <f> --opponent passive --seed 11` with `14 Kyoshi Village /
+  10 Plains / 16 Youthful Knight` against `40 Plains` reaches Village + Plains
+  (exact {1}{W}, no stop) on turn 5 and Village + 3 Plains on turn 9 when the
+  script plays Village first, then Plains. The rail's turn number (`li.turn`
+  `data-turn`) is the last log entry, not reliably the current turn; to cast
+  "the turn after the last land", drive `GameSession.new_game`/`hero_command`
+  by offer labels in Python and read `projection.turn.turn_number` and each
+  permanent's `entered_this_turn`. Plain non-creature, non-animating lands
+  played this turn are interchangeable with earlier copies; creatures,
+  non-lands, and self-animating lands (e.g. Soulstone Sanctuary) stay distinct.
+  Mid-payment color choices are MODAL frames with
+  `decision_context.stage == "mana_color"`. The table's client Auto-tap
+  (on by default) submits "Pay the cost" at every mandatory payment, so the
+  browser never shows a native payment stop and Moves reads
+  `Auto-tapped {1}{W} for <spell>`. To turn it off, open
+  `[data-testid=game-menu]` (Settings) and click the switch
+  `[data-testid=auto-tap-toggle]` (a hidden-styled `input[role=switch]`:
+  wait for it `attached`, check `isChecked()`), close the menu and wait for
+  the header chip `[data-testid=chip-auto-tap]` to read "Manual tap".
+  "Pay the cost" renders as "Auto pay". A payment's taps fold into its
+  "Cast …" move. During attacks the per-creature offers sit in a closed
+  disclosure, so a driver waiting for a visible `action-option` stalls:
+  also accept `[data-testid=primary-action][data-draft-ready=true]` and click
+  it ("No attack"). A tapped land is drawn as a landscape box (`.turned`,
+  aria-label "… — Tapped"), not a rotated picture; count `.turned` rather
+  than judging a screenshot. Ward payments come from a real `GameSession` with
+  `villain_type: "random"`, `{"Island": 22, "Waterfall Aerialist": 18}` and a
+  Mountain/Kyoshi Village/Plains/Lightning Bolt hero (seeds 3, 5, 7 reach
+  Bolt → Ward {2} stops at `stage == "resolution_payment"`).
+  `14 Gruul Guildgate / 6 Mountain / 6 Forest / 14 Gray Ogre` (seed 11) reaches
+  Guildgate + Forest + Mountain (exact {2}{R}, no stop). Gruul Guildgate
+  enters tapped, so casting on the turn the second Guildgate is played is
+  again exact; cast on a later turn to reach the two-Guildgate stop, color
+  modal and second stop. To check a browser game's choices exactly, replay
+  the hero's recorded `action_description`s from `attempts.trace_json` through
+  `GameSession` with the recorded `config` (drop `hero_source`,
+  `villain_source`, `seed_was_requested`). Rebuild the static SPA
+  after any `academy/ui` change; a configured launch serves the stale build silently.
+- Folded offers over identical objects in a real game: the offer's
+  `subjects[0]` is the copy the engine acts on and `aliases[]` are the other
+  copies as `SubjectRef`s (`alias.id.entity` is the board card's
+  `data-object-id`); a `DeclareBlocker` offer's subjects are
+  `choice:<blocker>`, `target:<attacker>` and its aliases are attackers; a click or drag on any copy sends the one offer and
+  the engine plays, taps, targets or blocks the canonical copy. Read frames
+  from the WebSocket (`payload.recovery?.frame ?? payload.update?.frame ??
+  payload.frame`) and click rows by `[data-testid=action-option][data-offer-id=N]`
+  rather than text. Reached with configured launches (`--order play` unless
+  noted): `kyoshi` (14 Kyoshi Village / 10 Plains / 16 Youthful Knight)
+  against `40 Plains` passive, seed 11: three Plains fold into one Play
+  Plains on turn 1, five Knights into one cast, and Village + 3 Plains at
+  `{1}{W}` by turn 7 with Auto-tap off. `22 Mountain / 30 Raging Goblin /
+  8 Burst Lightning` against `60 Plains` passive, seed 5: three-to-four goblin
+  attack drafts by turn 3. The same deck mirrored against `heuristic`,
+  `--order draw`, seed 5: a block stop on turn 3 with one blocker against
+  three attackers (two fold). `22 Mountain / 8 Raging Goblin / 30 Burst
+  Lightning` against that goblin deck (heuristic, draw, seed 5): Burst
+  Lightning targets on turn 3 with two folded attackers. Creatures that
+  entered on different turns stay separate. Hand cards lose `.playable`
+  during the turn read-out: wait for `[data-testid=walk-now]` to disappear
+  before clicking or dragging board cards. After game over the captured
+  frame may still show the last decision; detect the end by the visible "Rematch"
+  button. Attack and block drafts confirm as one `decision_group_command`
+  (no `command` messages); its `plan` may name an alias, which the engine
+  resolves. A drafted block moves its attacker's pile to the front of the
+  row (`alignCombatRows`), so read card boxes after the draft before judging
+  where a block line ends. `60 Plains` against `60 Plains` passive, seed 3, passing every
+  priority, reaches a cleanup discard from eight identical Plains on turn 2:
+  there is no prompt, the graveyard simply gains one. `managym academy watch
+  --player heuristic --player heuristic` opens paused at position 1/1: press
+  Start watching if shown, then the replay bar's **Play**. Which goblin each prompt named is in `attempts.trace_json`
+  `events[].actions[].focus`. To record a game on the pre-change engine,
+  `git worktree add --detach /private/tmp/<x> <base>`, build its wheel with
+  this checkout's `.venv/bin/maturin build --release` and `CARGO_TARGET_DIR`
+  under `.runs/` (about 10 minutes), place its `.so` there and run the CLI
+  from `/tmp` with `PYTHONPATH=/private/tmp/<x>`; the main checkout's `.so`
+  may not match its Python.
+- Board drags and combat drafts in a real game: import `22 Mountain / 30 Raging
+  Goblin / 8 Burst Lightning` against `60 Plains` with Passive and Automatic
+  payment; haste goblins give a multi-creature attack draft by turn 3 and
+  Burst Lightning a stack-to-plate target drag. For blocks and a trigger
+  target from the battlefield, play Elemental GR against Search 16 on
+  Elemental GW (Badgermole Cub's earthbend asks for a land). After each
+  accepted Command the server sends `command_outcome` twice: first with
+  `work.state` `running` (the board is not live; keys and the draft runner
+  wait), then `complete`. Wait for `[data-testid=game][data-live=true]`
+  before the next key. During a live combat draft the per-creature rows sit
+  in the closed `[data-testid=per-creature-choices]` disclosure, so their
+  `innerText` is empty; number keys do nothing there. Drag with
+  `page.mouse` down/move in steps/up; target `.board` cards with
+  `:not(.hand *)`, since `.board` also contains the hand. A long QA session
+  is easiest from one persistent Playwright process; a new context reaches
+  the same game by `/?game=<id>`. Bash background jobs stop after their
+  timeout, so give it `timeout` up to 2 h.
+  The leftmost creature sits flush against the player plate: start an
+  attack sweep on a creature or on empty row space, since a press on the
+  plate is ordinary text selection. To change decks, press the board's "New
+  game" (setup opens in place; the game stays resumable in History), choose
+  the decks and Start game. The release
+  proof's API server needs `VIRTUAL_ENV=<checkout>/.runs/play-venv` (or another
+  env with uvicorn) for `uv run --active`; targeted specs reuse running dev
+  servers when `ACADEMY_API_PORT`/`ACADEMY_FRONTEND_PORT` name them.
+- Study (Review analysis, Show analysis, Games record) as a returning user:
+  drive games with Playwright `launchPersistentContext(<.runs dir>)` so `/`
+  returns to the unfinished game; any context may analyse any game, finished
+  or not (Settings → Analysis → "Analyse with…", `[data-testid=analyse-with]`;
+  the menu is `[data-testid=game-menu]`). For games written by an older build, `git worktree
+  add --detach /private/tmp/<x> <base>`, build its SPA there, and run it with
+  this checkout's `.venv/bin/python` from `/tmp` (cwd on `sys.path` otherwise
+  loads this checkout) with `PYTHONPATH=/private/tmp/<x>` and
+  `ACADEMY_FRONTEND_BUILD` pointing at its build; when the Rust diff is only
+  additive, this checkout's `.so` serves (the main checkout's may be stale).
+  Start the CLI as `python -c 'from managym.cli import main; main()' academy
+  ...` (`-m managym.cli` exits silently); stop a `nohup … &` server with
+  SIGTERM. Enable live overlays and charts mid-game, not only from turn 1, and
+  check that axes, `%` units and hover readouts are legible. A real checkpoint
+  from `etude train manabot/recipes/local.py`
+  analysed a 130-event game in about 5–60 s depending on load.
+  The Bolt-deck acceptance spec never meets long option names or a stack
+  item; check Review's rail at a Lessons v Allies decision (Learn has nine
+  options) and with **See its line** open, which passes no `onjump`.
+- Battlefield badges in a real game (`managym academy play` with imported
+  `--deck`/`--opponent-deck` files and `--opponent passive`): drive it with a
+  Node Playwright script copied into `academy/ui` (move it out afterwards).
+  Hand cards also carry `data-testid=board-card`, so scope by aria-label.
+  In Play, clicking a permanent with one offer commits it (Fire Nation
+  Cadets' pump), so open Inspect by hovering and waiting about one second,
+  then read `[data-testid=inspect-card]`. Read the turn from
+  `getByText(/^Turn \d+/)`. Each new context replays the same seeded deal, so
+  use a different `--seed` or deck to reach other cards. After game over,
+  "Review this game" opens the replay at position 1. Press End, then the
+  "Previous" button, to reach the final board. With
+  `UV_PROJECT_ENVIRONMENT` and `--only-group play-runtime`, managym is not
+  installed, so uncached card art returns 500 (`PackageNotFoundError` in
+  `card_art.py`). Use a cached card, or install the wheel, when art matters.
+  Start several launch servers from Python `subprocess.Popen(...,
+  start_new_session=True)`; macOS has no `setsid`. Attacking cards are
+  rotated, so `getBoundingClientRect` overlap checks between chips and `.pt`
+  report false overlaps on them; confirm those in a screenshot. Watch with
+  `--player random` twice shows no `.policy` pill; the pill case is covered by
+  `e2e/card-badges.spec.ts` ("recorded Watch badges") or a trained policy.
+  Useful real-game cards: Watery Grasp and Path to Redemption (Auras that name
+  themselves as a restriction source), Tiger-Dillo (own conditional
+  restriction), Sokka with Ty Lee (granted Menace/Prowess named in Inspect).
+- Swap sides (Play → Settings → This game, `[data-testid=swap-sides]`): a
+  policy launched from `etude train manabot/recipes/local.py` needs
+  `--deck ur_lessons --opponent-deck gw_allies` (otherwise `setup.invalid`).
+  Each fresh browser launch of the same `?launch=` URL starts a new game as a
+  new player, so drive the whole game, swaps and reloads in one script. The
+  flipped board publishes immediately after policy build (with `work.state`
+  `running`) before the bot plays the seat you left; the settled turn can
+  still take seconds (at load ~110 policy build was 1.2 s and the new
+  runner's first decision 4.3 s, which a fresh game's first bot move also
+  costs). To time the server path, start the CLI from a small script that
+  wraps `GameSession.swap_sides`, `_build_swap_policy` and `_advance` with
+  `perf_counter` and then calls `managym.cli.main()`. The live line's caption
+  (`/decisions? read/`) shows how many readings it holds; after a swap it must
+  restart from the new seat. In browser scripts, read optional elements with
+  `count()`: `innerText().catch()` on an absent one waits the full 30 s
+  timeout and looks like a slow server. For a dark screenshot, pass
+  `colorScheme: 'dark'` when launching the context; `emulateMedia` after load
+  can capture the theme's transition with unreadable text.
+  A driver that clicks offers must filter with
+  `[data-testid=action-option]:enabled:not([aria-disabled]) >> visible=true`:
+  during a live combat draft the per-creature offers sit hidden under a
+  collapsed disclosure and the decision commits with the `No attack`/confirm
+  button, whose `kbd` reads `Space` (press Space when no offer is visible).
+  `/api/traces/{id}`, `/recording` and `/decisions` refuse an unfinished game
+  with `participant_credential_required`; fetch them inside the player's
+  browser profile with headers `x-etude-participant-tokens` (localStorage
+  `etude.play.record-credentials` plus `etude.play.player-credential`).
+  `--decklists closed` works with swaps; restart the server to interrupt a
+  game rather than waiting for it to end.
+  `play-session.spec.ts` (release and default configs) fails six tests on
+  this branch's base, looking for a "Seat 1 controller" select no GameSetup
+  renders; compare against a revert before reading it as a regression.
+- Priority stops in a real combat (MTG-475): `managym academy play --deck
+  <f> --opponent-deck <f> --opponent heuristic --order play --seed 3 --no-open
+  --port <unused> --traces-dir .runs/<dir>` with `24 Plains / 18 Savannah
+  Lions / 18 Razor Rings` on both sides (the `heuristic` alias needs provider
+  discovery: do not pass `--no-discover`). Seed 3 attacks with Rings castable
+  on hero turn 5 and the heuristic attacks on turns 8–14. Each new browser
+  context starts a new game from the same launch URL. Read
+  `game[data-step]`, `[data-turn]`, `[data-turn-owner]` per decision; the
+  StopBar cells are `[data-testid=bar-stop-<my|opponent>-<step>]` with
+  `data-state` off/every/once, and a click cycles off → every → once. Seed
+  legacy storage with an `addInitScript` guarded by a flag key, or reloads
+  reseed it. Escape does not close the top-bar Menu; click
+  `[data-testid=game-menu]` again. Auto passes are `auto: true` events in
+  `attempts.trace_json`. A Once stop must hold the window it arrives at:
+  check the priority offers appear there before the bar turns Off.
+- Resume across a restart (MTG-488): `./scripts/play --port <api> --frontend-port
+  <ui>` with `UV_PROJECT_ENVIRONMENT=$PWD/.runs/play-venv` and
+  `ACADEMY_TRACES_DIR=$PWD/.runs/<dir>`; start with **Deal & Play**, decide a
+  few times, close the persistent context, SIGINT the `scripts/play.py`
+  Python process (a `nohup … &` launch still accepts SIGINT there), start it
+  again on the same traces dir. Bare `/` in the same profile and History's
+  **Resume** (`/?game=<id>`) both return to the pending decision; a fresh
+  context opens `/replay?trace=<id>` with Play on from here
+  (`[data-testid=play-on]`, then `[data-testid=start-played-from]`).
+  `attempts` columns are `id`, `status`, `ending_reason`, `num_events`. In
+  combat the per-creature offers are hidden: click visible offers only and
+  fall back to `[data-testid=primary-action]` ("No attack"). A configured
+  launch with `20 Mountain / 40 Lightning Bolt` against `40 Plains`, Passive,
+  seed 7 ends in 9 turns with 17 clicks preferring Bolt → "Target Passive
+  player".
+- Scripted Play with chosen cards (no file upload needed): a fresh worktree has
+  no `.venv`; `uv venv --python 3.13 && uv sync --extra play --extra dev`
+  builds the release engine and installs it editable (about 10 min at load
+  ~85). On `/?setup=1` the opponent picker's values are `policy` (the
+  registered checkpoint), `random` and `passive`; there is no heuristic. After
+  "Import decklist files" and the "Use imported decks" checkbox, `fill` the
+  "Your deck source" / "Opponent deck source" textareas with counted lines; the
+  Play page has no Seed field, so deals vary. Combat is drafted on the board:
+  the per-creature offers are hidden, so click every `.board
+  [data-testid=board-card][data-draft=can]` and then `primary-action`, and
+  restrict offer clicks to `:visible`. A passive opponent discards to hand
+  size, which fills its graveyard by about turn 4.

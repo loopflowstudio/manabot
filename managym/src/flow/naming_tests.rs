@@ -14,7 +14,7 @@ use crate::{
     },
     decision::Command,
     flow::{
-        decision::{Decision, EffectFrame},
+        decision::{Decision, EffectFrame, ResolutionTarget},
         game::Game,
         scenario::naming_fixture_vocabulary,
     },
@@ -39,7 +39,13 @@ fn naming_game() -> Game {
     );
     game.keep_opening_hands();
     game.run_frame(EffectFrame {
-        context_target: Some(Target::Player(PlayerId(1))),
+        targets: vec![ResolutionTarget {
+            share: 0,
+            division: 0,
+            target: Target::Player(PlayerId(1)),
+            requirement: 0,
+            legal: true,
+        }],
         ..EffectFrame::new(
             PlayerId(0),
             vec![Effect::NameAndExileFromTargetPlayer { count: 4 }],
@@ -205,6 +211,15 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
         };
         assert_eq!(name, &names.get(index).unwrap().name);
         assert_eq!(*remaining, 4);
+        let capture = branch.capture_decision(PlayerId(0), 0).unwrap();
+        let description = capture
+            .frames
+            .iter()
+            .filter_map(|frame| frame.effect_execution_description.as_deref())
+            .find(|text| text.contains("named search:"))
+            .unwrap();
+        assert!(description.contains(&format!("named search: {name} (seat 2, up to 4)")));
+        assert_eq!(description.matches(name).count(), 1);
         let searched = witness(&branch);
         for stale in &path {
             assert!(branch.execute_semantic_command(stale).is_err());
@@ -288,7 +303,7 @@ fn installed_naming_vocabulary_preserves_the_exact_real_catalog() {
     let old: std::collections::BTreeSet<_> = pack
         .definition_entries()
         .filter(|(id, definition)| {
-            !definition.is_token
+            definition.kind == crate::state::game_object::ObjectKind::Card
                 && (definition.scryfall_id.is_some()
                     || !definition.key.is_empty()
                     || pack.front_face(*id).is_some())
@@ -342,7 +357,7 @@ fn catalog_naming_cost_attribution() {
     let game = naming_game();
     measure("naming_decision", || Decision::NameCard {
         player: PlayerId(0),
-        count: 4,
+        after: crate::flow::decision::AfterNaming::Exile { count: 4 },
         scope: names.root(),
         names: Arc::clone(&names),
     });

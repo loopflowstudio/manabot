@@ -89,8 +89,8 @@ def test_baseline_provider_search_runs_in_play_and_either_watch_seat(
         try:
             actors: set[int] = set()
             for revision in range(8):
-                step_watch(created["id"], created["token"], revision)
-                row = inspect_watch(created["id"], revision, created["token"])
+                step_watch(created["id"], revision)
+                row = inspect_watch(created["id"], revision)
                 assert row["outputs"]["mirror"]["worlds"] == 1
                 assert row["outputs"]["mirror"]["depth"] == 1
                 assert len(row["outputs"]["probabilities"]) == len(
@@ -101,7 +101,7 @@ def test_baseline_provider_search_runs_in_play_and_either_watch_seat(
                     break
             assert actors == {0, 1}
         finally:
-            server._drop_session(created["id"], "test")
+            server.end_game(created["id"], "test")
     finally:
         game.close("test")
         set_policy_registry(None)

@@ -508,12 +508,7 @@ impl HiddenHandConstraints {
         {
             return Err(MaterializeError::StaleSource);
         }
-        if source
-            .current_action_space
-            .as_ref()
-            .and_then(|space| space.player)
-            != Some(self.viewer)
-        {
+        if source.action_space().and_then(|space| space.player) != Some(self.viewer) {
             return Err(MaterializeError::UnsupportedActingPrompt);
         }
         let world = PossibleWorld {
@@ -669,13 +664,11 @@ impl HiddenHandConstraints {
 
         if mode == MaterializeMode::RefreshOpponentCommitment
             && branch
-                .current_action_space
-                .as_ref()
+                .action_space()
                 .is_some_and(|space| space.player == Some(opponent))
         {
             let space = branch
-                .current_action_space
-                .as_ref()
+                .action_space()
                 .ok_or(MaterializeError::UnsupportedActingPrompt)?;
             let kind = space.kind;
             let subject = space
@@ -697,15 +690,17 @@ impl HiddenHandConstraints {
                         .is_some_and(|suspended| {
                             matches!(
                                 suspended.decision,
-                                crate::flow::decision::Decision::OrderReplacement { .. }
+                                crate::flow::decision::Decision::OrderEntryChoices { .. }
+                                    | crate::flow::decision::Decision::ChooseEntryValue { .. }
+                                    | crate::flow::decision::Decision::NameCard { .. }
+                                    | crate::flow::decision::Decision::OrderReplacement { .. }
                                     | crate::flow::decision::Decision::AssignCombatDamage { .. }
                             )
                         }) =>
                 {
-                    // All prospective entrants and replacement sources, and
-                    // the attacker, blocker and damage already assigned, are
-                    // public battlefield state; the retained alternatives stay
-                    // valid.
+                    // The sampled discard satisfies the retained replacement
+                    // predicates. Its ordering choices keep their sources and
+                    // modes, as do choices over public battlefield objects.
                 }
                 ActionSpaceKind::Learn
                 | ActionSpaceKind::Scry

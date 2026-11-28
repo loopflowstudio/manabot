@@ -68,7 +68,7 @@ def test_bloodbending_pending_discard_recovers_and_commits_once(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": _request()})
@@ -103,8 +103,7 @@ def test_bloodbending_pending_discard_recovers_and_commits_once(
             resumed.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             recovery = settled_message(resumed)["recovery"]
@@ -130,13 +129,13 @@ def test_bloodbending_pending_discard_recovers_and_commits_once(
             assert (
                 rejected["recovery"]["frame"]["frame_hash"] == next_frame["frame_hash"]
             )
-    session = next(iter(server.SESSION_REGISTRY.values())).game
+    session = next(iter(server.LIVE_GAMES.values())).game
     assert session.trace is not None
     assert session.env is not None
     assert session.env.skip_trivial_count() > 0
     assert any(event.auto for event in session.trace.events)
     session.close(end_reason="test_complete")
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
 
 
 def test_submitted_tla_decks_play_through_the_training_environment() -> None:
@@ -177,7 +176,7 @@ def test_resume_preserves_private_opening_bottom_offers(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": _request()})
@@ -191,27 +190,27 @@ def test_resume_preserves_private_opening_bottom_offers(
             )
             pending = settled_message(socket)["update"]["frame"]
             bottom = ExperienceFrame.model_validate(pending)
-            assert len(bottom.offers) == 7
+            assert sum(1 + len(offer.aliases) for offer in bottom.offers) == 7
+            assert len(bottom.offers) >= 2
             assert all("deepest first" in offer.label for offer in bottom.offers)
             assert not bottom.projection.opponent.hand
         with client.websocket_connect("/ws/play") as resumed:
             resumed.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             recovery = settled_message(resumed)["recovery"]["frame"]
             assert recovery["frame_hash"] == pending["frame_hash"]
             assert recovery["offers"] == pending["offers"]
             resumed.send_json(
-                {"type": "command", "command": _command(bottom, bottom.offers[2], 1)}
+                {"type": "command", "command": _command(bottom, bottom.offers[-1], 1)}
             )
             result = settled_message(resumed)
             assert result["status"] == "accepted"
             assert [
                 offer["label"] for offer in result["update"]["frame"]["offers"]
             ] == ["Keep hand", "Mulligan"]
-    next(iter(server.SESSION_REGISTRY.values())).game.close(end_reason="test_complete")
-    server.SESSION_REGISTRY.clear()
+    next(iter(server.LIVE_GAMES.values())).game.close(end_reason="test_complete")
+    server.LIVE_GAMES.clear()

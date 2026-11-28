@@ -10,7 +10,13 @@ import boto3
 import pytest
 
 from manabot import data
-from manabot.data import DataManifest, fetch_data, load_manifest, publish_data
+from manabot.data import (
+    DataManifest,
+    DataUnavailable,
+    fetch_data,
+    load_manifest,
+    publish_data,
+)
 
 
 @dataclass
@@ -165,3 +171,18 @@ def test_unknown_paths_are_errors_not_empty_fetches(
         fetch_data(["experiments/data/absent"], manifest=load_manifest(manifest_path))
     with pytest.raises(ValueError, match="under experiments/data"):
         publish_data(["README.md"], manifest_path=manifest_path)
+
+
+def test_r2_store_without_credentials_is_unavailable_not_an_error(
+    tmp_path: Path, bucket: Bucket, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CI without R2 secrets skips data-backed tests instead of erroring them."""
+    root = tmp_path / "repo"
+    manifest = _publish(root, {"result.json": b"{}"})
+    (root / "experiments/data/result.json").unlink()
+    monkeypatch.setenv("MANABOT_DATA_CACHE", str(tmp_path / "empty-cache"))
+    for name in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    r2 = manifest.model_copy(update={"store": "r2://bucket/manabot/"})
+    with pytest.raises(DataUnavailable, match="R2_ACCOUNT_ID"):
+        fetch_data(["experiments/data/result.json"], manifest=r2)

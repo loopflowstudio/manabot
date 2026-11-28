@@ -30,7 +30,7 @@ fn elvish_archdruid_adds_green_for_each_elf_off_the_stack() {
         let elves: Vec<_> = (0..2)
             .map(|_| {
                 s.game_mut()
-                    .create_token("token.elf_warrior_1_1_g", PlayerId(0), false)
+                    .create_token("token.elf_warrior_1_1_g", PlayerId(0))
                     .unwrap()
             })
             .collect();

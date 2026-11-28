@@ -57,6 +57,19 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   playing randomly, and one Pay-1-life activation per turn. The choice
   is a Modal decision only with two or more cards exiled with Koh (one is
   skipped as forced). 3 of 6 games reached it (8 decisions, about 7 minutes at load ~110).
+  With a debug wheel (`uv run --extra play maturin build` without `--release`, about 6 min,
+  unzipped to `.runs/<dir>/site`, `PYTHONPATH` pointing there) the
+  `TokenWriter::into_rules_tokens` guard panics natively on any unregistered
+  program token. From `.runs/<dir>`, run `uv run --project ../.. python -m
+  manabot.verify.record_coverage --games 40 --seed 501` to stop at the first
+  bad game (about 20 s in debug). From the checkout root, the current directory
+  shadows `PYTHONPATH`, so the stale `managym/*.so` loads and the guard is
+  silently absent. A sweep that catches `BaseException` per game and keeps
+  going ran 200 world games (41k decisions, one decision per `prepare`) in
+  about 28 min. MTG-501 found Text `"all"` (`CreatureTypes::All`, a departed
+  changeling's LKI) in game 38 of seed 501; `RUST_BACKTRACE=1` names the
+  emitter. To name a pair, blake3 every string literal under `managym/` and
+  mask the first four little-endian bytes with `0x7fffffff`.
   For the negative, build a mutated release wheel with
   `-o /tmp/<dir>/wheels`, restore the source at once, unzip the wheel into
   `/tmp/<dir>/site` and run with `PYTHONPATH=/tmp/<dir>/site` (print
@@ -104,3 +117,44 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   `read_record` before retrying. Its phase should be `ready`, with both
   pre-call prefixes intact. Correcting the batch should spend the same fresh
   seed as a first successful load.
+- Trigger-resolution fixes (what an ability does to its own source or a
+  target): play seeded random games with decks built around the card, take
+  `DeclineChoice` about half the time at target choices, and count zone
+  transitions per step from both seats' `agent_cards` (for example, Eagles
+  entering exile not from a graveyard). Run the identical script against the
+  base wheel unzipped to `.runs/base-site` with `PYTHONPATH` as the control:
+  in MTG-486, 100 games took about 2 s per engine, with 625 self-exiles on base
+  and 0 after the fix.
+- `tests/env/test_skip_forced_decisions.py::test_no_runner_turns_skipping_off`
+  greps every `.rs`/`.py` line under `managym/src`, `manabot`, `academy`,
+  `scripts` and `experiments` for `skip_trivial=false`/`False`, comments
+  included. Describe lockstep or debug paths in prose ("with and without
+  `skip_trivial`") rather than writing the assignment in a doc comment.
+- Folded offers and the decision APIs without a browser: play seeded games
+  between token-heavy decks (`22 Mountain / 30 Raging Goblin / 8 Burst
+  Lightning`; `12 Mountain / 10 Island / 14 Dragon Fodder / 8 Geyser Leaper /
+  8 Lightning Bolt`) through `Env.decision` / `Env.preview` / `Env.submit`,
+  drafting attacks from the *last* declarable copies so plans name creatures
+  the engine is not asking. An attacker with empty `can_attack` attacks the
+  single default defender (`defender=None`); `PlannedAttack` needs
+  `incarnation`. For the deprecated compound surface, use
+  `env.compound_offers()` (`structured_offers()` only covers priority and
+  raises elsewhere) with `RaggedPolicyDecoder` + `SeededSemanticScorer` and
+  `step_structured`. 32 games take about a second. Repeated candidate labels
+  are usually real distinctions the observation hides: haste masks differing
+  summoning sickness (control since the turn began, CR 302.6), the creature
+  activating a waterbend ability is named by the payment, and a spell on the
+  stack names its target. To explain one, cast Bolt on an `env.clone_env()` at
+  each step and watch when the copy stops sharing a target offer's aliases.
+- Counterfactual state edits (`GameStateEdit`, `Env.edit_game_state`,
+  `RestoreOptions(game_state_edits=)`): play an authored game
+  (`authored_deck_setup("elemental-world-v2", "elemental_gr")` vs `_gw`, seed 7,
+  80% non-pass random) to a turn-6+ `Priority` with two opposing creatures
+  (38 steps), then run each edit on `env.clone_env()` and step 30 random
+  actions after it; the original `state_digest()` must not move. Gray Ogre /
+  Hill Giant mirrors (seed 11, always attack) reach `DeclareBlocker` by turn 7.
+  For Academy, a snapshot replay that ends at the edit shows the edited board
+  but no branch note (the note rides the next recorded choice): step 25
+  actions past the edit before `to_replay_json()`, then the History panel
+  shows **Branch · game state edited**. Only the branch kind reaches the
+  browser, never edit ids or destinations.

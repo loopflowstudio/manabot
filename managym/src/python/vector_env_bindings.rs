@@ -120,9 +120,10 @@ impl PySlotLoad {
     fn branch_root(&self) -> Option<(PyGameSnapshot, PyRestoreOptions)> {
         match &self.0 {
             SlotLoad::Fresh(..) => None,
-            SlotLoad::Snapshot(_, source, options) => {
-                Some((PyGameSnapshot(source.clone()), PyRestoreOptions(*options)))
-            }
+            SlotLoad::Snapshot(_, source, options) => Some((
+                PyGameSnapshot(source.clone()),
+                PyRestoreOptions(options.clone()),
+            )),
         }
     }
 
@@ -146,7 +147,7 @@ impl PySlotLoad {
         Self(SlotLoad::Snapshot(
             slot,
             snapshot.0.clone(),
-            options.map(|o| o.0).unwrap_or_default(),
+            options.map(|o| o.0.clone()).unwrap_or_default(),
         ))
     }
 }

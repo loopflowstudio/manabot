@@ -288,3 +288,120 @@ fn time_stop_skips_the_end_step_but_preserves_its_delayed_trigger() {
     resolve_top(&mut s);
     assert_eq!(zone_of(&s, leveler), Some(ZoneType::Exile));
 }
+
+#[test]
+fn myojin_discard_resumes_each_sampled_hand_and_removes_divinity_once() {
+    use crate::support::{
+        game::{clear_hand, move_from_library},
+        inspect::{counters_of, keywords},
+        play::{enter_and_settle, pass_until},
+    };
+    use managym::{
+        possible_worlds::{MaterializeMode, PossibleWorldSpace},
+        state::{card::Keyword, permanent::CounterKind},
+    };
+    let myojin = "Myojin of Night's Reach";
+    let mut s = five_color_setup(&[
+        myojin,
+        "Dryad Militant",
+        "Lightning Bolt",
+        "Wilt-Leaf Liege",
+        "Gray Ogre",
+    ]);
+    let mut uncast = s.clone();
+    enter_and_settle(&mut uncast, myojin);
+    let spirit = permanent_named(&uncast, myojin);
+    assert_eq!(counters_of(&uncast, spirit, CounterKind::Divinity), 0);
+    assert!(!keywords(&uncast, spirit).has(Keyword::Indestructible));
+
+    cast(&mut s, myojin);
+    settle(&mut s);
+    let spirit = permanent_named(&s, myojin);
+    assert_eq!(counters_of(&s, spirit, CounterKind::Divinity), 1);
+    assert!(keywords(&s, spirit).has(Keyword::Indestructible));
+    for player in 0..2 {
+        s.force_permanent_on_battlefield(player, "Dryad Militant");
+    }
+    clear_hand(&mut s, 1);
+    for name in ["Gray Ogre", "Lightning Bolt", "Wilt-Leaf Liege"] {
+        move_from_library(&mut s, 1, name, ZoneType::Hand);
+    }
+    activate(&mut s, spirit, 0);
+    assert!(!keywords(&s, spirit).has(Keyword::Indestructible));
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    s.assert_zone_size(1, ZoneType::Hand, 3);
+    let mut exact = s.clone();
+    choose_mode(&mut exact, 1);
+    settle(&mut exact);
+    exact.assert_zone_size(1, ZoneType::Hand, 0);
+    assert_eq!(
+        exact
+            .battlefield_permanents_named(1, "Wilt-Leaf Liege")
+            .len(),
+        1
+    );
+    let viewer = PlayerId(0);
+    let space = PossibleWorldSpace::for_viewer(s.game(), viewer);
+    let materialized = space
+        .materialize_index(s.game(), 0, 17, MaterializeMode::RefreshOpponentCommitment)
+        .unwrap();
+    let mut sampled = s.game().clone();
+    sampled.determinize(viewer, 0).unwrap();
+    for world in [sampled, materialized] {
+        let mut branch = s.clone();
+        *branch.game_mut() = world;
+        let hand = branch
+            .game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Hand, PlayerId(1))
+            .to_vec();
+        let expected: Vec<_> = hand
+            .iter()
+            .map(|&object| {
+                let row = &branch.game().state[object];
+                (
+                    object,
+                    if row.name == "Wilt-Leaf Liege" {
+                        ZoneType::Battlefield
+                    } else if row.types.is_instant_or_sorcery() {
+                        ZoneType::Exile
+                    } else {
+                        ZoneType::Graveyard
+                    },
+                )
+            })
+            .collect();
+        choose_mode(&mut branch, 0);
+        settle(&mut branch);
+        branch.assert_zone_size(1, ZoneType::Hand, 0);
+        for (object, zone) in expected {
+            assert_eq!(zone_of(&branch, object), Some(zone));
+        }
+    }
+    s.assert_zone_size(1, ZoneType::Hand, 3);
+}
+
+#[test]
+fn myojin_discards_two_lieges_into_play_together() {
+    use crate::support::{game::move_from_library, inspect::permanent_of};
+
+    let mut s = five_color_setup(&["Myojin of Night's Reach", "Wilt-Leaf Liege", "Gray Ogre"]);
+    cast(&mut s, "Myojin of Night's Reach");
+    settle(&mut s);
+    let myojin = permanent_named(&s, "Myojin of Night's Reach");
+    let mine = move_to_hand(&mut s, "Wilt-Leaf Liege");
+    let lieges = [(); 2].map(|_| move_from_library(&mut s, 1, "Wilt-Leaf Liege", ZoneType::Hand));
+    let ogre = move_from_library(&mut s, 1, "Gray Ogre", ZoneType::Hand);
+
+    activate(&mut s, myojin, 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, mine), Some(ZoneType::Hand));
+    s.assert_zone_size(1, ZoneType::Hand, 0);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Graveyard));
+    for card in lieges {
+        let liege = permanent_of(&s, card).unwrap();
+        assert_eq!(permanent(&s, liege).controller, PlayerId(1));
+        assert_eq!(s.game().characteristics(liege).pt(), (6, 6));
+    }
+}

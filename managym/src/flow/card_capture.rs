@@ -63,6 +63,11 @@ pub struct ExposureCapture {
     pub attackers_lost_for_nothing: [u64; 2],
     pub blockers_committed: [u64; 2],
     pub blockers_lost_for_nothing: [u64; 2],
+    /// Damage dealt to each player, from any source (CR 120.3a); dealt even
+    /// when the life total can't change (CR 119.7).
+    pub player_damage_taken: [u64; 2],
+    /// Damage each player's sources dealt to the other player.
+    pub player_damage_dealt: [u64; 2],
     #[serde(skip)]
     pub(crate) combat: CombatDeclarations,
 }
@@ -242,6 +247,24 @@ impl Game {
         self.card_capture.as_mut()?.exposure.as_mut()
     }
 
+    pub(crate) fn player_damage_capture(
+        &mut self,
+        source: Option<ObjectId>,
+        recipient: PlayerId,
+        amount: i32,
+    ) {
+        if self.exposure_mut().is_none() {
+            return;
+        }
+        let controller = source.and_then(|source| self.source_controller(source));
+        let amount = u64::try_from(amount).unwrap_or(0);
+        let exposure = self.exposure_mut().expect("exposure checked above");
+        exposure.player_damage_taken[recipient.0] += amount;
+        if let Some(controller) = controller.filter(|c| *c != recipient) {
+            exposure.player_damage_dealt[controller.0] += amount;
+        }
+    }
+
     pub(crate) fn finish_combat_capture(&mut self) {
         // Combat attribution is read before turn progression expires any control.
         // Attribute losses to the same chooser as the declaration denominator.
@@ -262,6 +285,7 @@ impl Game {
         snapshot.decision_memory_enabled = self.decision_memory_enabled;
         snapshot.card_capture = self.card_capture.clone();
         snapshot.statistics = self.statistics.clone();
+        snapshot.presentation = self.presentation.clone();
         snapshot.capture_originals = self.capture_originals.clone();
         snapshot.capture_drawing = self.capture_drawing;
         snapshot
@@ -269,7 +293,7 @@ impl Game {
 
     /// Bind an atomic action to the same published choice as indexed stepping.
     pub(crate) fn exposure_for_action(&self, action: &Action) -> Option<ExposureChoice> {
-        let space = self.current_action_space.as_ref()?;
+        let space = self.action_space()?;
         let index = space
             .actions
             .iter()
@@ -585,15 +609,16 @@ mod tests {
         game.keep_opening_hands();
         game.scenario_force_battlefield(payer, "Izzet Guildgate", true)
             .unwrap();
-        game.create_token("token.treasure", payer, false).unwrap();
+        game.create_token("token.treasure", payer).unwrap();
         let prism = game
             .scenario_force_battlefield(payer, "Prophetic Prism", true)
             .unwrap();
         // This creature can convoke or waterbend but produces no mana.
-        game.create_token("token.ally", payer, false).unwrap();
-        game.state
-            .combat_mana_pool_mut(payer)
-            .add(&Mana::parse("R"), None);
+        game.create_token("token.ally", payer).unwrap();
+        game.state.mana_pool_mut(payer).add(
+            &Mana::parse("R").with_expiry(crate::state::mana::ManaExpiry::EndOfCombat),
+            None,
+        );
         game.capture_priority_mana(payer);
         let hand = game.state.zones.zone_objects(ZoneType::Hand, payer);
         let card = game.state.card_id(hand[0]).unwrap();
@@ -606,7 +631,7 @@ mod tests {
         )
         .unwrap();
         // A second source arriving on the same turn increases the peak.
-        game.create_token("token.treasure", payer, false).unwrap();
+        game.create_token("token.treasure", payer).unwrap();
         game.capture_priority_mana(payer);
         let turn = &game.exposure_mut().unwrap().mana_turns[0][0];
         assert_eq!((turn.available, turn.paid), (4, 1));
@@ -635,14 +660,18 @@ mod tests {
         game.state.turn.step_initialized = false;
         game.state.combat = Some(Default::default());
         let attackers: Vec<_> = (0..4)
-            .map(|_| game.create_token("token.ally", active, false).unwrap())
+            .map(|_| game.create_token("token.ally", active).unwrap())
             .collect();
         let blockers: Vec<_> = (0..4)
-            .map(|_| game.create_token("token.ally", defender, false).unwrap())
+            .map(|_| game.create_token("token.ally", defender).unwrap())
             .collect();
         game.mark_permanents_not_summoning_sick(active);
         for &attacker in &attackers {
-            game.declare_attacker(attacker, true).unwrap();
+            game.declare_attacker(
+                attacker,
+                Some(crate::flow::combat::AttackTarget::Player(defender)),
+            )
+            .unwrap();
         }
         for (&blocker, attacker) in blockers.iter().zip([0, 0, 1, 2]) {
             game.declare_blocker(blocker, Some(attackers[attacker]))
@@ -662,10 +691,14 @@ mod tests {
 
         // One more blocker receives lethal damage in the same batch as its
         // controller. Only earlier, committed deaths count on this branch.
-        let extra = game.create_token("token.ally", active, false).unwrap();
+        let extra = game.create_token("token.ally", active).unwrap();
         game.mark_permanents_not_summoning_sick(active);
-        game.declare_attacker(extra, true).unwrap();
-        let last = game.create_token("token.ally", defender, false).unwrap();
+        game.declare_attacker(
+            extra,
+            Some(crate::flow::combat::AttackTarget::Player(defender)),
+        )
+        .unwrap();
+        let last = game.create_token("token.ally", defender).unwrap();
         game.declare_blocker(last, Some(extra)).unwrap();
         *game.state.life_mut(defender).unwrap() = 1;
         assert!(game.tick());
@@ -779,7 +812,12 @@ mod tests {
             let source = game.state.live(object_id).unwrap();
             game.step(usize::from(outcome == "declined")).unwrap();
             if outcome == "countered" {
-                game.counter_spell(object_id, None, ZoneType::Graveyard);
+                let batch = game.counter_spells([object_id], None, ZoneType::Graveyard);
+                game.run_frame(crate::flow::decision::EffectFrame {
+                    batch: Some(batch),
+                    completion: crate::flow::decision::FrameCompletion::Continue,
+                    ..crate::flow::decision::EffectFrame::new(PlayerId(0), vec![])
+                });
             }
             if outcome == "completed" {
                 game.resolve_top_of_stack();

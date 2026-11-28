@@ -4,8 +4,9 @@ use managym_state::ability::{
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-    StaticAbility, StaticPtBuff, StaticScope,
+    StaticAbility, StaticScope,
 };
+use managym_state::effect::Modification;
 use managym_state::mana::{Color, Mana, ManaCost};
 use managym_state::permanent::CounterKind;
 use managym_state::predicate::CardPredicate;
@@ -31,18 +32,14 @@ fn elvish_archdruid() -> CardDefinition {
             subtypes: vec!["Elf".into(), "Druid".into()],
             power: Some(2),
             toughness: Some(2),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::OtherYouControl(CardPredicate {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..elf.clone()
                 }),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             // A mana ability whose amount is read as it is activated (CR
             // 605.1a, 605.3a): characteristics finalize it to concrete mana.
             activated_abilities: vec![ActivatedAbilityDefinition {

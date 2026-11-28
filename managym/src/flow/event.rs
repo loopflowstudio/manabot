@@ -77,6 +77,9 @@ pub enum GameEvent {
         from: Option<ZoneType>,
         to: ZoneType,
         controller: PlayerId,
+        /// This move committed a discard, including one with a replaced destination.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        discarded: bool,
         /// The card arrived face down: its identity is not public.
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         face_down: bool,
@@ -135,6 +138,16 @@ pub enum GameEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         attacker: Option<PermanentId>,
     },
+    /// A player activated a loyalty ability (CR 606) once its costs were
+    /// paid (CR 602.2i): its exact source and the loyalty counters that
+    /// payment removed (none for a [+N] or [0] cost).
+    LoyaltyAbilityActivated {
+        player: PlayerId,
+        #[serde(rename = "source_card")]
+        source_object: ObjectId,
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        counters_removed: u32,
+    },
     /// A player drew a card; `nth_this_turn` counts that player's draws
     /// this turn (resets each turn).
     CardDrawn {
@@ -162,12 +175,18 @@ pub enum GameEvent {
     AttackersDeclared {
         player: PlayerId,
         attackers: Vec<PermanentId>,
+        #[allow(clippy::box_collection)] // a thin pointer; `Vec` would widen every event
+        #[serde(skip_serializing_if = "Option::is_none")]
+        permanent_defenders: Option<Box<Vec<(PermanentId, super::combat::AttackTarget)>>>,
     },
     /// Viewer-safe attacker identities captured at declaration completion.
     CombatAttackersDeclared {
         player: PlayerId,
         defender: PlayerId,
         attackers: Vec<ObjectEventRef>,
+        #[allow(clippy::box_collection)] // a thin pointer; `Vec` would widen every event
+        #[serde(skip_serializing_if = "Option::is_none")]
+        permanent_defenders: Option<Box<Vec<(ObjectEventRef, ObjectEventRef)>>>,
     },
     /// Final legal assignments after the complete blocker declaration loop.
     BlockersDeclared {
@@ -241,6 +260,8 @@ pub enum GameEvent {
     },
 }
 
+const _: () = assert!(std::mem::size_of::<GameEvent>() <= 56);
+
 /// The variant of a `GameEvent`, which trigger conditions are indexed by
 /// (`flow/triggers.rs`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -275,6 +296,7 @@ pub enum EventKind {
     CardsLeftGraveyard,
     SourceDealtDamage,
     PermanentUntapped,
+    LoyaltyAbilityActivated,
 }
 
 impl GameEvent {
@@ -301,6 +323,7 @@ impl GameEvent {
             GameEvent::SpellCountered { .. } => EventKind::SpellCountered,
             GameEvent::AbilityCountered { .. } => EventKind::AbilityCountered,
             GameEvent::AbilityTriggered { .. } => EventKind::AbilityTriggered,
+            GameEvent::LoyaltyAbilityActivated { .. } => EventKind::LoyaltyAbilityActivated,
             GameEvent::CardDrawn { .. } => EventKind::CardDrawn,
             GameEvent::PermanentTapped { .. } => EventKind::PermanentTapped,
             GameEvent::PermanentUntapped { .. } => EventKind::PermanentUntapped,

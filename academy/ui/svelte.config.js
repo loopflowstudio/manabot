@@ -2,9 +2,9 @@ import adapter from '@sveltejs/adapter-auto';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 // ACADEMY_STATIC_BUILD=1 packages the client build as a static SPA — build/
-// with an index.html fallback — for the hosted play deployment, where the
-// experience server serves it from the same origin as /ws and /api. The
-// inline adapter keeps adapter-auto (and the dev workflow) untouched.
+// with an index.html fallback — for the packaged Academy server, which serves
+// it from the same origin as /ws and /api. The inline adapter keeps
+// adapter-auto (and the dev workflow) untouched.
 const staticSpaAdapter = () => ({
   name: 'academy-static-spa',
   async adapt(builder) {

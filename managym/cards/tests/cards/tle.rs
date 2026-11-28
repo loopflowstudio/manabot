@@ -180,11 +180,11 @@ fn tle_baseline_tundra_wall_cannot_attack() {
     pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     assert!(!has_action(&s, |action| matches!(
         action,
-        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == wall
+        Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == wall
     )));
     assert!(has_action(&s, |action| matches!(
         action,
-        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == ogre
+        Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == ogre
     )));
 }
 
@@ -232,7 +232,7 @@ fn tle_baseline_iroh_pumps_every_attacking_creature() {
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |action| {
             matches!(action, Action::DeclareAttacker { permanent, attack, .. }
-                if *attack == (*permanent == iroh || *permanent == ogre))
+                if attack.is_some() == (*permanent == iroh || *permanent == ogre))
         });
     }
     resolve_everything(&mut s);
@@ -349,7 +349,7 @@ fn create_foods(s: &mut Scenario, count: usize) -> Vec<PermanentId> {
     (0..count)
         .map(|_| {
             s.game_mut()
-                .create_token("token.food", PlayerId(0), false)
+                .create_token("token.food", PlayerId(0))
                 .unwrap()
         })
         .collect()
@@ -488,7 +488,13 @@ fn merchant_sacrifices_a_food_for_each_creature_dealing_combat_damage_to_you() {
     s.advance_to_active_step(1, StepKind::DeclareAttackers);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |action| {
-            matches!(action, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                action,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     s.advance_to_active_step(1, StepKind::DeclareBlockers);
@@ -808,8 +814,14 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
     for spend_combat in [false, true] {
         let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
         only_pool(&mut s, "1W");
-        s.game_mut().state.players[0].combat_mana_pool =
-            Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]).into();
+        let combat_attendant = ManaClass {
+            expiry: managym::state::mana::ManaExpiry::EndOfCombat,
+            ..attendant_class()
+        };
+        s.game_mut().state.players[0].mana_pool.add(
+            &Mana::of_class(combat_attendant.clone(), [0, 0, 0, 0, 1, 0]),
+            None,
+        );
         s.game_mut().state.players[0]
             .mana_pool
             .add(&Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]), None);
@@ -818,6 +830,10 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
         let pools = &obs.agent.pooled_mana_classes;
         assert_eq!(pools.len(), 2);
         assert_eq!((pools[0].combat, pools[1].combat), (false, true));
+        assert_eq!(
+            (pools[0].expiry.as_str(), pools[1].expiry.as_str()),
+            ("step", "end_of_combat")
+        );
         assert_ne!(pools[0].program, pools[1].program);
         assert_choice_contract(&s);
         spend_named(&mut s, |label| {
@@ -826,20 +842,32 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
         spend_named(&mut s, |label| label.contains("{C}"));
         assert_eq!(spell_spent(&s, sheep).entry_counters(), 1);
         let player = &s.game().state.players[0];
-        assert_eq!(player.combat_mana_pool.total(), u16::from(!spend_combat));
+        assert_eq!(
+            player
+                .mana_pool
+                .expiry_total(managym::state::mana::ManaExpiry::EndOfCombat),
+            u16::from(!spend_combat)
+        );
         assert_eq!(
             player.mana_pool.class_of(&attendant_class())[4],
             u8::from(spend_combat)
         );
         settle(&mut s);
         s.advance_to_step(StepKind::BeginningOfCombat);
-        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         assert_eq!(
-            s.game().state.players[0].combat_mana_pool.total(),
+            s.game().state.players[0]
+                .mana_pool
+                .expiry_total(managym::state::mana::ManaExpiry::Step),
+            0
+        );
+        assert_eq!(
+            s.game().state.players[0]
+                .mana_pool
+                .expiry_total(managym::state::mana::ManaExpiry::EndOfCombat),
             u16::from(!spend_combat)
         );
         s.advance_to_step(StepKind::PostcombatMain);
-        assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     }
 }
 

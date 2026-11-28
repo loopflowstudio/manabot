@@ -208,7 +208,7 @@ impl Game {
     /// call this once, after all injections, while the game is at a priority
     /// decision (e.g. immediately after reset, at the first main phase).
     pub fn scenario_refresh_priority(&mut self) -> Result<(), AgentError> {
-        let Some(space) = self.current_action_space.as_ref() else {
+        let Some(space) = self.action_space() else {
             return Err(AgentError(
                 "scenario_refresh_priority: no active action space".to_string(),
             ));
@@ -226,6 +226,8 @@ impl Game {
             .ok_or_else(|| {
                 AgentError("scenario_refresh_priority: priority space has no player".to_string())
             })?;
+        self.clear_staged_announced_actions();
+        self.refresh_control();
         self.publish_action_space(self.priority_action_space(player));
         Ok(())
     }

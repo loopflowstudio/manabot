@@ -4,10 +4,10 @@ use crate::state::player::{ManaFloats, ManaPayment};
 use crate::{
     agent::{
         action::AgentError,
+        decision_surface::{DecisionSubmission, DecisionSurface},
         heuristic::Heuristic,
         observation::{EventData, Observation},
         player_policy::PlayerPolicy,
-        structured_offer::{OfferSubmission, StructuredOfferSet},
     },
     cards::{
         content_pack::{default_content_pack, ContentPackManifest},
@@ -17,7 +17,7 @@ use crate::{
         Command as SemanticCommand, DecisionFrame, Observation as SemanticObservation,
         SemanticTransition,
     },
-    flow::{card_capture::CaptureMode, game::Game, search::mix_seed},
+    flow::{card_capture::CaptureMode, game::Game, search::mix_seed, state_edit::GameStateEdit},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
     search_state::{witness, SearchStateWitness},
@@ -127,6 +127,8 @@ pub struct FlatMcResult {
 
 mod provenance;
 mod snapshot;
+#[cfg(test)]
+mod state_edit_tests;
 use provenance::{GameProvenance, Intervention, RecordedAction};
 pub use snapshot::{BranchMode, GameSnapshot, RestoreOptions, SnapshotMetadata};
 
@@ -317,7 +319,9 @@ impl Env {
                 let valid = content
                     .definition_id(name)
                     .and_then(|id| content.definition(id))
-                    .is_some_and(|definition| !definition.is_token);
+                    .is_some_and(|definition| {
+                        definition.kind == crate::state::game_object::ObjectKind::Card
+                    });
                 if *count == 0 || !valid {
                     return Err(AgentError(format!("invalid sideboard card: {name}")));
                 }
@@ -626,7 +630,15 @@ impl Env {
         chooser: usize,
         action: i64,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
-        let (obs, mut reward, terminated, truncated, info) = self.step_once(action)?;
+        let result = self.step_once(action)?;
+        self.finish_and_settle(chooser, result)
+    }
+
+    fn finish_and_settle(
+        &mut self,
+        chooser: usize,
+        (obs, mut reward, terminated, truncated, info): (Observation, f64, bool, bool, InfoDict),
+    ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
         // A mixed game's rewards belong to its external seat.
         if self.external_seat().is_some_and(|seat| seat != chooser) {
             reward = -reward;
@@ -735,7 +747,7 @@ impl Env {
     }
 
     /// Project the exact currently supported structured decision.
-    pub fn structured_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+    pub fn structured_offers(&self) -> Result<DecisionSurface, AgentError> {
         self.game
             .as_ref()
             .ok_or_else(|| AgentError("env.structured_offers called before reset".to_string()))?
@@ -744,7 +756,7 @@ impl Env {
     }
 
     /// Project the complete action-aligned structured surface used by search.
-    pub fn compound_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+    pub fn compound_offers(&self) -> Result<DecisionSurface, AgentError> {
         self.game
             .as_ref()
             .ok_or_else(|| AgentError("env not reset".into()))?
@@ -754,8 +766,8 @@ impl Env {
 
     pub fn compound_commands(
         &self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
     ) -> Result<Vec<SemanticCommand>, AgentError> {
         self.game
             .as_ref()
@@ -764,21 +776,25 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
-    pub fn structured_search_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+    /// Project the action-aligned decision surface for the current prompt.
+    pub fn decision_surface(&self) -> Result<DecisionSurface, AgentError> {
         self.game
             .as_ref()
-            .ok_or_else(|| {
-                AgentError("env.structured_search_offers called before reset".to_string())
-            })?
-            .structured_search_offers()
+            .ok_or_else(|| AgentError("env.decision_surface called before reset".to_string()))?
+            .decision_surface()
             .map_err(|error| AgentError(error.to_string()))
+    }
+
+    /// Deprecated compatibility alias for [`Self::decision_surface`] (removed in 0.3.0).
+    pub fn structured_search_offers(&self) -> Result<DecisionSurface, AgentError> {
+        self.decision_surface()
     }
 
     /// Apply one prompt-bound structured submission through the atomic path.
     pub fn step_structured(
         &mut self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
     ) -> Result<(Observation, f64, bool, bool, InfoDict, usize), AgentError> {
         self.require_external_chooser()?;
         let mut result = {
@@ -805,8 +821,8 @@ impl Env {
     /// adapter. The final count is the number of legacy actions consumed.
     pub fn step_legacy_submission(
         &mut self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
     ) -> Result<(Observation, f64, bool, bool, InfoDict, usize), AgentError> {
         self.require_external_chooser()?;
         let (mut result, legacy_actions) = {
@@ -861,6 +877,7 @@ impl Env {
     }
 
     /// Read-only whole-declaration preview; see [`Game::combat_preview`].
+    /// Deprecated wrapper over [`Env::preview`], removed in 0.3.0.
     pub fn combat_preview(
         &self,
         viewer: usize,
@@ -872,6 +889,103 @@ impl Env {
             .as_ref()
             .ok_or_else(|| AgentError("no active game".into()))?
             .combat_preview(PlayerId(viewer), revision, fingerprint, plan)
+    }
+
+    /// Active decision for `viewer` (defaults to the current actor); see [`Game::decision`].
+    pub fn decision(
+        &self,
+        viewer: Option<usize>,
+    ) -> Result<Option<crate::flow::decision_group::ActiveDecision>, AgentError> {
+        if let Some(seat) = viewer {
+            if seat >= 2 {
+                return Err(AgentError("viewer out of bounds".into()));
+            }
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .decision(viewer.map(PlayerId)))
+    }
+
+    /// Read-only preview of a single or grouped choice; see [`Game::preview`].
+    pub fn preview(
+        &self,
+        at: Option<&crate::flow::decision_group::DecisionAddress>,
+        choice: &crate::flow::decision_group::DecisionChoice,
+    ) -> Result<crate::flow::decision_group::DecisionPreview, AgentError> {
+        if let Some(address) = at {
+            if address.viewer >= 2 {
+                return Err(AgentError("viewer out of bounds".into()));
+            }
+        }
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .preview(at, choice)
+    }
+
+    /// Validate `choice` on a clone, execute all compiled sequential steps
+    /// atomically, drain observation events, and settle any built-in opponent
+    /// policies so mixed-policy envs match manual `Env::step` identically.
+    pub fn submit(
+        &mut self,
+        at: Option<&crate::flow::decision_group::DecisionAddress>,
+        choice: &crate::flow::decision_group::DecisionChoice,
+    ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
+        self.require_external_chooser()?;
+        let preview = self.preview(at, choice)?;
+        preview.require_submittable()?;
+        let chooser = preview.decision.address.viewer;
+        let mut last_result = None;
+        for step in &preview.steps {
+            self.game
+                .as_ref()
+                .ok_or_else(|| AgentError("no active game".into()))?
+                .verify_step(step)?;
+            let result = self.step_once(step.action_index as i64)?;
+            if let Some(trace) = &mut self.provenance {
+                trace.push(RecordedAction::Index(step.action_index as i64));
+            }
+            last_result = Some(result);
+        }
+        self.finish_and_settle(chooser, last_result.expect("preview.steps is non-empty"))
+    }
+
+    /// Tell the current game's facts until it ends; see
+    /// [`crate::flow::presentation`].
+    pub fn enable_presentation(&mut self) -> Result<(), AgentError> {
+        self.game
+            .as_mut()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .enable_presentation();
+        Ok(())
+    }
+
+    pub fn presentation_facts(
+        &self,
+        viewer: usize,
+    ) -> Result<Vec<crate::flow::presentation::PresentationFact>, AgentError> {
+        if viewer >= 2 {
+            return Err(AgentError("viewer out of bounds".into()));
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .presentation_facts(PlayerId(viewer)))
+    }
+
+    pub fn take_presentation_positions(&mut self) -> Result<Vec<Env>, AgentError> {
+        let positions = self
+            .game
+            .as_mut()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .take_presentation_positions();
+        Ok(positions
+            .into_iter()
+            .map(|game| self.branch_from_game(game))
+            .collect())
     }
 
     /// Public event identities used to explain a committed transition.
@@ -905,6 +1019,21 @@ impl Env {
             .as_ref()
             .ok_or_else(|| AgentError("env.player_controls called before reset".into()))?;
         Ok(game.player_control_views())
+    }
+
+    pub fn permanent_details(
+        &self,
+        viewer: usize,
+    ) -> Result<std::collections::BTreeMap<u32, crate::experience::PermanentDetails>, AgentError>
+    {
+        if viewer >= 2 {
+            return Err(AgentError("viewer out of bounds".into()));
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .permanent_details(PlayerId(viewer)))
     }
 
     pub fn decision_context(
@@ -1261,7 +1390,7 @@ impl Env {
             .ok_or_else(|| AgentError("env.state_digest called before reset".to_string()))?;
         Ok(snapshot::state_digest(
             &game.state,
-            &game.current_action_space,
+            game.action_space(),
             &game.pending_choice,
             game.skip_trivial,
             game.skip_trivial_count,
@@ -1334,6 +1463,18 @@ impl Env {
         self.apply_intervention(Intervention::Reseed { seed })
     }
 
+    /// Apply one counterfactual batch and observe the refreshed decision as its chooser.
+    pub fn edit_game_state(
+        &mut self,
+        edits: impl Into<Arc<[GameStateEdit]>>,
+    ) -> Result<Observation, AgentError> {
+        self.apply_intervention(Intervention::GameStateEdits {
+            edits: edits.into(),
+        })?;
+        let game = self.game.as_ref().expect("edited live game");
+        Ok(Observation::for_player(game, game.agent_player()))
+    }
+
     pub(crate) fn restore_frame_candidates(
         &self,
         take: impl FnOnce(&str) -> Result<bool, AgentError>,
@@ -1378,6 +1519,12 @@ impl Env {
                     ));
                 }
                 self.step_and_settle(chooser, action as i64)?;
+            }
+            Intervention::GameStateEdits { ref edits } => {
+                game.edit_game_state(edits)?;
+                if edits.is_empty() {
+                    return Ok(());
+                }
             }
         }
         if let Some(trace) = &mut self.provenance {
@@ -1604,6 +1751,8 @@ impl Env {
     pub fn scenario_refresh(&mut self) -> Result<Observation, AgentError> {
         let game = self.scenario_game_mut("scenario_refresh")?;
         game.scenario_refresh_priority()?;
+        // A constructed position tells nothing: it starts with no events.
+        game.take_presentation_positions();
         Ok(Observation::new(game, &[]))
     }
 
@@ -2145,7 +2294,7 @@ mod content_pack_contract_tests {
             let definition = admitted
                 .definition(entry.card_def_id)
                 .expect("manifest definition");
-            assert_eq!(definition.name, entry.registry_name);
+            assert_eq!(definition.registry_name(), entry.registry_name);
             assert_eq!(definition.key, entry.key.as_deref().unwrap_or(""));
         }
 

@@ -125,7 +125,7 @@ including semantic-kernel conformance, and focused browser interactions. Also:
   with isolated `ACADEMY_RELEASE_API_PORT` and `ACADEMY_RELEASE_FRONTEND_PORT`.
 
 **Training resume and game errors.**
-`uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py -q`.
+`uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py tests/training/test_training_game_journals.py -q`.
 Run `uv run --extra dev --extra mlx pytest tests/training/test_cross_backend_continuation.py -q`
 for portable state, sampling-domain changes and historical Torch saves.
 On Apple Silicon, run the Metal subprocess cases serially. Resume restores
@@ -133,10 +133,12 @@ learner state and native streams at the saved update boundary.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
 Collector or batch-closure changes also require
-`uv run --extra dev --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
-Fixtures asserting exact rollout shapes or transition counts must explicitly
-select `batch_closure="exact-quota"` as well as one learning seat; whole-game
-closure treats the transition quota as a minimum.
+`uv run --extra dev --extra artifacts --extra reports pytest tests/training/test_batch_closure.py tests/training/test_collection.py tests/model/test_layer_input.py tests/semantic/test_elemental_world.py -q`.
+Fixtures asserting exact transition counts must explicitly select
+`batch_closure="exact-quota"` (and `learning_seats="one"` when asserting the
+rectangular `[transitions, streams]` shape; two-seat exact quota packs
+`streams × transitions` rows into `[rows, 1]` with explicit trajectory spans);
+whole-game closure treats the transition quota as a minimum.
 The native encoder is the only one, so an observation change is written once
 in `managym/src/agent/` with a directed test that asserts its named columns or
 rows on a constructed position, and its `observability.rs` entry. Python
@@ -147,11 +149,10 @@ Python edit; renaming one fails the import. Run
 `uv run --extra dev pytest tests/env/test_named_observation_layout.py -q`
 after changing the layout. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
-Changes to effects or runtime token registration require the
-[effect vocabulary checks](../managym/cards/tests/cards/README.md#effect-vocabulary-checks):
-the exhaustive debug Rust witness guard and the rebuilt-extension Python
-admission checks. These check token membership independently of which effects
-a game happens to reach. Changes to retained execution or its record vocabulary
+For changes to effects, runtime projections or token registrations, run the
+debug emission, exhaustive witness and Python admission checks in the
+[effect vocabulary guide](../managym/cards/tests/cards/README.md#effect-vocabulary-checks).
+Changes to retained execution or its record vocabulary
 also require
 `uv run --extra dev pytest tests/model/test_record_coverage.py -q` after rebuilding
 the native extension. This bounded sweep checks that emitted execution tokens
@@ -200,7 +201,7 @@ When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.
 Moves between Academy and checkout-only conformance tools also require
-`uv run --extra dev pytest --collect-only tests/academy/test_authored_match_authority.py tests/academy/test_authored_match_parity.py tests/academy/test_public_commitment_parity.py tests/academy/test_learn_evidence.py -q`
+`uv run --extra dev pytest --collect-only tests/academy/test_authored_match_authority.py tests/academy/test_authored_match_parity.py tests/academy/test_learn_evidence.py -q`
 to catch stale module-level imports before running the affected behavior checks.
 Academy package, bot or fixture moves also require
 `uv run --extra dev pytest tests/model/test_world.py tests/model/test_policy_input_rejection.py -q`
@@ -259,13 +260,12 @@ and narration controls, and `npm --prefix academy/ui run test:e2e:release`.
 Settle narration through `finishBoardNarration` before captures; reduced motion
 does not stop semantic beat timers.
 
-**Shared game history.** Exercise `game-history.spec.ts` against an isolated
+**Game history.** Exercise `game-history.spec.ts` against an isolated
 built SPA/ASGI instance
 ([Academy isolated browser validation](../managym/academy/README.md#isolated-browser-validation)),
-including empty results, visible request errors and retry, shared/private
-replay and feedback. Permission or replay-projection changes add the relevant
-history, replay and shared-table cases; match terminal traces by the live
-table's `attempt_id` (replays omit the deal seed). Treat failures in frozen
+including empty results, visible request errors and retry, replay and resume.
+Replay-projection changes add the relevant history and replay cases; match
+terminal traces by the live game's id (replays omit the deal seed). Treat failures in frozen
 advice evidence as gate blockers; never regenerate fixtures or relax historical
 checkpoint validation to pass.
 
@@ -295,9 +295,9 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Job | Runs |
 |---|---|
 | Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests`; JUnit timings uploaded |
-| Python Unit Tests | `tests/infra/`, clean-machine verifier, `deploy/play/tests/`, website |
+| Python Unit Tests | `tests/infra/`, clean-machine verifier, website |
 | Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
-| Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
+| Academy Integration | `academy-integration.yml` (two matrix groups: world bindings, Elemental admission, replay/study contracts, play, recovery, game records and card art) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
 | Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v6` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
@@ -341,7 +341,9 @@ When a job passes 8 minutes, in order of preference:
 2. Cut the shared installation and build time.
 3. Move test files to a faster group, or add a group to the matrix, balanced by
    the measured times; `tests/infra/test_ci_selection.py` checks that every
-   path a group names exists.
+   path a group names exists, that every non-nightly `tests/**/test_*.py` file
+   is run in full by a PR job, and that `.github/ci/select-tests.sh` selects an
+   owning job when that file changes.
 
 Never skip, deselect or delete a test to fit, and never raise the five-minute
 single-test limit ([TESTING.md](../TESTING.md)). Groups select directories,
@@ -370,17 +372,21 @@ neither skipped nor succeeded.
 | Other Academy UI | UI |
 | Academy server, presentation, demo, pack or villain modules, `managym/academy/fixtures/` | Academy integration, protocol, UI |
 | Other `managym/academy/`, `tests/academy/` | Academy integration, protocol |
-| Launcher, `scripts/verify-clean-machine`, `deploy/play/` | Python unit, protocol, clean-machine |
+| `tests/model/test_world.py`, `tests/semantic/test_elemental_world.py`, `tests/semantic/test_decklist_import.py`, `tests/semantic/fixtures/elemental/` | Academy integration |
+| `scripts/play`, `scripts/play.py`, `tests/academy/test_play_launcher.py`, `scripts/verify-clean-machine` | Python unit, protocol, clean-machine |
+| `tests/academy/test_clean_machine_verifier.py` | Python unit, clean-machine |
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
-| `manabot/README.md` (published API table), other `manabot/`, training/eval/sim tests, `tests/test_public_api_contract.py`, `tests/public_api.json`, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
+| `manabot/README.md` (published API table), other `manabot/`, other training/eval/sim/belief/semantic/model/verify/config tests, `tests/academy/test_qwen_policy.py`, `tests/test_public_api_contract.py`, `tests/public_api.json`, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
 | `manabot/infra/`, `tests/infra/test_external_consumer.py` | Python unit, integration |
 | `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`engine-budget.yml` also Python workflow regressions; `bench_search.rs` also Rust digest tests; `scripts/engine_budget.py` also Python unit) |
 | `website/`, `tests/infra/`, rules audit | Python unit |
 | Docs, Markdown, `.lf/`, `paper/`, `scratch/`, other workflows | Detection and aggregate only |
 
 Runtime inputs such as experiment Markdown and benchmark data are not prose-only.
-`tests/infra/test_ci_selection.py` covers these boundaries and the aggregate;
-update both when adding a package or consumer.
+`tests/infra/test_ci_selection.py` covers these boundaries, the aggregate, and the
+invariant that every non-nightly `tests/**/test_*.py` file is run in full by a PR
+job that `.github/ci/select-tests.sh` selects when that file changes; update both
+when adding a package or consumer.
 
 **Other workflows.** `macos-nightly.yml` reruns both integration suites on
 `macos-latest` nightly. `baseline.yml` trains the CPU test variant nightly on
@@ -687,7 +693,7 @@ increase a known expensive cell just to make it run longer.
 the harness, not here. They come in four families: many copies of one thing
 (`duplicate-lands`, `duplicate-creatures`, `duplicate-tokens`), many different
 things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
-`diverse-statics`, `attachments`, `mixed`), one mechanic at size (`herbalist`,
+`diverse-statics`, `attachments`, `mixed`), one mechanic at size (`control-auras`, `herbalist`,
 `paid-filter`, `counted-tap`, `waterbend-x`, `triggers`, `zones`, `choices`,
 `names`, `face-down`, `graveyard-routes`, `profile-hand`, `prepared-copies` with its
 zero-link control `unprepared-copies`) and one way of paying at size

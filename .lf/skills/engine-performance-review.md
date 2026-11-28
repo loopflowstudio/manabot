@@ -14,7 +14,10 @@ Judge measured engine speedups against unchanged behavior.
 2. Check debug invariants and affected behavior; changed semantics void the
    speed comparison, and narrower choices or lost observations are never gains.
 3. Update `scratch/plan.md` with supported gains, negative results and open
-   bottlenecks, without editing code.
+   bottlenecks, without editing code. When scoped by `card-perf`, do not chase
+   pre-existing global engine bottlenecks on a card branch—record them as
+   `engine-performance` follow-ups once the branch regression and new-card
+   stress blowups are resolved.
 
 When deciding whether to continue:
 

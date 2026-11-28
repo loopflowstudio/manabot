@@ -16,7 +16,7 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, ManaProduction, ResolutionRef, SuspendedResolution},
         game::{ActivationSource, Game, PendingChoice},
-        payment::{CostComponent, Operation},
+        payment::{AnnouncedSpell, CostComponent, Operation},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
@@ -70,6 +70,9 @@ pub struct ClauseTarget {
     /// Retained CR 608.2b result, not current presence. Missing historical data is unknown.
     #[serde(default)]
     pub legal_at_resolution_start: Option<bool>,
+    /// Announced divided share (CR 601.2d, 602.2b); zero when undivided.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub division: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -165,7 +168,11 @@ pub struct ContinuationFrame {
     /// The announced value of X (CR 107.3) of the spell or ability this frame
     /// casts, activates or resolves; zero when it has none.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
-    pub x: u8,
+    pub x: i32,
+    /// Remaining division budget to distribute across the active clause's
+    /// unassigned targets (CR 601.2d, 602.2b); zero outside `DivideAmount`.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub division_remaining: i32,
     /// Keywords a static grants this spell on the stack (a Lesson's lifelink),
     /// in `KeywordData` field order.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -177,14 +184,17 @@ pub struct ContinuationFrame {
     /// A waiting delayed trigger that ends in this turn's cleanup step.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub this_turn: bool,
+    /// A waiting delayed trigger that ends as its controller's next turn begins.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub until_next_turn: bool,
 }
 
-pub const MAX_DELAYED_EVENT_CODE: u8 = 7;
+pub const MAX_DELAYED_EVENT_CODE: u8 = 8;
 
 /// A waiting delayed trigger's event as its frame's `decision`: 1 the watched
 /// object dies, 2 it dies or is exiled, 3 any creature dies, 4 the end
 /// step, 5 its controller casts a matching spell, 6 upkeep,
-/// 7 its controller's end step. Frequency is projected separately.
+/// 7 its controller's end step, 8 a `TriggerCondition` watcher. Frequency is projected separately.
 pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
     match event {
         DelayedTriggerEvent::Leaves {
@@ -202,6 +212,7 @@ pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
         } => 7,
         DelayedTriggerEvent::YouCastSpell(_) => 5,
         DelayedTriggerEvent::Upkeep => 6,
+        DelayedTriggerEvent::Whenever(_) => 8,
     }
 }
 
@@ -371,7 +382,8 @@ impl Game {
         };
         let (owner, zone) = (self.state[object].owner, self.state.zones.zone_of(object));
         suspended.decisions().any(|decision| {
-            self.shares_information(viewer, decision.player())
+            matches!(decision, Decision::ChoosePile { owner, looked, .. } if self.shares_information(viewer, *owner) && looked.contains(&object))
+                || self.shares_information(viewer, decision.player())
                 && (decision.revealed_objects().contains(&object)
                     || matches!(decision, Decision::SelectCards { from: Some(source), .. }
                         if source.owner == owner && Some(source.zone) == zone))
@@ -436,6 +448,7 @@ impl Game {
         &self,
         targets: &[Target],
         clauses: &[usize],
+        divisions: &[i32],
         viewer: PlayerId,
     ) -> Vec<ClauseTarget> {
         targets
@@ -445,6 +458,7 @@ impl Game {
                 reference: self.target_reference(*target, viewer),
                 clause: clauses.get(index).copied().unwrap_or(0),
                 legal_at_resolution_start: None,
+                division: divisions.get(index).copied().unwrap_or(0),
             })
             .collect()
     }
@@ -460,9 +474,7 @@ impl Game {
         for object in self.state.stack_objects.iter().rev() {
             frames.push(self.stack_frame(object, viewer));
         }
-        if self.current_action_space.as_ref().and_then(|s| s.player) == Some(viewer)
-            && !self.is_game_over()
-        {
+        if self.action_space().and_then(|s| s.player) == Some(viewer) && !self.is_game_over() {
             self.append_private_frames(viewer, &mut frames);
         }
         frames.extend(
@@ -571,7 +583,8 @@ impl Game {
             DelayedTriggerEvent::EndStep { .. }
             | DelayedTriggerEvent::CreatureDies
             | DelayedTriggerEvent::YouCastSpell(_)
-            | DelayedTriggerEvent::Upkeep => None,
+            | DelayedTriggerEvent::Upkeep
+            | DelayedTriggerEvent::Whenever(_) => None,
         };
         let mut frame = ContinuationFrame {
             remembered: self.remembered_references(&trigger.remembered, viewer),
@@ -585,6 +598,7 @@ impl Game {
                 DelayedFrequency::EachMatch => 2,
             }),
             this_turn: trigger.expiry == DelayedExpiry::ThisTurn,
+            until_next_turn: trigger.expiry == DelayedExpiry::UntilYourNextTurn,
             ..ContinuationFrame::default()
         };
         let program = trigger.effects.projection();
@@ -673,6 +687,7 @@ impl Game {
                     targets: self.clause_targets(
                         &trigger.targets,
                         &trigger.target_req_indices,
+                        &[],
                         viewer,
                     ),
                     remembered: self.remembered_references(&trigger.remembered, viewer),
@@ -778,17 +793,59 @@ impl Game {
         if let Some(definition) = object.source_definition_id().catalog_id() {
             frame.source.definition = Some(definition.0);
         }
-        frame.targets = self.clause_targets(object.targets(), object.target_req_indices(), viewer);
+        frame.targets = self.clause_targets(
+            object.targets(),
+            object.target_req_indices(),
+            object.target_divisions(),
+            viewer,
+        );
         super::effect_execution::project_stack_object(self, object, viewer, &mut frame, false);
         frame
+    }
+
+    fn fill_spell_targeting(
+        &self,
+        targeting: &crate::flow::game::SpellTargeting,
+        viewer: PlayerId,
+        frame: &mut ContinuationFrame,
+    ) {
+        frame.source = self.object_reference(targeting.object, viewer);
+        frame.kicked = targeting.cast.kicked;
+        frame.spell_profile = spell_profile_code(targeting.cast.profile);
+        frame.x = i32::from(targeting.cast.x);
+        frame.mode = targeting.mode;
+        frame.active_clause = Some(targeting.requirement_index);
+        frame.targets = self.clause_targets(
+            &targeting.chosen,
+            &targeting.chosen_req_indices,
+            &targeting.target_divisions,
+            viewer,
+        );
+    }
+
+    fn fill_activated_targeting(
+        &self,
+        targeting: &crate::flow::game::ActivatedTargeting,
+        viewer: PlayerId,
+        frame: &mut ContinuationFrame,
+    ) {
+        frame.source = self.activation_reference(targeting.source, viewer);
+        frame.x = targeting.x;
+        frame.ability = Some(targeting.ability_index);
+        frame.active_clause = Some(targeting.requirement);
+        frame.targets = self.clause_targets(
+            &targeting.chosen,
+            &targeting.target_req_indices,
+            &targeting.target_divisions,
+            viewer,
+        );
     }
 
     fn announcement_frame(&self, pending: &PendingChoice, viewer: PlayerId) -> ContinuationFrame {
         let mut frame = ContinuationFrame {
             kind: 4,
             controller: self
-                .current_action_space
-                .as_ref()
+                .action_space()
                 .and_then(|space| space.actions.first().map(|action| action.player()))
                 .expect("announcement has a player")
                 .0,
@@ -828,49 +885,57 @@ impl Game {
                     self, payment, viewer, &mut frame, false,
                 );
             }
-            PendingChoice::ChooseTargets {
-                object,
-                cast,
-                mode,
-                requirement_index,
-                chosen,
-                chosen_req_indices,
+            PendingChoice::ChooseTargets { targeting, .. } => {
+                self.fill_spell_targeting(targeting, viewer, &mut frame);
+            }
+            PendingChoice::DivideAmount {
+                slots,
+                next,
+                remaining,
+                parent,
                 ..
             } => {
-                frame.source = self.object_reference(*object, viewer);
-                frame.kicked = cast.kicked;
-                frame.spell_profile = spell_profile_code(cast.profile);
-                frame.x = cast.x;
-                frame.mode = *mode;
-                frame.active_clause = Some(*requirement_index);
-                frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
+                frame.division_remaining = *remaining;
+                frame.context = parent
+                    .chosen()
+                    .get(slots[*next])
+                    .map(|t| self.target_reference(*t, viewer));
+                match parent.as_ref() {
+                    crate::flow::game::DivisionParent::Spell(targeting) => {
+                        self.fill_spell_targeting(targeting, viewer, &mut frame);
+                    }
+                    crate::flow::game::DivisionParent::Activation(targeting) => {
+                        self.fill_activated_targeting(targeting, viewer, &mut frame);
+                    }
+                }
+            }
+            PendingChoice::DivideAmongTargets { spell, .. } => {
+                frame.source = self.object_reference(spell.object, viewer);
+                frame.kicked = spell.cast.kicked;
+                frame.spell_profile = spell_profile_code(spell.cast.profile);
+                frame.x = i32::from(spell.cast.x);
+                frame.mode = spell.mode;
+                frame.targets = self.clause_targets(
+                    &spell.targets,
+                    &spell.target_req_indices,
+                    &spell.target_divisions,
+                    viewer,
+                );
+                super::effect_execution::project_division(self, spell, viewer, &mut frame, false);
             }
             PendingChoice::SpellMode { object, cast, .. } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.spell_profile = spell_profile_code(cast.profile);
-                frame.x = cast.x;
+                frame.x = i32::from(cast.x);
             }
             PendingChoice::KickerChoice { object, cast, .. }
             | PendingChoice::AnnounceX { object, cast, .. } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.spell_profile = spell_profile_code(cast.profile);
             }
-            PendingChoice::ActivatedTarget {
-                source,
-                ability_index,
-                chosen,
-                requirement,
-                ..
-            } => {
-                frame.source = self.activation_reference(*source, viewer);
-                frame.ability = Some(*ability_index);
-                frame.active_clause = Some(*requirement);
-                let clauses = self
-                    .activation_ability(*source, *ability_index)
-                    .map(|ability| ability.target_clause_indices(chosen.len()))
-                    .unwrap_or_default();
-                frame.targets = self.clause_targets(chosen, &clauses, viewer);
+            PendingChoice::ActivatedTarget(targeting) => {
+                self.fill_activated_targeting(targeting, viewer, &mut frame);
             }
             PendingChoice::ActivationX {
                 permanent,
@@ -934,12 +999,11 @@ impl Game {
                     reference: self.target_reference(slot.target, viewer),
                     clause: slot.requirement,
                     legal_at_resolution_start: Some(slot.legal),
+                    division: slot.division,
                 })
                 .collect(),
             remembered: self.remembered_references(&effect.remembered, viewer),
-            context: effect
-                .context_target
-                .map(|t| self.target_reference(t, viewer)),
+            context: effect.context.map(|t| self.target_reference(t, viewer)),
             ..ContinuationFrame::default()
         };
         frame.program(&effect.program);
@@ -961,10 +1025,15 @@ impl Game {
             debug_assert!(matches!(frame.kind, 1..=3));
             super::effect_execution::project_stack_object(self, object, viewer, frame, true);
         }
-        if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
-            || self.is_game_over()
-        {
+        if self.action_space().and_then(|s| s.player) != Some(viewer) || self.is_game_over() {
             return;
+        }
+        if let Some(PendingChoice::DivideAmongTargets { spell, .. }) = &self.pending_choice {
+            let frame = frames
+                .iter_mut()
+                .find(|frame| frame.kind == 4)
+                .expect("announcing division");
+            super::effect_execution::project_division(self, spell, viewer, frame, true);
         }
         if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
             let frame = frames
@@ -1018,7 +1087,7 @@ impl Game {
                 frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
             }
             Decision::Payment(progress) => {
-                if let CostComponent::Mana { cost, .. } = &progress.owed {
+                if let Some(CostComponent::Mana { cost, .. }) = progress.owed.first() {
                     frame.cost(cost);
                 }
                 frame.waterbend = progress.waterbends();
@@ -1100,31 +1169,36 @@ impl Game {
         frame: &mut ContinuationFrame,
     ) {
         match operation {
-            Operation::Spell {
+            Operation::Spell(AnnouncedSpell {
                 object,
                 cast,
                 mode,
                 targets,
                 target_req_indices,
+                target_divisions,
                 ..
-            } => {
+            }) => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.spell_profile = spell_profile_code(cast.profile);
-                frame.x = cast.x;
+                frame.x = i32::from(cast.x);
                 frame.mode = *mode;
-                frame.targets = self.clause_targets(targets, target_req_indices, viewer);
+                frame.targets =
+                    self.clause_targets(targets, target_req_indices, target_divisions, viewer);
             }
             Operation::Activation {
                 source,
                 ability_index,
                 targets,
+                target_req_indices,
+                target_divisions,
                 x,
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
                 frame.x = *x;
-                frame.targets = self.clause_targets(targets, &[], viewer);
+                frame.targets =
+                    self.clause_targets(targets, target_req_indices, target_divisions, viewer);
             }
         }
     }
@@ -1132,7 +1206,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 34;
+pub const MAX_DECISION_CODE: u8 = 39;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -1141,7 +1215,12 @@ pub fn decision_code(decision: &Decision) -> u8 {
     match decision {
         Decision::AssignCombatDamage { .. } => 32,
         Decision::OrderMeldedCards { .. } => 34,
+        Decision::OrderEntryChoices { .. } => 35,
+        Decision::PartitionPiles { .. } => 37,
+        Decision::ChoosePile { .. } => 38,
+        Decision::ChooseEntryValue { .. } => 36,
         Decision::OrderReplacement { .. } => 29,
+        Decision::EnterAttacking { .. } => 39,
         Decision::EnterAsCopy { .. } => 30,
         Decision::ChoosePaymentX { .. } => 24,
         Decision::SearchNamed { .. } => 25,
@@ -1163,7 +1242,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::CastDuringResolution { .. } => 17,
         Decision::ExileLinked { .. } => 18,
         Decision::DistributeCounters { .. } => 19,
-        Decision::KeepCreatures { .. } => 20,
+        Decision::KeepPermanents { .. } => 20,
         Decision::Retarget { .. } => 21,
         Decision::ManifestDread { .. } => 33,
         Decision::Surveil { .. } => 22,
@@ -1272,12 +1351,15 @@ fn relation_rows(
         }
         header[relation::THIS_TURN] = i64::from(frame.this_turn);
         header[relation::SPELL_PROFILE] = i64::from(frame.spell_profile);
+        header[relation::UNTIL_NEXT_TURN] = i64::from(frame.until_next_turn);
+        header[relation::DIVISION] = i64::from(frame.division_remaining);
         emit(&header)?;
         let mut reference_row = |kind: i64,
                                  reference: VisibleReference,
                                  clause: usize,
                                  ordinal: usize,
-                                 legal: Option<bool>| {
+                                 legal: Option<bool>,
+                                 division: i32| {
             let mut row = header;
             row[relation::KIND] = kind;
             row[relation::LEGAL_AT_RESOLUTION_START] =
@@ -1290,6 +1372,7 @@ fn relation_rows(
                 reference
                     .player
                     .map_or(0, |p| if p == viewer { 1 } else { 2 });
+            row[relation::DIVISION] = i64::from(division);
             if let Some(player) = reference.player {
                 row[relation::REFERENCE] = if player == viewer { 1 } else { 2 };
             }
@@ -1302,22 +1385,23 @@ fn relation_rows(
                 target.clause,
                 ordinal,
                 target.legal_at_resolution_start,
+                target.division,
             )?;
         }
         if let Some(target) = frame.context {
-            reference_row(3, target, 0, 0, None)?;
+            reference_row(3, target, 0, 0, None, 0)?;
         }
         if let Some(target) = frame.sacrifice {
-            reference_row(4, target, 0, 0, None)?;
+            reference_row(4, target, 0, 0, None, 0)?;
         }
         for (ordinal, reference) in frame.effect_execution_references.iter().enumerate() {
-            reference_row(10, *reference, 0, ordinal, None)?;
+            reference_row(10, *reference, 0, ordinal, None, 0)?;
         }
         if let Some(definition) = frame.inherited_from {
-            reference_row(7, definition, 0, 0, None)?;
+            reference_row(7, definition, 0, 0, None, 0)?;
         }
         for (ordinal, reference) in frame.remembered.iter().enumerate() {
-            reference_row(8, *reference, 0, ordinal, None)?;
+            reference_row(8, *reference, 0, ordinal, None, 0)?;
         }
         if let Some(frequency) = frame.delayed_frequency {
             let mut row = header;
@@ -1453,7 +1537,20 @@ mod tests {
         let predicate = CardPredicate::default();
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.
+        let question = crate::flow::proposed_event::EntryQuestion {
+            object: game.state.zones.latest().next().unwrap(),
+            kind: crate::state::card::EntryChoiceKind::Color,
+        };
         let decisions = [
+            Decision::OrderEntryChoices {
+                player,
+                questions: Vec::new(),
+            },
+            Decision::ChooseEntryValue {
+                player,
+                question,
+                scope: crate::cards::names::NameScope { start: 0, end: 5 },
+            },
             Decision::OrderMeldedCards {
                 player,
                 cards: [game.state.players[0].deck[0], game.state.players[0].deck[1]],
@@ -1515,7 +1612,7 @@ mod tests {
             Decision::ChooseObject {
                 player,
                 predicate: predicate.clone(),
-                excluded: None,
+                excluded: Vec::new(),
                 optional: false,
                 effect: Box::new(crate::state::ability::Effect::tap(
                     crate::state::ability::ObjectSelector::chosen(predicate.clone()),
@@ -1530,6 +1627,8 @@ mod tests {
                 origin: crate::flow::decision::SelectionOrigin::Other,
                 player,
                 from: None,
+                pool: vec![],
+                inspected: false,
                 candidates: vec![],
                 selected: vec![],
                 min: 0,
@@ -1588,6 +1687,18 @@ mod tests {
                 owner: player,
                 predicate: predicate.clone(),
             },
+            Decision::PartitionPiles {
+                player,
+                looked: vec![],
+                next: 0,
+                face_up: vec![],
+            },
+            Decision::ChoosePile {
+                player,
+                owner: player,
+                looked: vec![],
+                face_up: vec![],
+            },
             Decision::OpponentSplitsRevealed {
                 player,
                 owner: player,
@@ -1621,10 +1732,9 @@ mod tests {
                 player,
                 remaining: 1,
             },
-            Decision::KeepCreatures {
+            Decision::KeepPermanents {
                 player,
-                max_total_power: 0,
-                sacrifice: None,
+                limit: crate::flow::decision::KeepLimit::TotalCreaturePower(0),
                 kept: vec![],
             },
             Decision::ChooseToExile {
@@ -1636,13 +1746,18 @@ mod tests {
             Decision::Retarget {
                 player,
                 object: Target::Player(player),
-                slot: 0,
+                chosen: Vec::new(),
                 may_keep: false,
             },
             Decision::LegendRule {
                 player,
                 groups: vec![],
                 keep: vec![],
+            },
+            Decision::EnterAttacking {
+                player,
+                object: game.state.zones.latest().next().unwrap(),
+                defenders: vec![],
             },
             Decision::EnterAsCopy {
                 player,
@@ -1682,6 +1797,7 @@ mod tests {
                     },
                     clause: 0,
                     legal_at_resolution_start: None,
+                    division: 0,
                 },
                 ClauseTarget {
                     reference: VisibleReference {
@@ -1690,6 +1806,7 @@ mod tests {
                     },
                     clause: 1,
                     legal_at_resolution_start: None,
+                    division: 0,
                 },
             ],
             ..ContinuationFrame::default()

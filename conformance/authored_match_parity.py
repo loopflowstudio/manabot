@@ -33,8 +33,8 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-named-turns.json"
 )
-AUTHORITY_SHA256 = "228daa6571c4a9299368bc995ac7994761c505bdb31cabf5c4bf1657d7441385"
-TERMINAL_STATE = "a1b6932d0fd9a06e884d93237b118713cc36e23973d1f500d3c246b680425876"
+AUTHORITY_SHA256 = "a2eb4df25ac2651be7121644aff8d27d13ca02188308bd74c70c79d2c538441e"
+TERMINAL_STATE = "7579635e057980ae75908fc77f25300fa96cc1ed4fb45184b83ca595bd754dff"
 
 COMMAND_COUNT = 174
 
@@ -236,15 +236,15 @@ def _capture_object_candidate(
             for candidate in choice["candidates"]["initial"]:
                 subject = candidate["value"]["subject"]
                 if subject["kind"] == "object" and subject["id"] == {
-                    "entity": 96,
-                    "incarnation": 3,
+                    "entity": 94,
+                    "incarnation": 1,
                 }:
                     rendered = dict(subject["id"])
                     role = int(choice["role"])
                     candidate_id = int(candidate["id"])
                     offer_id = int(offer["id"])
     if rendered is None:
-        raise ParityDivergence("headless", 17, "object_candidate", "96@3", "absent")
+        raise ParityDivergence("headless", 22, "object_candidate", "94@1", "absent")
     address = next(
         candidate
         for candidate in frame["object_candidates"]
@@ -261,8 +261,12 @@ def _run_engine(
     *,
     prove_stale: bool = False,
     config: trace_store.GameConfig | None = None,
+    decision_memory: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    env = managym.Env(seed=0 if config is None else config.seed)
+    env = managym.Env(
+        seed=0 if config is None else config.seed,
+        decision_memory=decision_memory,
+    )
     observation, _ = env.reset(
         config.to_rust()
         if config is not None
@@ -301,7 +305,7 @@ def _run_engine(
             surface, revision, "offer_count", row["offer_count"], len(frame["offers"])
         )
 
-        if prove_stale and revision == 17:
+        if prove_stale and revision == 22:
             captured_address, rendered_ref = _capture_object_candidate(env, frame)
             stale_revision_command = _semantic_command(row, frame)
             current_clone = env.clone_env()
@@ -320,10 +324,10 @@ def _run_engine(
                 or current_clone.semantic_event_cursor() <= current_cursor
             ):
                 raise ParityDivergence(
-                    surface, 17, "current_object_binding", "committed", "unchanged"
+                    surface, 22, "current_object_binding", "committed", "unchanged"
                 )
 
-        if prove_stale and revision == 33:
+        if prove_stale and revision == 37:
             assert (
                 captured_address is not None
                 and rendered_ref is not None
@@ -492,7 +496,7 @@ def _run_live(
         )
         original_factory = server._new_game_session
         server._new_game_session = lambda: session
-        server.SESSION_REGISTRY.clear()
+        server.LIVE_GAMES.clear()
         try:
             with TestClient(server.app) as client:
                 with client.websocket_connect("/ws/play") as websocket:
@@ -534,7 +538,7 @@ def _run_live(
                         payload = {"frame": payload["update"]["frame"]}
         finally:
             server._new_game_session = original_factory
-            server.SESSION_REGISTRY.clear()
+            server.LIVE_GAMES.clear()
 
         _equal(
             "live",
@@ -576,6 +580,16 @@ def _run_live(
                 row["presentation_events"],
                 transition.presentation_events,
             )
+            _equal(
+                "live",
+                revision,
+                "ordered_presentation_events_by_viewer",
+                row["presentation_events_by_viewer"],
+                {
+                    "0": transition.viewer_presentation_events[0],
+                    "1": transition.viewer_presentation_events[1],
+                },
+            )
             if ordinal == 0:
                 root = session._study_roots[0]
                 checkpoints.append(_checkpoint(root, "live", 0, []))
@@ -597,11 +611,9 @@ def _run_live(
         expected_presentation: dict[int, list[dict[str, Any]]] = {0: [], 1: []}
         for row in decisions:
             for viewer in (0, 1):
-                for event in row["presentation_events"]:
-                    projected = deepcopy(event)
-                    if viewer != int(row["actor"]):
-                        projected["caused_by"] = None
-                    expected_presentation[viewer].append(projected)
+                expected_presentation[viewer].extend(
+                    deepcopy(row["presentation_events_by_viewer"][str(viewer)])
+                )
         actual_tracks = {
             track.viewer: track.events for track in replay.presentation_tracks
         }

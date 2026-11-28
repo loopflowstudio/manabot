@@ -1,7 +1,6 @@
 //! Bounded CR 608.2b witnesses. Synthetic programs isolate resolution semantics;
 //! they do not assert these combinations are reachable in an admitted deck.
 
-use crate::state::ability::LibraryEnd;
 use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
@@ -12,10 +11,10 @@ use crate::{
     flow::{event::GameEvent, game::Game, turn::StepKind},
     state::{
         ability::{
-            DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, ObjectSelector,
-            TargetRequirement, TargetSpec,
+            DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, LibraryEnd,
+            ObjectSelector, TargetRequirement, TargetSpec,
         },
-        card::{ActivatedAbilityDefinition, CardType, Keyword, Keywords},
+        card::{ActivatedAbilityDefinition, CardType, EntryScope, Keyword, Keywords},
         effect::{CopyException, EffectDuration, Modification},
         game_object::{ObjectId, ObjectKind, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -112,8 +111,11 @@ fn stack(
                 targets,
                 attached: None,
                 target_req_indices: Vec::new(),
+                target_divisions: Vec::new(),
                 x: 0,
+                loyalty_change: None,
                 granted_by: None,
+                acquired: None,
                 paid: Default::default(),
             })
         }
@@ -139,6 +141,7 @@ fn stack(
             player: None,
             chosen_modes: Vec::new(),
             inline_effects: Some(effects),
+            acquired: None,
             x: 0,
             spent: Default::default(),
         }),
@@ -720,6 +723,7 @@ fn counter_spell_cannot_affect_an_ability() {
             what: ObjectSelector::Target(TargetSpec::Spell),
             exile: false,
         }]),
+        acquired: None,
         x: 0,
         spent: Default::default(),
     }));
@@ -761,7 +765,7 @@ fn counter_ability_counters_an_ability_and_cannot_target_a_spell() {
         panic!("the counter is a spell");
     };
     let counter = counter.object;
-    assert!(!game.target_is_legal(Target::StackSpell(counter), &spec, PlayerId(0)));
+    assert!(!game.test_target_is_legal(Target::StackSpell(counter), &spec, PlayerId(0)));
     assert!(!game
         .legal_targets_for_spec(&spec, PlayerId(0))
         .contains(&Target::StackSpell(counter)));
@@ -792,7 +796,7 @@ fn counter_spell_cannot_target_an_ability() {
     assert!(game
         .legal_targets_for_spec(&TargetSpec::Spell, PlayerId(0))
         .is_empty());
-    assert!(!game.target_is_legal(
+    assert!(!game.test_target_is_legal(
         Target::StackAbility(ability),
         &TargetSpec::Spell,
         PlayerId(0)
@@ -936,7 +940,14 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
         game.resolve_top_of_stack();
         let source = game.state.delayed_triggers[0].source_object();
         let source_permanent = game.state.permanent_of(game.state.now(source)).unwrap();
-        game.change_control(source_permanent, PlayerId(1 - controller.0));
+        let affected = game.affected_permanent(source_permanent);
+        game.apply_continuous(
+            None,
+            PlayerId(1 - controller.0),
+            affected,
+            crate::state::effect::Modification::Control,
+            crate::state::effect::EffectDuration::Indefinite,
+        );
         game.move_object(source, ZoneType::Graveyard);
         stack(&mut game, Entry::Spell, controller, vec![], vec![], vec![]);
         let StackObject::Spell(spell) = game.state.stack_objects.last().unwrap() else {
@@ -959,10 +970,7 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
         game.resolve_top_of_stack();
         let suspended = game.state.suspended_decision.as_ref().unwrap();
         assert_eq!(suspended.frame.remembered[0].object, remembered);
-        assert_eq!(
-            suspended.frame.context_target,
-            Some(Target::StackSpell(cast))
-        );
+        assert_eq!(suspended.frame.context, Some(Target::StackSpell(cast)));
         let space = game.suspended_decision_action_space().unwrap();
         assert_eq!(
             space.player,
@@ -1046,6 +1054,7 @@ fn completed_private_capture(player: PlayerId) -> Game {
         vec![Effect::SelectCards {
             from: ObjectSelector::Zone(ZoneType::Hand),
             predicate: CardPredicate::default(),
+            max_mana_value: None,
             min: 1,
             max: 1.into(),
             // Two occurrences alias one selected subject; they must receive one
@@ -1058,8 +1067,15 @@ fn completed_private_capture(player: PlayerId) -> Game {
     );
     root.resolve_top_of_stack();
     root.publish_action_space(root.suspended_decision_action_space().unwrap());
-    let object = root.state.zones.zone_objects(ZoneType::Hand, player)[0];
-    checked_command(&mut root, Action::SelectCard { player, object });
+    let first_select = root
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .find(|action| matches!(action, Action::SelectCard { .. }))
+        .unwrap()
+        .clone();
+    checked_command(&mut root, first_select);
     assert!(root.state.suspended_decision.is_none());
     assert_eq!(root.state.delayed_triggers.len(), 2);
     root
@@ -1176,7 +1192,6 @@ fn hidden_selection_moved_capture_uses_its_new_zone() {
     let player = PlayerId(1);
     let viewer = PlayerId(0);
     let (mut root, _, _) = fixture(player);
-    let object_id = root.state.zones.zone_objects(ZoneType::Hand, player)[0];
     stack(
         &mut root,
         Entry::Triggered,
@@ -1184,6 +1199,7 @@ fn hidden_selection_moved_capture_uses_its_new_zone() {
         vec![Effect::SelectCards {
             from: ObjectSelector::Zone(ZoneType::Hand),
             predicate: CardPredicate::default(),
+            max_mana_value: None,
             min: 1,
             max: 1.into(),
             if_declined: Vec::new(),
@@ -1203,13 +1219,15 @@ fn hidden_selection_moved_capture_uses_its_new_zone() {
     );
     root.resolve_top_of_stack();
     root.publish_action_space(root.suspended_decision_action_space().unwrap());
-    checked_command(
-        &mut root,
-        Action::SelectCard {
-            player,
-            object: object_id,
-        },
-    );
+    let first_select = root
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .find(|action| matches!(action, Action::SelectCard { .. }))
+        .unwrap()
+        .clone();
+    checked_command(&mut root, first_select);
     assert_eq!(
         root.state.delayed_triggers[0].remembered[0]
             .selection
@@ -1291,6 +1309,7 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
         trigger.effects = crate::flow::trigger::DelayedEffects::new(vec![Effect::SelectCards {
             from: ObjectSelector::Remembered,
             predicate: CardPredicate::default(),
+            max_mana_value: None,
             min: 1,
             max: 1.into(),
             if_declined: Vec::new(),
@@ -1963,7 +1982,7 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
             },
             resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
                 player,
-                CostComponent::mana(ManaCost::parse("{1}")),
+                vec![CostComponent::mana(ManaCost::parse("{1}"))],
                 vec![Effect::gain_life(2)],
                 vec![],
             )))),
@@ -2398,6 +2417,7 @@ fn destruction_count_survives_a_child_returning_one_of_the_destroyed_creatures()
             Effect::SelectCards {
                 from: ObjectSelector::Moved,
                 predicate: CardPredicate::creature(),
+                max_mana_value: None,
                 min: 1,
                 max: EffectValue::Fixed(1),
                 effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
@@ -2428,6 +2448,7 @@ fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
         let (mut game, _, _) = fixture(player);
         let milled = game.library_top_objects(player, 3);
         let select = |min, max, effects| Effect::SelectCards {
+            max_mana_value: None,
             from: ObjectSelector::CardsThisWay,
             predicate: CardPredicate::default(),
             min,
@@ -2723,9 +2744,11 @@ fn exiled_counter_entry(game: &mut Game, player: PlayerId) -> ObjectId {
         .unwrap()
         .0;
     let object = game.move_object(object, ZoneType::Exile);
-    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithPlusOneCounters {
-        count: 1,
+    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithCounters {
+        on: EntryScope::This,
+        count: 1.into(),
         condition: None,
+        kind: CounterKind::PlusOnePlusOne,
     }];
     object
 }
@@ -2894,8 +2917,10 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
     }];
     let returned = exiled_counter_entry(&mut game, player);
     let returned_ref = game.state.now(returned);
+    let source_def = game.state[source_object].definition_id;
     game.state.exile_links.push(ExileLink {
         source: source_ref,
+        ability_set: crate::state::ability::AbilitySet::Printed(source_def),
         exiled_object: returned_ref,
         returns: true,
     });
@@ -2904,7 +2929,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         frame: EffectFrame::new(player, vec![Effect::gain_life(3)]),
         decision: Decision::Payment(PaymentProgress::new(
             player,
-            CostComponent::mana(ManaCost::parse("{U}")),
+            vec![CostComponent::mana(ManaCost::parse("{U}"))],
             vec![Effect::gain_life(2)],
             vec![],
         )),
@@ -2965,21 +2990,21 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
     use crate::flow::combat::CombatState;
     use crate::state::{
         ability::Actor,
-        card::{DamageTransform, ReplacementEffect},
+        card::{DamageRecipient, DamageSource, DamageTransform, ReplacementEffect},
     };
     let defender = PlayerId(1);
     let (mut root, first, second) = fixture(defender);
     for effect in [
         ReplacementEffect::ModifyDamage {
-            creature_source: false,
-            source_by: Actor::AnyPlayer,
-            recipient_by: Actor::You,
+            source: DamageSource::any(Actor::AnyPlayer),
+            recipient: DamageRecipient::any(Actor::You),
+            combat: None,
             transform: DamageTransform::Prevent(1),
         },
         ReplacementEffect::ModifyDamage {
-            creature_source: false,
-            source_by: Actor::AnyPlayer,
-            recipient_by: Actor::You,
+            source: DamageSource::any(Actor::AnyPlayer),
+            recipient: DamageRecipient::any(Actor::You),
+            combat: None,
             transform: DamageTransform::Double,
         },
     ] {
@@ -2990,7 +3015,14 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
         root.state[object].replacement_effects = vec![effect];
     }
     root.state.combat = Some(Box::new(CombatState {
-        attackers: vec![first, second],
+        attack_targets: [first, second]
+            .map(|id| {
+                (
+                    id,
+                    Some(crate::flow::combat::AttackTarget::Player(defender)),
+                )
+            })
+            .to_vec(),
         ..Default::default()
     }));
     root.resolve_combat_damage();
@@ -3037,8 +3069,10 @@ fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
     let source_ref = game.permanent_object(source).unwrap();
     let returned = exiled_counter_entry(&mut game, player);
     let returned_ref = game.state.now(returned);
+    let source_def = game.state[source_object].definition_id;
     game.state.exile_links.push(ExileLink {
         source: source_ref,
+        ability_set: crate::state::ability::AbilitySet::Printed(source_def),
         exiled_object: returned_ref,
         returns: true,
     });
@@ -3088,13 +3122,15 @@ fn hidden_selection_partial_discard_survives_both_samplers_and_divergent_command
             vec![Effect::discard_draw(2, 1), Effect::gain_life(3)],
         ));
         root.publish_action_space(root.suspended_decision_action_space().unwrap());
-        checked_command(
-            &mut root,
-            Action::SelectCard {
-                player,
-                object: hand[0],
-            },
-        );
+        let first_select = root
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .find(|action| matches!(action, Action::SelectCard { .. }))
+            .unwrap()
+            .clone();
+        checked_command(&mut root, first_select);
         assert_eq!(
             root.state.zones.size(ZoneType::Hand, player),
             hand.len(),
@@ -3202,6 +3238,7 @@ fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
             Effect::SelectCards {
                 from: ObjectSelector::Zone(ZoneType::Hand),
                 predicate: CardPredicate::default(),
+                max_mana_value: None,
                 min: 1,
                 max: 1.into(),
                 effects: vec![
@@ -3217,13 +3254,15 @@ fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
         ],
     ));
     root.publish_action_space(root.suspended_decision_action_space().unwrap());
-    checked_command(
-        &mut root,
-        Action::SelectCard {
-            player,
-            object: hand[0],
-        },
-    );
+    let first_select = root
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .find(|action| matches!(action, Action::SelectCard { .. }))
+        .unwrap()
+        .clone();
+    checked_command(&mut root, first_select);
     // Retain the choice-bearing child beneath another scope and saved decision.
     let mut caller = root.state.suspended_decision_mut().take().unwrap();
     caller.frame.remembered = root.capture_bindings(&ObjectSelector::Selected, &caller.frame);
@@ -3459,8 +3498,10 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
     let returned_ref = game.state.now(returned);
     // The real Merchant program is the consumer; this constructed link isolates
     // a source departure whose consequent entry asks a replacement question.
+    let source_def = game.state[source].definition_id;
     game.state.exile_links.push(ExileLink {
         source: source_ref,
+        ability_set: crate::state::ability::AbilitySet::Printed(source_def),
         exiled_object: returned_ref,
         returns: true,
     });
@@ -3552,6 +3593,7 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
             vec![Effect::SelectCards {
                 from: ObjectSelector::Zone(zone),
                 predicate: CardPredicate::creature(),
+                max_mana_value: None,
                 min: 0,
                 max: 1.into(),
                 effects: vec![Effect::return_to_battlefield(
@@ -3774,9 +3816,11 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();
     let object = game.state.permanents[source].as_ref().unwrap().object;
-    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithPlusOneCounters {
-        count: 1,
+    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithCounters {
+        on: EntryScope::This,
+        count: 1.into(),
         condition: None,
+        kind: CounterKind::PlusOnePlusOne,
     }];
     for multiplier in [2, 3] {
         let id = game
@@ -4029,9 +4073,11 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 "iteration" => {
                     frame.iteration = Some(TargetIteration {
                         remaining: vec![ResolutionTarget {
+                            share: 0,
                             target: Target::Permanent(subject),
                             requirement: 0,
                             legal: true,
+                            division: 0,
                         }]
                         .into(),
                         effects: vec![Effect::Tap {
@@ -4463,7 +4509,7 @@ fn hidden_knowledge_transient_departures_cannot_leave_false_hidden_zone_facts() 
             game.remember_library_objects(owner, &inspected);
             game.remember_hand(owner);
             let expected_hand = game.state.players[owner.0].known_hand.clone();
-            let token = game.create_token("token.ally", owner, false).unwrap();
+            let token = game.create_token("token.ally", owner).unwrap();
             let object = game.permanent_object(token).unwrap();
             game.move_object(object, zone);
             game.finish_state_based_batch();
@@ -4624,7 +4670,7 @@ fn venom_connoisseur_only_resolved_triggers_advance_their_source() {
     let player = PlayerId(0);
     let original = game.permanent_object(source).unwrap();
     let trigger = |game: &mut Game| {
-        game.create_token("token.ally", player, false);
+        game.create_token("token.ally", player);
         game.process_game_events();
         assert!(game.flush_triggers().is_none());
         game.state.stack_objects.last().unwrap().id()
@@ -4684,7 +4730,7 @@ fn separate_printed_abilities_on_one_source_each_resolve_for_the_first_time() {
     let source = game.permanent_object(permanent).unwrap();
     let original = game.state[source].abilities[0].clone();
     game.state[source].abilities.push(original);
-    game.create_token("token.ally", PlayerId(0), false);
+    game.create_token("token.ally", PlayerId(0));
     game.process_game_events();
     let choices = game
         .flush_triggers()
@@ -4746,6 +4792,8 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         game.scenario_force_battlefield(player, "Fire Lord Azula", true)
             .unwrap()
     });
+    // Distinguish the two copies so both legend-rule keep choices stay offered.
+    game.state.permanents[legends[1]].as_mut().unwrap().tapped = true;
     let spell = |game: &mut Game, name: &str| {
         let object = game
             .state
@@ -4761,13 +4809,11 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         panic!("expected a spell copy");
     };
     spell(&mut game, "Time Stop");
-    game.exile_top_cards_to_play(
+    let grant_frame = crate::flow::decision::EffectFrame::new(
         player,
-        1,
-        crate::state::ability::PlayWindow::ThisTurn,
-        false,
-        None,
+        Effect::exile_top_to_play(1, crate::state::ability::PlayWindow::ThisTurn),
     );
+    game.run_frame(grant_frame);
     let playable = game.exile_playable_objects(player).next().unwrap();
     game.resolve_top_of_stack();
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
@@ -4839,12 +4885,12 @@ fn snapshot_shuffle_keeps_inspections_and_random_bottom_placements_until_a_rules
         ));
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         let inspected = game.library_top_objects(owner, 12);
-        let space = game.current_action_space.clone();
+        let space = game.action_space().cloned();
         let mut sibling = game.clone();
         game.shuffle_unseen_libraries(101);
         sibling.shuffle_unseen_libraries(101);
         assert_eq!(game.library_top_objects(owner, 12), inspected);
-        assert_eq!(game.current_action_space, space);
+        assert_eq!(game.action_space(), space.as_ref());
         checked_command(&mut game, Action::Decline { player: owner });
         checked_command(&mut sibling, Action::Decline { player: owner });
         let order = |game: &Game| {
@@ -4996,6 +5042,7 @@ fn snapshot_constrained_determinize_retry_preserves_live_capture() {
     game.run_frame(EffectFrame::new(
         owner,
         vec![Effect::SelectCards {
+            max_mana_value: None,
             from: ObjectSelector::Zone(ZoneType::Hand),
             predicate: CardPredicate {
                 card_type: Some(CardType::Instant),
@@ -5168,6 +5215,7 @@ fn hidden_selection_manifest_fill_leaves_the_committed_library_cards() {
     root.run_frame(EffectFrame::new(
         player,
         vec![Effect::SelectCards {
+            max_mana_value: None,
             from: ObjectSelector::Zone(ZoneType::Library),
             predicate: CardPredicate {
                 card_type: Some(CardType::Creature),
@@ -5264,6 +5312,7 @@ fn sole_forest_manifest_selecting(card_type: CardType, library: &[&str], picked:
     root.run_frame(EffectFrame::new(
         player,
         vec![Effect::SelectCards {
+            max_mana_value: None,
             from: ObjectSelector::Zone(ZoneType::Library),
             predicate: CardPredicate {
                 card_type: Some(card_type),
@@ -5547,9 +5596,11 @@ fn power_properties_keep_target_lki_and_filter_aggregates_by_source_name() {
     let mut frame = EffectFrame::new(player, vec![]);
     frame.source_identity = Some(AbilitySource::new(source, Some(source)));
     frame.targets = vec![ResolutionTarget {
+        share: 0,
         target: Target::Permanent(other),
         requirement: 0,
         legal: true,
+        division: 0,
     }];
     game.apply_continuous(
         None,
@@ -5629,7 +5680,7 @@ fn prepared_seed_sutures() -> (Game, [ObjectId; 2], [ObjectId; 2]) {
         game.move_object(object, ZoneType::Battlefield)
     });
     let id = game.state.id_gen.next_id();
-    let unrelated = game.create_spell_copy(sources[0], id, player);
+    let unrelated = game.create_spell_copy(game.state[sources[0]].clone(), id, player);
     let unrelated = game.move_object(unrelated, ZoneType::Exile);
     game.finish_action_step();
     assert_eq!(game.state.zones.zone_of(unrelated), None);
@@ -5816,7 +5867,14 @@ fn transferred_seed_suture_keeps_owner_and_follows_source_controller() {
             );
         }
     }
-    game.change_control(angel, caster);
+    let affected = game.affected_permanent(angel);
+    game.apply_continuous(
+        None,
+        caster,
+        affected,
+        crate::state::effect::Modification::Control,
+        crate::state::effect::EffectDuration::Indefinite,
+    );
     game.finish_action_step();
     assert!(cast_offer(&game, copies[0]).is_none());
     assert!(cast_offer(&game, copies[1]).is_some());
@@ -6137,6 +6195,7 @@ fn preparation_resolution_triggered_sources_create_their_printed_spells() {
                     }
                 }
                 game.emit(GameEvent::AttackersDeclared {
+                    permanent_defenders: None,
                     player,
                     attackers: vec![permanent],
                 });
@@ -6157,13 +6216,17 @@ fn preparation_resolution_triggered_sources_create_their_printed_spells() {
                 for card in casts {
                     let object = fixture_card(&game, player, card);
                     let payment = crate::flow::payment::Payment {
-                        operation: crate::flow::payment::Operation::Spell {
-                            object,
-                            cast: Default::default(),
-                            mode: None,
-                            targets: Vec::new(),
-                            target_req_indices: Vec::new(),
-                        },
+                        operation: crate::flow::payment::Operation::Spell(
+                            crate::flow::payment::AnnouncedSpell {
+                                object,
+                                cast: Default::default(),
+                                mode: None,
+                                targets: Vec::new(),
+                                target_req_indices: Vec::new(),
+                                target_divisions: Vec::new(),
+                                target_shares: Vec::new(),
+                            },
+                        ),
                         owed: Vec::new(),
                         receipt: Default::default(),
                     };
@@ -6302,6 +6365,29 @@ fn emeritus_of_truce_resolves_for_the_bound_player_and_source() {
                 );
                 assert_eq!(game.state.players[opponent.0].life, life + 2);
             }
+        }
+    }
+}
+
+#[test]
+fn full_board_with_four_of_each_emblem_per_seat() {
+    let (mut game, _, _) = fixture(PlayerId(0));
+    for seat in [PlayerId(0), PlayerId(1)] {
+        for _ in 0..10 {
+            game.scenario_force_battlefield(seat, "Gray Ogre", true)
+                .unwrap();
+        }
+        for emblem in managym_cards::emblem_catalog() {
+            for _ in 0..4 {
+                game.create_emblem(emblem.key, seat);
+            }
+        }
+    }
+    let _scan = game.board_scan();
+    for seat in [PlayerId(0), PlayerId(1)] {
+        assert_eq!(game.state.zones.size(ZoneType::Command, seat), 16);
+        for id in game.iter_battlefield_permanents(seat) {
+            assert_eq!(game.object_pt(game.permanent_object(id).unwrap()), (18, 18));
         }
     }
 }

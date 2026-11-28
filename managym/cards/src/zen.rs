@@ -8,7 +8,7 @@ use managym_state::{
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, ManaAbility, PrintedCharacteristics, ReplacementEffect, StaticAbility,
-        StaticPtBuff, StaticScope,
+        StaticScope,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -18,6 +18,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        gatekeeper_of_malakir(),
         adventuring_gear(),
         day_of_judgment(),
         vampire_nighthawk(),
@@ -90,18 +91,14 @@ fn beastmaster_ascension() -> CardDefinition {
                     if_declined: vec![],
                 }],
             }],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(CardPredicate::creature()),
-                condition: Some(Condition::SourceCountersAtLeast {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate::creature()),
+                Some(Condition::SourceCountersAtLeast {
                     kind: CounterKind::Quest,
                     count: 7,
                 }),
-                power: 5,
-                toughness: 5,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+                vec![Modification::pump(5, 5)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -409,4 +406,28 @@ fn rite_of_replication() -> CardDefinition {
         },
         ..Default::default()
     }
+}
+
+fn gatekeeper_of_malakir() -> CardDefinition {
+    CardDefinition {
+key: "zen.gatekeeper_of_malakir",
+scryfall_id: "71db3698-a45c-4eaf-87e6-30502c0c10f4",
+printed: PrintedCharacteristics {
+name: "Gatekeeper of Malakir".into(),
+mana_cost: Some(ManaCost::parse("{B}{B}")),
+types: CardTypes::new([CardType::Creature]),
+subtypes: vec!["Vampire".into(), "Warrior".into()],
+power: Some(2),
+toughness: Some(2),
+additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{B}"))],
+abilities: vec![Ability::Triggered {
+condition: TriggerCondition::EntersTheBattlefield { subject: TriggerSubject::This },
+intervening_if: Some(Condition::Kicked),
+effects: vec![Effect::ForPlayer { player: PlayerSelector::Target(Box::new(TargetSpec::Player)), effects: vec![Effect::sacrifice(CardPredicate::creature())] }]
+}],
+text_box: "Kicker {B} (You may pay an additional {B} as you cast this spell.)\nWhen this creature enters, if it was kicked, target player sacrifices a creature of their choice.".into(),
+..Default::default()
+},
+..Default::default()
+}
 }

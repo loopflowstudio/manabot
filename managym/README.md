@@ -61,14 +61,17 @@ uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
 uv run --no-project managym academy
 ```
 
-This starts a local server and opens `http://127.0.0.1:8000` with a game
-ready; Ctrl-C stops it. It needs CPython 3.12 or 3.13 and nothing else: no
-manabot, Torch, Node or Rust. Finished and unfinished games are listed under
-**Games** and open in **Replay**. `uv run --no-project python -m managym.academy` is the same
-command, and `uv run --no-project managym academy --help` lists the port, host and storage
-options. Cards show their Scryfall art with no extra step: the server fetches
-each image the first time it is shown and keeps it in `~/.cache/managym/card-art`;
-`ACADEMY_CARD_ART=off` turns that off ([card art](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#card-art)).
+This starts a local server and opens `http://127.0.0.1:8000`; Ctrl-C stops it.
+It needs CPython 3.12 or 3.13 and nothing else: no manabot, Torch, Node or
+Rust. Opening `/` resumes your unfinished game at its pending decision, or
+opens setup when none is in progress. Finished and unfinished games are listed
+under **History** (`/games`), with **Replay** on every row and **Resume** on
+unfinished played games. `uv run --no-project python -m managym.academy` is the
+same command, and `uv run --no-project managym academy --help` lists the port,
+host and storage options. Cards show their Scryfall art with no extra step: the
+server fetches each image the first time it is shown and keeps it in
+`~/.cache/managym/card-art`; `ACADEMY_CARD_ART=off` turns that off
+([card art](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#card-art)).
 Installing `manabot` in the same environment adds trained opponents.
 The [Academy guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy)
 covers playing, replays, trained bots and launch troubleshooting.
@@ -88,26 +91,52 @@ with the reason before anything opens.
 Bundled names take precedence over same-named files; use `./ur_lessons` to
 select a file named `ur_lessons`.
 
-The same choices are in the browser. Open **New game**, expand **Browse decks
-and cards**, and assign a bundled deck to each native seat. Choose an opponent
-such as **Search 64**, then click **Start game**.
+The same choices are in the browser. On the setup screen (`/` or **New game**
+from a board), expand **Browse decks and cards** and assign a bundled deck to
+each native seat. Choose an opponent such as **Search 64**, then click
+**Start**.
 
 For your own lists, expand **Import decklist files** and check **Use imported
 decks for the next game**. Upload or paste both decks, one `count card name`
 per line, with optional `Main` and `Sideboard` headings. Click **Check decklists**,
-fix any reported issues, and select **Start game**. Imported decks use the
+fix any reported issues, and select **Start**. Imported decks use the
 development format and supported cards. Registered policies check the complete
 setup, including imported lists, against their own admission requirements. See the
 [play guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#play-a-game).
 
-For several games against a model, **Rematch**, **Swap sides** and **Change
-opponent** retain unrelated setup and group recordings in one session. See
-[playing a series](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#playing-a-series-against-a-model)
-for deal modes, results and recovery. **Edit next game** opens the session draft:
-**Save next setup** retains it, and **Start next game** starts a continuation.
-Global **New game** opens a separate session setup; **Cancel** discards edits.
-Changing both controllers to bots in the session editor offers **Start new
-watched game**, preserving the Play session.
+When a game finishes, **Rematch**, **Swap sides** and **Deal new decks** (for
+deck pools) carry forward the setup of the game just played. Closing the tab or
+restarting the server never ends an unfinished game: opening `/` or pressing
+**Resume** in **History** rebuilds it from its stored record at the pending
+decision. See
+[rematch, swap sides and resuming](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#rematch-swap-sides-and-resuming).
+
+### Play against your own policy
+
+Academy loads external bots without importing your training framework or Torch.
+Pass a Python file, a saved `PolicySpec` JSON, or a `managym.bots` entry point:
+
+```bash
+# Plain (obs) -> int | probabilities function, or a managym.policy.Policy object
+uv run --no-project managym play --opponent ./my_bot.py:choose --decklists closed
+
+# Saved PolicySpec JSON (e.g. {"provider": "manabot", "artifact": ".../iter-0010.safetensors"})
+uv run --no-project managym play --opponent ./iter-0010.policy.json --decklists closed
+
+# Pit two policies against each other in Watch, or list discovered policies
+uv run --no-project managym watch --bot1 ./my_bot.py:choose --bot2 heuristic
+uv run --no-project managym opponents
+```
+
+When you pass a `.py` file without `:attr`, Academy looks for `policy` or `choose`
+at module scope. For stateful/recurrent bots, probability/value outputs, or
+custom model architectures, implement `managym.policy.Policy`
+(`describe`, `admit`, `load -> PolicySession`) or register a provider under the
+`managym.bots` entry-point group. From Python, pass a live policy directly to
+`managym.academy.launch.serve(policies={"my-bot": policy})` or
+`managym.academy.launch.play(opponent=policy)`. See
+[independent Python policies](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#independent-python-policies)
+for the full contract.
 
 ### Watch a recorded game
 
@@ -125,22 +154,21 @@ result. Each choice shows the probabilities, value and update the chooser
 recorded, and **not retained** for what it did not. `--game` is the game's
 position, counted from 0, or the start of its digest; run the command without
 it to list the games. In the browser, the same is **Open a game file** under
-**Watch** (`/replay?watch=1`).
+**History** (`/games`).
 
 Academy plays the recorded actions through the engine again and checks the
 recorded state digest before every decision, without running the original
 players or loading their checkpoints. A game cut off part-way, or one this
 build does not reproduce, opens up to its last verified decision and says
 where and why it stops. A game from another world is refused with the managym
-version that recorded it. `managym academy replay <recording-id>` reopens a
-game from **Games** in the same browser and address (including port), or when
-it is shared and finished.
+version that recorded it. `managym academy replay <recording-id>` reopens any
+saved game from **History**, finished or unfinished.
 
 Evaluation command traces (`traces/<cell-id>.commands.jsonl.gz`) and exported
 training games written by earlier releases still open; those two are verified
 by manabot, installed at the same release version. The
 [replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#open-a-replay-directly)
-covers selection, privacy and troubleshooting.
+covers selection and troubleshooting.
 
 ### Launch from Python
 
@@ -157,9 +185,8 @@ with serve(port=0) as academy:
 ```
 
 `serve` opens no browser; call `academy.open()` to open the bare table.
-`game.url` and imported evaluation replay URLs open in any browser that can
-reach the server; recording ids retain the access rules above. Failures raise
-`AcademyLaunchError` with a `code`. See
+`game.url` and replay URLs open in any browser that can reach the server.
+Failures raise `AcademyLaunchError` with a `code`. See
 [Launch from Python](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#launch-from-python).
 
 For building a deck before play, see [Limited deck building](../docs/deck-building.md):
@@ -273,6 +300,10 @@ targets still resolve.
 in one event batch. `ForEachTarget` instead runs a separate child program per
 slot, retaining its position across choices. Leaves from the Vine's simultaneous
 counter placement uses the former.
+A spell with a printed `division` assigns its total among the chosen targets
+before payment. The stack retains the shares in target order. Biogenic
+Upgrade places the announced counters in one batch, then reads the new
+counter counts for its doubling instruction.
 Graveyard targets
 carry an exact `ObjectId`, so continuations cannot follow a physical card into
 the object it later becomes. Mutate permanents at their event authority;
@@ -551,6 +582,24 @@ countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual
 legendary status in observations; canonical hashing includes their copied data.
 
+Thousand-Year Storm counts earlier instant and sorcery casts by its controller,
+including spells cast before it entered. Each copy offers its own target choices.
+If the original was countered, the copy takes the spell's last targets, mode and X.
+Keeping a target with ward triggers ward for the copy.
+
+With Divine Resilience, paying kicker changes how many creatures you can
+target. You can cast it kicked with an empty battlefield. Charming Prince can
+exile a creature you own that an opponent controls and return it under your
+control at the next end step. Affectionate Indrik's controller chooses its
+opposing target when the ability goes on the stack and decides whether to
+fight when it resolves.
+
+For Deadly Brew, the active player chooses which eligible permanents to keep
+first. Both players finish choosing before the sacrifices happen together.
+If you sacrificed one, you can return another permanent card in your graveyard.
+Tribute to Hunger uses the toughness the creature had just before its sacrifice,
+including temporary bonuses.
+
 Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
 Their [ownership and authoring contract](../docs/engine.md#resolution-contracts)
 covers both ordinary mana and waterbend without a card-specific decision.
@@ -780,6 +829,16 @@ lists the table names and their unbatched row dimensions; for a pair `(key, dim)
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.
 
+Confiscate changes control for as long as it enchants the permanent. Harmless
+Offering targets both the opponent and the permanent being given away. Control
+effects apply in layer 2. When one ends, the remaining effects determine who
+controls the permanent. A change removes it from combat and preserves its tapped
+state. Observations and wire projections carry `entry_controller_id` when a
+permanent's current controller differs from its CR 110.2 entry controller, and
+the v11 permanent row derives its `control_differs_from_entry` flag from it. A
+blocked attacker keeps its `blocked` flag even if its last blocker changes
+control or phases out and leaves combat.
+
 `Game::object_pt` reads contextual power and toughness in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's
 controller or card's owner elsewhere (including outside the game). Zone
@@ -881,6 +940,82 @@ retired codes 5, 6 and 7 keep their historical meanings.
 observation projection and hidden-world sampling share that chain for caller
 ancestry and inspection permissions.
 
+### Indistinguishable objects
+
+When several legal actions in one decision differ only in which of several
+game-indistinguishable objects they name, the engine offers one action for the
+class and keeps the first in its existing emission order. Every consumer —
+policies, search, Python callers and Academy — sees the shorter action space:
+
+- **Hand plays and discards.** Two identical unpinned Forests in hand with a
+  land drop open yield one `PlayLand`; two castable copies of the same creature
+  card yield one `CastSpell`. Discarding one card from a hand of two identical
+  unpinned cards folds to one action and is skipped under `skip_trivial` with no
+  prompt.
+- **Mana taps, targets and costs.** Paying `{1}{W}` manually with Kyoshi Village
+  and three identical untapped Plains offers three actions instead of five (see
+  [manual mana sources](#manual-mana-sources)); floating mana with eight
+  identical untapped Forests offers one `TapForMana`. Targeting a creature an
+  opponent controls among three identical unreferenced tokens offers one
+  `ChooseTarget`, and paying convoke, sacrifice, discard, crew, exile or delve
+  costs with identical copies offers one choice per class.
+- **Combat.** Attack and block declarations ask about one creature at a time.
+  After one creature declines to attack (or block), later indistinguishable
+  copies in that declaration are not offered that choice, so their forced
+  decline is skipped — three identical tokens produce four attacker-count lines
+  (0, 1, 2 or 3) instead of eight yes/no paths. Indistinguishable attackers
+  with the same defender and no blockers yet fold to one `DeclareBlocker`
+  target.
+- **Distinguishing state stays separate.** If one of two Forests is enchanted,
+  targeted on the stack or carries a counter, or if one of two identical hand
+  cards is pinned by a reveal (`ObjectBinding.known_to`), it stays in its own
+  class and keeps its own offer.
+
+Two objects in the same zone (or outside-game sideboard entries for
+`LearnTakeLesson`) are interchangeable when all of the following hold:
+
+- **Same object state.** Same zone, owner, controller, definition, object kind
+  and form, neither face down, and — on the battlefield — equal layered
+  characteristics and permanent state. A settled permanent's `spell_entry`
+  compares only whether it was paid, whether it was kicked and its X value.
+  Plain non-creature, non-animating lands ignore summoning sickness and turn of
+  entry; creatures, non-lands, self-animating lands (such as Soulstone
+  Sanctuary) and permanents with `power_up` abilities compare both.
+- **No live rules reference.** Neither object is named anywhere in live rules
+  state outside its own zone slot, its own record, or the current decision's
+  candidate list (already-chosen targets or selections still distinguish them).
+  Historical logs and a settled permanent's payment receipt do not distinguish
+  objects.
+- **No layer-ordering timestamp or hidden identity.** Face-down objects never
+  fold in any zone. Battlefield permanents with any layered static ability
+  (printed or granted) or any keyword counter never fold; equal ordinary
+  counters (such as three tokens each carrying one `+1/+1` counter) still fold.
+  Hand and graveyard order and card `incarnation` are not distinguishing.
+- **Eligible decision.** Folding applies to `PlayLand`, `CastSpell`,
+  `ActivateCardAbility`, `Foretell`, `ActivateAbility`, `TapForMana`,
+  `WaterbendTap`, permanent and graveyard `ChooseTarget`, `LearnDiscard`,
+  `LearnTakeLesson`, cost-component selections, `DeclareBlocker` over
+  interchangeable attackers, and `SelectCard` over Battlefield, Hand,
+  Graveyard, face-up Exile or outside-game Sideboard. `TurnFaceUp` never folds
+  (its object is face down), nor do positional and order-sensitive choices:
+  Library cards, Stack objects as fold members, `ChooseMode`, `ScryCard`,
+  `OrderLibrary`, `ChooseTrigger`, `DistributeCounters`, `PassPriority`,
+  `PayCost` and `Decline`. Multi-pick permutation orders (picking A then C
+  versus C then A) and assigning two interchangeable blockers across two
+  different attackers in either order remain separate.
+
+Surviving actions keep their relative order, `ActionSpace`'s shape and policy
+input layouts are unchanged, and a space folded to one action is skipped under
+`skip_trivial` like any forced choice (and counts as no choice for loop
+detection). `Offer.aliases` and experience `InteractionOffer.aliases`
+(`list[SubjectRef]`, omitted when empty) list live in-zone folded copies only so
+Academy can keep every copy on the board or in hand interactive while sending
+the one canonical Command; outside-game sideboard `LearnTakeLesson` copies stay
+in `Game::action_aliases` for lowering, and compound offers lower folded members
+through `Game::action_aliases`. A Command naming an offer id removed by folding
+is rejected as unknown; recordings written before this change replay by action
+index only at their own engine revision.
+
 ### Automatic source preference
 
 Pay `{1}{G}` with an empty mana pool and two untapped Mountains and a Forest:
@@ -901,24 +1036,101 @@ other permanents, then creatures; within those tiers, colorless output is
 preferred. The class search stops after 1024 arithmetic checks and keeps a
 payable candidate. Payments with saved obligations only receive surplus
 pruning. If fixed sources cannot pay, the planner may also select the color
-of a simple tap activation such as Kyoshi Village. The preview shows that
-source and its output. In manual payment mode, sacrifices, life payments and abilities with other
+of a simple tap activation such as Kyoshi Village and removes surplus taps
+(keeping creatures, utility lands and dual lands untapped ahead of basics).
+The preview shows that source and its output. In manual payment mode, sacrifices, life payments and abilities with other
 effects remain explicit payment choices. Native spending choices determine
 the exact mana receipt. Source preference has no setting.
 
 ### Manual mana sources
 
-A pending cast or activation payment offers useful fixed-source taps beside
-`PayCost`, which completes payment automatically from the resources left.
-A tap must make progress and preserve the announced costs and every saved
-payment; funded payments and payments needing every available source retain
-native trivial-decision skipping. These ordinary choices are on by default
-for every consumer. Source taps and direct taps (convoke, improvise, waterbend)
-share the `TapForCost` policy action with the permanent as focus; its
-`pays_directly` flag tells a tap that pays a pip itself from one that makes
-mana. The native Command verb for a source tap is `tap_for_mana`, distinct
-from waterbend. They do not expose undo, or production at priority unless a
-seat [asks for it](#mana-taps-at-priority-and-during-payment).
+Under the default `mana_payment="manual"` (with `mana_floats="off"`), a cast,
+activation or resolution payment opens a prompt only when the player can finish
+it in two distinguishable states. Simple tap-for-mana abilities — dual lands
+such as Kyoshi Village, any-color sources such as Birds of Paradise or Arcane
+Signet, Great Divide Guide grants, and restricted simple taps such as Jasmine
+Dragon Tea Shop or Hermitic Herbalist — follow the same rule as fixed-output
+lands.
+
+With Kyoshi Village and one Plains untapped, casting a `{1}{W}` spell finishes
+at once with no payment prompt. With four identical untapped Mountains for
+`{2}{R}`, or Kyoshi Village and two identical Plains for `{1}{G}`, the game
+likewise pays without prompting — tapping Kyoshi Village and one Plains,
+leaving the other Plains untapped.
+
+With Kyoshi Village and three identical untapped Plains for `{1}{W}`, choosing
+between the dual land and a Plains is a real difference, so the payment stops
+and offers one action per class of
+[indistinguishable](#indistinguishable-objects) useful sources beside `PayCost`:
+
+```text
+0  ActivateAbility  Tap Kyoshi Village for {G}/{W}
+1  TapForMana       Tap Plains for {W}
+2  PayCost          Pay the cost
+```
+
+Selecting action 0 taps Kyoshi Village and skips the `{G}`/`{W}` modal because
+either color finishes identically (one Plains tapped, two Plains untapped).
+Tapping Kyoshi Village toward `{1}{G}` with a Plains and a Forest left keeps
+the color modal, because `{G}` leaves a choice between Plains and Forest while
+`{W}` forces Forest.
+
+- **When a manual payment skips.** A pending mana payment completes
+  automatically when no non-simple mana ability, help action (convoke,
+  improvise, delve, waterbend) or extra float tap is available, automatic
+  payment can fund the cost, no choice source floats unspent mana, spent-color
+  counts cannot differ (converge spells keep the prompt when a source can
+  contribute more than one color), useful modes on each source share one spend
+  effect, and the useful sources produce exactly the mana needed. A payment
+  with spare sources can also skip when each useful tap produces one unit,
+  the number of taps is fixed, and every optional tap comes from a single
+  class of game-indistinguishable, unreferenced permanents. With Sol Ring and
+  two Mountains for Gray Ogre, **Pay the cost** leaves one Mountain untapped.
+  Tapping both Mountains before Sol Ring leaves one colorless mana floating.
+  Any distinguishing state — a land targeted on the stack,
+  enchanted, animated, carrying counters, or referenced by a trigger or
+  continuous effect — places that permanent in its own class and keeps the
+  prompt. Plain non-creature, non-animating lands played this turn are
+  interchangeable with earlier copies, while creatures, non-lands,
+  self-animating lands (such as Soulstone Sanctuary), and permanents with
+  `power_up` abilities stay distinct when summoning sickness or turn of entry
+  differs.
+- **What always stops.** Non-simple mana abilities (sacrifices such as
+  Treasure, life payments such as pain lands, mana fees such as filter lands,
+  counted taps, once-per-turn limits, non-mana side effects, or triggered mana
+  bonuses that alter a choice ability's output), extra taps under
+  `mana_floats="usable"` or `"all"`, and costs needing help taps keep the
+  payment open.
+- **Actions and wording.** When a payment stops, each class of
+  [indistinguishable](#indistinguishable-objects) useful permanents gets one
+  offer (its other copies travel in `InteractionOffer.aliases` on Academy
+  frames) and must make progress
+  while leaving the announced costs and saved payments payable. Fixed-source
+  taps stay `TapForMana` (policy action `TapForCost` with
+  `pays_directly=False`, Command verb `tap_for_mana`); simple choice-of-color
+  taps stay one `ActivateAbility` per ability rather than expanding into
+  per-color actions, keeping policy input and protocol shapes unchanged.
+  Native `action.description` labels simple choice taps to match fixed
+  sources — `"Tap <Name> for {G}/{W}"` for 2–4 explicit modes,
+  `"Tap <Name> for any color"` for all five single colors, and unit or
+  restriction detail when needed (such as
+  `"Tap Hermitic Herbalist for 2 mana (Lesson spells only)"`) — while
+  non-simple mana abilities keep `"Activate ability: <Name>"`.
+- **Color modals and resolution payments.** During an announced or resolution
+  payment with `skip_trivial` enabled, `Decision::ManaChoice` skips
+  automatically when every legal mode leaves the same remaining state or the
+  same determined completion with no floating surplus; deliberate floats at
+  priority always keep the color choice. Resolution payments (`TurnFaceUp`,
+  `Ward`, and other `Decision::Payment` prompts) share the same per-source tap
+  and forced/interchangeable skip rules for both basics and simple choice
+  sources: when only one outcome exists, turning a creature face up pays
+  immediately and ward offers only pay or decline; when there is a real source
+  choice, both fixed and simple choice taps are offered alongside pay (and
+  non-simple mana abilities such as Treasure remain explicit).
+
+These choices are on by default for every consumer. They do not expose undo,
+or production at priority unless a seat
+[asks for it](#mana-taps-at-priority-and-during-payment).
 
 ### Mana taps at priority and during payment
 
@@ -939,14 +1151,14 @@ source can trigger an ability.
 The engine inspects the listed actions without checking individual mana colors.
 Manual payment with usable or all floats also offers extra payment-time taps.
 
-With two untapped Forests and a creature spell in hand, the first seat's
-priority space is what it was, followed by one tap per source:
+With two identical untapped Forests and a creature spell in hand, the first
+seat's priority space is what it was, followed by one tap per class of
+[indistinguishable](#indistinguishable-objects) sources:
 
 ```text
 0  CastSpell     Badgermole Cub
 1  PassPriority
 2  TapForMana    Forest
-3  TapForMana    Forest
 ```
 
 Taking action 2 taps that Forest and adds `{G}` to the seat's pool. The seat
@@ -956,8 +1168,9 @@ or phase, as any floating mana does. There is no undo.
 
 - **The space only grows at its end.** Every action offered without the option
   keeps its index, `PassPriority` included; taps follow in battlefield order,
-  one per source, identical sources included (eight Forests are eight
-  actions). Under `action_overflow="first-legal"` the taps are the first
+  one per equivalence class (eight identical untapped Forests are one action; a
+  Forest that is enchanted, targeted or otherwise distinguished keeps its own
+  offer). Under `action_overflow="first-legal"` the taps are the first
   actions dropped.
 - **Manual payments.** During cast, activation and resolution payments,
   extra fixed-source taps follow the ordinary payment choices. A tap must
@@ -982,7 +1195,9 @@ or phase, as any floating mana does. There is no undo.
 - **Seat order and replay.** Both settings follow the chooser. Fixed-source
   taps and direct taps use the `TapForCost` policy action with the
   permanent as focus, told apart by `pays_directly`.
-  Choice-output abilities use their activation action. Omitting both fields
+  Choice-output abilities use their activation action. Both fixed-source taps
+  and mana-producing activated abilities set `Action.is_mana_ability` to
+  `True`, distinguishing mana abilities from non-mana plays. Omitting both fields
   produces the same native setup, game digest and recording bytes as explicit
   manual/off for both seats. Invalid values raise `ValueError`.
 
@@ -1022,7 +1237,7 @@ from another offer set raises `managym.AgentError` and returns no plan.
 | `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. |
 | `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost, or mana alone cannot pay a cost that taps or exiled cards may help pay. `explanation` names the choice; there are no sources. |
 | `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
-| `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability with its own fee. |
+| `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability (whether it has a color choice or its own fee). |
 
 The preview reads the cost as the payment owes it (`Payment.owed`). While a
 sacrifice, discard, exile or forage is still the payer's to choose, the state
@@ -1041,7 +1256,7 @@ exile.") until the payer's own taps and exiles leave a remainder mana covers.
 
 A cast offer, or the target that completes it, previews the spell's cost; a
 non-mana activated ability previews its fee; `PayCost` previews the pending
-payment. A source-tap offer previews tapping that source and then paying automatically,
+payment. A fixed source-tap offer previews tapping that source and then paying automatically,
 with the chosen source first. Each source carries its object reference, name
 and output; pools carry the six amounts and the restriction, spend-effect and
 combat-expiry classes of the mana in them.
@@ -1050,38 +1265,129 @@ This is an inspection API for Academy and tools. It adds no action,
 observation field or encoder column, and nothing in `Env.step`, `VectorEnv`,
 search or training calls it.
 
-### Previewing a whole combat declaration
+When choosing targets, a spell uses the colors and card types of the face being
+cast. An ability uses its source’s current characteristics, or its last known
+characteristics if the source has left. The engine checks each target again
+on resolution. Knight of Grace therefore permits its controller’s black
+spells and excludes an opponent’s black spells and abilities from black
+sources. Academy and the text observation show effective protection and
+qualified hexproof on permanents and hexproof on players.
 
-The engine declares attackers and blockers one creature at a time. Ask how a
-whole drafted declaration would be declared, without declaring any of it:
+### Interactive decisions (single and grouped)
+
+Multi-part decisions such as combat declarations and library arrangements still
+execute as sequential native `Action`s (`Game::step`, `Env.step(action: int)`),
+keeping RL/search action spaces, observations and replay digests unchanged.
+Above `Env.step`, `Env` exposes one unified interactive decision surface
+(`managym/src/flow/decision_group/`, typed models in `managym.decision_group`):
 
 ```python
-from managym.combat import CombatPlan, PlannedBlock, preview_combat
+from managym.decision_group import DeclareAttackersChoice, ScryChoice
 
-frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
-ask = preview_combat(env, viewer=frame.actor, revision=frame.revision,
-                     fingerprint=frame.fingerprint, plan=CombatPlan())
-ask.declarable          # every creature the declaration will ask about, in order
-plan = CombatPlan(attackers=[c.creature for c in ask.declarable[:2]])
-preview = preview_combat(env, viewer=frame.actor, revision=frame.revision,
-                         fingerprint=frame.fingerprint, plan=plan)
-preview.refused         # None, or the first creature refused and why
-[(s.action_index, s.revision) for s in preview.steps]
+decision = env.decision()  # defaults to current actor; None if terminal
+if decision is not None:
+    if decision.kind == "declare_attackers":
+        choice = DeclareAttackersChoice(
+            attackers=[c.item for c in decision.declarable[:2]]
+        )
+        preview = env.preview(choice, at=decision.address)
+        # preview.complete is True, preview.refused is None
+        # preview.outcome.attackers lists the declared attackers
+        # [(s.action_index, s.revision) for s in preview.steps] are the sequential steps
+        obs, reward, done, trunc, info = env.submit(choice, at=decision.address)
+    elif decision.kind == "scry":
+        choice = ScryChoice(
+            top=[decision.items[0].item],
+            bottom=[c.item for c in decision.items[1:]],  # top-most of bottom group first
+        )
+        obs, reward, done, trunc, info = env.submit(choice)
+    else:
+        # SingleDecision (or any single raw step via decision.offers):
+        obs, reward, done, trunc, info = env.submit(decision.offers[0].id)
 ```
 
-`Game::combat_preview` replays the engine's own per-creature answers to the
-plan on a clone (`managym/src/flow/combat_preview.rs`). Each step is one
-ordinary action at the decision it will be asked at, with that decision's
-revision and fingerprint; stepping them in order declares exactly the plan.
-Creatures with a single legal answer are answered by the engine without a
-step, as in play. A block plan names blocker → attacker pairs
-(`PlannedBlock`), and a blocker's `can_block` lists the attackers it may block
-from here. The plan is refused, with a reason, when a planned creature is
-never asked, a planned answer is not offered (a required block) or the
-finished declaration differs from the plan (a lone block of a creature with
-menace, which the engine removes once every blocker is declared).
-`declared_attackers` and `declared_blocks` are the declaration as the engine
-would finish it. During attacker selection both viewers can see the attackers
+Supported `Decision` kinds and grouped activation thresholds:
+
+| `kind` | Active when | Descriptor fields (besides `address`, `offers`) | `Choice` model and fields | `Outcome` fields |
+| --- | --- | --- | --- | --- |
+| `single` | any other decision, or below threshold | — | `int` (raw offer id) | `offer_id` |
+| `declare_attackers` | `>= 1` declarable creature | `declarable` (`AttackerItem`: `item`, `label`, `can_attack`, `must_attack`), `committed` (`PlannedAttack`) | `DeclareAttackersChoice(attackers)` (`PlannedAttack`: `entity`, `incarnation`, optional `defender`) | `attackers` (`PlannedAttack`) |
+| `declare_blockers` | `>= 1` declarable creature | `declarable` (`BlockerItem`: `item`, `label`, `can_block`, `must_block`), `committed` (`PlannedBlock`) | `DeclareBlockersChoice(blocks)` (`PlannedBlock`) | `blocks` |
+| `scry` | `>= 2` remaining cards | `items` (`DecisionCard`), `committed_top` (`DecisionCard`), `committed_bottom` (`DecisionCard`) | `ScryChoice(top, bottom)` | `top`, `bottom` |
+| `surveil` | `>= 2` remaining cards | `items` (`DecisionCard`), `committed_graveyard` (`DecisionCard`) | `SurveilChoice(graveyard)` | `graveyard`, `kept` |
+| `order_library` | `>= 2` remaining cards | `end` (`"top"` or `"bottom"`), `items` (`DecisionCard`), `committed` (`DecisionCard`) | `OrderLibraryChoice(order)` | `end`, `order` |
+| `partition_piles` | `>= 2` remaining cards | `items` (`DecisionCard`), `committed_face_up` (`DecisionCard`), `committed_face_down` (`DecisionCard`) | `PartitionPilesChoice(face_up)` | `face_up`, `face_down` |
+
+- **`env.decision(viewer=None)`** returns the active `Decision` for `viewer`
+  (defaulting to the current acting player), or `None` when the game is over or
+  `viewer` is not the chooser. Every `Decision` carries its optimistic-concurrency
+  `address` (`DecisionAddress(viewer, revision, fingerprint)`) and the raw
+  single-step legal `offers` (`list[Offer]`), where each `Offer` carries a
+  human-readable `label` (such as `"Play Mountain"`, `"Cast Gray Ogre"`,
+  `"Pass priority"`), its viewer-safe `source: SubjectRef | None`, and any
+  viewer-visible live in-zone folded copies in `aliases: list[SubjectRef]`
+  (omitted when empty; outside-game sideboard `LearnTakeLesson` copies stay in
+  `Game::action_aliases` for lowering) without changing
+  `semantic_decision_frame()` fingerprints. Halfway through raw
+  stepping a grouped decision, `env.decision()` returns the remaining undecided
+  items plus immutable `committed*` state (and drops to `SingleDecision` below
+  threshold).
+- **`env.preview(choice, *, at=None)`** is read-only: the live game's state
+  digest, RNG, revision, trace and pending decision do not change. `choice` is
+  either a single `int` offer id or a grouped `Choice`; `at` defaults to the
+  current decision's address and accepts an explicit `DecisionAddress` for
+  optimistic concurrency (raising `managym.AgentError` on stale/non-actor
+  address or mismatched choice kind). For attackers, each `AttackerItem.can_attack`
+  lists permanent defenders (planeswalkers); supply a
+  `PlannedAttack(entity=..., incarnation=..., defender=...)` to attack one, or
+  omit `defender` to attack the defending player. When
+  [indistinguishable](#indistinguishable-objects) creatures are declared, after
+  one declines to attack or block later identical copies are not offered that
+  choice; `env.preview` normalizes a combat choice onto the copies the engine
+  asks and resolves folded attacker targets, so drafting any subset of identical
+  creatures (such as the second and third of three identical tokens) succeeds
+  and `outcome.attackers` / `outcome.blocks` report the canonical copies
+  declared. A structurally incomplete
+  choice (for example, unplaced cards in `scry` or `order_library`) returns
+  `complete=False, refused=None, steps=[], outcome=None` without cloning.
+  Otherwise it clones the game with its `skip_trivial` setting, compiles each
+  step from the clone's own legal action space, and returns `DecisionPreview`
+  with `steps`, `complete`, `outcome` and optional `refused` (`DecisionRefusal`
+  carrying `item`, `label` and the engine's `reason`, such as a lone blocker on
+  a creature with menace or a skipped required attack/block).
+- **`env.submit(choice, *, at=None)`** commits the whole decision atomically
+  (all-or-nothing): it previews first, raises `managym.AgentError` without
+  mutating the live game if the choice is refused, incomplete or stale, and
+  otherwise steps all compiled sequential actions, drains `observation_events`,
+  and settles any built-in opponent policies so mixed-policy envs match manual
+  `env.step` identically. It returns `(obs, reward, done, trunc, info)`.
+- **Scry bottom order:** `ScryChoice.bottom` uses top-to-bottom reading order
+  (`bottom[0]` is drawn first among bottomed cards and `bottom[-1]` sits on the
+  very bottom of the library), matching `OrderLibraryChoice` with `end="bottom"`.
+- **Purity boundary:** A grouped choice covers consecutive steps of one decision
+  by one player. Between step `i` and step `i+1` (while the group is still
+  active), the compiler verifies that no `CardDrawn` or `CardRevealed` event
+  occurred, the RNG did not advance (catching any shuffle), and no unseen
+  hidden-zone object became visible to `viewer`. If a boundary trips mid-group,
+  preview stops with `complete=False, outcome=None` and `submit` refuses it.
+  Effects that fire after the final step exits the group — such as drawing a
+  card after Scry 2 resolves or revealing the face-up pile when `PartitionPiles`
+  transitions to `ChoosePile` — complete cleanly. Surveil finishes when its
+  graveyard picks commit; any following `order_library` is its own decision.
+- **Deprecations (`0.3.0`):** `Env.compound_offers`,
+  `Env.compound_commands_json`, `Env.structured_offers`, `Env.step_structured`,
+  `Env.step_legacy_submission`, `Env.structured_search_offers`,
+  `StructuredOfferSet`, `Env.combat_preview_json`, and
+  `managym.combat.preview_combat` emit `DeprecationWarning` and are scheduled
+  for removal in `0.3.0` in favor of `Env.decision` / `Env.preview` /
+  `Env.submit` and `Env.decision_surface` (`DecisionSurface`).
+
+### Combat declaration and damage rules
+
+Each offered block or decline can still complete a legal declaration satisfying
+the greatest possible number of requirements (CR 509.1b–c). Blocking a creature
+with menace commits at least two blockers. During attacker selection both
+viewers can see the attackers
 chosen so far. Raid becomes true for the attacking player when a nonempty
 declaration finishes and lasts through the turn, even if those creatures leave.
 Linden triggers for each white attacker her controller declares. With two white attackers
@@ -1090,8 +1396,6 @@ occurrences. A creature that enters attacking can deal combat damage. Its
 first declaration in a later combat still counts as its first attack for
 Aurelia. Leaving and returning starts a new attack history for that creature.
 Extra combats preserve raid and each creature’s history until the turn ends.
-The same address rules as payment previews apply, and the
-call is read-only in the same way.
 
 At the combat damage step, the attacking player assigns damage among the
 remaining blockers. Each choice names the attacker, the current blocker and
@@ -1110,6 +1414,19 @@ names while `Observation.from_json` continues to decode 0.2.x integer codes
 ([turn steps and Observation JSON](../docs/engine.md#turn-steps-and-observation-json)).
 Each permanent's `first_strike_participant` remembers whether it had first strike or
 double strike when the first step began, including after its abilities change.
+
+### Reading creature types and counted bonuses
+
+Taurean Mauler has every creature type in every zone. Master Piandao can
+reveal it as an Ally from the library. On the battlefield Dwynen counts it
+as an Elf, and Crossway Troublemakers grants it deathtouch and lifelink
+while it attacks. A type-setting effect can replace its creature types in
+layer 4. Removing its abilities in layer 6 leaves those types in place.
+
+Counted bonuses read the source's controller. Blanchwood Armor counts that
+player's Forests even when another player controls the enchanted creature.
+Tempest Djinn counts each basic Island its current controller controls.
+
 ### Reading power during combat
 
 Courageous Goblin and Ruby, Daring Tracker check for a creature with power
@@ -1127,3 +1444,29 @@ card returns. Bulk Up similarly reads the target's power at resolution. A
 creature at −2 power goes to −4, and flashback uses the same calculation.
 Bite Down uses the power of the creature dealing damage at resolution.
 If either target leaves and returns first, it deals no damage.
+
+### Ordering graveyard replacements
+
+With two Dryad Militants on the battlefield, discarding Lightning Bolt to pay
+for Seize the Spoils pauses before the card leaves the hand. Choose which
+Militant applies. The Bolt goes to exile and the same payment continues.
+A spell whose targets have all become illegal stays on the stack until its
+controller chooses the replacement. For a card in hand or library, its owner
+makes that choice.
+
+Progenitus and Darksteel Colossus reveal and shuffle into their owner's
+library when they would go to a graveyard. A milled Colossus stays in its
+library, and both viewers lose their knowledge of its position when the
+library is shuffled. Its old object reference expires. On the battlefield,
+losing all abilities removes the replacement.
+
+When Myojin of Night's Reach makes an opponent discard their hand, all its
+cards remain in hand until the replacement choices are complete. Wilt-Leaf
+Liege enters from that hand and still counts as discarded. Discarding the
+Liege to pay for your own spell puts it in the graveyard.
+
+Banner of Kinship asks for a creature type before it enters. Choose the
+alphabetical group, then the type. Both players can inspect the chosen type
+after entry. A changeling counts toward the fellowship counters and receives
+the bonus. Giada and Prime Speaker Zegana likewise count creatures already on
+the battlefield before a simultaneous entry.

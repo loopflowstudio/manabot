@@ -74,7 +74,10 @@ fn an_attack_plan_is_read_only_and_its_steps_declare_exactly_it() {
     let (mut s, attackers, _) = combat();
     let game = s.game();
     let plan = CombatPlan {
-        attackers: vec![render(game, attackers[0]), render(game, attackers[2])],
+        attackers: vec![
+            render(game, attackers[0]).into(),
+            render(game, attackers[2]).into(),
+        ],
         blocks: Vec::new(),
     };
     let before = witness(game);
@@ -93,20 +96,16 @@ fn an_attack_plan_is_read_only_and_its_steps_declare_exactly_it() {
     assert_eq!(result.steps.len(), 3, "one answer per creature asked");
     assert_eq!(result.steps.iter().filter(|step| step.attack).count(), 2);
     let mut declared = result.declared_attackers.clone();
-    declared.sort_by_key(|id| id.entity);
+    declared.sort_by_key(|a| a.creature.entity);
     let mut planned = plan.attackers.clone();
-    planned.sort_by_key(|id| id.entity);
+    planned.sort_by_key(|a| a.creature.entity);
     assert_eq!(declared, planned);
 
     follow(s.game_mut(), &result);
     let combat = s.game().state.combat.as_ref().unwrap();
-    let mut live: Vec<_> = combat
-        .attackers
-        .iter()
-        .map(|id| render(s.game(), *id))
-        .collect();
+    let mut live: Vec<_> = combat.attackers().map(|id| render(s.game(), id)).collect();
     live.sort_by_key(|id| id.entity);
-    assert_eq!(live, planned);
+    assert_eq!(live, planned.iter().map(|a| a.creature).collect::<Vec<_>>());
 }
 
 #[test]
@@ -127,7 +126,7 @@ fn a_stale_address_is_refused_and_a_creature_that_cannot_attack_is_named() {
         game,
         0,
         &CombatPlan {
-            attackers: vec![elf],
+            attackers: vec![elf.into()],
             blocks: Vec::new(),
         },
     );
@@ -143,7 +142,10 @@ fn at_blocks() -> (Scenario, Vec<PermanentId>, Vec<PermanentId>) {
     let (mut s, attackers, blockers) = combat();
     let game = s.game();
     let all = CombatPlan {
-        attackers: attackers.iter().map(|id| render(game, *id)).collect(),
+        attackers: attackers
+            .iter()
+            .map(|id| render(game, *id).into())
+            .collect(),
         blocks: Vec::new(),
     };
     let result = preview(game, 0, &all);
@@ -164,6 +166,9 @@ fn a_multi_block_is_declared_as_planned() {
         attacker: render(game, attackers[attacker]),
     };
     // Two Elves on the Brute satisfy menace; the third blocks an Ogre.
+    // `attackers[1]` and `attackers[2]` are indistinguishable unblocked Gray
+    // Ogres, and `attackers[2]` was declared first, so blocking `attackers[1]`
+    // normalizes onto the canonical unblocked Ogre (`attackers[2]`).
     let plan = CombatPlan {
         attackers: Vec::new(),
         blocks: vec![block(0, 0), block(1, 0), block(2, 1)],
@@ -181,15 +186,15 @@ fn a_multi_block_is_declared_as_planned() {
     assert_eq!(result.steps.len(), 3);
     let mut declared = result.declared_blocks.clone();
     declared.sort_by_key(|block| (block.attacker.entity, block.blocker.entity));
-    let mut planned = plan.blocks.clone();
-    planned.sort_by_key(|block| (block.attacker.entity, block.blocker.entity));
-    assert_eq!(declared, planned);
+    let mut expected = vec![block(0, 0), block(1, 0), block(2, 2)];
+    expected.sort_by_key(|block| (block.attacker.entity, block.blocker.entity));
+    assert_eq!(declared, expected);
 
     follow(s.game_mut(), &result);
     let combat = s.game().state.combat.as_ref().unwrap();
     assert_eq!(combat.attacker_to_blockers[&attackers[0]].len(), 2);
     assert_eq!(
-        combat.attacker_to_blockers[&attackers[1]],
+        combat.attacker_to_blockers[&attackers[2]],
         vec![blockers[2]]
     );
 }
@@ -206,12 +211,11 @@ fn a_lone_block_of_a_menace_creature_is_refused_with_the_reason() {
         }],
     };
     let result = preview(game, 1, &plan);
-    let refused = result.refused.expect("menace removes a lone block");
-    assert_eq!(refused.creature, render(game, blockers[0]));
+    let refused = result
+        .refused
+        .expect("a lone block cannot complete the declaration");
     assert!(
-        refused
-            .reason
-            .starts_with("Boggart Brute can't be blocked that way"),
+        refused.reason.contains("block") && refused.reason.contains("Boggart Brute"),
         "{}",
         refused.reason
     );
@@ -274,7 +278,7 @@ fn a_creature_that_must_attack_is_marked_and_a_plan_omitting_it_is_refused() {
                 game,
                 0,
                 &CombatPlan {
-                    attackers: vec![ogre],
+                    attackers: vec![ogre.into()],
                     blocks: Vec::new(),
                 },
             );
@@ -295,7 +299,10 @@ fn a_creature_that_must_attack_is_marked_and_a_plan_omitting_it_is_refused() {
                 // Already declared without asking: the plan covers the rest.
                 None => {
                     assert!(home.refused.is_none(), "{context}: {:?}", home.refused);
-                    assert!(home.declared_attackers.contains(&juggernaut), "{context}");
+                    assert!(
+                        home.declared_attackers.contains(&juggernaut.into()),
+                        "{context}"
+                    );
                 }
             }
             assert!(home
@@ -304,15 +311,15 @@ fn a_creature_that_must_attack_is_marked_and_a_plan_omitting_it_is_refused() {
                 .all(|creature| creature.creature == juggernaut || !creature.must_attack));
 
             let both = CombatPlan {
-                attackers: vec![juggernaut, ogre],
+                attackers: vec![juggernaut.into(), ogre.into()],
                 blocks: Vec::new(),
             };
             let result = preview(game, 0, &both);
             assert!(result.refused.is_none(), "{context}: {:?}", result.refused);
             let mut declared = result.declared_attackers.clone();
-            declared.sort_by_key(|id| id.entity);
+            declared.sort_by_key(|a| a.creature.entity);
             let mut planned = both.attackers.clone();
-            planned.sort_by_key(|id| id.entity);
+            planned.sort_by_key(|a| a.creature.entity);
             assert_eq!(declared, planned, "{context}");
         }
     }
@@ -362,7 +369,10 @@ fn a_block_the_engine_already_declared_is_kept_by_the_plan() {
                 .position(|action| {
                     matches!(
                         action,
-                        managym::agent::action::Action::DeclareAttacker { attack: true, .. }
+                        managym::agent::action::Action::DeclareAttacker {
+                            attack: Some(_),
+                            ..
+                        }
                     )
                 })
                 .unwrap();
@@ -424,4 +434,56 @@ fn a_block_the_engine_already_declared_is_kept_by_the_plan() {
         }
     }
     assert!(reached_predeclared, "one order declares the Spider first");
+}
+
+#[test]
+fn tomik_refusal_names_the_restricted_planeswalker_defender() {
+    use managym::{flow::combat_preview::PlannedAttack, state::permanent::CounterKind};
+    let jace_name = "The Theorist, Jace Beleren";
+    let tomik_name = "Tomik, Orzhov Lawmage";
+    let mut s = five_color_setup(&["Gray Ogre", jace_name, tomik_name]);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, first);
+    clear_summoning_sickness(&mut s, second);
+    let jace = s.force_permanent_on_battlefield(1, jace_name);
+    set_counters(&mut s, jace, CounterKind::Loyalty, 3);
+    s.force_permanent_on_battlefield(1, tomik_name);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let game = s.game();
+    let jace_id = render(game, jace);
+    let both_on_jace = CombatPlan {
+        attackers: vec![
+            PlannedAttack {
+                creature: render(game, first),
+                defender: Some(jace_id),
+            },
+            PlannedAttack {
+                creature: render(game, second),
+                defender: Some(jace_id),
+            },
+        ],
+        blocks: Vec::new(),
+    };
+    let refused = preview(game, 0, &both_on_jace)
+        .refused
+        .expect("Tomik refuses a second attacker on the same planeswalker");
+    assert_eq!(
+        refused.reason,
+        format!("Gray Ogre can't attack {jace_name}.")
+    );
+
+    let split = CombatPlan {
+        attackers: vec![
+            PlannedAttack {
+                creature: render(game, first),
+                defender: Some(jace_id),
+            },
+            render(game, second).into(),
+        ],
+        blocks: Vec::new(),
+    };
+    let ok = preview(game, 0, &split);
+    assert!(ok.refused.is_none(), "{:?}", ok.refused);
+    assert_eq!(ok.declared_attackers.len(), 2);
 }

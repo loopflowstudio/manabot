@@ -109,7 +109,10 @@ def test_history_dropout_is_training_treatment() -> None:
     rows = [_input(), replace(_input(), history_features=(99.0,))]
     labels = torch.tensor([[3, 0, 0], [3, 0, 0]])
     training_scores = model.log_prob(rows, labels)
-    assert training_scores[0].item() == training_scores[1].item()
+    # Dropped history is exactly zero; batched rows can still differ in float order.
+    assert training_scores[0].item() == pytest.approx(
+        training_scores[1].item(), rel=1e-6
+    )
 
 
 def test_exact_world_contract_with_known_minima() -> None:

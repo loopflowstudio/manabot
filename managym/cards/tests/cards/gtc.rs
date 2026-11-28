@@ -174,7 +174,11 @@ fn aurelia_that_entered_attacking_still_gets_a_first_declaration() {
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
     let token = s
         .game_mut()
-        .create_token("token.soldier", PlayerId(0), true)
+        .create_token_attacking(
+            "token.soldier",
+            PlayerId(0),
+            managym::flow::combat::AttackTarget::Player(PlayerId(1)),
+        )
         .unwrap();
     let object = card_of(&s, token);
     s.game_mut().state[object].become_copy_of(&printed, &[]);
@@ -262,4 +266,25 @@ fn foundations_5e_boros_charm() {
     settle(&mut s);
     assert!(keywords(&s, theirs).has(Keyword::DoubleStrike));
     assert!(!keywords(&s, ogre).has(Keyword::DoubleStrike));
+}
+
+#[test]
+fn prime_speaker_zegana_counts_greatest_other_power_then_draws_by_its_own() {
+    use crate::support::{
+        game::five_color_setup,
+        inspect::{counters, permanent_named},
+        play::enter_and_settle,
+    };
+    use managym::state::{game_object::PlayerId, zone::ZoneType};
+    for (other, count, draw) in [(None, 0, 1), (Some("Wilt-Leaf Liege"), 4, 6)] {
+        let mut s = five_color_setup(&["Prime Speaker Zegana", "Wilt-Leaf Liege"]);
+        if let Some(name) = other {
+            s.force_permanent_on_battlefield(0, name);
+        }
+        let before = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+        enter_and_settle(&mut s, "Prime Speaker Zegana");
+        let prime = permanent_named(&s, "Prime Speaker Zegana");
+        assert_eq!(counters(&s, prime), count);
+        s.assert_zone_size(0, ZoneType::Hand, before + draw);
+    }
 }

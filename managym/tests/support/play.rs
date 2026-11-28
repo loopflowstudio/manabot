@@ -29,8 +29,8 @@ use crate::support::{
         force_new_card_in_hand, move_to_hand, Scenario,
     },
     inspect::{
-        can_cast, card_of, find_owned_card, has_action, library, library_card, now, offered_cards,
-        permanent_named, tapped, top_spell, zone_of,
+        can_cast, card_of, find_object_action_index, find_owned_card, has_action, library,
+        library_card, now, offered_cards, permanent_named, tapped, top_spell, zone_of,
     },
 };
 
@@ -81,7 +81,7 @@ impl Scenario {
             ActionSpaceKind::DeclareAttacker => space
                 .actions
                 .iter()
-                .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+                .position(|action| matches!(action, Action::DeclareAttacker { attack: None, .. }))
                 .unwrap_or(space.actions.len().saturating_sub(1)),
             ActionSpaceKind::DeclareBlocker => space
                 .actions
@@ -148,9 +148,19 @@ impl Scenario {
     // -----------------------------------------------------------------------
 
     pub fn choose_target(&mut self, target: Target) -> bool {
-        let Some(index) = self.action_space().actions.iter().position(
-            |action| matches!(action, Action::ChooseTarget { target: t, .. } if *t == target),
-        ) else {
+        let direct = |action: &Action| matches!(action, Action::ChooseTarget { target: t, .. } if *t == target);
+        let alias_object = match target {
+            Target::Permanent(id) => self.game.state.permanents[id].as_ref().map(|p| p.object),
+            Target::GraveyardCard(obj) => Some(obj),
+            _ => None,
+        };
+        let index = match alias_object {
+            Some(obj) => find_object_action_index(self, obj, direct, |a| {
+                matches!(a, Action::ChooseTarget { .. })
+            }),
+            None => self.action_space().actions.iter().position(direct),
+        };
+        let Some(index) = index else {
             return false;
         };
         self.step_action(index);
@@ -227,7 +237,15 @@ impl Scenario {
             .action_space()
             .actions
             .iter()
-            .position(|action| matches!(action, Action::DeclareAttacker { attack: true, .. }))
+            .position(|action| {
+                matches!(
+                    action,
+                    Action::DeclareAttacker {
+                        attack: Some(_),
+                        ..
+                    }
+                )
+            })
             .expect("attack action should exist");
         self.step_action(attack_index);
     }
@@ -238,7 +256,7 @@ impl Scenario {
             .action_space()
             .actions
             .iter()
-            .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+            .position(|action| matches!(action, Action::DeclareAttacker { attack: None, .. }))
             .expect("decline-attack action should exist");
         self.step_action(decline_index);
     }
@@ -284,7 +302,7 @@ pub fn attack_with_group(s: &mut Scenario, attackers: &[PermanentId]) {
     let mut declared = 0;
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         let index = s.action_space().actions.iter().position(|action| {
-            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if attackers.contains(permanent))
+            matches!(action, Action::DeclareAttacker { permanent, attack: Some(_), .. } if attackers.contains(permanent))
         });
         match index {
             Some(index) => {
@@ -325,6 +343,36 @@ pub fn choose_mode(s: &mut Scenario, wanted: usize) {
         .position(|a| matches!(a, Action::ChooseMode { mode, .. } if *mode == wanted))
         .unwrap();
     s.step_action(index);
+}
+
+/// Follow the published labels through a grouped name or creature-type decision.
+pub fn choose_entry_value(s: &mut Scenario, value: &str) {
+    loop {
+        let frame = s.game().semantic_decision_frame().unwrap();
+        let leaf = frame.offers.iter().position(|offer| {
+            ["Name ", "Choose "]
+                .iter()
+                .any(|prefix| offer.label.strip_prefix(prefix) == Some(value))
+        });
+        if let Some(index) = leaf {
+            s.step_action(index);
+            return;
+        }
+        let group = frame
+            .offers
+            .iter()
+            .position(|offer| {
+                let range = offer
+                    .label
+                    .strip_prefix("Names ")
+                    .or_else(|| offer.label.strip_prefix("Types "));
+                range
+                    .and_then(|r| r.split_once(" through "))
+                    .is_some_and(|(lo, hi)| lo <= value && value <= hi)
+            })
+            .unwrap_or_else(|| panic!("missing {value} in {:?}", frame.offers));
+        s.step_action(group);
+    }
 }
 
 /// Submit a native spending offer matching its public description. A color
@@ -370,13 +418,26 @@ pub fn spend_colorless(s: &mut Scenario) {
     panic!("colorless payment did not complete");
 }
 
+fn find_object_action(
+    s: &Scenario,
+    object: ObjectId,
+    predicate: impl Fn(&Action) -> bool,
+    same_kind: impl Fn(&Action) -> bool,
+) -> usize {
+    find_object_action_index(s, object, predicate, same_kind)
+        .unwrap_or_else(|| panic!("missing action for {object:?}: {:?}", s.action_space()))
+}
+
 /// Select the card behind `object` wherever it is offered.
 pub fn select_card(s: &mut Scenario, object: ObjectId) {
     let object = now(s, object);
-    choose(
+    let i = find_object_action(
         s,
-        |a| matches!(a,Action::SelectCard {object: selected,..} if *selected==object),
+        object,
+        |a| matches!(a, Action::SelectCard { object: selected, .. } if *selected == object),
+        |a| matches!(a, Action::SelectCard { .. }),
     );
+    s.step_action(i);
 }
 
 /// A copy of the scenario in which the offered action at `index` was taken:
@@ -409,13 +470,25 @@ pub fn fork_selecting(s: &Scenario, object: ObjectId) -> Scenario {
 /// Tap `source` for mana while a cost is being paid or at priority. A source
 /// whose mana carries a rider confirms its one output.
 pub fn tap_for_mana(s: &mut Scenario, source: PermanentId) {
-    choose(s, |a| {
-        matches!(
-            a,
-            Action::ActivateAbility { permanent, .. } | Action::TapForMana { permanent, .. }
-                if *permanent == source
-        )
-    });
+    let object = s.game().state.permanents[source].as_ref().unwrap().object;
+    let i = find_object_action(
+        s,
+        object,
+        |a| {
+            matches!(
+                a,
+                Action::ActivateAbility { permanent, .. } | Action::TapForMana { permanent, .. }
+                    if *permanent == source
+            )
+        },
+        |a| {
+            matches!(
+                a,
+                Action::ActivateAbility { .. } | Action::TapForMana { .. }
+            )
+        },
+    );
+    s.step_action(i);
     if s.action_space().kind == ActionSpaceKind::Modal {
         choose(s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
     }
@@ -461,8 +534,8 @@ pub fn target_opponent(s: &mut Scenario) {
 /// returns: the spell, or the hand card while a casting choice is pending.
 pub fn cast(s: &mut Scenario, name: &str) -> ObjectId {
     let id = move_to_hand(s, name);
-    cast_card(s, id);
-    now(s, id)
+    let actual = cast_card_returning(s, id);
+    now(s, actual)
 }
 
 pub fn cast_clone_as(s: &mut Scenario, creature: PermanentId) -> ObjectId {
@@ -474,14 +547,26 @@ pub fn cast_clone_as(s: &mut Scenario, creature: PermanentId) -> ObjectId {
     clone
 }
 
-/// Cast `id` from whichever zone currently permits it, refreshing priority.
-pub fn cast_card(s: &mut Scenario, id: ObjectId) {
+fn cast_card_returning(s: &mut Scenario, id: ObjectId) -> ObjectId {
     s.game_mut().scenario_refresh_priority().unwrap();
     let id = now(s, id);
-    choose(
+    let i = find_object_action(
         s,
+        id,
         |a| matches!(a, Action::CastSpell { object, .. } if *object == id),
+        |a| matches!(a, Action::CastSpell { .. }),
     );
+    let actual = match s.action_space().actions[i] {
+        Action::CastSpell { object, .. } => object,
+        _ => id,
+    };
+    s.step_action(i);
+    actual
+}
+
+/// Cast `id` from whichever zone currently permits it, refreshing priority.
+pub fn cast_card(s: &mut Scenario, id: ObjectId) {
+    cast_card_returning(s, id);
 }
 
 /// Refresh priority, then whether `id` may be cast.
@@ -493,13 +578,20 @@ pub fn castable(s: &mut Scenario, id: ObjectId) -> bool {
 /// Play player 0's library copy of a land with the ordinary land action.
 pub fn play_land(s: &mut Scenario, name: &str) -> PermanentId {
     let id = move_to_hand(s, name);
-    choose(
+    let i = find_object_action(
         s,
+        id,
         |a| matches!(a, Action::PlayLand { object, .. } if *object == id),
+        |a| matches!(a, Action::PlayLand { .. }),
     );
+    let actual = match s.action_space().actions[i] {
+        Action::PlayLand { object, .. } => object,
+        _ => id,
+    };
+    s.step_action(i);
     s.game()
         .state
-        .permanent_of(now(s, id))
+        .permanent_of(now(s, actual))
         .expect("land entered")
 }
 
@@ -663,8 +755,8 @@ pub fn sacrifices_itself_to_destroy_an_artifact(name: &str, land: &str) {
 pub fn cast_owned(s: &mut Scenario, name: &str) -> ObjectId {
     let object = find_owned_card(s, 0, name);
     let object = s.game_mut().move_object(object, ZoneType::Hand);
-    cast_card(s, object);
-    now(s, object)
+    let actual = cast_card_returning(s, object);
+    now(s, actual)
 }
 
 /// Take the first offered cast action.
@@ -696,10 +788,17 @@ pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
     if s.action_space().kind == ActionSpaceKind::Priority {
         s.game_mut().scenario_refresh_priority().unwrap();
     }
-    choose(s, |a| {
-        matches!(a, Action::ActivateAbility { permanent, ability_index, .. }
-        if *permanent == source && *ability_index == index)
-    });
+    let object = s.game().state.permanents[source].as_ref().unwrap().object;
+    let i = find_object_action(
+        s,
+        object,
+        |a| {
+            matches!(a, Action::ActivateAbility { permanent, ability_index, .. }
+                if *permanent == source && *ability_index == index)
+        },
+        |a| matches!(a, Action::ActivateAbility { ability_index, .. } if *ability_index == index),
+    );
+    s.step_action(i);
 }
 
 /// Activate ability `index` of a card in its hand or graveyard, refreshing
@@ -707,10 +806,16 @@ pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
 pub fn activate_card(s: &mut Scenario, source: ObjectId, index: usize) {
     s.game_mut().scenario_refresh_priority().unwrap();
     let source = now(s, source);
-    choose(s, |a| {
-        matches!(a, Action::ActivateCardAbility { object, ability_index, .. }
-        if *object == source && *ability_index == index)
-    });
+    let i = find_object_action(
+        s,
+        source,
+        |a| {
+            matches!(a, Action::ActivateCardAbility { object, ability_index, .. }
+                if *object == source && *ability_index == index)
+        },
+        |a| matches!(a, Action::ActivateCardAbility { ability_index, .. } if *ability_index == index),
+    );
+    s.step_action(i);
 }
 
 /// Activate the first offered ability of a permanent, refreshing priority only
@@ -719,10 +824,14 @@ pub fn activate_first(s: &mut Scenario, id: PermanentId) {
     if s.action_space().kind == ActionSpaceKind::Priority {
         s.game_mut().scenario_refresh_priority().unwrap();
     }
-    choose(
+    let object = s.game().state.permanents[id].as_ref().unwrap().object;
+    let i = find_object_action(
         s,
-        |a| matches!(a,Action::ActivateAbility {permanent,..} if *permanent==id),
+        object,
+        |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == id),
+        |a| matches!(a, Action::ActivateAbility { .. }),
     );
+    s.step_action(i);
 }
 
 /// Activate ability `index` of player 0's first permanent with this name,
@@ -961,8 +1070,14 @@ pub fn cast_profile(
 ) {
     s.game_mut().scenario_refresh_priority().unwrap();
     let object = now(s, object);
-    choose(
+    let i = find_object_action(
         s,
-        |action| matches!(action, Action::CastSpell { object: legal, profile: offered, .. } if *legal == object && *offered == profile),
+        object,
+        |action| {
+            matches!(action, Action::CastSpell { object: legal, profile: offered, .. }
+                if *legal == object && *offered == profile)
+        },
+        |action| matches!(action, Action::CastSpell { profile: offered, .. } if *offered == profile),
     );
+    s.step_action(i);
 }

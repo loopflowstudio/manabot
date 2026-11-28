@@ -5,8 +5,9 @@ use managym_state::{
         TriggerCondition, TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        LayerValue, PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, EntryChoiceKind, Keyword,
+        Keywords, LayerValue, PrintedCharacteristics, ReplacementEffect, StaticAbility,
+        StaticContinuous, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -16,6 +17,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        adaptive_automaton(),
         rune_scarred_demon(),
         swiftfoot_boots(),
         sundial_of_the_infinite(),
@@ -190,6 +192,44 @@ fn angelic_destiny() -> CardDefinition {
                 intervening_if: None,
                 effects: vec![Effect::return_to_hand(ObjectSelector::This)],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn adaptive_automaton() -> CardDefinition {
+    let text_box = "As this creature enters, choose a creature type.\nThis creature is the chosen type in addition to its other types.\nOther creatures you control of the chosen type get +1/+1.";
+    CardDefinition {
+        key: "m12.adaptive_automaton",
+        scryfall_id: "79e42ead-df6e-4181-ae2b-a2abfc3f1d7c",
+        printed: PrintedCharacteristics {
+            name: "Adaptive Automaton".into(),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            subtypes: vec!["Construct".into()],
+            power: Some(2),
+            toughness: Some(2),
+            replacement_effects: vec![ReplacementEffect::AsEntersChoose {
+                kind: EntryChoiceKind::CreatureType,
+                look_at_opponent_hand: false,
+            }],
+            statics: vec![
+                StaticAbility::HasChosenCreatureType,
+                StaticAbility::Continuous(StaticContinuous {
+                    scope: StaticScope::OtherYouControl(CardPredicate {
+                        chosen_subtype: true,
+                        ..CardPredicate::creature()
+                    }),
+                    condition: None,
+                    characteristic_defining: false,
+                    modifications: vec![Modification::ModifyPt {
+                        power: 1.into(),
+                        toughness: 1.into(),
+                    }],
+                }),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

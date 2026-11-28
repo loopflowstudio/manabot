@@ -1,8 +1,8 @@
 //! Amonkhet.
-use managym_state::ability::{Ability, Effect, TriggerSubject};
+use managym_state::ability::{Ability, Actor, Effect, TriggerSubject};
 use managym_state::card::{
-    CardDefinition, CardType, CardTypes, Keyword, Keywords, PowerCda, PrintedCharacteristics,
-    StaticAbility, StaticScope,
+    CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerCount, LayerValue,
+    PrintedCharacteristics, StaticAbility, StaticScope,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
@@ -24,12 +24,16 @@ fn enigma_drake() -> CardDefinition {
             subtypes: vec!["Drake".into()],
             toughness: Some(4),
             keywords: Keywords::of(&[Keyword::Flying]),
-            statics: vec![StaticAbility::CharacteristicPower(
-                PowerCda::GraveyardMatching(Box::new(CardPredicate {
-                    card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                    ..Default::default()
+            statics: vec![StaticAbility::cda(vec![Modification::SetBasePt {
+                power: Some(LayerValue::count(LayerCount::Graveyard {
+                    who: Actor::You,
+                    predicate: CardPredicate {
+                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
+                        ..Default::default()
+                    },
                 })),
-            )],
+                toughness: None,
+            }])],
             text_box: text_box.into(),
             ..Default::default()
         },

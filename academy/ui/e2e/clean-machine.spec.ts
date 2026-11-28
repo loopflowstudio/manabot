@@ -6,7 +6,9 @@ import path from 'node:path';
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
-const RESUME_STORAGE_KEY = 'etude.gui.resume';
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 const PUBLIC_PROTOCOLS = new Set(['http:', 'https:', 'ws:', 'wss:']);
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 const RECEIPT_PATH = process.env.ACADEMY_CLEAN_RECEIPT;
@@ -17,8 +19,7 @@ const LAUNCH_STARTED_MS = Number(process.env.ACADEMY_CLEAN_START_MS ?? '0');
 const PLAYABLE_BUDGET_MS = 90_000;
 // Hang guard shared with scripts/verify-clean-machine.
 const READY_LIMIT_MS = 600_000;
-// A move advances the board only after the Search 64 opponent replies; its
-// flat Monte Carlo rollouts take tens of seconds on a hosted runner.
+// A move advances the board only after the opponent replies.
 const OPPONENT_REPLY_LIMIT_MS = 120_000;
 
 interface AssetPackReference {
@@ -116,20 +117,10 @@ async function updateSequence(page: Page): Promise<number> {
   return Number(await page.locator('main').getAttribute('data-update-seq'));
 }
 
-async function resumeIdentity(page: Page): Promise<string | null> {
-  const identity = await page.evaluate((key) => {
-    const stored = sessionStorage.getItem(key);
-    if (!stored) return null;
-    const record = JSON.parse(stored);
-    const fields = [record.session_id, record.resume_token, record.play_session_id];
-    if (!fields.every((field) => typeof field === 'string' && field.length > 0)) {
-      throw new Error('Incomplete resume identity');
-    }
-    return JSON.stringify(fields);
-  }, RESUME_STORAGE_KEY);
-  // Compare credentials without printing them in a failing assertion. The saved
-  // frame and presentation cursor are recovery state, not session identity.
-  return identity === null ? null : sha256(identity);
+/** The game this page plays, as its board and its address name it. */
+async function gameOnBoard(page: Page): Promise<string | null> {
+  const game = await page.locator('main').getAttribute('data-game');
+  return game && new URL(page.url()).searchParams.get('game') === game ? game : null;
 }
 
 async function chooseDeterministicAction(page: Page): Promise<void> {
@@ -155,23 +146,60 @@ async function chooseDeterministicAction(page: Page): Promise<void> {
   await expect(actions.first()).toBeEnabled({ timeout: OPPONENT_REPLY_LIMIT_MS });
 }
 
-async function visibleSignature(page: Page): Promise<string> {
+interface VisibleState {
+  deckNames: string;
+  board: string;
+  prompt: string;
+  actions: string[];
+}
+
+const TRANSIENT_BOARD_SELECTORS = [
+  '[data-testid="presentation-stage"]',
+  '[data-testid="death-travel"]',
+  '[data-testid="death-chip"]',
+  '[data-testid="damage-dealt"]',
+  '[data-testid="player-damage"]',
+  '[data-testid="stop-delta"]',
+  // Printed card faces and art fallbacks populate asynchronously from
+  // /api/card-faces and /api/card-art independently of the WebSocket frame.
+  '.no-art',
+  '.type',
+  '.cost',
+  '.bar-cost',
+].join(', ');
+
+async function visibleState(page: Page): Promise<VisibleState> {
+  const gameBoard = page.getByTestId('game-board');
+  // An opponent turn auto-walks past steps (`data-board="step"`); return to the
+  // live frame without acting so both snapshots sign the authoritative board.
+  if ((await gameBoard.getAttribute('data-board')) !== 'frame') {
+    await page.keyboard.press('Escape');
+    await expect(gameBoard).toHaveAttribute('data-board', 'frame');
+  }
+  await page.evaluate(
+    () =>
+      document.fonts.ready.then(
+        () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+      ),
+  );
   const prompts = page.getByTestId('decision-prompt');
   const prompt = (await prompts.count()) > 0 ? normalize(await prompts.first().textContent()) : '';
-  const board = await page.getByTestId('game-board').evaluate((element) => {
+  const board = await gameBoard.evaluate((element, selectors) => {
     const canonical = element.cloneNode(true) as HTMLElement;
-    canonical.querySelector('[data-testid="presentation-stage"]')?.remove();
+    for (const node of canonical.querySelectorAll(selectors)) {
+      node.remove();
+    }
     return canonical.textContent;
-  });
-  const payload = {
+  }, TRANSIENT_BOARD_SELECTORS);
+  return {
     deckNames: normalize(await page.getByTestId('deck-names').textContent()),
-    // Optional presentation theater is transient; the proof signs the
-    // authoritative board, prompt, and legal-action projection underneath it.
+    // Optional presentation theater, transient move marks / damage counters,
+    // and async card-face/art decorations do not survive a reload; the proof
+    // checks the authoritative board, prompt, and legal-action projection.
     board: normalize(board),
     prompt,
     actions: (await page.getByTestId('action-option').allTextContents()).map(normalize),
   };
-  return sha256(JSON.stringify(payload));
 }
 
 function toolVersion(executable: string): string {
@@ -259,17 +287,19 @@ test('clean command reaches pinned play and reloads without public network', asy
       .poll(launcherReadyRecord, { timeout: READY_LIMIT_MS, intervals: [100] })
       .not.toBeNull();
   }
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
-  await expect(page.getByTestId('opponent-select')).toHaveValue('search-64');
+  // The default opponent is the hosted policy when it can be fetched; this proof
+  // plays the built-in Random so it never depends on that download.
+  await page.getByTestId('opponent-select').selectOption('random');
   await expect(page.getByTestId('selected-deck-hero')).toHaveAttribute('data-deck-id', 'ur_lessons');
   await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id', 'gw_allies');
   await page.getByRole('button', { name: 'Start game' }).first().click();
 
   const board = page.getByTestId('game-board');
-  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Search 64 · GW Allies', {
+  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Random · GW Allies', {
     timeout: 15_000,
   });
   await expect(page.getByTestId('action-option').first()).toBeEnabled({ timeout: 30_000 });
@@ -281,20 +311,28 @@ test('clean command reaches pinned play and reloads without public network', asy
   await expect.poll(() => latestBrowserPack(page), { timeout: 15_000 }).toEqual(expected);
 
   await chooseDeterministicAction(page);
-  const credentialsBefore = await resumeIdentity(page);
-  expect(credentialsBefore, 'resume credentials were not installed').not.toBeNull();
-  const signatureBefore = await visibleSignature(page);
+  const gameBefore = await gameOnBoard(page);
+  expect(gameBefore, 'the address does not name the game on the board').not.toBeNull();
+  const stateBefore = await visibleState(page);
 
   await page.reload();
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
-  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Search 64 · GW Allies');
+  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Random · GW Allies');
   await expect(page.getByTestId('action-option').first()).toBeEnabled({ timeout: 30_000 });
-  const credentialsAfter = await resumeIdentity(page);
-  const signatureAfter = await visibleSignature(page);
-  expect(credentialsAfter).toBe(credentialsBefore);
-  expect(signatureAfter).toBe(signatureBefore);
+  const gameAfter = await gameOnBoard(page);
+  expect(gameAfter).toBe(gameBefore);
+  let stateAfter: VisibleState | null = null;
+  await expect
+    .poll(
+      async () => {
+        stateAfter = await visibleState(page);
+        return stateAfter;
+      },
+      { timeout: 15_000 },
+    )
+    .toEqual(stateBefore);
   await expect.poll(() => latestBrowserPack(page), { timeout: 15_000 }).toEqual(expected);
 
   await expect(board.getByTestId('board-card').first()).toBeVisible();
@@ -336,12 +374,12 @@ test('clean command reaches pinned play and reloads without public network', asy
       within_budget: elapsedToPlayableMs < PLAYABLE_BUDGET_MS,
     },
     experience: {
-      opponent: 'search-64',
+      opponent: 'random',
       hero_deck: 'ur_lessons',
       villain_deck: 'gw_allies',
       asset_pack: expected,
-      same_session_after_reload: credentialsAfter === credentialsBefore,
-      same_visible_state_after_reload: signatureAfter === signatureBefore,
+      same_session_after_reload: gameAfter === gameBefore,
+      same_visible_state_after_reload: JSON.stringify(stateAfter) === JSON.stringify(stateBefore),
       post_reload_action_accepted: true,
       public_requests: publicRequests,
     },

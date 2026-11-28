@@ -149,3 +149,59 @@ fn checked_in_schema_is_generated_from_the_rust_authority() {
     generated.push('\n');
     assert_eq!(CHECKED_IN_SCHEMA, generated);
 }
+
+#[test]
+fn permanent_details_round_trip_alongside_historical_permanents() {
+    use managym::experience::LegacyPermanentView;
+    use serde_json::{from_value, json, to_value};
+
+    let mut row = json!({
+        "id": 7, "name": "Platypus-Bear", "controller_id": 1, "damage": 0,
+        "summoning_sick": false, "tapped": false, "power": 3, "toughness": 3,
+        "base_power": 3, "base_toughness": 3, "plus1_counters": 0,
+        "keywords": ["defender"],
+    });
+    let round_trip = |row: &serde_json::Value| {
+        to_value(from_value::<LegacyPermanentView>(row.clone()).unwrap()).unwrap()
+    };
+    assert_eq!(round_trip(&row), row);
+    row["attacks_despite_defender"] = json!(true);
+    row["restrictions"] = json!([{"kind": "cant_block"}]);
+    row["keyword_grants"] = json!({"menace": {"source": "Sokka"}});
+    row["keyword_abilities"] = json!([{"label": "Prowess", "granted": true, "source": "Sokka"}]);
+    assert_eq!(round_trip(&row), row);
+    row["unknown_detail"] = json!(true);
+    assert!(from_value::<LegacyPermanentView>(row).is_err());
+}
+
+#[test]
+fn interaction_offer_aliases_omit_when_empty_and_round_trip_when_present() {
+    use managym::experience::InteractionOffer;
+    use serde_json::{from_value, json, to_value};
+
+    let source: serde_json::Value = serde_json::from_str(FIXTURE).expect("fixture JSON");
+    let offer_json = source["recovery"]["frame"]["offers"][0].clone();
+    assert!(offer_json.get("aliases").is_none());
+    let plain: InteractionOffer =
+        from_value(offer_json.clone()).expect("offer without aliases parses");
+    assert!(plain.aliases.is_empty());
+    assert_eq!(to_value(&plain).unwrap(), offer_json);
+
+    let mut with_aliases = offer_json;
+    with_aliases["aliases"] = json!([
+        { "kind": "object", "id": { "entity": 42, "incarnation": 0 } }
+    ]);
+    let parsed: InteractionOffer =
+        from_value(with_aliases.clone()).expect("offer with aliases parses");
+    assert_eq!(parsed.aliases.len(), 1);
+    assert_eq!(
+        parsed.aliases[0],
+        managym::experience::SubjectRef::Object {
+            id: managym::experience::ObjectRenderId {
+                entity: 42,
+                incarnation: 0,
+            }
+        }
+    );
+    assert_eq!(to_value(&parsed).unwrap(), with_aliases);
+}

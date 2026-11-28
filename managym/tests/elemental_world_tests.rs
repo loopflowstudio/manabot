@@ -23,7 +23,7 @@ fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
     }
     // Includes the retained deliberate green Prism float and manual source decisions.
     let prefix = [
-        2, 2, 0, 0, 4, 3, 3, 5, 2, 0, 2, 2, 2, 6, 2, 3, 3, 0, 1, 0, 1, 0, 4, 0, 0, 8, 0, 0, 0, 0,
+        2, 2, 0, 0, 4, 2, 2, 5, 1, 0, 2, 2, 2, 6, 2, 3, 2, 0, 1, 0, 1, 0, 4, 0, 0, 8, 0, 0, 0, 0,
         1, 4, 6, 2, 2, 5, 0, 0,
     ];
     for action in prefix {

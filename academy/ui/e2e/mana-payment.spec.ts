@@ -1,6 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { Command, ExperienceFrame } from '../src/lib/types';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 // Payment on the board: the automatic payer's plan is drawn on the lands it
 // would tap, the primary button reads it, and tapping a land yourself is the
 // authority's own offer. Previewing never sends a Command.
@@ -10,6 +13,7 @@ declare global {
 }
 async function track(page: Page): Promise<void> {
   await page.addInitScript(() => {
+    localStorage.setItem('academy.auto-tap', 'off');
     window.__mana = { frame: null, commands: [], previews: 0 };
     const Native = window.WebSocket;
     class PaymentSocket extends Native {
@@ -55,7 +59,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
   test(`pay through the plan drawn on the lands at ${width}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
     await track(page);
-    await page.goto('/?setup=1');
+    await page.goto(SETUP);
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
@@ -94,7 +98,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     await waitForRevision(page, before);
     await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'PAY_OR_NOT');
     const primary = page.getByTestId('primary-action');
-    await expect(primary).toHaveText(/^Pay \{1\}\{R\}/);
+    await expect(primary).toHaveText(/^Auto pay \{1\}\{R\}/);
     await expect(primary).toHaveAccessibleName(/\{1\}\{R\} · \S+/);
     await expect(planned(page)).toHaveCount(2);
     await expect(page.getByTestId('decision-hint')).toContainText('Space pays automatically, or click lands');
@@ -114,26 +118,27 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     await expect(planned(page)).toHaveCount(2);
     expect(await planned(page).evaluateAll(cards => cards.map(card => card.getAttribute('data-object-id')).sort())).toEqual(plannedIds);
 
-    // Pointing at a land outside the plan previews "tap this, then the rest"; clicking it is the authority's tap.
-    // The first land outside the plan tops its pile, so its left edge is the
-    // part only it covers: further right, a copy under it shares the point
-    // and the hover raises whichever the browser hits first. The land and the
-    // point are read together, since a second read can name another card.
+    // Pointing at an alias copy in a pile of identical lands previews tapping
+    // the canonical copy the engine will tap; clicking the alias sends that
+    // canonical offer and taps the canonical copy.
+    const mountainOffer = (await frame(page)).offers.find(offer => offer.label === 'Tap Mountain for {R}')!;
+    const canonicalMountainId = String(mountainOffer.subjects![0].object.display_id);
     const { ownId, x, y } = await page.evaluate(() => {
       const land = [...document.querySelectorAll<HTMLElement>('.you .row.support [data-testid=board-card].legal:not([data-payment-source])')]
         .find(card => card.dataset.cardName === 'Mountain')!;
       const box = land.getBoundingClientRect();
       return { ownId: land.dataset.objectId!, x: box.left + 6, y: box.top + box.height / 2 };
     });
+    expect(mountainOffer.aliases?.some(alias => alias.kind === 'object' && String(alias.id.entity) === ownId)).toBe(true);
     await page.mouse.move(x, y);
-    await expect(page.locator(`[data-object-id="${ownId}"][data-payment-source="1"]`)).toHaveCount(1);
-    await expect(primary).toHaveText(/^Pay \{1\}\{R\}\s*Space$/);
+    await expect(page.locator(`[data-object-id="${canonicalMountainId}"][data-payment-source="1"]`)).toHaveCount(1);
+    await expect(primary).toHaveText(/^Auto pay \{1\}\{R\}\s*Space$/);
     before = (await frame(page)).revision;
     await clickCard(page.locator(`[data-object-id="${ownId}"]`));
     await waitForRevision(page, before);
-    expect((await page.evaluate(() => window.__mana.commands.at(-1)!)).offer_id).toBeDefined();
+    expect((await page.evaluate(() => window.__mana.commands.at(-1)!)).offer_id).toBe(mountainOffer.id);
     await page.mouse.move(2, 2);
-    await expect(page.locator(`[data-object-id="${ownId}"]`)).toHaveAttribute('aria-label', /tapped/);
+    await expect(page.locator(`[data-object-id="${canonicalMountainId}"]`)).toHaveAttribute('aria-label', /tapped/i);
 
     // Space pays what remains along the plan the button reads.
     const after = await frame(page);
@@ -145,9 +150,37 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
       before = after.revision;
       await page.keyboard.press('Space');
       await waitForRevision(page, before);
-      for (const id of remaining) await expect(page.locator(`[data-object-id="${id}"]`)).toHaveAttribute('aria-label', /tapped/);
+      for (const id of remaining) await expect(page.locator(`[data-object-id="${id}"]`)).toHaveAttribute('aria-label', /tapped/i);
     }
     await expect(page.getByTestId('stack-entry').filter({ hasText: 'Lightning Strike' })).toHaveCount(1);
     await expect(planned(page)).toHaveCount(0);
+  });
+}
+
+for (const [mode, deck] of [
+  ['All', '16 Island'],
+  ['Only when usable', '4 Island\n4 Consider'],
+]) {
+  test(`a human can float mana from the chosen land at priority with ${mode}`, async ({page}) => {
+    await page.goto(SETUP);
+    const taps = page.getByRole('combobox', {name: 'Mana floats'});
+    await expect(taps.locator('option:checked')).toHaveText('Off');
+    await taps.selectOption({label: mode});
+    const payment = page.getByRole('combobox', {name: 'Mana payment'});
+    await expect(payment.locator('option:checked')).toHaveText('Manual');
+    await payment.selectOption('auto');
+    await page.getByText('Import decklist files', {exact: true}).click();
+    await page.getByLabel('Use imported decks for the next game').check();
+    await page.getByLabel('Your deck source', {exact: true}).fill(deck);
+    await page.getByLabel('Opponent deck source', {exact: true}).fill('16 Mountain');
+    await page.getByRole('button', {name: 'Start game', exact: true}).click();
+    await page.getByTestId('action-option').filter({ hasText: 'Keep hand' }).click();
+    const actions = page.getByTestId('action-option');
+    await actions.filter({hasText: 'Play Island'}).first().click();
+    const tap = actions.filter({hasText: 'Tap Island for mana'});
+    await expect(tap).toBeEnabled();
+    await page.reload();
+    await tap.click();
+    await expect(tap).toHaveCount(0);
   });
 }

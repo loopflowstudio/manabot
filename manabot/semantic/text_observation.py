@@ -34,9 +34,23 @@ from managym.decision_memory import (
     DecisionReference,
     read_records,
 )
+from managym.enums import ZoneEnum
 
 REPRESENTATION_VERSION = "manabot-text-10"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
+_SOURCE_CARD_TYPES = frozenset(
+    (
+        "artifact",
+        "battle",
+        "creature",
+        "enchantment",
+        "instant",
+        "kindred",
+        "land",
+        "planeswalker",
+        "sorcery",
+    )
+)
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
     "untap",
@@ -95,6 +109,7 @@ _STAGES = frozenset(
         "opening_entry",
         "priority",
         "targets",
+        "target_shares",
         "announcement",
         "additional_cost",
         "payment",
@@ -113,9 +128,12 @@ _STAGES = frozenset(
         "resolution_payment",
         "resolution_mode",
         "name_card",
+        "choose_creature_type",
         "discard",
         "select_milled",
         "select_cards",
+        "entry_choice",
+        "order_entry_choices",
         "order_replacement",
         "order_melded_cards",
         "manifest_dread",
@@ -126,10 +144,13 @@ _STAGES = frozenset(
         "trigger_mode",
         "revealed_hand",
         "split_revealed",
+        "partition_piles",
+        "choose_pile",
         "free_cast",
         "linked_exile",
         "distribute_counters",
         "keep_creatures",
+        "keep_permanents",
         "retarget",
         "resolution_cast",
         "surveil",
@@ -224,9 +245,14 @@ _OBLIGATIONS = (
     "order replacements",
     "enter as a copy",
     "spend mana",
-    "order melded cards",
-    "manifest dread",
     "assign combat damage",
+    "manifest dread",
+    "order melded cards",
+    "order entry choices",
+    "choose as a permanent enters",
+    "partition piles",
+    "choose a pile",
+    "choose what an entering attacker attacks",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -245,6 +271,7 @@ _DELAYED_EVENTS = (
     "its controller's matching spell",
     "the upkeep",
     "its controller's end step",
+    "creatures to attack",
 )
 
 
@@ -348,6 +375,8 @@ def _turn_history(player: managym.Player) -> str:
         )
     if history.warped_this_turn:
         parts.append("cast a spell for warp")
+    if count := history.loyalty_abilities_activated:
+        parts.append(f"activated {count} loyalty abilit{'y' if count == 1 else 'ies'}")
     if amount := history.life_lost:
         parts.append(f"lost {amount} life")
     if amount := history.mana_spent_casting:
@@ -456,10 +485,12 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "LoseAllAbilities": "loses all abilities",
         "Firebending": f"firebending {effect.amount}",
         "CantBeBlocked": "can't be blocked",
+        "CantBeCountered": "can't be countered",
         "CantBlock": "can't block",
         "DoesntUntap": "doesn't untap during its controller's untap step",
         "Saddled": "saddled",
         "CantActivateAbilities": "its activated abilities can't be activated",
+        "MustBeBlocked": "must be blocked if able",
         "MustBeBlockedByAllAble": "all creatures able to block it do so",
         "ExileIfWouldDie": "exiled instead if it would die",
         "PreventCombatDamage": "combat damage dealt to it is prevented",
@@ -471,8 +502,10 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         ),
         "SkipsCombatPhasesNextTurn": "skips all combat phases of their next turn",
         "LifeTotalCantChange": "life total can't change",
+        "Hexproof": "has hexproof",
         "ProtectionFromEverything": "protection from everything",
         "PhasedOut": "phased out (treated as though it doesn't exist)",
+        "Control": "controlled by the effect’s controller",
         "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
         "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
         "HasAbilitiesOfSource": (
@@ -639,12 +672,25 @@ class _Renderer:
             and not first
         ):
             raise TextEncodingError("action missing required visible focus")
+        # A simple choice-of-color mana tap is the same act as tapping a fixed
+        # source, and reads like one: the native description ("Tap Kyoshi
+        # Village for {G}/{W}") marks it and already names its ability.
+        simple_choice_tap = bool(
+            kind == "activate_ability"
+            and action.description
+            and action.description.startswith("Tap ")
+            and len(focus) == 1
+        )
+        if simple_choice_tap:
+            kind = "tap_for_mana"
         if kind == "declare_attacker":
-            if action.declared is None or len(focus) != 1:
+            if action.declared is None or len(focus) not in (1, 2):
                 raise TextEncodingError("attack declaration missing")
             label = (
                 "Attack with " if action.declared else "Do not attack with "
             ) + first
+            if len(focus) == 2:
+                label = f"Attack {focus[1]} with {first}"
         elif kind == "declare_blocker":
             if len(focus) not in (1, 2):
                 raise TextEncodingError("unsupported blocker focus")
@@ -678,7 +724,9 @@ class _Renderer:
             label = verb + (" " + ", ".join(focus) if focus else "")
         # Attack/block verbs already express participation. Keep other declared
         # values and every present selector; omit absent optional metadata.
-        details = _selectors(action.mode_index, action.ability_index)
+        details = _selectors(
+            action.mode_index, None if simple_choice_tap else action.ability_index
+        )
         if action.declared is not None and kind not in (
             "declare_attacker",
             "declare_blocker",
@@ -773,6 +821,8 @@ class _Renderer:
             details.append(
                 "waiting ends at this turn's cleanup"
                 if relation.this_turn
+                else "waiting ends at your next turn"
+                if getattr(relation, "until_next_turn", False)
                 else "no stated expiry"
             )
         if relation.cost is not None:
@@ -793,8 +843,10 @@ class _Renderer:
         for ordinal, target in enumerate(relation.targets, 1):
             legal = target.legal_at_resolution_start
             eligibility = "unknown" if legal is None else _yes(legal)
+            division = getattr(target, "division", 0)
+            share = f"; assigned {division}" if division else ""
             details.append(
-                f"target {ordinal}, clause {target.clause + 1}: {self.fact_reference(target.reference)}; "
+                f"target {ordinal}, clause {target.clause + 1}: {self.fact_reference(target.reference)}{share}; "
                 f"Legal when resolution began: {eligibility}"
             )
         if relation.context is not None:
@@ -826,6 +878,9 @@ class _Renderer:
             )
         if relation.triggering_amount and not relation.trigger_damage:
             details.append(f"triggering amount {relation.triggering_amount}")
+        division_remaining = getattr(relation, "division_remaining", 0)
+        if division_remaining:
+            details.append(f"remaining division {division_remaining}")
         if relation.resolutions_this_turn:
             details.append(
                 f"ability resolutions this turn {relation.resolutions_this_turn}"
@@ -889,6 +944,12 @@ class _Renderer:
                     + "."
                 )
             for pooled in player.pooled_mana_classes:
+                if pooled.expiry == "end_of_turn":
+                    expiry_text = "; expires at end of turn."
+                elif pooled.expiry == "end_of_combat" or pooled.combat:
+                    expiry_text = "; expires at end of combat."
+                else:
+                    expiry_text = "; expires at step end."
                 lines.append(
                     "Of the mana above: "
                     + ", ".join(
@@ -902,11 +963,7 @@ class _Renderer:
                         else ""
                     )
                     + (f"; puts {pooled.effect}" if pooled.effect else "")
-                    + (
-                        "; expires at end of combat."
-                        if pooled.combat
-                        else "; expires at step end."
-                    )
+                    + expiry_text
                 )
             for source, kind in player.spent_graveyard_types:
                 grantor = self.names.get(source, f"departed permanent {source}")
@@ -917,6 +974,8 @@ class _Renderer:
                     f"from elsewhere, until {self.name(player.hand_only_until)} "
                     "begins a turn."
                 )
+            if player.hexproof:
+                lines.append("Has hexproof.")
             if player.no_maximum_hand_size:
                 lines.append("Has no maximum hand size for the rest of the game.")
             if player.keeps_red_mana:
@@ -973,9 +1032,16 @@ class _Renderer:
         lines: list[str] = []
         for card in state.agent_cards + state.opponent_cards:
             characteristics = card.characteristics
+            if card.zone == ZoneEnum.COMMAND:
+                lines.append(
+                    f"{self.name(card.id)} [command zone], controlled by {self.name(card.owner_id)}. {characteristics.text_box}"
+                )
+                continue
             optional = _type_flags(characteristics.card_types)
             if keywords := _keywords(characteristics.keywords):
                 optional += f"; keywords {keywords}"
+            if characteristics.printed_loyalty is not None:
+                optional += f"; printed loyalty {characteristics.printed_loyalty}"
             if card.face_down:
                 optional += (
                     "; foretold, face down (hidden from other players)"
@@ -986,6 +1052,8 @@ class _Renderer:
                 optional += f"; announced X {card.x}"
             if card.from_battlefield_this_turn:
                 optional += "; put into the graveyard from the battlefield this turn"
+            elif card.put_into_graveyard_this_turn:
+                optional += "; put into the graveyard this turn"
             for kind, count in sorted(card.counters.items()):
                 optional += f"; {kind.replace('_', ' ')} counters {count}"
             for permission in card.cast_permissions:
@@ -1045,6 +1113,18 @@ class _Renderer:
         for permanent in state.agent_permanents + state.opponent_permanents:
             characteristics = permanent.characteristics
             optional = ""
+            if permanent.blocked:
+                optional += "; blocked"
+            if (
+                permanent.entry_controller_id is not None
+                and permanent.entry_controller_id != permanent.controller_id
+            ):
+                entered_under = (
+                    "your"
+                    if permanent.entry_controller_id == state.agent.id
+                    else f"{self.name(permanent.entry_controller_id)}'s"
+                )
+                optional += f"; entered under {entered_under} control"
             if permanent.first_strike_participant:
                 optional += "; participated in the first-strike damage step"
             if permanent.attacking:
@@ -1053,10 +1133,16 @@ class _Renderer:
                 optional += f"; colors {', '.join(permanent.colors) or 'colorless'}"
             if permanent.keyword_counter_timestamps:
                 optional += f"; keyword counter timestamps {permanent.keyword_counter_timestamps}"
+            if permanent.chosen:
+                optional += f"; chosen {permanent.chosen}"
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
             if permanent.exhausted_abilities:
                 optional += f"; exhaust abilities used {permanent.exhausted_abilities}"
+            if characteristics.printed_loyalty is not None:
+                optional += f"; printed loyalty {characteristics.printed_loyalty}"
+            if permanent.loyalty_activated_this_turn:
+                optional += "; activated a loyalty ability this turn"
             if permanent.once_each_turn_used:
                 optional += (
                     "; once-each-turn abilities used this turn "
@@ -1101,8 +1187,19 @@ class _Renderer:
             parts.append(f"creature types set to {types}")
         if permanent.is_granted_land:
             parts.append("land through an effect")
+        if permanent.attacked_permanent is not None:
+            parts.append(f"attacking {self.name(permanent.attacked_permanent)}")
         if permanent.blocking is not None:
             parts.append(f"blocking {self.name(permanent.blocking)}")
+        for ability, qualities in (
+            ("hexproof", permanent.hexproof_from),
+            ("protection", permanent.protection_from),
+        ):
+            for quality in qualities:
+                label = (
+                    f"{quality} sources" if quality in _SOURCE_CARD_TYPES else quality
+                )
+                parts.append(f"{ability} from {label}")
         if permanent.abilities_lost:
             parts.append("has lost all abilities")
         if permanent.transforms:
@@ -1200,6 +1297,8 @@ class _Renderer:
                 optional += f"; power {definition.power}"
             elif definition.toughness is not None:
                 optional += f"; toughness {definition.toughness}"
+            if definition.printed_loyalty is not None:
+                optional += f"; printed loyalty {definition.printed_loyalty}"
             if definition.subtypes:
                 optional += f"; subtypes {', '.join(definition.subtypes)}"
             if keywords := _keywords(definition.keywords):
@@ -1352,6 +1451,8 @@ class _Renderer:
             spell = ""
             if (card := item.characteristics) is not None:
                 keywords = _keywords(card.keywords)
+                if card.printed_loyalty is not None:
+                    details.append(f"printed loyalty {card.printed_loyalty}")
                 spell = (
                     f" Spell: owner {self.name(item.owner_id)}; copy {_yes(item.is_copy)}; "
                     f"power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; "
@@ -1382,6 +1483,13 @@ class _Renderer:
                 f"Announcing this {context.announcing.replace('_', ' ')}: "
                 "it is on the stack until its costs are paid."
             )
+        if context.stage in {
+            "partition_piles",
+            "choose_pile",
+            "target_shares",
+            "retarget",
+        }:
+            lines.extend(context.pending)
         if context.chosen_mode is not None:
             lines.append(f"Chosen mode: {context.chosen_mode + 1}.")
         if context.targets:

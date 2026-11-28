@@ -172,6 +172,10 @@ pub struct PlayerTurnHistory {
     pub nonland_permanents_left: u32,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub warped_this_turn: bool,
+    /// Loyalty abilities this player activated (CR 606), wherever their
+    /// sources are now.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub loyalty_abilities_activated: u32,
 }
 
 /// A kind of bending (CR 701.65–701.67 and firebending, CR 702.189); its
@@ -253,6 +257,18 @@ impl DamageHistory {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// Visit every `ObjectId` (source or permanent recipient) recorded in this
+    /// turn's damage history.
+    pub(crate) fn visit_objects(&self, mut visit: impl FnMut(ObjectId)) {
+        for DamagePair(source, recipient) in &self.0 {
+            visit(*source);
+            match recipient {
+                DamageRecipient::Permanent(object) => visit(*object),
+                DamageRecipient::CombatPlayer(_) => {}
+            }
+        }
+    }
 }
 
 /// Used once-per-turn grants, ordered by recipient so a viewer can read the
@@ -277,6 +293,11 @@ impl UsedTriggerGrants {
     }
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+    pub(crate) fn visit_objects(&self, mut visit: impl FnMut(ObjectId)) {
+        for (source, _) in &self.0 {
+            visit(*source);
+        }
     }
 }
 
@@ -314,12 +335,13 @@ pub struct TurnState {
     pub spells_cast: [Vec<RecordedCast>; 2],
     /// Each player's history this turn, by player index. Resets every turn.
     pub history: [PlayerTurnHistory; 2],
-    /// Graveyard objects that were put there from the battlefield this turn
-    /// (Brought Back), as the exact graveyard incarnation: a card that leaves
-    /// its graveyard is a new object and no longer qualifies (CR 400.7).
+    /// Graveyard objects put there this turn, paired with whether they came
+    /// from the battlefield (Brought Back vs Abyssal Harvester), as the exact
+    /// graveyard incarnation: leaving the graveyard mints a new object that
+    /// no longer qualifies (CR 400.7).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
-    pub graveyard_from_battlefield: Vec<ObjectId>,
+    pub graveyard_arrivals: Vec<(ObjectId, bool)>,
 
     /// Positive damage to permanents and combat damage to players this turn.
     #[serde(skip_serializing_if = "DamageHistory::is_empty")]
@@ -365,6 +387,13 @@ pub struct TurnState {
 }
 
 impl TurnState {
+    /// Earlier casts by this player, bounded by the exact stack appearance.
+    pub fn casts_before(&self, caster: PlayerId, spell: ObjectId) -> Option<&[RecordedCast]> {
+        let casts = &self.spells_cast[caster.0];
+        let index = casts.iter().position(|cast| cast.object == spell)?;
+        Some(&casts[..index])
+    }
+
     pub fn creature_died_this_turn(&self) -> bool {
         self.history.iter().any(|seat| seat.creatures_died > 0)
     }
@@ -410,7 +439,7 @@ impl TurnState {
             attacks_this_turn: Vec::new(),
             damage_pairs: Default::default(),
             history: Default::default(),
-            graveyard_from_battlefield: Vec::new(),
+            graveyard_arrivals: Vec::new(),
             ability_resolutions_this_turn: BTreeMap::new(),
             ability_triggers_this_turn: BTreeMap::new(),
             used_trigger_grants: UsedTriggerGrants::default(),
@@ -424,6 +453,22 @@ impl TurnState {
             turn_based_actions_complete: false,
             cleanup_priority: false,
         }
+    }
+
+    pub fn record_graveyard_arrival(&mut self, object: ObjectId, from_battlefield: bool) {
+        self.graveyard_arrivals.push((object, from_battlefield));
+    }
+
+    pub fn in_graveyard_this_turn(&self, object: ObjectId) -> bool {
+        self.graveyard_arrivals
+            .iter()
+            .any(|(arrival, _)| *arrival == object)
+    }
+
+    pub fn in_graveyard_from_battlefield(&self, object: ObjectId) -> bool {
+        self.graveyard_arrivals
+            .iter()
+            .any(|(arrival, from_battlefield)| *arrival == object && *from_battlefield)
     }
 
     pub fn current_phase_kind(&self) -> PhaseKind {
@@ -561,7 +606,7 @@ impl TurnState {
         self.damage_pairs.0.clear();
         self.attacks_this_turn.clear();
         self.history = Default::default();
-        self.graveyard_from_battlefield.clear();
+        self.graveyard_arrivals.clear();
         self.spells_cast = [Vec::new(), Vec::new()];
         self.ability_resolutions_this_turn.clear();
         self.ability_triggers_this_turn.clear();

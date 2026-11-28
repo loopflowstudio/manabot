@@ -1,8 +1,16 @@
-import { tableSnapshot } from './fixtures/table';
+import { gameReply } from './fixtures/game';
 import { expect, test, type Page } from '@playwright/test';
 import positionsJson from '../../../managym/academy/fixtures/choice-navigation-opening-v1.json' with { type: 'json' };
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
+// Retained openings pay by hand; Auto-tap would submit their payments before the test reads them.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('academy.auto-tap', 'off'));
+});
 
 test.beforeEach(({ page }) => { page.on('dialog', dialog => dialog.accept()); });
 
@@ -30,12 +38,13 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
     accepted_commands: [],
     replay_cursor: frame.revision,
   };
+  const game = gameReply();
   await page.routeWebSocket('**/ws/play', socket => {
     socket.onMessage(raw => {
       const message = JSON.parse(String(raw));
       if (message.type === 'new_game' || message.type === 'resume') {
-        socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection,
-          actions: [], recovery, session_id: 'navigation', resume_token: 'navigation' }));
+        socket.send(JSON.stringify({ type: 'observation', ...game, data: frame.projection,
+          actions: [], recovery }));
       } else if (message.type === 'command') {
         commands.push(message.command);
         // Exercise the existing recovery path without claiming mocked acceptance.
@@ -46,7 +55,7 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
       }
     });
   });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', family);
@@ -55,10 +64,11 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
 
 const FAMILIES = ['CHOOSE_TARGET', 'DISCARD', 'LEARN', 'DECLARE_BLOCKER', 'PAY_OR_NOT'] as const;
 
-/** Where the board draws an offer besides its rail row: a card, a player, a prompt button or the tray. */
+/** Where the board draws an offer besides its rail row: a card, a player, the primary button or the tray; a prompt button stands in while Choices is folded. */
 function drawn(page: Page, offer: { id: number; label: string }, number: number) {
   return page.locator([
     `[data-testid=board-card][aria-label*="${offer.label} (${number})"]`,
+    `[data-testid=board-card][data-offer-count]:not([data-offer-count="1"])[aria-label*="${offer.label}"]`,
     `[data-testid=player-target][aria-label*="${offer.label} (${number})"]`,
     `[data-testid=primary-action][data-offer-id="${offer.id}"]`,
     `[data-testid=prompt-action][data-offer-id="${offer.id}"]`,
@@ -74,9 +84,15 @@ for (const family of FAMILIES) {
     await expect(page.getByTestId('legal-choice-count')).toContainText(String(frame.offers.length));
     expect(await page.getByTestId('action-option').evaluateAll(rows => rows.map(row => Number(row.getAttribute('data-offer-id')))))
       .toEqual(frame.offers.map(offer => offer.id));
+    // The open list shows each choice once: no button repeats a row under it.
+    await expect(page.getByTestId('prompt-action')).toHaveCount(0);
+    await page.getByTestId('choices-toggle').click();
+    await expect(page.getByTestId('action-option')).toHaveCount(0);
     for (const [index, offer] of frame.offers.entries()) {
       expect(await drawn(page, offer, index + 1).count(), offer.label).toBeGreaterThanOrEqual(1);
     }
+    await page.getByTestId('choices-toggle').click();
+    await expect(page.getByTestId('action-option')).toHaveCount(frame.offers.length);
     // Pointing and inspecting send nothing.
     await page.getByTestId('board-card').first().hover();
     expect(commands).toEqual([]);
@@ -98,11 +114,14 @@ for (const family of FAMILIES) {
   });
 }
 
-test('Learn draws Lessons from outside the game in the tray, and declining stays a button', async ({ page }) => {
+test('Learn draws Lessons from outside the game in the tray, and declining is a row, or a button while Choices is folded', async ({ page }) => {
   const commands = await installPosition(page, 'LEARN');
   const frame = positions.LEARN.frame as ExperienceFrame;
   const lessons = frame.offers.filter(offer => offer.action_type === 'LEARN_TAKE_LESSON');
   await expect(page.getByTestId('tray').getByTestId('board-card')).toHaveCount(lessons.length);
+  await expect(page.getByTestId('action-option').filter({ hasText: 'Decline Learn' })).toHaveCount(1);
+  await expect(page.getByTestId('prompt-action')).toHaveCount(0);
+  await page.getByTestId('choices-toggle').click();
   await expect(page.getByTestId('prompt-action').filter({ hasText: 'Decline Learn' })).toBeVisible();
   // A click on the Learn spell never declines it.
   await expect(page.getByTestId('stack-entry').locator('xpath=self::*[contains(@class, "legal")]')).toHaveCount(0);
@@ -145,7 +164,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
       window.__choiceNavigation = state;
       window.WebSocket = TrackedSocket;
     }, position.config);
-    await page.goto('/?setup=1');
+    await page.goto(SETUP);
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
     await expect(page.getByTestId('game')).toBeVisible();

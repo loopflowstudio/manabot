@@ -3,6 +3,8 @@ import prefix from '../../../managym/academy/fixtures/learn-demo-opening-v1.json
 
 for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) test(`Learn on the board: every answer a row, lessons in the tray, reconnect, ${outcome}`, async ({ page }) => {
   await page.addInitScript((config) => {
+    // The recorded opening pays by hand; Auto-tap would submit its payment before the test reads it.
+    localStorage.setItem('academy.auto-tap', 'off');
     const state = { commands: [] as unknown[], sockets: [] as WebSocket[], frame: null as any };
     const Native = window.WebSocket;
     class TrackedSocket extends Native {
@@ -37,7 +39,7 @@ for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) 
   await expect.poll(() => page.evaluate(() => (window as any).__learn.frame?.revision)).toBe(0);
   for (const step of prefix.prefix) {
     const button = page.locator(`[data-testid="action-option"][data-offer-id="${step.offer_id}"]`);
-    await expect(button).toHaveAttribute('aria-label', step.label);
+    await expect(button).toHaveAttribute('data-action-description', step.label);
     const revision = await page.evaluate(() => (window as any).__learn.frame.revision);
     await button.click();
     await expect.poll(() => page.evaluate(() => (window as any).__learn.frame.revision)).toBeGreaterThan(revision);

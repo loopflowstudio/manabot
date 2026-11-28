@@ -16,6 +16,11 @@
 //!
 //! Entry point: [`record_names`].
 
+use std::{
+    collections::{BTreeSet, HashSet},
+    sync::LazyLock,
+};
+
 #[cfg(test)]
 use crate::state::card::SpellProfile;
 use crate::{
@@ -27,10 +32,13 @@ use crate::{
     },
     cards::{
         content_pack::default_content_pack,
-        tokens::{name_value, TokenKind},
+        tokens::{catalog_tokens, name_value, TokenKind},
     },
     state::{
-        card::Keyword, mana::Color, permanent::CounterKind, predicate::CardPredicate,
+        card::{Keyword, SourceQuality},
+        mana::Color,
+        permanent::CounterKind,
+        predicate::CardPredicate,
         subtype::subtypes,
     },
 };
@@ -121,11 +129,19 @@ pub fn record_names() -> Vec<RecordName> {
     }
     out.push(record(Token, "CopyEffect", None));
     out.push(record(Token, POOLED_MANA, None));
+    out.push(variant("StaticAbility::HexproofFrom"));
+    out.push(variant("StaticAbility::Protection"));
+    for quality in SourceQuality::ALL {
+        out.push(variant(&quality.token_name()));
+    }
     out.push(record(Token, WARD, None));
     out.push(record(Token, PLAY_GRANT, None));
     out.push(record(Token, PLAY_GRANT_SOURCE, None));
     out.push(record(Token, SPENT_TYPE, None));
     let pack = default_content_pack();
+    for candidate in pack.name_candidates().iter() {
+        out.push(record(Name, &candidate.name, None));
+    }
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));
         let json = serde_json::to_value(definition).expect("serializable definition");
@@ -141,6 +157,33 @@ pub fn record_names() -> Vec<RecordName> {
     out.sort_by(|a, b| (a.namespace, &a.name).cmp(&(b.namespace, &b.name)));
     out.dedup();
     out
+}
+
+/// Exact rows in a catalog policy with decision memory disabled.
+pub(crate) static PROGRAM_VOCABULARY: LazyLock<HashSet<(u16, i32)>> = LazyLock::new(|| {
+    let catalog = catalog_tokens(default_content_pack()).expect("default token catalog");
+    catalog
+        .token_kind
+        .into_iter()
+        .zip(catalog.token_value)
+        .chain(
+            record_names()
+                .into_iter()
+                .filter(|entry| !entry.name.starts_with("DecisionMemory::"))
+                .filter_map(|entry| entry.token),
+        )
+        .collect()
+});
+
+/// Distinct missing pairs in diagnostic order. Numeric literals carry their own value.
+#[doc(hidden)]
+pub fn missing_program_tokens(tokens: &[(u16, i32)]) -> BTreeSet<(u16, i32)> {
+    let vocabulary = &*PROGRAM_VOCABULARY;
+    tokens
+        .iter()
+        .copied()
+        .filter(|token| !TokenKind::of(token.0).is_numeric() && !vocabulary.contains(token))
+        .collect()
 }
 
 /// Runtime-only programs have no printed card span from which to discover
@@ -163,6 +206,17 @@ fn execution_names(out: &mut Vec<RecordName>) {
         add(TokenKind::Text, name);
     }
     add(TokenKind::Variant, "CostComponent::Discard");
+    // Variable loyalty costs are supported before a printed ability uses one.
+    add(TokenKind::Variant, "LoyaltyCost::MinusX");
+    // These modifications are record names. Their bodies also emit closing tokens.
+    add(TokenKind::Structure, "/Modification::AddTypes");
+    add(TokenKind::Structure, "/Modification::AddColors");
+    add(TokenKind::Structure, "/Modification::ModeChosen");
+    add(TokenKind::Variant, "DamageKind::Combat");
+    // A changeling's last known characteristics (CR 702.73a) derive every
+    // creature type, which no printed definition serializes.
+    add(TokenKind::Text, "all");
+    add(TokenKind::Variant, "DamageRecipientFilter::Any");
     // A departed permanent's last known name (a token's, or one an effect
     // set) and a play grant's condition reach fact programs as rules text.
     for (_, definition) in default_content_pack().definition_entries() {
@@ -203,15 +257,12 @@ fn execution_names(out: &mut Vec<RecordName>) {
         // Retained execution can refer to a spell already on the stack;
         // printed card programs do not supply this zone's token.
         ("ZoneType", &["Stack"][..]),
-        ("DamageTransform", &["Prevent"][..]),
+        ("DamageTransform", &["Prevent", "PreventAll"][..]),
+        ("TriggerCondition", &["TappedForMana"][..]),
         // Offered only by a resolved shield record, never printed.
         (
             "ReplacementEffect",
-            &[
-                "PreventCombatDamage",
-                "AdventureExile",
-                "ExileInsteadOfGraveyard",
-            ][..],
+            &["PreventCombatDamage", "AdventureExile"][..],
         ),
         ("EventCause", &["Effect", "Cost", "TurnAction"][..]),
         (
@@ -219,7 +270,10 @@ fn execution_names(out: &mut Vec<RecordName>) {
             &[
                 "None",
                 "ThisWay",
+                "Discard",
+                "Countered",
                 "Destroyed",
+                "OwnSacrifices",
                 "LifeLost",
                 "Damage",
                 "Deaths",
@@ -228,6 +282,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "Shuffle",
                 "Bending",
                 "Created",
+                "SacrificedBy",
                 "ExileLinked",
             ][..],
         ),
@@ -255,6 +310,12 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "Station",
             ][..],
         ),
+        ("EntryChoice", &["Color", "CreatureType", "CardName"][..]),
+        ("ManaExpiry", &["Step", "EndOfCombat", "EndOfTurn"][..]),
+        (
+            "SpendPredicate",
+            &["CastCreatureSubtype", "ActivateCreatureSubtype"][..],
+        ),
         (
             "Effect",
             &[
@@ -264,6 +325,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "HaveAbilitiesOf",
                 "ExileNamed",
                 "CounterAbility",
+                "GrantPlay",
             ][..],
         ),
     ] {
@@ -282,7 +344,10 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "replaced",
         "result",
         "second_from_top",
+        "remaining",
+        "by",
         "index",
+        "mode",
         "kind",
         "attacking",
         "kicked",
@@ -299,7 +364,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "entry_counters",
         "gains",
         "copies",
-        "combat",
+        "expiry",
         "definition",
         "name",
         "cost",
@@ -323,7 +388,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
 fn play_grant_conditions(value: &serde_json::Value) -> Vec<crate::state::ability::Condition> {
     objects(value)
         .into_iter()
-        .filter_map(|map| map.get("ExileTopCardsToPlay")?.get("condition"))
+        .filter_map(|map| map.get("GrantPlay")?.get("condition"))
         .map(|condition| serde_json::from_value(condition.clone()).expect("serialized condition"))
         .collect()
 }
@@ -386,13 +451,15 @@ mod tests {
         };
         let nested = Effect::If {
             condition: Condition::YourTurn,
-            then: vec![Effect::ExileTopCardsToPlay {
-                count: 2,
+            then: vec![Effect::GrantPlay {
+                what: crate::state::ability::ObjectSelector::Moved,
                 until: PlayWindow::WhileExiled,
+                play_lands: true,
+                flashback: false,
                 face_down: true,
                 condition: Some(wizard.clone()),
             }],
-            otherwise: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
+            otherwise: Effect::exile_top_to_play(1, PlayWindow::ThisTurn),
         };
         let json = serde_json::json!({ "abilities": [{ "effects": [nested] }] });
         assert_eq!(play_grant_conditions(&json), [wizard]);
@@ -401,7 +468,7 @@ mod tests {
     #[test]
     fn runtime_only_programs_have_catalog_tokens() {
         use crate::{
-            cards::tokens::{catalog_tokens, rules_tokens},
+            cards::tokens::rules_tokens,
             flow::{
                 event::GameEvent,
                 game::CastChoices,
@@ -411,103 +478,78 @@ mod tests {
             },
             state::{ability::LibraryEnd, game_object::PlayerId},
         };
-        let pack = default_content_pack();
-        let catalog = catalog_tokens(pack).unwrap();
-        let known: std::collections::HashSet<_> = catalog
-            .token_kind
-            .into_iter()
-            .zip(catalog.token_value)
-            .chain(record_names().into_iter().filter_map(|entry| entry.token))
-            .collect();
-        // Effect programs are covered by the cards crate's exhaustive witnesses.
-        let mut tokens = rules_tokens(
-            &[
-                GameEvent::Scried {
-                    player: PlayerId(0),
-                },
-                GameEvent::Surveilled {
-                    player: PlayerId(0),
-                },
-                GameEvent::LibrarySearched {
-                    player: PlayerId(0),
-                },
-            ],
-            pack,
-        )
-        .unwrap();
-        tokens.extend(
-            rules_tokens(
-                &[
-                    EventBinding::None,
-                    EventBinding::ThisWay,
-                    EventBinding::Destroyed,
-                    EventBinding::LifeLost,
-                    EventBinding::Deaths,
-                    EventBinding::Combat,
-                    EventBinding::Damage { result: Some(1) },
-                    EventBinding::PlaceInLibrary {
-                        second_from_top: true,
-                    },
-                    EventBinding::Shuffle {
-                        player: PlayerId(0),
-                    },
-                    EventBinding::Bending {
-                        player: PlayerId(0),
-                        kind: Bending::Earth,
-                    },
-                    EventBinding::Created { attacking: true },
-                    EventBinding::ExileLinked {
-                        actor: PlayerId(0),
-                        grantee: PlayerId(1),
-                        source: None,
-                        grant: crate::state::ability::LinkedGrant::FlashAnyMana,
-                    },
-                ],
-                pack,
-            )
-            .unwrap(),
-        );
-        tokens.extend(
-            rules_tokens(
-                &CastChoices {
-                    profile: SpellProfile::Adventure,
-                    exile_instead_of_graveyard: true,
-                    route: None,
-                    kicked: true,
-                    flash_surcharge: true,
-                    flashback: true,
-                    from_prepared: true,
-                    x: 1,
-                    free: true,
-                    resolving: true,
-                },
-                pack,
-            )
-            .unwrap(),
-        );
-        for profile in [SpellProfile::Omen, SpellProfile::BackFace] {
-            tokens.extend(
-                rules_tokens(
-                    &CastChoices {
-                        profile,
-                        ..Default::default()
-                    },
-                    pack,
-                )
-                .unwrap(),
+        fn check(value: &impl serde::Serialize) {
+            let tokens = rules_tokens(value, default_content_pack()).unwrap();
+            let missing = missing_program_tokens(&tokens);
+            assert!(
+                missing.is_empty(),
+                "unregistered runtime tokens: {missing:?}"
             );
+        }
+
+        // Effect programs are covered by the cards crate's exhaustive witnesses.
+        check(&[
+            GameEvent::Scried {
+                player: PlayerId(0),
+            },
+            GameEvent::Surveilled {
+                player: PlayerId(0),
+            },
+            GameEvent::LibrarySearched {
+                player: PlayerId(0),
+            },
+        ]);
+        check(&[
+            EventBinding::None,
+            EventBinding::ThisWay,
+            EventBinding::Destroyed,
+            EventBinding::OwnSacrifices,
+            EventBinding::LifeLost,
+            EventBinding::Deaths,
+            EventBinding::Combat,
+            EventBinding::Damage { result: Some(1) },
+            EventBinding::PlaceInLibrary {
+                second_from_top: true,
+            },
+            EventBinding::Shuffle {
+                player: PlayerId(0),
+            },
+            EventBinding::Bending {
+                player: PlayerId(0),
+                kind: Bending::Earth,
+            },
+            EventBinding::Created { attacking: true },
+            EventBinding::ExileLinked {
+                actor: PlayerId(0),
+                grantee: PlayerId(1),
+                source: None,
+                grant: crate::state::ability::LinkedGrant::FlashAnyMana,
+            },
+        ]);
+        check(&CastChoices {
+            profile: SpellProfile::Adventure,
+            exile_instead_of_graveyard: true,
+            route: None,
+            kicked: true,
+            flash_surcharge: true,
+            flashback: true,
+            from_prepared: true,
+            x: 1,
+            free: true,
+            resolving: true,
+        });
+        for profile in [SpellProfile::Omen, SpellProfile::BackFace] {
+            check(&CastChoices {
+                profile,
+                ..Default::default()
+            });
         }
         for cause in [EventCause::Effect, EventCause::Cost, EventCause::TurnAction] {
-            tokens.extend(rules_tokens(&CounterProvenance::new(cause), pack).unwrap());
+            check(&CounterProvenance::new(cause));
         }
-        tokens.extend(rules_tokens(&[LibraryEnd::Top, LibraryEnd::Bottom], pack).unwrap());
-        tokens.extend(rules_tokens(&CostComponent::Discard, pack).unwrap());
-        for (kind, value) in tokens {
-            assert!(
-                matches!(kind, 4 | 5) || known.contains(&(kind, value)),
-                "unregistered runtime token: kind {kind}, value {value}"
-            );
-        }
+        check(&[LibraryEnd::Top, LibraryEnd::Bottom]);
+        check(&CostComponent::Discard);
+        check(&crate::state::subtype::CreatureTypes::All);
     }
 
     #[test]

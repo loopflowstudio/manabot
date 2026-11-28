@@ -1,20 +1,22 @@
 /**
  * The prompt's one line: what to do now, in plain words.
  *
- * `promptLine(frame, view)` names the decision ("Choose blockers", "Pay {2}{U}").
+ * `promptLine(frame, view, keys)` names the decision ("Choose blockers", "Pay {2}{U}");
+ * `keys` false (a recording, where Space plays the transport) leaves out the
+ * live keyboard's words.
  * `promptHint(frame, view)` describes how to answer a mana payment. The engine's
  * own instruction stays available behind the prompt's details; this line adds
  * no rules and chooses nothing.
  */
-import type { ExperienceFrame } from '$lib/types';
+import type { ExperienceFrame, Observation, PermanentState } from '$lib/types';
 import type { PaymentPreview } from '$lib/payment-preview';
 import { payLabel, paymentPlan } from './payment';
-import { stackName, type BoardView } from './view';
+import { stackName, type BoardView, type PlacedOffer } from './view';
 
 function anyCards(view: BoardView): boolean {
   const permanents = [view.you, view.opponent].flatMap(side => [...side.creatures, ...side.support])
     .flatMap(pile => pile.items).flatMap(item => [item, ...item.attached]);
-  return view.hand.some(item => item.offers.length) || permanents.some(item => item.offers.length)
+  return [view.you, view.opponent].some(side => side.hand.some(item => item.offers.length)) || permanents.some(item => item.offers.length)
     || view.stack.some(item => item.offers.length) || view.you.offers.length + view.opponent.offers.length > 0;
 }
 
@@ -30,16 +32,16 @@ function askedCreature(frame: ExperienceFrame, view: BoardView): string | null {
 }
 
 /** What the decision asks, in one stable line: hovering a choice never rewrites it. */
-export function promptLine(frame: ExperienceFrame, view: BoardView): string {
+export function promptLine(frame: ExperienceFrame, view: BoardView, keys = true): string {
   const context = frame.projection.decision_context;
   const creature = askedCreature(frame, view);
   const source = context?.source?.label ?? null;
   const top = view.stack[0] ? stackName(view.stack[0].entry) : null;
   switch (frame.action_space) {
     case 'PRIORITY':
-      if (top) return `${top} is on the stack. Respond, or Space to let it resolve`;
-      if (!anyCards(view)) return 'Nothing to play. Space passes';
-      return yourMain(frame) ? 'Play a land or cast a spell, or Space to pass' : 'Cast or activate now, or Space to pass';
+      if (top) return `${top} is on the stack. Respond, or ${keys ? 'Space to ' : ''}let it resolve`;
+      if (!anyCards(view)) return keys ? 'Nothing to play. Space passes' : 'Nothing to play';
+      return `${yourMain(frame) ? 'Play a land or cast a spell' : 'Cast or activate now'}, or ${keys ? 'Space to ' : ''}pass`;
     case 'PAY_OR_NOT':
       return context?.mana_cost
         ? `Pay ${context.mana_cost}${source ? ` for ${source}` : ''}`
@@ -63,8 +65,16 @@ export function promptLine(frame: ExperienceFrame, view: BoardView): string {
     case 'MODAL':
       // Mid-payment, a modal choice is what a tap pays, not a mode of the spell.
       if (context?.stage === 'payment') return `Choose what the tap pays${source ? ` for ${source}` : ''}`;
+      // A mana ability's color choice belongs to the tapped source, not the spell being paid.
+      if (context?.stage === 'mana_color') return 'Choose the mana to add';
       if (context?.stage === 'assign_combat_damage') return 'Assign combat damage';
+      if (context?.stage === 'choose_creature_type') return 'Choose a creature type';
       if (context?.stage === 'order_replacement') return 'Choose which replacement applies next';
+      if (context?.stage === 'target_shares') return `Divide among targets${source ? ` for ${source}` : ''}`;
+      if (context?.stage === 'entry_choice') return `Choose as ${source ?? 'the permanent'} enters`;
+      if (context?.stage === 'order_entry_choices') return 'Choose which entering permanent to decide next';
+      if (context?.stage === 'partition_piles') return `Put each card into the face-up or face-down pile${source ? ` (${source})` : ''}`;
+      if (context?.stage === 'choose_pile') return `Choose which pile goes to hand${source ? ` (${source})` : ''}`;
       return `Choose a mode${source ? ` for ${source}` : ''}`;
     case 'LEGEND_RULE':
       return 'Choose which legendary permanent to keep';
@@ -108,6 +118,71 @@ export interface PrimaryLabel {
 }
 
 /**
+ * An offer's words on the board. The payment offer hands the choice of lands
+ * to the automatic payer, so it reads "Auto pay"; the recorded label stays
+ * "Pay the cost".
+ */
+export function offerText(offer: { verb?: string; label: string }): string {
+  return offer.verb === 'pay' ? offer.label.replace(/^Pay the cost/, 'Auto pay') : offer.label;
+}
+
+/**
+ * Disambiguate rail choice labels when two or more legal choices share the
+ * same base text and point at distinct battlefield permanents (e.g. two
+ * creatures with the same name). Unique labels are returned unchanged.
+ */
+export function offerChoiceLabel(
+  placed: PlacedOffer,
+  list: readonly PlacedOffer[],
+  projection: Observation,
+): string {
+  const base = offerText(placed.offer);
+  if (placed.anchor.kind !== 'object') return base;
+  const peers = list.filter(
+    candidate => candidate.anchor.kind === 'object' && offerText(candidate.offer) === base,
+  );
+  if (peers.length <= 1) return base;
+
+  const byId = new Map<number, { perm: PermanentState; side: 'yours' | 'theirs' }>([
+    ...projection.agent.battlefield.map(perm => [perm.id, { perm, side: 'yours' as const }] as const),
+    ...projection.opponent.battlefield.map(perm => [perm.id, { perm, side: 'theirs' as const }] as const),
+  ]);
+  const infos = peers.map(peer => ({
+    id: peer.offer.id,
+    info: peer.anchor.kind === 'object' ? (byId.get(peer.anchor.id) ?? null) : null,
+  }));
+  const present = infos.flatMap(entry => (entry.info ? [entry.info] : []));
+  // Only disambiguate battlefield permanents (not identical basic lands in hand).
+  if (present.length === 0) return base;
+  const sidesDiffer = new Set(present.map(entry => entry.side)).size > 1;
+  const ptsDiffer = new Set(present.map(entry => `${entry.perm.power}/${entry.perm.toughness}`)).size > 1;
+  const tappedDiffer = new Set(present.map(entry => Boolean(entry.perm.tapped))).size > 1;
+
+  const describe = (entry: { perm: PermanentState; side: 'yours' | 'theirs' } | null): string => {
+    if (!entry) return '';
+    const { perm, side } = entry;
+    const parts: string[] = [];
+    if (sidesDiffer) parts.push(side);
+    if (ptsDiffer && perm.power !== null && perm.toughness !== null) parts.push(`${perm.power}/${perm.toughness}`);
+    if (perm.damage) parts.push(`${perm.damage} dmg`);
+    if (perm.plus1_counters) parts.push(`+${perm.plus1_counters}/+${perm.plus1_counters}`);
+    if (perm.attacking) parts.push('attacking');
+    if (perm.blocking !== undefined) parts.push('blocking');
+    if (tappedDiffer && perm.tapped) parts.push('tapped');
+    return parts.join(' · ');
+  };
+
+  const tags = infos.map(entry => describe(entry.info));
+  const myIdx = infos.findIndex(entry => entry.id === placed.offer.id);
+  if (myIdx < 0) return base;
+  const myTag = tags[myIdx];
+  const sameTagIndices = tags.flatMap((tag, i) => (tag === myTag ? [i] : []));
+  const ordinal = sameTagIndices.length > 1 ? `#${sameTagIndices.indexOf(myIdx) + 1}` : '';
+  const suffix = [myTag, ordinal].filter(Boolean).join(' ');
+  return suffix ? `${base} (${suffix})` : base;
+}
+
+/**
  * The primary button's words: what pressing it does next rather than the
  * offer's verb. Passing with a spell on the stack lets it resolve (if the
  * other player passes too); on an empty stack it moves to the next step. The
@@ -122,7 +197,8 @@ export function primaryLabel(frame: ExperienceFrame, view: BoardView, preview: P
     const full = payLabel(frame.projection.decision_context?.mana_cost ?? null, paymentPlan(preview, frame), preview);
     // The button says the price on one line; the lands it taps are drawn on
     // the board and named in its accessible name.
-    return full ? { text: full.split(' · ')[0], description: `${offer}: ${full.slice('Pay '.length)}` } : { text: offer, description: offer };
+    if (full) return { text: full.split(' · ')[0], description: `${offer}: ${full.slice('Auto pay '.length)}` };
+    return { text: offerText(primary.offer), description: offerText(primary.offer) };
   }
   const top = view.stack[0] ? stackName(view.stack[0].entry) : null;
   // A card name is never cut: when it does not fit beside the verb, the

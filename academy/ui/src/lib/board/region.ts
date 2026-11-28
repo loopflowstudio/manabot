@@ -22,10 +22,19 @@
 export const CONTROLS = 'button:not([disabled]), a[href], summary, [tabindex]:not([data-region])';
 const ACTS = '[data-offer-id], [data-offer-count]:not([data-offer-count="0"])';
 
-/** The last input was a key, not a pointer: only then does focus follow a replaced control. */
+type Direction = 'left' | 'right' | 'up' | 'down';
+const DIRECTIONS: Record<string, Direction> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
+
+/** Only focus-movement keys start focus-following; shortcuts (`Space`, `1`–`9`) and OS chords (`Cmd+Shift+4`) leave pointer play untouched. */
+export function isFocusNavigationKey(event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey'>): boolean {
+  if (event.metaKey || event.ctrlKey || event.altKey) return false;
+  return event.key === 'Tab' || event.key in DIRECTIONS || event.key === 'Home' || event.key === 'End';
+}
+
+/** The last input moved focus by keyboard, not pointer: only then does focus follow a replaced control. */
 let keyboard = false;
 if (typeof window !== 'undefined') {
-  window.addEventListener('keydown', () => { keyboard = true; }, true);
+  window.addEventListener('keydown', event => { if (isFocusNavigationKey(event)) keyboard = true; }, true);
   window.addEventListener('pointerdown', () => { keyboard = false; }, true);
 }
 
@@ -33,9 +42,6 @@ function controls(node: HTMLElement): HTMLElement[] {
   return [...node.querySelectorAll<HTMLElement>(CONTROLS)].filter(element =>
     element.closest('[data-region]') === node && element.getClientRects().length > 0);
 }
-
-type Direction = 'left' | 'right' | 'up' | 'down';
-const DIRECTIONS: Record<string, Direction> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
 
 /** The control nearest `from` in `direction`, weighing distance across the direction twice. */
 export function nearest(from: DOMRect, candidates: readonly DOMRect[], direction: Direction): number | null {
@@ -108,9 +114,10 @@ export function region(node: HTMLElement, options: RegionOptions = {}): { update
 
   function onFocusin(event: FocusEvent): void {
     if (!(event.target instanceof HTMLElement) || event.target === node) return;
+    if (event.target.closest('[data-region]') !== node) return;
     current = event.target;
     rove();
-    held = { element: current, index: controls(node).indexOf(current) };
+    held = current ? { element: current, index: controls(node).indexOf(current) } : null;
   }
 
   function onFocusout(event: FocusEvent): void {

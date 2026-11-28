@@ -13,11 +13,14 @@ class SpaStaticFiles(StaticFiles):
     """Serve the SPA fallback for client-routed paths (/replay).
 
     Vite emits hashed filenames under _app/immutable (card art included), so
-    those get a year-long immutable Cache-Control — browsers and the
-    Cloudflare edge fetch each asset once. The fallback shell revalidates.
+    those get a year-long immutable Cache-Control — the browser fetches each
+    asset once. The fallback shell revalidates.
     """
 
     async def get_response(self, path: str, scope: Scope) -> Response:
+        # Never let unknown /api/* routes fall through to index.html or StaticFiles 405.
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(status_code=404)
         try:
             response = await super().get_response(path, scope)
             if response.status_code == 404:
@@ -37,8 +40,12 @@ class SpaStaticFiles(StaticFiles):
 
 def frontend_directory() -> Path:
     override = os.environ.get("ACADEMY_FRONTEND_BUILD")
-    return (
-        Path(override).expanduser().resolve()
-        if override
-        else Path(__file__).parent / "site"
-    )
+    if override:
+        return Path(override).expanduser().resolve()
+    packaged = Path(__file__).parent / "site"
+    if (packaged / "index.html").is_file():
+        return packaged
+    checkout = Path(__file__).resolve().parents[2] / "academy" / "ui" / "build"
+    if (checkout / "index.html").is_file():
+        return checkout
+    return packaged

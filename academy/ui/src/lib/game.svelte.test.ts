@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { policyChoice, createGameStore } from './game.svelte';
+import { policyChoice, createGameStore, seedError } from './game.svelte';
 import type { Command, Observation, RecoveryEnvelope } from './types';
 
 interface BoltProtocolFixture {
@@ -84,7 +84,7 @@ describe('GameStore', () => {
     const store = createGameStore();
     const frame = boltProtocolFixture.recovery.frame;
 
-    store.applyFrame(frame, 'session-a', 'token-a');
+    store.applyFrame(frame);
 
     expect(store.protocolFrame).toBe(frame);
     expect(store.observation).toBe(frame.projection);
@@ -103,7 +103,6 @@ describe('GameStore', () => {
       },
     ]);
     expect(store.actionSpaceKind).toBe('CHOOSE_TARGET');
-    expect(store.sessionId).toBe('session-a');
     expect(boltProtocolFixture.command).toMatchObject({
       expected_revision: frame.revision,
       prompt_id: frame.prompt?.id,
@@ -118,30 +117,22 @@ describe('GameStore', () => {
     store.applyObservation(
       observation,
       [{ index: 0, type: 'PRIORITY_PASS_PRIORITY', focus: [10], description: 'Pass priority' }],
-      'session-a',
-      'token-a',
     );
 
     expect(store.observation?.turn.turn_number).toBe(1);
     expect(store.actions).toHaveLength(1);
-    expect(store.sessionId).toBe('session-a');
-    expect(store.resumeToken).toBe('token-a');
     expect(store.gameOver).toBe(false);
   });
 
-  it('records each move with its actor and the turn it was made in', () => {
+  it('records client-local history notes anchored to the presentation track', () => {
     const store = createGameStore();
     store.applyObservation(makeObservation(), []);
-    store.appendHeroAction('Pass turn');
-    store.applyObservation(makeObservation(), [], undefined, undefined, [
-      { actor: 'hero', turn: 1, text: 'Cast Divide by Zero, targeting Tiger-Seal' },
-      { actor: 'villain', turn: 2, text: 'Pass priority' },
-    ]);
+    store.addHistoryNote('you', 1, 5, 'Pass turn');
+    store.spendOnce('my', 'main1', 6);
 
-    expect(store.actionLog.map(({ actor, turn, text }) => ({ actor, turn, text }))).toEqual([
-      { actor: 'hero', turn: 1, text: 'Pass turn' },
-      { actor: 'hero', turn: 1, text: 'Cast Divide by Zero, targeting Tiger-Seal' },
-      { actor: 'villain', turn: 2, text: 'Pass priority' },
+    expect(store.historyNotes.map(({ actor, turn, afterSeq, text }) => ({ actor, turn, afterSeq, text }))).toEqual([
+      { actor: 'you', turn: 1, afterSeq: 5, text: 'Pass turn' },
+      { actor: 'auto', turn: 1, afterSeq: 6, text: 'Stopped once at First main on your turn; that stop is now off' },
     ]);
   });
 
@@ -157,194 +148,97 @@ describe('GameStore', () => {
     expect(store.actions).toEqual([]);
   });
 
-  it('keeps the last confirmed board readable after authority is lost', () => {
+  it('keeps the last board readable and takes no input once the game has stopped', () => {
     const store = createGameStore();
     const frame = structuredClone(boltProtocolFixture.recovery.frame);
-    store.applyFrame(frame, 'session-a', 'token-a');
-    store.recordingId = 'saved-attempt';
+    store.applyGame({ game: 'saved-game', opponent_label: 'Random' });
+    store.applyFrame(frame);
     store.beginCommand();
     store.beginFastForward();
-    store.markResumeFailed('expired');
+    store.markStopped('The opponent could not continue.');
 
-    expect(store.resumeFailed).toBe(true);
-    expect(store.sessionId).toBeNull();
-    expect(store.resumeToken).toBeNull();
-    expect(store.protocolFrame).toEqual(frame);
-    expect(store.observation).toEqual(frame.projection);
-    expect(store.recordingId).toBe('saved-attempt');
+    expect(store.stopped).toBe(true);
     expect(store.commandPending).toBe(false);
     expect(store.fastForwarding).toBe(false);
-    expect(store.decisionStatus).toContain('Interrupted');
+    expect(store.protocolFrame).toEqual(frame);
+    expect(store.gameId).toBe('saved-game');
+    expect(store.decisionStatus).toContain('Stopped');
   });
 
-  it('starts with default stops and toggles individual stop steps', () => {
+  it('names the game on the board and returns to setup without ending it', () => {
     const store = createGameStore();
-    expect(store.stops).toEqual({
-      my: ['main1', 'main2'],
-      opponent: ['end_step'],
-      stop_on_stack: true,
-      auto_pass: true,
-    });
+    const setup = { villain_type: 'policy', opponent_sha256: 'b'.repeat(64), human_seat: 1 };
+    store.applyGame({ game: 'game-a', opponent: { name: 'Pilot', sha256: 'a'.repeat(64), base_sha256: 'b'.repeat(64) }, opponent_label: 'Pilot · checkpoint', setup });
+    store.applyFrame(structuredClone(boltProtocolFixture.recovery.frame));
 
-    store.toggleStop('my', 'upkeep');
-    expect(store.stops.my).toEqual(['main1', 'main2', 'upkeep']);
-    store.toggleStop('my', 'main1');
-    expect(store.stops.my).toEqual(['main2', 'upkeep']);
-    store.setStopOnStack(false);
-    store.setAutoPass(false);
-    expect(store.stops.stop_on_stack).toBe(false);
-    expect(store.stops.auto_pass).toBe(false);
-    store.resetStops();
-    expect(store.stops.my).toEqual(['main1', 'main2']);
+    expect(store.gameId).toBe('game-a');
+    expect(store.opponentChoice).toBe(policyChoice('b'.repeat(64)));
+    expect(store.setup).toEqual(setup);
+
+    // A choice made in setup is not overwritten by the same game's next reply.
+    store.setOpponentChoice('random');
+    store.applyGame({ game: 'game-a', opponent: { name: 'Pilot', sha256: 'a'.repeat(64) }, setup });
+    expect(store.opponentChoice).toBe('random');
+
+    store.leaveGame();
+    expect(store.gameId).toBeNull();
+    expect(store.observation).toBeNull();
+    expect(store.setup).toBeNull();
   });
 
-  it('includes the stops config in new_game configs', () => {
+  it('keeps a complete u64 seed as decimal text and sends no identity with a start', () => {
+    expect(seedError('18446744073709551615')).toBeNull();
+    expect(seedError('18446744073709551616')).not.toBeNull();
+    expect(seedError('1.5')).not.toBeNull();
+    expect(seedError('-1')).not.toBeNull();
     const store = createGameStore();
-    store.toggleStop('opponent', 'declare_blockers');
-
-    const config = store.newGameConfig();
-    expect(config.stops).toEqual({
-      my: ['main1', 'main2'],
-      opponent: ['end_step', 'declare_blockers'],
-    });
-    expect(config.stop_on_stack).toBe(true);
-    expect(config.auto_pass).toBe(true);
-    expect(config.villain_type).toBe('search');
+    store.seed = '18446744073709551615'; store.dealMode = 'repeat';
+    expect(store.newGameConfig().seed).toBe('18446744073709551615');
+    expect(Object.keys(store.newGameConfig())).not.toEqual(expect.arrayContaining(['request_id', 'player_token']));
+    store.dealMode = 'fresh';
+    expect(store.newGameConfig().seed).toBeNull();
+    store.seed = 'invalid';
+    expect(store.seedError).toBeNull();
+    store.dealMode = 'repeat';
+    expect(store.seedError).not.toBeNull();
   });
 
-  it('names a chosen trained checkpoint by its digest', () => {
+  it('selects the setup a game was started with, imported decks and search included', () => {
     const store = createGameStore();
-    const sha256 = 'a'.repeat(64);
-    store.setOpponentChoice(policyChoice(sha256));
-
-    const config = store.newGameConfig();
-    expect(config.villain_type).toBe('policy');
-    expect(config.opponent_sha256).toBe(sha256);
+    const previousDecks = {...store.decks};
+    const mirror = {algorithm:'local_update', belief:'physical_deal', worlds:4, depth:2, decision_seconds:1, alpha:0, beta:1};
+    const draft = {human_seat:1, mana_floats:'usable', mana_payment:'auto', seed:'18446744073709551615', villain_type:'policy', opponent_sha256:'a'.repeat(64),
+      mirror, decklists:'closed', open_hands:true, stops:{my:['main1'], opponent:['end_step']}, auto_pass:false, stop_on_stack:true,
+      deck_import:{hero:{source:'8 Island',filename:'a.txt'},villain:{source:'8 Mountain',filename:'b.txt'}}};
+    store.applySetupDraft(draft);
+    expect(store.decks).toEqual(previousDecks);
+    expect(store.newGameConfig()).toMatchObject(draft);
   });
 
-  it('keeps next-game search edits separate from the running opponent budget', () => {
+  it('keeps the opponent deck chosen here when a closed game names none', () => {
     const store = createGameStore();
-    store.activeSearchConfig = { algorithm: 'local_update', belief: 'physical_deal',
-      worlds: 1, depth: 2, decision_seconds: 30, alpha: 0.02, beta: 1 };
-    store.searchConfig = { ...store.activeSearchConfig, worlds: 4 };
-    expect(store.newGameConfig().mirror).toEqual(store.searchConfig);
-    expect(store.activeSearchConfig.worlds).toBe(1);
-  });
-
-  it('adopts the server stops echo from observation payloads', () => {
-    const store = createGameStore();
-    const echo = {
-      my: ['end_step'],
-      opponent: [],
-      stop_on_stack: false,
-      auto_pass: true,
-    };
-
-    store.applyObservation(makeObservation(), [], undefined, undefined, [], echo);
-
-    expect(store.stops).toEqual(echo);
-  });
-
-  it('defaults to the UR-vs-GW matchup and sends deck names in new_game', () => {
-    const store = createGameStore();
-    expect(store.decks).toEqual({ hero: 'ur_lessons', villain: 'gw_allies' });
-
-    const config = store.newGameConfig();
-    expect(config.hero_deck).toBe('ur_lessons');
-    expect(config.villain_deck).toBe('gw_allies');
-
     store.setHeroDeck('gw_allies');
-    store.setVillainDeck('interactive');
-    const updated = store.newGameConfig();
-    expect(updated.hero_deck).toBe('gw_allies');
-    expect(updated.villain_deck).toBe('interactive');
+    store.setVillainDeck('gw_allies');
+    store.applySetupDraft({hero_deck:'ur_lessons', decklists:'closed', villain_type:'random'});
+    expect(store.decks).toEqual({hero:'ur_lessons', villain:'gw_allies'});
+    expect(store.decklists).toBe('closed');
   });
 
-  it('retains editable imported source in the next setup and can return to presets', () => {
+  it('selects a pool game as its pools and drops an import left from an earlier game', () => {
     const store = createGameStore();
-    const source = '# retained comment\n10 Forest\nSideboard\n1 Island';
-    store.deckImport = {
-      hero: { source, filename: 'hero.txt' },
-      villain: { source: '20 Island', filename: 'villain.txt' },
-    };
-    expect(store.newGameConfig().deck_import).toEqual(store.deckImport);
-    store.deckImport.hero.source = source + '\n1 Mountain';
-    expect(store.newGameConfig().deck_import).toEqual(store.deckImport);
-    store.deckImport = null;
+    store.deckImport = {hero:{source:'8 Island',filename:'a.txt'},villain:{source:'8 Mountain',filename:'b.txt'}};
+    store.applySetupDraft({hero_deck:'pool:tla_trophies', villain_deck:'pool:tla_trophies', hero_deck_pool:'pool:tla_trophies', villain_deck_pool:'pool:tla_trophies', villain_type:'random'});
+    expect(store.deckImport).toBeNull();
+    expect(store.decks).toEqual({hero:'pool:tla_trophies', villain:'pool:tla_trophies'});
     expect(store.newGameConfig()).not.toHaveProperty('deck_import');
-    expect(store.newGameConfig().hero_deck).toBe('ur_lessons');
+
+    // One side's list alone (a closed opponent's is not sent) is no import to select.
+    store.deckImport = {hero:{source:'8 Island',filename:'a.txt'},villain:{source:'8 Mountain',filename:'b.txt'}};
+    store.applySetupDraft({decklists:'closed', villain_type:'random', deck_import:{hero:{source:'8 Island',filename:'a.txt'}}});
+    expect(store.deckImport).toBeNull();
   });
 
-  it('sanitizes stored deck selections and falls back to defaults', async () => {
-    const { sanitizeDeckSelection, defaultDeckSelection } = await import('./decks');
-
-    expect(sanitizeDeckSelection({ hero: 'interactive', villain: 'gw_allies' })).toEqual({
-      hero: 'interactive',
-      villain: 'gw_allies',
-    });
-    expect(sanitizeDeckSelection({ hero: 'not_a_deck', villain: 'gw_allies' })).toBeNull();
-    expect(sanitizeDeckSelection('garbage')).toBeNull();
-    expect(sanitizeDeckSelection(null)).toBeNull();
-    expect(defaultDeckSelection()).toEqual({ hero: 'ur_lessons', villain: 'gw_allies' });
-  });
-
-  it('adopts the server deck-names echo for the game header', () => {
-    const store = createGameStore();
-    expect(store.deckNames).toBeNull();
-
-    store.applyObservation(
-      makeObservation(),
-      [],
-      undefined,
-      undefined,
-      [],
-      undefined,
-      { hero: 'UR Lessons', villain: 'GW Allies' },
-    );
-
-    expect(store.deckNames).toEqual({
-      hero: 'UR Lessons',
-      villain: 'GW Allies',
-    });
-  });
-
-  it('logs automated moves as automation and clears the fast-forward flag', () => {
-    const store = createGameStore();
-    store.beginFastForward();
-    expect(store.fastForwarding).toBe(true);
-
-    store.applyObservation(
-      makeObservation(),
-      [],
-      undefined,
-      undefined,
-      [{ actor: 'villain', turn: 3, text: 'Cast Grey Ogre' }, { actor: 'auto', turn: 3, text: 'Choose red' }],
-    );
-
-    expect(store.fastForwarding).toBe(false);
-    expect(store.actionLog.map(({ actor, text }) => [actor, text])).toEqual([
-      ['villain', 'Cast Grey Ogre'],
-      ['auto', 'Choose red'],
-    ]);
-  });
-});
-
-describe('current decision status', () => {
-  it('names the authoritative actor independently of whose turn it is', () => {
-    const store = createGameStore();
-    store.connection = 'connected';
-    store.protocolFrame = structuredClone(boltProtocolFixture.recovery.frame);
-    store.observation = store.protocolFrame.projection;
-    const prompt = store.protocolFrame.prompt!;
-    prompt.actor = store.observation.agent.player_index;
-    prompt.instruction = 'Choose a target.';
-    store.observation.turn.active_player_id = store.observation.opponent.id;
-    expect(store.decisionStatus).toBe('Your decision — Choose a target.');
-    prompt.actor = store.observation.opponent.player_index;
-    expect(store.decisionStatus).toBe("Opponent's decision — Choose a target.");
-  });
-
-  it('does not invite a decision while waiting, disconnected, studying or finished', () => {
+  it('does not invite a decision while waiting, disconnected or finished', () => {
     const store = createGameStore();
     store.connection = 'connected';
     expect(store.decisionStatus).toBe('Waiting for the next decision.');
@@ -354,29 +248,120 @@ describe('current decision status', () => {
     expect(store.decisionStatus).toContain('play is unavailable');
     store.gameOver = true;
     expect(store.decisionStatus).toBe('Game over — no next decision.');
-    store.restoredDecision = {} as NonNullable<typeof store.restoredDecision>;
-    expect(store.decisionStatus).toBe('Study position — return to live to play.');
   });
 });
 
 describe('stop changes in flight', () => {
-  it('drops the echo of an older config, so fast presses keep their last state', () => {
+  it('ignores an unrelated earlier frame while one stop change is in flight', () => {
+    const store = createGameStore();
+    const before = { ...store.stops, my: [...store.stops.my], opponent: [...store.stops.opponent] };
+    store.cycleStop('opponent', 'upkeep');
+    store.noteStopsSent();
+    const every = { ...store.stops, my: [...store.stops.my], opponent: [...store.stops.opponent] };
+
+    // An earlier command's observation (such as Keep hand) arrives before the set_stops echo.
+    store.applyServerStops(before);
+    expect(store.stops.opponent).toContain('upkeep');
+
+    // A second press sees "every" rather than a reverted "off", so it advances to "once".
+    store.cycleStop('opponent', 'upkeep');
+    expect(store.onceStops.opponent).toEqual(['upkeep']);
+
+    // Once the set_stops echo arrives, the server's config holds again.
+    store.applyServerStops(every);
+    expect(store.onceStops.opponent).toEqual(['upkeep']);
+    store.applyServerStops({ ...before, my: ['main1'] });
+    expect(store.stops.my).toEqual(['main1']);
+  });
+
+  it('drops intermediate echoes when fast presses cycle back through the same config', () => {
+    const store = createGameStore();
+    store.cycleStop('my', 'upkeep');
+    const every = { ...store.stops, my: [...store.stops.my] };
+    store.noteStopsSent();
+    store.cycleStop('my', 'upkeep'); // every -> once (same server config)
+    store.cycleStop('my', 'upkeep'); // once -> off
+    const off = { ...store.stops, my: [...store.stops.my] };
+    store.noteStopsSent();
+    store.cycleStop('my', 'upkeep'); // off -> every
+    store.noteStopsSent();
+
+    store.applyServerStops(every);
+    expect(store.stops.my).toContain('upkeep');
+    store.applyServerStops(off);
+    expect(store.stops.my).toContain('upkeep');
+    store.applyServerStops(every);
+    expect(store.stops.my).toContain('upkeep');
+
+    // After all in-flight echoes arrive, subsequent server updates apply again.
+    store.applyServerStops(off);
+    expect(store.stops.my).not.toContain('upkeep');
+  });
+
+  it('clears pending stop expectations on disconnect or control error', () => {
     const store = createGameStore();
     const before = { ...store.stops, my: [...store.stops.my] };
     store.cycleStop('my', 'upkeep');
     store.noteStopsSent();
-    const every = { ...store.stops, my: [...store.stops.my] };
-    store.cycleStop('my', 'upkeep');
-    store.noteStopsSent();
-    expect(store.onceStops.my).toEqual(['upkeep']);
-    // The frame that answers an earlier change, or one sent before any, still carries the old config.
+    store.clearPendingStops();
     store.applyServerStops(before);
-    expect(store.stops.my).toContain('upkeep');
-    expect(store.onceStops.my).toEqual(['upkeep']);
-    store.applyServerStops(every);
-    expect(store.onceStops.my).toEqual(['upkeep']);
-    // After the last echo the server's config holds again.
-    store.applyServerStops({ ...before, my: ['main1'] });
-    expect(store.stops.my).toEqual(['main1']);
+    expect(store.stops.my).not.toContain('upkeep');
+  });
+
+  it('does not persist passive server echoes to localStorage', () => {
+    const backing = new Map<string, string>();
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (key: string) => backing.get(key) ?? null,
+      setItem: (key: string, value: string) => backing.set(key, value),
+      removeItem: (key: string) => backing.delete(key),
+    };
+    try {
+      const store = createGameStore();
+      store.applyServerStops({ my: ['main1'], opponent: [], stop_on_stack: true, auto_pass: true });
+      expect(store.stops.my).toEqual(['main1']);
+      expect(backing.size).toBe(0);
+
+      store.toggleStop('my', 'upkeep');
+      expect(backing.size).toBeGreaterThan(0);
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
+  });
+});
+
+describe('dismissCommandRejection', () => {
+  it('clears the matching rejection and error banner without wiping unrelated errors', () => {
+    const store = createGameStore();
+    store.lastCommandRejection = {
+      command_id: 'cmd-1',
+      code: 'decision_group_refused',
+      message: 'Boggart Brute requires at least two blockers.',
+      current_revision: 12,
+      current_prompt: null,
+    };
+    store.setError('Boggart Brute requires at least two blockers.');
+
+    // Mismatched command id leaves both intact.
+    store.dismissCommandRejection('cmd-other');
+    expect(store.errorMessage).toBe('Boggart Brute requires at least two blockers.');
+    expect(store.lastCommandRejection?.command_id).toBe('cmd-1');
+
+    // Matching command id clears both rejection and matching error banner.
+    store.dismissCommandRejection('cmd-1');
+    expect(store.errorMessage).toBeNull();
+    expect(store.lastCommandRejection).toBeNull();
+
+    // Unrelated error message is preserved when dismissing a rejection.
+    store.lastCommandRejection = {
+      command_id: 'cmd-2',
+      code: 'decision_group_incomplete',
+      message: 'Place remaining cards before confirming.',
+      current_revision: 13,
+      current_prompt: null,
+    };
+    store.setError('WebSocket error. Trying to reconnect.');
+    store.dismissCommandRejection('cmd-2');
+    expect(store.lastCommandRejection).toBeNull();
+    expect(store.errorMessage).toBe('WebSocket error. Trying to reconnect.');
   });
 });

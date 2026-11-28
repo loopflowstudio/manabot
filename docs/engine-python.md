@@ -11,14 +11,15 @@ mkdir managym-example
 cd managym-example
 uv venv --python 3.13
 uv pip install --python .venv/bin/python --only-binary :all: managym
-uv run --no-project --python .venv/bin/python python -c 'import managym; print(managym.world_identity())'
+uv run --no-project --python .venv/bin/python python -c 'import managym; print(managym.__version__, managym.world_identity())'
 ```
 
-The last command prints the installed world's version and card digest. The
-`managym` distribution contains the compiled engine and its Python API. It
-installs without Torch, Gymnasium, Etude or the training CLI. NumPy supports
-native observation buffers; Pydantic supports the structured decision API.
-No Rust compiler is needed when installing a wheel.
+The last command prints the engine version (`managym.__version__`) and card
+digest, both read directly from the compiled extension without requiring
+installed package metadata. The `managym` distribution contains the compiled
+engine and its Python API. It installs without Torch, Gymnasium, Etude or the
+training CLI. NumPy supports native observation buffers; Pydantic supports the
+structured decision API. No Rust compiler is needed when installing a wheel.
 
 To play in the browser instead of from Python, install the `academy` extra and
 run `uv run --no-project managym academy` ([running Academy](academy.md#running-academy)); it adds
@@ -448,7 +449,7 @@ recording sinks. Use `snapshot.restore()` for exact continuation, or pass
 | `RestoreOptions.shuffle_libraries(seed, ...)` | Permutes only exchangeable slots in each player's library using a local seeded RNG, on open or closed decks. Preserves both hands, face-down exile, future rules RNG, and every inspected, revealed, or positioned library card until a genuine rules shuffle. Reusing `seed` across sibling branches gives Common Random Numbers. |
 | `RestoreOptions.determinize(viewer, seed, ...)` | Redraws hidden opponent cards consistently with what the chosen seat can see. The constructor requires `viewer` to be 0 or 1. Restore requires an open opponent decklist. |
 
-Each constructor also accepts two keyword arguments.
+The three named constructors also accept these keyword arguments.
 
 - `enable_decision_memory` defaults to the live capture setting. Set it to
   `False` to freeze the existing logs or `True` to append from this boundary.
@@ -456,8 +457,12 @@ Each constructor also accepts two keyword arguments.
   (`Env.clone_env()` and `fork_exact()`) always freeze their logs.
 - `forced_first_action` commits one legal index after sampling and setting
   capture. It returns the resulting game, including a terminal result.
-  Restore rejects a terminal root, an out-of-range index or a choice changed
-  by determinization. For a built-in seat it records the override for replay.
+  Restore rejects a terminal root, an out-of-range index, a choice changed
+  by determinization, or any combination with non-empty `game_state_edits`.
+  For a built-in seat it records the override for replay.
+- `game_state_edits` accepts a sequence of `GameStateEdit` values applied
+  **before** the restore mode (`reseed`, `shuffle_libraries`, or
+  `determinize`). See [counterfactual state edits](#counterfactual-state-edits).
 
 `snapshot.metadata()` returns a frozen `SnapshotMetadata` with `turn`, `phase`
 (`PhaseEnum`), `life`, `board_counts` (live battlefield permanents by
@@ -575,6 +580,72 @@ digest even if the slot stays parked. For branch evidence,
 interventions to the attempted suffix on demand. Failure capture and durable
 journaling use the same replay inputs.
 
+### Counterfactual state edits
+
+At a `Priority`, `DeclareAttacker`, or `DeclareBlocker` decision, apply a batch
+of `GameStateEdit` values to compare choices on a different board. Use the
+observed `Permanent.id` for a permanent and `permanent.characteristics.name`
+for its effective name. For a player, use the native seat index from
+`obs.agent.player_index` or `obs.opponent.player_index`.
+
+```python
+import managym
+
+blocker = next(
+    p for p in obs.opponent_permanents if p.characteristics.name == "Gray Ogre"
+)
+edits = [
+    managym.GameStateEdit.move_permanent(blocker.id, to="library_bottom"),
+    managym.GameStateEdit.set_life(obs.opponent.player_index, 5),
+]
+
+# Probe a live decision. The clone retains decision memory and freezes capture.
+probe = game.clone_env()
+edited_obs = probe.edit_game_state(edits)
+
+# Fork the same decision with its original memory capture setting.
+options = managym.RestoreOptions.exact(game_state_edits=edits)
+branch = game.snapshot().restore(options)
+replay = branch.snapshot().to_replay_json()
+assert managym.GameSnapshot.from_replay_json(replay).state_digest == branch.state_digest()
+```
+
+| Constructor | Effect |
+|---|---|
+| `move_permanent(permanent, to="graveyard")` | Moves a card to its owner's `"graveyard"`, `"exile"`, or `"library_bottom"`. A melded permanent moves both cards. Tokens cease to exist. Cards exiled until the permanent leaves stay in exile. A bottom placement stays pinned through `shuffle_libraries`. |
+| `set_tapped(permanent, tapped)` | Sets tap state directly, bypassing stun counters and tap or untap triggers. |
+| `set_damage(permanent, damage)` | Sets nonnegative marked damage. Zero also clears the deathtouch mark. `dealt_damage_this_turn` keeps its value. |
+| `set_counters(permanent, kind, count)` | Sets a nonnegative count of one named kind, updating keyword-counter timestamps. Zero removes that kind. Use `"plus_one_plus_one"` for the count exposed as `Permanent.plus1_counters`. Other counter names appear in `Permanent.counters`. |
+| `set_life(player, life)` | Sets life for native seat 0 or 1, preserving turn history. |
+
+A successful non-empty batch applies in order and journals one
+`"game_state_edits"` intervention at the current action offset. The engine
+publishes the same decision with refreshed legal actions. Commands bound to the
+previous revision become stale. Opening hands, pending choices, suspended
+decisions and finished games cannot be edited. An empty live batch at a
+supported decision returns its observation and preserves the revision.
+
+Edits preserve turn, stack, mana, decision memory and the 32-row policy-history
+window. A moved permanent's history rows lose their live object links. Quiet
+moves produce no departure or arrival events. State-based actions, including
+lethal damage and unattached Auras, wait until the next ordinary check.
+
+During declarations, newly eligible creatures join the remaining prompts.
+The current declarer must stay eligible and retain a legal action. An invalid
+batch raises `managym.AgentError` and preserves the original state and journal.
+This includes a phased-out or unknown permanent, a second edit to a permanent
+already moved in the batch, and an unknown destination or counter kind.
+
+Snapshot restore applies edits before reseeding, shuffling or determinizing.
+`SlotLoad.snapshot` accepts the same options for a vector slot. A non-empty
+batch excludes `forced_first_action` because the action indices can change.
+For recorded counterfactuals, export via `snapshot().to_replay_json()` or load
+into `RecordedVectorEnv` with `SlotLoad.snapshot` rather than calling
+`env.edit_game_state` directly on a `ScalarCapture`-tracked `Env`, which does
+not record mid-game branch interventions. Cold replay and `walk` reapply
+journaled edits. Academy Replay labels the choice recorded after the edit
+**Branch · game state edited**.
+
 ## Ask questions of recorded games
 
 ```python
@@ -603,7 +674,7 @@ the card content digest and definition, unique within a world; `name` is for
 reading.
 
 `reduce` re-executes each record once and feeds every reducer the same
-verified decisions. Two reducers are built in:
+verified decisions. Three reducers are built in:
 
 - `CardPerformance`: per card, games played, opening-hand and drawn copies, and
   the win rate of games with the card in hand against games where it was never
@@ -612,6 +683,11 @@ verified decisions. Two reducers are built in:
   card values.
 - `Behaviour`: per seat, how often a land was played at a decision that offered
   one, and how often at least one attacker was declared when one could be.
+- `Totals`: per seat, the game's turns, spells cast (cards put on the stack;
+  copies of a spell are never cast), cards drawn from the library after the
+  opening hand, damage dealt by the seat's sources to the other player and
+  damage dealt to the seat from any source. Damage is `None` in records
+  captured before damage was counted.
 
 A decision with one legal action is never shown to the chooser and so never
 counts as an opportunity.

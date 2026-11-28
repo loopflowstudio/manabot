@@ -1,10 +1,10 @@
 //! The world's one immutable card catalog.
 //!
-//! A [`ContentPack`] maps card names and token keys to stable [`CardDefId`]s
+//! A [`ContentPack`] maps card names and token and emblem keys to stable [`CardDefId`]s
 //! and their [`ObjectDefinition`] rows. A process holds one ([`default_content_pack`]):
-//! every card and token definition in `managym-cards` plus the rules fixtures, in
+//! every card, token and emblem definition in `managym-cards` plus the rules fixtures, in
 //! name order, with each double-faced card's back face registered right after its
-//! front. Cards resolve by name; tokens, which may share a name, by `token.*` key. Every
+//! front. Cards resolve by name; tokens and emblems resolve by their definition keys. Every
 //! match, authored setup and search fork runs on it. Its digest and manifest
 //! name the world's cards for derived consumers (the world identity, learning
 //! catalogs, checkpoints).
@@ -20,10 +20,12 @@ use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, PaymentCost},
     card::{
-        CardDefId, CardDefinition, CastOption, ObjectDefinition, PrintedCharacteristics,
-        SpellProfile, TokenDefinition,
+        CardDefId, CardDefinition, CastOption, EmblemDefinition, ObjectDefinition,
+        PrintedCharacteristics, SpellProfile, TokenDefinition,
     },
-    game_object::{CopiableValues, Object, ObjectLki, PlayerId, PublicId, TransformingFaces},
+    game_object::{
+        CopiableValues, Object, ObjectKind, ObjectLki, PlayerId, PublicId, TransformingFaces,
+    },
 };
 
 pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
@@ -48,6 +50,7 @@ pub struct ContentPackManifest {
 pub struct ContentPack {
     pub schema_version: u32,
     cards_by_name: BTreeMap<String, CardDefId>,
+    emblems_by_key: BTreeMap<&'static str, CardDefId>,
     tokens_by_key: BTreeMap<&'static str, CardDefId>,
     definitions: Vec<ObjectDefinition>,
     names: OnceLock<Arc<NameVocabulary>>,
@@ -62,6 +65,51 @@ pub fn default_content_pack() -> &'static ContentPack {
     DEFAULT_CONTENT_PACK.get_or_init(ContentPack::default)
 }
 
+/// What the definition can read from the mana on its payment receipt.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SpentManaRead {
+    Amount,
+    Colors,
+}
+
+pub(crate) fn spent_mana_read(id: CardDefId) -> Option<SpentManaRead> {
+    static READS: OnceLock<Vec<Option<SpentManaRead>>> = OnceLock::new();
+    READS
+        .get_or_init(|| {
+            default_content_pack()
+                .definitions()
+                .map(|definition| {
+                    let json = serde_json::to_string(definition).expect("serializable definition");
+                    if json.contains("ColorsSpentToCast") {
+                        Some(SpentManaRead::Colors)
+                    } else if json.contains("ManaSpentToCast") {
+                        Some(SpentManaRead::Amount)
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .get(id.0 as usize)
+        .copied()
+        .flatten()
+}
+
+/// The printed face used to announce, pay for or stack `object` under `profile`.
+/// Reads the front or inset face directly without touching the global catalog
+/// unless `profile` selects a modal back face.
+#[inline]
+pub(crate) fn spell_face(
+    object: &Object,
+    profile: SpellProfile,
+) -> Option<&Arc<PrintedCharacteristics>> {
+    if profile == SpellProfile::BackFace && object.modal_back {
+        default_content_pack().spell_definition(object, profile)
+    } else {
+        object.front_or_inset(profile)
+    }
+}
+
 impl ContentPack {
     /// Sorted real names, including registered back faces.
     /// Built once with the catalog; decisions and search forks share the allocation.
@@ -69,7 +117,7 @@ impl ContentPack {
         Arc::clone(self.names.get_or_init(|| {
             let mut names = BTreeMap::new();
             for (id, card) in self.definition_entries() {
-                if card.is_token
+                if card.kind != ObjectKind::Card
                     || (card.scryfall_id.is_none()
                         && card.key.is_empty()
                         && self.front_face(id).is_none())
@@ -90,6 +138,11 @@ impl ContentPack {
                     .collect(),
             )
         }))
+    }
+
+    /// Whether a chosen name has a policy row in this catalog.
+    pub(crate) fn catalog_name<'a>(&self, name: &'a str) -> Option<&'a str> {
+        self.name_candidates().contains(name).then_some(name)
     }
 
     /// Representation-neutral fingerprint of the immutable card definitions.
@@ -123,7 +176,7 @@ impl ContentPack {
                 .map(|(card_def_id, definition)| ContentPackDefinitionManifest {
                     card_def_id,
                     key: (!definition.key.is_empty()).then(|| definition.key.to_owned()),
-                    registry_name: definition.name.clone(),
+                    registry_name: definition.registry_name().into(),
                 })
                 .collect(),
         }
@@ -147,12 +200,14 @@ impl Default for ContentPack {
             .chain(&fixtures)
             .map(Row::Card)
             .chain(managym_cards::token_catalog().iter().map(Row::Token))
+            .chain(managym_cards::emblem_catalog().iter().map(Row::Emblem))
             .collect::<Vec<_>>();
         rows.sort_by(|left, right| (left.name(), left.key()).cmp(&(right.name(), right.key())));
         let mut out = Self {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
             cards_by_name: BTreeMap::new(),
             tokens_by_key: BTreeMap::new(),
+            emblems_by_key: BTreeMap::new(),
             names: OnceLock::new(),
             digest: OnceLock::new(),
             public_definitions: OnceLock::new(),
@@ -162,6 +217,14 @@ impl Default for ContentPack {
             match row {
                 Row::Card(card) => out.register_card(card.clone()),
                 Row::Token(token) => out.register_token(token),
+                Row::Emblem(emblem) => out.register(ObjectDefinition {
+                    key: emblem.key,
+                    label: Some(emblem.label),
+                    scryfall_id: None,
+                    printed: Arc::new(emblem.printed.clone()),
+                    kind: ObjectKind::Emblem,
+                    back_face: None,
+                }),
             }
         }
         out.register(managym_cards::ragnarok());
@@ -173,6 +236,7 @@ impl Default for ContentPack {
 enum Row<'a> {
     Card(&'a CardDefinition),
     Token(&'a TokenDefinition),
+    Emblem(&'a EmblemDefinition),
 }
 
 impl Row<'_> {
@@ -180,6 +244,7 @@ impl Row<'_> {
         match self {
             Self::Card(card) => &card.name,
             Self::Token(token) => &token.name,
+            Self::Emblem(emblem) => emblem.label,
         }
     }
 
@@ -187,6 +252,7 @@ impl Row<'_> {
         match self {
             Self::Card(card) => card.key,
             Self::Token(token) => token.key,
+            Self::Emblem(emblem) => emblem.key,
         }
     }
 }
@@ -230,12 +296,15 @@ impl ContentPack {
                 .try_into()
                 .expect("content pack exceeds CardDefId capacity"),
         );
-        if definition.is_token {
+        if definition.kind != ObjectKind::Card {
+            let keys = if definition.kind == ObjectKind::Emblem {
+                &mut self.emblems_by_key
+            } else {
+                &mut self.tokens_by_key
+            };
             assert!(
-                self.tokens_by_key
-                    .insert(definition.key, definition_id)
-                    .is_none(),
-                "duplicate token definition {}",
+                keys.insert(definition.key, definition_id).is_none(),
+                "duplicate object definition {}",
                 definition.key
             );
         } else {
@@ -347,19 +416,22 @@ impl ContentPack {
                 self.definitions()
                     .map(|card| {
                         let mut public = serde_json::json!({
-                            "name": card.name, "text_box": card.text_box,
+                            "name": card.registry_name(), "text_box": card.text_box,
                             "mana_cost": card.mana_cost, "types": card.types,
                             "supertypes": card.supertypes, "subtypes": card.subtypes,
                             "keywords": KeywordData::from_keywords(&card.keywords),
                             "power": card.power,
                             "toughness": card.toughness, "kicker": card.optional_cost(),
                             "ward": card.ward().and_then(PaymentCost::mana),
-                            "is_token": card.is_token,
+                            "is_token": card.kind == ObjectKind::Token,
                         });
-                        // A ward paid in life has no mana cost to state; the
-                        // key is absent on every other definition.
-                        if let Some(PaymentCost::Life(life)) = card.ward() {
-                            public["ward_life"] = (*life).into();
+                        if let Some(loyalty) = card.loyalty {
+                            public["printed_loyalty"] = loyalty.into();
+                        }
+                        // A ward with a life component states it here; the key
+                        // is absent when the ward costs no life.
+                        if let Some(life) = card.ward().map(PaymentCost::life).filter(|&l| l > 0) {
+                            public["ward_life"] = life.into();
                         }
                         // A cost choice other than kicker names itself, so
                         // a reader of `kicked` says "bargained"; the key is
@@ -422,9 +494,10 @@ impl ContentPack {
     pub fn object_row(&self, card: &Object) -> ObjectDefinition {
         ObjectDefinition {
             key: "",
+            label: None,
             scryfall_id: None,
             printed: card.copiable_definition(),
-            is_token: !card.is_card(),
+            kind: card.kind(),
             back_face: self
                 .transforming_faces(card)
                 .filter(|faces| !faces.back_up)
@@ -447,7 +520,7 @@ impl ContentPack {
         if object.copy().is_none()
             && object.form_faces().is_none()
             && self.definition(object.definition_id).is_some_and(|row| {
-                row.is_token != object.is_card() && &row.printed == object.copiable_face()
+                row.kind == object.kind() && &row.printed == object.copiable_face()
             })
         {
             return None;
@@ -489,6 +562,14 @@ impl ContentPack {
         self.instantiate_row(self.token_id(key)?, owner, object_id)
     }
 
+    pub fn emblem_id(&self, key: &str) -> Option<CardDefId> {
+        self.emblems_by_key.get(key).copied()
+    }
+
+    pub fn instantiate_emblem(&self, key: &str, owner: PlayerId, id: PublicId) -> Option<Object> {
+        self.instantiate_row(self.emblem_id(key)?, owner, id)
+    }
+
     fn instantiate_row(
         &self,
         definition_id: CardDefId,
@@ -501,7 +582,7 @@ impl ContentPack {
             owner,
             definition_id,
             Arc::clone(&row.printed),
-            row.is_token,
+            row.kind,
         ))
     }
 }

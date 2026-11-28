@@ -20,7 +20,18 @@ Read when CI fails, a test fails locally, or the change touches CI or test timin
   Check the PR's checks before QA ends; tests elsewhere in the tree can still
   assert the behavior the change replaced.
 - Once a CI run has finished, `gh run view <run> --job <job-id> --log-failed`
-  gives the pytest summary. CI names its test files in
-  `.github/workflows/manabot-integration.yml`; `tests/sim/test_puct_compatibility.py`,
-  `tests/sim/test_conditional_search.py` and `tests/verify/test_learning_regression.py`
-  are not among them, and the first two fail on main (2026-11-18).
+  gives the pytest summary. CI names test directories in
+  `.github/workflows/manabot-integration.yml` and `academy-integration.yml`;
+  `tests/infra/test_ci_selection.py` fails when a `tests/**/test_*.py` file is
+  outside every workflow.
+- CI has no R2 secrets, so `experiment_data`-marked tests skip there. A test
+  that passes locally can still fail CI because the bytes already sit in
+  `experiments/data/`. Reproduce CI by moving the named paths aside and running
+  with `MANABOT_DATA_CACHE=<empty .runs dir>`: the test must report `SKIPPED
+  ... needs experiment data`, not error. Restore the files afterwards.
+- Job selection: drive `.github/ci/select-tests.sh` as `ci.yml` does, with
+  NUL-delimited paths on stdin:
+  `printf '%s\0' tests/belief/test_tracker.py | bash .github/ci/select-tests.sh | grep =true`.
+  Empty input selects every job; `--only <job>` rejects an unknown name with
+  exit 1. `test_all_test_files_are_covered_by_ci_workflows` checks that each
+  test file's selected jobs include a workflow that runs it.

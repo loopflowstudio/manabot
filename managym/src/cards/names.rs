@@ -54,6 +54,12 @@ impl NameVocabulary {
     pub fn iter(&self) -> impl Iterator<Item = &NameCandidate> {
         self.entries.iter()
     }
+
+    pub(crate) fn contains(&self, name: &str) -> bool {
+        self.entries
+            .binary_search_by(|entry| entry.name.as_str().cmp(name))
+            .is_ok()
+    }
 }
 
 /// Most options a naming prompt offers. Larger scopes publish groups first.

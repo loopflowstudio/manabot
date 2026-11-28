@@ -4,8 +4,8 @@ use managym_state::ability::{
     TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-    StaticAbility,
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, EntryScope, Keyword, Keywords,
+    PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticKeywordGrant, StaticScope,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
@@ -14,11 +14,46 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        wildwood_scourge(),
+        garruks_uprising(),
         heartfire_immolator(),
         mazemind_tome(),
+        primal_might(),
         sanguine_indulgence(),
         shipwreck_dowser(),
     ]
+}
+
+fn primal_might() -> CardDefinition {
+    let text_box = "Target creature you control gets +X/+X until end of turn. Then it fights up to one target creature you don't control. (Each deals damage equal to its power to the other.)";
+    CardDefinition {
+        key: "m21.primal_might",
+        scryfall_id: "1cd8cee8-7ea0-4037-8a3b-39334dc064fb",
+        printed: PrintedCharacteristics {
+            name: "Primal Might".into(),
+            mana_cost: Some(ManaCost::parse("{X}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::CreatureYouControl),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::ClauseTarget(0),
+                        Modification::ModifyPt {
+                            power: EffectValue::X,
+                            toughness: EffectValue::X,
+                        },
+                    )],
+                },
+                Effect::TargetClause {
+                    requirement: TargetRequirement::up_to(1, TargetSpec::CreatureOpponentControls),
+                    effects: vec![Effect::fight_last_target()],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn mazemind_tome() -> CardDefinition {
@@ -170,6 +205,87 @@ fn heartfire_immolator() -> CardDefinition {
                     }),
                 )],
                 ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn garruks_uprising() -> CardDefinition {
+    let powerful = CardPredicate {
+        min_power: Some(4),
+        ..CardPredicate::creature()
+    };
+    let draw = Effect::DrawCards { count: 1.into() };
+    let text_box = "When this enchantment enters, if you control a creature with power 4 or greater, draw a card.\nCreatures you control have trample. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever a creature you control with power 4 or greater enters, draw a card.";
+    CardDefinition {
+        key: "m21.garruks_uprising",
+        scryfall_id: "71a4860a-8bb6-45c0-b00a-b4a42da33ab9",
+        printed: PrintedCharacteristics {
+            name: "Garruk's Uprising".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: Some(Condition::ControlsAtLeast {
+                        count: 1,
+                        predicate: powerful.clone(),
+                        distinct_names: false,
+                    }),
+                    effects: vec![draw.clone()],
+                },
+                Ability::when_enters(TriggerSubject::you_control(powerful), vec![draw]),
+            ],
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::YouControl(CardPredicate::creature()),
+                condition: None,
+                keywords: Keywords::of(&[Keyword::Trample]),
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn wildwood_scourge() -> CardDefinition {
+    let text_box = "This creature enters with X +1/+1 counters on it.\nWhenever one or more +1/+1 counters are put on another non-Hydra creature you control, put a +1/+1 counter on this creature.";
+    CardDefinition {
+        key: "m21.wildwood_scourge",
+        scryfall_id: "46ff0b33-d153-4b0e-ac48-7e5ed70dea09",
+        printed: PrintedCharacteristics {
+            name: "Wildwood Scourge".into(),
+            mana_cost: Some(ManaCost::parse("{X}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Hydra".into()],
+            power: Some(0),
+            toughness: Some(0),
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                kind: CounterKind::PlusOnePlusOne,
+                count: EffectValue::X,
+                condition: None,
+            }],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::PutsCountersOn {
+                    who: Actor::AnyPlayer,
+                    kind: CounterKind::PlusOnePlusOne,
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        not_subtypes: vec!["Hydra".into()],
+                        ..CardPredicate::creature()
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
             }],
             text_box: text_box.into(),
             ..Default::default()

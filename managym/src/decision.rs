@@ -15,11 +15,11 @@ use sha2::{Digest, Sha256};
 use crate::{
     agent::{
         action::AgentError,
-        observation::{EventData, Observation as AgentObservation},
-        structured_offer::{
-            ChoiceAnswer, InteractionOffer, OfferId, OfferSubmission, PublicCommitment,
-            StructuredOfferError, StructuredOfferProjection,
+        decision_surface::{
+            ChoiceAnswer, DecisionOption, DecisionOptionId, DecisionProjection, DecisionSubmission,
+            DecisionSurfaceError, PublicCommitment,
         },
+        observation::{EventData, Observation as AgentObservation},
     },
     flow::game::Game,
     state::{
@@ -60,7 +60,7 @@ pub struct DecisionFrame {
     pub revision: u64,
     pub actor: u8,
     pub fingerprint: DecisionFingerprint,
-    pub offers: Vec<InteractionOffer>,
+    pub offers: Vec<DecisionOption>,
     #[serde(default)]
     pub object_candidates: Vec<ObjectCandidateAddress>,
 }
@@ -168,10 +168,10 @@ impl std::fmt::Display for SemanticError {
     }
 }
 
-impl From<StructuredOfferError> for SemanticError {
-    fn from(error: StructuredOfferError) -> Self {
+impl From<DecisionSurfaceError> for SemanticError {
+    fn from(error: DecisionSurfaceError) -> Self {
         match error {
-            StructuredOfferError::NoActiveActionSpace | StructuredOfferError::GameOver => {
+            DecisionSurfaceError::NoActiveActionSpace | DecisionSurfaceError::GameOver => {
                 Self::NoActiveDecision
             }
             other => Self::IllegalCommand(other.to_string()),
@@ -192,7 +192,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 /// Canonical digest of one complete decision frame projection.
-fn decision_fingerprint(revision: u64, projection: &StructuredOfferProjection) -> String {
+fn decision_fingerprint(revision: u64, projection: &DecisionProjection) -> String {
     let payload = json!({
         "schema_version": SEMANTIC_DECISION_VERSION,
         "revision": revision,
@@ -257,7 +257,7 @@ impl Game {
         if self.is_game_over() {
             return Err(SemanticError::GameOver);
         }
-        let projection = self.structured_search_offers()?.into_projection();
+        let projection = self.decision_surface()?.into_projection();
         let fingerprint = decision_fingerprint(self.decision_epoch, &projection);
         let object_candidates = self.bind_frame_candidates(&fingerprint);
         Ok(DecisionFrame {
@@ -272,7 +272,7 @@ impl Game {
 
     fn bind_frame_candidates(&self, fingerprint: &str) -> Vec<ObjectCandidateAddress> {
         let mut object_candidates = Vec::new();
-        if let Ok(presentation) = self.structured_offers() {
+        if let Ok(presentation) = self.decision_candidate_surface() {
             let mut private = self.semantic_object_candidates.borrow_mut();
             for (offer_id, role, candidate_id, object_ref) in
                 presentation.object_candidate_bindings()
@@ -301,7 +301,7 @@ impl Game {
             return Ok(());
         }
         let offers = self
-            .structured_search_offers()
+            .decision_surface()
             .map_err(|e| AgentError(e.to_string()))?;
         let fingerprint = decision_fingerprint(self.decision_epoch, offers.projection());
         if take(&fingerprint)? && self.bind_frame_candidates(&fingerprint).is_empty() {
@@ -337,11 +337,8 @@ impl Game {
         let decision = if self.is_game_over() {
             None
         } else {
-            let actor_is_viewer = self
-                .current_action_space
-                .as_ref()
-                .and_then(|space| space.player)
-                == Some(viewer);
+            let actor_is_viewer =
+                self.action_space().and_then(|space| space.player) == Some(viewer);
             if actor_is_viewer {
                 self.semantic_decision_frame().ok()
             } else {
@@ -430,7 +427,7 @@ impl Game {
             });
         }
 
-        let offers = self.structured_search_offers()?;
+        let offers = self.decision_surface()?;
         let projection = offers.projection();
         let actor = PlayerId(projection.actor as usize);
         let public_commitment = projection
@@ -441,8 +438,8 @@ impl Game {
             .public_commitment
             .clone();
 
-        let submission = OfferSubmission {
-            offer_id: OfferId(command.offer_id),
+        let submission = DecisionSubmission {
+            offer_id: DecisionOptionId(command.offer_id),
             answers: command.answers.clone(),
         };
 
@@ -476,7 +473,7 @@ impl Game {
         let events = self.take_observation_events();
         let event_identities = events
             .iter()
-            .flat_map(|event| AgentObservation::event_data(self, event))
+            .flat_map(|event| AgentObservation::event_data(self, event, actor))
             .map(|event| event_identity(&event))
             .collect();
 
@@ -516,7 +513,7 @@ impl Game {
 mod tests {
     use super::*;
     use crate::{
-        agent::structured_offer::{CandidateId, ChoiceAnswer, OfferVerb, RoleId},
+        agent::decision_surface::{CandidateId, ChoiceAnswer, DecisionVerb, RoleId},
         state::player::PlayerConfig,
         state::zone::ZoneType,
     };
@@ -554,7 +551,7 @@ mod tests {
         let pass = frame
             .offers
             .iter()
-            .find(|offer| offer.verb == OfferVerb::PassPriority)
+            .find(|offer| offer.verb == DecisionVerb::PassPriority)
             .expect("a pass priority offer is always legal");
         Command {
             command_id: id.to_string(),
@@ -654,8 +651,7 @@ mod tests {
     fn observation_is_viewer_safe_and_decision_only_for_actor() {
         let game = first_game();
         let actor = game
-            .current_action_space
-            .as_ref()
+            .action_space()
             .and_then(|space| space.player)
             .expect("an actor holds the first decision");
 
@@ -812,7 +808,9 @@ mod tests {
             })
             .cloned()
             .expect("candidate privately binds exact object");
-        let rendered = game.structured_offers().expect("structured offer");
+        let rendered = game
+            .decision_candidate_surface()
+            .expect("decision candidate surface");
         let rendered_json = serde_json::to_value(rendered.projection()).expect("projection json");
         assert!(rendered_json
             .to_string()
@@ -827,7 +825,7 @@ mod tests {
         let pass = current
             .offers
             .iter()
-            .find(|offer| offer.verb == OfferVerb::PassPriority)
+            .find(|offer| offer.verb == DecisionVerb::PassPriority)
             .expect("pass offer");
         let stale_object = Command {
             command_id: "stale-object".to_string(),

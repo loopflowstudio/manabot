@@ -18,21 +18,29 @@ impl Game {
     /// through the ordinary action boundary before priority can be granted.
     pub(crate) fn stabilize_before_priority(&mut self) -> Option<ActionSpace> {
         self.state.priority_mut().sba_done = false;
+        // What led here (combat damage, a turn-based action, a resolution)
+        // is a whole state before the first state-based check.
+        self.presentation_cut();
         let cleanup = self.state.turn.current_step_kind() == StepKind::Cleanup;
 
         loop {
+            self.refresh_control();
             // CR 603.3b: finish this placement round before another SBA or
             // collection pass, including after an ordering/target suspension.
             if self.state.trigger_placement.is_some() {
                 if let Some(choice) = self.flush_triggers() {
                     return Some(choice);
                 }
+                self.presentation_cut();
             }
             self.collect_waiting_triggers();
 
             // CR 704.3 — after any SBA is performed, check the complete set
             // again before putting waiting triggers on the stack.
             let progress = self.perform_state_based_actions();
+            if progress == SbaProgress::Changed {
+                self.presentation_cut();
+            }
             if cleanup && progress != SbaProgress::Stable {
                 self.state.set_cleanup_priority(true);
             }
@@ -54,10 +62,12 @@ impl Game {
                 if let Some(choice) = self.flush_triggers() {
                     return Some(choice);
                 }
+                self.presentation_cut();
                 continue;
             }
             self.state.release_resolved_forms();
             self.state.priority_mut().sba_done = true;
+            self.presentation_settled();
             return None;
         }
     }

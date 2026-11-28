@@ -30,7 +30,7 @@ def test_bumi_schedule_reconnect_keeps_current_restriction_and_rejects_stale_com
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     # Bolt leaves a real priority choice after the trigger, so native trivial
     # skipping does not jump straight past the pending schedule.
     config = {
@@ -90,7 +90,7 @@ def test_bumi_schedule_reconnect_keeps_current_restriction_and_rejects_stale_com
                     f"Restricted combat not reached: {frame.action_space}, {[o.label for o in frame.offers]}"
                 )
             assert saw_pending and stale is not None
-            game = server.SESSION_REGISTRY[initial["session_id"]].game
+            game = server.LIVE_GAMES[initial["game"]].game
             assert game.env is not None and game.trace is not None
             digest = game.env.state_digest()
             events = len(game.trace.events)
@@ -105,8 +105,7 @@ def test_bumi_schedule_reconnect_keeps_current_restriction_and_rejects_stale_com
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             recovered = ExperienceFrame.model_validate(
@@ -130,7 +129,7 @@ def test_delayed_lifetime_reconnect_preserves_waiter_and_expired_state(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     config = {
         "hero_deck": {"Swamp": 12, "Mountain": 8, "Gray Ogre": 12, "Fatal Fissure": 8},
         "villain_deck": {"Plains": 40},
@@ -144,7 +143,7 @@ def test_delayed_lifetime_reconnect_preserves_waiter_and_expired_state(
             socket.send_json({"type": "new_game", "config": config})
             initial = settled_message(socket)
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
-            game = server.SESSION_REGISTRY[initial["session_id"]].game
+            game = server.LIVE_GAMES[initial["game"]].game
             cast_ogre = False
             played_mountain = False
             for ordinal in range(250):
@@ -198,8 +197,7 @@ def test_delayed_lifetime_reconnect_preserves_waiter_and_expired_state(
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             recovered = ExperienceFrame.model_validate(
@@ -247,8 +245,7 @@ def test_delayed_lifetime_reconnect_preserves_waiter_and_expired_state(
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             assert (

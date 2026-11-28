@@ -154,7 +154,7 @@ def replay_root(
         seed=42, decision_memory=memory, decision_memory_include_own=own
     )
     scalar.reset(setup)
-    actions = [0, 0] + [0] * (30 if terminal else 4)
+    actions = [0, 0] + [0] * (21 if terminal else 4)
     for action in actions:
         scalar.step(action)
     recipe = SnapshotRecipe.from_inputs(
@@ -2140,12 +2140,12 @@ def test_snapshot_settings_require_both_seats() -> None:
     settings = gray_ogre_self_play(horizon=2).model_dump() | {
         "snapshot": SnapshotConfig(capacity=1, replay_fraction=0.5, fresh_floor=0.5)
     }
-    for changes in (
-        {"learning_seats": "one"},
-        {"behavior": "random"},
-        {"batch_closure": "exact-quota"},
+    for changes, match in (
+        ({"learning_seats": "one"}, "both learning seats"),
+        ({"behavior": "random"}, "both learning seats"),
+        ({"batch_closure": "exact-quota"}, "complete games"),
     ):
-        with pytest.raises(ValueError, match="both learning seats"):
+        with pytest.raises(ValueError, match=match):
             SelfPlay.model_validate(settings | changes)
 
 

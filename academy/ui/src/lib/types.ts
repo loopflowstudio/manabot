@@ -1,3 +1,4 @@
+import type { GameNumbers } from './numbers';
 export interface CardTypes {
   is_creature: boolean;
   is_land: boolean;
@@ -16,6 +17,7 @@ export interface CardPreview {
 }
 
 export interface CardState {
+  printed_loyalty?: number | null;
   text_box?: string;
   id: number;
   registry_key: number;
@@ -94,9 +96,43 @@ export interface ContinuousEffect {
   timestamp: number;
 }
 
+export interface AbilityGrantView {
+  effect_timestamp?: number;
+  source?: string;
+  counter?: boolean;
+}
+
+export interface KeywordAbilityView {
+  source?: string;
+  effect_timestamp?: number;
+  label: string;
+  granted?: boolean;
+}
+
+export type PermanentRestriction =
+  | 'cant_be_blocked'
+  | 'cant_block'
+  | 'cant_attack_or_block'
+  | 'doesnt_untap'
+  | 'must_attack';
+
+export interface RestrictionView {
+  kind: PermanentRestriction;
+  source?: string;
+}
+
 export interface PermanentState {
+  printed_loyalty?: number | null;
+  loyalty_activated_this_turn?: boolean;
+  attacked_permanent?: number;
+  /** Effective evergreen grants, keyed by keyword: granting permanent, effect timestamp, or counter. */
+  keyword_grants?: Record<string, AbilityGrantView>;
+  keyword_abilities?: KeywordAbilityView[];
+  attacks_despite_defender?: boolean;
+  restrictions?: RestrictionView[];
   types?: CardTypes;
   is_token?: boolean;
+  chosen?: string;
   temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
   /** Exhaust abilities this object has used. */
@@ -128,12 +164,17 @@ export interface PermanentState {
   is_granted_land?: boolean;
   /** Attacking in the current combat. */
   attacking?: boolean;
+  blocked?: boolean;
+  /** Public player ID of the controller this permanent entered under (CR 110.2), omitted while unchanged. */
+  entry_controller_id?: number;
   first_strike_participant?: boolean;
   attacked_this_turn?: boolean;
   /** The attacking permanent this one blocks. */
   blocking?: number;
   /** It has lost all abilities. */
   abilities_lost?: boolean;
+  protection_from?: string[];
+  hexproof_from?: string[];
   /** Face down (CR 708.2). */
   face_down?: boolean;
   /** Keywords it has after continuous effects; absent when it has none. */
@@ -181,11 +222,14 @@ export interface PlayerTurnHistory {
   permanents_left?: number;
   nonland_permanents_left?: number;
   warped_this_turn?: boolean;
+  loyalty_abilities_activated?: number;
   mana_spent_casting?: number;
 }
 
+export type ManaExpiry = 'step' | 'end_of_combat' | 'end_of_turn';
+
 export interface PlayerState {
-  pooled_mana_classes?: { mana: number[]; effect?: string | null; restriction?: string | null; combat: boolean }[];
+  pooled_mana_classes?: { mana: number[]; effect?: string | null; restriction?: string | null; combat: boolean; expiry?: ManaExpiry }[];
   mana?: number[];
   lesson_mana?: number[];
   /** `lesson_mana` split by restriction class. */
@@ -193,6 +237,7 @@ export interface PlayerState {
   /** Player id whose next turn ends this player's hand-only casting. */
   spent_graveyard_types?: [number, string][];
   hand_only_until?: number;
+  hexproof?: boolean;
   no_maximum_hand_size?: boolean;
   counters?: Record<string, number>;
   combat_mana?: number;
@@ -230,6 +275,7 @@ export interface PlayerState {
   hand: CardState[];
   graveyard: CardState[];
   exile: CardState[];
+  command?: CardState[];
   stack: CardState[];
   battlefield: PermanentState[];
 }
@@ -286,6 +332,8 @@ export interface StackEntryView {
   source_permanent?: number;
   ability_index?: number;
   chosen_mode?: number;
+  /** What the spell or ability targets, in the order chosen. */
+  targets?: SubjectRef[];
   /** The announced value of X, when above zero. */
   x?: number;
   /** A spell cast from a prepared copy; its stack copies are not. */
@@ -438,6 +486,8 @@ export type ChoiceAnswer =
 // for retained readers and outside-game Learn candidate navigation.
 export interface InteractionOffer {
   subjects?: OfferSubjectView[];
+  /** Live in-zone copies folded into this offer, omitted when empty. */
+  aliases?: SubjectRef[];
   id: number;
   actor: number;
   verb: OfferVerb;
@@ -518,9 +568,44 @@ export const PRESENTATION_KIND_NAMES = [
   'blocked',
   'turn_started',
   'land_played',
+  'drew',
   'discarded',
   'revealed',
+  'activated',
+  'triggered',
+  'ability_resolved',
+  'countered',
+  'passed',
+  'counters',
+  'searched',
+  'looked',
+  'sacrificed',
+  'lost',
+  'life',
+  'exiled',
+  'token_created',
+  'pt_changed',
+  'control_changed',
 ] as const;
+
+export const PRESENTATION_RULES = [
+  'draw_step',
+  'cleanup',
+  'lethal_damage',
+  'zero_toughness',
+  'zero_loyalty',
+  'zero_defense',
+  'legend_rule',
+  'unattached_aura',
+  'zero_life',
+  'empty_library',
+  'poison',
+  'illegal_targets',
+] as const;
+/** The state-based, turn-based, or resolution rule (CR 704.5, 504, 514, 608.2b) that did what an event tells. */
+export type PresentationRule = (typeof PRESENTATION_RULES)[number];
+
+export type LookAction = 'scry' | 'surveil';
 
 /**
  * Protocol-v1 semantic theater. Targeted/resolved are the first explicit
@@ -528,6 +613,7 @@ export const PRESENTATION_KIND_NAMES = [
  * spell leaving the stack must not be reconstructed from snapshot diffs.
  */
 export type PresentationKind =
+  | { kind: 'drew'; player: number; object?: ObjectRenderId }
   | {
       kind: 'cast';
       object: ObjectRenderId;
@@ -588,6 +674,88 @@ export type PresentationKind =
       kind: 'revealed';
       cards: string[];
       player: number;
+    }
+  | {
+      kind: 'activated';
+      source: ObjectRenderId;
+      controller: number;
+      stack: number;
+    }
+  | {
+      kind: 'triggered';
+      source: ObjectRenderId;
+      controller: number;
+      stack: number;
+    }
+  | {
+      /** An activated or triggered ability began to resolve. */
+      kind: 'ability_resolved';
+      source: ObjectRenderId;
+      stack: number;
+    }
+  | {
+      /** A spell or ability left the stack without resolving. */
+      kind: 'countered';
+      stack: number;
+    }
+  | {
+      /** A player passed priority. */
+      kind: 'passed';
+      player: number;
+    }
+  | {
+      kind: 'counters';
+      object: ObjectRenderId;
+      counter: string;
+      count: number;
+      /** The permanent's count of that kind after. */
+      total: number;
+    }
+  | {
+      kind: 'searched';
+      player: number;
+    }
+  | {
+      kind: 'looked';
+      player: number;
+      action: LookAction;
+    }
+  | {
+      kind: 'sacrificed';
+      objects: ObjectRenderId[];
+      player: number;
+    }
+  | {
+      kind: 'lost';
+      player: number;
+    }
+  | {
+      /** Life gained (positive `amount`) or lost other than by damage; `total` after. */
+      kind: 'life';
+      player: number;
+      amount: number;
+      total: number;
+    }
+  | {
+      kind: 'exiled';
+      objects: ObjectRenderId[];
+    }
+  | {
+      kind: 'token_created';
+      objects: ObjectRenderId[];
+      player: number;
+    }
+  | {
+      kind: 'pt_changed';
+      objects: ObjectRenderId[];
+      power: number;
+      toughness: number;
+    }
+  | {
+      kind: 'control_changed';
+      object: ObjectRenderId;
+      controller: number;
+      returned: boolean;
     };
 
 export interface PresentationEvent {
@@ -600,6 +768,10 @@ export interface PresentationEvent {
   suggested_ms: number;
   sound: string | null;
   kind: PresentationKind;
+  /** The earlier event on this track this one follows from; absent for a root. */
+  cause?: number;
+  rule?: PresentationRule;
+  labels?: Partial<Pick<PresentationLabels, 'objects' | 'stacks'>>;
 }
 
 export interface FrameUpdate {
@@ -660,11 +832,12 @@ export interface CommandRejection {
   message: string;
   current_revision: number;
   current_prompt: number | null;
+  refused?: import('./decision-group').DecisionGroupRefusal | null;
 }
 
-/** One line of the server's narration: either player's move or an automated action, in the turn it was taken. */
+/** One line of the server's narration: either player's move, an automated action, or a system note, in the turn it was taken. */
 export interface LogLine {
-  actor: 'hero' | 'villain' | 'auto';
+  actor: 'hero' | 'villain' | 'auto' | 'system';
   turn: number;
   text: string;
 }
@@ -701,18 +874,17 @@ export interface RecordedPlayer {
 }
 
 export interface GameSummary extends TraceSummary {
-  status: 'active' | 'completed' | 'stopped' | 'interrupted';
+  /** `active` is a game in progress; a legacy record may still say `interrupted`. */
+  status: 'active' | 'completed' | 'stopped';
+  /** An unfinished played game: `/?game=<id>` takes it up again. */
+  resumable: boolean;
   ended_at: string | null;
   players: RecordedPlayer[];
   origin: string;
   record_version: number;
   revision: number | null;
-  mine: boolean;
-  replay_available: boolean;
-  play_session_id?: string | null;
-  game_number?: number | null;
-  feedback_truncated?: boolean;
-  feedback: { note: string; created_at: string; author_id: string | null; decision_address: string | null }[];
+  /** The game's numbers once it is over and has been counted (`$lib/numbers`). */
+  numbers?: GameNumbers | null;
 }
 
 export interface TraceSummary {
@@ -732,19 +904,40 @@ export interface TrainedOpponent {
   policy?: PolicyRuntimeIdentity;
   sha256: string;
   name: string;
-  /** How it decides: "scripted", "checkpoint w17", "search". */
+  /** How it decides: "scripted", "checkpoint", "search". */
   kind?: string;
   producer: string;
   group: string;
   details: { label: string; value: string }[];
   available: boolean;
   reason: string | null;
+  recommended?: boolean;
+  summary?: string | null;
+  trained_settings?: Record<string, number> | null;
+  aliases?: string[];
+}
+
+export interface BuiltinOpponentEntry {
+  id: string;
+  name: string;
+  kind: string;
+  group: string;
+  summary: string;
+  requires_open_decklists: boolean;
+}
+
+export interface SettingsFitReport {
+  status: 'match' | 'mismatch' | 'unknown';
+  summary: string | null;
+  warnings: string[];
 }
 
 export interface OpponentCatalog {
   advice_available?: boolean;
   extension?: string | null;
   watch_players?: string[];
+  default_opponent?: string;
+  builtins?: BuiltinOpponentEntry[];
   opponents: TrainedOpponent[];
   catalog_error: string | null;
 }
@@ -764,8 +957,11 @@ export interface CheckpointProvenance {
   step?: number | null;
 }
 
+/** A registered policy in the opponent's seat; `base_sha256` names it without its search wrapper. */
+export interface GameOpponent { name: string; sha256: string; producer?: string; base_sha256?: string | null }
+
 export interface TraceConfig {
-  opponent?: { name: string; sha256: string; producer?: string } | null;
+  opponent?: GameOpponent | null;
   opponent_checkpoint?: CheckpointProvenance | null;
   watch_players?: string[] | null;
   mirror?: import('./search').SearchConfig | null;
@@ -813,8 +1009,6 @@ export interface TraceEvent {
 }
 
 export interface Trace {
-  can_feedback?: boolean;
-  read_only?: boolean;
   players?: RecordedPlayer[];
   record_version?: number;
   origin?: string;
@@ -868,7 +1062,7 @@ export type WorkStatus = {
 });
 
 export type ServerMessage = (
-  | { type: 'work_status'; session_id: string; work: WorkStatus }
+  | { type: 'work_status'; game: string | null; work: WorkStatus }
 
   | {
       type: 'observation';
@@ -883,10 +1077,10 @@ export type ServerMessage = (
       asset_pack?: AssetPackReference | null;
       auto_passed?: number;
       boards?: StepBoardPatch[];
-      session_id?: string;
-      resume_token?: string;
       frame?: ExperienceFrame;
       recovery?: RecoveryEnvelope;
+      /** Present while a live analysis is shown in this game. */
+      analysis?: { policy: import('./analysis').AnalysisPolicy };
     }
   | {
       type: 'game_over';
@@ -914,15 +1108,23 @@ export type ServerMessage = (
           recovery?: RecoveryEnvelope;
         }
     ))
-  | { type: 'error'; message: string; session_ended?: boolean }
+  | { type: 'error'; message: string; game_stopped?: boolean }
+  | { type: 'control_error'; code: string; message: string }
+  | { type: 'open_hands_state' }
+  | import('./analysis').LiveAnalysisState
+  | import('./analysis').LiveAnalysisMessage
 ) & {
   work?: WorkStatus | null;
   mirror_retry?: import('./search').PendingSearch | null;
   mirror?: import('./search').SearchConfig | null;
-  table?: import('./shared-table-protocol').TableSnapshot;
-  session_id?: string;
-  resume_token?: string;
-  participant_id?: string;
+  /** The game this reply belongs to, with its opponent and the setup it was started with. */
+  game?: string;
+  opponent?: GameOpponent | null;
+  opponent_label?: string | null;
+  setup?: Record<string, unknown>;
+  decision_group?: import('./decision-group').LiveDecisionGroup | null;
+  /** The bot's hand beside this reply's frame while open hands is on; null while it is off. */
+  open_hand?: OpenHand | null;
   launch?: string;
   launch_setup?: LaunchSetup;
 };
@@ -935,10 +1137,29 @@ export interface LaunchSetup {
   villain_sims?: number;
   opponent_sha256?: string;
   decklists: Decklists;
-  deck_import?: { hero: { source: string; filename: string }; villain: { source: string; filename: string } };
+  deck_import?: { hero: { source: string; filename: string; name?: string }; villain: { source: string; filename: string; name?: string } };
 }
 
-export type ClientMessage = import('./shared-table-protocol').SharedTableRequest;
+/** The bot's hand as it holds it at `revision`, sent on `/ws/play` while open hands is on. Never part of a frame. */
+export interface OpenHand {
+  revision: number;
+  hand: CardState[];
+}
+
+/** What the browser sends on `/ws/play` (`managym/academy/play_protocol.py`). */
+export type ClientMessage =
+  | { type: 'resume'; game: string; presentation_cursor?: number | null; take_over?: boolean }
+  | { type: 'new_game'; config?: Record<string, unknown> }
+  | { type: 'rematch'; game: string; intent: 'rematch' | 'swap_sides'; config?: Record<string, unknown> }
+  | { type: 'swap_sides'; request_id: string; match_id: string; expected_revision: number }
+  | { type: 'command'; command: Command }
+  | { type: 'decision_group_command'; command: import('./decision-group').DecisionGroupCommand }
+  | { type: 'action'; index: number }
+  | { type: 'pass_turn' }
+  | { type: 'retry_mirror'; match_id: string; expected_revision: number }
+  | { type: 'set_stops'; stops?: Record<string, string[]> | null; stop_on_stack?: boolean | null; auto_pass?: boolean | null }
+  | { type: 'show_analysis'; shown: boolean; policy?: string | null }
+  | { type: 'set_open_hands'; open: boolean };
 
 export type ConnectionState =
   | 'disconnected'

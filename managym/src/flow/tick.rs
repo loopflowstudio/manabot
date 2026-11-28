@@ -10,7 +10,12 @@ use crate::{
         proposed_event::EventBinding,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
-    state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    state::{
+        card::StaticAbility,
+        game_object::{PermanentId, PlayerId},
+        permanent::CounterKind,
+        zone::ZoneType,
+    },
 };
 
 impl Game {
@@ -18,28 +23,28 @@ impl Game {
         if self.is_game_over() {
             return Err(AgentError("game is over".to_string()));
         }
-        let action_space = self
-            .current_action_space
+        let decision = self
+            .published_decision
             .take()
             .ok_or_else(|| AgentError("no active action space".to_string()))?;
 
-        if action >= action_space.actions.len() {
-            self.current_action_space = Some(action_space.clone());
+        if action >= decision.space.actions.len() {
+            let len = decision.space.actions.len();
+            self.published_decision = Some(decision);
             return Err(AgentError(format!(
-                "Action index {action} out of bounds: {}",
-                action_space.actions.len()
+                "Action index {action} out of bounds: {len}"
             )));
         }
 
         let pending_memory = crate::agent::decision_memory::capture(
             self,
-            &action_space,
-            &action_space.actions[action],
+            &decision.space,
+            &decision.space.actions[action],
         );
-        let exposure = self.exposure_choice(&action_space, action);
-        let selected_action = action_space.actions[action].clone();
+        let exposure = self.exposure_choice(&decision.space, action);
+        let selected_action = decision.space.actions[action].clone();
         if let Err(error) = self.execute_action(&selected_action) {
-            self.current_action_space = Some(action_space);
+            self.published_decision = Some(decision);
             return Err(error);
         }
 
@@ -63,9 +68,20 @@ impl Game {
         game_over
     }
 
-    /// Publish a newly computed external decision and invalidate commands
-    /// decoded from every previously published structured offer set.
-    pub(crate) fn publish_action_space(&mut self, mut action_space: ActionSpace) {
+    /// Fold indistinguishable object offers and publish the resulting external
+    /// decision, invalidating commands decoded from earlier offer sets.
+    pub(crate) fn publish_action_space(&mut self, action_space: ActionSpace) {
+        let (action_space, aliases) = self.fold_action_space(action_space);
+        self.publish_folded_action_space(action_space, aliases);
+    }
+
+    /// Publish an already-folded external decision with its alias pairs.
+    /// Overwrites aliases on every call and clears them at game over.
+    pub(crate) fn publish_folded_action_space(
+        &mut self,
+        mut action_space: ActionSpace,
+        aliases: crate::flow::interchangeable::ActionAliases,
+    ) {
         self.refresh_visible_library_tops();
         self.assert_library_knowledge();
         self.decision_epoch = self
@@ -78,7 +94,15 @@ impl Game {
             .map(|action| action.player())
             .map(|player| self.decision_controller(player));
         self.remember_controlled_hands();
-        self.current_action_space = Some(action_space);
+        let aliases = if action_space.kind == ActionSpaceKind::GameOver {
+            None
+        } else {
+            aliases
+        };
+        self.published_decision = Some(crate::flow::game::PublishedDecision {
+            space: action_space,
+            aliases,
+        });
     }
 
     pub fn play(&mut self) {
@@ -96,11 +120,12 @@ impl Game {
             let action_space = self.opening_actions().or_else(|| self.turn_tick());
             if self.is_game_over() {
                 self.finish_combat_capture();
-                self.publish_action_space(ActionSpace::game_over());
+                self.publish_folded_action_space(ActionSpace::game_over(), None);
                 return true;
             }
 
             if let Some(space) = action_space {
+                let (space, aliases) = self.fold_action_space(space);
                 if let Some(action) = self.automatic_payment_action(&space) {
                     self.execute_action(&action)
                         .expect("automatic payment witness executes");
@@ -112,7 +137,7 @@ impl Game {
                         // A player chooses: the chain is no longer mandatory.
                         self.state.priority_mut().clear_loop_watch();
                     }
-                    self.publish_action_space(space);
+                    self.publish_folded_action_space(space, aliases);
                     return false;
                 }
                 self.skip_trivial_count += 1;
@@ -242,8 +267,9 @@ impl Game {
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
                 let combat = self.state.combat.get_or_insert_default();
-                combat.already_attacking = combat.attackers.len();
+                combat.already_attacking = combat.attack_targets.len();
                 combat.attackers_to_declare = eligible;
+                combat.declined_attackers.clear();
             }
             StepKind::DeclareBlockers => {
                 // CR 509.1 — Defending player declares blockers.
@@ -251,14 +277,16 @@ impl Game {
                 let eligible = self.eligible_blockers(defender);
                 let combat = self.state.combat.get_or_insert_default();
                 combat.blockers_to_declare = eligible;
+                combat.declined_blockers.clear();
             }
             _ => {}
         }
     }
 
     fn on_step_end(&mut self, step: StepKind) {
-        // CR 106.4 — Unspent mana empties at the end of each step and phase.
-        self.clear_mana_pools();
+        // CR 106.4 — Unspent mana empties at the end of each step and phase,
+        // respecting classes that survive until end of combat or end of turn.
+        self.clear_mana_pools(step);
         if step == StepKind::EndOfCombat {
             // CR 511.3 — Creatures stop being attacking as combat ends.
             for permanent in self.state.permanents.iter_mut().flatten() {
@@ -266,9 +294,6 @@ impl Game {
             }
             self.finish_combat_capture();
             self.state.combat = None;
-        }
-        if matches!(step, StepKind::EndOfCombat | StepKind::Cleanup) {
-            self.clear_combat_mana_pools();
         }
         self.remember_controlled_hands();
     }
@@ -281,6 +306,8 @@ impl Game {
                 // phased-out permanents phase in first (CR 502.1).
                 let active = self.active_player();
                 self.end_until_your_next_turn_effects(active);
+                self.refresh_control();
+                self.presentation_cut();
                 self.phase_in(active);
                 self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);
@@ -320,7 +347,7 @@ impl Game {
                 let is_first_player_first_turn =
                     self.state.turn.turn_number == 1 && active == PlayerId(0);
                 if !is_first_player_first_turn {
-                    self.draw_cards(active, 1);
+                    self.draw(active, 1, true);
                 }
                 None
             }
@@ -328,57 +355,64 @@ impl Game {
                 let active = self.active_player();
                 let combat = self.state.combat.get_or_insert_default();
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
+                    combat.declined_attackers.clear();
+                    combat.detached_declarers.clear();
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
                     let first = std::mem::take(&mut combat.already_attacking);
-                    let attackers = combat.attackers[first..].to_vec();
-                    if !attackers.is_empty() {
-                        self.state.turn.history[active.0].attacked = true;
-                        for &attacker in &attackers {
-                            let object =
-                                self.permanent_object(attacker).expect("declared attacker");
-                            self.state.turn.record_attack(object);
+                    if first == combat.attack_targets.len() {
+                        return None;
+                    }
+                    let declared = combat.attack_targets[first..].to_vec();
+                    let mut attackers = Vec::with_capacity(declared.len());
+                    let mut permanent_defenders = Vec::new();
+                    let mut visible_defenders = Vec::new();
+                    self.state.turn.history[active.0].attacked = true;
+                    for (attacker, target) in declared {
+                        attackers.push(attacker);
+                        let object = self.permanent_object(attacker).expect("declared attacker");
+                        self.state.turn.record_attack(object);
+                        if let Some(target @ super::combat::AttackTarget::Permanent(defender)) =
+                            target
+                        {
+                            permanent_defenders.push((attacker, target));
+                            if let (Some(a), Some(d)) = (
+                                self.permanent_event_ref(attacker),
+                                self.object_event_ref(defender),
+                            ) {
+                                visible_defenders.push((a, d));
+                            }
                         }
-                        self.emit(GameEvent::AttackersDeclared {
+                    }
+                    let visible_attackers: Vec<_> = attackers
+                        .iter()
+                        .filter_map(|&permanent| self.permanent_event_ref(permanent))
+                        .collect();
+                    self.emit(GameEvent::AttackersDeclared {
+                        permanent_defenders: (!permanent_defenders.is_empty())
+                            .then(|| Box::new(permanent_defenders)),
+                        player: active,
+                        attackers,
+                    });
+                    if !visible_attackers.is_empty() {
+                        self.emit_observation_event(GameEvent::CombatAttackersDeclared {
                             player: active,
-                            attackers: attackers.clone(),
+                            defender: self.non_active_player(),
+                            permanent_defenders: (!visible_defenders.is_empty())
+                                .then(|| Box::new(visible_defenders)),
+                            attackers: visible_attackers,
                         });
-                        let attackers = attackers
-                            .into_iter()
-                            .filter_map(|permanent| self.permanent_event_ref(permanent))
-                            .collect::<Vec<_>>();
-                        if !attackers.is_empty() {
-                            self.emit_observation_event(GameEvent::CombatAttackersDeclared {
-                                player: active,
-                                defender: self.non_active_player(),
-                                attackers,
-                            });
-                        }
                     }
                     return None;
                 };
-                let must_attack = self.must_attack(attacker);
-                let actions = [true, false]
-                    .into_iter()
-                    .filter(|attack| *attack || !must_attack)
-                    .map(|attack| Action::DeclareAttacker {
-                        player: active,
-                        permanent: attacker,
-                        attack,
-                    })
-                    .collect();
-                Some(ActionSpace {
-                    player: Some(active),
-                    kind: ActionSpaceKind::DeclareAttacker,
-                    actions,
-                    focus: Vec::new(),
-                })
+                Some(self.declare_attacker_action_space(active, attacker))
             }
             StepKind::DeclareBlockers => {
                 let defending = self.non_active_player();
                 let combat = self.state.combat.get_or_insert_default();
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
-                    self.cleanup_illegal_menace_blocks();
+                    combat.declined_blockers.clear();
+                    combat.detached_declarers.clear();
                     let assignments: Vec<_> = self
                         .state
                         .combat
@@ -407,40 +441,7 @@ impl Game {
                     }
                     return None;
                 };
-                let attackers = combat.attackers.clone();
-
-                let mut actions = Vec::with_capacity(attackers.len() + 1);
-                for attacker in &attackers {
-                    if self.blocker_can_block_attacker(blocker, *attacker) {
-                        actions.push(Action::DeclareBlocker {
-                            player: defending,
-                            blocker,
-                            attacker: Some(*attacker),
-                        });
-                    }
-                }
-                // CR 509.1c: a blocker able to block an attacker every able
-                // creature must block declares one of those blocks.
-                let required = |action: &Action| {
-                    matches!(action, Action::DeclareBlocker { attacker: Some(attacker), .. }
-                        if self.must_be_blocked_by_all_able(*attacker))
-                };
-                if actions.iter().any(required) {
-                    actions.retain(required);
-                } else {
-                    actions.push(Action::DeclareBlocker {
-                        player: defending,
-                        blocker,
-                        attacker: None,
-                    });
-                }
-
-                Some(ActionSpace {
-                    player: Some(defending),
-                    kind: ActionSpaceKind::DeclareBlocker,
-                    actions,
-                    focus: Vec::new(),
-                })
+                Some(self.declare_blocker_action_space(defending, blocker))
             }
             StepKind::CombatDamage => {
                 // CR 510.1 — Assign and deal combat damage.
@@ -450,10 +451,8 @@ impl Game {
             StepKind::Cleanup => {
                 let player = self.active_player();
                 let unlimited = self.has_no_maximum_hand_size_effect(player)
-                    || self.battlefield_permanents(player).iter().any(|id| {
-                        self.characteristics(*id)
-                            .static_abilities
-                            .contains(&StaticAbility::NoMaximumHandSize)
+                    || self.has_functioning_static(Some(player), |ability| {
+                        matches!(ability, StaticAbility::NoMaximumHandSize)
                     });
                 if !unlimited && self.state.zones.size(ZoneType::Hand, player) > 7 {
                     self.suspend_rule_decision(crate::flow::decision::Decision::Discard {
@@ -465,9 +464,59 @@ impl Game {
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
                 self.end_turn_modifiers();
+                self.presentation_cut();
                 None
             }
             _ => None,
+        }
+    }
+
+    pub(super) fn declare_attacker_action_space(
+        &self,
+        active: PlayerId,
+        attacker: PermanentId,
+    ) -> ActionSpace {
+        let must_attack = self.must_attack(attacker);
+        let suppress_attack = !must_attack && self.declined_interchangeable_attacker(attacker);
+        let actions = if suppress_attack {
+            vec![Action::DeclareAttacker {
+                player: active,
+                permanent: attacker,
+                attack: None,
+            }]
+        } else {
+            let mut targets = self.declaration_targets(active);
+            targets
+                .next()
+                .map(Some)
+                .into_iter()
+                .chain((!must_attack).then_some(None))
+                .chain(targets.map(Some))
+                .map(|attack| Action::DeclareAttacker {
+                    player: active,
+                    permanent: attacker,
+                    attack,
+                })
+                .collect()
+        };
+        ActionSpace {
+            player: Some(active),
+            kind: ActionSpaceKind::DeclareAttacker,
+            actions,
+            focus: Vec::new(),
+        }
+    }
+
+    pub(super) fn declare_blocker_action_space(
+        &self,
+        defending: PlayerId,
+        blocker: PermanentId,
+    ) -> ActionSpace {
+        ActionSpace {
+            player: Some(defending),
+            kind: ActionSpaceKind::DeclareBlocker,
+            actions: self.block_actions(defending, blocker),
+            focus: Vec::new(),
         }
     }
 
@@ -513,6 +562,7 @@ impl Game {
                 if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
+                    self.presentation_cut();
                     if !self.state.turn.step_initialized || self.is_game_over() {
                         // A turn-ending resolution leaves this priority round.
                         return None;

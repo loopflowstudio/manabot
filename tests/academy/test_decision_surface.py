@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from dataclasses import asdict
+from hashlib import sha256
 import json
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,8 @@ from typing import Any
 from pydantic import ValidationError
 import pytest
 
+from manabot.verify.text_observation import priority_root
+import managym
 from managym.academy.replay_index import (
     CanonicalReplayV1,
     DecisionAddressV2,
@@ -20,6 +23,7 @@ from managym.academy.server import GameSession, viewer_view
 from managym.academy.trace import GameConfig, Trace, TraceEvent
 from managym.bots import BeliefSummary, BotDecision, PolicyFactor
 from managym.experience import Command, ExperienceFrame, InteractionOffer
+from managym.experience_projection import serialize_observation
 
 
 def _frame(session: GameSession) -> ExperienceFrame:
@@ -202,13 +206,16 @@ def test_precision_four_mana_branch(tmp_path: Path) -> None:
             session.new_game({"demo": "precision-mana"})["frame"]
         )
         frame = _choose(session, frame, _label(frame, "Cast Deadly Precision"))
-        frame = _choose(
-            session,
-            frame,
-            next(
-                offer for offer in frame.offers if offer.action_type == "CHOOSE_TARGET"
-            ),
-        )
+        if frame.action_space == "CHOOSE_TARGET":
+            frame = _choose(
+                session,
+                frame,
+                next(
+                    offer
+                    for offer in frame.offers
+                    if offer.action_type == "CHOOSE_TARGET"
+                ),
+            )
         before = len(frame.projection.agent.battlefield)
         revision = frame.revision
         alternative = next(
@@ -271,7 +278,78 @@ def test_trace_record_preserves_nested_policy_evidence() -> None:
         timestamp="fixed",
         canonical_replay={"decisions": []},
     )
-    assert trace.to_record() == asdict(trace)
-    assert json.loads(json.dumps(trace.to_record())) == json.loads(
-        json.dumps(asdict(trace))
+    expected = asdict(trace)
+    expected.pop("recording_import")
+    expected.pop("played_from")
+    expected.pop("seat_swaps")
+    expected["events"][0].pop("boards")
+    expected.pop("final_opponent_hand")
+    expected["events"][0].pop("analysis_shown")
+    expected["events"][0].pop("open_hands")
+    expected["config"].pop("open_hands")
+    expected["config"].pop("mana_payment")
+    expected["config"].pop("mana_floats")
+    expected["config"].pop("hero_deck_pool")
+    expected["config"].pop("villain_deck_pool")
+    expected["mana_payment"] = ["manual", "manual"]
+    expected["mana_floats"] = ["off", "off"]
+    assert trace.to_record() == expected
+    assert json.loads(json.dumps(trace.to_record())) == json.loads(json.dumps(expected))
+
+
+def test_permanent_details_in_recovery_after_a_lesson_resolves(tmp_path: Path) -> None:
+    env = priority_root(
+        ("Firebending Lesson",),
+        ("Platypus-Bear", "Mountain", "Fire Nation Cadets"),
+        opponent=("Mai, Jaded Edge",),
     )
+    session = GameSession(tmp_path)
+    try:
+        session.env = env
+        session.obs = env.observation_for_player(0)
+        initial = _frame(session).projection
+        bear, _, cadets = initial.agent.battlefield
+        assert bear.keyword_grants == {}  # Its Defender comes from its own face.
+        assert not bear.attacks_despite_defender
+        assert not cadets.keyword_abilities
+        assert initial.opponent.battlefield[0].keyword_abilities[0].label == "Prowess"
+
+        cast = next(
+            i
+            for i, action in enumerate(session.obs.action_space.actions)
+            if action.action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
+        )
+        targets = env.step(cast)[0].action_space.actions
+        target = next(
+            i for i, action in enumerate(targets) if action.focus == [bear.id]
+        )
+        session.obs = env.step(target)[0]
+        for _ in range(2):
+            (action,) = session.obs.action_space.actions
+            assert action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
+            session.obs = env.step(0)[0]
+
+        # Same public permanent ids and abilities from the other seat on reconnect.
+        session.human_seat = 1
+        board = _frame(session).projection.opponent.battlefield
+        assert board[0].id == bear.id and board[0].attacks_despite_defender
+        assert board[2].id == cadets.id
+        assert [a.model_dump() for a in board[2].keyword_abilities] == [
+            {"label": "Firebending 2"}
+        ]
+
+        # Bytes captured with the pre-change extension, at this resolved position.
+        historical = serialize_observation(env.observation_for_player(0))
+        blob = json.dumps(historical, separators=(",", ":"), sort_keys=True).encode()
+        assert (
+            sha256(blob).hexdigest()
+            == "c0b8ee6b84c4428f122209d1f42c0778c581a04b7bf7fdaa0343f33affbaf089"
+        )
+
+        details = env.permanent_details_json(0)
+        hidden = env.observation_for_player(1).toJSON()
+        env.determinize(seed=71, perspective=0)
+        assert env.observation_for_player(1).toJSON() != hidden
+        assert env.permanent_details_json(0) == details
+    finally:
+        session.close("session_closed")

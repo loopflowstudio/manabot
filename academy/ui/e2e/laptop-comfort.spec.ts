@@ -9,7 +9,11 @@ import { expect, test, type Page } from '@playwright/test';
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, FrameUpdate, RecoveryEnvelope } from '../src/lib/types';
 import { denseFrame } from './fixtures/laptop-board';
-import { tableSnapshot } from './fixtures/table';
+import { showEachCreaturesChoice } from './fixtures/combat';
+import { gameReply } from './fixtures/game';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 const VIEWPORTS = [{ width: 1280, height: 800 }, { width: 1440, height: 900 }] as const;
 
@@ -86,8 +90,9 @@ async function denseBoard(page: Page, offers: number): Promise<{ commands: Comma
   const commands: Command[] = [];
   const recover = (): RecoveryEnvelope => ({ ...boltJson.recovery as RecoveryEnvelope,
     frame, presentation_tail: [], accepted_commands: [], replay_cursor: frame.revision });
+  const game = gameReply();
   const observe = (): string => JSON.stringify({ type: 'observation', data: frame.projection, actions: [],
-    table: tableSnapshot(), session_id: 'laptop', resume_token: 'laptop', recovery: recover() });
+    ...game, recovery: recover() });
   let resend = (): void => {};
   await page.routeWebSocket('**/ws/play', socket => {
     resend = () => socket.send(observe());
@@ -106,7 +111,7 @@ async function denseBoard(page: Page, offers: number): Promise<{ commands: Comma
     });
   });
   await page.route('**/api/card-art/**', route => route.fulfill({ status: 404 }));
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('game')).toBeVisible();
@@ -180,7 +185,7 @@ test('a seeded game keeps the board whole at 1280×800', async ({ page }, testIn
       server.send(JSON.stringify(message));
     });
   });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
@@ -189,6 +194,7 @@ test('a seeded game keeps the board whole at 1280×800', async ({ page }, testIn
     await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => working).toBe(false);
     if (await page.getByTestId('result-card').isVisible()) break;
+    await showEachCreaturesChoice(page);
     const rows = page.getByTestId('action-option');
     await expect(rows).toHaveCount(offers);
     // A row under the resting pointer previews its payment and lifts the lands it

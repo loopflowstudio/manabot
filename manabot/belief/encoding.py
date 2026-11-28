@@ -259,10 +259,10 @@ def belief_schema_from_engine(
     *,
     count_buckets: int,
 ) -> BeliefEncodingSchema:
-    """Build fixed opponent hand/library rows from non-token definitions.
+    """Build fixed opponent hand/library rows from card definitions.
 
-    Tokens cannot remain in either hidden zone (CR 111.7); their printed names
-    can match cards or other tokens, so they do not belong to deck-count rows.
+    Tokens cannot remain in either hidden zone (CR 111.7). Emblems live in
+    the command zone (CR 114). Both have their own content-pack rows.
     """
 
     try:
@@ -271,7 +271,7 @@ def belief_schema_from_engine(
         definitions = tuple(
             (int(row["card_def_id"]), str(row["registry_name"]))
             for row in manifest["definitions"]
-            if not str(row["key"]).startswith("token.")
+            if not str(row["key"]).startswith(("token.", "emblem."))
         )
     except Exception as error:
         raise BeliefError(
@@ -329,6 +329,7 @@ def encode_belief(
     # an otherwise normalized marginal outside the fail-closed tolerance.
     probabilities64 = np.zeros((row_count, schema.count_buckets), dtype=np.float64)
     belief_probabilities = belief.probabilities
+    total_probability = float(belief_probabilities.sum())
     hand_counts: dict[str, NDArray[np.int64]] = {}
     for row_index, row in enumerate(schema.rows):
         if row.owner_role_id != OPPONENT_OWNER_ROLE_ID:
@@ -339,6 +340,9 @@ def encode_belief(
             raise BeliefError(
                 "the canonical world space only projects hidden hand and library rows"
             )
+        if row.card_name not in pool_names:
+            probabilities64[row_index, 0] = total_probability
+            continue
         if row.card_name not in hand_counts:
             hand_counts[row.card_name] = np.fromiter(
                 (world.count(row.card_name) for world in belief.space.worlds),

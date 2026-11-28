@@ -92,9 +92,11 @@ focus and naming joins live in those spans. Behavior probabilities refer to
 the original legal slots. Learner minibatches gather the selected rows across
 shards in training order, including repeats. At a snapshot horizon the collector
 freezes each contributing seat's view before assigning that stream another
-root. Decision-memory rows share their captured prefixes (`RetainedMemory`)
-across the rollout. Use `batch.observations(indexes).observation.project(key)`
-to inspect a table as a NumPy array.
+root; at a two-seat `exact-quota` cut it freezes each open seat's view while
+leaving the game running for the next batch. Decision-memory rows share their
+captured prefixes (`RetainedMemory`) across the rollout. Use
+`batch.observations(indexes).observation.project(key)` to inspect a table as a
+NumPy array.
 
 When collection runs in separate worker processes, send each collected
 `RolloutBatch` directly over `pickle` (such as a `spawn` `multiprocessing.Queue`)
@@ -142,10 +144,37 @@ capacities, and mismatched optional fields raise `ValueError`.
 The opponent is `opponent_mode`: `"self"` (one model, both seats learn by
 default), `"learning"` (two models), `"frozen"` (with `opponent_agent`, only
 the learner's seat learns) or `"random"`. `batch_closure="complete-games"` is
-the default; `"exact-quota"` pauses every stream at exactly `decisions` rows,
-carries the game into the next batch and needs `learning_seats="one"` and a
-critic bootstrap from `next_obs`
-([batch boundaries](learning.md#can-a-batch-contain-unfinished-games)).
+the default; `"exact-quota"` stops at exactly `num_envs * decisions`
+surviving learner rows (every stream at `decisions` when no game fails),
+carries unfinished games into the next batch, and
+bootstraps open seats from `next_obs`
+([batch boundaries](learning.md#can-a-batch-contain-unfinished-games)). With
+`learning_seats="one"` it returns a rectangular `[decisions, num_envs]` batch;
+with `learning_seats="both"` (and `opponent_mode="self"`) it returns a packed
+`[num_envs * decisions, 1]` batch with explicit `trajectories` spans:
+
+```python
+collector = open_collector(
+    space,
+    match,
+    reward,
+    num_envs=4,
+    seed=0,
+    opponent_mode="self",
+    learning_seats="both",
+    batch_closure="exact-quota",
+    numerics=CollectionSession(device="cpu", seed=0),
+)
+batch = collect(collector, agent, 32)
+print(batch.actions.shape, len(batch.trajectories or ()))
+# (128, 1) 8  (for example: 4 streams × 2 seats paused mid-game)
+```
+
+`batch_closure="exact-quota"` rejects `games_per_stream`, snapshot or adaptive
+collection, `opponent_mode="learning"` (`collect_pair`), and `game_errors`
+without `recover_capacity=True`; with `learning_seats="both"` it also rejects
+`observation_space.config.policy_history_version == 1` (set by `SelfPlay` for
+`model.recent_events=True`).
 Collection never changes weights. A native game failure raises unless the
 collector is given a `GameErrorPolicy`
 ([game failures](training.md#game-failures)).

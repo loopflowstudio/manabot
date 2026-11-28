@@ -15,7 +15,7 @@ def test_battlefield_permanents_carry_their_effective_keywords(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json(
@@ -31,8 +31,10 @@ def test_battlefield_permanents_carry_their_effective_keywords(
                 }
             )
             initial = settled_message(websocket)
-            game = server.SESSION_REGISTRY[initial["session_id"]].game
-            assert game.env is not None
+            game = server.LIVE_GAMES[initial["game"]].game
+            assert game.env is not None and game.obs is not None
+            while game.obs.turn.turn_number == 0:
+                game.obs, *_ = game.env.step(0)
             game.env.scenario_force_battlefield(0, "First-Time Flyer", ready=True)
             game.env.scenario_force_battlefield(0, "Island", ready=True)
             game.obs = game.env.scenario_refresh()
@@ -52,9 +54,9 @@ def test_the_spell_being_paid_for_is_announced_with_its_target(
     """Between Cast and its payment the spell is on the stack by the rules
     (CR 601.2a); the acting viewer's projection says so, with its target."""
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     config = {
-        "hero_deck": {"Mountain": 30, "Lightning Bolt": 10},
+        "hero_deck": {"Mountain": 20, "Gruul Guildgate": 10, "Lightning Bolt": 10},
         "villain_deck": {"Plains": 40},
         "villain_type": "passive",
         "seed": 11,
@@ -67,7 +69,23 @@ def test_the_spell_being_paid_for_is_announced_with_its_target(
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             seen: list[ExperienceFrame] = []
             for ordinal in range(120):
-                prefixes = ("Play Mountain", "Cast Lightning Bolt", "Target Villain")
+                has_choice = any(
+                    p.name == "Mountain" and not p.tapped
+                    for p in frame.projection.agent.battlefield
+                ) and any(
+                    p.name == "Gruul Guildgate" and not p.tapped
+                    for p in frame.projection.agent.battlefield
+                )
+                prefixes = (
+                    (
+                        "Play Gruul Guildgate",
+                        "Play Mountain",
+                        "Cast Lightning Bolt",
+                        "Target Villain",
+                    )
+                    if has_choice
+                    else ("Play Gruul Guildgate", "Play Mountain", "Target Villain")
+                )
                 offer = next(
                     (
                         o

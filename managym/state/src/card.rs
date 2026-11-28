@@ -44,6 +44,18 @@ pub enum CardType {
     Battle,
 }
 
+impl CardType {
+    /// Permanent types (CR 205.2a), in alphabetical order.
+    pub const PERMANENT_TYPES: [CardType; 6] = [
+        CardType::Artifact,
+        CardType::Battle,
+        CardType::Creature,
+        CardType::Enchantment,
+        CardType::Land,
+        CardType::Planeswalker,
+    ];
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardTypes {
     pub types: BTreeSet<CardType>,
@@ -54,6 +66,12 @@ impl CardTypes {
         Self {
             types: types.into_iter().collect(),
         }
+    }
+
+    /// Creatures and kindreds share the creature subtype list (CR 205.3m).
+    #[inline]
+    pub fn has_creature_subtypes(&self) -> bool {
+        self.is_creature() || self.types.contains(&CardType::Kindred)
     }
 
     #[inline]
@@ -190,7 +208,7 @@ macro_rules! keywords {
     ($( $(#[$meta:meta])* $variant:ident => $name:literal ),+ $(,)?) => {
         /// A parameterless keyword ability (CR 702), held in a [`Keywords`] set.
         /// Parameterized keywords (ward, firebending) have their own rules types.
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
         pub enum Keyword {
             $( $(#[$meta])* #[serde(rename = $name)] $variant, )+
         }
@@ -225,6 +243,7 @@ keywords! {
     /// control.
     Hexproof => "hexproof",
     Indestructible => "indestructible",
+    Changeling => "changeling",
 }
 
 impl Keyword {
@@ -250,6 +269,7 @@ impl<const WORDS: usize> Default for KeywordBits<WORDS> {
 }
 
 impl<const WORDS: usize> KeywordBits<WORDS> {
+    #[inline]
     fn has(self, index: usize) -> bool {
         self.0[index / 64] & (1_u64 << (index % 64)) != 0
     }
@@ -284,6 +304,7 @@ impl Keywords {
         result
     }
 
+    #[inline]
     pub fn has(self, keyword: Keyword) -> bool {
         self.0.has(keyword as usize)
     }
@@ -328,27 +349,7 @@ impl serde::Serialize for Keywords {
     }
 }
 
-/// Characteristic-defining power (CR 604.3): recomputed on every read.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum PowerCda {
-    CountersOnLandsYouControl,
-    /// "This creature's power is equal to the number of creatures you
-    /// control." (Suki, Kyoshi Warrior.)
-    CreaturesYouControl,
-    /// "This creature's power is equal to the number of [predicate] cards
-    /// in your graveyard." (Dragonfly Swarm: noncreature, nonland.)
-    GraveyardMatching(Box<CardPredicate>),
-    /// The number of [predicate] cards in the graveyards of every player
-    /// `who` names ("cards in your opponents' graveyards", Consuming
-    /// Aberration). `who` is relative to the object's controller, or its
-    /// owner off the battlefield and stack (CR 109.5).
-    GraveyardMatchingBy {
-        who: crate::ability::Actor,
-        predicate: Box<CardPredicate>,
-    },
-}
-
-/// Which battlefield permanents a static P/T buff applies to.
+/// Which battlefield permanents a static ability applies to.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticScope {
     /// Every matching permanent, regardless of controller.
@@ -371,30 +372,6 @@ pub enum StaticScope {
     /// "[predicate] spells you control" (Lo and Li's Lesson spells): stack
     /// spells only, read by `Game::spell_keywords`; no permanent matches.
     SpellsYouControl(CardPredicate),
-}
-
-/// A static continuous P/T effect (CR 613.3c layer 7c): "[scope] get(s)
-/// +P/+T [as long as condition]". Applies only while the source is on the
-/// battlefield.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct StaticPtBuff {
-    pub scope: StaticScope,
-    pub condition: Option<Condition>,
-    pub power: i32,
-    pub toughness: i32,
-    /// "+P/+T for each of its creature types, to a maximum of N" (Diligent
-    /// Zookeeper): the bonus is multiplied by the affected creature's
-    /// creature-type count, capped at this value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub per_creature_type_max: Option<i32>,
-    /// "+P/+T for each color among [predicate] permanents you control"
-    /// (Earthen Ally): the bonus is multiplied by that color count.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub per_color_among: Option<CardPredicate>,
-    /// "+P/+T for each [predicate] card in your graveyard" (Avatar
-    /// Destiny): the bonus is multiplied by that count.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub per_graveyard_matching: Option<CardPredicate>,
 }
 
 /// A static type-adding effect (CR 613.1d layer 4): "[scope] are [types] in
@@ -483,6 +460,7 @@ pub struct StaticRestriction {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Restriction {
+    CantActivateNonmanaAbilities,
     /// CR 508.1c, 509.1b.
     CantAttackOrBlock,
     /// CR 502.3.
@@ -491,15 +469,122 @@ pub enum Restriction {
     CantBeBlocked,
     /// "Can't be blocked by more than one creature" (CR 509.1b).
     CantBeBlockedByMoreThanOne,
+    /// No more than one declared creature can attack this permanent each combat.
+    CantBeAttackedByMoreThanOne,
     /// "Attacks each combat if able" (CR 508.1d): a requirement on the
     /// attack declaration, obeyed whenever the creature can attack.
     AttacksEachCombat,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum DamageTransform {
     Double,
+    Add(Box<EffectValue>),
     Prevent(u32),
+    PreventAll,
+}
+
+impl DamageTransform {
+    pub fn add(amount: EffectValue) -> Self {
+        Self::Add(Box::new(amount))
+    }
+}
+
+/// Which object a graveyard replacement applies to (CR 400.6).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum GraveyardMover {
+    This,
+    Matching(CardPredicate),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Redirect {
+    Exile,
+    OwnerLibraryShuffled { reveal: bool },
+}
+
+/// Which prospective permanent receives entry counters (CR 614.12).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum EntryScope {
+    This,
+    OtherYouControl(Box<CardPredicate>),
+}
+
+/// A damage source filter, relative to the replacement's source permanent.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct DamageSource {
+    pub by: super::ability::Actor,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub predicate: Option<CardPredicate>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub this: bool,
+}
+
+impl DamageSource {
+    pub fn any(by: super::ability::Actor) -> Self {
+        Self {
+            by,
+            predicate: None,
+            this: false,
+        }
+    }
+
+    pub fn matching(by: super::ability::Actor, predicate: CardPredicate) -> Self {
+        Self {
+            by,
+            predicate: Some(predicate),
+            this: false,
+        }
+    }
+
+    pub fn this() -> Self {
+        Self {
+            by: super::ability::Actor::AnyPlayer,
+            predicate: None,
+            this: true,
+        }
+    }
+}
+
+/// A damage recipient, relative to the replacement's source.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct DamageRecipient {
+    pub by: super::ability::Actor,
+    pub players: bool,
+    pub permanents: Option<CardPredicate>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub this: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub except_source: bool,
+}
+
+impl DamageRecipient {
+    pub fn any(by: super::ability::Actor) -> Self {
+        Self {
+            by,
+            players: true,
+            permanents: Some(CardPredicate::default()),
+            this: false,
+            except_source: false,
+        }
+    }
+
+    pub fn this() -> Self {
+        Self {
+            by: super::ability::Actor::AnyPlayer,
+            players: false,
+            permanents: None,
+            this: true,
+            except_source: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum EntryChoiceKind {
+    Color,
+    CreatureType,
+    CardName,
 }
 
 /// Declarative replacement/prevention effects supported by the curated
@@ -509,19 +594,39 @@ pub enum DamageTransform {
 /// each exact source/definition identity so it applies once per event.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
+    AsEntersChoose {
+        kind: EntryChoiceKind,
+        look_at_opponent_hand: bool,
+    },
     AdventureExile,
-    ExileInsteadOfGraveyard,
+    /// "If a [predicate] [controlled_by] controls would die, exile it instead"
+    /// (CR 614.6): applies while this permanent is on the battlefield.
+    ExileIfWouldDie {
+        controlled_by: super::ability::Actor,
+        predicate: CardPredicate,
+    },
+    GraveyardInstead {
+        what: GraveyardMover,
+        to: Redirect,
+    },
+    DiscardedInstead {
+        by: super::ability::Actor,
+        to: ZoneType,
+    },
     EntersPrepared,
-    PreventCombatDamageToOrFromSelf,
     /// Combat damage that would be dealt to the protected permanent is
     /// prevented (CR 615.1a). Only a resolved `Modification::PreventCombatDamage`
     /// record offers it; no definition prints it.
     PreventCombatDamage,
+    ModifyLifeGain {
+        who: super::ability::Actor,
+        additional: i32,
+    },
     ModifyDamage {
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        creature_source: bool,
-        source_by: super::ability::Actor,
-        recipient_by: super::ability::Actor,
+        source: DamageSource,
+        recipient: DamageRecipient,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        combat: Option<bool>,
         transform: DamageTransform,
     },
     /// This object enters the battlefield tapped (CR 614.1c).
@@ -531,32 +636,12 @@ pub enum ReplacementEffect {
     EntersTappedUnlessControls {
         predicate: CardPredicate,
     },
-    /// This object enters with +1/+1 counters already present (CR 614.1c),
-    /// if `condition` holds for its entering controller as it enters
-    /// ("enters with a +1/+1 counter on it if you attacked this turn").
-    EntersWithPlusOneCounters {
-        count: i32,
+    EntersWithCounters {
+        on: EntryScope,
+        kind: CounterKind,
+        count: EffectValue,
         #[serde(skip_serializing_if = "Option::is_none")]
         condition: Option<Condition>,
-    },
-    /// This object enters with X counters of `kind`, X being the value
-    /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
-    EntersWithXCounters {
-        kind: CounterKind,
-    },
-    /// This object enters with `count` counters of `kind` (CR 614.1c).
-    EntersWithCounters {
-        kind: CounterKind,
-        count: i32,
-        /// "If you cast it": check the entering controller against the cast spell.
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        if_cast: bool,
-    },
-    /// Damage a source this permanent's controller controls would deal to
-    /// an opponent or a permanent an opponent controls is increased by the
-    /// number of `kind` counters on this permanent (CR 614.1a).
-    OpponentDamagePlusCounters {
-        kind: CounterKind,
     },
     /// While this permanent is on the battlefield, unspent mana its
     /// controller would lose as a step or phase ends becomes red instead
@@ -605,6 +690,59 @@ fn is_mana_suffix_effect(effect: &Effect) -> bool {
     ) && effect.target_spec().is_none()
 }
 
+/// Materialize `Effect::AddOneColorManaValue` once its count is known. Shared
+/// by layer evaluation (for `EffectValue::Fixed`) and dynamic/resolution reads.
+pub fn materialize_one_color_mana(
+    amount: i32,
+    chosen_color: bool,
+    creature_purposes: &[crate::mana::CreatureManaPurpose],
+    chosen: Option<&crate::permanent::EntryChoice>,
+) -> Effect {
+    use crate::{
+        mana::{ManaRestriction, SpendPredicate},
+        permanent::EntryChoice,
+    };
+    let amount = amount.max(0) as usize;
+    if amount == 0 {
+        return Effect::add_mana(Mana::default());
+    }
+    let restriction = (!creature_purposes.is_empty()).then(|| {
+        let mut purposes = BTreeSet::new();
+        if let Some(EntryChoice::CreatureType(t)) = chosen {
+            for p in creature_purposes {
+                purposes.insert(match p {
+                    crate::mana::CreatureManaPurpose::Cast => {
+                        SpendPredicate::CastCreatureSubtype(t.clone())
+                    }
+                    crate::mana::CreatureManaPurpose::Activate => {
+                        SpendPredicate::ActivateCreatureSubtype(t.clone())
+                    }
+                });
+            }
+        }
+        ManaRestriction::only_predicates(purposes)
+    });
+    let output = |color: Color| {
+        let mut amounts = [0; 6];
+        amounts[color as usize] = amount.min(u8::MAX as usize) as u8;
+        match &restriction {
+            Some(r) => Mana::restricted_to(r.clone(), amounts),
+            None => Mana {
+                mana: amounts,
+                ..Default::default()
+            },
+        }
+    };
+    if chosen_color {
+        Effect::add_mana(match chosen {
+            Some(EntryChoice::Color(c)) => output(*c),
+            _ => Mana::default(),
+        })
+    } else {
+        Effect::mana_choice(Color::COLORS.map(output))
+    }
+}
+
 /// A single fixed immediate mana output (CR 605.1a).
 fn fixed_mana_output(effect: &Effect) -> Option<&Mana> {
     match effect {
@@ -650,6 +788,18 @@ fn is_mana_output(effect: &Effect) -> bool {
 }
 
 impl ActivatedAbilityDefinition {
+    pub fn loyalty(cost: i16, effects: Vec<Effect>) -> Self {
+        Self {
+            loyalty: Some(LoyaltyCost::Fixed(cost)),
+            effects,
+            ..Default::default()
+        }
+    }
+
+    pub fn announces_x(&self) -> bool {
+        self.mana_cost.x > 0 || self.loyalty == Some(LoyaltyCost::MinusX)
+    }
+
     /// Each object may activate this ability only once (exhaust, power-up
     /// or "activate only once").
     pub fn once_per_object(&self) -> bool {
@@ -658,7 +808,7 @@ impl ActivatedAbilityDefinition {
 
     /// Whether activating the ability spends one of its uses on the object.
     pub fn is_use_limited(&self) -> bool {
-        self.once_per_object() || self.once_each_turn
+        self.once_per_object() || self.once_each_turn || self.loyalty.is_some()
     }
 
     /// Equip attaches the Equipment to a creature its controller controls (CR 702.6).
@@ -679,6 +829,9 @@ impl ActivatedAbilityDefinition {
     /// may still depend on the game ([`Self::has_dynamic_mana_output`]); a
     /// mana ability never uses the stack.
     pub fn is_mana_ability(&self) -> bool {
+        if self.loyalty.is_some() {
+            return false;
+        }
         let Some((effect, suffix)) = self.effects.split_first() else {
             return false;
         };
@@ -689,6 +842,9 @@ impl ActivatedAbilityDefinition {
     /// control", a conditional branch, X mana of one color). Characteristics
     /// finalize it to concrete [`Self::mana_choices`] when they are read.
     pub fn has_dynamic_mana_output(&self) -> bool {
+        if self.loyalty.is_some() {
+            return false;
+        }
         let Some((effect, suffix)) = self.effects.split_first() else {
             return false;
         };
@@ -697,11 +853,34 @@ impl ActivatedAbilityDefinition {
             && !is_static_mana_output(effect)
     }
 
+    /// Resolve a fixed-count `AddOneColorManaValue` mana ability from the
+    /// permanent's entry choice during layer evaluation so it becomes a static
+    /// output instead of requiring per-read finalization.
+    pub fn resolve_fixed_entry_mana(&mut self, chosen: Option<&crate::permanent::EntryChoice>) {
+        let Some((effect, suffix)) = self.effects.split_first_mut() else {
+            return;
+        };
+        if let Effect::AddOneColorManaValue {
+            amount: EffectValue::Fixed(amount),
+            chosen_color,
+            creature_purposes,
+        } = effect
+        {
+            if suffix.iter().all(is_mana_suffix_effect) {
+                *effect =
+                    materialize_one_color_mana(*amount, *chosen_color, creature_purposes, chosen);
+            }
+        }
+    }
+
     /// The concrete outputs of a mana ability: a leading effect adding one of
     /// these mana. `None` for an ability that uses the stack and for a mana
     /// ability whose output has not been finalized against the game
     /// (`Game::characteristics` finalizes every dynamic output it returns).
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
+        if self.loyalty.is_some() {
+            return None;
+        }
         let (effect, suffix) = self.effects.split_first()?;
         if !suffix.iter().all(is_mana_suffix_effect) {
             return None;
@@ -719,6 +898,16 @@ impl ActivatedAbilityDefinition {
                 .collect(),
             _ => None,
         }
+    }
+
+    /// Tapping this permanent is the entire cost and producing mana its only effect.
+    pub fn is_simple_mana_tap(&self) -> bool {
+        self.tap_source
+            && self.mana_cost.mana_value == 0
+            && self.mana_cost.x == 0
+            && !self.is_use_limited()
+            && !self.mana_activation_has_side_effects()
+            && self.is_mana_ability()
     }
 
     /// The total power of other creatures this ability taps as a cost, and
@@ -789,32 +978,8 @@ impl ActivatedAbilityDefinition {
     }
 
     /// The activation's targeting clauses (CR 602.2b, 601.2c), in order.
-    /// Of several clauses each names a fixed number of targets, so a target's
-    /// position names its clause (`target_clause_indices`).
     pub fn target_requirements(&self) -> Vec<TargetRequirement> {
-        if self.target_spec().is_none() {
-            return Vec::new();
-        }
         effect_target_requirements(&self.effects)
-    }
-
-    /// The clause of each of the first `count` chosen targets; empty for a
-    /// single clause, whose targets are all clause 0.
-    pub fn target_clause_indices(&self, count: usize) -> Vec<usize> {
-        let requirements = self.target_requirements();
-        if requirements.len() < 2 {
-            return Vec::new();
-        }
-        requirements
-            .iter()
-            .enumerate()
-            .flat_map(|(index, requirement)| std::iter::repeat_n(index, requirement.max))
-            .take(count)
-            .collect()
-    }
-
-    pub fn target_spec(&self) -> Option<&TargetSpec> {
-        self.effects.iter().find_map(Effect::target_spec)
     }
 }
 
@@ -880,8 +1045,37 @@ impl serde::Serialize for TapCost {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LoyaltyCost {
+    Fixed(i16),
+    MinusX,
+}
+
+impl LoyaltyCost {
+    pub fn counter_change(self, x: i32) -> i32 {
+        match self {
+            Self::Fixed(n) => i32::from(n),
+            Self::MinusX => -x,
+        }
+    }
+}
+
+impl std::fmt::Display for LoyaltyCost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Self::MinusX => write!(f, "[−X]"),
+            Self::Fixed(0) => write!(f, "[0]"),
+            Self::Fixed(n) if n < 0 => write!(f, "[−{}]", n.unsigned_abs()),
+            Self::Fixed(n) => write!(f, "[+{n}]"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
+    /// A loyalty symbol in the activation cost (CR 606.2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loyalty: Option<LoyaltyCost>,
     /// Omitted for battlefield abilities so existing definition digests hold.
     #[serde(skip_serializing_if = "is_battlefield")]
     pub zone: ActivationZone,
@@ -984,6 +1178,11 @@ pub struct ActivatedAbilityDefinition {
     /// from a grantor; printed abilities have none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub granted_by: Option<AbilityGrant>,
+    /// CR 607.5: the Layer-6 acquiring effect that granted or inherited this
+    /// ability on a permanent, or `None` for printed / Layer-1 copied abilities.
+    /// Omitted from catalog serialization.
+    #[serde(skip)]
+    pub acquired: Option<crate::ability::GrantKey>,
     /// Resolution effects in printed order ("draw a card, then discard a card").
     pub effects: Vec<Effect>,
 }
@@ -1011,6 +1210,26 @@ fn fixed_as_number<S: serde::Serializer>(
     }
 }
 
+/// A counted quantity read in layer 7 (characteristic-defining or static P/T).
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LayerCount {
+    YouControl(CardPredicate),
+    Graveyard {
+        who: crate::ability::Actor,
+        predicate: CardPredicate,
+    },
+    ColorsAmong(CardPredicate),
+    CreatureTypes {
+        max: i32,
+    },
+    SourceCounters(CounterKind),
+    CountersOn {
+        kind: CounterKind,
+        predicate: CardPredicate,
+    },
+}
+
 /// A P/T amount read from the current layer context for an affected object.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum LayerValue {
@@ -1021,6 +1240,14 @@ pub enum LayerValue {
     GraveyardCardTypes {
         offset: i32,
     },
+    /// A battlefield, graveyard or counter count read in the current layer context.
+    Count(Box<LayerCount>),
+}
+
+impl LayerValue {
+    pub fn count(count: LayerCount) -> Self {
+        Self::Count(Box::new(count))
+    }
 }
 
 impl From<i32> for LayerValue {
@@ -1039,10 +1266,96 @@ pub struct StaticContinuous {
     pub modifications: Vec<crate::effect::Modification<LayerValue>>,
 }
 
+/// The quality named by protection or "hexproof from" (CR 702.11, 702.16).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum SourceQuality {
+    Everything,
+    Color(Color),
+    CardType(CardType),
+}
+
+impl SourceQuality {
+    /// Every standard source quality named by protection or hexproof-from.
+    pub const ALL: &'static [Self] = &[
+        Self::Everything,
+        Self::Color(Color::White),
+        Self::Color(Color::Blue),
+        Self::Color(Color::Black),
+        Self::Color(Color::Red),
+        Self::Color(Color::Green),
+        Self::CardType(CardType::Artifact),
+        Self::CardType(CardType::Battle),
+        Self::CardType(CardType::Creature),
+        Self::CardType(CardType::Enchantment),
+        Self::CardType(CardType::Instant),
+        Self::CardType(CardType::Kindred),
+        Self::CardType(CardType::Land),
+        Self::CardType(CardType::Planeswalker),
+        Self::CardType(CardType::Sorcery),
+    ];
+
+    /// Plain domain name exposed on wire, Python, and Academy surfaces.
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::Everything => "everything",
+            Self::Color(Color::White) => "white",
+            Self::Color(Color::Blue) => "blue",
+            Self::Color(Color::Black) => "black",
+            Self::Color(Color::Red) => "red",
+            Self::Color(Color::Green) => "green",
+            Self::Color(Color::Colorless) => "colorless",
+            Self::Color(Color::Generic) => "generic",
+            Self::CardType(CardType::Artifact) => "artifact",
+            Self::CardType(CardType::Battle) => "battle",
+            Self::CardType(CardType::Creature) => "creature",
+            Self::CardType(CardType::Enchantment) => "enchantment",
+            Self::CardType(CardType::Instant) => "instant",
+            Self::CardType(CardType::Kindred) => "kindred",
+            Self::CardType(CardType::Land) => "land",
+            Self::CardType(CardType::Planeswalker) => "planeswalker",
+            Self::CardType(CardType::Sorcery) => "sorcery",
+        }
+    }
+
+    pub fn from_wire_name(name: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|quality| quality.wire_name() == name)
+            .or(match name {
+                "colorless" => Some(Self::Color(Color::Colorless)),
+                "generic" => Some(Self::Color(Color::Generic)),
+                _ => None,
+            })
+    }
+
+    /// The leaf variant in this quality's learning-token representation.
+    pub fn token_name(self) -> String {
+        match self {
+            Self::Everything => "SourceQuality::Everything".into(),
+            Self::Color(color) => format!("Color::{color:?}"),
+            Self::CardType(kind) => format!("CardType::{kind:?}"),
+        }
+    }
+
+    pub fn matches(self, colors: &Colors, types: &CardTypes) -> bool {
+        match self {
+            Self::Everything => true,
+            Self::Color(color) => colors.contains(&color),
+            Self::CardType(card_type) => types.types.contains(&card_type),
+        }
+    }
+}
+
 /// A static ability (CR 604), interpreted by the rules engine.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticAbility {
+    HasChosenCreatureType,
     BeginOnBattlefield,
+    HexproofFrom(SourceQuality),
+    Protection(SourceQuality),
+    ControllerHas(Box<crate::effect::Modification>),
+    SpellsCantBeCountered(CardPredicate),
     /// One continuous effect whose parts may apply in different layers.
     Continuous(StaticContinuous),
     /// "During your turn, spells in your graveyard have flashback": a Lesson's
@@ -1118,8 +1431,6 @@ pub enum StaticAbility {
     /// "You may play an additional land on each of your turns" (CR 305.2):
     /// one more land play per such permanent, for its controller.
     AdditionalLandPlay,
-    /// "The legend rule doesn't apply to permanents you control" (CR 704.5j).
-    LegendRuleDoesntApply,
     CantLoseAndOpponentsCantWin,
     /// "Activated abilities of [predicate] you control cost {generic} less to
     /// activate. This effect can't reduce the mana in that cost to less than
@@ -1129,15 +1440,6 @@ pub enum StaticAbility {
         predicate: CardPredicate,
         generic: u8,
     },
-    /// A continuous P/T effect (layer 7c).
-    PtBuff(StaticPtBuff),
-    /// Characteristic-defining power (CR 604.3, layer 7a); printed `power` is
-    /// ignored.
-    CharacteristicPower(PowerCda),
-    /// Characteristic-defining power and toughness, each equal to the same
-    /// count ("power and toughness are each equal to", CR 604.3, layer 7a);
-    /// printed `power` and `toughness` are ignored in every zone.
-    CharacteristicPt(PowerCda),
     /// Ward (CR 702.21): registration expands it into its "becomes the
     /// target" trigger, "counter it unless that player pays [cost]".
     Ward(PaymentCost),
@@ -1201,9 +1503,47 @@ pub enum StaticAbility {
         predicate: crate::predicate::CardPredicate,
         cost: AdditionalCost,
     },
+    /// "[Scope] aren't subject to [action]": that state-based action stops
+    /// applying to permanents `scope` covers; every other state-based action
+    /// and destruction still do.
+    StateBasedActionDoesntApply {
+        action: StateBasedAction,
+        scope: StaticScope,
+    },
+}
+
+/// A state-based action a static ability can exempt permanents from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[repr(u8)]
+pub enum StateBasedAction {
+    /// A planeswalker with 0 loyalty is put into its owner's graveyard
+    /// (CR 704.5i).
+    ZeroLoyalty = 0,
+    /// A player who controls two or more legendary permanents with the same
+    /// name chooses one and puts the rest into their owners' graveyards
+    /// (CR 704.5j).
+    LegendRule = 1,
+}
+
+/// Bitset of state-based actions a permanent is exempt from via layer 6.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StateBasedActions(u8);
+
+impl StateBasedActions {
+    pub fn insert(&mut self, action: StateBasedAction) {
+        self.0 |= 1u8 << (action as u8);
+    }
+
+    pub fn contains(self, action: StateBasedAction) -> bool {
+        (self.0 & (1u8 << (action as u8))) != 0
+    }
 }
 
 impl StaticAbility {
+    pub fn protects_from(&self, matches: impl Fn(SourceQuality) -> bool) -> bool {
+        matches!(self, Self::Protection(quality) if *quality == SourceQuality::Everything || matches(*quality))
+    }
+
     /// A battlefield effect applying its modifications together across layers (CR 613.6).
     pub fn continuous(
         scope: StaticScope,
@@ -1214,6 +1554,16 @@ impl StaticAbility {
             scope,
             condition,
             characteristic_defining: false,
+            modifications,
+        })
+    }
+
+    /// A characteristic-defining ability (CR 604.3, layer 7a) on this object.
+    pub fn cda(modifications: Vec<crate::effect::Modification<LayerValue>>) -> Self {
+        Self::Continuous(StaticContinuous {
+            scope: StaticScope::This,
+            condition: None,
+            characteristic_defining: true,
             modifications,
         })
     }
@@ -1356,6 +1706,8 @@ impl InsetSpell {
 /// objects, so a copy effect copies these values and nothing else.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PrintedCharacteristics {
+    /// Printed starting loyalty (CR 306.5b), including zero.
+    pub loyalty: Option<i32>,
     /// The other catalog face can be cast in its own right (CR 712.11).
     pub modal_back: bool,
     pub inset: Option<InsetSpell>,
@@ -1371,6 +1723,8 @@ pub struct PrintedCharacteristics {
     pub triggered_mana_abilities: Vec<TriggeredManaAbility>,
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
     pub spell_effects: Vec<Effect>,
+    /// Total divided among chosen targets as this spell is cast (CR 601.2d).
+    pub division: u8,
     /// Explicit targeting clauses for multi-target or effect-decoupled
     /// spells. When empty, a single requirement is derived from the first
     /// targeted spell effect.
@@ -1416,31 +1770,47 @@ pub struct TokenDefinition {
     pub printed: PrintedCharacteristics,
 }
 
+/// An emblem's catalog identity and its abilities (CR 114).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EmblemDefinition {
+    /// Public label of the emblem printing, separate from its rules name.
+    pub label: &'static str,
+    pub key: &'static str,
+    pub printed: PrintedCharacteristics,
+}
+
 /// A registered row of the engine's catalog, the definition a [`CardDefId`]
-/// names: a card face, a back face, a token or a rules fixture. Token status
-/// is not a printed characteristic, so it lives here and on game objects.
+/// names: a card face, token, emblem or rules fixture. The kind of object the
+/// row creates is separate from its copiable characteristics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectDefinition {
-    /// The card's or token's key; empty for a back face or rules fixture.
+    /// Display label for an unnamed catalog object.
+    pub label: Option<&'static str>,
+    /// The definition key, empty for a back face or rules fixture.
     pub key: &'static str,
     pub scryfall_id: Option<&'static str>,
     /// Shared with every object instantiated from this row.
     pub printed: Arc<PrintedCharacteristics>,
-    /// Token status (CR 111.1): rows from a [`TokenDefinition`].
-    pub is_token: bool,
+    /// The kind of object instantiated from this row.
+    pub kind: crate::game_object::ObjectKind,
     /// The printed name of this front face's back face, registered as the
     /// next row.
     pub back_face: Option<String>,
 }
 
 impl ObjectDefinition {
+    pub fn registry_name(&self) -> &str {
+        self.label.unwrap_or(&self.printed.name)
+    }
+
     /// The front face of `card` as a row; its back face is registered apart.
     pub fn card(card: &CardDefinition) -> Self {
         Self {
+            label: None,
             key: card.key,
             scryfall_id: (!card.scryfall_id.is_empty()).then_some(card.scryfall_id),
             printed: Arc::new(card.printed.clone()),
-            is_token: false,
+            kind: crate::game_object::ObjectKind::Card,
             back_face: card.back_face.as_ref().map(|face| face.name.clone()),
         }
     }
@@ -1448,20 +1818,22 @@ impl ObjectDefinition {
     /// A row with no identity of its own: a back face.
     pub fn face(printed: PrintedCharacteristics) -> Self {
         Self {
+            label: None,
             key: "",
             scryfall_id: None,
             printed: Arc::new(printed),
-            is_token: false,
+            kind: crate::game_object::ObjectKind::Card,
             back_face: None,
         }
     }
 
     pub fn token(token: &TokenDefinition) -> Self {
         Self {
+            label: None,
             key: token.key,
             scryfall_id: token.scryfall_id,
             printed: Arc::new(token.printed.clone()),
-            is_token: true,
+            kind: crate::game_object::ObjectKind::Token,
             back_face: None,
         }
     }
@@ -1493,17 +1865,23 @@ struct DefinitionWire<'a> {
     triggered_mana_abilities: &'a Vec<TriggeredManaAbility>,
     activated_abilities: &'a Vec<ActivatedAbilityDefinition>,
     spell_effects: &'a Vec<Effect>,
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    division: u8,
     targeting: &'a Vec<TargetRequirement>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     additional_costs: &'a Vec<AdditionalCost>,
     keywords: &'a Keywords,
     color_override: &'a Option<Colors>,
     is_token: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    is_emblem: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     replacement_effects: &'a Vec<ReplacementEffect>,
     text_box: &'a String,
     power: &'a Option<i32>,
     toughness: &'a Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    loyalty: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     back_face: Option<&'a str>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -1511,6 +1889,28 @@ struct DefinitionWire<'a> {
 }
 
 impl PrintedCharacteristics {
+    /// CR 702.73a: changeling defines the creature types of this face in every zone.
+    #[inline]
+    pub fn has_all_creature_types(&self) -> bool {
+        self.keywords.has(Keyword::Changeling)
+    }
+
+    pub fn creature_types(&self) -> super::subtype::CreatureTypes {
+        if self.has_all_creature_types() {
+            super::subtype::CreatureTypes::All
+        } else if self.types.has_creature_subtypes() {
+            super::subtype::CreatureTypes::among(&self.subtypes)
+        } else {
+            super::subtype::CreatureTypes::default()
+        }
+    }
+
+    #[inline]
+    pub fn has_subtype(&self, subtype: &str) -> bool {
+        self.subtypes.iter().any(|name| name == subtype)
+            || (self.has_all_creature_types() && super::subtype::is_creature_type(subtype))
+    }
+
     pub fn spell_profiles(&self) -> impl Iterator<Item = SpellProfile> {
         std::iter::once(SpellProfile::Front)
             .chain(self.inset.as_ref().and_then(InsetSpell::casting_profile))
@@ -1524,7 +1924,11 @@ impl PrintedCharacteristics {
             .map(InsetSpell::characteristics)
     }
 
-    fn wire<'a>(&'a self, is_token: bool, back_face: Option<&'a str>) -> DefinitionWire<'a> {
+    fn wire<'a>(
+        &'a self,
+        kind: crate::game_object::ObjectKind,
+        back_face: Option<&'a str>,
+    ) -> DefinitionWire<'a> {
         DefinitionWire {
             adventure: self
                 .inset_definition(SpellProfile::Adventure)
@@ -1545,15 +1949,21 @@ impl PrintedCharacteristics {
             triggered_mana_abilities: &self.triggered_mana_abilities,
             activated_abilities: &self.activated_abilities,
             spell_effects: &self.spell_effects,
+            division: self.division,
             targeting: &self.targeting,
             additional_costs: &self.additional_costs,
             keywords: &self.keywords,
             color_override: &self.color_override,
-            is_token,
+            is_token: matches!(
+                kind,
+                crate::game_object::ObjectKind::Token | crate::game_object::ObjectKind::SpellCopy
+            ),
+            is_emblem: kind == crate::game_object::ObjectKind::Emblem,
             replacement_effects: &self.replacement_effects,
             text_box: &self.text_box,
             power: &self.power,
             toughness: &self.toughness,
+            loyalty: self.loyalty,
             back_face,
             modal_back: self.modal_back,
         }
@@ -1563,7 +1973,7 @@ impl PrintedCharacteristics {
 impl serde::Serialize for ObjectDefinition {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.printed
-            .wire(self.is_token, self.back_face.as_deref())
+            .wire(self.kind, self.back_face.as_deref())
             .serialize(serializer)
     }
 }
@@ -1571,7 +1981,8 @@ impl serde::Serialize for ObjectDefinition {
 /// Copiable values alone, in the row's shape: not a token, no back face.
 impl serde::Serialize for PrintedCharacteristics {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.wire(false, None).serialize(serializer)
+        self.wire(crate::game_object::ObjectKind::Card, None)
+            .serialize(serializer)
     }
 }
 
@@ -1826,6 +2237,7 @@ impl PrintedCharacteristics {
         })
     }
 
+    #[inline]
     pub fn ward(&self) -> Option<&PaymentCost> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::Ward(cost) => Some(cost),
@@ -1833,12 +2245,17 @@ impl PrintedCharacteristics {
         })
     }
 
-    /// The characteristic-defining P/T ability, and whether it also defines
-    /// toughness (`CharacteristicPt`) rather than power alone.
-    pub fn pt_cda(&self) -> Option<(&PowerCda, bool)> {
+    /// Characteristic-defining base power and/or toughness (CR 604.3).
+    pub fn pt_cda(&self) -> Option<(Option<&LayerValue>, Option<&LayerValue>)> {
         self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::CharacteristicPower(cda) => Some((cda, false)),
-            StaticAbility::CharacteristicPt(cda) => Some((cda, true)),
+            StaticAbility::Continuous(effect) if effect.characteristic_defining => {
+                effect.modifications.iter().find_map(|m| match m {
+                    crate::effect::Modification::SetBasePt { power, toughness } => {
+                        Some((power.as_ref(), toughness.as_ref()))
+                    }
+                    _ => None,
+                })
+            }
             _ => None,
         })
     }
@@ -1857,6 +2274,16 @@ impl PrintedCharacteristics {
             StaticAbility::CostsLessIfTargets(reduction) => Some(reduction),
             _ => None,
         })
+    }
+
+    /// Bitmask of `Color::bit` for this face's printed colors (CR 202.2),
+    /// allocation-free for targeting and protection checks.
+    #[inline]
+    pub fn color_bits(&self) -> u8 {
+        if let Some(colors) = &self.color_override {
+            return Color::bits(colors);
+        }
+        self.mana_cost.as_ref().map_or(0, ManaCost::color_bits)
     }
 
     pub fn colors(&self) -> Colors {

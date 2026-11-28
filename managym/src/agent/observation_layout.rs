@@ -261,6 +261,7 @@ columns! { player {
     72: ADDITIONAL_COMBATS => ("additional_combats", ValueLayout::COUNT),
     73: DECKLISTS_OPEN => ("decklists_open", ValueLayout::FLAG),
     74: STEP_FIRST_STRIKE_COMBAT_DAMAGE => ("step_first_strike_combat_damage", ValueLayout::FLAG),
+    75: HEXPROOF => ("hexproof", ValueLayout::FLAG),
 } }
 
 // One turn-state row per seat, viewer first.
@@ -280,6 +281,7 @@ columns! { turn_state {
     12: PERMANENTS_LEFT => ("permanents_left", ValueLayout::COUNT),
     13: NONLAND_PERMANENTS_LEFT => ("nonland_permanents_left", ValueLayout::COUNT),
     14: WARPED_THIS_TURN => ("warped_this_turn", ValueLayout::FLAG),
+    15: LOYALTY_ABILITIES_ACTIVATED => ("loyalty_abilities_activated", ValueLayout::COUNT),
 } }
 
 columns! { card {
@@ -339,6 +341,8 @@ columns! { card {
     53: HAS_X => ("has_x", ValueLayout::FLAG),
     54: X => ("x", ValueLayout::COUNT_TENTHS),
     55: VALID => ("valid", ValueLayout::FLAG),
+    56: PUT_INTO_GRAVEYARD_THIS_TURN => ("put_into_graveyard_this_turn", ValueLayout::FLAG),
+    57: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
 } }
 
 columns! { permanent {
@@ -399,6 +403,11 @@ columns! { permanent {
     54: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
     55: ATTACKED_THIS_TURN => ("attacked_this_turn", ValueLayout::FLAG),
     56: FACE_DOWN => ("face_down", ValueLayout::FLAG),
+    57: CONTROL_DIFFERS_FROM_ENTRY => ("control_differs_from_entry", ValueLayout::FLAG),
+    58: BLOCKED => ("blocked", ValueLayout::FLAG),
+    59: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
+    60: LOYALTY_ACTIVATED_THIS_TURN => ("loyalty_activated_this_turn", ValueLayout::FLAG),
+    61: ATTACKED_PERMANENT => ("attacked_permanent", ValueLayout::OBJECT_REFERENCE),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -452,6 +461,7 @@ columns! { stack {
     44: MANA_SPENT => ("mana_spent", ValueLayout::COUNT),
     45: PAID_AMOUNT => ("paid_amount", ValueLayout::NUMBER_TENTHS),
     46: CAST_FROM_GRAVEYARD => ("cast_from_graveyard", ValueLayout::FLAG),
+    47: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
 } }
 
 columns! { action {
@@ -488,6 +498,7 @@ columns! { action {
     27: QUOTA_TYPE => ("quota_type", ValueLayout::new(ValueKind::Category {size:9}, "Permanent type spent by this play (CardType + 1)", "0 absent; 1..9")),
     28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
     29: PLAY_ROUTE => ("play_route", ValueLayout::new(ValueKind::Category {size:10}, "Permission this play uses (play_route_code): 1 hand, 2 free from hand, 3 library top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type, 8 exile counter, 9 printed graveyard", "0 ordinary hand play or not a play; 1..9")),
+    30: DIVISION => ("division", ValueLayout::COUNT),
 } }
 
 columns! { name {
@@ -746,6 +757,8 @@ columns! { relation {
     47: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     48: THIS_TURN => ("this_turn", ValueLayout::FLAG),
     49: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell an announcement frame casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
+    50: UNTIL_NEXT_TURN => ("until_next_turn", ValueLayout::FLAG),
+    51: DIVISION => ("division", ValueLayout::COUNT),
 } }
 
 #[derive(Clone, Debug)]
@@ -872,7 +885,11 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
     match kind {
         FactKind::Counter => ("counter", "id: CounterKind token; value: count / 10"),
         FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
+        FactKind::ChosenColor => ("chosen_color","id: chosen color token; value: 1"),
+        FactKind::ChosenSubtype => ("chosen_subtype","id: chosen creature type token; value: 1"),
+        FactKind::ChosenName => ("chosen_name","id: chosen card name; value: 1"),
         FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
+        FactKind::Keyword => ("keyword", "id: keyword token; value: 1"),
         FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
         FactKind::TriggeringAmount => ("triggering_amount", "object: controller; id: frame index + 1; value: the triggering event's amount (damage dealt or life lost)"),
         FactKind::AbilityResolution => ("ability_resolution","id: triggered ability index; value: resolutions this turn"),
@@ -881,7 +898,7 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
         FactKind::CopyException => ("copy_exception", "Copy exception: id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance"),
         FactKind::Transforms => ("transforms", "id: 0 for permanent, frame index + 1 for captured source; value: unscaled transform count"),
         FactKind::CombatRestriction => ("combat_restriction", "id: frame index + 1; detail: attacker-predicate token"),
-        FactKind::EffectProgram => ("effect_program", "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance), PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance) or Ward (a permanent's ward price that is not a mana value, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal"),
+        FactKind::EffectProgram => ("effect_program", "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance), PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance), Ward (a permanent's ward price that is not a mana value, no provenance), or StaticAbility::HexproofFrom / StaticAbility::Protection (a permanent's source quality, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal"),
         FactKind::EffectiveColor => ("effective_color", "id: Color token (Colorless for empty colors); value: 1"),
         FactKind::KeywordCounterTimestamp => ("keyword_counter_timestamp", "id: CounterKind token; timestamp: counter timestamp rank"),
         FactKind::ContinuationProgram => ("continuation_program", "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0"),
@@ -1051,8 +1068,8 @@ pub fn observation_layout(policy_history: bool) -> BTreeMap<String, ArrayLayout>
         relation::COLUMNS,
     );
     relations.row_kinds = BTreeMap::from([
-        (1, "Frame header; frame_kind describes the unfinished work; other rows repeat this header"),
-        (2, "Target: clause, ordinal, reference_definition/reference/reference_player and legal_at_resolution_start"),
+        (1, "Frame header; frame_kind describes the unfinished work; division is remaining division budget during DivideAmount; other rows repeat this header"),
+        (2, "Target: clause, ordinal, reference_definition/reference/reference_player, legal_at_resolution_start and division (assigned share)"),
         (3, "Event context: reference_definition/reference/reference_player"),
         (4, "Sacrifice: reference_definition/reference/reference_player"),
         (5, "Hybrid payment: hybrid_first/hybrid_second are alternative colors"),
@@ -1160,10 +1177,10 @@ mod tests {
             }
             // Numeric ABI: changing a width is a layout change that checkpoints see.
             for (key, width, abi) in [
-                ("agent_player", player::WIDTH, 75),
-                ("agent_cards", card::WIDTH, 56),
-                ("agent_permanents", permanent::WIDTH, 57),
-                ("actions", action::WIDTH, 30),
+                ("agent_player", player::WIDTH, 76),
+                ("agent_cards", card::WIDTH, 58),
+                ("agent_permanents", permanent::WIDTH, 62),
+                ("actions", action::WIDTH, 31),
                 (
                     "events",
                     if policy_history {
@@ -1173,7 +1190,7 @@ mod tests {
                     },
                     if policy_history { 12 } else { 7 },
                 ),
-                ("relations", super::super::continuation::RELATION_DIM, 50),
+                ("relations", super::super::continuation::RELATION_DIM, 52),
                 ("facts", FACT_DIM, 12),
                 ("effects", effect::WIDTH, 18),
                 ("effect_details", detail::WIDTH, 3),
@@ -1186,7 +1203,7 @@ mod tests {
                 assert_eq!(width, abi, "{key}");
             }
             assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-            assert_eq!(stack::WIDTH, 47);
+            assert_eq!(stack::WIDTH, 48);
             assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["player_turn_state"].columns.len(), turn_state::WIDTH);
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
@@ -1195,7 +1212,8 @@ mod tests {
                 layout["agent_permanents"].columns[permanent::VALID].name,
                 "valid"
             );
-            for key in ["agent_cards", "facts", "effects"] {
+            assert_eq!(layout["agent_cards"].columns[card::VALID].name, "valid");
+            for key in ["facts", "effects"] {
                 assert_eq!(layout[key].columns.last().unwrap().name, "valid", "{key}");
             }
             assert_eq!(layout["actions"].columns[action::VALID].name, "valid");

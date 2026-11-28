@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import type { ExperienceFrame } from '$lib/types';
-import { fitRow, footprint, handFan, handStrip, pileWidth, offerPlacements, possessive, splitHalf, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
+import type { ExperienceFrame, PermanentState } from '$lib/types';
+import { NO_RIBBON_OVERRIDES, fitRow, footprint, handFan, handStrip, pileWidth, offerPlacements, possessive, ribbonIsOut, splitHalf, toggleRibbon, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
 import { decidesBy, shortName } from '$lib/opponent-name';
 import { counterTerms, permissionTerms } from './inspect';
 
@@ -120,11 +120,28 @@ describe('where decisions land', () => {
 
   it('draws Learn: discards on hand cards, Lessons in the tray by name, declining as a button', () => {
     const view = boardView(navigation.LEARN.frame, PLAYERS);
-    expect(view.hand.filter(item => item.offers.length).length).toBe(6);
+    expect(view.you.hand.filter(item => item.offers.length).length).toBe(6);
     expect(view.tray.map(item => item.name)).toEqual(['Accumulate Wisdom', 'Firebending Lesson', "It'll Quench Ya!"]);
     expect(view.buttons.map(placed => placed.offer.label)).toEqual(['Decline Learn']);
     // A click on the Learn spell on the stack never declines.
     expect(view.stack.flatMap(item => item.offers)).toEqual([]);
+  });
+
+  it('draws a top-seat chooser\'s offers on its own hand, and unseen hand cards as backs', () => {
+    const { frame } = navigation.LEARN;
+    const { agent, opponent } = frame.projection;
+    // The same decision seen from the other seat's side of the table, hands face-up.
+    const view = boardView({ ...frame, projection: { ...frame.projection, agent: opponent, opponent: agent } }, PLAYERS);
+    expect(view.opponent.hand.filter(item => item.offers.length).length).toBe(6);
+    expect(view.opponent.hiddenHand).toBe(0);
+    expect(view.tray.map(item => item.name)).toEqual(['Accumulate Wisdom', 'Firebending Lesson', "It'll Quench Ya!"]);
+    expect([...offerPlacements(view).values()].every(count => count === 1)).toBe(true);
+    // Closed: the count stays, the cards are backs, and their offers fall back to the tray.
+    const closed = boardView({ ...frame, projection: { ...frame.projection, agent: opponent,
+      opponent: { ...agent, hand: [], hand_hidden_count: agent.hand.length, zone_counts: { ...agent.zone_counts, HAND: agent.hand.length } } } }, PLAYERS);
+    expect(closed.opponent.hand).toEqual([]);
+    expect(closed.opponent.hiddenHand).toBe(agent.hand.length);
+    expect(closed.tray.length).toBe(view.tray.length + 6);
   });
 
   it('inspects tray cards as themselves: stash counters, a condition, a controlled opponent\'s hand', () => {
@@ -200,11 +217,177 @@ describe('where decisions land', () => {
     expect(unpilePlanned([pile], new Map())).toEqual([pile]);
   });
 
+  it('keeps permanents with different loyalty activation histories separately inspectable', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const agent = frame.projection.agent;
+    const token = { ...agent.battlefield[0], id: 9001, name: 'Jace', printed_loyalty: 0, counters: { loyalty: 2 } };
+    agent.battlefield = [token, { ...token, id: 9002, loyalty_activated_this_turn: true }];
+    frame.offers = [];
+    const side = boardView(frame, PLAYERS).you;
+    expect([...side.support, ...side.creatures].map(pile => pile.items.length)).toEqual([1, 1]);
+  });
+
+  it('separates lands with different entry choices', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const lands = boardView(frame, PLAYERS).you.support.find(pile => pile.items.length > 2)!.items;
+    for (const [i, { permanent }] of lands.entries()) {
+      permanent.name = 'Uncharted Haven';
+      permanent.chosen = i === 0 ? 'color Red' : 'color Blue';
+    }
+    const piles = boardView(frame, PLAYERS).you.support.filter(pile => pile.items[0].permanent.name === 'Uncharted Haven');
+    expect(piles.map(pile => pile.items.length).sort((a, b) => a - b)).toEqual([1, lands.length - 1]);
+  });
+
+  it('piles only copies with the same effective abilities and state', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const copies: Partial<PermanentState>[] = [
+      {}, {}, { keywords: ['defender'] }, { keywords: ['defender'], attacks_despite_defender: true },
+      { keywords: ['defender'], keyword_grants: { defender: { source: 'Shield' } } },
+      { keyword_abilities: [{ label: 'Firebending 1' }] }, { granted_firebending: 1 },
+      { keyword_abilities: [{ label: 'Prowess' }] }, { keyword_abilities: [{ label: 'Prowess', granted: true }] },
+      { restrictions: [{ kind: 'cant_block' }] }, { abilities_lost: true },
+    ];
+    frame.offers = [];
+    frame.projection.agent.battlefield = copies.map((extra, index) => ({
+      id: 1000 + index, name: 'Soldier', controller_id: 0, tapped: false, damage: 0, summoning_sick: false,
+      power: 1, toughness: 1, base_power: 1, base_toughness: 1, plus1_counters: 0, is_token: true, ...extra,
+    }));
+    const piles = boardView(frame, PLAYERS).you.creatures;
+    expect(piles.map(pile => pile.items.map(item => item.permanent.id))).toEqual([
+      [1000, 1001], ...copies.slice(2).map((_, i) => [1002 + i]),
+    ]);
+  });
+
+  it('draws an opponent\'s Aura with the creature of yours it enchants', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const host = frame.projection.agent.battlefield[0];
+    const aura = { ...host, id: 9001, name: 'Watery Grasp', attached_to: host.id };
+    frame.projection.opponent.battlefield.push(aura);
+    const view = boardView(frame, PLAYERS);
+    const held = permanents(view).find(item => item.permanent.id === host.id)!;
+    expect(held.attached.map(item => item.permanent.id)).toEqual([9001]);
+    const theirs = [...view.opponent.support, ...view.opponent.creatures].flatMap(pile => pile.items);
+    expect(theirs.some(item => item.permanent.id === 9001)).toBe(false);
+  });
+
   it('fans identical lands into one pile, keeping each copy', () => {
     const view = boardView(navigation.CHOOSE_TARGET.frame, PLAYERS);
     const piles = [...view.you.support, ...view.you.creatures];
     expect(piles.some(pile => pile.items.length > 1)).toBe(true);
     expect(piles.flatMap(pile => pile.items).length).toBe(navigation.CHOOSE_TARGET.frame.projection.agent.battlefield.length);
+  });
+
+  it('keeps a land that entered under a different player’s control distinguishable', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const lands = boardView(frame, PLAYERS).you.support.find(pile => pile.items.length > 1)!;
+    const land = lands.items[0].permanent;
+    land.entry_controller_id = frame.projection.opponent.id;
+    const after = boardView(frame, PLAYERS).you.support.find(pile => pile.items.some(item => item.permanent.id === land.id))!;
+    expect(after.items.map(item => item.permanent.id)).toEqual([land.id]);
+  });
+
+  it('places folded offer aliases on drawn copies on the board and in hand, keeping piles whole and trays deduplicated', () => {
+    const frame = structuredClone(navigation.PAY_OR_NOT.frame);
+    const { agent, opponent } = frame.projection;
+    const basePerm = agent.battlefield[0];
+    const plains = [501, 502, 503].map(id => ({
+      ...basePerm,
+      id,
+      name: 'Plains',
+      controller_id: agent.id,
+      tapped: false,
+      damage: 0,
+      summoning_sick: false,
+      power: null,
+      toughness: null,
+      base_power: null,
+      base_toughness: null,
+      plus1_counters: 0,
+      attached_to: undefined,
+      effects: undefined,
+      copy_of: undefined,
+      types: { is_creature: false, is_land: true, is_spell: false, is_artifact: false, is_enchantment: false, is_planeswalker: false, is_battle: false },
+    }));
+    const handBase = agent.hand[0] ?? {
+      id: 0, registry_key: 1, name: 'Youthful Knight', zone: 'HAND', owner_id: agent.id,
+      power: 2, toughness: 1, mana_value: 2,
+      types: { is_creature: true, is_land: false, is_spell: true, is_artifact: false, is_enchantment: false, is_planeswalker: false, is_battle: false },
+    };
+    const knights = [601, 602].map(id => ({ ...handBase, id, name: 'Youthful Knight', zone: 'HAND' }));
+    const graveCards = [701, 702].map(id => ({ ...handBase, id, name: 'Mountain', zone: 'GRAVEYARD' }));
+    agent.battlefield = plains;
+    opponent.battlefield = [];
+    agent.hand = knights;
+    agent.graveyard = graveCards;
+    frame.projection.decision_context = undefined;
+    const ref = (id: number) => ({
+      kind: 'object' as const,
+      id: { entity: id, incarnation: 0 },
+    });
+    const obj = (id: number, label: string) => ({
+      entity_id: id,
+      subject: ref(id),
+      display_id: id,
+      label,
+    });
+    const baseOffer = frame.offers[0];
+    frame.offers = [
+      {
+        ...baseOffer,
+        id: 0,
+        verb: 'activate',
+        action_type: 'TAP_FOR_COST',
+        label: 'Tap Plains for {W}',
+        confirm_label: 'Tap Plains for {W}',
+        source: null,
+        subjects: [{ role: 'choice', object: obj(501, 'Plains') }],
+        aliases: [ref(502), ref(503)],
+        focus: [501],
+      },
+      {
+        ...baseOffer,
+        id: 1,
+        verb: 'cast',
+        action_type: 'PRIORITY_CAST_SPELL',
+        label: 'Cast Youthful Knight',
+        confirm_label: 'Cast Youthful Knight',
+        source: ref(601),
+        subjects: [{ role: 'source', object: obj(601, 'Youthful Knight') }],
+        aliases: [ref(602)],
+        focus: [601],
+      },
+      {
+        ...baseOffer,
+        id: 2,
+        verb: 'choose',
+        action_type: 'SELECT_CARD',
+        label: 'Select Mountain',
+        confirm_label: 'Select Mountain',
+        source: null,
+        subjects: [{ role: 'choice', object: obj(701, 'Mountain') }],
+        aliases: [ref(702)],
+        focus: [701],
+      },
+    ];
+
+    const view = boardView(frame, PLAYERS);
+    // Rail lists each canonical offer once.
+    expect(view.list.map(placed => placed.offer.id)).toEqual([0, 1, 2]);
+    // All three Plains share one pile and every copy carries the canonical offer.
+    expect(view.you.support).toHaveLength(1);
+    expect(view.you.support[0].items.map(item => item.permanent.id)).toEqual([501, 502, 503]);
+    for (const item of view.you.support[0].items) {
+      expect(item.offers.map(placed => placed.offer.id)).toEqual([0]);
+    }
+    // Both copies in hand carry the canonical cast offer.
+    expect(view.you.hand.map(item => [item.card.id, item.offers.map(placed => placed.offer.id)])).toEqual([
+      [601, [1]],
+      [602, [1]],
+    ]);
+    // Graveyard aliases never duplicate tray cards.
+    expect(view.tray).toHaveLength(1);
+    expect(view.tray[0].placed.offer.id).toBe(2);
+    expect(view.tray[0].card?.id).toBe(701);
   });
 });
 
@@ -308,7 +491,7 @@ describe('the spell being cast', () => {
     expect(view.stack[0].card?.id).toBe(source.display_id);
     expect(view.stack[0].entry.label).toBe(source.label);
     expect(view.stack.length).toBe((frame.projection.stack_objects ?? []).length + 1);
-    expect(view.hand.map(item => item.card.id)).not.toContain(source.display_id);
+    expect(view.you.hand.map(item => item.card.id)).not.toContain(source.display_id);
   });
 
   it('draws a spell announced from outside the hand with its card', () => {
@@ -331,6 +514,52 @@ describe('the spell being cast', () => {
     const view = boardView(frame, PLAYERS);
     expect(view.stack[0]).toMatchObject({ announcing: 'activated_ability', card: null, entry: { source_permanent: land.id } });
     expect(permanents(view).map(item => item.permanent.id)).toContain(land.id);
+  });
+
+  it('keeps stack_objects in top-first authority order so index 0 truly resolves next', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    frame.projection.decision_context = undefined;
+    frame.projection.stack_objects = [
+      { id: 202, kind: 'triggered_ability', controller: 0, label: 'Momo, Friendly Flier — trigger' },
+      { id: 201, kind: 'triggered_ability', controller: 1, label: 'Jet, Freedom Fighter — trigger' },
+    ];
+    const view = boardView(frame, PLAYERS);
+    expect(view.stack.map(item => item.entry.id)).toEqual([202, 201]);
+  });
+
+  it('draws blockers opposite the attackers they block without reordering idle boards', () => {
+    const frame = structuredClone(navigation.DECLARE_BLOCKER.frame);
+    const makeCreature = (id: number, name: string, controller: number, extra: Record<string, unknown> = {}) => ({
+      id,
+      name,
+      controller_id: controller,
+      tapped: false,
+      damage: 0,
+      summoning_sick: false,
+      power: 2,
+      toughness: 2,
+      base_power: 2,
+      base_toughness: 2,
+      plus1_counters: 0,
+      types: { is_creature: true, is_land: false, is_spell: false, is_artifact: false, is_enchantment: false, is_planeswalker: false, is_battle: false },
+      ...extra,
+    });
+    // Opponent has an idle creature, an unblocked attacker, and two blocked attackers (in reverse order of our blockers).
+    frame.projection.opponent.battlefield = [
+      makeCreature(101, 'Idle Elf', 1),
+      makeCreature(102, 'Unblocked Goblin', 1, { attacking: true }),
+      makeCreature(103, 'First Blocked Ogre', 1, { attacking: true }),
+      makeCreature(104, 'Second Blocked Drake', 1, { attacking: true }),
+    ];
+    frame.projection.agent.battlefield = [
+      makeCreature(201, 'Idle Wall', 0),
+      makeCreature(202, 'Blocker B', 0, { blocking: 104 }),
+      makeCreature(203, 'Blocker A', 0, { blocking: 103 }),
+    ];
+    frame.offers = [];
+    const view = boardView(frame, PLAYERS);
+    expect(view.opponent.creatures.map(pile => pile.items[0].permanent.id)).toEqual([103, 104, 102, 101]);
+    expect(view.you.creatures.map(pile => pile.items[0].permanent.id)).toEqual([203, 202, 201]);
   });
 });
 
@@ -404,5 +633,38 @@ describe('stack provenance', () => {
     expect(stackProvenance({ ...spell, from_prepared: true })).toEqual(['prepared']);
     expect(stackProvenance(spell)).toEqual([]);
     expect(stackProvenance({ ...spell, flashback: true })).toEqual(['flashback']);
+  });
+});
+
+describe('hand ribbon overrides', () => {
+  const asked = { position: true, offered: false };
+  const quiet = { position: false, offered: false };
+
+  it('shows one seat without moving the other, and keeps it out across positions', () => {
+    const shown = toggleRibbon(NO_RIBBON_OVERRIDES, 'opponent', 'a', false);
+    expect(ribbonIsOut(shown, 'opponent', 'a', quiet)).toBe(true);
+    expect(ribbonIsOut(shown, 'opponent', 'b', quiet)).toBe(true);
+    expect(ribbonIsOut(shown, 'you', 'a', quiet)).toBe(false);
+    expect(ribbonIsOut(toggleRibbon(shown, 'opponent', 'b', false), 'opponent', 'b', quiet)).toBe(false);
+  });
+
+  it('tucks the acting seat for the position it is at, then lets it out again', () => {
+    const tucked = toggleRibbon(NO_RIBBON_OVERRIDES, 'you', 'a', true);
+    expect(ribbonIsOut(tucked, 'you', 'a', asked)).toBe(false);
+    expect(ribbonIsOut(tucked, 'opponent', 'a', asked)).toBe(true);
+    expect(ribbonIsOut(tucked, 'you', 'b', asked)).toBe(true);
+    expect(ribbonIsOut(toggleRibbon(tucked, 'you', 'a', true), 'you', 'a', asked)).toBe(true);
+  });
+
+  it('tucking a pinned hand that the position also asks for unpins it', () => {
+    const pinned = toggleRibbon(NO_RIBBON_OVERRIDES, 'you', 'a', false);
+    const tucked = toggleRibbon(pinned, 'you', 'b', true);
+    expect(ribbonIsOut(tucked, 'you', 'b', asked)).toBe(false);
+    expect(ribbonIsOut(tucked, 'you', 'c', quiet)).toBe(false);
+  });
+
+  it('an offer on a hand card holds the hand out whatever was asked', () => {
+    const tucked = toggleRibbon(NO_RIBBON_OVERRIDES, 'you', 'a', true);
+    expect(ribbonIsOut(tucked, 'you', 'a', { position: true, offered: true })).toBe(true);
   });
 });

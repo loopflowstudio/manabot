@@ -102,7 +102,7 @@ NAME_DIM = width("name_candidates")
 PLAYER_RESTRICTED_INDEX = column("agent_player", "restricted_lesson_white")
 PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = column("agent_player", "no_maximum_hand_size")
 PLAYER_DIM = width("agent_player")
-# Cast-permission terms follow the printed characteristics; validity is last.
+# Cast-permission terms follow the original printed characteristics.
 CARD_PERMISSION_INDEX = column("agent_cards", "permission")
 CARD_DIM = width("agent_cards")
 
@@ -117,7 +117,11 @@ PERMANENT_TIMESTAMP_INDEX = column("agent_permanents", "timestamp")
 PERMANENT_MANA_VALUE_INDEX = column("agent_permanents", "mana_value")
 PERMANENT_DIM = width("agent_permanents")
 # Permanent columns that hold object links (joins), in model parameter order.
-PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
+PERMANENT_LINK_INDEXES = (
+    PERMANENT_ATTACHED_INDEX,
+    PERMANENT_BLOCKING_INDEX,
+    column("agent_permanents", "attacked_permanent"),
+)
 
 # Input v11 stack rows, top first: one per spell or ability.
 STACK_IS_MINE_INDEX = column("stack", "is_mine")
@@ -154,6 +158,7 @@ FACT_DIM = width("facts")
 _FACT_KINDS: dict[str, int] = V11_LAYOUT["facts"]["row_kind_names"]
 FACT_COUNTER = _FACT_KINDS["counter"]
 FACT_SET_NAME = _FACT_KINDS["set_name"]
+NAME_ID_KINDS = (FACT_SET_NAME, _FACT_KINDS["chosen_name"])
 FACT_ABILITY_RESOLUTION = _FACT_KINDS["ability_resolution"]
 FACT_TRIGGERING_AMOUNT = _FACT_KINDS["triggering_amount"]
 FACT_USED_ABILITY = _FACT_KINDS["used_ability"]

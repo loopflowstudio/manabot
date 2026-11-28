@@ -332,30 +332,57 @@ pub fn has_action(s: &Scenario, predicate: impl Fn(&Action) -> bool) -> bool {
     s.action_space().actions.iter().any(predicate)
 }
 
-/// Whether the card behind `id` is offered as a spell to cast.
+/// Find an action matching `predicate`, or fall back to a surviving action
+/// matching `same_kind` for which `object` was folded as an alias.
+pub fn find_object_action_index(
+    s: &Scenario,
+    object: ObjectId,
+    predicate: impl Fn(&Action) -> bool,
+    same_kind: impl Fn(&Action) -> bool,
+) -> Option<usize> {
+    let actions = &s.action_space().actions;
+    actions.iter().position(predicate).or_else(|| {
+        s.game().action_aliases().iter().find_map(|&(idx, alias)| {
+            (alias == object && actions.get(idx).is_some_and(&same_kind)).then_some(idx)
+        })
+    })
+}
+
+/// Whether the card behind `id` is offered as a spell to cast (directly or as a folded alias).
 pub fn can_cast(s: &Scenario, id: ObjectId) -> bool {
     let id = now(s, id);
-    s.action_space()
-        .actions
-        .iter()
-        .any(|a| matches!(a, Action::CastSpell { object, .. } if *object == id))
+    find_object_action_index(
+        s,
+        id,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == id),
+        |a| matches!(a, Action::CastSpell { .. }),
+    )
+    .is_some()
 }
 
 pub fn can_activate(s: &Scenario, source: PermanentId) -> bool {
-    s.action_space()
-        .actions
-        .iter()
-        .any(|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == source))
+    let direct =
+        |a: &Action| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == source);
+    match s.game().state.permanents[source].as_ref().map(|p| p.object) {
+        Some(obj) => find_object_action_index(s, obj, direct, |a| {
+            matches!(a, Action::ActivateAbility { .. })
+        })
+        .is_some(),
+        None => has_action(s, direct),
+    }
 }
 
 /// Whether an ability of `source` that functions from its hand or graveyard
-/// is offered.
+/// is offered (directly or as a folded alias).
 pub fn can_activate_card(s: &Scenario, source: ObjectId) -> bool {
     let source = now(s, source);
-    s.action_space()
-        .actions
-        .iter()
-        .any(|a| matches!(a, Action::ActivateCardAbility { object, .. } if *object == source))
+    find_object_action_index(
+        s,
+        source,
+        |a| matches!(a, Action::ActivateCardAbility { object, .. } if *object == source),
+        |a| matches!(a, Action::ActivateCardAbility { .. }),
+    )
+    .is_some()
 }
 
 pub fn offered_targets(s: &Scenario) -> Vec<Target> {
@@ -369,6 +396,24 @@ pub fn offered_targets(s: &Scenario) -> Vec<Target> {
         .collect()
 }
 
+/// Every target offered directly or folded as an alias of an offered target.
+pub fn offered_targets_with_aliases(s: &Scenario) -> Vec<Target> {
+    let actions = &s.action_space().actions;
+    let mut targets = offered_targets(s);
+    for &(idx, alias) in s.game().action_aliases() {
+        if matches!(actions.get(idx), Some(Action::ChooseTarget { .. })) {
+            let target = s
+                .game()
+                .state
+                .permanent_of(alias)
+                .map(Target::Permanent)
+                .unwrap_or(Target::GraveyardCard(alias));
+            targets.push(target);
+        }
+    }
+    targets
+}
+
 pub fn offered_cards(s: &Scenario) -> Vec<ObjectId> {
     s.action_space()
         .actions
@@ -378,6 +423,18 @@ pub fn offered_cards(s: &Scenario) -> Vec<ObjectId> {
             _ => None,
         })
         .collect()
+}
+
+/// Every card offered directly or folded as an alias of an offered selection.
+pub fn offered_cards_with_aliases(s: &Scenario) -> Vec<ObjectId> {
+    let actions = &s.action_space().actions;
+    let mut cards = offered_cards(s);
+    for &(idx, alias) in s.game().action_aliases() {
+        if matches!(actions.get(idx), Some(Action::SelectCard { .. })) {
+            cards.push(alias);
+        }
+    }
+    cards
 }
 
 /// The object the card behind `object` is now. A zone change makes a new

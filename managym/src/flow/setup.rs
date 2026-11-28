@@ -100,10 +100,11 @@ impl Game {
                     .definition_id(name)
                     .unwrap_or_else(|| panic!("unknown card in sideboard: {name}"));
                 assert!(
-                    !content
+                    content
                         .definition(definition_id)
                         .expect("resolved definition")
-                        .is_token,
+                        .kind
+                        == crate::state::game_object::ObjectKind::Card,
                     "token cannot be a sideboard card: {name}"
                 );
                 for _ in 0..*qty {
@@ -181,7 +182,7 @@ impl Game {
             skip_trivial,
             mana_floats: player_configs.mana_floats,
             mana_payment: player_configs.mana_payment,
-            current_action_space: None,
+            published_decision: None,
             decision_epoch: 0,
             semantic_object_candidates: Default::default(),
             pending_choice: None,
@@ -189,6 +190,7 @@ impl Game {
             skipped_priority_passes: 0,
             card_capture: None,
             statistics: None,
+            presentation: None,
             capture_drawing: None,
             capture_originals: Default::default(),
         };

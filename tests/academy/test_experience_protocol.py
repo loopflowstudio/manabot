@@ -35,12 +35,16 @@ STRUCT_MODELS = (
     "LegacyCardView",
     "LegacyHeroObservation",
     "PlayerControlView",
+    "AbilityGrantView",
+    "KeywordAbilityView",
+    "RestrictionView",
     "LegacyPermanentView",
     "LegacyPlayerView",
     "PooledManaView",
     "LegacyTurnView",
     "ObjectRenderId",
     "PresentationEvent",
+    "PresentationLabels",
     "PromptView",
     "RecoveryEnvelope",
     "StopsConfig",
@@ -49,6 +53,7 @@ STRUCT_MODELS = (
 ENUM_MODELS = (
     "AuthorityStatus",
     "OfferVerb",
+    "PermanentRestriction",
     "PresentationImportance",
     "RecoveryReason",
 )
@@ -86,8 +91,24 @@ UNION_VARIANTS = {
         "BlockedPresentation",
         "TurnStartedPresentation",
         "LandPlayedPresentation",
+        "DrewPresentation",
         "DiscardedPresentation",
         "RevealedPresentation",
+        "ActivatedPresentation",
+        "TriggeredPresentation",
+        "AbilityResolvedPresentation",
+        "CounteredPresentation",
+        "PassedPresentation",
+        "CountersPresentation",
+        "SearchedPresentation",
+        "LookedPresentation",
+        "SacrificedPresentation",
+        "LostPresentation",
+        "LifePresentation",
+        "ExiledPresentation",
+        "TokenCreatedPresentation",
+        "PtChangedPresentation",
+        "ControlChangedPresentation",
     ),
 }
 
@@ -165,10 +186,18 @@ def test_python_fields_and_requiredness_match_rust_generated_schema():
 
 
 def test_python_enums_match_rust_generated_schema():
+    from typing import get_args
+
+    from managym.experience import PresentationRule
+
     for name in ENUM_MODELS:
         assert (
             RUST_SCHEMA["$defs"][name]["enum"] == PYTHON_SCHEMA["$defs"][name]["enum"]
         ), name
+    assert (
+        list(get_args(PresentationRule))
+        == RUST_SCHEMA["$defs"]["PresentationRule"]["enum"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -214,6 +243,9 @@ def test_optional_fields_may_be_absent_or_round_trip_when_present():
             "auto_passed": 2,
         }
     )
+    frame["offers"][0]["aliases"] = [
+        {"kind": "object", "id": {"entity": 99, "incarnation": 0}}
+    ]
 
     RUST_VALIDATOR.validate(enriched)
     bundle = ProtocolV1ConformanceBundle.model_validate(enriched)

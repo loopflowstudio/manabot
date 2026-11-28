@@ -14,6 +14,7 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        sphinx_of_the_final_word(),
         ayli_eternal_pilgrim(),
         untamed_hunger(),
         make_a_stand(),
@@ -139,6 +140,30 @@ fn untamed_hunger() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],
             mana_cost: Some(ManaCost::parse("{2}{B}")),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn sphinx_of_the_final_word() -> CardDefinition {
+    let text_box = "This spell can't be countered.\nFlying\nHexproof (This creature can't be the target of spells or abilities your opponents control.)\nInstant and sorcery spells you control can't be countered.";
+    CardDefinition {
+        key: "ogw.sphinx_of_the_final_word",
+        scryfall_id: "866f92a3-2738-4e0f-adda-3ff9227dc17a",
+        printed: PrintedCharacteristics {
+            name: "Sphinx of the Final Word".into(),
+            mana_cost: Some(ManaCost::parse("{5}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Sphinx".into()],
+            power: Some(5),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Hexproof]),
+            statics: vec![
+                StaticAbility::CantBeCountered,
+                StaticAbility::SpellsCantBeCountered(CardPredicate::instant_or_sorcery()),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

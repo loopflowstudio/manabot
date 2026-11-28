@@ -61,6 +61,11 @@ if let Some(space) = action_space {
 - `skip_trivial` is on everywhere by default: training, evaluation, Academy and
   benchmarks. Turning it off is for explicit debugging and the constructed-position
   diagnostic fixtures only.
+- Before the single-action check, actions that differ only in which of several
+  game-indistinguishable objects they name fold into one offer, so a choice
+  among identical copies — such as discarding one card from two identical
+  unpinned cards in hand — collapses to one action and is skipped as forced
+  ([indistinguishable objects](../managym/README.md#indistinguishable-objects)).
 - Every decision count in these docs excludes forced choices. Decisions per
   game and learner decisions both mean real choices.
 - The readable conformance path surfaces every singleton action so the
@@ -271,6 +276,11 @@ life or high of poison for a player who can lose ends the game as
 `draw_reason: "mandatory_loop"`. A chain that spends counters, cards or
 permanents never repeats a fingerprint, so it is never drawn; 10,000
 resolutions draw a loop that grows something without bound.
+Version 32 includes the last copiable face and casting choices of a departed
+spell when a trigger still refers to it. A suspended repeated instruction
+records the remaining count in its resolution frame. Version 34 adds
+`CombatState.declined_attackers` and `declined_blockers` (for combat symmetry
+breaking across indistinguishable creatures) and `TurnState.graveyard_arrivals`.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.
@@ -338,6 +348,13 @@ into hand becomes a hand minimum. A shuffle or an unspecified private reorder
 forgets the affected order. Public and private maps independently retain ten
 positions: eight nearest the top and two nearest the bottom among known facts.
 The owner reads their union, so private retention cannot erase a public fact.
+
+Curator of Destinies lets its controller look at the top five cards and
+assign each one to a pile. Either pile can be empty. When the split is
+complete, the opponent sees the face-up cards and the size of the face-down
+pile. The opponent chooses which pile goes into the controller’s hand. Face-up
+cards remain known there and face-down cards stay hidden. The other pile goes into the graveyard, where both players can
+see it.
 
 Facts never claim several possible locations. After a secret hand departure,
 each independent hand minimum decreases by one (to a minimum of zero). Seeing
@@ -506,6 +523,7 @@ The capture wrapper is a separate Python class:
 | A fixed viewer's observation | `Env.observation_for_player(player_index)` |
 | Encoded fixed-viewer observations for all or selected slots, including nonchoosing seats | `VectorEnv.observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
 | Live snapshots and batched slot loading (`GameSnapshot`, `RestoreOptions`, `SlotLoad`) | `Env.snapshot` / `restore`; `VectorEnv.snapshot_slots`, `slot_metadata`, `load_slots_into_buffers` ([Batched slot loading and snapshots](engine-python.md#batched-slot-loading-and-snapshots)) |
+| Counterfactual state edits (`GameStateEdit`) | `Env.edit_game_state`; `RestoreOptions.exact(game_state_edits=...)` ([Counterfactual state edits](engine-python.md#counterfactual-state-edits)) |
 | Revision-bound Commands, decision captures, search forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
 | Batched readable observations | `managym.VectorEnv.reset_all` / `step` |
 | Native `ObservationBatch` stepping, per-slot setups, sparse slot loading and partial stepping | `VectorEnv.set_observation_layout` with `observation_rows()` / `step_into_buffers`, or `step_observation_batch` |
@@ -931,6 +949,38 @@ tokenized rules text, rows by `CardDefId`, with the same `keys` and
 `registry_names` beside them, so the tokens describe cards a model has not
 seen.
 
+### Program-token vocabulary
+
+`managym.catalog_tokens()` holds only the printed rules spans of catalog
+definitions (cards, tokens and back faces). Live observations also emit
+runtime program tokens in fact and shared-effect rows — suspended resolution
+frames, granted abilities and last-known characteristics — whose runtime-only
+symbols come from `managym.record_vocabulary()`.
+
+```python
+import managym
+
+catalog = managym.catalog_tokens()
+printed = set(zip(catalog["token_kind"], catalog["token_value"], strict=True))
+runtime = {
+    (kind, value)
+    for _space, name, _hashed, kind, value in managym.record_vocabulary()
+    if kind is not None
+    and value is not None
+    and not name.startswith("DecisionMemory::")
+}
+admitted_program_tokens = printed | runtime
+```
+
+`Integer` and `Boolean` carry their values directly. Every other token,
+including `Null` and `DefinitionRef`, needs an exact pair in
+`admitted_program_tokens`. Admission reports missing pairs as `(kind, 0x…)`.
+Policies with decision memory enabled also admit the `DecisionMemory::*` rows.
+
+An expanded naming source can supply a chosen card name outside the installed
+catalog. Suspended entries and named exile or search programs encode it as
+`Null`, and permanent facts omit its vocabulary row. Rules state and readable
+observations keep the chosen spelling.
 ## Cards as programs
 
 A card is one Rust function returning the engine's own `CardDefinition`, written
@@ -1056,6 +1106,86 @@ graveyard restores Monica Rambeau.
   printed characteristic, so copy effects copy `printed` and never token
   status; a token copy of a card is a token because it was created as one.
 
+### Loyalty abilities
+
+The Theorist, Jace Beleren enters with three loyalty counters. Doubling Season
+changes that to six. Activating his [+1] adds one loyalty counter immediately.
+The Illusion appears when the ability resolves. Once a player activates a
+loyalty ability, every loyalty ability of that permanent is spent for the
+turn, even if control changes. The normal activation window is its
+controller’s main phase with an empty stack.
+An effect can grant instant timing for matching permanents. The turn limit
+still applies.
+
+For a [−X] ability, choose X before choosing targets. The offers run from
+zero through the loyalty available to pay the cost, including 256 when the
+permanent has 256 loyalty. Declining an optional target keeps the announced X.
+The ability uses that value on resolution even if paying the cost took the
+planeswalker’s last loyalty counter.
+
+| Rule | State on the permanent | What the player does |
+| --- | --- | --- |
+| Loyalty (CR 306, 606) | Loyalty counters | Pay the signed cost and put an ability on the stack |
+| Class (CR 717) | Class level | Pay mana to activate the next level ability at sorcery timing |
+| Room (CR 709) | Which doors are unlocked | Pay a door’s mana cost as a special action |
+
+Input v11 exposes the face’s starting value in `printed_loyalty`, the current
+loyalty among its counter facts, and the per-turn limit in
+`loyalty_activated_this_turn`. Each available loyalty activation names its
+cost and effect in the shared offer.
+
+Empower Jace first creates a blue Jace planeswalker token if you control
+none. You choose one Jace planeswalker token you control and put the stated
+number of loyalty counters on it. A nontoken Jace does not satisfy the
+instruction. With Doubling Season, two tokens enter and one receives twice
+the stated counters. The other goes to the graveyard when state-based
+actions next run. The chosen token has two loyalty abilities, −1 to surveil
+1 and −3 to draw a card. Jace’s Machinations lets you activate a Jace’s
+loyalty ability on another player’s turn and still uses its one activation
+for that turn.
+
+An ultimate that gives you an emblem puts it in your command zone. If paying
+the loyalty cost sends Vivien Reid to the graveyard, her ultimate still
+resolves. Your creatures get +2/+2, vigilance, trample and indestructible
+from the emblem. A second copy gives them another +2/+2. Kaito’s emblem
+creates a Ninja for its controller when either player casts a spell. Both
+players can inspect each emblem and its rules text under **Emblems** on the
+controller’s player plate in Academy.
+
+A Way such as Way of the Wildspeaker gives each planeswalker you control
+another loyalty ability, listed after its own. A holder that uses the granted
+ability has spent its activation for the turn, and the ability is gone as soon
+as the Way leaves the battlefield. Way of the Warlord’s ability has two target
+choices: you may skip the creature or planeswalker and still deal 2 damage to
+the player. While you control Sanctum Lurker, your planeswalkers stay on the
+battlefield with no loyalty counters. Destruction and the legend rule still
+remove them.
+
+Each loyalty activation is an event once its cost is paid. Way of the Paradox
+and Gideon the Oathless trigger on any activation. Way of the Mind Sculptor
+triggers only when the cost removed two or more loyalty counters.
+Kiora of Salt and Sand reads how many loyalty abilities you activated this
+turn. Input v11 shows that count in the `loyalty_abilities_activated` column
+of `player_turn_state`, and the text observation lists it under the player's
+turn.
+
+### Attacking a planeswalker
+
+Each attacker can attack the defending player or one of that player’s
+planeswalkers. In v11 a planeswalker attack puts the defending permanent in the
+action’s second `action_focus` slot, and `attacked_permanent` on an attacking
+permanent joins its current defender (a one-based object reference; 0 for a
+player attack). The first two ordinary declaration offers still attack the
+player and decline, respectively.
+
+Combat damage removes loyalty from the planeswalker. Ordinary trample can
+assign excess damage to that planeswalker. If it leaves combat before damage,
+the creature stays attacking and can still deal damage to its blockers.
+Tomik, Orzhov Lawmage limits declarations to one attacker per planeswalker
+its controller controls. A token entering tapped and attacking chooses its
+own defender as it enters. This can include a planeswalker already under
+attack, and multiple tokens entering together choose independently.
+
 ## Objects and zones
 
 The engine's runtime types and their names come from the Comprehensive Rules.
@@ -1175,7 +1305,7 @@ it:
 | Permanent | CR 110 | `Permanent`, named by `PermanentId`, beside the object it is | battlefield state: tapped, damage, attachment |
 | Spell | CR 112 | `StackObject::Spell`, beside the object it is | cast choices: targets, X, modes, kicker |
 | Ability on the stack | CR 113, 602, 603 | `StackObject::ActivatedAbility`, `StackObject::TriggeredAbility` | source, effects and choices; not an `Object` |
-| Emblem | CR 114 | none yet; no defined card creates one | no card |
+| Emblem | CR 114 | `Object` with `ObjectKind::Emblem`, from an `EmblemDefinition` | its own abilities in its controller’s command zone |
 
 `Card` is a small `Copy` value written once at setup: `owner`, `definition`
 and the `PublicId` observations show for it. `GameState::cards` holds both
@@ -1183,9 +1313,8 @@ main decks and both sideboards and never grows.
 
 An object's kind is fixed when the object is made. A copy of a permanent spell
 resolves into a token (CR 111.12, 608.3f): the permanent is a new object of
-kind `Token`, and neither it nor the copy has a `CardId`. A definition's
-`is_token` says only that its catalog row is a token definition's; an object's
-kind is the authority for what it is.
+kind `Token`, and neither it nor the copy has a `CardId`. The catalog row records the kind of
+object it creates.
 
 Cast Sun-Blessed Healer with kicker and its entry trigger lets you choose a
 nonland permanent card with mana value two or less in your graveyard. Nullpriest
@@ -1384,6 +1513,28 @@ minting consumes those values in place. Without a new copy choice, minting
 uses the retained printing, including any fixture edits, and discards the old
 appearance's copy effect.
 
+When Zhao, the Moon Slayer has a conqueror counter, Dark Depths enters
+as a Mountain with zero ice counters. Zhao’s separate ability makes it
+enter tapped. If Zhao has also lost all abilities, the Mountain effect
+still applies in layer 4 and Dark Depths enters untapped.
+
+When several permanents enter together, the active player makes their entry
+choices first, then the other player makes theirs. Each player chooses which
+of their entrants to answer first. For example, Brought Back can return
+Sorcerous Spyglass and Heraldic Banner together. Their controller can look at
+the opponent’s hand and name a card before choosing Banner’s color, or choose
+the color first. Both artifacts enter after the last answer. Each viewer can
+see the name and color on the battlefield. Only the player using Spyglass
+gets the private look.
+
+A copy entering as Adaptive Automaton chooses its own creature type. The
+grouped prompt includes all 367 creature types in CR 205.3m. Secluded
+Courtyard’s colored mana keeps the chosen type until spent and can pay for an
+ability of a creature of that type, including cycling from hand. If Zhao turns
+Courtyard or Uncharted Haven into a Mountain as it enters, the land makes no
+choice. Removing Zhao restores its printed mana abilities, with no chosen
+type or color for that incarnation.
+
 CR 400.7a to c (effects and prevention applied to a permanent spell continuing
 on the permanent) carry nothing, because no supported effect applies to a
 spell. Madness and stickers (CR 400.7k, m) are not modeled.
@@ -1468,7 +1619,7 @@ lists hold `ObjectId`s, and card-only readers narrow them through
 | Exile | CR 406 | cards, transient non-card objects | `ObjectId` |
 | Battlefield | CR 403 | permanents: cards and tokens | `ObjectId` |
 | Stack | CR 405 | spells (cards and copies) and abilities | `ObjectId` for spells; `GameState::stack_objects` includes abilities and owns stack order |
-| Command | CR 408 | cards (commanders, CR 903.6) and emblems (CR 114.1); empty until a format or card puts something there | `ObjectId` |
+| Command | CR 408 | emblems (CR 114.1) and cards placed there by a format (CR 903.6) | `ObjectId` |
 
 Decklists and sideboards are outside the game and hold cards alone.
 
@@ -1578,6 +1729,12 @@ discards and marked damage clears. If a player gets priority in cleanup,
 another cleanup step follows. Combat-only control ends when combat ends.
 Turn-long control applies to every cleanup discard that turn.
 
+When casting Biogenic Upgrade, choose one, two, or three creatures and announce
+how the three counters divide among them. Each target gets at least one.
+A copy keeps the amount assigned to each slot when its targets change.
+If a target becomes illegal, its share is lost. Each legal target receives its
+share, then doubles all its +1/+1 counters, including any it already had.
+
 The Dominion Bracelet locks its activation price using the equipped creature’s
 power. When several Bracelets grant that ability, each offer identifies the
 Bracelet it exiles. The payment receipt retains that object and the mana spent,
@@ -1589,14 +1746,14 @@ opponent’s next turn using that opponent’s resources.
 
 **Proposed events.** Damage, life change, destruction, counter change and zone
 movement are submitted as a typed `ProposedEvent` before any state mutates.
-Replacement and prevention definitions from the immutable card definitions
-apply once each in `(source ObjectId, definition index)` order; the surviving
-event commits and emits the ordinary facts, so triggers, observations and
-presentation consume only committed events. Supported replacements are
-prevent N damage, double damage, enters tapped and enters with counters. The
-choice CR 616 gives a player among several replacements is not offered: the
-order is deterministic so replay, training and search stay exact, and a card
-that needs more stays unsupported rather than approximated.
+The affected player or object's controller chooses among competing applicable
+replacements (CR 616.1). The engine retains the batch and its caller through
+each choice, rechecks applicability, then commits the results together.
+Triggers and observations see the committed events. For example, a player
+chooses whether Crystal Barricade prevents a Bolt on another of their creatures
+before a damage doubler applies. Lifelink uses the damage actually dealt by
+each source. Angels of Vitality replace that source's gain before the damage
+batch commits.
 
 **Optional payments.** A resolving optional cost is `Effect::OptionalPayment`
 with a `PaymentCost` (mana, waterbend taps against a generic obligation, or

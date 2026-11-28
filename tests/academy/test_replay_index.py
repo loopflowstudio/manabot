@@ -357,7 +357,7 @@ def test_http_serves_only_player_zero_projection_and_strips_authority(
         encoding="utf-8",
     )
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
 
     with TestClient(app) as client:
         projection_response = client.get("/api/traces/canonical/decisions")
@@ -473,6 +473,14 @@ def test_recording_legacy_empty_and_no_event_transitions() -> None:
     assert empty.read("latest")["decision"] is None
 
 
+def test_recording_rejects_a_malformed_command_zone() -> None:
+    payload = _terminal_recording()
+    payload.pop("canonical_replay")
+    payload["final_observation"]["agent"]["command"] = {}
+    with pytest.raises(ValueError, match="recording_board_unavailable"):
+        Recording("broken", payload)
+
+
 def test_recording_rejects_a_missing_legacy_board() -> None:
     payload = _terminal_recording()
     payload.pop("canonical_replay")
@@ -499,7 +507,7 @@ def test_recording_index_keeps_seat_two_checkpoint_provenance_private_path_out(
     payload["timestamp"] = "2026-11-14T00:00:00+00:00"
     (tmp_path / "provenance.json").write_text(json.dumps(payload), encoding="utf-8")
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
 
     with TestClient(app) as client:
         response = client.get("/api/traces/provenance/recording")

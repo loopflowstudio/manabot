@@ -1,6 +1,10 @@
 /** Ordinary release-SPA work. Old DOM-response baselines remain frozen separately. */
 import { writeFile } from 'node:fs/promises';
 import { expect, test, type Request } from '@playwright/test';
+import { showEachCreaturesChoice } from './fixtures/combat';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 interface Sample {
   match: string; revision: number; input: number; sent: number | null;
@@ -55,6 +59,8 @@ for (const [seed, width, height, motion] of [
             // Rewrite here: a routed second socket can reach this probe before the app.
             if (message.type === 'new_game') {
               message.config.seed = gameSeed;
+              // The picker lists no standalone Search player; the timed opponent is set on the request.
+              if (gameSeed !== 0) { message.config.villain_type = 'search'; message.config.villain_sims = 64; }
               super.send(JSON.stringify(message));
               return;
             }
@@ -97,9 +103,9 @@ for (const [seed, width, height, motion] of [
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Performance.enable');
     await cdp.send('Tracing.start', { categories: 'devtools.timeline', transferMode: 'ReturnAsStream' });
-    await page.goto('/?setup=1');
+    await page.goto(SETUP);
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-    await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
+    await page.getByTestId('opponent-select').selectOption('random');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     for (let input = 0; input < 30; input += 1) {
       // The receipt can render before following bot work finishes. Keep that
@@ -108,10 +114,15 @@ for (const [seed, width, height, motion] of [
         if (!window.academyTiming.working) resolve();
         else window.addEventListener('academy-timing-settled', () => resolve(), {once: true});
       }));
+      if (await page.locator('[data-testid=walk-bar][data-walking=true]').count()) {
+        await page.keyboard.press('Space');
+        await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
+      }
       await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('game-result').isVisible()).toBe(true);
       if (await page.getByTestId('game-result').isVisible()) break;
+      await showEachCreaturesChoice(page);
       const actions = page.getByTestId('action-option');
-      if (input === 15) await page.getByTestId('inspect-toggle').click();
+      if (input === 15) { await page.getByTestId('game-menu').click(); await page.getByTestId('inspect-toggle').check(); await page.getByTestId('game-menu').click(); }
       const labels = await actions.allTextContents();
       let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast /.test(label));
       if (pick < 0) pick = input % labels.length;
@@ -174,7 +185,7 @@ test('cold visible-art delivery receipt', async ({ page, browser }, info) => {
     const start = started.get(request);
     if (start !== undefined) delivered.push({ url: request.url(), ms: performance.now() - start, status: request.failure()?.errorText ?? 'unknown' });
   });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();

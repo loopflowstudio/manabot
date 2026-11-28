@@ -44,16 +44,16 @@ fn archons_glory_gains_flying_and_lifelink_only_when_bargained() {
         },
     };
     for (treasure, bargain) in [(false, false), (true, false), (true, true)] {
-        let mut s = five_color_unfunded_setup(&["Archon's Glory", "Gray Ogre"]);
+        let mut s = five_color_unfunded_setup(&["Archon's Glory", "Gray Ogre", "Kyoshi Village"]);
         let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-        // Two lands, so the mana is a choice and the payment stays pending
-        // after the sacrifice is chosen.
+        // Two distinct white sources, so the mana is a choice and the payment
+        // stays pending after the sacrifice is chosen.
         s.force_permanent_on_battlefield(0, "Plains");
-        s.force_permanent_on_battlefield(0, "Plains");
+        s.force_permanent_on_battlefield(0, "Kyoshi Village");
         let token = treasure.then(|| {
             let token = s
                 .game_mut()
-                .create_token("token.treasure", PlayerId(0), false)
+                .create_token("token.treasure", PlayerId(0))
                 .unwrap();
             s.game().state.permanents[token].as_ref().unwrap().object
         });
@@ -158,7 +158,7 @@ fn archons_glory_bargain_sacrifice_is_chosen_under_auto_and_forks() {
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.force_permanent_on_battlefield(0, "Plains");
     let tokens = ["token.treasure", "token.food"].map(|key| {
-        let token = s.game_mut().create_token(key, PlayerId(0), false).unwrap();
+        let token = s.game_mut().create_token(key, PlayerId(0)).unwrap();
         s.game().state.permanents[token].as_ref().unwrap().object
     });
     s.game_mut().mana_payment[0] = ManaPayment::Auto;

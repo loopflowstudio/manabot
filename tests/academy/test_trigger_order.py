@@ -45,7 +45,6 @@ def _session(path: Path) -> GameSession:
     assert session.env is not None
     session.obs = configure_root(session.env)
     session.published_prompt = None
-    session.presentation.reset()
     return session
 
 
@@ -69,7 +68,6 @@ def test_order_reconnect_recovers_bound_choices_without_automatic_selection(
         assert self.env is not None
         self.obs = configure_root(self.env)
         self.published_prompt = None
-        self.presentation.reset()
         return self._wire_message()
 
     monkeypatch.setattr(GameSession, "new_game", prepared)
@@ -77,7 +75,7 @@ def test_order_reconnect_recovers_bound_choices_without_automatic_selection(
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": {}})
             initial = settled_message(socket)
-            record = server.SESSION_REGISTRY[initial["session_id"]]
+            record = server.LIVE_GAMES[initial["game"]]
             for ordinal in range(8):
                 assert record.game.obs is not None
                 if (
@@ -92,13 +90,17 @@ def test_order_reconnect_recovers_bound_choices_without_automatic_selection(
                 assert settled_message(socket)["status"] == "accepted"
             assert record.game.env is not None
             digest = record.game.env.state_digest()
-            command = _command(record.game, 0, "lost-order-response")
+            surviving = next(
+                i
+                for i, action in enumerate(record.game.obs.action_space.actions)
+                if "Callous Inspector" in (action.description or "")
+            )
+            command = _command(record.game, surviving, "lost-order-response")
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             frame = settled_message(socket)["recovery"]["frame"]
@@ -112,8 +114,7 @@ def test_order_reconnect_recovers_bound_choices_without_automatic_selection(
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             recovered = settled_message(socket)["recovery"]["frame"]

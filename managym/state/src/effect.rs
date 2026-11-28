@@ -102,6 +102,8 @@ pub enum Modification<N = i32> {
     CantActivateAbilities,
     /// Rules effect: every creature able to block it does so (CR 509.1c).
     MustBeBlockedByAllAble,
+    /// At least one creature must block this attacker if able (CR 509.1c).
+    MustBeBlocked,
     /// Layer 6: loses these keywords, whatever grants them.
     LoseKeywords(Keywords),
     /// Replacement: if it would die, exile it instead.
@@ -120,10 +122,14 @@ pub enum Modification<N = i32> {
     NoMaximumHandSize,
     /// One more land play for the affected player (CR 305.2).
     AdditionalLandPlay,
+    /// CR 606.3 timing permission on the affected player.
+    LoyaltyAtInstantSpeed(Box<super::predicate::CardPredicate>),
     /// Rules effect on a player: the next creature card they cast may be
     /// cast as though it had flash (Scout's Warning). Casting any creature
     /// card ends every such record, whether or not it needed the timing.
     NextCreatureCastFlash,
+    /// The affected stack spell can't be countered.
+    CantBeCountered,
     /// Rules effect on a player: they skip every combat phase of their next
     /// turn, additional ones included (CR 500.11). It ends in the cleanup step
     /// of a turn that player takes.
@@ -135,6 +141,8 @@ pub enum Modification<N = i32> {
     /// Rules effect on a player: protection from everything (CR 702.16j).
     /// Nothing can target them, and all damage to them is prevented.
     ProtectionFromEverything,
+    /// The affected player has hexproof.
+    Hexproof,
     /// Rules effect: the permanent is phased out (CR 702.26). It stays on
     /// the battlefield with its counters and attachments, but the game
     /// treats it as though it doesn't exist; `Game::is_phased_out` is the
@@ -142,12 +150,9 @@ pub enum Modification<N = i32> {
     /// untap step before they untap (CR 702.26a); a permanent phased out
     /// indirectly with the one it is attached to phases in with it.
     PhasedOut,
-    /// Layer 2 (CR 613.1b): the record's controller controls the object;
-    /// when the record ends with the object still theirs, control returns
-    /// to `previous`. Only resolutions create it (`Effect::GainControl`).
-    ControlChanged {
-        previous: PlayerId,
-    },
+    /// Layer 2 (CR 613.1b): the source's controller (static ability) or
+    /// the player specified at resolution controls the affected permanent.
+    Control,
     /// The source's triggered ability chose mode `mode` ("choose one that
     /// hasn't been chosen"); lasts as long as the object.
     ModeChosen {
@@ -171,6 +176,17 @@ impl<N> Modification<N> {
         Self::ModifyPt {
             power: power.into(),
             toughness: toughness.into(),
+        }
+    }
+
+    /// Whether this modification can give a permanent the Creature card type.
+    pub fn grants_creature_type(&self) -> bool {
+        match self {
+            Self::BecomeCreature => true,
+            Self::AddTypes(types) | Self::SetTypes { types, .. } => {
+                types.contains(&CardType::Creature)
+            }
+            _ => false,
         }
     }
 
@@ -214,22 +230,24 @@ impl<N> Modification<N> {
             Self::DoesntUntap => Modification::DoesntUntap,
             Self::Saddled => Modification::Saddled,
             Self::CantActivateAbilities => Modification::CantActivateAbilities,
+            Self::MustBeBlocked => Modification::MustBeBlocked,
             Self::MustBeBlockedByAllAble => Modification::MustBeBlockedByAllAble,
             Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
             Self::PreventCombatDamage => Modification::PreventCombatDamage,
             Self::ExileIfWouldLeave => Modification::ExileIfWouldLeave,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
+            Self::LoyaltyAtInstantSpeed(p) => Modification::LoyaltyAtInstantSpeed(p.clone()),
             Self::AdditionalLandPlay => Modification::AdditionalLandPlay,
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
+            Self::CantBeCountered => Modification::CantBeCountered,
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
             Self::SkipsCombatPhasesNextTurn => Modification::SkipsCombatPhasesNextTurn,
             Self::LifeTotalCantChange => Modification::LifeTotalCantChange,
+            Self::Hexproof => Modification::Hexproof,
             Self::ProtectionFromEverything => Modification::ProtectionFromEverything,
             Self::PhasedOut => Modification::PhasedOut,
-            Self::ControlChanged { previous } => Modification::ControlChanged {
-                previous: *previous,
-            },
+            Self::Control => Modification::Control,
             Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
             Self::HasAbilitiesOfSource => Modification::HasAbilitiesOfSource,
             Self::AllCreatureTypes => Modification::AllCreatureTypes,
@@ -351,7 +369,9 @@ pub enum EffectDuration {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Affected {
     Player(PlayerId),
-    /// One battlefield incarnation; the record ends when it changes zones
+    /// Waiting to bind to the next spell this player actually casts (CR 601.2i).
+    NextSpell(PlayerId),
+    /// One stack or battlefield incarnation; the record ends when it changes zones
     /// (CR 400.7). An effect affecting a set fixed at resolution (CR 611.2c)
     /// is one record per object, sharing a timestamp.
     Object(#[serde(serialize_with = "crate::game_object::exact")] ObjectId),
@@ -397,6 +417,7 @@ pub struct EffectRecords {
     by_object: BTreeMap<ObjectId, Vec<usize>>,
     /// Indices into `records` by affected player, ascending.
     by_player: [Vec<usize>; 2],
+    next_spell: [Vec<usize>; 2],
     /// How many records are `PhasedOut`, so battlefield readers skip the
     /// per-object lookup while nothing is phased out.
     phased_out: usize,
@@ -408,6 +429,7 @@ impl EffectRecords {
         match record.affected {
             Affected::Object(object) => self.by_object.entry(object).or_default().push(index),
             Affected::Player(player) => self.by_player[player.0].push(index),
+            Affected::NextSpell(player) => self.next_spell[player.0].push(index),
         }
         self.phased_out += usize::from(record.modification == Modification::PhasedOut);
         self.records.push(record);
@@ -417,6 +439,22 @@ impl EffectRecords {
         for record in records {
             self.push(record);
         }
+    }
+
+    /// Bind the player's waiting effects to the stack appearance just cast.
+    /// Keep the original timestamps and record order when changing their subject.
+    pub fn bind_next_spell(&mut self, player: PlayerId, spell: ObjectId) {
+        let waiting = std::mem::take(&mut self.next_spell[player.0]);
+        for &index in &waiting {
+            let effect = &mut self.records[index];
+            effect.affected = Affected::Object(spell);
+            effect.duration = EffectDuration::Indefinite;
+        }
+        self.by_object.entry(spell).or_default().extend(waiting);
+    }
+
+    pub fn awaits_spell(&self, player: PlayerId) -> bool {
+        !self.next_spell[player.0].is_empty()
     }
 
     /// Records affecting `object`, in timestamp order.
@@ -459,6 +497,7 @@ impl EffectRecords {
         let records = std::mem::take(&mut self.records);
         self.by_object.clear();
         self.by_player = Default::default();
+        self.next_spell = Default::default();
         self.phased_out = 0;
         self.extend(records.into_iter().filter(|record| keep(record)));
     }

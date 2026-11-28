@@ -39,7 +39,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     seed = 165
     config = {
         "hero_deck": {
@@ -50,13 +50,14 @@ def test_merchant_payment_reconnect_vector_and_fork(
         "villain_deck": {"Plains": 40},
         "villain_type": "passive",
         "auto_pass": False,
+        "mana_floats": "all",
         "seed": seed,
     }
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": config})
             initial = settled_message(socket)
-            game = server.SESSION_REGISTRY[initial["session_id"]].game
+            game = server.LIVE_GAMES[initial["game"]].game
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             merchant_cast = False
             # Three Foods leave a real choice at both taps with forced skipping on.
@@ -138,8 +139,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
                 socket.send_json(
                     {
                         "type": "resume",
-                        "session_id": initial["session_id"],
-                        "resume_token": initial["resume_token"],
+                        "game": initial["game"],
                     }
                 )
                 recovered = ExperienceFrame.model_validate(
@@ -162,18 +162,31 @@ def test_merchant_payment_reconnect_vector_and_fork(
                         f"{remaining} tap selections still required"
                         in capture_text_decision(game.env).text
                     )
-                    assert len(frame.offers) == remaining + 1
+                    assert (
+                        sum(1 + len(o.aliases) for o in frame.offers) == remaining + 1
+                    )
                     assert all("Tap Food to pay" in o.label for o in frame.offers)
-                    foods.append(frame.offers[0].focus[0])
+                    # Tap from a folded pair first so the second tap still leaves two
+                    # distinct Foods and does not auto-skip.
+                    chosen_index = next(
+                        (i for i, o in enumerate(frame.offers) if o.aliases),
+                        0,
+                    )
+                    foods.append(frame.offers[chosen_index].focus[0])
                 else:
                     assert frame.action_space == "MODAL"
                     assert len(frame.offers) == 5
                     assert len(set(foods)) == 2
+                    chosen_index = 0
                 before = len(game.trace.events)
-                command = _command(frame, frame.offers[0], f"pay.{remaining}")
+                command = _command(
+                    frame, frame.offers[chosen_index], f"pay.{remaining}"
+                )
                 contract = SemanticDecisionContract.from_env(fork)
                 contract.apply(
-                    fork, contract.frame.offers[0]["id"], command_id=f"fork.{remaining}"
+                    fork,
+                    contract.frame.offers[chosen_index]["id"],
+                    command_id=f"fork.{remaining}",
                 )
                 assert game.env.state_digest() == digest
                 socket.send_json({"type": "command", "command": command})

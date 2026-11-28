@@ -56,10 +56,10 @@ const positions: RecordingIndex['positions'] = [
   {key: 'latest', kind: 'state', turn: 2, phase: 'COMBAT', step: 'DAMAGE', actor: null, automatic: false, can_reveal: false},
 ];
 function index(canProduce = false): RecordingIndex {
-  return {id: 'trace-1', positions: [...positions], total: 3, next_offset: null, revision: 91, status: canProduce ? 'waiting' : 'finished', can_produce: canProduce, can_study: true, winner: 0, players: [], source_kind: null, watch: true, can_feedback: false};
+  return {id: 'trace-1', positions: [...positions], total: 3, next_offset: null, revision: 91, status: canProduce ? 'active' : 'completed', can_produce: canProduce, can_study: true, winner: 0, players: [], source_kind: null, watch: true};
 }
 function current(key: string): RecordedPosition {
-  return {description: null, note_key: key, ...positions.find(position => position.key === key)!, observation: makeObservation(2, key === 'latest'), decision: null, outputs: null, viewer: 0, revealed: false, can_reveal: false, history: [], history_labels: [], history_before: null, cursor: 0, transition_start: 0, consequences_recorded: true};
+  return {description: null, ...positions.find(position => position.key === key)!, observation: makeObservation(2, key === 'latest'), decision: null, outputs: null, viewer: 0, revealed: false, can_reveal: false, history: [], history_labels: [], history_before: null, cursor: 0, transition_start: 0, consequences_recorded: true};
 }
 function installApi(live = false): string[] {
   const calls: string[] = [];
@@ -85,6 +85,27 @@ describe('ReplayStore', () => {
     await store.next();
     expect(store.current?.observation.game_over).toBe(true);
     expect(calls.every(call => call.startsWith('GET'))).toBe(true);
+  });
+  it('opens a Watch with both hands wherever the position allows, unless the acting view was chosen', async () => {
+    const reads = async (watch: boolean, reveal: boolean | null): Promise<string[]> => {
+      const calls: string[] = [];
+      vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+        calls.push(input);
+        if (input.includes('/positions/')) return Response.json(current(decodeURIComponent(input.split('/positions/')[1].split('?')[0])));
+        return Response.json({...index(), watch, positions: positions.map(position => ({...position, can_reveal: position.key !== 'latest'}))});
+      }));
+      const store = createReplayStore();
+      store.reveal = reveal;
+      await store.open('trace-1');
+      await store.next();
+      await store.next();
+      return calls.filter(call => call.includes('/positions/')).map(call => call.split('?')[1]);
+    };
+    installApi();
+    // The last position of an older record has no stored hand: the acting view there.
+    expect(await reads(true, null)).toEqual(['reveal=true', 'reveal=true', 'reveal=false']);
+    expect(await reads(true, false)).toEqual(['reveal=false', 'reveal=false', 'reveal=false']);
+    expect(await reads(false, null)).toEqual(['reveal=false', 'reveal=false', 'reveal=false']);
   });
   it('restores a nonzero key and rejects an unavailable saved position visibly', async () => {
     installApi();

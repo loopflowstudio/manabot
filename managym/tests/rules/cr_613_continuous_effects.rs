@@ -418,7 +418,7 @@ fn layer_fixture(
         old.owner,
         old.definition_id,
         Arc::new(definition),
-        old.kind() == ObjectKind::Token,
+        old.kind(),
     );
     s.game_mut().state[object_id] = object;
     id
@@ -1340,7 +1340,7 @@ fn cr_613_keyword_predicate_dependency_overrides_grant_timestamp() {
             vec![continuous(
                 StaticScope::All(CardPredicate {
                     any_of: vec![CardPredicate {
-                        flying: true,
+                        keyword: Some(Keyword::Flying),
                         ..Default::default()
                     }],
                     ..CardPredicate::creature()

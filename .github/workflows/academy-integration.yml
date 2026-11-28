@@ -13,8 +13,12 @@ env:
 
 jobs:
   academy-integration:
-    name: Academy Integration (${{ inputs.runner }})
+    name: Academy Integration (${{ inputs.runner }}, ${{ matrix.group }})
     runs-on: ${{ inputs.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [contracts, play]
     env:
       # Sync dependencies once, then build managym below. Later syncs would
       # rebuild the engine.
@@ -39,36 +43,43 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync --python 3.13 --no-install-package managym \
+            --no-default-groups --group play-runtime \
             --extra dev --extra play --extra artifacts --extra reports
 
       - name: Build managym extension
         run: uv run maturin develop --features python --manifest-path managym/Cargo.toml
 
-      - name: Checkpoint world bindings
-        run: uv run pytest tests/model/test_world.py
-
-      - name: Elemental roster admission
-        run: uv run pytest tests/semantic/test_elemental_world.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py -q
-
-      - name: Elemental local play contracts
+      - name: World bindings, roster admission and replay/study contracts
+        if: matrix.group == 'contracts'
         run: |
-          uv run pytest -q \
-            tests/academy/test_elemental_play_launcher.py \
-            tests/academy/test_named_search_recovery.py \
-            tests/academy/test_manifest_recovery.py \
-            tests/academy/test_schedule_recovery.py \
-            tests/academy/test_forced_step_automation.py \
+          uv run pytest -n logical --dist loadscope --durations=20 \
+            tests/model/test_world.py \
+            tests/semantic/test_elemental_world.py \
+            tests/semantic/test_decklist_import.py \
+            tests/sim/test_local_update_sampling.py \
             tests/academy/test_authored_match_authority.py \
             tests/academy/test_authored_match_parity.py \
-            tests/academy/test_watch.py \
-            tests/academy/test_policy_runtime.py \
-            tests/academy/test_play_sessions.py \
-            tests/academy/test_policy_search_play.py tests/academy/test_search_baseline.py \
-            tests/academy/test_checkpoint_catalog.py \
-            tests/academy/test_configured_launch.py \
-            tests/academy/test_packaged_launcher.py
+            tests/academy/test_learn_evidence.py \
+            tests/academy/test_replay_index.py \
+            tests/academy/test_study_branch.py \
+            tests/academy/test_study_runtime.py \
+            tests/academy/test_choice_navigation.py \
+            tests/academy/test_stops.py \
+            tests/academy/test_play_modes.py
 
-      - name: Frozen-policy search fixtures
+      - name: Academy play, recovery and session contracts
+        if: matrix.group == 'play'
         run: |
-          uv run pytest -q \
-            tests/sim/test_local_update_sampling.py
+          uv run pytest -n logical --dist loadscope --durations=20 \
+            tests/academy/ \
+            --ignore=tests/academy/test_authored_match_authority.py \
+            --ignore=tests/academy/test_authored_match_parity.py \
+            --ignore=tests/academy/test_learn_evidence.py \
+            --ignore=tests/academy/test_replay_index.py \
+            --ignore=tests/academy/test_study_branch.py \
+            --ignore=tests/academy/test_study_runtime.py \
+            --ignore=tests/academy/test_choice_navigation.py \
+            --ignore=tests/academy/test_stops.py \
+            --ignore=tests/academy/test_play_modes.py \
+            --ignore=tests/academy/test_clean_machine_verifier.py \
+            --ignore=tests/academy/test_qwen_policy.py

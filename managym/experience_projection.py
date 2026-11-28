@@ -45,6 +45,7 @@ KEYWORD_NAMES = (
     "menace",
     "hexproof",
     "indestructible",
+    "changeling",
 )
 
 ACTION_LABELS = {
@@ -148,6 +149,8 @@ def _serialize_object(card: managym.Card | managym.StackObject) -> dict[str, Any
             details["cast_permissions"] = permissions
         if card.counters:
             details["counters"] = {kind: int(n) for kind, n in card.counters.items()}
+    if characteristics.printed_loyalty is not None:
+        details["printed_loyalty"] = characteristics.printed_loyalty
     if announced_x is not None:
         details["x"] = int(announced_x)
     return {
@@ -175,6 +178,10 @@ def _serialize_permanent(
     if include_details:
         types = _serialize_types(characteristics.card_types)
         details = {"types": types, "is_token": bool(permanent.is_token)}
+    if characteristics.printed_loyalty is not None:
+        details["printed_loyalty"] = characteristics.printed_loyalty
+    if permanent.loyalty_activated_this_turn:
+        details["loyalty_activated_this_turn"] = True
     return {
         **details,
         "id": int(permanent.id),
@@ -218,11 +225,17 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
     values: dict[str, Any] = {
         "counters": counters or None,
         "attached_to": permanent.attached_to,
+        "chosen": permanent.chosen,
         "creature_types": permanent.creature_types,
         "is_granted_land": bool(permanent.is_granted_land) or None,
+        "blocked": bool(permanent.blocked) or None,
+        "entry_controller_id": permanent.entry_controller_id,
         "first_strike_participant": bool(permanent.first_strike_participant) or None,
         "attacking": bool(permanent.attacking) or None,
         "blocking": permanent.blocking,
+        "attacked_permanent": permanent.attacked_permanent,
+        "hexproof_from": list(permanent.hexproof_from) or None,
+        "protection_from": list(permanent.protection_from) or None,
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "face_down": bool(permanent.face_down) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
@@ -259,6 +272,7 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "permanents_left": history.permanents_left,
         "nonland_permanents_left": history.nonland_permanents_left,
         "warped_this_turn": history.warped_this_turn,
+        "loyalty_abilities_activated": history.loyalty_abilities_activated,
         "life_lost": history.life_lost,
     }
     return {key: value for key, value in values.items() if value}
@@ -336,6 +350,7 @@ def _serialize_player(
         "HAND": [],
         "GRAVEYARD": [],
         "EXILE": [],
+        "COMMAND": [],
         "STACK": [],
     }
     for card in cards:
@@ -385,6 +400,7 @@ def _serialize_player(
                         else {}
                     ),
                     "combat": p.combat,
+                    **({"expiry": p.expiry} if p.expiry != "step" else {}),
                 }
                 for p in player.pooled_mana_classes
             ],
@@ -450,11 +466,13 @@ def _serialize_player(
             if (spent := player.spent_graveyard_types)
             else {}
         ),
+        **({"hexproof": True} if player.hexproof else {}),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         **({"effects": _effects(player.effects)} if player.effects else {}),
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],
         "exile": grouped_cards["EXILE"],
+        **({"command": grouped_cards["COMMAND"]} if grouped_cards["COMMAND"] else {}),
         "stack": grouped_cards["STACK"],
         "battlefield": serialized_permanents,
     }
@@ -539,6 +557,10 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     """
     observation = env.observation_for_player(viewer)
     data = serialize_observation(observation, include_details=True)
+    details = json.loads(env.permanent_details_json(viewer))
+    for side in ("agent", "opponent"):
+        for permanent in data[side]["battlefield"]:
+            permanent.update(details[str(permanent["id"])])
     data["player_controls"] = json.loads(env.player_controls_json())
     data["schedule"] = json.loads(env.public_schedule_json())
     context = json.loads(env.decision_context_json(viewer))
@@ -547,6 +569,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     data["definition_names"] = {
         str(definition): name for definition, name in definition_names(env).items()
     }
+    subjects = json.loads(env.presentation_subjects_json())
     data["stack_objects"] = [
         {
             "combat_damage_to_players": list(entry.combat_damage_to_players),
@@ -566,6 +589,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
             "source_permanent": entry.source_permanent_id,
             "ability_index": entry.ability_index,
             "chosen_mode": entry.chosen_mode,
+            "targets": stack_target_subjects(entry, subjects),
             "x": int(entry.x) or None,
             "from_prepared": entry.from_prepared,
             "flashback": entry.flashback,
@@ -581,6 +605,41 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
         }
     redact_observation(data)
     return LegacyHeroObservation.model_validate(data).model_dump(mode="json")
+
+
+def stack_target_subjects(
+    entry: managym.StackObject, subjects: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The targets of one stack entry as the subjects the board draws.
+
+    ``subjects`` is the native ``presentation_subjects_json`` of the same
+    position. The observation names a targeted permanent or card by the id
+    the viewer sees, which is the ``entity`` of its public subject. A target
+    with no public subject (a card in a zone the board does not draw) is left
+    out rather than guessed.
+    """
+    objects = {
+        int(subject["id"]["entity"]): subject
+        for subject in subjects.values()
+        if subject["kind"] == "object"
+    }
+    found: list[dict[str, Any]] = []
+    for target in entry.targets:
+        if target.stack_object_id is not None:
+            found.append({"kind": "stack", "id": int(target.stack_object_id)})
+        elif target.player_id is not None:
+            subject = subjects.get(f"player:{int(target.player_id)}")
+            if subject is not None:
+                found.append(subject)
+        else:
+            seen = (
+                target.permanent_id
+                if target.permanent_id is not None
+                else target.card_id
+            )
+            if seen is not None and int(seen) in objects:
+                found.append(objects[int(seen)])
+    return found
 
 
 def definition_names(env: managym.Env) -> dict[int, str]:
@@ -628,7 +687,7 @@ def format_action(
 
     Focus semantics (managym observation.rs action_focus):
       PLAY_LAND / CAST_SPELL: [card_id]
-      DECLARE_ATTACKER:       [attacker_permanent_id]
+      DECLARE_ATTACKER:       [attacker_permanent_id, attacked_permanent_id?]
       DECLARE_BLOCKER:        [blocker_permanent_id, attacker_permanent_id?]
                               (one entry means "this creature does not block")
       CHOOSE_TARGET:          [player_id or permanent_id]
@@ -653,6 +712,8 @@ def format_action(
     if action_name == "PRIORITY_CAST_SPELL" and first:
         return f"Cast {first}"
     if action_name == "DECLARE_ATTACKER" and first:
+        if len(focus_names) == 2:
+            return f"Attack {focus_names[1]} with {first}"
         return (
             f"Do not attack with {first}"
             if declared is False
