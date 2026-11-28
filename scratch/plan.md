@@ -57,16 +57,9 @@ Drafted in place before implementation (read these when building and reviewing):
 
 Passes 1 and 4 and the memo key/replacement-order design were judged aligned. Four findings land in Pass 5; the three review questions are adopted headless with the recommended option (1a, 2a, 3a), **made for review, not settled**. Passed over: 1b (every ability Sensitive; breaks the 207-state `{15}` bound), 2b (leave Delve unchecked, separate Task), 3b (per-call recompute, rely on Engine Budget). F5 (hash v36) needs no code: origin/main is at v35 with MTG-500 merged, so v36 stays.
 
-## Pass 5 · Close the coupled authority's gaps (next)
+## Pass 5 · Close the coupled authority's gaps
 
-One fix pass, each item with a regression built from a Pass 3 board variation in `managym/src/flow/mana/tests/manual_payment/coupled_boards.rs`:
-
-1. **Classifier blind spots (F1).** `coupling()` (`mana/coupled.rs` ≈88) makes any ability Sensitive on `facts.reads || profile.writes_non_pt || loses_rules || (tap_source && profile.stateful_triggers)`, with `loses_rules` passed in instead of applied only to `fixed`. `mana_ability_reads()` (`layers.rs` ≈641) scans `cost_reduction_per`. The pure handoff (`coupled.rs` ≈607) sets `source.untapped = false` for a Mutator fixed source under `stateful_tap()`, so `Obligation::Tap` cannot tap inside `cached_plan`. Regressions: White Lotus Tile discount on a non-tapping `{1}{R}, Pay 1 life: Add {G}{G}` beside `Remove a +1/+1 counter: Add {B}`, paying `{G}{G}{B}` (castable, ability 0 first); a `cost_reduction_per` predicate reading `tapped`. Keep the `{15}` rejection at 207 fork states (or record the new pinned count if it moves and stays small).
-2. **Resolution payments keep choice-tap lands (F2).** `resolution_mana_actions` (`mana.rs` ≈4212) adds `|| model.coupled().is_some()` to `explicit`, matching `compute_announced_mana_actions`. Regression: Ward/resolving payment on a coupled board with an automatic route offers the choice-tap land.
-3. **Upfront life and Delve (F3).** One guard (life budget + source presence) shared by `fund_upfront` (≈825) and `PaymentCandidate::Spend` (≈397). Delve on a board with stateful abilities, statics or triggers is coupled; add `PaymentCandidate::DelveExile(ObjectId)` and filter `help_actions` (`payment.rs` ≈1675) and the execution check (≈1250) through it. Regression: `{1}{G}{G}{G}` Delve spell, one graveyard card, Forest, and a `GraveyardAtLeast { count: 1 }` source (`{G}{G}` else `{G}`): the exile is not offered and the cast completes by taps.
-4. **Classify once per model (F4).** `PaymentModel` holds the coupling decision computed at construction (recomputed only where `mark_help_taps` changes `help.delve`); uncoupled boards build no `CoupledPayment` and allocate no reservations. Compute the suspended suffix's life delta once (at announcement or in `CoupledPayment::new`) so `has_mutating_caller()` never clones `Game` per call. Drop the redundant `stateful_tap()` check (≈43).
-
-Teaches: whether the closed whitelist holds once non-tapping and graveyard-coupled steps join it, and whether the fast path is truly free on ordinary boards.
+`0f32a515a1` classifies each payment model once, handles stateful taps and fee discounts, retains completing choice taps during resolution, shares the upfront guard, and checks native Delve exiles for both offers and execution. All 45 focused tests passed across the filtered run and follow-ups, including the `{15}` rejection at 207 fork states.
 
 ## Delivery (after Pass 5)
 

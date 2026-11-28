@@ -1,4 +1,4 @@
-at: 478bfe336681349ce574834a377304c905412a81
+at: 0f32a515a14b2e26264e1d270d05603935a6d304
 first:
   - path: managym/README.md
     why: Rules and offers the player will see
@@ -9,17 +9,21 @@ first:
   - path: managym/src/flow/play.rs
     why: Announcement, X selection, targeting and stack preparation
   - path: managym/src/flow/payment.rs
-    why: Fixed costs and completion from the announced ability
+    why: Announced costs and shared Delve eligibility
   - path: managym/src/flow/mana/profile.rs
     why: Board facts that make source order matter
+  - path: managym/src/flow/layers.rs
+    why: State read by mana ability cost reductions
   - path: managym/src/flow/mana.rs
-    why: Feasibility entry points and native production
+    why: Feasibility entry points, model construction and native production
   - path: managym/src/flow/mana/coupled.rs
-    why: Native steps, upfront tap budget, and memoization
+    why: Native steps, guarded upfront fees and memoization
+  - path: managym/src/flow/mana/help.rs
+    why: Candidate checks for direct taps and Delve exiles
   - path: managym/src/flow/decision.rs
     why: Replacement offers and execution share the payment check
   - path: managym/src/flow/mana/tests/manual_payment/coupled_boards.rs
-    why: Live replacement decisions and order-sensitive payment boards
+    why: Native payment regressions through offers and execution
   - path: managym/src/flow/mana/tests/manual_payment.rs
     why: Live grant loss and payment regressions
   - path: managym/src/agent/env/snapshot.rs
