@@ -1,29 +1,15 @@
-at: 3531b83533b0c6db69f84f33ec3f47588ba4c415
+at: f3863261e1ec133d12531f5211f59d9ca4fb5ae1
 first:
-  - path: docs/evaluation.md
-    why: Scalar and streaming callbacks, devices and game budgets
-  - path: experiments/reports/eval_throughput.md
-    why: Measured throughput and replay parity on each accelerator
-  - path: experiments/tla_trophies.py
-    why: Trophy deals and precision shared with the benchmark
-  - path: manabot/eval/pairing.py
-    why: Common deal specification, admission and result tables
-  - path: manabot/eval/agents.py
-    why: Checkpoint metadata, host preparation and seeded sampling
+  - path: experiments/reports/eval_precision_profile.md
+    why: How to reproduce the profile and what remains open
+  - path: experiments/eval_precision_profile.py
+    why: Captures, replay timings, profiler attribution and offline tables
   - path: manabot/eval/agent_loader.py
-    why: Device selection and batched inference
-  - path: manabot/sim/native_game.py
-    why: Viewer frames and sampling evidence shared across runners
+    why: Shared Torch loading and forward precision context
   - path: manabot/eval/vector.py
-    why: One decision round, slot backfill and failure isolation
-  - path: managym/recording.py
-    why: Detaching game records before a slot is reused
-  - path: managym/src/agent/vector_env/slots.rs
-    why: Explicit deals preserve the automatic seed sequence
-  - path: manabot/eval/match.py
-    why: Replaying and retaining each completed deal
-  - path: tests/eval/test_vector_eval.py
-    why: Scalar trace parity, live budgets and backfill
-hide:
-  - path: tests/public_api.json
-    why: Generated snapshot of optional native arguments
+    why: Prepared observation coordinates at the arena boundary
+  - path: experiments/eval_throughput.py
+    why: Paired arena timing receipts and seeded checkpoint controls
+  - path: tests/eval/test_eval_precision_profile.py
+    why: Real game replay equality and CUDA trace accounting
+hide: []

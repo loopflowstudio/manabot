@@ -4,6 +4,9 @@ Each is reversible.
 
 - **Profile by replaying captured batches**, not by instrumenting the live
   arena; replay runs first on the L4 and sizes the arena repeats.
+- The trained checkpoint has older saved readings. Seeded grid controls
+  inherit them so cross-width comparisons can hold preparation constant.
+  The fresh-reading `w384l8` arena checkpoint has its own capture.
 - **Cross-width replay re-tags `Prepared.binding` in the harness** after
   asserting equal observation config, readings and decision memory
   (concept review, 2026-11-27). Alternative: prepare per width from raw
@@ -13,6 +16,7 @@ Each is reversible.
 - **`agent_loader.py` gains `load_torch_policy` and a shared per-call
   context helper now** (review Q4a), Torch types under `TYPE_CHECKING`.
 - **One L4 rental under `--max-usd 5`**, no CPU baseline arms.
+  `mtg324-l4-step` was rentable at USD 0.69/hour during the local pass.
 - **A fix that changes bf16 logits is not taken**: it would be a new compute
   class beside `etude-policy-bf16-auto-v1`. The report documents the
   threshold instead.

@@ -24,12 +24,11 @@ From `experiments/reports/eval_throughput.md` and the receipts in
 | Trained `w160l8` | 603 | 18.6 | 39.7 | 67.2 |
 | Seeded `w384l8` | 677 | 9.9 | 43.6 | 18.6 |
 
-- **Width is not the only thing that differs.** The two checkpoints have the
-  same model settings apart from `hidden_dim` (checked with `read_container`
-  against `tla_frontier.model("w160l8")`). But one is trained and one is
-  random: the trained policy wins 113 of 128 over long games with 18.6 rows
-  per forward, the seeded one loses quickly with 9.9. Width, trained weights
-  and batch composition are confounded in the Task's headline.
+- **The arms differ in width, weights, batches and saved readings.** Their
+  model settings differ only in `hidden_dim`. The trained checkpoint saves
+  narrower column prefixes and two smaller relation categories than a fresh
+  seeded model. The trained policy wins 113 of 128 over long games with 18.6
+  rows per forward. The seeded one loses quickly with 9.9.
 - **A fixed per-call cast cost cannot be the whole cause.** bf16 `w384l8`
   takes 18.6 ms per call in total, less than the 27.5 ms bf16 adds per call at
   `w160l8`. Whatever costs 27.5 ms is absent or much smaller in the seeded
@@ -100,11 +99,12 @@ Cross-width replay: `admission.binding` dumps the whole `ModelConfig`
 (`manabot/policy/admission.py:110`), so `forward_distribution`
 (`policy.py:770`) rejects a `w160l8` batch on any other width although
 `Prepared` holds no width-dependent arrays. Chosen for review: the harness
-asserts equal `space.config`, readings and decision-memory settings between
-capturing and replaying model, then re-tags `Prepared.binding` with
-`dataclasses.replace`; production keeps the strict check. Passed over:
-preparing per width from captured raw observations (a second capture path
-for the same bytes).
+asserts equal `space.config`, readings and model settings apart from width
+and head count, then re-tags `Prepared.binding` with `dataclasses.replace`.
+The grid instantiates seeded controls from the trained checkpoint's settings
+and readings with `random_checkpoint(..., template=trained)`. Use the
+fresh-reading seeded `w384l8` checkpoint only on its own capture and in its
+arena repeats.
 
 Variants:
 
@@ -158,11 +158,16 @@ synthetic fixed-shape microbenchmark.
 
 ## Rental
 
-One RunPod L4 through Etude, the path the `l4-966e8ff296` arms used, under
-`--max-usd 5`. Order: the replay/profile pass first (minutes), then only the
-arena arms it calls for. No CPU baseline arms. Receipts go to
-`.runs/eval-precision-profile/l4-<rev>/`; the launcher's cost is recorded once
-in the report. Confirm the pod is gone.
+One RunPod L4 through Etude under `--max-usd 5`. Use the replay/profile pass
+first, then only the arena arms it calls for. Receipts go to
+`.runs/eval-precision-profile/l4-<rev>/`. Record the launcher's cost once and
+confirm the pod is gone.
+
+2026-11-27 availability check. `l4-etude` quoted USD 0.69/hour against its
+USD 0.60 ceiling. Existing `mtg324-l4-step` quoted the same price under its
+USD 0.70 ceiling, with zero of one in use. Recheck that profile before renting.
+Inject RunPod from Doppler `etude/prd` and R2 from `manabot/prd` through nested
+`doppler run` for Etude launcher commands. No rental was created.
 
 ## Acceptance check
 
@@ -185,12 +190,15 @@ parts, and that the buckets cover the forward.
 
 ## Passes
 
-1. **Harness and the L4 diagnosis.** Split the loader, add `forwards.jsonl`,
-   extend `random_checkpoint` with heads, write `capture`/`replay`/
-   `render_report` and the smoke test, validate locally on CPU and MPS, then
-   on the L4 run the replay grid over the six models and five variants, and
-   the arena arms it calls for.
-2. **Fix or rule.** If `bf16-linear-once` removes the penalty with logits
+1. **Harness.** `f3863261e` added the capture, replay, report and arena receipts, with CPU and MPS smoke checks.
+2. **L4 diagnosis.** Use `experiments/reports/eval_precision_profile.md` to
+   stage the trained checkpoint and held-out corpus, generate matched-input
+   seeded controls, and run the real-batch and head-width comparisons on
+   one L4. Start with the same-call float32/bf16 arms for trained `w160l8`
+   and seeded `w384l8`, then the six-model grid and arena repeats. Verify
+   CUDA trace correlation and bucket coverage on the first replay before
+   expanding the sweep. Local MPS evidence covers execution only.
+3. **Fix or rule.** If `bf16-linear-once` removes the penalty with logits
    bit-identical to shipped bf16, change `torch_logits`, rerun the two bf16
    arena arms on the same rental and report before/after. Otherwise the
    report states the L4 rule in `head_dim` and width/rows-per-call terms
