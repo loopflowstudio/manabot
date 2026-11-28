@@ -193,7 +193,14 @@ parts, and that the buckets cover the forward.
 
 1. **Harness.** `f3863261e` added the capture, replay, report and arena receipts, with CPU and MPS smoke checks.
 2. **L4 diagnosis.** `75ae6a1d4` corrected CUDA trace admission. `e86b798d1` records 84 replay profiles, the even-head alignment control and three arena repeats per arm.
-3. **L4 guidance.** `e86b798d1` documents the head-width and batch-size crossovers after cast-once preserved the logits and left the narrow slowdown intact.
+3. **L4 guidance.** `e86b798d1` documents the head-width and batch-size crossovers. The `head_dim % 8` rule is now stated in `docs/evaluation.md#etude-agents` (realign, review F4).
+4. **Review fix pass (next, no rental).** From the post-implementation review (`scratch/concept-review.html`, at `178a551d7`):
+   - *Bucket attribution (F2, Q1a for review).* In `op_bucket` (`experiments/eval_precision_profile.py:333`) check `ATTENTION`/`GRU` and `parent != "other"` before `casts_and_copies`, so every scope owns its internal casts. Add a unit check (nested `aten::to` under `policy.attention` charges to attention) in `tests/eval/test_eval_precision_profile.py`. Recompute the report's bucket table (`experiments/reports/eval_precision_profile.md:57-64`) offline from `.runs/eval-precision-profile/l4-a468879a7a/*/profile.json`; review reports totals unchanged (59.45, 100.77, 86.48, 30.40 ms/call) and `w160l8` delta +48.14 ms attention (36.41 -> 84.55), +0.20 ms outside casts, -8.64 ms MLP. Verify those numbers yourself.
+   - *Delete `bf16-cached-autocast` (F1).* Autocast does not cache weight casts under `torch.inference_mode()`; the L4 traces show identical cast counts (1,094 `copy_` on `w384l8`) and peak memory to `bf16`. Remove the variant, `cached_context` and its CLI choice; the report says why it was dropped, not that it cached weights.
+   - *Report `bf16-linear-once` fully (F1).* State that it leaves `w160l8` slow (math SDPA dominates) and that on `w384l8` it cut 18.12 -> 15.48 ms/call and about 54 MiB peak memory with 0.0 logit difference, while switching 16 attention GEMMs (`cutlass_80_wmma_tensorop_bf16_32x32` -> `ampere_bf16_s1688gemm_128x128`); that kernel change is why the loader does not adopt it here.
+   - *Capture boundary (F3, Q2a for review).* Drop `observe_prepared` from `experiments/eval_throughput.run_vector`; `capture` calls `play_pairings` directly. Prepare single rows inside the observer while the `ObservationSelection` is live and correlate with `record` by `id(prepared)`, replacing `nonlocal pending` and its one-checkpoint assert. Keep `observe_prepared` on `manabot/eval/vector.py` with a docstring saying the selection is valid only during the synchronous call. Passed over: removing it from `vector.py` and capturing singles in a separate one-slot run (Q2b), which would replay different games.
+   - Minor: `load_torch_policy` (`manabot/eval/agent_loader.py:133`) applies matmul precision both itself and through `torch_forward_context`; keep one.
+   - Rerun the CPU smoke test and the bucket unit check; refresh `scratch/tour.yaml`.
 
 ## Absent and error states
 
@@ -227,24 +234,28 @@ checks. `scratch/tour.yaml` gives the reading order for MTG-507.
   logits, or the docs give the `head_dim`, width and rows-per-call conditions
   under which bf16 is faster on an L4.
 
-## Concept review (2026-11-27) dispositions
+## Concept review dispositions
 
-- `head_dim % 8` SDPA fallback missing from the grid: adopted; models table,
-  SDPA kernel and peak-memory recording added.
-- Cross-width binding rejection and no `split`: adopted; single-row capture
-  plus `concatenate`, harness-only re-tag (for review).
-- Cast-once rounding LayerNorm/Embedding: replaced by `bf16-linear-once`
-  plus diagnostic `bf16-cached-autocast` (review Q2a).
-- Rental order: replay first, arena arms sized by it (Q3a); `forwards.jsonl`
-  written once after the run.
-- Loader split vs Torch-free import: `load_torch_policy` plus shared per-call
-  helper under `TYPE_CHECKING` (Q4a, for review).
+Pre-build review (2026-11-27): head-dim grid, single-row capture with
+`concatenate`, `bf16-linear-once`, replay-first rental and the loader split
+were adopted (see Design).
+
+Post-implementation review (`scratch/concept-review.html`, at `178a551d7`):
+F1 cached-autocast no-op and linear-once reporting, F2 parent-first buckets,
+F3 capture boundary -> pass 4; F4 `head_dim % 8` doc rule fixed in realign;
+F5 and F6 deferred below (Q3a, for review: file F5, keep F6 as an idea).
 
 ## Deferred findings
 
-- If the L4 profile confirms the `head_dim % 8` fallback, file a separate
-  Task to revisit frontier width/head guidance and `BF16_MIN_HIDDEN_DIM = 256`
-  (`manabot/infra/config.py:347`; MLX uses it too), since training (MTG-317)
-  shows the same penalty. Padding `head_dim` inside `GameObjectAttention`
-  changes bf16 rounding and needs a new compute class id, so it is not
-  MTG-507's.
+- **F5 (file a Task at ship).** `BF16_MIN_HIDDEN_DIM = 256`
+  (`manabot/infra/config.py:347`, also MLX's default-precision rule) and
+  `docs/training.md:1147` state the L4 CUDA crossover by width alone. Separate
+  MLX's width rule from CUDA's `head_dim % 8 == 0` SDPA alignment and review
+  frontier head counts (MTG-317 training shows the same `w160l8` penalty).
+  Padding `head_dim` inside `GameObjectAttention` changes bf16 rounding and
+  needs a new compute class id.
+- **F6 (idea, not filed).** Pre-cast Linear/MHA projection weights for aligned
+  CUDA bf16 evaluation: worth 14.6% on L4 `w384l8`, but the GEMM kernel switch
+  means cross-GPU and cross-shape parity must be shown, or a new compute class
+  id taken, before `etude-policy-bf16-auto-v1` could use it. Worth it only
+  once wide-model GPU evaluation is forward-bound.
