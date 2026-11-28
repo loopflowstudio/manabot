@@ -1,24 +1,29 @@
 <h1>Concept Review: MTG-506 — Vectorized Eval Host, Replay, and Heuristic Stepping</h1>
 
-<p><strong>Area reviewed:</strong> Evaluation execution, recording, and verification replay across
-<code>managym</code> (<code>PlayerPolicy</code>, <code>VectorEnv</code>/<code>SlotLoad</code>,
+<p><strong>Area reviewed:</strong> Post-build review of evaluation execution, per-seat native policies,
+game recording/audit views, and verification/failure replay across <code>managym</code>
+(<code>PlayerPolicy</code>, <code>Env</code>, <code>VectorEnv</code>/<code>SlotLoad</code>,
 <code>RecordedVectorEnv</code>, <code>GameRecord</code>/<code>GameInputs</code>,
-<code>RecordWalker</code>, <code>PyEnv</code>) and <code>manabot</code>
-(<code>eval/agents</code>, <code>eval/vector</code>, <code>sim/agent</code>,
-<code>sim/native_game</code>, <code>sim/evaluation_records</code>, <code>sim/replay</code>,
-<code>sim/heuristic</code>, <code>infra/provenance</code>). This is a pre-build review of
-<a href="scratch/plan.md"><code>scratch/plan.md</code></a> (committed at <code>26cfa6c47f</code>,
-stacked on MTG-497 at <code>fb1580b472</code>). Because the plan reshapes four coupled contracts —
-per-slot native policies, heuristic statefulness, compact records, and threaded single-digest replay —
-every surface that owns or reads those contracts is in scope.</p>
+<code>RecordWalker</code>, <code>PyEnv</code>, <code>academy/watch</code>), <code>manabot</code>
+(<code>eval/agents</code>, <code>eval/admission</code>, <code>eval/pairing</code>,
+<code>eval/vector</code>, <code>sim/agent</code>, <code>sim/heuristic</code>,
+<code>sim/native_game</code>, <code>sim/evaluation_records</code>, <code>sim/card_evidence</code>,
+<code>sim/replay</code>, <code>infra/provenance</code>), and the evaluation experiment declarations
+(<code>experiments/eval_throughput.py</code>, <code>experiments/tla_trophies.py</code>,
+<code>experiments/tla_trophies_colab.py</code>, <code>experiments/tla_trophies_floor.py</code>,
+<code>experiments/opponent_memory.py</code>). Reviewed as a whole at <code>aca4c41ad6</code> against
+checkout base <code>0f885b1f43</code> (superseding the pre-build plan review at <code>2ee58b5d2d</code>).</p>
 
-<p><strong>Sync note against <code>origin/main</code>:</strong> Since <code>fb1580b472</code>,
-<code>origin/main</code> landed <code>23212c88f5</code> (MTG-502, <code>GameStateEdit</code>),
-which modified <code>managym/src/agent/vector_env/slots.rs</code>,
-<code>managym/src/python/vector_env_bindings.rs</code>, <code>managym/recording.py</code>,
-<code>managym/__init__.pyi</code>, and <code>tests/public_api.json</code> (and changed
-<code>RestoreOptions</code> from <code>Copy</code> to <code>Clone</code>). Plan the sync before
-Pass 1 edits those same files.</p>
+<p><strong>Sync note against freshly fetched <code>origin/main</code> (<code>606e79e90a</code>):</strong>
+Since the branch base, <code>origin/main</code> landed MTG-500 (<code>606e79e90a</code>), which edited
+<code>docs/engine.md</code>, <code>managym/src/agent/env.rs</code>, and
+<code>managym/src/agent/vector_env.rs</code>. Notably, <code>Game::construct</code> in
+<code>env.rs</code> now returns <code>Result&lt;Game, AgentError&gt;</code> when an opening decision
+stalls with no legal action. On this branch, <code>VectorEnv::deal_fresh_game</code>
+(<code>managym/src/agent/vector_env.rs:1069-1079</code>) calls <code>env.reset_root(...)?</code> outside
+<code>isolate_gameplay</code> and only isolates <code>env.settle_opening(obs)</code>; when syncing onto
+<code>606e79e90a</code>, keep setup validation strict while isolating gameplay errors raised during
+<code>Game::construct</code> so a stalled opening decision poisons only its slot.</p>
 
 <h2>Do domain concepts and code concepts line up?</h2>
 
@@ -26,273 +31,264 @@ Pass 1 edits those same files.</p>
   <thead>
     <tr>
       <th>Domain concept</th>
-      <th>Code concept (current + plan)</th>
+      <th>Code concept (at <code>aca4c41ad6</code>)</th>
       <th>Aligned?</th>
       <th>Mismatch</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>Per-game seat policy</strong><br>Each leg assigns each seat to an external checkpoint, the built-in heuristic (optionally capped), or a custom Python player; stateful players keep state across one game.</td>
-      <td><code>VectorEnv.player_policies</code> (vector-wide), <code>GameRecord.player_policies</code> (record-wide), <code>GameInputs</code> (no policies); <code>agents.py:Heuristic</code> wraps both native heuristic and custom <code>CodePlayer</code>s; <code>GamePlayer</code> has no per-game lifecycle.</td>
+      <td><strong>Built-in heuristic identity &amp; version</strong><br>The stateful <code>native-v3</code> heuristic changes 16/7,155 decisions and derives a new player-seed cohort; an Etude tournament runs one declared opponent version and never mixes <code>native-v2</code> and <code>native-v3</code>.</td>
+      <td><code>HEURISTIC_VERSION = "native-v3"</code> in <code>sim/heuristic.py</code>; <code>eval/admission.py</code> stamps <code>native-v3</code> and hashes <code>player_policy.rs</code> into <code>anchor_cohort_sha256</code>; <code>eval_throughput.py</code> puts <code>version</code> in <code>Code.config</code>, but <code>tla_trophies.py:265</code> and <code>opponent_memory.py:326</code> omit it and <code>agents.py</code>/<code>pairing.py</code> ignore <code>Code.config["version"]</code>.</td>
       <td><strong>No</strong></td>
-      <td>One idea under two owners (<code>VectorEnv</code> vs slot <code>Env</code>; <code>GameRecord</code> vs <code>GameInputs</code> breaks multi-slot failure records). One name (<code>Heuristic</code>) for two ideas. Plan blames <code>sim/heuristic.py</code> (already stateful) instead of <code>GamePlayer</code>/<code>agents.py</code>.</td>
+      <td>One idea under two disconnected owners. Etude's <code>Code.key</code> and <code>Seating.definition</code> depend on <code>name</code> + <code>config</code> (not <code>source</code>), so resuming any <code>tla_trophies*</code> or <code>opponent_memory</code> tournament silently mixes <code>native-v3</code> games and new seeds into stored <code>native-v2</code> benchmarks. Even an explicit <code>config={"version": "native-v2"}</code> is silently run as <code>native-v3</code>.</td>
     </tr>
     <tr>
-      <td><strong>Per-leg native failure isolation</strong><br>A rules error or panic in one leg fails only that leg and attributes the crash to whichever seat was acting.</td>
-      <td><code>step_isolated_with_writer</code> catches step errors with no acting-seat field; <code>vector.py</code> blames <code>round_result.players[slot]</code> (always checkpoint). <code>reset_each_into_buffers</code> and <code>load_slots_into_buffers</code> have no isolation.</td>
+      <td><strong>Isolated opening failures &amp; replay</strong><br>An opening failure in an isolated vector slot is recorded by <code>RecordedVectorEnv</code> like a step failure; <code>walk()</code> and <code>replay_failure_inputs()</code> handle opening failures uniformly.</td>
+      <td><code>RecordedVectorEnv._reset_each</code> and <code>load_recorded_slots</code> ignore <code>isolated</code> and never read <code>get_last_info()</code>; <code>take_slot_record</code> patches <code>operation="reset"</code> by guessing <code>if not game.actions:</code>; <code>GameRecord.failed_opening()</code> hardcodes <code>mode == "vector"</code> and <code>end.status == "failed"</code> so <code>RecordWalker._open()</code> swaps policies to <code>("agent", "agent")</code>.</td>
       <td><strong>No</strong></td>
-      <td>Seat-0 heuristic opening turns run inside unisolated <code>reset</code>/<code>load_slots</code> (crashing all 64 slots). Mid-game heuristic crashes inside <code>settle_players</code> get misattributed to the checkpoint.</td>
+      <td>Action with no single owner. Direct <code>RecordedVectorEnv</code> callers using <code>games_path</code>, <code>snapshot()</code>, or <code>reducers</code> lose opening failures (and activate live reducers on poisoned slots). Scalar <code>operation="reset"</code> failures bypass <code>failed_opening()</code> and raise an uncaught <code>AgentError</code> inside <code>RecordWalker.__init__</code>.</td>
     </tr>
     <tr>
-      <td><strong>Recorded evaluation decision</strong><br>Engine owns authoritative inputs and state digests; runner adds only non-recomputable metadata; viewer frames and offer labels derive on demand.</td>
-      <td>Plan drops <code>frame_sha256</code> on vector records but keeps <code>chosen_offer</code> and <code>action_space_kind</code>; <code>RecordedVectorEnv._step</code> also serializes <code>semantic_decision_frames_json</code> on every isolated step.</td>
+      <td><strong>Per-leg native failure isolation</strong><br>A native <code>AgentError</code> or <code>PanicException</code> in one leg fails only that leg, whether the seat is a checkpoint, native heuristic, or custom Python <code>CodeSeat</code>.</td>
+      <td><code>VectorEnv</code> isolates native step and opening failures with <code>game_error_seat</code>; scalar <code>execute_game</code> catches <code>is_game_error</code> around player calls; <code>vector.py:step_round</code> calls <code>choose_code_action</code> with no <code>is_game_error</code> guard.</td>
       <td><strong>No</strong></td>
-      <td>Halfway split: zero downstream consumers read <code>chosen_offer</code>/<code>action_space_kind</code> from a <code>GameRecord</code>, yet keeping them forces 64 full <code>PyObservation</code> clones and <code>describe_actions</code> per round, plus duplicate semantic-frame serialization.</td>
+      <td>Rule stops early on the <code>CodeSeat</code> path. A native error from a search-backed <code>CodePlayer</code> (such as <code>DemoSearchPlayer</code> running native rollouts) escapes <code>step_round</code> and aborts all 64 slots instead of isolating that leg.</td>
     </tr>
     <tr>
-      <td><strong>Verified replay &amp; background execution</strong><br>Replay checks every transition once, never pollutes <code>cards()</code> with a diverged step, and runs off the stepping loop in parallel with forwards.</td>
-      <td>Plan drops <code>clone_env()</code> in <code>RecordWalker</code> for plain integer actions, runs <code>finalize_match</code> on 2 threads while <code>PyEnv::step</code>/<code>state_digest</code> hold the GIL, and <code>eval_throughput.py</code> subtracts <code>replay_seconds</code> from wall time.</td>
-      <td><strong>No</strong></td>
-      <td>Dropping clone-first breaks <code>tests/env/test_record_reducers.py:105-113</code> (<code>cards()</code> invariant on divergence). Holding the GIL serializes both threads against the event loop. Subtracting overlapped replay makes <code>other_arena</code> wrong or negative.</td>
+      <td><strong>Per-slot <code>player_policies</code> surface</strong><br>Each slot owns its two-seat policy pair (<code>agent</code>, <code>random</code>, <code>heuristic</code>, <code>heuristic:N</code>), readable beside seeds and configs and preserved across snapshots, <code>GameInputs</code>, and failure replay.</td>
+      <td><code>PlayerPolicy::Heuristic { max_actions }</code> custom string serde; <code>SlotLoad.fresh</code> / <code>SlotLoad.snapshot</code>; <code>GameInputs.player_policies</code> + <code>GameRecord.for_game</code> / <code>policies_for</code>; <code>VectorEnv._current_player_policies()</code> (underscore-prefixed, absent from <code>_VECTOR_READS</code>).</td>
+      <td><strong>No</strong> (minor)</td>
+      <td>Core ownership model is clean and complete; only the getter name <code>_current_player_policies</code> leaks an internal underscore onto the public stub (<code>managym/__init__.pyi</code>) and breaks symmetry with <code>current_game_seeds()</code> and <code>current_player_configs()</code>.</td>
     </tr>
     <tr>
-      <td><strong>Inspecting recorded games in Academy Watch</strong><br>Any stored evaluation game record can be opened for visual inspection.</td>
-      <td><code>managym/academy/watch.py:486</code> raises <code>ValueError</code> whenever <code>resolved_player_policies != ("agent", "agent")</code>.</td>
-      <td><strong>No</strong></td>
-      <td>Unstated consequence: every vector heuristic evaluation record becomes unviewable in Academy Watch until Watch supports native-seat records.</td>
+      <td><strong>Inspecting recorded games in Academy Watch</strong><br>Stored evaluation records open in Watch for visual inspection.</td>
+      <td><code>managym/academy/watch.py:486-492</code> raises <code>ValueError</code> whenever a single-game record has <code>policies_for(games[0]) != ("agent", "agent")</code>.</td>
+      <td><strong>No</strong> (deferred)</td>
+      <td>Every new vector heuristic evaluation record is unviewable in Watch until a follow-up Academy Task reconstructs or surfaces native-seat turns on import.</td>
     </tr>
     <tr>
-      <td><strong>Process runtime identity &amp; scalar capture context</strong><br>Process-invariant engine hashes compute once; static per-game metadata isn't deep-copied per decision.</td>
-      <td><code>provenance.py:runtime_fingerprints</code> re-hashes all <code>.rs</code> files and <code>_managym</code> and resets a throwaway <code>Env</code> every call; <code>native_game.py:292</code> deep-copies metadata 3×/decision despite <code>_Capture.frozen_context</code>.</td>
-      <td><strong>No</strong></td>
-      <td>Plan adds a per-run cache in <code>vector.py</code> instead of caching process invariants in <code>provenance.py</code> and using existing <code>frozen_context</code>.</td>
-    </tr>
-    <tr>
-      <td><strong>Paired deals, <code>Play</code> counts, and card evidence</strong><br>Checkpoint play habits and card exposure match between scalar and native-heuristic vector runs.</td>
-      <td><code>Play</code> selects only the checkpoint seat (<code>checkpoint_counts</code>); combat/mana exposure runs natively for both seats; <code>GameEvidence</code> derives from <code>walk(..., capture_cards=True)</code>.</td>
+      <td><strong>Compact vector decision evidence &amp; replay</strong><br>Engine owns inputs and digests; vector annotations carry only runner facts; viewer frames derive on demand and are checked when present.</td>
+      <td>Shared <code>DecisionIdentity</code>; <code>RecordedVectorEnv._step</code> skips <code>semantic_decision_frames_json</code> when isolated without journal/probabilities and takes <code>game_error_frame</code> from the receipt; <code>audit_view</code> derives <code>command</code> from <code>actions[index]</code>; <code>_replay_record</code> always checks <code>actor</code>, <code>player_id</code>, and digests.</td>
       <td><strong>Yes</strong></td>
-      <td>Aligned. Skipping heuristic decisions leaves checkpoint <code>PlayCounts</code> and native card exposure identical.</td>
+      <td>Aligned. Zero live <code>decision_observations</code> or <code>describe_actions</code> against native heuristic; 1,280/1,280 replay passes in the panel at <code>ad8b9dbaab</code> (11,959 games/hr on M4 Max MPS, 85% forward).</td>
+    </tr>
+    <tr>
+      <td><strong>Single-digest replay &amp; background workers</strong><br>Integer-only replay checks each transition once without breaking <code>cards()</code> on divergence, and runs concurrently off the stepping loop.</td>
+      <td><code>RecordWalker.run</code> direct fast path with cold prefix rebuild on divergence; GIL released in <code>PyEnv::reset</code>/<code>step</code>/<code>state_digest</code>; bounded 2-thread <code>ThreadPoolExecutor</code> in <code>play_pairings</code> joined on close; separate <code>background_replay_seconds</code> in <code>eval_throughput.py</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned. One minor inefficiency: if <code>len(replays) &gt;= slots</code> while all active slots drain, <code>play_pairings</code> closes and reopens <code>vector</code> instead of awaiting one replay first.</td>
+    </tr>
+    <tr>
+      <td><strong>Process provenance &amp; scalar capture context</strong><br>Process-invariant fingerprints compute once; static per-game metadata is not deep-copied on every scalar step.</td>
+      <td><code>@cache</code> on <code>process_fingerprints()</code> and <code>arena_source_sha256()</code> in <code>infra/provenance.py</code>; <code>capture.frozen_context</code> set after setup in <code>execute_game</code> and cleared on exception and before cutoff/close.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned. Fingerprinting dropped from 1.782 s to 0.027 s across 80 calls while preserving cutoff and close diagnostics.</td>
     </tr>
   </tbody>
 </table>
 
-<h2>The biggest mismatch: patching around vector-wide policies and halfway-compact records instead of finishing the ownership boundary</h2>
+<h2>The biggest mismatch: split heuristic identity between Etude tournaments and Manabot admission</h2>
 
-<p>The plan treats <strong>per-slot native policies</strong> and <strong>compact decision evidence</strong> as
-local optimizations inside <code>vector.py</code> rather than finishing the model where each fact is owned.
-Walking both a normal round and a failure exposes four concrete breaks:</p>
+<p>MTG-506 honestly fixed per-game heuristic turn state (changing 16 of 7,155 heuristic choices in
+10 of 64 profiled games), added <code>player_policy.rs</code> to <code>heuristic_source_paths()</code>,
+and bumped <code>HEURISTIC_VERSION</code> to <code>"native-v3"</code>. Because <code>admit_pairing</code>
+hashes that registration into <code>EvaluationKey.anchor_cohort_sha256</code>, every game's derived
+player seed changes as well.</p>
+
+<p>Walk what happens right now if someone runs <code>etude eval experiments/tla_trophies.py</code>,
+<code>experiments/tla_trophies_colab.py</code>, <code>experiments/tla_trophies_floor.py</code>, or
+<code>experiments/opponent_memory.py</code> on this branch:</p>
 
 <ol>
-  <li><strong>Multi-slot records and slot reuse still assume one vector-wide policy pair.</strong>
-    <code>GameRecord</code> stores one <code>player_policies</code> tuple for all <code>games</code>,
-    <code>GameInputs</code> has none, <code>SlotLoad::Fresh</code> inherits the previous leg's policies via
-    <code>previous.replacement_root()</code>, and <code>SlotLoad::Snapshot</code> checks against
-    <code>self.player_policies</code>. If a multi-slot failure snapshot or journal is written while slot 0
-    is <code>("agent", "heuristic:64")</code> and slot 1 is <code>("heuristic:64", "agent")</code>,
-    <code>replay_failure_inputs</code> replays half the slots with the wrong seat as heuristic.</li>
-  <li><strong>Halfway-compact annotations still pay for full observations every round.</strong>
-    <code>GameInputs.digests[i]</code> already Blake3-hashes the entire <code>ActionSpace</code> and
-    <code>GameInputs.actions[i]</code> is the chosen offer index. Dropping <code>frame_sha256</code> while
-    keeping <code>chosen_offer</code> and <code>action_space_kind</code> forces <code>step_round</code> to
-    keep calling <code>vector.decision_observations(active)</code> (cloning 64 full native
-    <code>Observation</code> structs across PyO3) and <code>describe_actions(raw)</code> every round — even
-    though no downstream consumer reads either field from a <code>GameRecord</code> (<code>audit_view</code>
-    only reads <code>chosen_offer["id"]</code>, which equals <code>inputs["actions"][index]</code>).</li>
-  <li><strong><code>RecordedVectorEnv._step</code> duplicates Rust's semantic frame serialization.</strong>
-    On every isolated step, <code>RecordedVectorEnv._step</code> calls
-    <code>semantic_decision_frames_json(active)</code> in Python even with no journal and no policy
-    probabilities, while Rust's <code>step_isolated_with_writer</code> serializes the exact same frame a
-    second time into <code>info["game_error_frame"]</code>.</li>
-  <li><strong><code>agents.py</code> overloads <code>Heuristic</code> and misses why state was lost.</strong>
-    <code>manabot/sim/heuristic.py:HeuristicPlayer</code> is already stateful (standalone scalar
-    <code>execute_game</code> builds one per game). State is lost because <code>GamePlayer</code> has no
-    per-game lifecycle and <code>agents.py:Heuristic</code> calls <code>factory(seed)</code> inside
-    <code>choose()</code>.</li>
+  <li><code>tla_trophies.py:265</code> still constructs
+    <code>Code(name="heuristic", source=heuristic_source_paths(), config=HEURISTIC)</code> — with
+    <code>config={"max_actions": 64}</code> and <strong>no <code>version</code> field</strong>.</li>
+  <li>Etude treats <code>Code.source</code> as provenance, not seating identity; it keys the player and
+    seating from <code>name</code> + <code>config</code>. So Etude sees the <strong>exact same opponent
+    key and seating definition</strong> as the stored <code>native-v2</code> matches already in
+    <code>tla-trophies-held-out-32</code> (and the Colab/floor/opponent-memory tournaments).</li>
+  <li><code>manabot/eval/agents.py:279-281</code> and <code>manabot/eval/pairing.py:103-109</code>
+    never read or validate <code>player.config.get("version")</code>. Admission silently runs the stateful
+    <code>native-v3</code> heuristic, derives completely new player seeds, stamps
+    <code>version="native-v3"</code> and <code>compute_class_id="heuristic-cpu-v3"</code> in Manabot's
+    attempt rows, and returns the result to Etude.</li>
+  <li>Etude stores those new <code>native-v3</code> matches alongside historical <code>native-v2</code>
+    matches inside the same tournament with <strong>zero conflict and no distinguishing key</strong>.
+    Even an explicit <code>Code(name="heuristic", config={"max_actions": 64, "version": "native-v2"})</code>
+    is silently accepted and executed as <code>native-v3</code>.</li>
 </ol>
 
 <lf-component name="before-after">
   <div slot="before">
-    <h4>Plan as written (halfway boundary)</h4>
+    <h4>Built at <code>aca4c41ad6</code> (two disconnected owners)</h4>
     <ul>
-      <li><code>GameRecord.player_policies</code> stays record-wide; only <code>take_slot_record</code> patches it. Multi-slot snapshots/journals write wrong policies for swapped seats.</li>
-      <li><code>agents.py</code> keeps one <code>Heuristic(factory)</code> class; <code>vector.py</code> peeks at <code>match.players</code> to detect built-in heuristic; plan edits <code>sim/heuristic.py</code> just to bump its hash.</li>
-      <li>Vector annotations drop <code>frame_sha256</code> but keep <code>chosen_offer</code> + <code>action_space_kind</code> → still calls <code>decision_observations(active)</code> + <code>describe_actions</code> + duplicate <code>semantic_decision_frames_json</code> every round.</li>
-      <li>Opening heuristic turns run in unisolated <code>reset</code>/<code>load_slots</code>; mid-game heuristic crashes blame the checkpoint.</li>
+      <li><code>admission.py</code> unconditionally stamps <code>HEURISTIC_VERSION = "native-v3"</code> and changes <code>anchor_cohort_sha256</code> / derived seeds.</li>
+      <li><code>eval_throughput.py</code> sets <code>config={**HEURISTIC, "version": HEURISTIC_VERSION}</code>, while <code>tla_trophies.py</code> and <code>opponent_memory.py</code> omit <code>version</code>.</li>
+      <li><code>agents.py:build</code> and <code>pairing.py:admit_pairing</code> ignore <code>player.config.get("version")</code> completely.</li>
+      <li>Result: resuming any maintained trophy tournament silently mixes <code>native-v3</code> games and seeds into stored <code>native-v2</code> benchmarks.</li>
     </ul>
   </div>
   <div slot="after">
-    <h4>Recommended model (one owner per fact)</h4>
+    <h4>Recommended contract (one enforced version boundary)</h4>
     <ul>
-      <li>Each slot's <code>Env</code> and <code>GameInputs</code> owns its optional <code>player_policies</code> (omitted when matching <code>GameRecord.player_policies</code>; single-game records keep <code>GameRecord.player_policies</code>). <code>PlayerPolicy::Heuristic { max_actions }</code> serializes as <code>"heuristic"</code> / <code>"heuristic:64"</code> everywhere.</li>
-      <li>Split <code>NativeHeuristic(max_actions)</code> from <code>CodeSeat(factory)</code>; give <code>GamePlayer</code> a per-game handle (<code>open_game(seed)</code>) so every stateful code player keeps turn state naturally without artificial edits to <code>sim/heuristic.py</code>.</li>
-      <li>Compact vector annotations store only runner-owned facts (<code>actor</code>, <code>revision</code>, <code>player_id</code>, <code>player_seed</code>, <code>player_decision_ordinal</code>, <code>policy_rng_seed</code>, <code>latency_seconds</code>) → zero <code>decision_observations</code> or <code>describe_actions</code> calls against native heuristic; <code>RecordedVectorEnv</code> pulls <code>game.frame</code> from <code>info["game_error_frame"]</code> only on failure.</li>
-      <li>Isolate opening settlement per slot and return <code>game_error_seat</code> on isolated native errors so every crash isolates cleanly and attributes to the acting seat.</li>
+      <li><code>agents.py:build</code> and <code>pairing.py:admit_pairing</code> read <code>player.config.get("version")</code> and reject any missing or mismatched version when constructing/admitting the built-in heuristic (so an unversioned or <code>native-v2</code> declaration can never silently execute as <code>native-v3</code>).</li>
+      <li>New benchmark runs declare <code>config={**HEURISTIC, "version": HEURISTIC_VERSION}</code> under a new tournament name (or explicitly opt into a new seating cohort) so stored <code>native-v2</code> tournaments stay intact and uncontaminated.</li>
+      <li>If historical tournaments must remain resumable under <code>native-v2</code>, either keep them frozen or support explicit version dispatch rather than silent drift.</li>
     </ul>
   </div>
 </lf-component>
 
 <h3>Code evidence</h3>
 
-<p><strong>1. Where policies and slot loading live today</strong> — <code>GameInputs</code> has no per-game
-<code>player_policies</code>, <code>SlotLoad::Fresh</code> copies policies from the previous occupant via
-<code>previous.replacement_root()</code>, and <code>SlotLoad::Snapshot</code> rejects mismatches against
-the single vector-wide <code>self.player_policies</code>:</p>
+<p><strong>1. Heuristic version is bumped in admission and <code>eval_throughput.py</code>, ignored in
+<code>agents.py</code>/<code>pairing.py</code>, and absent from <code>tla_trophies.py</code>:</strong></p>
 
-<lf-file path="managym/src/agent/vector_env/slots.rs" lines="163-207"></lf-file>
-<lf-file path="managym/recording.py" lines="171-197"></lf-file>
+<lf-diff path="manabot/eval/admission.py" lines="118-127"></lf-diff>
+<lf-diff path="manabot/eval/agents.py" lines="273-283"></lf-diff>
+<lf-diff path="manabot/eval/pairing.py" lines="95-113"></lf-diff>
+<lf-diff path="experiments/eval_throughput.py" lines="101-110"></lf-diff>
+<lf-file path="experiments/tla_trophies.py" lines="260-276"></lf-file>
 
-<p><strong>2. Where heuristic state is actually lost</strong> — <code>HeuristicPlayer</code> is already
-stateful; <code>agents.py:Heuristic</code> rebuilds it per decision and conflates native heuristic with
-registered <code>CodePlayer</code>s:</p>
+<p><strong>2. Opening-failure ownership is split across <code>RecordedVectorEnv._record_roots</code>,
+<code>take_slot_record</code>, and <code>RecordWalker._open</code>:</strong> <code>_record_roots</code>
+never checks isolated opening errors (so <code>games_path</code>, <code>snapshot()</code>, and live
+<code>reducers</code> miss them), <code>take_slot_record</code> guesses from <code>not game.actions</code>,
+and <code>failed_opening()</code> hardcodes <code>mode == "vector"</code> + <code>end.status == "failed"</code>:</p>
 
-<lf-file path="manabot/sim/heuristic.py" lines="19-42"></lf-file>
-<lf-file path="manabot/eval/agents.py" lines="200-249"></lf-file>
+<lf-diff path="managym/recording.py" lines="390-411"></lf-diff>
+<lf-diff path="managym/recording.py" lines="1590-1627"></lf-diff>
+<lf-diff path="managym/recording.py" lines="1835-1863"></lf-diff>
+<lf-diff path="managym/replay.py" lines="156-172"></lf-diff>
 
-<p><strong>3. Duplicate frame/observation work on every vector round</strong> — <code>vector.py</code>
-fetches full <code>decision_observations</code>, <code>RecordedVectorEnv._step</code> calls
-<code>semantic_decision_frames_json(active)</code>, and <code>step_isolated_with_writer</code> serializes
-the semantic frame a second time (and records no acting seat on error):</p>
+<p><strong>3. Unisolated <code>CodeSeat</code> in <code>step_round</code>, underscore-prefixed
+<code>_current_player_policies</code>, and Watch refusal:</strong></p>
 
-<lf-file path="managym/recording.py" lines="1848-1886"></lf-file>
-<lf-file path="managym/src/agent/vector_env.rs" lines="844-882"></lf-file>
-<lf-file path="manabot/eval/vector.py" lines="733-762"></lf-file>
-
-<p><strong>4. Replay invariant and GIL contention</strong> — <code>test_record_reducers.py</code> requires
-<code>walker.cards()</code> to exclude a post-transition mismatch, and <code>PyEnv::step</code> /
-<code>state_digest</code> never call <code>py.allow_threads</code>:</p>
-
-<lf-file path="tests/env/test_record_reducers.py" lines="105-114"></lf-file>
-<lf-file path="managym/src/python/bindings.rs" lines="4191-4213"></lf-file>
-<lf-file path="managym/src/python/bindings.rs" lines="4389-4396"></lf-file>
-
-<p><strong>5. Unstated Academy Watch rejection and overlapping throughput math</strong>:</p>
-
-<lf-file path="managym/academy/watch.py" lines="484-490"></lf-file>
-<lf-file path="experiments/eval_throughput.py" lines="230-239"></lf-file>
+<lf-diff path="manabot/eval/vector.py" lines="461-480"></lf-diff>
+<lf-diff path="managym/src/python/vector_env_bindings.rs" lines="642-652"></lf-diff>
+<lf-diff path="managym/academy/watch.py" lines="484-493"></lf-diff>
 
 <h2>Findings</h2>
 
-<lf-component name="decision" id="f1" title="Finish per-game player_policies across VectorEnv, GameInputs, PlayerPolicy serde, and agents.py" recommendation="Fix here">
-  <p><strong>What breaks:</strong> Putting per-slot policies only in <code>take_slot_record</code> leaves
-  multi-slot failure snapshots/journals (<code>_snapshot()</code>, <code>_write_game()</code>,
-  <code>replay_failure_inputs()</code>) writing one vector-wide policy pair for swapped seats. In Rust,
-  <code>SlotLoad::Fresh</code> calls <code>previous.replacement_root()</code> (which would inherit the
-  previous leg's policies when policies are omitted), derived serde on
-  <code>PlayerPolicy::Heuristic { max_actions }</code> would break <code>GameProvenance</code>/<code>SnapshotReplay</code>
-  string encoding, and <code>env.rs:738,748</code> checks <code>contains(&amp;PlayerPolicy::Heuristic)</code>
-  which won't match a capped variant. In Python, <code>agents.py:Heuristic</code> conflates built-in
-  native heuristic with arbitrary <code>CodePlayer</code>s and rebuilds them on every <code>choose()</code>
-  because <code>GamePlayer</code> has no per-game lifecycle — while <code>sim/heuristic.py</code> is already stateful.</p>
-  <p><strong>Fix:</strong></p>
-  <ul>
-    <li>Custom string <code>Serialize</code>/<code>Deserialize</code>/<code>Display</code>/<code>FromStr</code> on <code>PlayerPolicy</code> (<code>"agent"</code>, <code>"random"</code>, <code>"heuristic"</code>, <code>"heuristic:64"</code>) and a <code>PlayerPolicy::is_heuristic()</code> helper in <code>env.rs</code>.</li>
-    <li><code>SlotLoad::Fresh</code> defaults omitted policies to <code>VectorEnv</code>'s default <code>self.player_policies</code>, not the slot's previous <code>Env</code>; <code>SlotLoad::Snapshot</code> restores its own policies.</li>
-    <li>Add optional <code>player_policies: tuple[str, str] | None = None</code> (excluded when <code>None</code>) on <code>GameInputs</code> so multi-slot snapshots and <code>replay_failure_inputs</code> preserve per-slot policies, while single-game records keep <code>GameRecord.player_policies</code> for backward compatibility.</li>
-    <li>Split <code>NativeHeuristic(max_actions)</code> from <code>CodeSeat(factory)</code> in <code>manabot/eval/agents.py</code>, and add a per-game lifecycle on <code>GamePlayer</code> (e.g., <code>open_game(seed)</code> or per-game reset) so both runners keep turn state for every stateful code player without editing <code>sim/heuristic.py</code> artificially.</li>
-    <li><strong>Identity warning (irreversible once published):</strong> Changing <code>heuristic_source_paths()</code> (e.g., adding <code>player_policy.rs</code> or bumping anchor version) changes BOTH Etude's <code>Code</code> player key and <code>EvaluationKey.anchor_cohort_sha256</code> → <code>derive_seed</code> for 100% of games, affecting stored <code>tla_trophies*</code> benchmarks. Decide explicitly in Q2 before Pass 1.</li>
-  </ul>
+<lf-component name="decision" id="f1" title="Enforce heuristic version at admission/build and prevent tla_trophies* from silently mixing native-v3 into native-v2" recommendation="Fix here">
+  <p><strong>What breaks (irreversible once scored to shared Etude tournaments):</strong>
+  <code>manabot/eval/admission.py:121-123</code> unconditionally stamps <code>version="native-v3"</code>
+  and hashes <code>player_policy.rs</code> into <code>anchor_cohort_sha256</code> (changing every game's
+  derived seed), while <code>experiments/tla_trophies.py:265</code> (inherited by
+  <code>tla_trophies_colab.py</code> and <code>tla_trophies_floor.py</code>) and
+  <code>experiments/opponent_memory.py:326</code> still pass <code>config=HEURISTIC</code> without
+  <code>version</code>. Because Etude keys <code>Code</code> players on <code>name</code> +
+  <code>config</code> (treating <code>source</code> as provenance), resuming any of those experiments on
+  this branch silently mixes stateful <code>native-v3</code> games and new seeds into stored
+  <code>native-v2</code> tournaments. Meanwhile <code>agents.py:279-281</code> and
+  <code>pairing.py:103-109</code> ignore <code>player.config.get("version")</code>, so even an explicit
+  <code>"version": "native-v2"</code> runs as <code>native-v3</code>.</p>
+  <p><strong>Fix:</strong> Require <code>player.config.get("version")</code> (when present — or unconditionally
+  for new built-in heuristic declarations; see Q1) to match <code>HEURISTIC_VERSION</code> in both
+  <code>agents.py:build</code> and <code>pairing.py:admit_pairing</code>, and decide explicitly how
+  <code>tla_trophies*</code> and <code>opponent_memory.py</code> declare <code>native-v3</code> without
+  contaminating stored <code>native-v2</code> tournaments.</p>
 </lf-component>
 
-<lf-component name="decision" id="f2" title="Isolate opening-turn native heuristic failures and report acting-seat attribution on crashes" recommendation="Fix here">
-  <p><strong>What breaks:</strong> When the native heuristic sits in seat 0 (legs 1 and 2 of every deal),
-  <code>Env::reset</code> runs <code>settle_players</code> for all opening heuristic turns before the
-  checkpoint acts. Neither <code>reset_each_into_buffers</code> nor <code>load_slots_into_buffers</code>
-  isolates native <code>AgentError</code> or panics — one bad opening leg aborts the entire 64-slot batch.
-  And during mid-game <code>step_isolated_with_writer</code>, <code>vector.py:758</code> attributes any
-  <code>game_error</code> to <code>round_result.players[slot]</code> (always the checkpoint), even when the
-  error happened inside the heuristic's <code>settle_players</code> loop.</p>
-  <p><strong>Fix:</strong></p>
-  <ul>
-    <li>Return <code>game_error_seat</code> in isolated step receipts (captured from the active chooser in <code>step_once</code> vs <code>settle_players</code>) so <code>vector.py</code> attributes crashes to <code>leg.game["seat_players"][seat]</code> rather than blindly blaming candidate or opponent.</li>
-    <li>Isolate per-slot opening settlement (either an isolated mode on <code>load_slots_into_buffers</code>/<code>reset_each_into_buffers</code> or isolating <code>Env::reset</code>'s <code>settle_players</code> phase into <code>SlotState::Poisoned</code> + receipt) so a seat-0 heuristic error fails only that leg and frees the slot.</li>
-  </ul>
-</lf-component>
-
-<lf-component name="decision" id="f3" title="Drop redundant chosen_offer/action_space_kind from compact vector annotations and skip duplicate semantic frames" recommendation="Fix here">
-  <p><strong>What breaks / wastes work:</strong> Dropping <code>frame_sha256</code> while keeping
-  <code>chosen_offer</code> and <code>action_space_kind</code> leaves <code>step_round</code> calling
-  <code>vector.decision_observations(active)</code> (64 full <code>PyObservation</code> clones/round) and
-  <code>describe_actions(raw)</code> live and in replay, even though no downstream consumer reads either field
-  from a <code>GameRecord</code> and <code>GameInputs.digests[i]</code> + <code>actions[i]</code> already
-  bind the exact offer set and choice. Meanwhile <code>RecordedVectorEnv._step</code> calls
-  <code>semantic_decision_frames_json(active)</code> every round even when <code>isolated=True</code>,
-  no journal is active, and no annotation carries <code>probabilities</code> — duplicating Rust's
-  <code>step_isolated_with_writer</code> frame capture.</p>
-  <p><strong>Fix:</strong></p>
-  <ul>
-    <li>In compact vector annotations, store only runner-owned facts that the engine cannot recompute (<code>actor</code>, <code>revision</code>, <code>player_id</code>, <code>player_seed</code>, <code>player_decision_ordinal</code>, <code>policy_rng_seed</code>, <code>latency_seconds</code>). Call <code>vector.decision_observations</code> only for slots with a custom Python <code>CodeSeat</code>.</li>
-    <li>In <code>audit_view</code>, derive <code>offer_id</code> from <code>inputs["actions"][index]</code> when <code>chosen_offer</code> is absent (falling back to <code>chosen_offer["id"]</code> for semantic Command strings). In <code>_replay_record</code>, verify <code>frame_sha256</code>, <code>chosen_offer</code>, and <code>action_space_kind</code> when present, and always verify <code>actor</code> + <code>player_id</code>.</li>
-    <li>In <code>RecordedVectorEnv._step</code>, skip <code>semantic_decision_frames_json(active)</code> when <code>isolated=True</code>, <code>_game_journal is None</code>, and no annotation has <code>probabilities</code>; on isolated <code>game_error</code>, copy <code>info.get("game_error_frame")</code> onto <code>game.frame</code> so <code>replay_failure</code> retains exact <code>matches_binding == True</code>.</li>
-  </ul>
-</lf-component>
-
-<lf-component name="decision" id="f4" title="Keep RecordWalker.cards() divergence invariant via cold rewind, release the GIL in PyEnv, and fix eval_throughput stage math" recommendation="Fix here">
+<lf-component name="decision" id="f2" title="Record isolated opening failures inside RecordedVectorEnv, skip live reducers on poisoned slots, and generalize RecordWalker reset failures" recommendation="Fix here">
   <p><strong>What breaks:</strong></p>
   <ul>
-    <li>Removing <code>clone_env()</code> from <code>RecordWalker.run()</code> mutates <code>self.env</code>'s card capture before detecting a post-transition digest mismatch, directly breaking <code>tests/env/test_record_reducers.py:105-113</code> and <code>RecordWalker.cards()</code>'s documented contract.</li>
-    <li><code>PyEnv::reset</code>, <code>PyEnv::step</code>, and <code>PyEnv::state_digest</code> (<code>managym/src/python/bindings.rs:4099-4396</code>) hold the Python GIL, so a 2-thread replay pool serializes on the GIL and stalls the asyncio stepping loop instead of running concurrently.</li>
-    <li><code>experiments/eval_throughput.py:237</code> computes <code>other_arena = seconds - timing.seconds - replay_seconds</code>, which becomes invalid (even negative) once replay overlaps with forwards.</li>
+    <li><code>RecordedVectorEnv._reset_each</code> and <code>load_recorded_slots</code> accept
+      <code>isolated=True</code> but never inspect <code>get_last_info()</code> after native settlement.
+      For any direct <code>RecordedVectorEnv</code> caller using <code>games_path</code>,
+      <code>snapshot()</code>, or live <code>reducers</code>, an isolated opening failure leaves
+      <code>game.end = None</code> (never written as <code>status="failed"</code>), reports
+      <code>execution_outcome="last_command_succeeded"</code> in <code>snapshot()</code>, and sets
+      <code>_analysis_active[slot] = True</code> on an already-poisoned slot (which can later read
+      post-panic state via <code>current_exposure</code>, unlike <code>_step</code> which guards against
+      <code>NativePanic</code>).</li>
+    <li><code>take_slot_record</code> has to infer opening failures via <code>if not game.actions:</code>
+      and manually patch <code>record.operation = "reset"</code> and <code>end</code>.</li>
+    <li><code>GameRecord.failed_opening()</code> hardcodes <code>mode == "vector"</code> and
+      <code>end.status == "failed"</code>, so a scalar <code>Env(player_policies=("heuristic:64", "agent"))</code>
+      whose <code>reset()</code> fails raises an uncaught <code>AgentError</code> inside
+      <code>RecordWalker.__init__</code> rather than stopping cleanly.</li>
+    <li>On sync with <code>origin/main</code> (<code>606e79e90a</code>), <code>Game::construct</code>
+      inside <code>Env::reset_root</code> can also return gameplay <code>AgentError</code> on a stalled
+      opening decision; <code>deal_fresh_game</code> currently calls <code>reset_root(...)?</code> outside
+      <code>isolate_gameplay</code>.</li>
   </ul>
-  <p><strong>Fix:</strong></p>
-  <ul>
-    <li>On the fast path (<code>apply is None</code>, integer action, no next-boundary interventions), step <code>self.env</code> directly and check <code>state_digest()</code> once (checking <code>digests[0]</code> once after reset; 0 clones, 1 digest per step). Only on the cold divergence path, if <code>self._capture_cards</code> is enabled, rebuild <code>self.env</code> through the verified prefix <code>0..index</code> before stopping so <code>cards()</code> stays exact without any new flag.</li>
-    <li>Wrap <code>PyEnv::reset</code>, <code>PyEnv::step</code>, and <code>PyEnv::state_digest</code> (including locking <code>self.inner</code>) in <code>py.allow_threads(...)</code> so background replay threads run genuinely in parallel with each other and with the stepping loop.</li>
-    <li>In <code>eval_throughput.py</code>, track main-loop wall stages separately from background replay thread time instead of subtracting overlapping worker seconds from total wall time.</li>
-  </ul>
+  <p><strong>Fix:</strong> Have <code>RecordedVectorEnv._record_roots</code> (when <code>isolated=True</code>)
+  read <code>get_last_info()</code>, record <code>GameEnd(status="failed", reason=...)</code>, write failed
+  openings to <code>games_path</code>, and skip activating live reducers on poisoned slots — mirroring
+  <code>_step</code>. Remove the <code>if not game.actions:</code> guess from <code>take_slot_record</code>
+  (checking <code>game.end.status == "failed"</code> / <code>not game.actions</code> from the already-recorded
+  failure), and generalize <code>RecordWalker._open()</code> for any failed <code>operation == "reset"</code>
+  record (scalar or vector). When syncing <code>606e79e90a</code>, isolate gameplay errors from
+  <code>Game::construct</code> while keeping deck/setup validation strict.</p>
 </lf-component>
 
-<lf-component name="decision" id="f5" title="Cache process-constant identities in provenance.py and use existing frozen_context in scalar capture" recommendation="Fix here">
-  <p><strong>What's awkward:</strong> <code>manabot/infra/provenance.py:runtime_fingerprints</code> re-hashes
-  every <code>.rs</code> file and the ~40 MB <code>_managym</code> binary and constructs/resets a throwaway
-  <code>Env</code> on every call (2.1 s of the 2.3 s admission profile). Adding a per-run cache inside
-  <code>vector.py</code> leaves scalar play, admission, and registration paying the same cost. Similarly,
-  <code>manabot/sim/native_game.py:292</code> deep-copies immutable setup metadata 3×/decision when
-  <code>_Capture</code> already provides <code>frozen_context</code> (<code>managym/recording.py:630,853</code>).</p>
-  <p><strong>Fix:</strong> Factor and <code>@cache</code> the process-constant engine/source/content-manifest
-  fingerprints inside <code>manabot/infra/provenance.py</code> (matching
-  <code>managym/recording.py:runtime_identities</code>), and set <code>capture.frozen_context</code> once
-  setup completes in <code>execute_game</code> (refreshing only on integrity/failure changes).</p>
+<lf-component name="decision" id="f3" title="Isolate native CodeSeat errors in vector.py:step_round to match scalar per-leg isolation" recommendation="Fix here">
+  <p><strong>What breaks:</strong> In <code>manabot/eval/vector.py:461-479</code>, <code>step_round</code>
+  invokes <code>choose_code_action</code> for custom <code>CodeSeat</code> players with no
+  <code>is_game_error</code> guard. A native <code>AgentError</code> or <code>PanicException</code> inside
+  a search-backed <code>CodePlayer</code> (such as <code>DemoSearchPlayer</code> invoking native
+  <code>FlatSearchPolicy</code> / <code>rollout_pool</code>) escapes <code>step_round</code> and aborts
+  all 64 slots, whereas scalar <code>execute_game</code> (<code>manabot/sim/native_game.py:432-446</code>)
+  isolates that error to the single leg and attributes it to <code>player_id</code>. (Also, incrementing
+  <code>state.leg.game["integrity"]["illegal_actions"]</code> right before raising <code>RuntimeError</code>
+  mutates a leg that is immediately discarded with the whole batch.)</p>
+  <p><strong>Fix:</strong> Catch <code>is_game_error</code> per slot around <code>choose_code_action</code>
+  in <code>step_round</code> (marking the slot inactive for that native step and settling it via
+  <code>complete_failed_leg</code> / <code>failure_record</code> attributed to <code>player_id</code>) so
+  custom code opponents obey the same per-leg native-error isolation contract as checkpoints and native
+  heuristics.</p>
 </lf-component>
 
-<lf-component name="decision" id="f6" title="Support native-seat GameRecords in Academy Watch" recommendation="File Task">
-  <p><strong>Unstated consequence of Design item 1:</strong> Moving vector heuristic evaluations from
-  <code>("agent", "agent")</code> to <code>("agent", "heuristic:64")</code> /
-  <code>("heuristic:64", "agent")</code> means <code>managym/academy/watch.py:486</code> will reject every
-  new vector heuristic evaluation record with
-  <code>ValueError("Academy requires both seats' surfaced decisions; native-seat records are not yet viewable")</code>.
-  Because the game is fully deterministic from its record, Watch can reconstruct native-seat decisions on
-  import by walking the record with an <code>("agent", "agent")</code> view and replaying the heuristic's
-  choices, or surfacing native turns — that is a separate Academy Task, not vector eval throughput, but it
-  should be tracked explicitly rather than discovered when someone tries to inspect a trophy game.</p>
+<lf-component name="decision" id="f4" title="Expose VectorEnv.current_player_policies() without a leading underscore and delegate it on RecordedVectorEnv" recommendation="Fix here">
+  <p><strong>What's awkward:</strong> <code>VectorEnv._current_player_policies()</code>
+  (<code>managym/src/python/vector_env_bindings.rs:644</code>, <code>managym/__init__.pyi:715</code>) uses
+  a leading underscore even though every sibling slot-state getter — <code>current_game_seeds()</code>,
+  <code>current_player_configs()</code>, <code>current_matchup_indices()</code>,
+  <code>current_game_generations()</code> — is unprefixed and delegated in
+  <code>RecordedVectorEnv._VECTOR_READS</code>. Now that per-slot <code>player_policies</code> is a public
+  API on <code>reset_each_into_buffers</code> and <code>SlotLoad.fresh</code>, callers inspecting live slot
+  state should be able to read it symmetrically, and <code>AGENTS.md</code> forbids prefixing methods with an
+  underscore merely because they are internal.</p>
+  <p><strong>Fix:</strong> Rename <code>_current_player_policies</code> to
+  <code>current_player_policies</code> in <code>vector_env_bindings.rs</code>,
+  <code>managym/__init__.pyi</code>, and <code>managym/recording.py</code>, add it to
+  <code>_VECTOR_READS</code>, and re-record <code>tests/public_api.json</code> with plain
+  <code>scripts/public_api.py record</code>.</p>
+</lf-component>
+
+<lf-component name="decision" id="f5" title="Support native-seat GameRecords in Academy Watch" recommendation="File Task">
+  <p><strong>Retained from pre-build review:</strong> Because vector heuristic evaluations now record
+  <code>("agent", "heuristic:64")</code> / <code>("heuristic:64", "agent")</code> instead of
+  <code>("agent", "agent")</code>, <code>managym/academy/watch.py:486-492</code> refuses every new vector
+  heuristic record. Watch can reconstruct native-seat decisions deterministically on import, which is an
+  independent Academy Task to file when MTG-506 lands.</p>
 </lf-component>
 
 <h2>Questions for review</h2>
 
-<div data-choice="q1" data-label="Compact vector decision annotations">
-  <p><strong>1. What should a compact vector <code>GameRecord</code> store per surfaced decision?</strong>
-  (Reversible for future runs; stored records keep their shape.)</p>
-  <button data-value="1a">1a. (Recommended) Runner-only facts (<code>actor</code>, <code>revision</code>, <code>player_id</code>, seeds, ordinal, latency) — drop <code>frame_sha256</code>, <code>chosen_offer</code>, and <code>action_space_kind</code>; skip <code>decision_observations</code> and <code>describe_actions</code> when playing native heuristic.</button>
-  <button data-value="1b">1b. Plan as written — drop <code>frame_sha256</code>, keep <code>chosen_offer</code> and <code>action_space_kind</code> (still clones <code>PyObservation</code> and runs <code>describe_actions</code> per decision).</button>
-  <button data-value="1c">1c. Keep full live viewer frames and <code>frame_sha256</code> on vector records (MTG-497 choice 1b; leaves ~52% of live host work and ~37% of replay).</button>
+<div data-choice="q1" data-label="Heuristic native-v3 version enforcement and trophy tournaments">
+  <p><strong>1. How should <code>native-v3</code> heuristic identity be enforced across Etude tournaments
+  (<code>tla_trophies*</code>, <code>opponent_memory</code>) and Manabot admission?</strong>
+  (<strong>Irreversible once scored to shared Etude tournaments</strong>: resuming an existing tournament
+  without separating versions mixes stateful <code>native-v3</code> games and new derived seeds into stored
+  <code>native-v2</code> benchmarks.)</p>
+  <button data-value="1a">1a. (Recommended) Validate <code>player.config.get("version") == HEURISTIC_VERSION</code> in <code>agents.py</code> and <code>pairing.py</code> (refusing unversioned or mismatched heuristic declarations from silently running as <code>native-v3</code>), and update <code>tla_trophies*</code> / <code>opponent_memory</code> to either name new <code>v3</code> tournaments with <code>"version": HEURISTIC_VERSION</code> or keep old tournament definitions frozen.</button>
+  <button data-value="1b">1b. Leave <code>tla_trophies.py</code> and <code>opponent_memory.py</code> unversioned as on HEAD, accepting that any new run under those names mixes <code>native-v3</code> games and seeds with stored <code>native-v2</code> matches.</button>
+  <button data-value="1c">1c. Support explicit <code>version="native-v2"</code> dispatch in Manabot (stateless heuristic + <code>native-v2</code> cohort seeds) for historical tournament declarations while opting new benchmarks into <code>native-v3</code>.</button>
 </div>
 
-<div data-choice="q2" data-label="Heuristic statefulness and Etude opponent identity">
-  <p><strong>2. How should fixing per-game heuristic state update opponent identity?</strong>
-  (<strong>Irreversible once published to shared Etude tournaments</strong>: changing <code>heuristic_source_paths()</code> changes both the Etude <code>Code</code> player key and <code>EvaluationKey.anchor_cohort_sha256</code> → checkpoint RNG seeds on 100% of games, affecting stored <code>tla_trophies*</code> benchmarks.)</p>
-  <button data-value="2a">2a. (Recommended) Fix statefulness honestly in <code>GamePlayer</code>/<code>agents.py</code>, include <code>player_policy.rs</code> in <code>heuristic_source_paths()</code> (and bump anchor version to <code>native-v3</code>), and verify/pin how existing <code>tla_trophies*</code> benchmarks handle the new opponent identity.</button>
-  <button data-value="2b">2b. Fix statefulness in <code>GamePlayer</code>/<code>agents.py</code> without changing <code>heuristic_source_paths()</code> or anchor version (new games stay in existing benchmarks, mixing 16/7,155 changed heuristic decisions with stored matches).</button>
-  <button data-value="2c">2c. Reset native heuristic state per decision to stay byte-identical to stored managed-eval results (permanently diverges from training's stateful native heuristic).</button>
+<div data-choice="q2" data-label="RecordWalker handling of failed opening records">
+  <p><strong>2. Once <code>RecordedVectorEnv</code> records isolated opening failures directly (F2), how
+  should <code>RecordWalker._open()</code> treat a failed <code>operation == "reset"</code> record (vector or
+  scalar)?</strong></p>
+  <button data-value="2a">2a. (Recommended) Generalize the pre-settlement deal open (<code>("agent", "agent")</code>) to any failed <code>operation == "reset"</code> record so <code>walk(record, capture_cards=True)</code> stops cleanly at index 0 with opening-hand card capture while <code>replay_failure_inputs</code> reproduces the crash under <code>policies_for(game)</code>.</button>
+  <button data-value="2b">2b. Always run <code>policies_for(game)</code> in <code>RecordWalker._open()</code> and return <code>ReplayStop("diverged", 0, ...)</code> on reset failure (and update <code>capture_verified_game</code> / <code>pairing_result</code> to permit failed-opening legs without card capture).</button>
 </div>
 
-<div data-choice="q3" data-label="Native heuristic seats vs Academy Watch">
-  <p><strong>3. Is making vector heuristic evaluation records unviewable in Academy Watch acceptable until a follow-up Task lands?</strong></p>
-  <button data-value="3a">3a. (Recommended) Yes — ship native heuristic seats in MTG-506 and file a separate Task for Academy Watch native-seat import (F6).</button>
-  <button data-value="3b">3b. No — add native-seat import to Academy Watch in this Task so trophy records remain viewable day one.</button>
-</div>
-
-<div data-choice="q4" data-label="Opening-turn native heuristic failure isolation">
-  <p><strong>4. Should MTG-506 isolate seat-0 heuristic failures during opening settlement (<code>reset</code> / <code>load_slots</code>)?</strong></p>
-  <button data-value="4a">4a. (Recommended) Yes — isolate opening settlement per slot and return <code>game_error_seat</code> on isolated native errors (F2), so a seat-0 heuristic bug never aborts a 64-slot batch.</button>
-  <button data-value="4b">4b. Defer opening-settlement isolation to a follow-up Task; only add <code>game_error_seat</code> on <code>step_isolated_with_writer</code> here.</button>
+<div data-choice="q3" data-label="Academy Watch native-seat import">
+  <p><strong>3. Confirm deferring Academy Watch support for native-seat records
+  (<code>("agent", "heuristic:64")</code>) to a separate Academy Task?</strong></p>
+  <button data-value="3a">3a. (Recommended) Yes — keep the explicit refusal in <code>watch.py</code> and file a separate Academy Task (F5) when MTG-506 lands.</button>
+  <button data-value="3b">3b. No — add native-seat import to Academy Watch in MTG-506 so new vector heuristic evaluation records open in Watch immediately.</button>
 </div>
