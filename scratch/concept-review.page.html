@@ -1,15 +1,16 @@
 <h1>Concept Review: MTG-506 — Vectorized Eval Host, Replay, and Heuristic Stepping</h1>
 
-<p><strong>Area reviewed:</strong> Whole-area post-build review at <code>8ac5746885</code> against
-freshly fetched <code>origin/main</code> (<code>606e79e90a</code>, also the checkout base; MTG-497
-stack parent at <code>0f885b1f43</code>), superseding the prior post-build review at
-<code>6783978c1f</code> after Pass 4 (<code>5ddf49e6cc</code>) introduced
-<code>OpeningFailure</code>, generalized failed-opening walking, isolated <code>CodeSeat</code>
-native errors, enforced <code>native-v3</code> heuristic versions, and synced MTG-500. Covers
-evaluation execution, per-seat native policies, isolated opening/step/player failure recording,
-verification/diagnostic replay, and heuristic tournament identity across <code>managym</code>
-(<code>PlayerPolicy</code>, <code>Env</code>, <code>VectorEnv</code>/<code>SlotLoad</code>,
-<code>RecordedVectorEnv</code>, <code>GameRecord</code>/<code>GameEnd</code>/<code>OpeningFailure</code>,
+<p><strong>Area reviewed:</strong> Whole-area post-build review at <code>e9e5440e8a</code> against
+freshly fetched <code>origin/main</code> (<code>606e79e90a</code>, also the checkout merge-base;
+MTG-497 stack parent at <code>0f885b1f43</code>), superseding the Pass 4 review at
+<code>e94731acd8</code> after Pass 5 (<code>708ce8e777</code>) replaced reset-only
+<code>OpeningFailure</code> with <code>GameFailure(operation, error_class, traceback)</code>,
+routed <code>managym.replay</code> over whole snapshots, and moved <code>CodeSeat</code> crashes
+to evaluation metadata. Covers evaluation execution, per-seat native policies, isolated
+opening/step/player failure recording, verification/diagnostic replay, and heuristic tournament
+identity across <code>managym</code> (<code>PlayerPolicy</code>, <code>Env</code>,
+<code>VectorEnv</code>/<code>SlotLoad</code>, <code>RecordedVectorEnv</code>,
+<code>GameRecord</code>/<code>GameEnd</code>/<code>GameFailure</code>,
 <code>RecordWalker</code>, <code>replay_failure_inputs</code>, <code>managym.replay</code> CLI,
 <code>academy/watch</code>), <code>manabot</code> (<code>eval/agents</code>,
 <code>eval/admission</code>, <code>eval/pairing</code>, <code>eval/vector</code>,
@@ -19,16 +20,20 @@ verification/diagnostic replay, and heuristic tournament identity across <code>m
 <code>experiments/opponent_memory.py</code>, <code>experiments/mana_taps.py</code>,
 <code>experiments/tla_frontier.py</code>).</p>
 
-<p><strong>What Pass 4 resolved from the previous review:</strong> (1) <code>require_heuristic_version</code>
-in <code>agents.py</code> and <code>pairing.py</code> now stops unversioned or stale
-<code>native-v2</code> declarations from silently running as <code>native-v3</code>;
-(2) <code>Env::prepare_root</code> / <code>construct_root</code> cleanly integrates MTG-500
-(<code>606e79e90a</code>) so construction and opening-settlement failures isolate per slot while
-deck/setup validation stays strict; (3) <code>VectorEnv.current_player_policies()</code> is
-exposed symmetrically on <code>VectorEnv</code>, <code>RecordedVectorEnv._VECTOR_READS</code>,
-and <code>BufferedStreams</code>; (4) full replay backpressure keeps the idle vector open instead
-of tearing it down. Two new conceptual mismatches remain in Pass 4's failure-recording layer, plus
-two open decisions carried for human review.</p>
+<p><strong>What Pass 5 resolved from the previous review:</strong> (1) <code>GameEnd.failure</code>
+(<code>GameFailure(operation, error_class, traceback)</code>) is now recorded uniformly by
+<code>RecordedVectorEnv._record_game_failure</code> for both isolated resets and isolated steps
+(even outside <code>record_fraction</code>), preserved across subsequent steps in
+<code>_GameJournal</code> alongside <code>game.frame</code>, checked by
+<code>GameRecord.needs_reproduction</code>, and hoisted-and-stripped by
+<code>GameRecord.for_game()</code>; (2) <code>managym/replay.py:main</code> now iterates
+<code>_read_snapshots(args.path)</code> so isolated failures in slot 1+ (or later rows of a
+multi-record file) route to reproduction rather than walking; (3) <code>CodeSeat</code> native
+errors in <code>manabot/eval/vector.py</code> now record a player crash in evaluation metadata
+with <code>GameEnd(status="interrupted", reason="crash")</code> and
+<code>execution_outcome="last_command_succeeded"</code>, matching scalar <code>execute_game</code>.
+One remaining conceptual gap stays in <code>managym/replay.py</code>'s failure-reproduction
+agreement reporting, plus two human-review choices carried forward.</p>
 
 <h2>Do domain concepts and code concepts line up?</h2>
 
@@ -36,33 +41,33 @@ two open decisions carried for human review.</p>
   <thead>
     <tr>
       <th>Domain concept</th>
-      <th>Code concept (at <code>8ac5746885</code>)</th>
+      <th>Code concept (at <code>e9e5440e8a</code>)</th>
       <th>Aligned?</th>
       <th>Mismatch</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>Per-slot isolated native failure in a vector capture</strong><br>When any slot fails natively during an isolated reset or step, <code>RecordedVectorEnv</code> retains that slot's failure class, message, and traceback across <code>snapshot()</code>, <code>games_path</code>, <code>journal</code>, and <code>take_slot_record()</code>, and diagnostic replay routes it to reproduction regardless of slot index.</td>
-      <td><code>OpeningFailure(error_class, traceback)</code> on <code>GameEnd.opening_failure</code>, set only in <code>RecordedVectorEnv._record_roots</code> and hoisted by <code>GameRecord.for_game()</code> (leaving <code>opening_failure</code> duplicated on <code>games[0].end</code>). <code>GameRecord.needs_reproduction</code> ignores <code>failed_opening</code>; <code>managym/replay.py:main</code> checks only <code>next(records).needs_reproduction</code>; <code>RecordedVectorEnv._step</code> drops <code>error_class</code>/<code>traceback</code> and relies on <code>take_slot_record(..., info=...)</code>.</td>
+      <td><strong>Per-slot isolated native failure &amp; diagnostic replay agreement</strong><br>An isolated vector failure (whether <code>reset</code> or <code>step</code>) proves that exact stream failed natively, while healthy or detached sibling slots in the same vector snapshot never failed. Diagnostic replay reports the same agreement semantics regardless of whether the failure occurred at reset or step, and regardless of whether a journal boundary is attached.</td>
+      <td>Capture/storage is unified via <code>GameFailure(operation, error_class, traceback)</code> on <code>GameEnd.failure</code>, hoisted by <code>GameRecord.for_game()</code>, checked by <code>needs_reproduction</code>, and routed by <code>managym.replay:main</code>. However, <code>_replay_game_inputs</code> (<code>managym/replay.py:579-583</code>) still branches on <code>evidence.mode == "vector" and not failed_opening</code>, and <code>replay_failure_inputs</code> (<code>managym/replay.py:468-473</code>) still sends every stream of a <code>boundary is None</code> snapshot straight to <code>_replay_game_inputs</code>.</td>
       <td><strong>No</strong></td>
-      <td>One concept split across two mechanisms with an invisible slot-index bug. A multi-slot <code>vector.snapshot()</code> or journal with an isolated opening failure reports <code>needs_reproduction == False</code>; running <code>python -m managym.replay</code> on a journal where <strong>slot 1+</strong> failed opening silently walks to <code>interrupted</code> instead of calling <code>replay_failure_inputs</code> (slot 0 succeeds only because <code>next(records)</code> checks index 0). Meanwhile isolated step failures in <code>_step</code> still lose <code>error_class</code>/<code>traceback</code> in <code>games_path</code>, <code>snapshot()</code>, and <code>journal</code>.</td>
+      <td>Unfinished Pass 5 rule on two replay surfaces. First, replaying an isolated vector <strong>step</strong> failure (from a journal, <code>vector.snapshot()</code>, <code>games_path</code>, <code>take_slot_record()</code>, or <code>manabot.sim.replay</code>) reports <code>original_outcome: "execution_outcome_unknown"</code> while an isolated vector <strong>reset</strong> failure from the exact same <code>GameFailure</code> schema reports <code>"failed"</code>. Second, on a boundaryless <code>vector.snapshot()</code> with a per-slot <code>GameFailure</code> in slot 1, healthy sibling slot 0 reports <code>at_retained_failure: True</code> (contradicting the journaled path's <code>False</code>), and a detached empty sibling slot (<code>players == []</code> after <code>take_slot_record(0)</code>) raises <code>ValueError</code> in <code>game.setup()</code> instead of returning <code>status: "setup_unavailable"</code>.</td>
     </tr>
     <tr>
-      <td><strong>Player-choice crash vs. native root-engine failure</strong><br>A native error inside a custom <code>CodeSeat</code> decision (e.g. <code>DemoSearchPlayer</code> rollouts) isolates to that leg, attributes the crash to the acting player in evaluation metadata, and leaves the root <code>GameRecord</code> honest that the root <code>Env</code> itself did not fail (matching scalar <code>execute_game</code>).</td>
-      <td><code>step_round</code> catches <code>is_game_error</code> into <code>PlayedRound.code_errors</code>; <code>play_pairings</code> calls <code>complete_failed_leg</code> passing <code>info={"game_error": ..., "game_error_class": ...}</code> and <code>GameEnd(status="failed", ...)</code> to <code>take_slot_record</code>.</td>
-      <td><strong>No</strong></td>
-      <td>One name for two failure boundaries. Passing <code>info={"game_error": ...}</code> to <code>take_slot_record</code> stamps a player-choice crash as a native root step failure (<code>execution_outcome="failed"</code>, <code>error_class="AgentError"</code>, <code>needs_reproduction=True</code>) even though <code>game.actions</code> has no pending action and the root <code>Env</code> never failed. Running <code>replay_failure_inputs</code> on that record replays every committed step cleanly and reports <code>status: "advanced"</code>, contradicting scalar <code>execute_game</code> (<code>test_evaluation_match.py:621-627</code>).</td>
+      <td><strong>Player-choice crash vs. native root-engine failure</strong><br>A native error inside a custom <code>CodeSeat</code> decision isolates to that leg, attributes the crash to the acting player in evaluation metadata, and leaves the root <code>GameRecord</code> honest that the root <code>Env</code> did not fail.</td>
+      <td><code>step_round</code> catches <code>is_game_error</code> into <code>PlayedRound.code_errors</code>; <code>play_pairings</code> records <code>error_class</code>/<code>failure_trace</code>/<code>failure_record</code> in evaluation metadata and calls <code>complete_leg(..., end=GameEnd(status="interrupted", reason="crash", digest=...))</code> with <code>execution_outcome="last_command_succeeded"</code> and <code>needs_reproduction=False</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned (matches scalar <code>execute_game</code>).</td>
     </tr>
     <tr>
       <td><strong>Built-in heuristic identity &amp; version boundary</strong><br>Stateful <code>native-v3</code> changes 16/7,155 decisions and derives a new seed cohort; Etude tournaments bind one declared heuristic version and never silently mix <code>native-v2</code> and <code>native-v3</code>.</td>
-      <td><code>HEURISTIC_VERSION = "native-v3"</code>; <code>require_heuristic_version</code> enforced in <code>agents.py:build</code> and <code>pairing.py:admit_pairing</code>; <code>player_policy.rs</code> included in <code>heuristic_source_paths()</code>; <code>eval_throughput.py</code> declares <code>version</code>; maintained experiments (<code>tla_trophies*</code>, <code>opponent_memory</code>, <code>mana_taps</code>, <code>tla_frontier</code>) remain unversioned so they refuse loudly rather than mix.</td>
+      <td><code>HEURISTIC_VERSION = "native-v3"</code>; <code>require_heuristic_version</code> enforced in <code>agents.py:build</code> and <code>pairing.py:admit_pairing</code>; <code>player_policy.rs</code> included in <code>heuristic_source_paths()</code>; <code>eval_throughput.py</code> declares <code>version</code>; maintained experiments remain unversioned so they refuse loudly rather than mix.</td>
       <td><strong>Yes</strong> (open rollout choice)</td>
-      <td>The enforcement boundary is now sound (registered heuristics are also guarded by <code>source_sha256</code>). Open decision: <code>tla_trophies.py:held_out_jobs</code> leaves <code>HEURISTIC</code> unversioned even for its brand-new <code>bf16</code>/<code>tf32</code> precision tournaments, so deciding which experiments move to <code>native-v3</code> tournament names remains irreversible once scored (Q2).</td>
+      <td>Enforcement boundary is sound. Open decision: maintained experiments (including <code>tla_trophies.py</code>'s unscored <code>bf16</code>/<code>tf32</code> precision branches) remain unversioned until a human chooses which tournaments move to <code>native-v3</code> names (Q1, irreversible once scored).</td>
     </tr>
     <tr>
       <td><strong>Per-slot <code>player_policies</code> &amp; opening isolation</strong><br>Each slot owns its policy pair (<code>agent</code>, <code>random</code>, <code>heuristic</code>, <code>heuristic:N</code>); invalid decks reject strictly while construction and opening-settlement failures poison only their slot and retain setup/seed/policies.</td>
-      <td><code>PlayerPolicy::Heuristic { max_actions }</code>; <code>SlotLoad.fresh</code> / <code>reset_each_into_buffers</code>; public <code>VectorEnv.current_player_policies()</code> delegated in <code>RecordedVectorEnv._VECTOR_READS</code> and <code>BufferedStreams</code>; <code>Env::prepare_root</code> + isolated <code>construct_root</code>/<code>settle_opening</code>; <code>decklists()</code>/<code>mana_payment()</code>/<code>mana_floats()</code> read <code>reset_setup</code>.</td>
+      <td><code>PlayerPolicy::Heuristic { max_actions }</code>; <code>SlotLoad.fresh</code> / <code>reset_each_into_buffers</code>; <code>VectorEnv.current_player_policies()</code> delegated in <code>RecordedVectorEnv._VECTOR_READS</code> and <code>BufferedStreams</code>; <code>Env::prepare_root</code> + isolated <code>construct_root</code>/<code>settle_opening</code>.</td>
       <td><strong>Yes</strong></td>
       <td>Aligned.</td>
     </tr>
@@ -82,169 +87,143 @@ two open decisions carried for human review.</p>
       <td><strong>Inspecting native-seat records in Academy Watch</strong><br>Stored evaluation records open in Watch for visual inspection.</td>
       <td><code>managym/academy/watch.py:486-492</code> raises <code>ValueError</code> whenever <code>policies_for(games[0]) != ("agent", "agent")</code>.</td>
       <td><strong>No</strong> (deferred)</td>
-      <td>New vector heuristic evaluation records remain unviewable in Watch until a separate Academy Task adds native-seat import.</td>
+      <td>New vector heuristic evaluation records remain unviewable in Watch until a separate Academy Task adds native-seat import (F2, Q2).</td>
     </tr>
   </tbody>
 </table>
 
-<h2>The biggest mismatch: split per-slot failure representation in <code>GameRecord</code> and slot-dependent replay routing</h2>
+<h2>The biggest mismatch: <code>managym/replay.py</code> still treats isolated vector step failures like strict batch exceptions</h2>
 
-<p>Pass 4 solved the previous review's missing opening-failure capture by adding a reset-only
-<code>OpeningFailure(error_class, traceback)</code> sub-record onto <code>GameEnd</code>. Walk
-two concrete failure-and-recovery paths through the code at <code>8ac5746885</code>:</p>
+<p>Pass 5 unified isolated reset and step failures under one per-game
+<code>GameFailure(operation, error_class, traceback)</code> record so that
+<code>RecordedVectorEnv</code>, <code>_GameJournal</code>, <code>GameRecord.for_game()</code>,
+and <code>managym.replay:main</code> all know which exact slot failed natively and why. Walk two
+concrete counterexamples reproduced directly on <code>HEAD</code> (<code>e9e5440e8a</code>):</p>
 
 <ol>
-  <li><strong>Counterexample 1 — an isolated opening failure in slot 1 of a journaled vector:</strong>
-    A 2-slot <code>RecordedVectorEnv</code> calls
-    <code>reset_each_into_buffers(..., isolated=True)</code> or
-    <code>load_slots_into_buffers(..., isolated=True)</code> with <code>journal_path=journal</code>.
-    Slot 0 opens cleanly; slot 1 hits a construction or opening-settlement error.
+  <li><strong>Counterexample 1 — detached or journaled isolated step failure reports
+    <code>original_outcome: "execution_outcome_unknown"</code>:</strong>
+    A 2-slot <code>RecordedVectorEnv</code> runs
+    <code>step_isolated_into_buffers([0, 999_999])</code>. Slot 1 fails natively and records
+    <code>GameEnd(status="failed", failure=GameFailure(operation="step", ...))</code>. Detaching
+    slot 1 with <code>detached = vector.take_slot_record(1)</code> produces a single-game record
+    with <code>detached.execution_outcome == "failed"</code> and
+    <code>detached.games[0].end.status == "failed"</code>. Yet calling
+    <code>replay_failure_inputs(detached)</code> (or replaying the journaled slot 1, or calling
+    <code>manabot.sim.replay</code> on the retained evaluation record) executes
+    <code>managym/replay.py:579-583</code>:
     <ul>
-      <li><code>_record_roots</code> writes <code>GameEnd(status="failed", reason=..., opening_failure=OpeningFailure(...))</code>
-        onto <code>self.games[1]</code> and publishes <code>phase="ready"</code> with
-        <code>error=None</code>, <code>error_class=None</code>,
-        <code>execution_outcome="last_command_succeeded"</code>.</li>
-      <li><code>vector.snapshot().needs_reproduction</code> returns <strong><code>False</code></strong>
-        because <code>GameRecord.needs_reproduction</code> (<code>managym/recording.py:365-386</code>)
-        only inspects top-level failure fields and never checks per-game <code>opening_failure</code>.</li>
-      <li>Running <code>python -m managym.replay &lt;journal&gt;</code>
-        (<code>managym/replay.py:777-810</code>) reads <code>evidence = next(records)</code> —
-        which is <strong>slot 0</strong>. Because slot 0 succeeded, <code>evidence.needs_reproduction</code>
-        is <code>False</code>; the CLI skips <code>require_replay_runtime</code> and
-        <code>replay_failure_inputs</code>, silently walking slot 1 to
-        <code>ReplayStop("interrupted", 0, ...)</code> without ever attempting to reproduce the
-        native crash. If the exact same failure happens in <strong>slot 0</strong>, the CLI
-        takes the reproduction branch.</li>
+      <li><code>evidence.mode == "vector"</code> is <code>True</code> and
+        <code>failed_opening</code> is <code>False</code> (because
+        <code>operation == "step"</code>, not <code>"reset"</code>).</li>
+      <li>So <code>ReplayAgreement</code> overwrites <code>evidence.execution_outcome</code>
+        (<code>"failed"</code>) with <strong><code>"execution_outcome_unknown"</code></strong>!</li>
+      <li>An isolated <code>reset</code> failure from the exact same <code>GameFailure</code>
+        path reports <strong><code>"failed"</code></strong>. The comment on line 577 explicitly
+        scopes <code>"execution_outcome_unknown"</code> to a <em>strict vector exception</em>
+        (where <code>game.end</code> is <code>None</code> and no slot outcome was observed); an
+        isolated step failure carries <code>game.end.status == "failed"</code> and proved that
+        exact stream failed.</li>
     </ul>
   </li>
-  <li><strong>Counterexample 2 — isolated step failure in <code>_step</code> vs. isolated opening failure in <code>_record_roots</code>:</strong>
+  <li><strong>Counterexample 2 — boundaryless <code>vector.snapshot()</code> marks healthy
+    sibling slots as <code>at_retained_failure: True</code> (and fails on detached empty
+    slots):</strong>
+    On the same 2-slot <code>RecordedVectorEnv</code> with no <code>journal_path</code>
+    (<code>snapshot.boundary is None</code>), calling <code>replay_failure_inputs(vector.snapshot())</code>
+    hits lines 469–473 and dispatches both slot 0 (healthy, <code>committed == 1 == len(actions)</code>,
+    <code>game.failure is None</code>) and slot 1 (failed) directly to
+    <code>_replay_game_inputs</code>:
     <ul>
-      <li>In <code>_record_roots</code>, an isolated opening failure records <code>error_class</code>
-        and <code>traceback</code> on <code>game.end.opening_failure</code> and sets
-        <code>game.end</code> unconditionally so <code>snapshot()</code>, <code>games_path</code>,
-        <code>journal</code>, and <code>take_slot_record()</code> all see the full error.</li>
-      <li>In <code>_step</code> (<code>managym/recording.py:2110-2120</code>), an isolated step
-        failure calls <code>self._write_game(game, GameEnd(status="failed", reason=infos[index]["game_error"]))</code>,
-        dropping <code>game_error_class</code> and <code>game_error_trace</code> from
-        <code>games_path</code>, <code>snapshot()</code>, and <code>journal</code> (and never
-        setting <code>game.end</code> when unselected). Then <code>take_slot_record</code> has to
-        branch on <code>if record.operation != "reset":</code> and re-accept <code>info</code> from
-        the caller to reconstruct step-failure metadata.</li>
-      <li>When <code>GameRecord.for_game()</code> hoists <code>game.end.opening_failure</code> onto
-        a single-game record, it leaves <code>opening_failure</code> duplicated inside
-        <code>games[0].end</code> (unlike <code>game.player_policies</code>, which it strips after
-        hoisting).</li>
+      <li>Healthy slot 0 returns
+        <code>{"stream": 0, "status": "advanced", "actions": 1, "at_retained_failure": True, "original_outcome": "execution_outcome_unknown"}</code>
+        — falsely claiming slot 0 reached a retained failure, whereas with a journal attached
+        (<code>boundary.phase == "ready"</code>) the exact same healthy slot returns
+        <code>at_retained_failure: False</code>.</li>
+      <li>If slot 0 was already detached via <code>vector.take_slot_record(0)</code> (leaving
+        <code>games[0].players == []</code>) while slot 1 still holds its <code>GameFailure</code>,
+        <code>replay_failure_inputs(vector.snapshot())</code> calls <code>game.setup()</code> on
+        empty slot 0 and reports <code>status: "failed", error_class: "ValueError"</code> instead of
+        <code>status: "setup_unavailable"</code> (which the <code>boundary is not None</code> branch
+        already handles on lines 509–513).</li>
     </ul>
   </li>
 </ol>
 
 <lf-component name="before-after">
   <div slot="before">
-    <h4>Built at <code>8ac5746885</code> (reset-only sub-record, slot-0 CLI check)</h4>
+    <h4>Built at <code>e9e5440e8a</code> (Pass 4's reset-only assumption remains in replay agreement)</h4>
     <ul>
-      <li><code>GameEnd.opening_failure</code> stores <code>error_class</code>/<code>traceback</code> only for isolated resets; <code>_step</code> drops them on isolated step failures and relies on <code>take_slot_record(..., info=...)</code>.</li>
-      <li><code>for_game()</code> hoists <code>opening_failure</code> to top-level fields but keeps the duplicate copy on <code>games[0].end</code>.</li>
-      <li><code>GameRecord.needs_reproduction</code> returns <code>False</code> on multi-slot snapshots with isolated failures; <code>managym.replay</code> checks only <code>next(records)</code>, so slot 1+ opening failures skip reproduction.</li>
-      <li><code>vector.py</code> passes <code>CodeSeat</code> Python-side crashes into <code>take_slot_record(..., info={"game_error": ...})</code>, forging a native root failure that <code>replay_failure_inputs</code> reports as <code>"advanced"</code>.</li>
+      <li><code>_replay_game_inputs</code> keeps <code>if evidence.mode == "vector" and not failed_opening</code>, demoting every isolated vector <code>step</code> failure to <code>original_outcome: "execution_outcome_unknown"</code> while isolated <code>reset</code> failures report <code>"failed"</code>.</li>
+      <li><code>replay_failure_inputs</code> treats every <code>boundary is None</code> record as a strict batch failure, setting <code>at_retained_failure: True</code> on healthy sibling slots and raising <code>ValueError</code> on detached empty slots instead of <code>"setup_unavailable"</code>.</li>
     </ul>
   </div>
   <div slot="after">
-    <h4>Recommended contract (one per-game native failure record, honest failure boundary)</h4>
+    <h4>Recommended contract (finish Pass 5's unified <code>GameFailure</code> rule in <code>managym/replay.py</code>)</h4>
     <ul>
-      <li>One <code>GameEnd</code> failure payload (or <code>opening_failure</code> + step <code>failure</code> unified as <code>IsolatedFailure(operation, error_class, traceback)</code>) set in both <code>_record_roots</code> and <code>_step</code>; <code>for_game()</code> hoists and clears it on the single-game <code>GameEnd</code> just like <code>player_policies</code>.</li>
-      <li><code>GameRecord.needs_reproduction</code> returns <code>True</code> if any game carries an isolated failure (<code>any(self.failed_opening(g) or ... for g in self.games)</code>); <code>managym.replay</code> checks whether any projected stream (or the batch record) needs reproduction, not only stream 0.</li>
-      <li><code>vector.py</code> settles <code>CodeSeat</code> crashes via evaluation metadata + <code>GameEnd(status="interrupted", reason="crash", digest=...)</code> without passing <code>info={"game_error": ...}</code> to <code>take_slot_record</code>, matching scalar <code>execute_game</code>.</li>
+      <li>In <code>_replay_game_inputs</code>, recognize any per-stream observed native failure (<code>game.end is not None and game.end.status == "failed"</code> after <code>for_game()</code>, covering both isolated <code>reset</code> and isolated <code>step</code>) so both report <code>original_outcome == evidence.execution_outcome</code> (<code>"failed"</code>), while strict vector batch exceptions (<code>game.end is None</code>) keep <code>"execution_outcome_unknown"</code>.</li>
+      <li>In <code>replay_failure_inputs</code> when <code>boundary is None</code> and the batch itself has no top-level failure/search (<code>evidence.error is None and evidence.error_class is None and evidence.execution_outcome != "failed" and evidence.mode != "search"</code>), route only streams with <code>game.failure is not None</code> or an uncommitted pending <code>frame</code> as failure targets; reconstruct healthy siblings with <code>at_retained_failure=False</code> (and <code>status="setup_unavailable"</code> when <code>not game.players</code>), matching the journaled <code>ready</code> path.</li>
     </ul>
   </div>
 </lf-component>
 
 <h3>Code evidence</h3>
 
-<p><strong>1. <code>OpeningFailure</code> is reset-only, left duplicated by <code>for_game()</code>,
-missed by <code>needs_reproduction</code>, and routed by slot 0 alone in
-<code>managym/replay.py</code>:</strong></p>
+<p><strong>1. Capture and <code>for_game()</code> unify isolated reset and step failures, but
+<code>replay_failure_inputs</code> and <code>_replay_game_inputs</code> still apply the rule only
+to <code>failed_opening</code> and journaled batches:</strong></p>
 
-<lf-diff path="managym/recording.py" lines="129-145"></lf-diff>
-<lf-file path="managym/recording.py" lines="364-386"></lf-file>
-<lf-diff path="managym/recording.py" lines="400-432"></lf-diff>
-<lf-file path="managym/replay.py" lines="776-815"></lf-file>
+<lf-diff path="managym/recording.py" lines="129-146"></lf-diff>
+<lf-diff path="managym/recording.py" lines="409-444"></lf-diff>
+<lf-file path="managym/replay.py" lines="464-491"></lf-file>
+<lf-diff path="managym/replay.py" lines="570-590"></lf-diff>
 
-<p><strong>2. Asymmetric isolated failure recording between <code>_record_roots</code>,
-<code>_step</code>, and <code>take_slot_record</code>:</strong></p>
+<p><strong>2. Pass 5's clean <code>CodeSeat</code> crash separation in
+<code>manabot/eval/vector.py</code>, plus carried rollout and Watch surfaces:</strong></p>
 
-<lf-diff path="managym/recording.py" lines="1614-1646"></lf-diff>
-<lf-diff path="managym/recording.py" lines="1880-1901"></lf-diff>
-<lf-diff path="managym/recording.py" lines="2107-2122"></lf-diff>
-
-<p><strong>3. <code>CodeSeat</code> crashes in <code>vector.py</code> stamp native root-failure
-fields onto <code>GameRecord</code>, diverging from scalar <code>execute_game</code>:</strong></p>
-
-<lf-diff path="manabot/eval/vector.py" lines="818-842"></lf-diff>
-<lf-file path="tests/eval/test_evaluation_match.py" lines="620-633"></lf-file>
-
-<p><strong>4. Enforced <code>native-v3</code> version check vs. unversioned
-<code>tla_trophies.py</code> (including new non-float32 precision jobs) and deferred Watch
-refusal:</strong></p>
-
-<lf-diff path="manabot/eval/agents.py" lines="258-294"></lf-diff>
+<lf-diff path="manabot/eval/vector.py" lines="815-839"></lf-diff>
 <lf-file path="experiments/tla_trophies.py" lines="254-277"></lf-file>
 <lf-diff path="managym/academy/watch.py" lines="484-493"></lf-diff>
 
 <h2>Findings</h2>
 
-<lf-component name="decision" id="f1" title="Fix needs_reproduction and managym.replay CLI for non-zero-slot isolated failures, and unify GameEnd failure ownership" recommendation="Fix here">
+<lf-component name="decision" id="f1" title="Finish unified GameFailure semantics in managym/replay.py (original_outcome and boundaryless healthy siblings)" recommendation="Fix here">
   <p><strong>What breaks:</strong></p>
   <ul>
-    <li><code>GameRecord.needs_reproduction</code> (<code>managym/recording.py:365-386</code>)
-      returns <code>False</code> for any multi-slot <code>vector.snapshot()</code> or ready journal
-      whose failing slot carries <code>GameEnd.opening_failure</code>.</li>
-    <li><code>managym/replay.py:777-810</code> inspects only <code>next(records).needs_reproduction</code>
-      (slot 0). If slot 1+ fails opening while slot 0 succeeds, <code>python -m managym.replay</code>
-      never calls <code>require_replay_runtime</code> or <code>replay_failure_inputs</code>; it
-      silently walks slot 1 to <code>interrupted</code> at index 0.</li>
-    <li><code>RecordedVectorEnv._step</code> (<code>managym/recording.py:2110-2120</code>) still
-      drops <code>game_error_class</code> and <code>game_error_trace</code> from
-      <code>games_path</code>, <code>snapshot()</code>, and <code>journal</code> on isolated step
-      failures (and skips setting <code>game.end</code> when unselected), whereas
-      <code>_record_roots</code> records <code>OpeningFailure</code> unconditionally;
-      <code>for_game()</code> also leaves <code>opening_failure</code> duplicated on single-game
-      <code>games[0].end</code>.</li>
+    <li>In <code>managym/replay.py:579-583</code>, <code>_replay_game_inputs</code> checks
+      <code>evidence.mode == "vector" and not failed_opening</code>. Replaying an isolated vector
+      step failure — via <code>replay_failure_inputs</code> on <code>vector.snapshot()</code>,
+      <code>take_slot_record()</code>, <code>games_path</code>, a journal, or
+      <code>manabot.sim.replay</code> — reports
+      <code>original_outcome: "execution_outcome_unknown"</code> even though
+      <code>game.end.status == "failed"</code> and <code>evidence.execution_outcome == "failed"</code>
+      proved that exact stream failed (whereas an isolated reset failure reports
+      <code>"failed"</code>).</li>
+    <li>In <code>managym/replay.py:468-473</code>, <code>replay_failure_inputs</code> sends every
+      stream of a <code>boundary is None</code> snapshot straight to
+      <code>_replay_game_inputs</code>. When a boundaryless <code>vector.snapshot()</code> carries a
+      per-slot <code>GameFailure</code>, healthy sibling slots report
+      <code>at_retained_failure: True</code> (contradicting the journaled <code>ready</code> path's
+      <code>False</code>), and a detached empty sibling slot (<code>players == []</code> after
+      <code>take_slot_record</code>) raises <code>ValueError</code> in <code>game.setup()</code>
+      instead of returning <code>status: "setup_unavailable"</code>.</li>
   </ul>
-  <p><strong>Fix:</strong> Include per-game isolated failures in
-  <code>GameRecord.needs_reproduction</code>, make <code>managym/replay.py:main</code> check the
-  whole snapshot/all projected records before choosing walk vs. reproduction, strip the hoisted
-  per-game failure sub-record in <code>GameRecord.for_game()</code> (matching
-  <code>player_policies</code>), and decide whether to generalize <code>OpeningFailure</code> into
-  one per-game isolated failure record used by both <code>_record_roots</code> and
-  <code>_step</code> (Q1). Add a test with the isolated failure in slot 1 through both
-  <code>snapshot().needs_reproduction</code> and <code>managym.replay</code>.</p>
+  <p><strong>Fix:</strong> In <code>_replay_game_inputs</code>, treat any stream with an observed
+  isolated failure (<code>game.end is not None and game.end.status == "failed"</code>) like scalar
+  and failed-opening records so <code>original_outcome</code> preserves
+  <code>evidence.execution_outcome</code> (<code>"failed"</code>) while strict vector batch
+  exceptions (<code>game.end is None</code>) keep <code>"execution_outcome_unknown"</code>. In
+  <code>replay_failure_inputs</code>, handle non-failing sibling streams of a boundaryless
+  per-slot-failure snapshot consistently with the <code>boundary.phase == "ready"</code> branch
+  (<code>at_retained_failure=False</code>, <code>matches_binding=None</code>,
+  <code>matches_error=None</code>, and <code>status="setup_unavailable"</code> when
+  <code>not game.players</code>). Assert both <code>original_outcome == "failed"</code> for
+  isolated step failures and <code>not healthy["at_retained_failure"]</code> for boundaryless
+  snapshots in <code>tests/env/test_record_reducers.py</code> and
+  <code>tests/eval/test_vector_eval.py</code>.</p>
 </lf-component>
 
-<lf-component name="decision" id="f2" title="Stop stamping CodeSeat decision crashes as native root step failures in vector.py" recommendation="Fix here">
-  <p><strong>What breaks:</strong> In <code>manabot/eval/vector.py:818-839</code>, a native error
-  raised inside a custom <code>CodeSeat</code>'s <code>choose_code_action</code> (for example,
-  <code>DemoSearchPlayer</code> failing inside a search rollout) is passed to
-  <code>complete_failed_leg</code> with <code>info={"game_error": ..., "game_error_class": ...}</code>
-  and <code>GameEnd(status="failed", ...)</code>. That causes <code>take_slot_record</code> to write
-  <code>execution_outcome="failed"</code>, <code>error_class="AgentError"</code>, and
-  <code>needs_reproduction=True</code> onto the root game's <code>GameRecord</code> even though no
-  pending root action exists and the root <code>Env</code> never failed. Running
-  <code>replay_failure_inputs</code> / <code>managym.replay</code> on the retained record replays
-  every committed step without error and reports <code>status: "advanced"</code>. Scalar
-  <code>execute_game</code> (<code>manabot/sim/native_game.py:432-461</code>, tested in
-  <code>tests/eval/test_evaluation_match.py:621-627</code>) explicitly keeps
-  <code>record.execution_outcome == "last_command_succeeded"</code>,
-  <code>record.needs_reproduction == False</code>, and
-  <code>GameEnd(status="interrupted", reason="crash")</code> for player-choice crashes.</p>
-  <p><strong>Fix:</strong> In <code>vector.py:play_pairings</code>, record
-  <code>round_result.code_errors</code> onto evaluation metadata
-  (<code>error_class</code>, <code>failure_trace</code>, <code>failure_record(..., "crash", ..., seat_player)</code>)
-  and call <code>complete_leg(slot_state, end=GameEnd(status="interrupted", reason="crash", digest=digests[slot]))</code>
-  with <code>info=None</code>. Only actual native root failures from <code>step_isolated_into_buffers</code>
-  or isolated resets pass <code>info={"game_error": ...}</code> to <code>take_slot_record</code>.</p>
-</lf-component>
-
-<lf-component name="decision" id="f3" title="Support native-seat GameRecords in Academy Watch" recommendation="File Task">
+<lf-component name="decision" id="f2" title="Support native-seat GameRecords in Academy Watch" recommendation="File Task">
   <p><strong>Carried from prior reviews:</strong> Because vector heuristic evaluations record
   <code>("agent", "heuristic:64")</code> / <code>("heuristic:64", "agent")</code>,
   <code>managym/academy/watch.py:486-492</code> refuses every new vector heuristic record.
@@ -254,27 +233,21 @@ refusal:</strong></p>
 
 <h2>Questions for review</h2>
 
-<div data-choice="q1" data-label="Per-game isolated failure record shape">
-  <p><strong>1. In F1, should <code>GameEnd</code> unify isolated opening and step failures into
-  one per-game failure record, or keep <code>OpeningFailure</code> reset-only?</strong></p>
-  <button data-value="1a">1a. (Recommended) Replace <code>GameEnd.opening_failure</code> with one optional <code>GameEnd.failure</code> carrying <code>operation: Literal["reset", "step"]</code>, <code>error_class</code>, and <code>traceback</code>, populated by both <code>_record_roots</code> and <code>_step</code>, hoisted and stripped by <code>for_game()</code>, and checked by <code>needs_reproduction</code>. Removes the <code>if record.operation != "reset":</code> split in <code>take_slot_record</code> and makes <code>games_path</code>/<code>snapshot()</code>/<code>journal</code> preserve step-failure class and traceback too.</button>
-  <button data-value="1b">1b. Keep <code>GameEnd.opening_failure</code> reset-only; only strip it in <code>for_game()</code>, add <code>any(self.failed_opening(g) for g in self.games)</code> to <code>needs_reproduction</code>, and fix <code>managym/replay.py:main</code> to check all streams.</button>
+<div data-choice="q1" data-label="Maintained experiment migration to native-v3">
+  <p><strong>1. Built-in heuristic declarations without <code>version: native-v3</code> are
+  refused so stored <code>native-v2</code> tournaments cannot silently mix with
+  <code>native-v3</code>. Which maintained experiments should move to new <code>native-v3</code>
+  tournament names now (including <code>tla_trophies.py</code>'s unscored <code>bf16</code>/<code>tf32</code>
+  benchmarks), and which stay frozen?</strong> (<strong>Irreversible once scored to shared Etude
+  tournaments.</strong>)</p>
+  <button data-value="1a">1a. (Recommended) Keep all existing stored <code>native-v2</code> experiment files frozen as on HEAD in MTG-506; adopt new <code>native-v3</code> tournament names only when starting the next evaluation campaign (or add <code>version: native-v3</code> exclusively to never-scored <code>bf16</code>/<code>tf32</code> precision branches in <code>tla_trophies.py</code>).</button>
+  <button data-value="1b">1b. Add new <code>-v3</code> tournament names with <code>version: native-v3</code> to <code>tla_trophies.py</code> (and <code>tla_trophies_colab.py</code> / <code>tla_trophies_floor.py</code>) in this Task and rerun their baselines.</button>
+  <button data-value="1c">1c. Keep existing tournament names by adding explicit <code>version="native-v2"</code> stateless dispatch in Manabot alongside <code>native-v3</code>.</button>
 </div>
 
-<div data-choice="q2" data-label="Maintained experiment migration to native-v3">
-  <p><strong>2. Pass 4 refuses unversioned built-in heuristic declarations so stored
-  <code>native-v2</code> tournaments cannot silently mix with <code>native-v3</code>. Which
-  maintained experiments should move to new <code>native-v3</code> tournament names now (including
-  <code>tla_trophies.py</code>'s new <code>bf16</code>/<code>tf32</code> benchmarks), and which
-  stay frozen?</strong> (<strong>Irreversible once scored to shared Etude tournaments.</strong>)</p>
-  <button data-value="2a">2a. (Recommended) Keep all existing stored <code>native-v2</code> experiment files frozen as on HEAD in MTG-506; file or adopt new <code>native-v3</code> tournament names only when starting the next evaluation campaign (or add <code>version: native-v3</code> exclusively to never-scored <code>bf16</code>/<code>tf32</code> precision branches in <code>tla_trophies.py</code>).</button>
-  <button data-value="2b">2b. Add new <code>-v3</code> tournament names with <code>version: native-v3</code> to <code>tla_trophies.py</code> (and <code>tla_trophies_colab.py</code> / <code>tla_trophies_floor.py</code>) in this Task and rerun their baselines.</button>
-  <button data-value="2c">2c. Keep existing tournament names by adding explicit <code>version="native-v2"</code> stateless dispatch in Manabot alongside <code>native-v3</code>.</button>
-</div>
-
-<div data-choice="q3" data-label="Academy Watch native-seat import">
-  <p><strong>3. Confirm deferring Academy Watch support for native-seat records
-  (<code>("agent", "heuristic:64")</code>) to a separate Academy Task (F3)?</strong></p>
-  <button data-value="3a">3a. (Recommended) Yes — keep the refusal in <code>watch.py</code> and file a separate Academy Task when MTG-506 lands.</button>
-  <button data-value="3b">3b. No — implement native-seat import in Academy Watch inside MTG-506.</button>
+<div data-choice="q2" data-label="Academy Watch native-seat import">
+  <p><strong>2. Confirm deferring Academy Watch support for native-seat records
+  (<code>("agent", "heuristic:64")</code>) to a separate Academy Task (F2)?</strong></p>
+  <button data-value="2a">2a. (Recommended) Yes — keep the refusal in <code>watch.py</code> and file a separate Academy Task when MTG-506 lands.</button>
+  <button data-value="2b">2b. No — implement native-seat import in Academy Watch inside MTG-506.</button>
 </div>

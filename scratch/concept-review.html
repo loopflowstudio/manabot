@@ -850,16 +850,17 @@ button.lf-btn-quiet[aria-pressed="true"] {
 <main class="lf-page">
 <h1>Concept Review: MTG-506 — Vectorized Eval Host, Replay, and Heuristic Stepping</h1>
 
-<p><strong>Area reviewed:</strong> Whole-area post-build review at <code>8ac5746885</code> against
-freshly fetched <code>origin/main</code> (<code>606e79e90a</code>, also the checkout base; MTG-497
-stack parent at <code>0f885b1f43</code>), superseding the prior post-build review at
-<code>6783978c1f</code> after Pass 4 (<code>5ddf49e6cc</code>) introduced
-<code>OpeningFailure</code>, generalized failed-opening walking, isolated <code>CodeSeat</code>
-native errors, enforced <code>native-v3</code> heuristic versions, and synced MTG-500. Covers
-evaluation execution, per-seat native policies, isolated opening/step/player failure recording,
-verification/diagnostic replay, and heuristic tournament identity across <code>managym</code>
-(<code>PlayerPolicy</code>, <code>Env</code>, <code>VectorEnv</code>/<code>SlotLoad</code>,
-<code>RecordedVectorEnv</code>, <code>GameRecord</code>/<code>GameEnd</code>/<code>OpeningFailure</code>,
+<p><strong>Area reviewed:</strong> Whole-area post-build review at <code>e9e5440e8a</code> against
+freshly fetched <code>origin/main</code> (<code>606e79e90a</code>, also the checkout merge-base;
+MTG-497 stack parent at <code>0f885b1f43</code>), superseding the Pass 4 review at
+<code>e94731acd8</code> after Pass 5 (<code>708ce8e777</code>) replaced reset-only
+<code>OpeningFailure</code> with <code>GameFailure(operation, error_class, traceback)</code>,
+routed <code>managym.replay</code> over whole snapshots, and moved <code>CodeSeat</code> crashes
+to evaluation metadata. Covers evaluation execution, per-seat native policies, isolated
+opening/step/player failure recording, verification/diagnostic replay, and heuristic tournament
+identity across <code>managym</code> (<code>PlayerPolicy</code>, <code>Env</code>,
+<code>VectorEnv</code>/<code>SlotLoad</code>, <code>RecordedVectorEnv</code>,
+<code>GameRecord</code>/<code>GameEnd</code>/<code>GameFailure</code>,
 <code>RecordWalker</code>, <code>replay_failure_inputs</code>, <code>managym.replay</code> CLI,
 <code>academy/watch</code>), <code>manabot</code> (<code>eval/agents</code>,
 <code>eval/admission</code>, <code>eval/pairing</code>, <code>eval/vector</code>,
@@ -869,16 +870,20 @@ verification/diagnostic replay, and heuristic tournament identity across <code>m
 <code>experiments/opponent_memory.py</code>, <code>experiments/mana_taps.py</code>,
 <code>experiments/tla_frontier.py</code>).</p>
 
-<p><strong>What Pass 4 resolved from the previous review:</strong> (1) <code>require_heuristic_version</code>
-in <code>agents.py</code> and <code>pairing.py</code> now stops unversioned or stale
-<code>native-v2</code> declarations from silently running as <code>native-v3</code>;
-(2) <code>Env::prepare_root</code> / <code>construct_root</code> cleanly integrates MTG-500
-(<code>606e79e90a</code>) so construction and opening-settlement failures isolate per slot while
-deck/setup validation stays strict; (3) <code>VectorEnv.current_player_policies()</code> is
-exposed symmetrically on <code>VectorEnv</code>, <code>RecordedVectorEnv._VECTOR_READS</code>,
-and <code>BufferedStreams</code>; (4) full replay backpressure keeps the idle vector open instead
-of tearing it down. Two new conceptual mismatches remain in Pass 4's failure-recording layer, plus
-two open decisions carried for human review.</p>
+<p><strong>What Pass 5 resolved from the previous review:</strong> (1) <code>GameEnd.failure</code>
+(<code>GameFailure(operation, error_class, traceback)</code>) is now recorded uniformly by
+<code>RecordedVectorEnv._record_game_failure</code> for both isolated resets and isolated steps
+(even outside <code>record_fraction</code>), preserved across subsequent steps in
+<code>_GameJournal</code> alongside <code>game.frame</code>, checked by
+<code>GameRecord.needs_reproduction</code>, and hoisted-and-stripped by
+<code>GameRecord.for_game()</code>; (2) <code>managym/replay.py:main</code> now iterates
+<code>_read_snapshots(args.path)</code> so isolated failures in slot 1+ (or later rows of a
+multi-record file) route to reproduction rather than walking; (3) <code>CodeSeat</code> native
+errors in <code>manabot/eval/vector.py</code> now record a player crash in evaluation metadata
+with <code>GameEnd(status="interrupted", reason="crash")</code> and
+<code>execution_outcome="last_command_succeeded"</code>, matching scalar <code>execute_game</code>.
+One remaining conceptual gap stays in <code>managym/replay.py</code>'s failure-reproduction
+agreement reporting, plus two human-review choices carried forward.</p>
 
 <h2>Do domain concepts and code concepts line up?</h2>
 
@@ -886,33 +891,33 @@ two open decisions carried for human review.</p>
   <thead>
     <tr>
       <th>Domain concept</th>
-      <th>Code concept (at <code>8ac5746885</code>)</th>
+      <th>Code concept (at <code>e9e5440e8a</code>)</th>
       <th>Aligned?</th>
       <th>Mismatch</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>Per-slot isolated native failure in a vector capture</strong><br>When any slot fails natively during an isolated reset or step, <code>RecordedVectorEnv</code> retains that slot's failure class, message, and traceback across <code>snapshot()</code>, <code>games_path</code>, <code>journal</code>, and <code>take_slot_record()</code>, and diagnostic replay routes it to reproduction regardless of slot index.</td>
-      <td><code>OpeningFailure(error_class, traceback)</code> on <code>GameEnd.opening_failure</code>, set only in <code>RecordedVectorEnv._record_roots</code> and hoisted by <code>GameRecord.for_game()</code> (leaving <code>opening_failure</code> duplicated on <code>games[0].end</code>). <code>GameRecord.needs_reproduction</code> ignores <code>failed_opening</code>; <code>managym/replay.py:main</code> checks only <code>next(records).needs_reproduction</code>; <code>RecordedVectorEnv._step</code> drops <code>error_class</code>/<code>traceback</code> and relies on <code>take_slot_record(..., info=...)</code>.</td>
+      <td><strong>Per-slot isolated native failure &amp; diagnostic replay agreement</strong><br>An isolated vector failure (whether <code>reset</code> or <code>step</code>) proves that exact stream failed natively, while healthy or detached sibling slots in the same vector snapshot never failed. Diagnostic replay reports the same agreement semantics regardless of whether the failure occurred at reset or step, and regardless of whether a journal boundary is attached.</td>
+      <td>Capture/storage is unified via <code>GameFailure(operation, error_class, traceback)</code> on <code>GameEnd.failure</code>, hoisted by <code>GameRecord.for_game()</code>, checked by <code>needs_reproduction</code>, and routed by <code>managym.replay:main</code>. However, <code>_replay_game_inputs</code> (<code>managym/replay.py:579-583</code>) still branches on <code>evidence.mode == "vector" and not failed_opening</code>, and <code>replay_failure_inputs</code> (<code>managym/replay.py:468-473</code>) still sends every stream of a <code>boundary is None</code> snapshot straight to <code>_replay_game_inputs</code>.</td>
       <td><strong>No</strong></td>
-      <td>One concept split across two mechanisms with an invisible slot-index bug. A multi-slot <code>vector.snapshot()</code> or journal with an isolated opening failure reports <code>needs_reproduction == False</code>; running <code>python -m managym.replay</code> on a journal where <strong>slot 1+</strong> failed opening silently walks to <code>interrupted</code> instead of calling <code>replay_failure_inputs</code> (slot 0 succeeds only because <code>next(records)</code> checks index 0). Meanwhile isolated step failures in <code>_step</code> still lose <code>error_class</code>/<code>traceback</code> in <code>games_path</code>, <code>snapshot()</code>, and <code>journal</code>.</td>
+      <td>Unfinished Pass 5 rule on two replay surfaces. First, replaying an isolated vector <strong>step</strong> failure (from a journal, <code>vector.snapshot()</code>, <code>games_path</code>, <code>take_slot_record()</code>, or <code>manabot.sim.replay</code>) reports <code>original_outcome: "execution_outcome_unknown"</code> while an isolated vector <strong>reset</strong> failure from the exact same <code>GameFailure</code> schema reports <code>"failed"</code>. Second, on a boundaryless <code>vector.snapshot()</code> with a per-slot <code>GameFailure</code> in slot 1, healthy sibling slot 0 reports <code>at_retained_failure: True</code> (contradicting the journaled path's <code>False</code>), and a detached empty sibling slot (<code>players == []</code> after <code>take_slot_record(0)</code>) raises <code>ValueError</code> in <code>game.setup()</code> instead of returning <code>status: "setup_unavailable"</code>.</td>
     </tr>
     <tr>
-      <td><strong>Player-choice crash vs. native root-engine failure</strong><br>A native error inside a custom <code>CodeSeat</code> decision (e.g. <code>DemoSearchPlayer</code> rollouts) isolates to that leg, attributes the crash to the acting player in evaluation metadata, and leaves the root <code>GameRecord</code> honest that the root <code>Env</code> itself did not fail (matching scalar <code>execute_game</code>).</td>
-      <td><code>step_round</code> catches <code>is_game_error</code> into <code>PlayedRound.code_errors</code>; <code>play_pairings</code> calls <code>complete_failed_leg</code> passing <code>info={"game_error": ..., "game_error_class": ...}</code> and <code>GameEnd(status="failed", ...)</code> to <code>take_slot_record</code>.</td>
-      <td><strong>No</strong></td>
-      <td>One name for two failure boundaries. Passing <code>info={"game_error": ...}</code> to <code>take_slot_record</code> stamps a player-choice crash as a native root step failure (<code>execution_outcome="failed"</code>, <code>error_class="AgentError"</code>, <code>needs_reproduction=True</code>) even though <code>game.actions</code> has no pending action and the root <code>Env</code> never failed. Running <code>replay_failure_inputs</code> on that record replays every committed step cleanly and reports <code>status: "advanced"</code>, contradicting scalar <code>execute_game</code> (<code>test_evaluation_match.py:621-627</code>).</td>
+      <td><strong>Player-choice crash vs. native root-engine failure</strong><br>A native error inside a custom <code>CodeSeat</code> decision isolates to that leg, attributes the crash to the acting player in evaluation metadata, and leaves the root <code>GameRecord</code> honest that the root <code>Env</code> did not fail.</td>
+      <td><code>step_round</code> catches <code>is_game_error</code> into <code>PlayedRound.code_errors</code>; <code>play_pairings</code> records <code>error_class</code>/<code>failure_trace</code>/<code>failure_record</code> in evaluation metadata and calls <code>complete_leg(..., end=GameEnd(status="interrupted", reason="crash", digest=...))</code> with <code>execution_outcome="last_command_succeeded"</code> and <code>needs_reproduction=False</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned (matches scalar <code>execute_game</code>).</td>
     </tr>
     <tr>
       <td><strong>Built-in heuristic identity &amp; version boundary</strong><br>Stateful <code>native-v3</code> changes 16/7,155 decisions and derives a new seed cohort; Etude tournaments bind one declared heuristic version and never silently mix <code>native-v2</code> and <code>native-v3</code>.</td>
-      <td><code>HEURISTIC_VERSION = "native-v3"</code>; <code>require_heuristic_version</code> enforced in <code>agents.py:build</code> and <code>pairing.py:admit_pairing</code>; <code>player_policy.rs</code> included in <code>heuristic_source_paths()</code>; <code>eval_throughput.py</code> declares <code>version</code>; maintained experiments (<code>tla_trophies*</code>, <code>opponent_memory</code>, <code>mana_taps</code>, <code>tla_frontier</code>) remain unversioned so they refuse loudly rather than mix.</td>
+      <td><code>HEURISTIC_VERSION = "native-v3"</code>; <code>require_heuristic_version</code> enforced in <code>agents.py:build</code> and <code>pairing.py:admit_pairing</code>; <code>player_policy.rs</code> included in <code>heuristic_source_paths()</code>; <code>eval_throughput.py</code> declares <code>version</code>; maintained experiments remain unversioned so they refuse loudly rather than mix.</td>
       <td><strong>Yes</strong> (open rollout choice)</td>
-      <td>The enforcement boundary is now sound (registered heuristics are also guarded by <code>source_sha256</code>). Open decision: <code>tla_trophies.py:held_out_jobs</code> leaves <code>HEURISTIC</code> unversioned even for its brand-new <code>bf16</code>/<code>tf32</code> precision tournaments, so deciding which experiments move to <code>native-v3</code> tournament names remains irreversible once scored (Q2).</td>
+      <td>Enforcement boundary is sound. Open decision: maintained experiments (including <code>tla_trophies.py</code>'s unscored <code>bf16</code>/<code>tf32</code> precision branches) remain unversioned until a human chooses which tournaments move to <code>native-v3</code> names (Q1, irreversible once scored).</td>
     </tr>
     <tr>
       <td><strong>Per-slot <code>player_policies</code> &amp; opening isolation</strong><br>Each slot owns its policy pair (<code>agent</code>, <code>random</code>, <code>heuristic</code>, <code>heuristic:N</code>); invalid decks reject strictly while construction and opening-settlement failures poison only their slot and retain setup/seed/policies.</td>
-      <td><code>PlayerPolicy::Heuristic { max_actions }</code>; <code>SlotLoad.fresh</code> / <code>reset_each_into_buffers</code>; public <code>VectorEnv.current_player_policies()</code> delegated in <code>RecordedVectorEnv._VECTOR_READS</code> and <code>BufferedStreams</code>; <code>Env::prepare_root</code> + isolated <code>construct_root</code>/<code>settle_opening</code>; <code>decklists()</code>/<code>mana_payment()</code>/<code>mana_floats()</code> read <code>reset_setup</code>.</td>
+      <td><code>PlayerPolicy::Heuristic { max_actions }</code>; <code>SlotLoad.fresh</code> / <code>reset_each_into_buffers</code>; <code>VectorEnv.current_player_policies()</code> delegated in <code>RecordedVectorEnv._VECTOR_READS</code> and <code>BufferedStreams</code>; <code>Env::prepare_root</code> + isolated <code>construct_root</code>/<code>settle_opening</code>.</td>
       <td><strong>Yes</strong></td>
       <td>Aligned.</td>
     </tr>
@@ -932,58 +937,65 @@ two open decisions carried for human review.</p>
       <td><strong>Inspecting native-seat records in Academy Watch</strong><br>Stored evaluation records open in Watch for visual inspection.</td>
       <td><code>managym/academy/watch.py:486-492</code> raises <code>ValueError</code> whenever <code>policies_for(games[0]) != ("agent", "agent")</code>.</td>
       <td><strong>No</strong> (deferred)</td>
-      <td>New vector heuristic evaluation records remain unviewable in Watch until a separate Academy Task adds native-seat import.</td>
+      <td>New vector heuristic evaluation records remain unviewable in Watch until a separate Academy Task adds native-seat import (F2, Q2).</td>
     </tr>
   </tbody>
 </table>
 
-<h2>The biggest mismatch: split per-slot failure representation in <code>GameRecord</code> and slot-dependent replay routing</h2>
+<h2>The biggest mismatch: <code>managym/replay.py</code> still treats isolated vector step failures like strict batch exceptions</h2>
 
-<p>Pass 4 solved the previous review's missing opening-failure capture by adding a reset-only
-<code>OpeningFailure(error_class, traceback)</code> sub-record onto <code>GameEnd</code>. Walk
-two concrete failure-and-recovery paths through the code at <code>8ac5746885</code>:</p>
+<p>Pass 5 unified isolated reset and step failures under one per-game
+<code>GameFailure(operation, error_class, traceback)</code> record so that
+<code>RecordedVectorEnv</code>, <code>_GameJournal</code>, <code>GameRecord.for_game()</code>,
+and <code>managym.replay:main</code> all know which exact slot failed natively and why. Walk two
+concrete counterexamples reproduced directly on <code>HEAD</code> (<code>e9e5440e8a</code>):</p>
 
 <ol>
-  <li><strong>Counterexample 1 — an isolated opening failure in slot 1 of a journaled vector:</strong>
-    A 2-slot <code>RecordedVectorEnv</code> calls
-    <code>reset_each_into_buffers(..., isolated=True)</code> or
-    <code>load_slots_into_buffers(..., isolated=True)</code> with <code>journal_path=journal</code>.
-    Slot 0 opens cleanly; slot 1 hits a construction or opening-settlement error.
+  <li><strong>Counterexample 1 — detached or journaled isolated step failure reports
+    <code>original_outcome: "execution_outcome_unknown"</code>:</strong>
+    A 2-slot <code>RecordedVectorEnv</code> runs
+    <code>step_isolated_into_buffers([0, 999_999])</code>. Slot 1 fails natively and records
+    <code>GameEnd(status="failed", failure=GameFailure(operation="step", ...))</code>. Detaching
+    slot 1 with <code>detached = vector.take_slot_record(1)</code> produces a single-game record
+    with <code>detached.execution_outcome == "failed"</code> and
+    <code>detached.games[0].end.status == "failed"</code>. Yet calling
+    <code>replay_failure_inputs(detached)</code> (or replaying the journaled slot 1, or calling
+    <code>manabot.sim.replay</code> on the retained evaluation record) executes
+    <code>managym/replay.py:579-583</code>:
     <ul>
-      <li><code>_record_roots</code> writes <code>GameEnd(status="failed", reason=..., opening_failure=OpeningFailure(...))</code>
-        onto <code>self.games[1]</code> and publishes <code>phase="ready"</code> with
-        <code>error=None</code>, <code>error_class=None</code>,
-        <code>execution_outcome="last_command_succeeded"</code>.</li>
-      <li><code>vector.snapshot().needs_reproduction</code> returns <strong><code>False</code></strong>
-        because <code>GameRecord.needs_reproduction</code> (<code>managym/recording.py:365-386</code>)
-        only inspects top-level failure fields and never checks per-game <code>opening_failure</code>.</li>
-      <li>Running <code>python -m managym.replay &lt;journal&gt;</code>
-        (<code>managym/replay.py:777-810</code>) reads <code>evidence = next(records)</code> —
-        which is <strong>slot 0</strong>. Because slot 0 succeeded, <code>evidence.needs_reproduction</code>
-        is <code>False</code>; the CLI skips <code>require_replay_runtime</code> and
-        <code>replay_failure_inputs</code>, silently walking slot 1 to
-        <code>ReplayStop("interrupted", 0, ...)</code> without ever attempting to reproduce the
-        native crash. If the exact same failure happens in <strong>slot 0</strong>, the CLI
-        takes the reproduction branch.</li>
+      <li><code>evidence.mode == "vector"</code> is <code>True</code> and
+        <code>failed_opening</code> is <code>False</code> (because
+        <code>operation == "step"</code>, not <code>"reset"</code>).</li>
+      <li>So <code>ReplayAgreement</code> overwrites <code>evidence.execution_outcome</code>
+        (<code>"failed"</code>) with <strong><code>"execution_outcome_unknown"</code></strong>!</li>
+      <li>An isolated <code>reset</code> failure from the exact same <code>GameFailure</code>
+        path reports <strong><code>"failed"</code></strong>. The comment on line 577 explicitly
+        scopes <code>"execution_outcome_unknown"</code> to a <em>strict vector exception</em>
+        (where <code>game.end</code> is <code>None</code> and no slot outcome was observed); an
+        isolated step failure carries <code>game.end.status == "failed"</code> and proved that
+        exact stream failed.</li>
     </ul>
   </li>
-  <li><strong>Counterexample 2 — isolated step failure in <code>_step</code> vs. isolated opening failure in <code>_record_roots</code>:</strong>
+  <li><strong>Counterexample 2 — boundaryless <code>vector.snapshot()</code> marks healthy
+    sibling slots as <code>at_retained_failure: True</code> (and fails on detached empty
+    slots):</strong>
+    On the same 2-slot <code>RecordedVectorEnv</code> with no <code>journal_path</code>
+    (<code>snapshot.boundary is None</code>), calling <code>replay_failure_inputs(vector.snapshot())</code>
+    hits lines 469–473 and dispatches both slot 0 (healthy, <code>committed == 1 == len(actions)</code>,
+    <code>game.failure is None</code>) and slot 1 (failed) directly to
+    <code>_replay_game_inputs</code>:
     <ul>
-      <li>In <code>_record_roots</code>, an isolated opening failure records <code>error_class</code>
-        and <code>traceback</code> on <code>game.end.opening_failure</code> and sets
-        <code>game.end</code> unconditionally so <code>snapshot()</code>, <code>games_path</code>,
-        <code>journal</code>, and <code>take_slot_record()</code> all see the full error.</li>
-      <li>In <code>_step</code> (<code>managym/recording.py:2110-2120</code>), an isolated step
-        failure calls <code>self._write_game(game, GameEnd(status="failed", reason=infos[index]["game_error"]))</code>,
-        dropping <code>game_error_class</code> and <code>game_error_trace</code> from
-        <code>games_path</code>, <code>snapshot()</code>, and <code>journal</code> (and never
-        setting <code>game.end</code> when unselected). Then <code>take_slot_record</code> has to
-        branch on <code>if record.operation != "reset":</code> and re-accept <code>info</code> from
-        the caller to reconstruct step-failure metadata.</li>
-      <li>When <code>GameRecord.for_game()</code> hoists <code>game.end.opening_failure</code> onto
-        a single-game record, it leaves <code>opening_failure</code> duplicated inside
-        <code>games[0].end</code> (unlike <code>game.player_policies</code>, which it strips after
-        hoisting).</li>
+      <li>Healthy slot 0 returns
+        <code>{"stream": 0, "status": "advanced", "actions": 1, "at_retained_failure": True, "original_outcome": "execution_outcome_unknown"}</code>
+        — falsely claiming slot 0 reached a retained failure, whereas with a journal attached
+        (<code>boundary.phase == "ready"</code>) the exact same healthy slot returns
+        <code>at_retained_failure: False</code>.</li>
+      <li>If slot 0 was already detached via <code>vector.take_slot_record(0)</code> (leaving
+        <code>games[0].players == []</code>) while slot 1 still holds its <code>GameFailure</code>,
+        <code>replay_failure_inputs(vector.snapshot())</code> calls <code>game.setup()</code> on
+        empty slot 0 and reports <code>status: "failed", error_class: "ValueError"</code> instead of
+        <code>status: "setup_unavailable"</code> (which the <code>boundary is not None</code> branch
+        already handles on lines 509–513).</li>
     </ul>
   </li>
 </ol>
@@ -992,23 +1004,20 @@ two concrete failure-and-recovery paths through the code at <code>8ac5746885</co
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">Before</div>
     
-    <h4>Built at <code>8ac5746885</code> (reset-only sub-record, slot-0 CLI check)</h4>
+    <h4>Built at <code>e9e5440e8a</code> (Pass 4's reset-only assumption remains in replay agreement)</h4>
     <ul>
-      <li><code>GameEnd.opening_failure</code> stores <code>error_class</code>/<code>traceback</code> only for isolated resets; <code>_step</code> drops them on isolated step failures and relies on <code>take_slot_record(..., info=...)</code>.</li>
-      <li><code>for_game()</code> hoists <code>opening_failure</code> to top-level fields but keeps the duplicate copy on <code>games[0].end</code>.</li>
-      <li><code>GameRecord.needs_reproduction</code> returns <code>False</code> on multi-slot snapshots with isolated failures; <code>managym.replay</code> checks only <code>next(records)</code>, so slot 1+ opening failures skip reproduction.</li>
-      <li><code>vector.py</code> passes <code>CodeSeat</code> Python-side crashes into <code>take_slot_record(..., info={"game_error": ...})</code>, forging a native root failure that <code>replay_failure_inputs</code> reports as <code>"advanced"</code>.</li>
+      <li><code>_replay_game_inputs</code> keeps <code>if evidence.mode == "vector" and not failed_opening</code>, demoting every isolated vector <code>step</code> failure to <code>original_outcome: "execution_outcome_unknown"</code> while isolated <code>reset</code> failures report <code>"failed"</code>.</li>
+      <li><code>replay_failure_inputs</code> treats every <code>boundary is None</code> record as a strict batch failure, setting <code>at_retained_failure: True</code> on healthy sibling slots and raising <code>ValueError</code> on detached empty slots instead of <code>"setup_unavailable"</code>.</li>
     </ul>
   
   </div>
   <div class="lf-before-after-pane">
     <div class="lf-before-after-label">After</div>
     
-    <h4>Recommended contract (one per-game native failure record, honest failure boundary)</h4>
+    <h4>Recommended contract (finish Pass 5's unified <code>GameFailure</code> rule in <code>managym/replay.py</code>)</h4>
     <ul>
-      <li>One <code>GameEnd</code> failure payload (or <code>opening_failure</code> + step <code>failure</code> unified as <code>IsolatedFailure(operation, error_class, traceback)</code>) set in both <code>_record_roots</code> and <code>_step</code>; <code>for_game()</code> hoists and clears it on the single-game <code>GameEnd</code> just like <code>player_policies</code>.</li>
-      <li><code>GameRecord.needs_reproduction</code> returns <code>True</code> if any game carries an isolated failure (<code>any(self.failed_opening(g) or ... for g in self.games)</code>); <code>managym.replay</code> checks whether any projected stream (or the batch record) needs reproduction, not only stream 0.</li>
-      <li><code>vector.py</code> settles <code>CodeSeat</code> crashes via evaluation metadata + <code>GameEnd(status="interrupted", reason="crash", digest=...)</code> without passing <code>info={"game_error": ...}</code> to <code>take_slot_record</code>, matching scalar <code>execute_game</code>.</li>
+      <li>In <code>_replay_game_inputs</code>, recognize any per-stream observed native failure (<code>game.end is not None and game.end.status == "failed"</code> after <code>for_game()</code>, covering both isolated <code>reset</code> and isolated <code>step</code>) so both report <code>original_outcome == evidence.execution_outcome</code> (<code>"failed"</code>), while strict vector batch exceptions (<code>game.end is None</code>) keep <code>"execution_outcome_unknown"</code>.</li>
+      <li>In <code>replay_failure_inputs</code> when <code>boundary is None</code> and the batch itself has no top-level failure/search (<code>evidence.error is None and evidence.error_class is None and evidence.execution_outcome != "failed" and evidence.mode != "search"</code>), route only streams with <code>game.failure is not None</code> or an uncommitted pending <code>frame</code> as failure targets; reconstruct healthy siblings with <code>at_retained_failure=False</code> (and <code>status="setup_unavailable"</code> when <code>not game.players</code>), matching the journaled <code>ready</code> path.</li>
     </ul>
   
   </div>
@@ -1017,323 +1026,151 @@ two concrete failure-and-recovery paths through the code at <code>8ac5746885</co
 
 <h3>Code evidence</h3>
 
-<p><strong>1. <code>OpeningFailure</code> is reset-only, left duplicated by <code>for_game()</code>,
-missed by <code>needs_reproduction</code>, and routed by slot 0 alone in
-<code>managym/replay.py</code>:</strong></p>
+<p><strong>1. Capture and <code>for_game()</code> unify isolated reset and step failures, but
+<code>replay_failure_inputs</code> and <code>_replay_game_inputs</code> still apply the rule only
+to <code>failed_opening</code> and journaled batches:</strong></p>
 
-<div class="lf-codeblock" data-path="managym/recording.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/recording.py:129-145</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-hunk"><td colspan="4">@@ -125,12 +126,22 @@ class DecisionAnnotation(BaseModel):</td></tr>
-<tr class="lf-add lf-code-row" data-line="129"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">129</td><td class="lf-sign">+</td><td>class OpeningFailure(BaseModel):</td></tr>
-<tr class="lf-add lf-code-row" data-line="130"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">130</td><td class="lf-sign">+</td><td>    &quot;&quot;&quot;A reset error owned by one game in a vector snapshot or journal.&quot;&quot;&quot;</td></tr>
+<div class="lf-codeblock" data-path="managym/recording.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/recording.py:129-146</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -126,12 +126,23 @@ class DecisionAnnotation(BaseModel):</td></tr>
+<tr class="lf-add lf-code-row" data-line="129"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">129</td><td class="lf-sign">+</td><td>class GameFailure(BaseModel):</td></tr>
+<tr class="lf-add lf-code-row" data-line="130"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">130</td><td class="lf-sign">+</td><td>    &quot;&quot;&quot;A native error owned by one game in a vector snapshot or journal.&quot;&quot;&quot;</td></tr>
 <tr class="lf-add lf-code-row" data-line="131"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">131</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="132"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">132</td><td class="lf-sign">+</td><td>    error_class: str</td></tr>
-<tr class="lf-add lf-code-row" data-line="133"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">133</td><td class="lf-sign">+</td><td>    traceback: str | None = None</td></tr>
-<tr class="lf-add lf-code-row" data-line="134"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">134</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="132"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">132</td><td class="lf-sign">+</td><td>    operation: Literal[&quot;reset&quot;, &quot;step&quot;]</td></tr>
+<tr class="lf-add lf-code-row" data-line="133"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">133</td><td class="lf-sign">+</td><td>    error_class: str</td></tr>
+<tr class="lf-add lf-code-row" data-line="134"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">134</td><td class="lf-sign">+</td><td>    traceback: str | None = None</td></tr>
 <tr class="lf-add lf-code-row" data-line="135"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">135</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="128" data-line="136"><td class="lf-ln lf-ln-old">128</td><td class="lf-ln lf-ln-new">136</td><td class="lf-sign"> </td><td>class GameEnd(BaseModel):</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="129" data-line="137"><td class="lf-ln lf-ln-old">129</td><td class="lf-ln lf-ln-new">137</td><td class="lf-sign"> </td><td>    status: Literal[&quot;complete&quot;, &quot;interrupted&quot;, &quot;failed&quot;]</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="130" data-line="138"><td class="lf-ln lf-ln-old">130</td><td class="lf-ln lf-ln-new">138</td><td class="lf-sign"> </td><td>    winner: int | None = None</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="131" data-line="139"><td class="lf-ln lf-ln-old">131</td><td class="lf-ln lf-ln-new">139</td><td class="lf-sign"> </td><td>    winner_retained: bool = True</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="132" data-line="140"><td class="lf-ln lf-ln-old">132</td><td class="lf-ln lf-ln-new">140</td><td class="lf-sign"> </td><td>    reason: str | None = None</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="133" data-line="141"><td class="lf-ln lf-ln-old">133</td><td class="lf-ln lf-ln-new">141</td><td class="lf-sign"> </td><td>    digest: str | None = None</td></tr>
-<tr class="lf-add lf-code-row" data-line="142"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">142</td><td class="lf-sign">+</td><td>    opening_failure: OpeningFailure | None = Field(</td></tr>
-<tr class="lf-add lf-code-row" data-line="143"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">143</td><td class="lf-sign">+</td><td>        default=None, exclude_if=lambda value: value is None</td></tr>
-<tr class="lf-add lf-code-row" data-line="144"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">144</td><td class="lf-sign">+</td><td>    )</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="134" data-line="145"><td class="lf-ln lf-ln-old">134</td><td class="lf-ln lf-ln-new">145</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="136"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">136</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="129" data-line="137"><td class="lf-ln lf-ln-old">129</td><td class="lf-ln lf-ln-new">137</td><td class="lf-sign"> </td><td>class GameEnd(BaseModel):</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="130" data-line="138"><td class="lf-ln lf-ln-old">130</td><td class="lf-ln lf-ln-new">138</td><td class="lf-sign"> </td><td>    status: Literal[&quot;complete&quot;, &quot;interrupted&quot;, &quot;failed&quot;]</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="131" data-line="139"><td class="lf-ln lf-ln-old">131</td><td class="lf-ln lf-ln-new">139</td><td class="lf-sign"> </td><td>    winner: int | None = None</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="132" data-line="140"><td class="lf-ln lf-ln-old">132</td><td class="lf-ln lf-ln-new">140</td><td class="lf-sign"> </td><td>    winner_retained: bool = True</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="133" data-line="141"><td class="lf-ln lf-ln-old">133</td><td class="lf-ln lf-ln-new">141</td><td class="lf-sign"> </td><td>    reason: str | None = None</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="134" data-line="142"><td class="lf-ln lf-ln-old">134</td><td class="lf-ln lf-ln-new">142</td><td class="lf-sign"> </td><td>    digest: str | None = None</td></tr>
+<tr class="lf-add lf-code-row" data-line="143"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">143</td><td class="lf-sign">+</td><td>    failure: GameFailure | None = Field(</td></tr>
+<tr class="lf-add lf-code-row" data-line="144"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">144</td><td class="lf-sign">+</td><td>        default=None, exclude_if=lambda value: value is None</td></tr>
+<tr class="lf-add lf-code-row" data-line="145"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">145</td><td class="lf-sign">+</td><td>    )</td></tr>
 <tr class="lf-ctx lf-code-row" data-old-line="135" data-line="146"><td class="lf-ln lf-ln-old">135</td><td class="lf-ln lf-ln-new">146</td><td class="lf-sign"> </td><td></td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="136" data-line="147"><td class="lf-ln lf-ln-old">136</td><td class="lf-ln lf-ln-new">147</td><td class="lf-sign"> </td><td>class BoundaryIntervention(BaseModel):</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="136" data-line="147"><td class="lf-ln lf-ln-old">136</td><td class="lf-ln lf-ln-new">147</td><td class="lf-sign"> </td><td></td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="137" data-line="148"><td class="lf-ln lf-ln-old">137</td><td class="lf-ln lf-ln-new">148</td><td class="lf-sign"> </td><td>class BoundaryIntervention(BaseModel):</td></tr>
 </tbody></table></div></div>
-<div class="lf-codeblock" data-path="managym/recording.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/recording.py:364-386</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="364"><td class="lf-ln lf-ln-single">364</td><td>    @property</td></tr>
-<tr class="lf-code-row" data-line="365"><td class="lf-ln lf-ln-single">365</td><td>    def needs_reproduction(self) -&gt; bool:</td></tr>
-<tr class="lf-code-row" data-line="366"><td class="lf-ln lf-ln-single">366</td><td>        &quot;&quot;&quot;A failed, pending or search call needs exact-runtime reproduction.</td></tr>
-<tr class="lf-code-row" data-line="367"><td class="lf-ln lf-ln-single">367</td><td></td></tr>
-<tr class="lf-code-row" data-line="368"><td class="lf-ln lf-ln-single">368</td><td>        Acknowledged prefixes are viewed with the walker on the same world;</td></tr>
-<tr class="lf-code-row" data-line="369"><td class="lf-ln lf-ln-single">369</td><td>        reproduction may attempt the unacknowledged call, including its failure.</td></tr>
-<tr class="lf-code-row" data-line="370"><td class="lf-ln lf-ln-single">370</td><td>        &quot;&quot;&quot;</td></tr>
-<tr class="lf-code-row" data-line="371"><td class="lf-ln lf-ln-single">371</td><td>        return (</td></tr>
-<tr class="lf-code-row" data-line="372"><td class="lf-ln lf-ln-single">372</td><td>            self.error is not None</td></tr>
-<tr class="lf-code-row" data-line="373"><td class="lf-ln lf-ln-single">373</td><td>            or self.error_class is not None</td></tr>
-<tr class="lf-code-row" data-line="374"><td class="lf-ln lf-ln-single">374</td><td>            or self.execution_outcome == &quot;failed&quot;</td></tr>
-<tr class="lf-code-row" data-line="375"><td class="lf-ln lf-ln-single">375</td><td>            or self.mode == &quot;search&quot;</td></tr>
-<tr class="lf-code-row" data-line="376"><td class="lf-ln lf-ln-single">376</td><td>            or (self.boundary is not None and self.boundary.phase != &quot;ready&quot;)</td></tr>
-<tr class="lf-code-row" data-line="377"><td class="lf-ln lf-ln-single">377</td><td>            or (</td></tr>
-<tr class="lf-code-row" data-line="378"><td class="lf-ln lf-ln-single">378</td><td>                self.boundary is None</td></tr>
-<tr class="lf-code-row" data-line="379"><td class="lf-ln lf-ln-single">379</td><td>                and self.execution_outcome != &quot;last_command_succeeded&quot;</td></tr>
-<tr class="lf-code-row" data-line="380"><td class="lf-ln lf-ln-single">380</td><td>                and any(</td></tr>
-<tr class="lf-code-row" data-line="381"><td class="lf-ln lf-ln-single">381</td><td>                    game.frame is not None</td></tr>
-<tr class="lf-code-row" data-line="382"><td class="lf-ln lf-ln-single">382</td><td>                    and (game.committed is None or game.committed &lt; len(game.actions))</td></tr>
-<tr class="lf-code-row" data-line="383"><td class="lf-ln lf-ln-single">383</td><td>                    for game in self.games</td></tr>
-<tr class="lf-code-row" data-line="384"><td class="lf-ln lf-ln-single">384</td><td>                )</td></tr>
-<tr class="lf-code-row" data-line="385"><td class="lf-ln lf-ln-single">385</td><td>            )</td></tr>
-<tr class="lf-code-row" data-line="386"><td class="lf-ln lf-ln-single">386</td><td>        )</td></tr>
+<div class="lf-codeblock" data-path="managym/recording.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/recording.py:409-444</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -384,6 +403,45 @@ class GameRecord(BaseModel):</td></tr>
+<tr class="lf-add lf-code-row" data-line="409"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">409</td><td class="lf-sign">+</td><td>    def failed_opening(self, game: GameInputs) -&gt; bool:</td></tr>
+<tr class="lf-add lf-code-row" data-line="410"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">410</td><td class="lf-sign">+</td><td>        if (failure := game.failure) is not None:</td></tr>
+<tr class="lf-add lf-code-row" data-line="411"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">411</td><td class="lf-sign">+</td><td>            return failure.operation == &quot;reset&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="412"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">412</td><td class="lf-sign">+</td><td>        return (</td></tr>
+<tr class="lf-add lf-code-row" data-line="413"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">413</td><td class="lf-sign">+</td><td>            self.operation == &quot;reset&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="414"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">414</td><td class="lf-sign">+</td><td>            and self.execution_outcome == &quot;failed&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="415"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">415</td><td class="lf-sign">+</td><td>            and not game.actions</td></tr>
+<tr class="lf-add lf-code-row" data-line="416"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">416</td><td class="lf-sign">+</td><td>            and (</td></tr>
+<tr class="lf-add lf-code-row" data-line="417"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">417</td><td class="lf-sign">+</td><td>                self.mode == &quot;scalar&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="418"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">418</td><td class="lf-sign">+</td><td>                or (game.end is not None and game.end.status == &quot;failed&quot;)</td></tr>
+<tr class="lf-add lf-code-row" data-line="419"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">419</td><td class="lf-sign">+</td><td>            )</td></tr>
+<tr class="lf-add lf-code-row" data-line="420"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">420</td><td class="lf-sign">+</td><td>        )</td></tr>
+<tr class="lf-add lf-code-row" data-line="421"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">421</td><td class="lf-sign">+</td><td></td></tr>
+<tr class="lf-add lf-code-row" data-line="422"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">422</td><td class="lf-sign">+</td><td>    def for_game(</td></tr>
+<tr class="lf-add lf-code-row" data-line="423"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">423</td><td class="lf-sign">+</td><td>        self, game: GameInputs, boundary: NativeBoundary | None = None</td></tr>
+<tr class="lf-add lf-code-row" data-line="424"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">424</td><td class="lf-sign">+</td><td>    ) -&gt; &quot;GameRecord&quot;:</td></tr>
+<tr class="lf-add lf-code-row" data-line="425"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">425</td><td class="lf-sign">+</td><td>        fields: dict[str, object] = {&quot;boundary&quot;: boundary}</td></tr>
+<tr class="lf-add lf-code-row" data-line="426"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">426</td><td class="lf-sign">+</td><td>        game_fields: dict[str, object] = {}</td></tr>
+<tr class="lf-add lf-code-row" data-line="427"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">427</td><td class="lf-sign">+</td><td>        if game.player_policies is not None:</td></tr>
+<tr class="lf-add lf-code-row" data-line="428"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">428</td><td class="lf-sign">+</td><td>            fields[&quot;player_policies&quot;] = game.player_policies</td></tr>
+<tr class="lf-add lf-code-row" data-line="429"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">429</td><td class="lf-sign">+</td><td>            game_fields[&quot;player_policies&quot;] = None</td></tr>
+<tr class="lf-add lf-code-row" data-line="430"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">430</td><td class="lf-sign">+</td><td>        if game.end is not None and (failure := game.end.failure) is not None:</td></tr>
+<tr class="lf-add lf-code-row" data-line="431"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">431</td><td class="lf-sign">+</td><td>            # This slot&#39;s observed failure owns its call, even after the</td></tr>
+<tr class="lf-add lf-code-row" data-line="432"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">432</td><td class="lf-sign">+</td><td>            # vector journal advances to a different batch boundary.</td></tr>
+<tr class="lf-add lf-code-row" data-line="433"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">433</td><td class="lf-sign">+</td><td>            fields.update(</td></tr>
+<tr class="lf-add lf-code-row" data-line="434"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">434</td><td class="lf-sign">+</td><td>                boundary=None,</td></tr>
+<tr class="lf-add lf-code-row" data-line="435"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">435</td><td class="lf-sign">+</td><td>                operation=failure.operation,</td></tr>
+<tr class="lf-add lf-code-row" data-line="436"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">436</td><td class="lf-sign">+</td><td>                execution_outcome=&quot;failed&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="437"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">437</td><td class="lf-sign">+</td><td>                error=game.end.reason,</td></tr>
+<tr class="lf-add lf-code-row" data-line="438"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">438</td><td class="lf-sign">+</td><td>                error_class=failure.error_class,</td></tr>
+<tr class="lf-add lf-code-row" data-line="439"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">439</td><td class="lf-sign">+</td><td>                traceback=failure.traceback,</td></tr>
+<tr class="lf-add lf-code-row" data-line="440"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">440</td><td class="lf-sign">+</td><td>            )</td></tr>
+<tr class="lf-add lf-code-row" data-line="441"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">441</td><td class="lf-sign">+</td><td>            game_fields[&quot;end&quot;] = game.end.model_copy(update={&quot;failure&quot;: None})</td></tr>
+<tr class="lf-add lf-code-row" data-line="442"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">442</td><td class="lf-sign">+</td><td>        fields[&quot;games&quot;] = [game.model_copy(update=game_fields) if game_fields else game]</td></tr>
+<tr class="lf-add lf-code-row" data-line="443"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">443</td><td class="lf-sign">+</td><td>        return self.model_copy(update=fields)</td></tr>
+<tr class="lf-add lf-code-row" data-line="444"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">444</td><td class="lf-sign">+</td><td></td></tr>
 </tbody></table></div></div>
-<div class="lf-codeblock" data-path="managym/recording.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/recording.py:400-432</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-hunk"><td colspan="4">@@ -383,6 +397,39 @@ class GameRecord(BaseModel):</td></tr>
-<tr class="lf-add lf-code-row" data-line="400"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">400</td><td class="lf-sign">+</td><td>    def policies_for(self, game: GameInputs) -&gt; tuple[str, str]:</td></tr>
-<tr class="lf-add lf-code-row" data-line="401"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">401</td><td class="lf-sign">+</td><td>        return game.player_policies or self.resolved_player_policies</td></tr>
-<tr class="lf-add lf-code-row" data-line="402"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">402</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="403"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">403</td><td class="lf-sign">+</td><td>    def failed_opening(self, game: GameInputs) -&gt; bool:</td></tr>
-<tr class="lf-add lf-code-row" data-line="404"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">404</td><td class="lf-sign">+</td><td>        if game.end is not None and game.end.opening_failure is not None:</td></tr>
-<tr class="lf-add lf-code-row" data-line="405"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">405</td><td class="lf-sign">+</td><td>            return True</td></tr>
-<tr class="lf-add lf-code-row" data-line="406"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">406</td><td class="lf-sign">+</td><td>        return (</td></tr>
-<tr class="lf-add lf-code-row" data-line="407"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">407</td><td class="lf-sign">+</td><td>            self.operation == &quot;reset&quot;</td></tr>
-<tr class="lf-add lf-code-row" data-line="408"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">408</td><td class="lf-sign">+</td><td>            and self.execution_outcome == &quot;failed&quot;</td></tr>
-<tr class="lf-add lf-code-row" data-line="409"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">409</td><td class="lf-sign">+</td><td>            and not game.actions</td></tr>
-<tr class="lf-add lf-code-row" data-line="410"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">410</td><td class="lf-sign">+</td><td>            and (</td></tr>
-<tr class="lf-add lf-code-row" data-line="411"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">411</td><td class="lf-sign">+</td><td>                self.mode == &quot;scalar&quot;</td></tr>
-<tr class="lf-add lf-code-row" data-line="412"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">412</td><td class="lf-sign">+</td><td>                or (game.end is not None and game.end.status == &quot;failed&quot;)</td></tr>
-<tr class="lf-add lf-code-row" data-line="413"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">413</td><td class="lf-sign">+</td><td>            )</td></tr>
-<tr class="lf-add lf-code-row" data-line="414"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">414</td><td class="lf-sign">+</td><td>        )</td></tr>
-<tr class="lf-add lf-code-row" data-line="415"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">415</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="416"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">416</td><td class="lf-sign">+</td><td>    def for_game(</td></tr>
-<tr class="lf-add lf-code-row" data-line="417"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">417</td><td class="lf-sign">+</td><td>        self, game: GameInputs, boundary: NativeBoundary | None = None</td></tr>
-<tr class="lf-add lf-code-row" data-line="418"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">418</td><td class="lf-sign">+</td><td>    ) -&gt; &quot;GameRecord&quot;:</td></tr>
-<tr class="lf-add lf-code-row" data-line="419"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">419</td><td class="lf-sign">+</td><td>        fields: dict[str, object] = {&quot;games&quot;: [game], &quot;boundary&quot;: boundary}</td></tr>
-<tr class="lf-add lf-code-row" data-line="420"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">420</td><td class="lf-sign">+</td><td>        if game.player_policies is not None:</td></tr>
-<tr class="lf-add lf-code-row" data-line="421"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">421</td><td class="lf-sign">+</td><td>            fields[&quot;player_policies&quot;] = game.player_policies</td></tr>
-<tr class="lf-add lf-code-row" data-line="422"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">422</td><td class="lf-sign">+</td><td>            fields[&quot;games&quot;] = [game.model_copy(update={&quot;player_policies&quot;: None})]</td></tr>
-<tr class="lf-add lf-code-row" data-line="423"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">423</td><td class="lf-sign">+</td><td>        if game.end is not None and (failure := game.end.opening_failure) is not None:</td></tr>
-<tr class="lf-add lf-code-row" data-line="424"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">424</td><td class="lf-sign">+</td><td>            fields.update(</td></tr>
-<tr class="lf-add lf-code-row" data-line="425"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">425</td><td class="lf-sign">+</td><td>                operation=&quot;reset&quot;,</td></tr>
-<tr class="lf-add lf-code-row" data-line="426"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">426</td><td class="lf-sign">+</td><td>                execution_outcome=&quot;failed&quot;,</td></tr>
-<tr class="lf-add lf-code-row" data-line="427"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">427</td><td class="lf-sign">+</td><td>                error=game.end.reason,</td></tr>
-<tr class="lf-add lf-code-row" data-line="428"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">428</td><td class="lf-sign">+</td><td>                error_class=failure.error_class,</td></tr>
-<tr class="lf-add lf-code-row" data-line="429"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">429</td><td class="lf-sign">+</td><td>                traceback=failure.traceback,</td></tr>
-<tr class="lf-add lf-code-row" data-line="430"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">430</td><td class="lf-sign">+</td><td>            )</td></tr>
-<tr class="lf-add lf-code-row" data-line="431"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">431</td><td class="lf-sign">+</td><td>        return self.model_copy(update=fields)</td></tr>
-<tr class="lf-add lf-code-row" data-line="432"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">432</td><td class="lf-sign">+</td><td></td></tr>
+<div class="lf-codeblock" data-path="managym/replay.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/replay.py:464-491</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="464"><td class="lf-ln lf-ln-single">464</td><td>def replay_failure_inputs(</td></tr>
+<tr class="lf-code-row" data-line="465"><td class="lf-ln lf-ln-single">465</td><td>    evidence: GameRecord, *, statistics: bool = False</td></tr>
+<tr class="lf-code-row" data-line="466"><td class="lf-ln lf-ln-single">466</td><td>) -&gt; list[dict[str, object]]:</td></tr>
+<tr class="lf-code-row" data-line="467"><td class="lf-ln lf-ln-single">467</td><td>    &quot;&quot;&quot;Replay only retained inputs. The CLI supplies the process wall-time bound.&quot;&quot;&quot;</td></tr>
+<tr class="lf-code-row" data-line="468"><td class="lf-ln lf-ln-single">468</td><td>    boundary = evidence.boundary</td></tr>
+<tr class="lf-code-row" data-line="469"><td class="lf-ln lf-ln-single">469</td><td>    if boundary is None:</td></tr>
+<tr class="lf-code-row" data-line="470"><td class="lf-ln lf-ln-single">470</td><td>        return [</td></tr>
+<tr class="lf-code-row" data-line="471"><td class="lf-ln lf-ln-single">471</td><td>            _replay_game_inputs(evidence, game, statistics=statistics)</td></tr>
+<tr class="lf-code-row" data-line="472"><td class="lf-ln lf-ln-single">472</td><td>            for game in evidence.games</td></tr>
+<tr class="lf-code-row" data-line="473"><td class="lf-ln lf-ln-single">473</td><td>        ]</td></tr>
+<tr class="lf-code-row" data-line="474"><td class="lf-ln lf-ln-single">474</td><td>    retained = evidence.model_copy(deep=True)</td></tr>
+<tr class="lf-code-row" data-line="475"><td class="lf-ln lf-ln-single">475</td><td>    # Journal reset inputs describe the prior game, not the proposed new root.</td></tr>
+<tr class="lf-code-row" data-line="476"><td class="lf-ln lf-ln-single">476</td><td>    # Only an active step row with its exact pre-action frame binds an attempt.</td></tr>
+<tr class="lf-code-row" data-line="477"><td class="lf-ln lf-ln-single">477</td><td>    retained.operation = &quot;step&quot;</td></tr>
+<tr class="lf-code-row" data-line="478"><td class="lf-ln lf-ln-single">478</td><td>    coordinates = {</td></tr>
+<tr class="lf-code-row" data-line="479"><td class="lf-ln lf-ln-single">479</td><td>        &quot;boundary_operation&quot;: boundary.operation,</td></tr>
+<tr class="lf-code-row" data-line="480"><td class="lf-ln lf-ln-single">480</td><td>        &quot;boundary_phase&quot;: boundary.phase,</td></tr>
+<tr class="lf-code-row" data-line="481"><td class="lf-ln lf-ln-single">481</td><td>        &quot;native_returned&quot;: boundary.returned,</td></tr>
+<tr class="lf-code-row" data-line="482"><td class="lf-ln lf-ln-single">482</td><td>        &quot;setup_known&quot;: boundary.setup_known,</td></tr>
+<tr class="lf-code-row" data-line="483"><td class="lf-ln lf-ln-single">483</td><td>    }</td></tr>
+<tr class="lf-code-row" data-line="484"><td class="lf-ln lf-ln-single">484</td><td>    results: list[dict[str, object]] = []</td></tr>
+<tr class="lf-code-row" data-line="485"><td class="lf-ln lf-ln-single">485</td><td>    for index, game in enumerate(retained.games):</td></tr>
+<tr class="lf-code-row" data-line="486"><td class="lf-ln lf-ln-single">486</td><td>        if game.failure is not None or evidence.failed_opening(game):</td></tr>
+<tr class="lf-code-row" data-line="487"><td class="lf-ln lf-ln-single">487</td><td>            result = _replay_game_inputs(evidence, game, statistics=statistics)</td></tr>
+<tr class="lf-code-row" data-line="488"><td class="lf-ln lf-ln-single">488</td><td>            results.append({**result, **coordinates})</td></tr>
+<tr class="lf-code-row" data-line="489"><td class="lf-ln lf-ln-single">489</td><td>            continue</td></tr>
+<tr class="lf-code-row" data-line="490"><td class="lf-ln lf-ln-single">490</td><td>        bound_step = (</td></tr>
+<tr class="lf-code-row" data-line="491"><td class="lf-ln lf-ln-single">491</td><td>            boundary.phase == &quot;executing&quot;</td></tr>
 </tbody></table></div></div>
-<div class="lf-codeblock" data-path="managym/replay.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/replay.py:776-815</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="776"><td class="lf-ln lf-ln-single">776</td><td>    try:</td></tr>
-<tr class="lf-code-row" data-line="777"><td class="lf-ln lf-ln-single">777</td><td>        records = read_records(args.path)</td></tr>
-<tr class="lf-code-row" data-line="778"><td class="lf-ln lf-ln-single">778</td><td>        evidence = next(records)</td></tr>
-<tr class="lf-code-row" data-line="779"><td class="lf-ln lf-ln-single">779</td><td>    except StopIteration:</td></tr>
-<tr class="lf-code-row" data-line="780"><td class="lf-ln lf-ln-single">780</td><td>        if not args.path.is_dir():</td></tr>
-<tr class="lf-code-row" data-line="781"><td class="lf-ln lf-ln-single">781</td><td>            parser.error(f&quot;cannot read journal {args.path}: no game records&quot;)</td></tr>
-<tr class="lf-code-row" data-line="782"><td class="lf-ln lf-ln-single">782</td><td>        parser.error(</td></tr>
-<tr class="lf-code-row" data-line="783"><td class="lf-ln lf-ln-single">783</td><td>            f&quot;no game records in {args.path}: a directory is read for its .jsonl&quot;</td></tr>
-<tr class="lf-code-row" data-line="784"><td class="lf-ln lf-ln-single">784</td><td>            &quot; records; pass a snapshot replay .json file directly&quot;</td></tr>
-<tr class="lf-code-row" data-line="785"><td class="lf-ln lf-ln-single">785</td><td>        )</td></tr>
-<tr class="lf-code-row" data-line="786"><td class="lf-ln lf-ln-single">786</td><td>    except (OSError, ValueError) as error:</td></tr>
-<tr class="lf-code-row" data-line="787"><td class="lf-ln lf-ln-single">787</td><td>        parser.error(f&quot;cannot read journal {args.path}: {error}&quot;)</td></tr>
-<tr class="lf-code-row" data-line="788"><td class="lf-ln lf-ln-single">788</td><td>    if not evidence.needs_reproduction:</td></tr>
-<tr class="lf-code-row" data-line="789"><td class="lf-ln lf-ln-single">789</td><td>        results = []</td></tr>
-<tr class="lf-code-row" data-line="790"><td class="lf-ln lf-ln-single">790</td><td>        for record in chain((evidence,), records):</td></tr>
-<tr class="lf-code-row" data-line="791"><td class="lf-ln lf-ln-single">791</td><td>            try:</td></tr>
-<tr class="lf-code-row" data-line="792"><td class="lf-ln lf-ln-single">792</td><td>                replay = walk(record, capture_cards=args.statistics)</td></tr>
-<tr class="lf-code-row" data-line="793"><td class="lf-ln lf-ln-single">793</td><td>            except ValueError as error:</td></tr>
-<tr class="lf-code-row" data-line="794"><td class="lf-ln lf-ln-single">794</td><td>                parser.error(f&quot;cannot replay {args.path}: {error}&quot;)</td></tr>
-<tr class="lf-code-row" data-line="795"><td class="lf-ln lf-ln-single">795</td><td>            for _ in replay:</td></tr>
-<tr class="lf-code-row" data-line="796"><td class="lf-ln lf-ln-single">796</td><td>                pass</td></tr>
-<tr class="lf-code-row" data-line="797"><td class="lf-ln lf-ln-single">797</td><td>            assert replay.stop is not None</td></tr>
-<tr class="lf-code-row" data-line="798"><td class="lf-ln lf-ln-single">798</td><td>            result = {**asdict(replay.stop), &quot;build_differs&quot;: replay.build_differs}</td></tr>
-<tr class="lf-code-row" data-line="799"><td class="lf-ln lf-ln-single">799</td><td>            if args.statistics:</td></tr>
-<tr class="lf-code-row" data-line="800"><td class="lf-ln lf-ln-single">800</td><td>                result[&quot;statistics&quot;] = {</td></tr>
-<tr class="lf-code-row" data-line="801"><td class="lf-ln lf-ln-single">801</td><td>                    &quot;terminal&quot;: replay.stop.status == &quot;complete&quot;,</td></tr>
-<tr class="lf-code-row" data-line="802"><td class="lf-ln lf-ln-single">802</td><td>                    &quot;winner&quot;: replay.stop.winner,</td></tr>
-<tr class="lf-code-row" data-line="803"><td class="lf-ln lf-ln-single">803</td><td>                    &quot;cards&quot;: [</td></tr>
-<tr class="lf-code-row" data-line="804"><td class="lf-ln lf-ln-single">804</td><td>                        row.model_dump(mode=&quot;json&quot;)</td></tr>
-<tr class="lf-code-row" data-line="805"><td class="lf-ln lf-ln-single">805</td><td>                        for row in reduce_cards(replay.cards())</td></tr>
-<tr class="lf-code-row" data-line="806"><td class="lf-ln lf-ln-single">806</td><td>                    ],</td></tr>
-<tr class="lf-code-row" data-line="807"><td class="lf-ln lf-ln-single">807</td><td>                }</td></tr>
-<tr class="lf-code-row" data-line="808"><td class="lf-ln lf-ln-single">808</td><td>            results.append(result)</td></tr>
-<tr class="lf-code-row" data-line="809"><td class="lf-ln lf-ln-single">809</td><td>        print(json.dumps({&quot;status&quot;: &quot;replayed&quot;, &quot;results&quot;: results}))</td></tr>
-<tr class="lf-code-row" data-line="810"><td class="lf-ln lf-ln-single">810</td><td>        return</td></tr>
-<tr class="lf-code-row" data-line="811"><td class="lf-ln lf-ln-single">811</td><td>    # Reproduction needs every stream and its original batch boundary.</td></tr>
-<tr class="lf-code-row" data-line="812"><td class="lf-ln lf-ln-single">812</td><td>    evidence = read_record(args.path)</td></tr>
-<tr class="lf-code-row" data-line="813"><td class="lf-ln lf-ln-single">813</td><td>    try:</td></tr>
-<tr class="lf-code-row" data-line="814"><td class="lf-ln lf-ln-single">814</td><td>        require_replay_runtime(</td></tr>
-<tr class="lf-code-row" data-line="815"><td class="lf-ln lf-ln-single">815</td><td>            evidence.identities,</td></tr>
+<div class="lf-codeblock" data-path="managym/replay.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/replay.py:570-590</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -513,11 +570,15 @@ def _replay_game_inputs(</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="513" data-line="570"><td class="lf-ln lf-ln-old">513</td><td class="lf-ln lf-ln-new">570</td><td class="lf-sign"> </td><td>    evidence: GameRecord, game: GameInputs, *, statistics: bool = False</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="514" data-line="571"><td class="lf-ln lf-ln-old">514</td><td class="lf-ln lf-ln-new">571</td><td class="lf-sign"> </td><td>) -&gt; dict[str, object]:</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="515" data-line="572"><td class="lf-ln lf-ln-old">515</td><td class="lf-ln lf-ln-new">572</td><td class="lf-sign"> </td><td>    &quot;&quot;&quot;Reconstruct one stream; keep binding divergence out of native failures.&quot;&quot;&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="573"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">573</td><td class="lf-sign">+</td><td>    if game.failure is not None:</td></tr>
+<tr class="lf-add lf-code-row" data-line="574"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">574</td><td class="lf-sign">+</td><td>        evidence = evidence.for_game(game)</td></tr>
+<tr class="lf-add lf-code-row" data-line="575"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">575</td><td class="lf-sign">+</td><td>        [game] = evidence.games</td></tr>
+<tr class="lf-add lf-code-row" data-line="576"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">576</td><td class="lf-sign">+</td><td>    failed_opening = evidence.failed_opening(game)</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="516" data-line="577"><td class="lf-ln lf-ln-old">516</td><td class="lf-ln lf-ln-new">577</td><td class="lf-sign"> </td><td>    # A strict vector exception records the batch outcome, without proving</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="517" data-line="578"><td class="lf-ln lf-ln-old">517</td><td class="lf-ln lf-ln-new">578</td><td class="lf-sign"> </td><td>    # which individual streams advanced. Replay cannot fill in that history.</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="518" data-line="579"><td class="lf-ln lf-ln-old">518</td><td class="lf-ln lf-ln-new">579</td><td class="lf-sign"> </td><td>    agreement = ReplayAgreement(</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="519" data-line="580"><td class="lf-ln lf-ln-old">519</td><td class="lf-ln lf-ln-new">580</td><td class="lf-sign"> </td><td>        &quot;execution_outcome_unknown&quot;</td></tr>
+<tr class="lf-add lf-code-row" data-line="581"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">581</td><td class="lf-sign">+</td><td>        if evidence.mode == &quot;vector&quot; and not failed_opening</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="521" data-line="582"><td class="lf-ln lf-ln-old">521</td><td class="lf-ln lf-ln-new">582</td><td class="lf-sign"> </td><td>        else evidence.execution_outcome</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="522" data-line="583"><td class="lf-ln lf-ln-old">522</td><td class="lf-ln lf-ln-new">583</td><td class="lf-sign"> </td><td>    )</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="523" data-line="584"><td class="lf-ln lf-ln-old">523</td><td class="lf-ln lf-ln-new">584</td><td class="lf-sign"> </td><td>    # A reset/search failure has a different boundary from a rejected game</td></tr>
 </tbody></table></div></div>
 
-<p><strong>2. Asymmetric isolated failure recording between <code>_record_roots</code>,
-<code>_step</code>, and <code>take_slot_record</code>:</strong></p>
+<p><strong>2. Pass 5's clean <code>CodeSeat</code> crash separation in
+<code>manabot/eval/vector.py</code>, plus carried rollout and Watch surfaces:</strong></p>
 
-<div class="lf-codeblock" data-path="managym/recording.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/recording.py:1614-1646</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-hunk"><td colspan="4">@@ -1552,7 +1608,42 @@ class RecordedVectorEnv(_Capture):</td></tr>
-<tr class="lf-add lf-code-row" data-line="1614"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1614</td><td class="lf-sign">+</td><td>    def take_slot_record(</td></tr>
-<tr class="lf-add lf-code-row" data-line="1615"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1615</td><td class="lf-sign">+</td><td>        self,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1616"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1616</td><td class="lf-sign">+</td><td>        slot: int,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1617"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1617</td><td class="lf-sign">+</td><td>        *,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1618"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1618</td><td class="lf-sign">+</td><td>        end: GameEnd | None = None,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1619"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1619</td><td class="lf-sign">+</td><td>        info: dict[str, Any] | None = None,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1620"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1620</td><td class="lf-sign">+</td><td>    ) -&gt; GameRecord:</td></tr>
-<tr class="lf-add lf-code-row" data-line="1621"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1621</td><td class="lf-sign">+</td><td>        &quot;&quot;&quot;Detach an in-memory game&#39;s record before reusing its slot.</td></tr>
-<tr class="lf-add lf-code-row" data-line="1622"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1622</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="1623"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1623</td><td class="lf-sign">+</td><td>        Opening failures are already retained. A runner may supply another</td></tr>
-<tr class="lf-add lf-code-row" data-line="1624"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1624</td><td class="lf-sign">+</td><td>        ending or error details from a failed decision.</td></tr>
-<tr class="lf-add lf-code-row" data-line="1625"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1625</td><td class="lf-sign">+</td><td>        &quot;&quot;&quot;</td></tr>
-<tr class="lf-add lf-code-row" data-line="1626"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1626</td><td class="lf-sign">+</td><td>        game = self.games[slot]</td></tr>
-<tr class="lf-add lf-code-row" data-line="1627"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1627</td><td class="lf-sign">+</td><td>        record = self._record_of(game)</td></tr>
-<tr class="lf-add lf-code-row" data-line="1628"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1628</td><td class="lf-sign">+</td><td>        if record.operation != &quot;reset&quot;:</td></tr>
-<tr class="lf-add lf-code-row" data-line="1629"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1629</td><td class="lf-sign">+</td><td>            if end is not None:</td></tr>
-<tr class="lf-add lf-code-row" data-line="1630"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1630</td><td class="lf-sign">+</td><td>                record.games[0].end = end</td></tr>
-<tr class="lf-add lf-code-row" data-line="1631"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1631</td><td class="lf-sign">+</td><td>            if info is not None and info.get(&quot;game_error&quot;):</td></tr>
-<tr class="lf-add lf-code-row" data-line="1632"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1632</td><td class="lf-sign">+</td><td>                record.execution_outcome = &quot;failed&quot;</td></tr>
-<tr class="lf-add lf-code-row" data-line="1633"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1633</td><td class="lf-sign">+</td><td>                record.error_class = str(info.get(&quot;game_error_class&quot;, &quot;AgentError&quot;))</td></tr>
-<tr class="lf-add lf-code-row" data-line="1634"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1634</td><td class="lf-sign">+</td><td>                record.error = str(info[&quot;game_error&quot;])</td></tr>
-<tr class="lf-add lf-code-row" data-line="1635"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1635</td><td class="lf-sign">+</td><td>                if info.get(&quot;game_error_trace&quot;):</td></tr>
-<tr class="lf-add lf-code-row" data-line="1636"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1636</td><td class="lf-sign">+</td><td>                    record.traceback = str(info[&quot;game_error_trace&quot;])</td></tr>
-<tr class="lf-add lf-code-row" data-line="1637"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1637</td><td class="lf-sign">+</td><td>            else:</td></tr>
-<tr class="lf-add lf-code-row" data-line="1638"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1638</td><td class="lf-sign">+</td><td>                record.execution_outcome = &quot;last_command_succeeded&quot;</td></tr>
-<tr class="lf-add lf-code-row" data-line="1639"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1639</td><td class="lf-sign">+</td><td>        self.games[slot] = GameInputs(</td></tr>
-<tr class="lf-add lf-code-row" data-line="1640"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1640</td><td class="lf-sign">+</td><td>            stream=game.stream,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1641"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1641</td><td class="lf-sign">+</td><td>            seed=game.seed,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1642"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1642</td><td class="lf-sign">+</td><td>            players=[],</td></tr>
-<tr class="lf-add lf-code-row" data-line="1643"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1643</td><td class="lf-sign">+</td><td>            decision_memory=game.decision_memory,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1644"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1644</td><td class="lf-sign">+</td><td>            decision_memory_include_own=game.decision_memory_include_own,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1645"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1645</td><td class="lf-sign">+</td><td>        )</td></tr>
-<tr class="lf-add lf-code-row" data-line="1646"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1646</td><td class="lf-sign">+</td><td>        return record</td></tr>
-<tr class="lf-hunk"><td colspan="4">@@ -1633,12 +1724,21 @@ class RecordedVectorEnv(_Capture):</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1633" data-line="1724"><td class="lf-ln lf-ln-old">1633</td><td class="lf-ln lf-ln-new">1724</td><td class="lf-sign"> </td><td>        self.reset_each_into_buffers([players for _ in self.games])</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1634" data-line="1725"><td class="lf-ln lf-ln-old">1634</td><td class="lf-ln lf-ln-new">1725</td><td class="lf-sign"> </td><td></td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1635" data-line="1726"><td class="lf-ln lf-ln-old">1635</td><td class="lf-ln lf-ln-new">1726</td><td class="lf-sign"> </td><td>    def reset_each_into_buffers(</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="1636"><td class="lf-ln lf-ln-old">1636</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>        self, players: list[managym.GameSetup], *, seeds: list[int] | None = None</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1637" data-line="1733"><td class="lf-ln lf-ln-old">1637</td><td class="lf-ln lf-ln-new">1733</td><td class="lf-sign"> </td><td>    ) -&gt; None:</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1638" data-line="1734"><td class="lf-ln lf-ln-old">1638</td><td class="lf-ln lf-ln-new">1734</td><td class="lf-sign"> </td><td>        self._reset_each(</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1639" data-line="1735"><td class="lf-ln lf-ln-old">1639</td><td class="lf-ln lf-ln-new">1735</td><td class="lf-sign"> </td><td>            players,</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1640" data-line="1736"><td class="lf-ln lf-ln-old">1640</td><td class="lf-ln lf-ln-new">1736</td><td class="lf-sign"> </td><td>            self.next_seeds if seeds is None else seeds,</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="1641"><td class="lf-ln lf-ln-old">1641</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>            lambda: self.native.reset_each_into_buffers(players, seeds=seeds),</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1642" data-line="1742"><td class="lf-ln lf-ln-old">1642</td><td class="lf-ln lf-ln-new">1742</td><td class="lf-sign"> </td><td>        )</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1643" data-line="1743"><td class="lf-ln lf-ln-old">1643</td><td class="lf-ln lf-ln-new">1743</td><td class="lf-sign"> </td><td></td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1644" data-line="1744"><td class="lf-ln lf-ln-old">1644</td><td class="lf-ln lf-ln-new">1744</td><td class="lf-sign"> </td><td>    def reset_all(self, players: managym.GameSetup) -&gt; Any:</td></tr>
-</tbody></table></div></div>
-<div class="lf-codeblock" data-path="managym/recording.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/recording.py:1880-1901</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-hunk"><td colspan="4">@@ -1757,6 +1878,19 @@ class RecordedVectorEnv(_Capture):</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1759" data-line="1880"><td class="lf-ln lf-ln-old">1759</td><td class="lf-ln lf-ln-new">1880</td><td class="lf-sign"> </td><td>            game.players = _retain_players(players[index], seeds[index])</td></tr>
-<tr class="lf-add lf-code-row" data-line="1881"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1881</td><td class="lf-sign">+</td><td>            if infos and (error := infos[index].get(&quot;game_error&quot;)):</td></tr>
-<tr class="lf-add lf-code-row" data-line="1882"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1882</td><td class="lf-sign">+</td><td>                info = infos[index]</td></tr>
-<tr class="lf-add lf-code-row" data-line="1883"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1883</td><td class="lf-sign">+</td><td>                end = GameEnd(</td></tr>
-<tr class="lf-add lf-code-row" data-line="1884"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1884</td><td class="lf-sign">+</td><td>                    status=&quot;failed&quot;,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1885"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1885</td><td class="lf-sign">+</td><td>                    reason=error,</td></tr>
-<tr class="lf-add lf-code-row" data-line="1886"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1886</td><td class="lf-sign">+</td><td>                    opening_failure=OpeningFailure(</td></tr>
-<tr class="lf-add lf-code-row" data-line="1887"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1887</td><td class="lf-sign">+</td><td>                        error_class=info[&quot;game_error_class&quot;],</td></tr>
-<tr class="lf-add lf-code-row" data-line="1888"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1888</td><td class="lf-sign">+</td><td>                        traceback=info.get(&quot;game_error_trace&quot;),</td></tr>
-<tr class="lf-add lf-code-row" data-line="1889"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1889</td><td class="lf-sign">+</td><td>                    ),</td></tr>
-<tr class="lf-add lf-code-row" data-line="1890"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1890</td><td class="lf-sign">+</td><td>                )</td></tr>
-<tr class="lf-add lf-code-row" data-line="1891"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1891</td><td class="lf-sign">+</td><td>                self._write_game(game, end)</td></tr>
-<tr class="lf-add lf-code-row" data-line="1892"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1892</td><td class="lf-sign">+</td><td>                game.end = end</td></tr>
-<tr class="lf-add lf-code-row" data-line="1893"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">1893</td><td class="lf-sign">+</td><td>                continue</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1760" data-line="1894"><td class="lf-ln lf-ln-old">1760</td><td class="lf-ln lf-ln-new">1894</td><td class="lf-sign"> </td><td>            if self._reductions and self._reduction.error is None:</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1761" data-line="1895"><td class="lf-ln lf-ln-old">1761</td><td class="lf-ln lf-ln-new">1895</td><td class="lf-sign"> </td><td>                self._analysis_indices[index] = 0</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1762" data-line="1896"><td class="lf-ln lf-ln-old">1762</td><td class="lf-ln lf-ln-new">1896</td><td class="lf-sign"> </td><td>                self._analysis_active[index] = True</td></tr>
-<tr class="lf-hunk"><td colspan="4">@@ -1876,7 +2026,7 @@ class RecordedVectorEnv(_Capture):</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1880" data-line="2030"><td class="lf-ln lf-ln-old">1880</td><td class="lf-ln lf-ln-new">2030</td><td class="lf-sign"> </td><td>            else []</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1881" data-line="2031"><td class="lf-ln lf-ln-old">1881</td><td class="lf-ln lf-ln-new">2031</td><td class="lf-sign"> </td><td>        )</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1882" data-line="2032"><td class="lf-ln lf-ln-old">1882</td><td class="lf-ln lf-ln-new">2032</td><td class="lf-sign"> </td><td>        attempted = []</td></tr>
-<tr class="lf-hunk"><td colspan="4">@@ -1893,12 +2043,7 @@ class RecordedVectorEnv(_Capture):</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1893" data-line="2043"><td class="lf-ln lf-ln-old">1893</td><td class="lf-ln lf-ln-new">2043</td><td class="lf-sign"> </td><td>                    digest = digests[index]</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1894" data-line="2044"><td class="lf-ln lf-ln-old">1894</td><td class="lf-ln lf-ln-new">2044</td><td class="lf-sign"> </td><td>                    assert digest is not None</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1895" data-line="2045"><td class="lf-ln lf-ln-old">1895</td><td class="lf-ln lf-ln-new">2045</td><td class="lf-sign"> </td><td>                    game.digests.append(digest)</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="1896"><td class="lf-ln lf-ln-old">1896</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                    annotation = annotations[index] if annotations is not None else None</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="1897"><td class="lf-ln lf-ln-old">1897</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                    retained = (</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="1898"><td class="lf-ln lf-ln-old">1898</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                        None</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="1899"><td class="lf-ln lf-ln-old">1899</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                        if annotation is None</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="1900"><td class="lf-ln lf-ln-old">1900</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                        else DecisionAnnotation.model_validate(annotation)</td></tr>
-<tr class="lf-del lf-code-row" data-old-line="1901"><td class="lf-ln lf-ln-old">1901</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                    )</td></tr>
-</tbody></table></div></div>
-<div class="lf-codeblock" data-path="managym/recording.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/recording.py:2107-2122</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-hunk"><td colspan="4">@@ -1963,6 +2108,8 @@ class RecordedVectorEnv(_Capture):</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1963" data-line="2108"><td class="lf-ln lf-ln-old">1963</td><td class="lf-ln lf-ln-new">2108</td><td class="lf-sign"> </td><td>            if not on:</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1964" data-line="2109"><td class="lf-ln lf-ln-old">1964</td><td class="lf-ln lf-ln-new">2109</td><td class="lf-sign"> </td><td>                continue</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1965" data-line="2110"><td class="lf-ln lf-ln-old">1965</td><td class="lf-ln lf-ln-new">2110</td><td class="lf-sign"> </td><td>            if infos and infos[index].get(&quot;game_error&quot;):</td></tr>
-<tr class="lf-add lf-code-row" data-line="2111"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">2111</td><td class="lf-sign">+</td><td>                if not needs_frames:</td></tr>
-<tr class="lf-add lf-code-row" data-line="2112"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">2112</td><td class="lf-sign">+</td><td>                    game.frame = infos[index].get(&quot;game_error_frame&quot;)</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1966" data-line="2113"><td class="lf-ln lf-ln-old">1966</td><td class="lf-ln lf-ln-new">2113</td><td class="lf-sign"> </td><td>                if self._reductions:</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1967" data-line="2114"><td class="lf-ln lf-ln-old">1967</td><td class="lf-ln lf-ln-new">2114</td><td class="lf-sign"> </td><td>                    self._analysis_active[index] = False</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="1968" data-line="2115"><td class="lf-ln lf-ln-old">1968</td><td class="lf-ln lf-ln-new">2115</td><td class="lf-sign"> </td><td>                self._write_game(</td></tr>
-</tbody></table></div></div>
-
-<p><strong>3. <code>CodeSeat</code> crashes in <code>vector.py</code> stamp native root-failure
-fields onto <code>GameRecord</code>, diverging from scalar <code>execute_game</code>:</strong></p>
-
-<div class="lf-codeblock" data-path="manabot/eval/vector.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/eval/vector.py:818-842</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,896 @@</td></tr>
-<tr class="lf-add lf-code-row" data-line="818"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">818</td><td class="lf-sign">+</td><td>            if round_result.code_errors:</td></tr>
-<tr class="lf-add lf-code-row" data-line="819"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">819</td><td class="lf-sign">+</td><td>                actors = vector.current_agent_indices()</td></tr>
-<tr class="lf-add lf-code-row" data-line="820"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">820</td><td class="lf-sign">+</td><td>                digests = vector.state_digests(</td></tr>
-<tr class="lf-add lf-code-row" data-line="821"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">821</td><td class="lf-sign">+</td><td>                    [i in round_result.code_errors for i in range(len(slot_states))]</td></tr>
-<tr class="lf-add lf-code-row" data-line="822"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">822</td><td class="lf-sign">+</td><td>                )</td></tr>
-<tr class="lf-add lf-code-row" data-line="823"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">823</td><td class="lf-sign">+</td><td>                for slot, error in round_result.code_errors.items():</td></tr>
-<tr class="lf-add lf-code-row" data-line="824"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">824</td><td class="lf-sign">+</td><td>                    slot_state = slot_states[slot]</td></tr>
-<tr class="lf-add lf-code-row" data-line="825"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">825</td><td class="lf-sign">+</td><td>                    assert slot_state is not None</td></tr>
-<tr class="lf-add lf-code-row" data-line="826"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">826</td><td class="lf-sign">+</td><td>                    complete_failed_leg(</td></tr>
-<tr class="lf-add lf-code-row" data-line="827"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">827</td><td class="lf-sign">+</td><td>                        slot_state,</td></tr>
-<tr class="lf-add lf-code-row" data-line="828"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">828</td><td class="lf-sign">+</td><td>                        {</td></tr>
-<tr class="lf-add lf-code-row" data-line="829"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">829</td><td class="lf-sign">+</td><td>                            &quot;game_error&quot;: str(error),</td></tr>
-<tr class="lf-add lf-code-row" data-line="830"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">830</td><td class="lf-sign">+</td><td>                            &quot;game_error_class&quot;: type(error).__name__,</td></tr>
-<tr class="lf-add lf-code-row" data-line="831"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">831</td><td class="lf-sign">+</td><td>                            &quot;game_error_trace&quot;: &quot;&quot;.join(</td></tr>
-<tr class="lf-add lf-code-row" data-line="832"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">832</td><td class="lf-sign">+</td><td>                                traceback.format_exception(error)</td></tr>
-<tr class="lf-add lf-code-row" data-line="833"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">833</td><td class="lf-sign">+</td><td>                            ),</td></tr>
-<tr class="lf-add lf-code-row" data-line="834"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">834</td><td class="lf-sign">+</td><td>                            &quot;game_error_seat&quot;: actors[slot],</td></tr>
-<tr class="lf-add lf-code-row" data-line="835"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">835</td><td class="lf-sign">+</td><td>                        },</td></tr>
-<tr class="lf-add lf-code-row" data-line="836"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">836</td><td class="lf-sign">+</td><td>                        end=GameEnd(</td></tr>
-<tr class="lf-add lf-code-row" data-line="837"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">837</td><td class="lf-sign">+</td><td>                            status=&quot;failed&quot;, reason=str(error), digest=digests[slot]</td></tr>
-<tr class="lf-add lf-code-row" data-line="838"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">838</td><td class="lf-sign">+</td><td>                        ),</td></tr>
-<tr class="lf-add lf-code-row" data-line="839"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">839</td><td class="lf-sign">+</td><td>                    )</td></tr>
-<tr class="lf-add lf-code-row" data-line="840"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">840</td><td class="lf-sign">+</td><td>            if not round_result.players:</td></tr>
-<tr class="lf-add lf-code-row" data-line="841"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">841</td><td class="lf-sign">+</td><td>                continue</td></tr>
-<tr class="lf-add lf-code-row" data-line="842"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">842</td><td class="lf-sign">+</td><td></td></tr>
-</tbody></table></div></div>
-<div class="lf-codeblock" data-path="tests/eval/test_evaluation_match.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">tests/eval/test_evaluation_match.py:620-633</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-code-row" data-line="620"><td class="lf-ln lf-ln-single">620</td><td>    record = GameRecord.model_validate(result[&quot;record&quot;])</td></tr>
-<tr class="lf-code-row" data-line="621"><td class="lf-ln lf-ln-single">621</td><td>    assert record.error_class is None and record.error is None</td></tr>
-<tr class="lf-code-row" data-line="622"><td class="lf-ln lf-ln-single">622</td><td>    assert record.execution_outcome == &quot;last_command_succeeded&quot;</td></tr>
-<tr class="lf-code-row" data-line="623"><td class="lf-ln lf-ln-single">623</td><td>    assert not record.needs_reproduction</td></tr>
-<tr class="lf-code-row" data-line="624"><td class="lf-ln lf-ln-single">624</td><td>    assert record.context[&quot;evaluation&quot;][&quot;termination_reason&quot;] == &quot;crash&quot;</td></tr>
-<tr class="lf-code-row" data-line="625"><td class="lf-ln lf-ln-single">625</td><td>    assert &quot;private policy detail&quot; in record.context[&quot;evaluation&quot;][&quot;failure&quot;]</td></tr>
-<tr class="lf-code-row" data-line="626"><td class="lf-ln lf-ln-single">626</td><td>    end = record.games[0].end</td></tr>
-<tr class="lf-code-row" data-line="627"><td class="lf-ln lf-ln-single">627</td><td>    assert end is not None and end.status == &quot;interrupted&quot; and end.reason == &quot;crash&quot;</td></tr>
-<tr class="lf-code-row" data-line="628"><td class="lf-ln lf-ln-single">628</td><td>    assert &quot;terminated&quot; not in record.context[&quot;evaluation&quot;]</td></tr>
-<tr class="lf-code-row" data-line="629"><td class="lf-ln lf-ln-single">629</td><td>    assert &quot;winner&quot; not in record.context[&quot;evaluation&quot;]</td></tr>
-<tr class="lf-code-row" data-line="630"><td class="lf-ln lf-ln-single">630</td><td>    replay = walk(record)</td></tr>
-<tr class="lf-code-row" data-line="631"><td class="lf-ln lf-ln-single">631</td><td>    assert list(replay) == []</td></tr>
-<tr class="lf-code-row" data-line="632"><td class="lf-ln lf-ln-single">632</td><td>    assert replay.stop is not None and replay.stop.status == &quot;interrupted&quot;</td></tr>
-<tr class="lf-code-row" data-line="633"><td class="lf-ln lf-ln-single">633</td><td></td></tr>
-</tbody></table></div></div>
-
-<p><strong>4. Enforced <code>native-v3</code> version check vs. unversioned
-<code>tla_trophies.py</code> (including new non-float32 precision jobs) and deferred Watch
-refusal:</strong></p>
-
-<div class="lf-codeblock" data-path="manabot/eval/agents.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/eval/agents.py:258-294</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
-<tr class="lf-hunk"><td colspan="4">@@ -107,24 +252,21 @@ def blank_decision_memory(player: CheckpointPlayer) -&gt; bool:</td></tr>
-<tr class="lf-add lf-code-row" data-line="258"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">258</td><td class="lf-sign">+</td><td>def require_heuristic_version(player: Code) -&gt; None:</td></tr>
-<tr class="lf-add lf-code-row" data-line="259"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">259</td><td class="lf-sign">+</td><td>    &quot;&quot;&quot;Bind the built-in heuristic&#39;s behavior to the Etude player key.&quot;&quot;&quot;</td></tr>
-<tr class="lf-add lf-code-row" data-line="260"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">260</td><td class="lf-sign">+</td><td>    version = player.config.get(&quot;version&quot;)</td></tr>
-<tr class="lf-add lf-code-row" data-line="261"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">261</td><td class="lf-sign">+</td><td>    if version != HEURISTIC_VERSION:</td></tr>
-<tr class="lf-add lf-code-row" data-line="262"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">262</td><td class="lf-sign">+</td><td>        raise ValueError(</td></tr>
-<tr class="lf-add lf-code-row" data-line="263"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">263</td><td class="lf-sign">+</td><td>            f&quot;built-in heuristic requires version {HEURISTIC_VERSION!r}; &quot;</td></tr>
-<tr class="lf-add lf-code-row" data-line="264"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">264</td><td class="lf-sign">+</td><td>            f&quot;got {version!r}. Use a new tournament for the current version&quot;</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="127" data-line="265"><td class="lf-ln lf-ln-old">127</td><td class="lf-ln lf-ln-new">265</td><td class="lf-sign"> </td><td>        )</td></tr>
-<tr class="lf-add lf-code-row" data-line="266"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">266</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="267"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">267</td><td class="lf-sign">+</td><td></td></tr>
-<tr class="lf-add lf-code-row" data-line="268"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">268</td><td class="lf-sign">+</td><td>def build(player: object, leaves: Mapping[str, Forward]) -&gt; Seat:</td></tr>
-<tr class="lf-add lf-code-row" data-line="269"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">269</td><td class="lf-sign">+</td><td>    if isinstance(player, CheckpointPlayer):</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="128" data-line="270"><td class="lf-ln lf-ln-old">128</td><td class="lf-ln lf-ln-new">270</td><td class="lf-sign"> </td><td>        registration = player.config.get(&quot;registration&quot;, {})</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="129" data-line="271"><td class="lf-ln lf-ln-old">129</td><td class="lf-ln lf-ln-new">271</td><td class="lf-sign"> </td><td>        player_spec = (</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="130" data-line="272"><td class="lf-ln lf-ln-old">130</td><td class="lf-ln lf-ln-new">272</td><td class="lf-sign"> </td><td>            registration.get(&quot;player_spec&quot;, {})</td></tr>
-<tr class="lf-hunk"><td colspan="4">@@ -132,9 +274,8 @@ def build(player: object, leaves: Mapping[str, Forward]) -&gt; GamePlayer:</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="132" data-line="274"><td class="lf-ln lf-ln-old">132</td><td class="lf-ln lf-ln-new">274</td><td class="lf-sign"> </td><td>            else {}</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="133" data-line="275"><td class="lf-ln lf-ln-old">133</td><td class="lf-ln lf-ln-new">275</td><td class="lf-sign"> </td><td>        )</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="134" data-line="276"><td class="lf-ln lf-ln-old">134</td><td class="lf-ln lf-ln-new">276</td><td class="lf-sign"> </td><td>        return Sampler(</td></tr>
-<tr class="lf-add lf-code-row" data-line="277"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">277</td><td class="lf-sign">+</td><td>            checkpoint_key=player.checkpoint.key,</td></tr>
-<tr class="lf-add lf-code-row" data-line="278"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">278</td><td class="lf-sign">+</td><td>            forward=leaves[player.checkpoint.key],</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="138" data-line="279"><td class="lf-ln lf-ln-old">138</td><td class="lf-ln lf-ln-new">279</td><td class="lf-sign"> </td><td>            deterministic=bool(player_spec.get(&quot;deterministic&quot;, False)),</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="139" data-line="280"><td class="lf-ln lf-ln-old">139</td><td class="lf-ln lf-ln-new">280</td><td class="lf-sign"> </td><td>            allow_deck_repetition=bool(player_spec.get(&quot;allow_deck_repetition&quot;, False)),</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="140" data-line="281"><td class="lf-ln lf-ln-old">140</td><td class="lf-ln lf-ln-new">281</td><td class="lf-sign"> </td><td>            blank_decision_memory=blank_decision_memory(player),</td></tr>
-<tr class="lf-hunk"><td colspan="4">@@ -144,37 +285,99 @@ def build(player: object, leaves: Mapping[str, Forward]) -&gt; GamePlayer:</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="144" data-line="285"><td class="lf-ln lf-ln-old">144</td><td class="lf-ln lf-ln-new">285</td><td class="lf-sign"> </td><td>            registration = PlayerRegistration.model_validate(</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="145" data-line="286"><td class="lf-ln lf-ln-old">145</td><td class="lf-ln lf-ln-new">286</td><td class="lf-sign"> </td><td>                player.config[&quot;registration&quot;]</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="146" data-line="287"><td class="lf-ln lf-ln-old">146</td><td class="lf-ln lf-ln-new">287</td><td class="lf-sign"> </td><td>            )</td></tr>
-<tr class="lf-add lf-code-row" data-line="288"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">288</td><td class="lf-sign">+</td><td>            return CodeSeat(lambda seed: build_code_player(registration, seed=seed))</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="148" data-line="289"><td class="lf-ln lf-ln-old">148</td><td class="lf-ln lf-ln-new">289</td><td class="lf-sign"> </td><td>        if player.name != &quot;heuristic&quot;:</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="149" data-line="290"><td class="lf-ln lf-ln-old">149</td><td class="lf-ln lf-ln-new">290</td><td class="lf-sign"> </td><td>            raise TypeError(f&quot;Code player {player.name} has no Manabot builder&quot;)</td></tr>
-<tr class="lf-add lf-code-row" data-line="291"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">291</td><td class="lf-sign">+</td><td>        require_heuristic_version(player)</td></tr>
-<tr class="lf-add lf-code-row" data-line="292"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">292</td><td class="lf-sign">+</td><td>        return NativeHeuristic(player.config.get(&quot;max_actions&quot;))</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="153" data-line="293"><td class="lf-ln lf-ln-old">153</td><td class="lf-ln lf-ln-new">293</td><td class="lf-sign"> </td><td>    raise TypeError(f&quot;unsupported Manabot player {type(player).__name__}&quot;)</td></tr>
-<tr class="lf-ctx lf-code-row" data-old-line="154" data-line="294"><td class="lf-ln lf-ln-old">154</td><td class="lf-ln lf-ln-new">294</td><td class="lf-sign"> </td><td></td></tr>
+<div class="lf-codeblock" data-path="manabot/eval/vector.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/eval/vector.py:815-839</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -732,8 +812,31 @@ async def play_pairings(</td></tr>
+<tr class="lf-add lf-code-row" data-line="815"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">815</td><td class="lf-sign">+</td><td>            if round_result.code_errors:</td></tr>
+<tr class="lf-add lf-code-row" data-line="816"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">816</td><td class="lf-sign">+</td><td>                actors = vector.current_agent_indices()</td></tr>
+<tr class="lf-add lf-code-row" data-line="817"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">817</td><td class="lf-sign">+</td><td>                digests = vector.state_digests(</td></tr>
+<tr class="lf-add lf-code-row" data-line="818"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">818</td><td class="lf-sign">+</td><td>                    [i in round_result.code_errors for i in range(len(slot_states))]</td></tr>
+<tr class="lf-add lf-code-row" data-line="819"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">819</td><td class="lf-sign">+</td><td>                )</td></tr>
+<tr class="lf-add lf-code-row" data-line="820"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">820</td><td class="lf-sign">+</td><td>                for slot, error in round_result.code_errors.items():</td></tr>
+<tr class="lf-add lf-code-row" data-line="821"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">821</td><td class="lf-sign">+</td><td>                    slot_state = slot_states[slot]</td></tr>
+<tr class="lf-add lf-code-row" data-line="822"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">822</td><td class="lf-sign">+</td><td>                    assert slot_state is not None</td></tr>
+<tr class="lf-add lf-code-row" data-line="823"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">823</td><td class="lf-sign">+</td><td>                    game = slot_state.leg.game</td></tr>
+<tr class="lf-add lf-code-row" data-line="824"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">824</td><td class="lf-sign">+</td><td>                    game[&quot;error_class&quot;] = type(error).__name__</td></tr>
+<tr class="lf-add lf-code-row" data-line="825"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">825</td><td class="lf-sign">+</td><td>                    game[&quot;failure_trace&quot;] = &quot;&quot;.join(traceback.format_exception(error))</td></tr>
+<tr class="lf-add lf-code-row" data-line="826"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">826</td><td class="lf-sign">+</td><td>                    failure_record(</td></tr>
+<tr class="lf-add lf-code-row" data-line="827"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">827</td><td class="lf-sign">+</td><td>                        game,</td></tr>
+<tr class="lf-add lf-code-row" data-line="828"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">828</td><td class="lf-sign">+</td><td>                        &quot;crash&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="829"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">829</td><td class="lf-sign">+</td><td>                        f&quot;{type(error).__name__}: {error}&quot;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="830"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">830</td><td class="lf-sign">+</td><td>                        game[&quot;seat_players&quot;][actors[slot]],</td></tr>
+<tr class="lf-add lf-code-row" data-line="831"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">831</td><td class="lf-sign">+</td><td>                    )</td></tr>
+<tr class="lf-add lf-code-row" data-line="832"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">832</td><td class="lf-sign">+</td><td>                    complete_leg(</td></tr>
+<tr class="lf-add lf-code-row" data-line="833"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">833</td><td class="lf-sign">+</td><td>                        slot_state,</td></tr>
+<tr class="lf-add lf-code-row" data-line="834"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">834</td><td class="lf-sign">+</td><td>                        end=GameEnd(</td></tr>
+<tr class="lf-add lf-code-row" data-line="835"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">835</td><td class="lf-sign">+</td><td>                            status=&quot;interrupted&quot;, reason=&quot;crash&quot;, digest=digests[slot]</td></tr>
+<tr class="lf-add lf-code-row" data-line="836"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">836</td><td class="lf-sign">+</td><td>                        ),</td></tr>
+<tr class="lf-add lf-code-row" data-line="837"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">837</td><td class="lf-sign">+</td><td>                    )</td></tr>
+<tr class="lf-add lf-code-row" data-line="838"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">838</td><td class="lf-sign">+</td><td>            if not round_result.players:</td></tr>
+<tr class="lf-add lf-code-row" data-line="839"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">839</td><td class="lf-sign">+</td><td>                continue</td></tr>
 </tbody></table></div></div>
 <div class="lf-codeblock" data-path="experiments/tla_trophies.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/tla_trophies.py:254-277</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
 <tr class="lf-code-row" data-line="254"><td class="lf-ln lf-ln-single">254</td><td>def benchmark_name(precision: EvalPrecision) -&gt; str:</td></tr>
@@ -1379,37 +1216,45 @@ refusal:</strong></p>
 
 <div class="lf-decision" data-decision-id="f1">
   <div class="lf-decision-head">
-    <span class="lf-decision-title">Fix needs_reproduction and managym.replay CLI for non-zero-slot isolated failures, and unify GameEnd failure ownership</span>
+    <span class="lf-decision-title">Finish unified GameFailure semantics in managym/replay.py (original_outcome and boundaryless healthy siblings)</span>
     <span class="lf-decision-rec">Recommended: Fix here</span>
   </div>
   <div class="lf-decision-body">
   <p><strong>What breaks:</strong></p>
   <ul>
-    <li><code>GameRecord.needs_reproduction</code> (<code>managym/recording.py:365-386</code>)
-      returns <code>False</code> for any multi-slot <code>vector.snapshot()</code> or ready journal
-      whose failing slot carries <code>GameEnd.opening_failure</code>.</li>
-    <li><code>managym/replay.py:777-810</code> inspects only <code>next(records).needs_reproduction</code>
-      (slot 0). If slot 1+ fails opening while slot 0 succeeds, <code>python -m managym.replay</code>
-      never calls <code>require_replay_runtime</code> or <code>replay_failure_inputs</code>; it
-      silently walks slot 1 to <code>interrupted</code> at index 0.</li>
-    <li><code>RecordedVectorEnv._step</code> (<code>managym/recording.py:2110-2120</code>) still
-      drops <code>game_error_class</code> and <code>game_error_trace</code> from
-      <code>games_path</code>, <code>snapshot()</code>, and <code>journal</code> on isolated step
-      failures (and skips setting <code>game.end</code> when unselected), whereas
-      <code>_record_roots</code> records <code>OpeningFailure</code> unconditionally;
-      <code>for_game()</code> also leaves <code>opening_failure</code> duplicated on single-game
-      <code>games[0].end</code>.</li>
+    <li>In <code>managym/replay.py:579-583</code>, <code>_replay_game_inputs</code> checks
+      <code>evidence.mode == "vector" and not failed_opening</code>. Replaying an isolated vector
+      step failure — via <code>replay_failure_inputs</code> on <code>vector.snapshot()</code>,
+      <code>take_slot_record()</code>, <code>games_path</code>, a journal, or
+      <code>manabot.sim.replay</code> — reports
+      <code>original_outcome: "execution_outcome_unknown"</code> even though
+      <code>game.end.status == "failed"</code> and <code>evidence.execution_outcome == "failed"</code>
+      proved that exact stream failed (whereas an isolated reset failure reports
+      <code>"failed"</code>).</li>
+    <li>In <code>managym/replay.py:468-473</code>, <code>replay_failure_inputs</code> sends every
+      stream of a <code>boundary is None</code> snapshot straight to
+      <code>_replay_game_inputs</code>. When a boundaryless <code>vector.snapshot()</code> carries a
+      per-slot <code>GameFailure</code>, healthy sibling slots report
+      <code>at_retained_failure: True</code> (contradicting the journaled <code>ready</code> path's
+      <code>False</code>), and a detached empty sibling slot (<code>players == []</code> after
+      <code>take_slot_record</code>) raises <code>ValueError</code> in <code>game.setup()</code>
+      instead of returning <code>status: "setup_unavailable"</code>.</li>
   </ul>
-  <p><strong>Fix:</strong> Include per-game isolated failures in
-  <code>GameRecord.needs_reproduction</code>, make <code>managym/replay.py:main</code> check the
-  whole snapshot/all projected records before choosing walk vs. reproduction, strip the hoisted
-  per-game failure sub-record in <code>GameRecord.for_game()</code> (matching
-  <code>player_policies</code>), and decide whether to generalize <code>OpeningFailure</code> into
-  one per-game isolated failure record used by both <code>_record_roots</code> and
-  <code>_step</code> (Q1). Add a test with the isolated failure in slot 1 through both
-  <code>snapshot().needs_reproduction</code> and <code>managym.replay</code>.</p>
+  <p><strong>Fix:</strong> In <code>_replay_game_inputs</code>, treat any stream with an observed
+  isolated failure (<code>game.end is not None and game.end.status == "failed"</code>) like scalar
+  and failed-opening records so <code>original_outcome</code> preserves
+  <code>evidence.execution_outcome</code> (<code>"failed"</code>) while strict vector batch
+  exceptions (<code>game.end is None</code>) keep <code>"execution_outcome_unknown"</code>. In
+  <code>replay_failure_inputs</code>, handle non-failing sibling streams of a boundaryless
+  per-slot-failure snapshot consistently with the <code>boundary.phase == "ready"</code> branch
+  (<code>at_retained_failure=False</code>, <code>matches_binding=None</code>,
+  <code>matches_error=None</code>, and <code>status="setup_unavailable"</code> when
+  <code>not game.players</code>). Assert both <code>original_outcome == "failed"</code> for
+  isolated step failures and <code>not healthy["at_retained_failure"]</code> for boundaryless
+  snapshots in <code>tests/env/test_record_reducers.py</code> and
+  <code>tests/eval/test_vector_eval.py</code>.</p>
 </div>
-  <div data-choice="f1" data-label="Fix needs_reproduction and managym.replay CLI for non-zero-slot isolated failures, and unify GameEnd failure ownership">
+  <div data-choice="f1" data-label="Finish unified GameFailure semantics in managym/replay.py (original_outcome and boundaryless healthy siblings)">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1418,42 +1263,6 @@ refusal:</strong></p>
 
 
 <div class="lf-decision" data-decision-id="f2">
-  <div class="lf-decision-head">
-    <span class="lf-decision-title">Stop stamping CodeSeat decision crashes as native root step failures in vector.py</span>
-    <span class="lf-decision-rec">Recommended: Fix here</span>
-  </div>
-  <div class="lf-decision-body">
-  <p><strong>What breaks:</strong> In <code>manabot/eval/vector.py:818-839</code>, a native error
-  raised inside a custom <code>CodeSeat</code>'s <code>choose_code_action</code> (for example,
-  <code>DemoSearchPlayer</code> failing inside a search rollout) is passed to
-  <code>complete_failed_leg</code> with <code>info={"game_error": ..., "game_error_class": ...}</code>
-  and <code>GameEnd(status="failed", ...)</code>. That causes <code>take_slot_record</code> to write
-  <code>execution_outcome="failed"</code>, <code>error_class="AgentError"</code>, and
-  <code>needs_reproduction=True</code> onto the root game's <code>GameRecord</code> even though no
-  pending root action exists and the root <code>Env</code> never failed. Running
-  <code>replay_failure_inputs</code> / <code>managym.replay</code> on the retained record replays
-  every committed step without error and reports <code>status: "advanced"</code>. Scalar
-  <code>execute_game</code> (<code>manabot/sim/native_game.py:432-461</code>, tested in
-  <code>tests/eval/test_evaluation_match.py:621-627</code>) explicitly keeps
-  <code>record.execution_outcome == "last_command_succeeded"</code>,
-  <code>record.needs_reproduction == False</code>, and
-  <code>GameEnd(status="interrupted", reason="crash")</code> for player-choice crashes.</p>
-  <p><strong>Fix:</strong> In <code>vector.py:play_pairings</code>, record
-  <code>round_result.code_errors</code> onto evaluation metadata
-  (<code>error_class</code>, <code>failure_trace</code>, <code>failure_record(..., "crash", ..., seat_player)</code>)
-  and call <code>complete_leg(slot_state, end=GameEnd(status="interrupted", reason="crash", digest=digests[slot]))</code>
-  with <code>info=None</code>. Only actual native root failures from <code>step_isolated_into_buffers</code>
-  or isolated resets pass <code>info={"game_error": ...}</code> to <code>take_slot_record</code>.</p>
-</div>
-  <div data-choice="f2" data-label="Stop stamping CodeSeat decision crashes as native root step failures in vector.py">
-    <button type="button" data-value="Fix here">Fix here</button>
-    <button type="button" data-value="File Task">File Task</button>
-    <button type="button" data-value="Drop">Drop</button>
-  </div>
-</div>
-
-
-<div class="lf-decision" data-decision-id="f3">
   <div class="lf-decision-head">
     <span class="lf-decision-title">Support native-seat GameRecords in Academy Watch</span>
     <span class="lf-decision-rec">Recommended: File Task</span>
@@ -1465,7 +1274,7 @@ refusal:</strong></p>
   Reconstructing or surfacing native-seat turns on import belongs in a separate Academy Task filed
   when MTG-506 lands.</p>
 </div>
-  <div data-choice="f3" data-label="Support native-seat GameRecords in Academy Watch">
+  <div data-choice="f2" data-label="Support native-seat GameRecords in Academy Watch">
     <button type="button" data-value="Fix here">Fix here</button>
     <button type="button" data-value="File Task">File Task</button>
     <button type="button" data-value="Drop">Drop</button>
@@ -1475,32 +1284,26 @@ refusal:</strong></p>
 
 <h2>Questions for review</h2>
 
-<div data-choice="q1" data-label="Per-game isolated failure record shape">
-  <p><strong>1. In F1, should <code>GameEnd</code> unify isolated opening and step failures into
-  one per-game failure record, or keep <code>OpeningFailure</code> reset-only?</strong></p>
-  <button data-value="1a">1a. (Recommended) Replace <code>GameEnd.opening_failure</code> with one optional <code>GameEnd.failure</code> carrying <code>operation: Literal["reset", "step"]</code>, <code>error_class</code>, and <code>traceback</code>, populated by both <code>_record_roots</code> and <code>_step</code>, hoisted and stripped by <code>for_game()</code>, and checked by <code>needs_reproduction</code>. Removes the <code>if record.operation != "reset":</code> split in <code>take_slot_record</code> and makes <code>games_path</code>/<code>snapshot()</code>/<code>journal</code> preserve step-failure class and traceback too.</button>
-  <button data-value="1b">1b. Keep <code>GameEnd.opening_failure</code> reset-only; only strip it in <code>for_game()</code>, add <code>any(self.failed_opening(g) for g in self.games)</code> to <code>needs_reproduction</code>, and fix <code>managym/replay.py:main</code> to check all streams.</button>
+<div data-choice="q1" data-label="Maintained experiment migration to native-v3">
+  <p><strong>1. Built-in heuristic declarations without <code>version: native-v3</code> are
+  refused so stored <code>native-v2</code> tournaments cannot silently mix with
+  <code>native-v3</code>. Which maintained experiments should move to new <code>native-v3</code>
+  tournament names now (including <code>tla_trophies.py</code>'s unscored <code>bf16</code>/<code>tf32</code>
+  benchmarks), and which stay frozen?</strong> (<strong>Irreversible once scored to shared Etude
+  tournaments.</strong>)</p>
+  <button data-value="1a">1a. (Recommended) Keep all existing stored <code>native-v2</code> experiment files frozen as on HEAD in MTG-506; adopt new <code>native-v3</code> tournament names only when starting the next evaluation campaign (or add <code>version: native-v3</code> exclusively to never-scored <code>bf16</code>/<code>tf32</code> precision branches in <code>tla_trophies.py</code>).</button>
+  <button data-value="1b">1b. Add new <code>-v3</code> tournament names with <code>version: native-v3</code> to <code>tla_trophies.py</code> (and <code>tla_trophies_colab.py</code> / <code>tla_trophies_floor.py</code>) in this Task and rerun their baselines.</button>
+  <button data-value="1c">1c. Keep existing tournament names by adding explicit <code>version="native-v2"</code> stateless dispatch in Manabot alongside <code>native-v3</code>.</button>
 </div>
 
-<div data-choice="q2" data-label="Maintained experiment migration to native-v3">
-  <p><strong>2. Pass 4 refuses unversioned built-in heuristic declarations so stored
-  <code>native-v2</code> tournaments cannot silently mix with <code>native-v3</code>. Which
-  maintained experiments should move to new <code>native-v3</code> tournament names now (including
-  <code>tla_trophies.py</code>'s new <code>bf16</code>/<code>tf32</code> benchmarks), and which
-  stay frozen?</strong> (<strong>Irreversible once scored to shared Etude tournaments.</strong>)</p>
-  <button data-value="2a">2a. (Recommended) Keep all existing stored <code>native-v2</code> experiment files frozen as on HEAD in MTG-506; file or adopt new <code>native-v3</code> tournament names only when starting the next evaluation campaign (or add <code>version: native-v3</code> exclusively to never-scored <code>bf16</code>/<code>tf32</code> precision branches in <code>tla_trophies.py</code>).</button>
-  <button data-value="2b">2b. Add new <code>-v3</code> tournament names with <code>version: native-v3</code> to <code>tla_trophies.py</code> (and <code>tla_trophies_colab.py</code> / <code>tla_trophies_floor.py</code>) in this Task and rerun their baselines.</button>
-  <button data-value="2c">2c. Keep existing tournament names by adding explicit <code>version="native-v2"</code> stateless dispatch in Manabot alongside <code>native-v3</code>.</button>
-</div>
-
-<div data-choice="q3" data-label="Academy Watch native-seat import">
-  <p><strong>3. Confirm deferring Academy Watch support for native-seat records
-  (<code>("agent", "heuristic:64")</code>) to a separate Academy Task (F3)?</strong></p>
-  <button data-value="3a">3a. (Recommended) Yes — keep the refusal in <code>watch.py</code> and file a separate Academy Task when MTG-506 lands.</button>
-  <button data-value="3b">3b. No — implement native-seat import in Academy Watch inside MTG-506.</button>
+<div data-choice="q2" data-label="Academy Watch native-seat import">
+  <p><strong>2. Confirm deferring Academy Watch support for native-seat records
+  (<code>("agent", "heuristic:64")</code>) to a separate Academy Task (F2)?</strong></p>
+  <button data-value="2a">2a. (Recommended) Yes — keep the refusal in <code>watch.py</code> and file a separate Academy Task when MTG-506 lands.</button>
+  <button data-value="2b">2b. No — implement native-seat import in Academy Watch inside MTG-506.</button>
 </div>
 </main>
-<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-506"},"directory":"/Users/jack/src/manabot.mtg-506-cut-game-side","base":"606e79e90a","head":"8ac5746885","path":"scratch/concept-review.html","build_id":"37242ff9ecbd7c95","protocol":{"revision":11,"min_revision":10}}</script>
+<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-506"},"directory":"/Users/jack/src/manabot.mtg-506-cut-game-side","base":"0f885b1f43e1c6d272347eed1082264c869c390b","head":"e9e5440e8a","path":"scratch/concept-review.html","build_id":"9fadd93f6b1b658a","protocol":{"revision":11,"min_revision":10}}</script>
 <script>
 (function () {
   "use strict";
