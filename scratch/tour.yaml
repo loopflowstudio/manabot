@@ -1,17 +1,19 @@
-at: 5a7eff4be5075086e18f55d6b6d053623a37b56d
+at: 24a3021f471b7f15117442cecef39bf0de4f2830
 first:
   - path: experiments/reports/eval_precision_profile.md
-    why: L4 dispatch, corrected bucket attribution and arena repeats
+    why: L4 attention dispatch, timing breakdown and arena repeats
   - path: docs/evaluation.md
-    why: Head width and batch guidance for padded L4 evaluation
-  - path: manabot/eval/vector.py
-    why: Synchronous observation selection at the forward boundary
+    why: Precision choices by head width and batch size
   - path: manabot/eval/agent_loader.py
-    why: Shared Torch loading and forward precision context
-  - path: experiments/eval_precision_profile.py
-    why: Capture, identical-input replay and scoped trace attribution
+    why: Precision shared by arena and replay forwards
+  - path: manabot/eval/vector.py
+    why: Synchronous access to the rows entering each forward
   - path: experiments/eval_throughput.py
-    why: Paired arena timings and seeded checkpoint controls
+    why: Per-call timings and validation of completed deals
+  - path: experiments/eval_precision_profile.py
+    why: Capture, matched replay timings and trace attribution
   - path: tests/eval/test_eval_precision_profile.py
-    why: Exact replay logits, grid batching and nested cast attribution
-hide: []
+    why: Replay logits, sampled timings and overlapping kernels
+hide:
+  - path: scratch/concept-review.html
+    why: Compiled from the adjacent review source
