@@ -1161,8 +1161,12 @@ def test_vector_runner_bounds_deferred_layouts_before_play(
     assert {key for key, _ in settled} == {match.key for match in matches}
 
 
+@pytest.mark.parametrize("fail_last_opening", [False, True])
 def test_vector_runner_reuses_idle_vector_after_waiting_for_replay(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cpu_eval: None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cpu_eval: None,
+    fail_last_opening: bool,
 ) -> None:
     ref = _fixture_checkpoint(tmp_path, 19, ObservationSpace())
     heuristic = Code(name="heuristic", config={"version": HEURISTIC_VERSION})
@@ -1176,7 +1180,40 @@ def test_vector_runner_reuses_idle_vector_after_waiting_for_replay(
     release = Event()
     finalize = vector_runner.finalize_match
     open_vector = vector_runner.open_vector
+    load_slots = RecordedVectorEnv.load_slots_into_buffers
     opened = []
+    loads = 0
+
+    def load_with_optional_opening_failure(
+        vector: RecordedVectorEnv,
+        requests: Sequence[managym.SlotLoad],
+        *,
+        isolated: bool = False,
+    ) -> list[managym.SlotLoadResult]:
+        nonlocal loads
+        loads += 1
+        if fail_last_opening and loads == 3:
+            native = vector.native
+
+            class FailedOpeningReceipt:
+                def __getattr__(self, name: str) -> Any:
+                    return getattr(native, name)
+
+                def get_last_info(self) -> list[dict[str, object]]:
+                    if loads != 3:
+                        return native.get_last_info()
+                    return [
+                        {
+                            "game_error": "stalled opening",
+                            "game_error_class": "AgentError",
+                        }
+                    ]
+
+                def current_agent_indices(self) -> list[int]:
+                    return [-1] if loads == 3 else native.current_agent_indices()
+
+            monkeypatch.setattr(vector, "native", FailedOpeningReceipt())
+        return load_slots(vector, requests, isolated=isolated)
 
     def observe_open(
         num_envs: int, space: ObservationSpace
@@ -1215,6 +1252,11 @@ def test_vector_runner_reuses_idle_vector_after_waiting_for_replay(
 
         monkeypatch.setattr(vector_runner, "open_vector", observe_open)
         monkeypatch.setattr(vector_runner, "finalize_match", hold_first)
+        monkeypatch.setattr(
+            RecordedVectorEnv,
+            "load_slots_into_buffers",
+            load_with_optional_opening_failure,
+        )
         playing = asyncio.create_task(consume())
         try:
             await asyncio.wait_for(first_replaying.wait(), timeout=10)

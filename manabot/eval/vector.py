@@ -719,10 +719,6 @@ async def play_pairings(
                 else:
                     yield match, result
 
-            if len(replays) >= slots and not any(slot_states):
-                await asyncio.wait(replays, return_when=asyncio.FIRST_COMPLETED)
-                continue
-
             if vector is None:
                 legs = await take_legs(slots, None)
                 if not legs:
@@ -790,6 +786,9 @@ async def play_pairings(
                 continue
 
             if not any(slot_states):
+                if len(replays) >= slots:
+                    await asyncio.wait(replays, return_when=asyncio.FIRST_COMPLETED)
+                    continue
                 vector.close()
                 vector = None
                 state_buffers = None
