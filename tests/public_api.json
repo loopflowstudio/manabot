@@ -4050,6 +4050,10 @@
         "kind": "function",
         "signature": "(name)"
       },
+      "decision_memory_names": {
+        "kind": "function",
+        "signature": "()"
+      },
       "encode_observation_batch": {
         "kind": "function",
         "signature": "(envs, layout, action_overflow=...)"
@@ -4080,6 +4084,10 @@
       "resolve_decklists": {
         "kind": "function",
         "signature": "(player_configs, seed)"
+      },
+      "runtime_tokens": {
+        "kind": "function",
+        "signature": "()"
       },
       "set_cards": {
         "kind": "function",

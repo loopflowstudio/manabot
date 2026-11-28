@@ -1,0 +1,228 @@
+<h1>Concept Review: Policy-Input Vocabulary Split (MTG-504, Post-Pass-4)</h1>
+
+<p>
+  <strong>Area reviewed:</strong> Policy-input vocabulary surfaces across
+  <code>managym</code> and <code>manabot</code> as built at
+  <code>1fad74af5e</code> against freshly fetched <code>origin/main</code>
+  (<code>23212c88f5</code>) — printed definition spans
+  (<code>catalog_tokens</code>), runtime program symbols
+  (<code>runtime_tokens</code>), hashed record names
+  (<code>record_vocabulary</code>), decision-memory labels
+  (<code>decision_memory_names</code>), historical renames and retirements
+  (<code>token_renames.rs</code>), host table construction and admission
+  (<code>catalog.py</code>, <code>admission.py</code>,
+  <code>decision_memory.py</code>), checkpoint rebinding
+  (<code>binding.py</code>), and the historical writer hash tracer
+  (<code>scripts/pinned_pilot.py</code> / <code>scripts/pilot_names.rs</code>).
+</p>
+
+<p>
+  <strong>Why this area:</strong> This review checks the complete branch after
+  Pass 4 (<code>6ac4bf8a8d</code>, <code>5301417e8b</code>) addressed every
+  in-scope finding from the prior post-implementation review
+  (<code>54e1b1816b</code>) and <code>eb2bbf4c09</code> synced
+  <code>origin/main</code> (<code>23212c88f5</code>, MTG-502 board-edit hooks,
+  orthogonal to this area). All concepts inside MTG-504's scope now align with
+  the domain: zero remaining in-scope mismatches. One pre-existing split in
+  Python decision-memory admission remains documented as a separate Task, and
+  two release/freeze choices stay open for review before the 0.3.0 cut.
+</p>
+
+<h2>Do the domain concepts and the code's concepts line up?</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Domain concept</th>
+      <th>Code concept (as built at <code>1fad74af5e</code>)</th>
+      <th>Aligns?</th>
+      <th>Notes / mismatch</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Printed card-definition token spans</strong> — serialized rules of every card, token, and back face, indexed by <code>CardDefId</code>.</td>
+      <td><code>managym.catalog_tokens()</code> (<code>CatalogTokens</code>, 1,502 unique pairs).</td>
+      <td><strong>Yes</strong></td>
+      <td>Matches <code>CatalogTokens</code>, <code>catalog_token_value</code>, and <code>catalog_token_renames</code>; docstring and <code>docs/engine.md</code> state it combines with <code>runtime_tokens()</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Admitted program-token vocabulary</strong> — every symbolic <code>(kind, value)</code> pair valid in printed definitions, shared effects, suspended execution frames, last-known characteristics, and decision-memory snapshots.</td>
+      <td>Exact two-list union <code>catalog_tokens() ∪ runtime_tokens()</code> (3,349 pairs: 1,502 printed + 2,148 runtime with 301 overlap, 1,847 runtime-only; never filtered against the pack).</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned across native <code>PROGRAM_VOCABULARY</code>, <code>catalog.py::_record_tables</code>, <code>docs/engine.md</code>, <code>pilot_names.rs</code>, and the refreshed module headers in <code>record_vocabulary.rs</code> and <code>record_coverage.py</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Hashed fact &amp; shared-effect record names</strong> — finite names hashed into id columns (<code>token</code>, <code>name</code>, <code>restriction</code>), optionally aliasing an existing program-token row.</td>
+      <td><code>managym.record_vocabulary()</code> (<code>record_names()</code>, 1,800 rows: 538 aliased, 1,262 independent; 0 <code>execution/*</code>, 0 <code>DecisionMemory::*</code>).</td>
+      <td><strong>Yes</strong></td>
+      <td>In <code>catalog.py:60–65</code>, non-<code>None</code> token columns strictly index <code>tokens[kind, token]</code> and never append new program tokens.</td>
+    </tr>
+    <tr>
+      <td><strong>Historical vocabulary ledger</strong> — immutable record of past tokens and record names mapped to successors or retirements so pre-0.3.0 checkpoints keep their learned vectors across future engine edits.</td>
+      <td><code>managym/src/cards/token_renames.rs</code>: <code>TOKENS</code> (100) + <code>LEGACY_DECISION_MEMORY_TOKENS</code> (44) = 144 token dispositions; <code>RECORDS</code> (1) + <code>LEGACY_EXECUTION_TOKENS</code> (409) + pack <code>content_names()</code> (1,255) = 1,665 record dispositions; both functions invariant-tested.</td>
+      <td><strong>Yes</strong></td>
+      <td>Fixed in <code>5301417e8b</code>: <code>TOKENS</code> and live <code>condition_text</code> prose no longer feed <code>record_renames()</code>, <code>pub const RECORDS</code> is restored, and <code>each_historical_record_has_one_disposition_and_renames_resolve</code> enforces key uniqueness and live-successor resolution. Only append-only pack card/set names remain derived via <code>content_names()</code> until the 0.3.0 cut (Question 1).</td>
+    </tr>
+    <tr>
+      <td><strong>Decision-memory record labels</strong> — the 44 optional <code>DecisionMemory::*</code> names in <code>RecordNamespace::Token</code>, carrying no program token, admitted against the loaded model's vocabulary.</td>
+      <td>Top-level <code>managym.decision_memory_names()</code> (44 <code>(name, value)</code> pairs, stubbed in <code>__init__.pyi</code> and <code>tests/public_api.json</code>) + two divergent Python admission checks in <code>decision_memory.py</code> vs <code>admission.py</code>.</td>
+      <td><strong>No</strong></td>
+      <td><strong>Pre-existing split admission authority (separate outcome).</strong> The <code>managym</code> surface and <code>catalog.py</code> table construction align cleanly, but dense/retained admission (<code>decision_memory.py:498–504</code>) checks only the running engine's <code>decision_name_values()</code> (ignoring the checkpoint's <code>record_name_keys</code>), whereas v11 admission (<code>admission.py:394–398</code>) checks only <code>record_name_keys</code> (accepting any <code>TOKEN</code>-namespace name such as <code>"flying"</code> and skipping models with <code>decision_memory="none"</code>).</td>
+    </tr>
+    <tr>
+      <td><strong>Historical writer hash tracer</strong> — trace every <code>record_name</code> and <code>record_token</code> key emitted by any past or current commit to classify unexplained checkpoint keys.</td>
+      <td><code>scripts/pinned_pilot.py names --at &lt;rev&gt;</code> injecting temporary feature <code>pilot-runtime-tokens</code> when archived <code>record_vocabulary.rs</code> defines <code>pub fn runtime_tokens(</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Works across both pre-0.3.0 (<code>ab2b757d9</code>) and post-0.3.0 writers without leaking a feature flag into <code>managym/Cargo.toml</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Patch-clean 0.2.x <code>main</code> vs 0.3.0 cut</strong> — semantic change to a published function waits for the minor release.</td>
+      <td>Held PR targeting 0.3.0 with no 0.2.x shim; new functions recorded in <code>managym/__init__.pyi</code> and <code>tests/public_api.json</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Matches PR #612's hold policy and avoids renaming <code>record_vocabulary()</code> a second time.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Verified end-to-end paths (normal, failure, and recovery)</h2>
+
+<ol>
+  <li>
+    <strong>Fresh catalog policy build (normal path):</strong>
+    <code>manabot/policy/catalog.py::_record_tables</code> loads printed card
+    tokens from <code>catalog_tokens()</code>, appends any unseen pairs from
+    <code>runtime_tokens()</code>, maps every aliased <code>record_vocabulary()</code>
+    entry directly onto its existing program-token row (never secretly appending),
+    and appends <code>decision_memory_names()</code> only when decision memory
+    is enabled — with zero string-prefix filters:
+  </li>
+</ol>
+
+<lf-diff path="manabot/policy/catalog.py" lines="51-71"></lf-diff>
+
+<ol start="2">
+  <li>
+    <strong>Pre-0.3.0 checkpoint rebinding (recovery across the split):</strong>
+    When <code>manabot/policy/binding.py::bind_catalog</code> loads a pre-0.3.0
+    checkpoint, every surviving learned vector binds through its surviving key
+    while the retired counterpart is explicitly accounted for:
+    <code>(Text, "kept creature")</code> renames to
+    <code>(Text, "kept permanent")</code> via <code>TOKENS</code> while
+    <code>("token", "execution/6/kept creature")</code> retires via
+    <code>LEGACY_EXECUTION_TOKENS</code>; <code>("token", "DecisionMemory::Priority")</code>
+    binds directly to the live memory row while its phantom
+    <code>(Variant, "DecisionMemory::Priority")</code> retires via
+    <code>LEGACY_DECISION_MEMORY_TOKENS</code>. Unknown keys outside both
+    running tables and <code>token_renames.rs</code> still fail loudly with
+    <code>ValueError: unexplained … key</code>.
+  </li>
+  <li>
+    <strong>Future engine edits (Pass 4 fix verified):</strong>
+    <code>play_grant_conditions</code> prose now appends directly to
+    <code>out.runtime</code> rather than <code>content_names()</code>,
+    <code>"you control a Wizard permanent"</code> and the 13 previously retired
+    execution symbols sit frozen in <code>LEGACY_EXECUTION_TOKENS</code>,
+    <code>TOKENS</code> no longer fabricates phantom <code>execution/*</code>
+    record retirements, <code>pub const RECORDS</code> is restored for future
+    record-name history, and <code>each_historical_record_has_one_disposition_and_renames_resolve</code>
+    checks uniqueness and live-successor resolution on every test run:
+  </li>
+</ol>
+
+<lf-diff path="managym/src/agent/record_vocabulary.rs" lines="179-208">
+  <lf-note line="192">Live condition_text("permanent", &amp;condition) now goes only into out.runtime, never into content_names().</lf-note>
+</lf-diff>
+
+<lf-diff path="managym/src/cards/token_renames.rs" lines="687-783">
+  <lf-note line="696">Chains only frozen LEGACY_EXECUTION_TOKENS and pack content_names() — no TOKENS or live prose.</lf-note>
+  <lf-note line="702">Named pub const RECORDS restored beside TOKENS for real record-name history.</lf-note>
+  <lf-note line="737">Checks hashed-key uniqueness and live-successor resolution across record_names() ∪ decision_memory_names().</lf-note>
+</lf-diff>
+
+<h2>Biggest remaining mismatch (separate outcome): divergent decision-memory label admission</h2>
+
+<p>
+  With MTG-504's own vocabulary split and historical ledger aligned, the only
+  remaining mismatch in the reviewed area is pre-existing in Python admission
+  and stands out more clearly now that <code>decision_memory_names()</code> is a
+  first-class surface:
+</p>
+
+<lf-file path="manabot/policy/decision_memory.py" lines="495-513"></lf-file>
+<lf-file path="manabot/policy/admission.py" lines="391-404"></lf-file>
+
+<lf-component name="before-after">
+  <div slot="before">
+    <h4>Current (two divergent checks)</h4>
+    <ul>
+      <li><strong>Dense / retained-prefix path</strong> (<code>decision_memory.py:498–504</code>): checks <code>kind</code> and <code>choice_kind</code> only against the running engine's <code>decision_name_values()</code>, ignoring the checkpoint's <code>tables.record_name_keys</code>. An incomplete checkpoint table passes admission and mis-indexes in <code>_prepare_memory_rows</code>.</li>
+      <li><strong>v11 native path</strong> (<code>admission.py:394–398</code>): checks only <code>tables.record_name_keys</code> under <code>RecordNamespace.TOKEN</code>, which accepts any non-memory token name (e.g. <code>"flying"</code>) and skips the check when <code>decision_memory == "none"</code>.</li>
+    </ul>
+  </div>
+  <div slot="after">
+    <h4>Recommended (separate follow-up Task)</h4>
+    <ul>
+      <li>Share one helper enforcing both invariants on decision-memory <code>kind</code> and <code>choice_kind</code>: membership in <code>decision_name_values()</code> and presence in <code>tables.record_name_keys</code> whenever the model reads memory rows.</li>
+      <li>Add a regression test covering an incomplete checkpoint table on retained prefixes and a non-memory <code>TOKEN</code> name on v11 batches.</li>
+    </ul>
+  </div>
+</lf-component>
+
+<h2>Findings</h2>
+
+<p>
+  <strong>In-scope findings from the prior review (<code>54e1b1816b</code>):</strong>
+  all three are resolved at <code>1fad74af5e</code> —
+  <code>TOKENS</code>/<code>condition_text</code> uncoupled from
+  <code>record_renames()</code> (<code>5301417e8b</code>),
+  <code>pub const RECORDS</code> and record-rename invariant tests added
+  (<code>5301417e8b</code>), and stale module headers in
+  <code>record_vocabulary.rs</code> and <code>record_coverage.py</code> updated
+  (<code>6ac4bf8a8d</code>). No in-scope findings remain.
+</p>
+
+<lf-component name="decision" id="f1" title="Unify decision-memory label admission between dense/retained and v11 native paths" recommendation="File Task">
+  <p>
+    <strong>Separate outcome.</strong> Pre-existing split outside MTG-504's
+    scope: make <code>manabot/policy/decision_memory.py::memory_vocabulary</code>
+    and <code>manabot/policy/admission.py::admit_native</code> enforce the same
+    rule on decision-memory <code>kind</code> and <code>choice_kind</code>
+    (admitted by <code>decision_name_values()</code> and present in
+    <code>tables.record_name_keys</code> when the model reads them), with a
+    regression test covering both an incomplete checkpoint table on retained
+    prefixes and a non-memory <code>TOKEN</code> name on v11 batches.
+  </p>
+</lf-component>
+
+<h2>Questions</h2>
+
+<div data-choice="q1" data-label="1. Scope of pack-name freeze in record_renames()">
+  <p>
+    <strong>1. With <code>TOKENS</code> and <code>condition_text</code> removed
+    from <code>record_renames()</code>, how should the 1,255 pre-0.3.0 pack
+    card/set <code>execution/6/&lt;name&gt;</code> retirements be held before
+    the 0.3.0 cut?</strong>
+  </p>
+  <button data-value="1a">1a. (Recommended) Keep deriving card/set names from append-only <code>content_names()</code> until the 0.3.0 cut (so cards landing before 0.3.0 need no ledger regen), and freeze at the cut if card renames can drop a name.</button>
+  <button data-value="1b">1b. Freeze the 1,255 pre-0.3.0 card/set names as a static table now and delete <code>content_names()</code> from <code>record_vocabulary.rs</code>.</button>
+</div>
+
+<div data-choice="q2" data-label="2. Confirm 0.3.0 hold, API names, and memory checkpoint coverage">
+  <p>
+    <strong>2. Confirm keeping the PR held unmerged for 0.3.0 (matching #612)
+    with decision-memory retirement covered by the constructed pre-0.3.0
+    checkpoint test in <code>tests/model/test_checkpoint_binding.py</code>, or
+    name a retained decision-memory checkpoint to pin.</strong>
+    (Published top-level API names <code>managym.runtime_tokens()</code> and
+    <code>managym.decision_memory_names()</code> are irreversible once 0.3.0
+    ships.)
+  </p>
+  <button data-value="2a">2a. (Recommended) Hold for 0.3.0 with the constructed decision-memory checkpoint test and the current top-level API names (<code>runtime_tokens</code>, <code>decision_memory_names</code>).</button>
+  <button data-value="2b">2b. Pin a real retained decision-memory checkpoint before cutting 0.3.0 (provide path or Etude run ID below).</button>
+</div>
+
+<div data-question="q3" data-label="3. Notes or retained decision-memory checkpoint">
+  <p>Optional: path/run ID for a retained decision-memory checkpoint, or feedback on finding f1 and questions 1–2.</p>
+  <textarea></textarea>
+</div>

@@ -460,7 +460,9 @@ can use an expanded card set on a later revision.
 If the checkpoint recorded exact decks (`setups` and `content_manifest`), the
 loader checks the saved column prefixes in the same way, including for the
 Elemental roster. All other binding fields must match exactly. When adding
-cards changes the manifest, the loader refuses the checkpoint.
+cards changes the manifest, the loader refuses the checkpoint. Its card
+programs are then the running pack's; record names and runtime tokens still
+bind by key, with the same renames and retirements as any other checkpoint.
 
 The terms:
 

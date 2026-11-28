@@ -2,9 +2,10 @@
 
 Catalog models (`ModelConfig.record_vocabulary="catalog"`) embed fact and
 effect ids through the card encoder's exact vocabulary and reject an id outside
-it. That vocabulary is native `record_vocabulary`, a list maintained beside
-the encoders, so an encoder that starts hashing a new name without listing it
-would stop training mid-run. This sweep plays seeded random games whose decks
+it. That vocabulary is native `record_vocabulary` for names and
+`catalog_tokens` with `runtime_tokens` for program tokens, lists maintained
+beside the encoders, so an encoder that starts emitting a new name or token
+without listing it would stop training mid-run. This sweep plays seeded random games whose decks
 together hold every eligible world card, encodes each decision at policy input
 v11 and runs a tiny catalog policy over the batch, so a missing name fails here
 with the game that produced it. `--decks elemental` instead exercises the curated

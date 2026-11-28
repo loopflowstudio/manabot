@@ -1,11 +1,9 @@
 """Complete typed card programs joined to viewer-safe card and knowledge rows.
 
-`SemanticCardEncoder` owns the one token vocabulary of card text. With
-`records`, it also owns the exact vocabulary of fact and shared-effect ids
-(`RecordNamespace` keys): every name native `record_vocabulary` lists reads
-the row of the card token for the same concept, or a row appended after the
-card tokens when no card text contains it. Nothing is hashed; an id outside
-the vocabulary fails loudly.
+`SemanticCardEncoder` embeds printed card programs. With `records`, it
+also embeds runtime program tokens. Hashed fact and shared-effect names
+either share their program token's row or have a row of their own.
+Decision-memory names get independent rows when enabled.
 """
 
 from dataclasses import dataclass

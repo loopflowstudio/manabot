@@ -15,7 +15,9 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.catalog import inspect_checkpoint
 from manabot.policy.binding import packed
+from manabot.policy.catalog import catalog_tables
 from manabot.policy.checkpoint import read_container, write_container
+from manabot.policy.prepare import RecordNamespace
 from manabot.policy.readings import (
     fresh_readings,
     input_width,
@@ -27,6 +29,87 @@ from manabot.recipes.builders import elemental_self_play, gray_ogre_self_play
 import managym
 from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+
+
+@pytest.mark.parametrize("exact_decks", [False, True])
+def test_checkpoint_keeps_vectors_after_vocabulary_keys_retire(
+    tmp_path: Path, exact_decks: bool
+) -> None:
+    """A world-bound and an exact-deck checkpoint both rebind record rows by key."""
+    players = [
+        managym.PlayerConfig("A", {"Forest": 20, "Gray Ogre": 20}),
+        managym.PlayerConfig("B", {"Mountain": 20, "Gray Ogre": 20}),
+    ]
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=8,
+            max_decision_reference_details=64,
+            max_decision_references=64,
+            max_decision_members=256,
+            decision_memory_include_own=True,
+        )
+    )
+    writer = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8,
+            world=managym.WORLD_SETUP,
+            attention_on=True,
+            policy_film=True,
+            decision_memory="gru",
+        ),
+    ).eval()
+    path = tmp_path / "before-vocabulary-split.safetensors"
+    save_checkpoint(
+        writer, space, path, player_configs=players if exact_decks else None
+    )
+    record = read_checkpoint(path)
+    assert ("world_digest" in record["world_binding"]) != exact_decks
+    state = record["model_state_dict"]
+    weights = "semantic_cards.token_embedding.weight"
+    no_memory = catalog_tables(managym.WORLD_SETUP, records=True, decision_memory=False)
+    assert len(state[weights]) == no_memory.embedding_rows + 44
+
+    def key(kind: int, name: str) -> int:
+        return packed(kind, managym.catalog_token_value(name))
+
+    def rows_by_key(family: str) -> dict[int, int]:
+        keys = state[f"semantic_cards.record_{family}_keys"]
+        rows = state[f"semantic_cards.record_{family}_rows"]
+        return dict(zip(keys.tolist(), rows.tolist(), strict=True))
+
+    names = rows_by_key("name")
+    tokens = rows_by_key("token")
+    # Each historical pair of keys addressed one learned vector.
+    memory = "DecisionMemory::Priority"
+    tokens[key(3, memory)] = names[key(RecordNamespace.TOKEN, memory)]
+    old = key(6, "kept creature")
+    tokens[old] = tokens.pop(key(6, "kept permanent"))
+    names[key(RecordNamespace.TOKEN, "execution/6/kept creature")] = tokens[old]
+
+    for family, table in (("name", names), ("token", tokens)):
+        keys = sorted(table)
+        state[f"semantic_cards.record_{family}_keys"] = torch.tensor(keys)
+        state[f"semantic_cards.record_{family}_rows"] = torch.tensor(
+            [table[k] for k in keys]
+        )
+    write_checkpoint(record, path)
+
+    restored, _ = load_checkpoint(str(path))
+    torch.testing.assert_close(
+        restored.state_dict()[weights], state[weights], atol=0, rtol=0
+    )
+    env = managym.Env(seed=17, decision_memory_include_own=True)
+    env.reset(players)
+    for _ in range(4):
+        env.step(0)
+    batch = managym.encode_observation_batch([env], space.layout)
+    prepared = writer.prepare(batch)
+    assert prepared.memory is not None
+    expected = writer.evaluate(prepared)
+    actual = restored.evaluate(restored.prepare(batch))
+    for before, after in zip(expected, actual, strict=True):
+        np.testing.assert_array_equal(before, after)
 
 
 @pytest.mark.parametrize("legacy_file", [False, True])

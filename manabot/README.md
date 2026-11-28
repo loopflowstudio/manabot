@@ -512,7 +512,8 @@ Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
 When the binding records exact decks and sideboards, every binding field except
 the input schema must match exactly, including the content manifest. As with
-any checkpoint, the runtime input columns may extend the saved column prefixes.
+any checkpoint, the runtime input columns may extend the saved column prefixes
+and learned record rows bind by key.
 Without exact decks, the model can play any admitted deck. The card digest
 describes the cards of the writing revision.
 Loading compares input columns, token names and action kinds by name
@@ -872,12 +873,15 @@ observed learning difficulty; chunking changes no checkpoint weights or buffers.
 
 Fresh models (`ModelConfig.record_vocabulary`,
 default `catalog`) embed fact and shared-effect ids through the same token
-embedding. Native `record_vocabulary` lists every counter kind, color,
-subtype, keyword, modification, set name and combat restriction the encoders
-hash. Each reads the row of the card token for the same concept (a granted
-`flying` and a printed `Keyword::flying` share one row) or a row appended after
-the card tokens. Runtime program tokens use the printed and registered rows in
-the [program-token vocabulary](../docs/engine.md#program-token-vocabulary).
+embedding. After printed card tokens from `managym.catalog_tokens()`, any
+remaining tokens from `managym.runtime_tokens()` append their rows so the
+admitted [program-token vocabulary](../docs/engine.md#program-token-vocabulary)
+is `catalog_tokens()` ∪ `runtime_tokens()`. Native `record_vocabulary()` lists
+only the counter kinds, colors, subtypes, keywords, modifications, set names
+and combat restrictions the encoders hash; each aliases an existing
+program-token row (a granted `flying` and a printed `Keyword::flying` share one
+row) or appends a name row. Policies with decision memory enabled append
+`managym.decision_memory_names()` as name rows without adding program tokens.
 Integers and booleans read one row per kind plus their exact value. Fact and
 effect sources read the card encoder's row for that definition, and ability
 or frame ordinals are numbers. Admission reports missing symbolic pairs as

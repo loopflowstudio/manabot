@@ -951,31 +951,36 @@ seen.
 
 ### Program-token vocabulary
 
-`managym.catalog_tokens()` holds only the printed rules spans of catalog
-definitions (cards, tokens and back faces). Live observations also emit
-runtime program tokens in fact and shared-effect rows — suspended resolution
-frames, granted abilities and last-known characteristics — whose runtime-only
-symbols come from `managym.record_vocabulary()`.
+A catalog policy reads printed rules from `managym.catalog_tokens()`, indexed
+by `CardDefId` for cards, tokens and back faces. Runtime projections such as
+suspended resolution frames and last-known characteristics can emit additional
+symbols. `managym.runtime_tokens()` lists registered `(kind, name, value)`
+triples, including symbols that also occur in print. Both sources use the
+same token kinds and signed 32-bit values.
 
 ```python
 import managym
 
 catalog = managym.catalog_tokens()
 printed = set(zip(catalog["token_kind"], catalog["token_value"], strict=True))
-runtime = {
-    (kind, value)
-    for _space, name, _hashed, kind, value in managym.record_vocabulary()
-    if kind is not None
-    and value is not None
-    and not name.startswith("DecisionMemory::")
-}
+runtime = {(kind, value) for kind, _, value in managym.runtime_tokens()}
 admitted_program_tokens = printed | runtime
 ```
 
-`Integer` and `Boolean` carry their values directly. Every other token,
-including `Null` and `DefinitionRef`, needs an exact pair in
-`admitted_program_tokens`. Admission reports missing pairs as `(kind, 0x…)`.
-Policies with decision memory enabled also admit the `DecisionMemory::*` rows.
+`Integer` and `Boolean` carry literal values. Every other program token,
+including `Null` and `DefinitionRef`, needs an exact pair in this union.
+Admission reports missing pairs as `(kind, 0x…)`.
+
+`managym.record_vocabulary()` lists the names fact and shared-effect encoders
+hash into the `token`, `name` and `restriction` namespaces. Each entry is a
+`(namespace, name, value, token_kind, token_value)` tuple. A name with a token
+shares that token's embedding row (for example, granted `flying` shares the
+row for printed `Keyword::flying`). Other names get their own rows.
+
+Policies that read decision memory also allocate name rows in the `token`
+namespace for the `(name, value)` pairs in `managym.decision_memory_names()`,
+such as `DecisionMemory::Priority`. The program vocabulary is the same with
+decision memory enabled or disabled.
 
 An expanded naming source can supply a chosen card name outside the installed
 catalog. Suspended entries and named exile or search programs encode it as

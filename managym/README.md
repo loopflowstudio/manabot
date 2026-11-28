@@ -235,7 +235,10 @@ each zone holds only the objects the Comprehensive Rules allow it
 ([objects and zones](../docs/engine.md#objects-and-zones)). The engine runs these values
 directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.catalog_tokens`)
-derives policy tokens from it. `src/world.rs` owns the card/deck
+derives printed policy tokens from it; runtime program tokens
+(`managym.runtime_tokens`), hashed record names (`managym.record_vocabulary`)
+and decision-memory names (`managym.decision_memory_names`) live in separate
+lists ([program-token vocabulary](../docs/engine.md#program-token-vocabulary)). `src/world.rs` owns the card/deck
 support check (defined cards, excluding tokens and rules fixtures) and the set
 filter. Known rules bugs are tracked as Tasks without revoking playability. Keep
 decklist data separate from card behavior; see

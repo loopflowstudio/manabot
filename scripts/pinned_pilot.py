@@ -222,6 +222,18 @@ def names_at(revision: str) -> None:
                 )
             source_text = source_text.replace(signature, signature + probe)
         serializer.write_text(source_text)
+        manifest = crate / "Cargo.toml"
+        manifest.write_text(
+            manifest.read_text().replace(
+                "[features]\n", "[features]\npilot-runtime-tokens = []\n", 1
+            )
+        )
+        vocabulary = crate / "src/agent/record_vocabulary.rs"
+        features = (
+            ["--features", "pilot-runtime-tokens"]
+            if "pub fn runtime_tokens(" in vocabulary.read_text()
+            else []
+        )
         shutil.copyfile(
             Path(__file__).with_name("pilot_names.rs"),
             crate / "examples/pilot_names.rs",
@@ -234,6 +246,7 @@ def names_at(revision: str) -> None:
                 "--quiet",
                 "--jobs",
                 "2",
+                *features,
                 "--example",
                 "pilot_names",
             ],

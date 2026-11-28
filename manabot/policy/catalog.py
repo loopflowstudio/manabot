@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import count
 
 import numpy as np
 
@@ -34,32 +35,35 @@ class _RecordTables:
 def _record_tables(
     vocabulary: dict[tuple[int, int], int], *, decision_memory: bool
 ) -> _RecordTables:
-    """A name whose card token exists reads that token's row, so a granted
-    keyword and the printed keyword share one embedding; every other name,
-    token and numeric kind gets a row appended after the card tokens."""
+    """Append runtime tokens and independent name rows after the card tokens.
+
+    Record aliases share their program token's row, including granted and
+    printed keywords.
+    """
     tokens = dict(vocabulary)
     names: dict[tuple[int, int], int] = {}
-    size = len(vocabulary) + 1
+    rows = count(len(vocabulary) + 1)  # Row zero is padding.
 
-    def append() -> int:
-        nonlocal size
-        size += 1
-        return size - 1
-
-    for space, name, value, kind, token in managym.record_vocabulary():
-        if name.startswith("DecisionMemory::") and not decision_memory:
-            continue
-        key = (int(RecordNamespace[space.upper()]), value)
+    def add_name(namespace: RecordNamespace, name: str, value: int, row: int) -> None:
+        key = (int(namespace), value)
         if key in names:
             raise ValueError(f"record name {name!r} shares an id with another")
+        names[key] = row
+
+    for kind, _, value in managym.runtime_tokens():
+        if (kind, value) not in tokens:
+            tokens[kind, value] = next(rows)
+    for space, name, value, kind, token in managym.record_vocabulary():
         if kind is None or token is None:
-            names[key] = append()
+            row = next(rows)
         else:
-            if (kind, token) not in tokens:
-                tokens[(kind, token)] = append()
-            names[key] = tokens[(kind, token)]
-    numbers = {kind: append() for kind in NUMBER_TOKEN_KINDS}
-    return _RecordTables(names, tokens, numbers, size)
+            row = tokens[kind, token]
+        add_name(RecordNamespace[space.upper()], name, value, row)
+    if decision_memory:
+        for name, value in managym.decision_memory_names():
+            add_name(RecordNamespace.TOKEN, name, value, next(rows))
+    numbers = {kind: next(rows) for kind in NUMBER_TOKEN_KINDS}
+    return _RecordTables(names, tokens, numbers, next(rows))
 
 
 def _sorted_keys(
