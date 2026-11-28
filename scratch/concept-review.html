@@ -1,0 +1,3347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept Review: MTG-506 — Vectorized Eval Host, Replay, and Heuristic Stepping</title>
+<style>
+/* Default review page theme tokens (light and dark).
+ * Override per repository in `.lf/theme.css` (CSS custom properties only). */
+:root {
+  --lf-bg: #faf8f5;
+  --lf-surface: #fffdf9;
+  --lf-surface-muted: #f3eee7;
+  --lf-surface-element: #ece6dd;
+  --lf-border: #e6dfd6;
+  --lf-border-strong: #d6ccc0;
+  --lf-text: #2a2624;
+  --lf-text-secondary: #5f5752;
+  --lf-text-tertiary: #65605d;
+  --lf-accent: #722f37;
+  --lf-accent-hover: #5e2630;
+  --lf-accent-text: #faf8f5;
+  --lf-working-ink: #2f629f;
+  --lf-working-fill: #d5dde6;
+  --lf-warning-ink: #7f5a19;
+  --lf-warning-fill: #e4dccd;
+  --lf-failure-ink: #a64038;
+  --lf-failure-fill: #ecd9d5;
+  --lf-success-ink: #386c48;
+  --lf-success-fill: #d7dfd6;
+  --lf-highlight: rgba(114, 47, 55, 0.14);
+  --lf-highlight-active: rgba(114, 47, 55, 0.28);
+  --lf-highlight-line: rgba(114, 47, 55, 0.45);
+  --lf-shadow: 0 8px 26px rgba(42, 38, 36, 0.14);
+  --lf-shadow-sm: 0 3px 12px rgba(42, 38, 36, 0.08);
+  --lf-bubble-bg: #24201e;
+  --lf-bubble-text: #faf8f5;
+  --lf-bubble-border: #3a3430;
+  --lf-font-serif: "Old Standard TT", Georgia, "Times New Roman", serif;
+  --lf-font-sans: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --lf-font-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lf-bg: #181615;
+    --lf-surface: #201d1b;
+    --lf-surface-muted: #282422;
+    --lf-surface-element: #312c29;
+    --lf-border: #38322e;
+    --lf-border-strong: #4a423d;
+    --lf-text: #efeae4;
+    --lf-text-secondary: #b9afa6;
+    --lf-text-tertiary: #8f857d;
+    --lf-accent: #c96b76;
+    --lf-accent-hover: #d8838d;
+    --lf-accent-text: #181615;
+    --lf-working-ink: #7eb2f0;
+    --lf-working-fill: #203147;
+    --lf-warning-ink: #e0b25c;
+    --lf-warning-fill: #3d311c;
+    --lf-failure-ink: #e67c73;
+    --lf-failure-fill: #452422;
+    --lf-success-ink: #7cc490;
+    --lf-success-fill: #213828;
+    --lf-highlight: rgba(201, 107, 118, 0.22);
+    --lf-highlight-active: rgba(201, 107, 118, 0.38);
+    --lf-highlight-line: rgba(201, 107, 118, 0.65);
+    --lf-shadow: 0 10px 30px rgba(0, 0, 0, 0.44);
+    --lf-shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.30);
+    --lf-bubble-bg: #efeae4;
+    --lf-bubble-text: #181615;
+    --lf-bubble-border: #d6ccc0;
+  }
+}
+
+/* Base layout and component styles for compiled Loopflow review pages. */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+main.lf-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 44px 24px max(168px, var(--lf-dock-room, 0px));
+}
+
+h1 {
+  font-family: var(--lf-font-serif);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-variant-ligatures: no-common-ligatures;
+  margin: 0 0 12px;
+}
+
+h2 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 32px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--lf-border);
+}
+
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+}
+
+p { margin: 0 0 12px; }
+ul, ol { margin: 0 0 12px; padding-left: 22px; }
+li { margin-bottom: 4px; }
+
+code, pre {
+  font-family: var(--lf-font-mono);
+  font-size: 12.5px;
+}
+
+code {
+  background: var(--lf-surface-muted);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 16px;
+  font-size: 14px;
+}
+
+th, td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--lf-border);
+  vertical-align: top;
+}
+
+th {
+  color: var(--lf-text-secondary);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+/* Meta bar & server status banner */
+.lf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--lf-text-secondary);
+  font-size: 12.5px;
+  margin-bottom: 24px;
+}
+
+.lf-meta code { font-size: 12px; }
+
+.lf-banner {
+  background: var(--lf-warning-fill);
+  color: var(--lf-warning-ink);
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13.5px;
+}
+
+/* Diff and File blocks */
+.lf-codeblock {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  margin: 14px 0;
+  overflow: hidden;
+}
+
+.lf-codeblock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--lf-surface-muted);
+  border-bottom: 1px solid var(--lf-border);
+  font-size: 12.5px;
+}
+
+.lf-codeblock-path {
+  font-family: var(--lf-font-mono);
+  color: var(--lf-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lf-codeblock-scroll { overflow-x: auto; }
+
+.lf-code-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-family: var(--lf-font-mono);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.lf-code-table td {
+  border: 0;
+  padding: 0 8px;
+  white-space: pre;
+}
+
+.lf-code-table td.lf-ln {
+  width: 1%;
+  min-width: 38px;
+  text-align: right;
+  color: var(--lf-text-tertiary);
+  user-select: none;
+  border-right: 1px solid var(--lf-border);
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+
+.lf-code-table tr.lf-code-row td.lf-ln { cursor: pointer; }
+
+.lf-code-table tr.lf-code-row td.lf-ln-old,
+.lf-code-table tr.lf-code-row td.lf-ln-single {
+  min-width: 52px;
+  padding-left: 24px;
+}
+
+.lf-code-table .lf-gutter-plus {
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border-radius: 4px;
+  border: none;
+  background: var(--lf-accent);
+  color: var(--lf-accent-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.lf-code-table tr.lf-code-row:hover .lf-gutter-plus,
+.lf-code-table .lf-gutter-plus:focus-visible {
+  opacity: 1;
+}
+
+/* A noted row keeps its diff tint; only the gutter carries the note. */
+.lf-code-table tr.lf-code-row.lf-row-has-note td.lf-ln { background: var(--lf-highlight-active); }
+
+.lf-code-table tr.lf-code-row.lf-row-has-note td.lf-ln:first-child {
+  box-shadow: inset 3px 0 0 var(--lf-accent);
+}
+
+.lf-code-table tr.lf-code-row.lf-row-selecting td { background: var(--lf-working-fill); }
+
+.lf-code-table td.lf-sign {
+  width: 18px;
+  text-align: center;
+  user-select: none;
+  padding: 0 2px;
+}
+
+.lf-code-table tr.lf-add { background: var(--lf-success-fill); }
+.lf-code-table tr.lf-add td.lf-sign { color: var(--lf-success-ink); }
+.lf-code-table tr.lf-del { background: var(--lf-failure-fill); }
+.lf-code-table tr.lf-del td.lf-sign { color: var(--lf-failure-ink); }
+.lf-code-table tr.lf-hunk td {
+  background: var(--lf-surface-muted);
+  color: var(--lf-text-secondary);
+  padding: 3px 10px;
+}
+
+.lf-code-table tr.lf-line-note td {
+  white-space: normal;
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  background: var(--lf-surface-element);
+  color: var(--lf-text);
+  padding: 6px 12px;
+  border-top: 1px solid var(--lf-border);
+  border-bottom: 1px solid var(--lf-border);
+}
+
+.lf-codeblock.lf-notes-hidden tr.lf-line-note { display: none; }
+
+/* Builtin components */
+.lf-decision {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+
+.lf-decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lf-decision-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.lf-decision-rec {
+  font-size: 12px;
+  color: var(--lf-text-secondary);
+}
+
+.lf-before-after {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.lf-before-after-pane {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  padding: 12px 14px;
+}
+
+.lf-before-after-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lf-text-secondary);
+  margin-bottom: 8px;
+}
+
+/* Controls: choices, questions, direct actions */
+[data-choice], [data-multiselect] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Draw `data-label` as a heading only when the control has no selectable prompt child;
+   a decision card shows its title instead. */
+:is([data-choice], [data-multiselect], [data-question])[data-label]:not(:has(> p, > label, > h3, > h4, > legend))::before {
+  content: attr(data-label);
+  display: block;
+  flex-basis: 100%;
+  margin: 10px 0 2px;
+  font-weight: 600;
+}
+
+:is([data-choice], [data-multiselect]) > :is(p, label, h3, h4, legend) {
+  flex-basis: 100%;
+  margin: 10px 0 2px;
+}
+
+.lf-decision [data-choice][data-label]::before { content: none; }
+
+button {
+  appearance: none;
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 6px 11px;
+  border-radius: 4px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  cursor: pointer;
+}
+
+button:hover { background: var(--lf-surface-muted); }
+
+button.is-selected,
+button[aria-pressed="true"],
+button.lf-btn-accent {
+  background: var(--lf-accent);
+  border-color: var(--lf-accent);
+  color: var(--lf-accent-text);
+}
+
+button.lf-btn-accent:hover {
+  background: var(--lf-accent-hover);
+  border-color: var(--lf-accent-hover);
+}
+
+button.lf-btn-quiet {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-color: var(--lf-border);
+  color: var(--lf-text-secondary);
+}
+
+button.lf-btn-quiet.is-selected,
+button.lf-btn-quiet[aria-pressed="true"] {
+  background: var(--lf-accent);
+  border-color: var(--lf-accent);
+  color: var(--lf-accent-text);
+}
+
+[data-question] { margin: 14px 0; }
+
+[data-question] textarea, [data-question] input[type="text"] {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 4px;
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 14px;
+  resize: vertical;
+}
+
+/* Direct action confirmation & receipt */
+.lf-action-confirm,
+.lf-action-receipt,
+.lf-action-error {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  border-radius: 4px;
+}
+
+.lf-action-confirm,
+.lf-action-error {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lf-action-confirm {
+  padding: 6px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 6px;
+  background: var(--lf-surface-muted);
+}
+
+.lf-action-summary {
+  font-family: var(--lf-font-mono);
+  font-size: 12px;
+  color: var(--lf-text-secondary);
+}
+
+.lf-action-receipt {
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--lf-success-fill);
+  color: var(--lf-success-ink);
+  font-weight: 600;
+}
+
+.lf-action-error {
+  padding: 5px 10px;
+  background: var(--lf-failure-fill);
+  color: var(--lf-failure-ink);
+}
+
+/* Warm-underlined cross-element note highlights */
+.lf-hl {
+  background: var(--lf-highlight);
+  border-bottom: 2px solid var(--lf-highlight-line, var(--lf-accent));
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.lf-hl:hover { background: var(--lf-highlight-active, var(--lf-highlight)); }
+
+.lf-pulse-ring {
+  outline: 2px solid var(--lf-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Notion-style floating selection bubble */
+.lf-float-pill {
+  position: fixed;
+  z-index: 960;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px;
+  border-radius: 8px;
+  background: var(--lf-bubble-bg, var(--lf-text));
+  color: var(--lf-bubble-text, var(--lf-bg));
+  border: 1px solid var(--lf-bubble-border, var(--lf-border-strong));
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.2));
+  font-size: 12px;
+}
+
+.lf-float-pill button {
+  background: transparent;
+  border: none;
+  color: var(--lf-bubble-text, var(--lf-bg));
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lf-float-pill button:hover { background: rgba(128, 128, 128, 0.24); }
+
+.lf-float-pill-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(128, 128, 128, 0.35);
+}
+
+/* Floating comment composer & hover cards */
+.lf-float-composer,
+.lf-hover-card {
+  position: fixed;
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border-strong);
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.18));
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.lf-float-composer {
+  z-index: 970;
+  width: min(320px, calc(100vw - 16px));
+  padding: 10px;
+  border-radius: 9px;
+}
+
+.lf-hover-card {
+  z-index: 950;
+  width: min(290px, calc(100vw - 16px));
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.lf-anchor-quote {
+  font-size: 11.5px;
+  color: var(--lf-text-secondary);
+  border-left: 2px solid var(--lf-border-strong);
+  padding-left: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lf-card-body {
+  color: var(--lf-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lf-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.lf-float-composer textarea,
+.lf-sidebar-item textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 5px;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  resize: vertical;
+}
+
+.lf-sidebar-item textarea { background: var(--lf-surface); }
+
+/* Top-right Comments toggle + collapsible slide-over sidebar */
+.lf-comments-toggle {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 920;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: var(--lf-shadow-sm, 0 3px 12px rgba(0, 0, 0, 0.08));
+}
+
+.lf-comments-toggle.has-notes { border-color: var(--lf-accent); }
+
+.lf-comments-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--lf-accent);
+  color: var(--lf-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.lf-comments-count[hidden] { display: none; }
+
+.lf-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(340px, 92vw);
+  z-index: 940;
+  background: var(--lf-surface);
+  border-left: 1px solid var(--lf-border-strong);
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.18));
+  display: flex;
+  flex-direction: column;
+  transform: translateX(104%);
+  transition: transform 0.18s ease;
+}
+
+.lf-sidebar.is-open { transform: translateX(0); }
+
+.lf-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--lf-border);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.lf-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lf-sidebar-empty {
+  font-size: 13px;
+  color: var(--lf-text-tertiary);
+  padding: 6px 2px;
+}
+
+.lf-sidebar-item {
+  padding: 9px 11px;
+  border: 1px solid var(--lf-border);
+  border-radius: 7px;
+  background: var(--lf-bg);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lf-sidebar-item:hover { border-color: var(--lf-accent); }
+
+/* Fixed T3 Code-style attached-chip composer dock (hidden in Loopflow Desktop) */
+.lf-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: min(820px, calc(100vw - 24px));
+  padding: 9px 12px;
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 11px;
+  box-shadow: var(--lf-shadow, 0 8px 28px rgba(0, 0, 0, 0.16));
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lf-dock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-height: 92px;
+  overflow-y: auto;
+}
+
+.lf-dock[hidden],
+.lf-dock-chips[hidden] { display: none; }
+
+.lf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-bg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lf-chip:hover { border-color: var(--lf-accent); }
+
+.lf-chip-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--lf-surface-element);
+  color: var(--lf-text-secondary);
+  flex-shrink: 0;
+}
+
+.lf-chip-tag.tag-note { background: var(--lf-highlight); color: var(--lf-accent); }
+.lf-chip-tag.tag-lines { background: var(--lf-working-fill); color: var(--lf-working-ink); }
+.lf-chip-tag.tag-choice { background: var(--lf-success-fill); color: var(--lf-success-ink); }
+.lf-chip-tag.tag-answer { background: var(--lf-warning-fill); color: var(--lf-warning-ink); }
+.lf-chip-tag.tag-run { background: var(--lf-failure-fill); color: var(--lf-failure-ink); }
+
+.lf-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.lf-chip-x {
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--lf-text-tertiary);
+}
+
+.lf-chip-x:hover {
+  background: transparent;
+  color: var(--lf-failure-ink);
+}
+
+.lf-dock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lf-dock-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 6px;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13.5px;
+}
+
+.lf-dock-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.lf-dock-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.lf-dock-preview {
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: var(--lf-bg);
+  border: 1px solid var(--lf-border);
+  font-family: var(--lf-font-mono);
+  font-size: 11.5px;
+  color: var(--lf-text-secondary);
+  word-break: break-word;
+  max-height: 84px;
+  overflow-y: auto;
+}
+
+.lf-dock-status {
+  font-size: 12.5px;
+  color: var(--lf-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lf-dock-status.is-error { color: var(--lf-failure-ink); }
+.lf-dock-status.is-ok { color: var(--lf-success-ink); }
+
+</style>
+</head>
+<body>
+<main class="lf-page">
+<h1>Concept Review: MTG-506 — Vectorized Eval Host, Replay, and Heuristic Stepping</h1>
+
+<p><strong>Area reviewed:</strong> Evaluation execution, recording, and verification replay across
+<code>managym</code> (<code>PlayerPolicy</code>, <code>VectorEnv</code>/<code>SlotLoad</code>,
+<code>RecordedVectorEnv</code>, <code>GameRecord</code>/<code>GameInputs</code>,
+<code>RecordWalker</code>, <code>PyEnv</code>) and <code>manabot</code>
+(<code>eval/agents</code>, <code>eval/vector</code>, <code>sim/agent</code>,
+<code>sim/native_game</code>, <code>sim/evaluation_records</code>, <code>sim/replay</code>,
+<code>sim/heuristic</code>, <code>infra/provenance</code>). This is a pre-build review of
+<a href="scratch/plan.md"><code>scratch/plan.md</code></a> (committed at <code>26cfa6c47f</code>,
+stacked on MTG-497 at <code>fb1580b472</code>). Because the plan reshapes four coupled contracts —
+per-slot native policies, heuristic statefulness, compact records, and threaded single-digest replay —
+every surface that owns or reads those contracts is in scope.</p>
+
+<p><strong>Sync note against <code>origin/main</code>:</strong> Since <code>fb1580b472</code>,
+<code>origin/main</code> landed <code>23212c88f5</code> (MTG-502, <code>GameStateEdit</code>),
+which modified <code>managym/src/agent/vector_env/slots.rs</code>,
+<code>managym/src/python/vector_env_bindings.rs</code>, <code>managym/recording.py</code>,
+<code>managym/__init__.pyi</code>, and <code>tests/public_api.json</code> (and changed
+<code>RestoreOptions</code> from <code>Copy</code> to <code>Clone</code>). Plan the sync before
+Pass 1 edits those same files.</p>
+
+<h2>Do domain concepts and code concepts line up?</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Domain concept</th>
+      <th>Code concept (current + plan)</th>
+      <th>Aligned?</th>
+      <th>Mismatch</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Per-game seat policy</strong><br>Each leg assigns each seat to an external checkpoint, the built-in heuristic (optionally capped), or a custom Python player; stateful players keep state across one game.</td>
+      <td><code>VectorEnv.player_policies</code> (vector-wide), <code>GameRecord.player_policies</code> (record-wide), <code>GameInputs</code> (no policies); <code>agents.py:Heuristic</code> wraps both native heuristic and custom <code>CodePlayer</code>s; <code>GamePlayer</code> has no per-game lifecycle.</td>
+      <td><strong>No</strong></td>
+      <td>One idea under two owners (<code>VectorEnv</code> vs slot <code>Env</code>; <code>GameRecord</code> vs <code>GameInputs</code> breaks multi-slot failure records). One name (<code>Heuristic</code>) for two ideas. Plan blames <code>sim/heuristic.py</code> (already stateful) instead of <code>GamePlayer</code>/<code>agents.py</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Per-leg native failure isolation</strong><br>A rules error or panic in one leg fails only that leg and attributes the crash to whichever seat was acting.</td>
+      <td><code>step_isolated_with_writer</code> catches step errors with no acting-seat field; <code>vector.py</code> blames <code>round_result.players[slot]</code> (always checkpoint). <code>reset_each_into_buffers</code> and <code>load_slots_into_buffers</code> have no isolation.</td>
+      <td><strong>No</strong></td>
+      <td>Seat-0 heuristic opening turns run inside unisolated <code>reset</code>/<code>load_slots</code> (crashing all 64 slots). Mid-game heuristic crashes inside <code>settle_players</code> get misattributed to the checkpoint.</td>
+    </tr>
+    <tr>
+      <td><strong>Recorded evaluation decision</strong><br>Engine owns authoritative inputs and state digests; runner adds only non-recomputable metadata; viewer frames and offer labels derive on demand.</td>
+      <td>Plan drops <code>frame_sha256</code> on vector records but keeps <code>chosen_offer</code> and <code>action_space_kind</code>; <code>RecordedVectorEnv._step</code> also serializes <code>semantic_decision_frames_json</code> on every isolated step.</td>
+      <td><strong>No</strong></td>
+      <td>Halfway split: zero downstream consumers read <code>chosen_offer</code>/<code>action_space_kind</code> from a <code>GameRecord</code>, yet keeping them forces 64 full <code>PyObservation</code> clones and <code>describe_actions</code> per round, plus duplicate semantic-frame serialization.</td>
+    </tr>
+    <tr>
+      <td><strong>Verified replay &amp; background execution</strong><br>Replay checks every transition once, never pollutes <code>cards()</code> with a diverged step, and runs off the stepping loop in parallel with forwards.</td>
+      <td>Plan drops <code>clone_env()</code> in <code>RecordWalker</code> for plain integer actions, runs <code>finalize_match</code> on 2 threads while <code>PyEnv::step</code>/<code>state_digest</code> hold the GIL, and <code>eval_throughput.py</code> subtracts <code>replay_seconds</code> from wall time.</td>
+      <td><strong>No</strong></td>
+      <td>Dropping clone-first breaks <code>tests/env/test_record_reducers.py:105-113</code> (<code>cards()</code> invariant on divergence). Holding the GIL serializes both threads against the event loop. Subtracting overlapped replay makes <code>other_arena</code> wrong or negative.</td>
+    </tr>
+    <tr>
+      <td><strong>Inspecting recorded games in Academy Watch</strong><br>Any stored evaluation game record can be opened for visual inspection.</td>
+      <td><code>managym/academy/watch.py:486</code> raises <code>ValueError</code> whenever <code>resolved_player_policies != ("agent", "agent")</code>.</td>
+      <td><strong>No</strong></td>
+      <td>Unstated consequence: every vector heuristic evaluation record becomes unviewable in Academy Watch until Watch supports native-seat records.</td>
+    </tr>
+    <tr>
+      <td><strong>Process runtime identity &amp; scalar capture context</strong><br>Process-invariant engine hashes compute once; static per-game metadata isn't deep-copied per decision.</td>
+      <td><code>provenance.py:runtime_fingerprints</code> re-hashes all <code>.rs</code> files and <code>_managym</code> and resets a throwaway <code>Env</code> every call; <code>native_game.py:292</code> deep-copies metadata 3×/decision despite <code>_Capture.frozen_context</code>.</td>
+      <td><strong>No</strong></td>
+      <td>Plan adds a per-run cache in <code>vector.py</code> instead of caching process invariants in <code>provenance.py</code> and using existing <code>frozen_context</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Paired deals, <code>Play</code> counts, and card evidence</strong><br>Checkpoint play habits and card exposure match between scalar and native-heuristic vector runs.</td>
+      <td><code>Play</code> selects only the checkpoint seat (<code>checkpoint_counts</code>); combat/mana exposure runs natively for both seats; <code>GameEvidence</code> derives from <code>walk(..., capture_cards=True)</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Aligned. Skipping heuristic decisions leaves checkpoint <code>PlayCounts</code> and native card exposure identical.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>The biggest mismatch: patching around vector-wide policies and halfway-compact records instead of finishing the ownership boundary</h2>
+
+<p>The plan treats <strong>per-slot native policies</strong> and <strong>compact decision evidence</strong> as
+local optimizations inside <code>vector.py</code> rather than finishing the model where each fact is owned.
+Walking both a normal round and a failure exposes four concrete breaks:</p>
+
+<ol>
+  <li><strong>Multi-slot records and slot reuse still assume one vector-wide policy pair.</strong>
+    <code>GameRecord</code> stores one <code>player_policies</code> tuple for all <code>games</code>,
+    <code>GameInputs</code> has none, <code>SlotLoad::Fresh</code> inherits the previous leg's policies via
+    <code>previous.replacement_root()</code>, and <code>SlotLoad::Snapshot</code> checks against
+    <code>self.player_policies</code>. If a multi-slot failure snapshot or journal is written while slot 0
+    is <code>("agent", "heuristic:64")</code> and slot 1 is <code>("heuristic:64", "agent")</code>,
+    <code>replay_failure_inputs</code> replays half the slots with the wrong seat as heuristic.</li>
+  <li><strong>Halfway-compact annotations still pay for full observations every round.</strong>
+    <code>GameInputs.digests[i]</code> already Blake3-hashes the entire <code>ActionSpace</code> and
+    <code>GameInputs.actions[i]</code> is the chosen offer index. Dropping <code>frame_sha256</code> while
+    keeping <code>chosen_offer</code> and <code>action_space_kind</code> forces <code>step_round</code> to
+    keep calling <code>vector.decision_observations(active)</code> (cloning 64 full native
+    <code>Observation</code> structs across PyO3) and <code>describe_actions(raw)</code> every round — even
+    though no downstream consumer reads either field from a <code>GameRecord</code> (<code>audit_view</code>
+    only reads <code>chosen_offer["id"]</code>, which equals <code>inputs["actions"][index]</code>).</li>
+  <li><strong><code>RecordedVectorEnv._step</code> duplicates Rust's semantic frame serialization.</strong>
+    On every isolated step, <code>RecordedVectorEnv._step</code> calls
+    <code>semantic_decision_frames_json(active)</code> in Python even with no journal and no policy
+    probabilities, while Rust's <code>step_isolated_with_writer</code> serializes the exact same frame a
+    second time into <code>info["game_error_frame"]</code>.</li>
+  <li><strong><code>agents.py</code> overloads <code>Heuristic</code> and misses why state was lost.</strong>
+    <code>manabot/sim/heuristic.py:HeuristicPlayer</code> is already stateful (standalone scalar
+    <code>execute_game</code> builds one per game). State is lost because <code>GamePlayer</code> has no
+    per-game lifecycle and <code>agents.py:Heuristic</code> calls <code>factory(seed)</code> inside
+    <code>choose()</code>.</li>
+</ol>
+
+<div class="lf-before-after">
+  <div class="lf-before-after-pane">
+    <div class="lf-before-after-label">Before</div>
+    
+    <h4>Plan as written (halfway boundary)</h4>
+    <ul>
+      <li><code>GameRecord.player_policies</code> stays record-wide; only <code>take_slot_record</code> patches it. Multi-slot snapshots/journals write wrong policies for swapped seats.</li>
+      <li><code>agents.py</code> keeps one <code>Heuristic(factory)</code> class; <code>vector.py</code> peeks at <code>match.players</code> to detect built-in heuristic; plan edits <code>sim/heuristic.py</code> just to bump its hash.</li>
+      <li>Vector annotations drop <code>frame_sha256</code> but keep <code>chosen_offer</code> + <code>action_space_kind</code> → still calls <code>decision_observations(active)</code> + <code>describe_actions</code> + duplicate <code>semantic_decision_frames_json</code> every round.</li>
+      <li>Opening heuristic turns run in unisolated <code>reset</code>/<code>load_slots</code>; mid-game heuristic crashes blame the checkpoint.</li>
+    </ul>
+  
+  </div>
+  <div class="lf-before-after-pane">
+    <div class="lf-before-after-label">After</div>
+    
+    <h4>Recommended model (one owner per fact)</h4>
+    <ul>
+      <li>Each slot's <code>Env</code> and <code>GameInputs</code> owns its optional <code>player_policies</code> (omitted when matching <code>GameRecord.player_policies</code>; single-game records keep <code>GameRecord.player_policies</code>). <code>PlayerPolicy::Heuristic { max_actions }</code> serializes as <code>"heuristic"</code> / <code>"heuristic:64"</code> everywhere.</li>
+      <li>Split <code>NativeHeuristic(max_actions)</code> from <code>CodeSeat(factory)</code>; give <code>GamePlayer</code> a per-game handle (<code>open_game(seed)</code>) so every stateful code player keeps turn state naturally without artificial edits to <code>sim/heuristic.py</code>.</li>
+      <li>Compact vector annotations store only runner-owned facts (<code>actor</code>, <code>revision</code>, <code>player_id</code>, <code>player_seed</code>, <code>player_decision_ordinal</code>, <code>policy_rng_seed</code>, <code>latency_seconds</code>) → zero <code>decision_observations</code> or <code>describe_actions</code> calls against native heuristic; <code>RecordedVectorEnv</code> pulls <code>game.frame</code> from <code>info["game_error_frame"]</code> only on failure.</li>
+      <li>Isolate opening settlement per slot and return <code>game_error_seat</code> on isolated native errors so every crash isolates cleanly and attributes to the acting seat.</li>
+    </ul>
+  
+  </div>
+</div>
+
+
+<h3>Code evidence</h3>
+
+<p><strong>1. Where policies and slot loading live today</strong> — <code>GameInputs</code> has no per-game
+<code>player_policies</code>, <code>SlotLoad::Fresh</code> copies policies from the previous occupant via
+<code>previous.replacement_root()</code>, and <code>SlotLoad::Snapshot</code> rejects mismatches against
+the single vector-wide <code>self.player_policies</code>:</p>
+
+<div class="lf-codeblock" data-path="managym/src/agent/vector_env/slots.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/agent/vector_env/slots.rs:163-207</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="163"><td class="lf-ln lf-ln-single">163</td><td>        let (env, obs, mut info, state, source_digest) = match request {</td></tr>
+<tr class="lf-code-row" data-line="164"><td class="lf-ln lf-ln-single">164</td><td>            SlotLoad::Fresh(_, setup, explicit_seed) =&gt; {</td></tr>
+<tr class="lf-code-row" data-line="165"><td class="lf-ln lf-ln-single">165</td><td>                if let Some(setup) = setup {</td></tr>
+<tr class="lf-code-row" data-line="166"><td class="lf-ln lf-ln-single">166</td><td>                    if !self.uniform_roster.is_empty() {</td></tr>
+<tr class="lf-code-row" data-line="167"><td class="lf-ln lf-ln-single">167</td><td>                        return Err(AgentError(</td></tr>
+<tr class="lf-code-row" data-line="168"><td class="lf-ln lf-ln-single">168</td><td>                            &quot;per-slot setup conflicts with configured roster&quot;.into(),</td></tr>
+<tr class="lf-code-row" data-line="169"><td class="lf-ln lf-ln-single">169</td><td>                        ));</td></tr>
+<tr class="lf-code-row" data-line="170"><td class="lf-ln lf-ln-single">170</td><td>                    }</td></tr>
+<tr class="lf-code-row" data-line="171"><td class="lf-ln lf-ln-single">171</td><td>                    Self::validate_player_configs(setup.len())?;</td></tr>
+<tr class="lf-code-row" data-line="172"><td class="lf-ln lf-ln-single">172</td><td>                }</td></tr>
+<tr class="lf-code-row" data-line="173"><td class="lf-ln lf-ln-single">173</td><td>                let mut dealt_seed = explicit_seed.unwrap_or(next_seed);</td></tr>
+<tr class="lf-code-row" data-line="174"><td class="lf-ln lf-ln-single">174</td><td>                let mut env = previous.replacement_root(dealt_seed);</td></tr>
+<tr class="lf-code-row" data-line="175"><td class="lf-ln lf-ln-single">175</td><td>                let (obs, info) = Self::deal_fresh_game(</td></tr>
+<tr class="lf-code-row" data-line="176"><td class="lf-ln lf-ln-single">176</td><td>                    &amp;self.uniform_roster,</td></tr>
+<tr class="lf-code-row" data-line="177"><td class="lf-ln lf-ln-single">177</td><td>                    &amp;mut env,</td></tr>
+<tr class="lf-code-row" data-line="178"><td class="lf-ln lf-ln-single">178</td><td>                    &amp;mut dealt_seed,</td></tr>
+<tr class="lf-code-row" data-line="179"><td class="lf-ln lf-ln-single">179</td><td>                    self.seed_stride,</td></tr>
+<tr class="lf-code-row" data-line="180"><td class="lf-ln lf-ln-single">180</td><td>                    setup.as_ref().unwrap_or(&amp;self.player_configs[slot]),</td></tr>
+<tr class="lf-code-row" data-line="181"><td class="lf-ln lf-ln-single">181</td><td>                )?;</td></tr>
+<tr class="lf-code-row" data-line="182"><td class="lf-ln lf-ln-single">182</td><td>                let automatic_seed = explicit_seed.is_none();</td></tr>
+<tr class="lf-code-row" data-line="183"><td class="lf-ln lf-ln-single">183</td><td>                if automatic_seed {</td></tr>
+<tr class="lf-code-row" data-line="184"><td class="lf-ln lf-ln-single">184</td><td>                    next_seed = dealt_seed;</td></tr>
+<tr class="lf-code-row" data-line="185"><td class="lf-ln lf-ln-single">185</td><td>                }</td></tr>
+<tr class="lf-code-row" data-line="186"><td class="lf-ln lf-ln-single">186</td><td>                (</td></tr>
+<tr class="lf-code-row" data-line="187"><td class="lf-ln lf-ln-single">187</td><td>                    env,</td></tr>
+<tr class="lf-code-row" data-line="188"><td class="lf-ln lf-ln-single">188</td><td>                    obs,</td></tr>
+<tr class="lf-code-row" data-line="189"><td class="lf-ln lf-ln-single">189</td><td>                    info,</td></tr>
+<tr class="lf-code-row" data-line="190"><td class="lf-ln lf-ln-single">190</td><td>                    SlotState::FreshOpening { automatic_seed },</td></tr>
+<tr class="lf-code-row" data-line="191"><td class="lf-ln lf-ln-single">191</td><td>                    None,</td></tr>
+<tr class="lf-code-row" data-line="192"><td class="lf-ln lf-ln-single">192</td><td>                )</td></tr>
+<tr class="lf-code-row" data-line="193"><td class="lf-ln lf-ln-single">193</td><td>            }</td></tr>
+<tr class="lf-code-row" data-line="194"><td class="lf-ln lf-ln-single">194</td><td>            SlotLoad::Snapshot(_, source, options) =&gt; {</td></tr>
+<tr class="lf-code-row" data-line="195"><td class="lf-ln lf-ln-single">195</td><td>                if !source.compatible(</td></tr>
+<tr class="lf-code-row" data-line="196"><td class="lf-ln lf-ln-single">196</td><td>                    *options,</td></tr>
+<tr class="lf-code-row" data-line="197"><td class="lf-ln lf-ln-single">197</td><td>                    self.player_policies,</td></tr>
+<tr class="lf-code-row" data-line="198"><td class="lf-ln lf-ln-single">198</td><td>                    self.skip_trivial,</td></tr>
+<tr class="lf-code-row" data-line="199"><td class="lf-ln lf-ln-single">199</td><td>                    self.decision_memory_enabled,</td></tr>
+<tr class="lf-code-row" data-line="200"><td class="lf-ln lf-ln-single">200</td><td>                    self.decision_memory_include_own,</td></tr>
+<tr class="lf-code-row" data-line="201"><td class="lf-ln lf-ln-single">201</td><td>                ) {</td></tr>
+<tr class="lf-code-row" data-line="202"><td class="lf-ln lf-ln-single">202</td><td>                    return Err(AgentError(</td></tr>
+<tr class="lf-code-row" data-line="203"><td class="lf-ln lf-ln-single">203</td><td>                        &quot;snapshot policies, skip_trivial or decision memory differ from vector&quot;</td></tr>
+<tr class="lf-code-row" data-line="204"><td class="lf-ln lf-ln-single">204</td><td>                            .into(),</td></tr>
+<tr class="lf-code-row" data-line="205"><td class="lf-ln lf-ln-single">205</td><td>                    ));</td></tr>
+<tr class="lf-code-row" data-line="206"><td class="lf-ln lf-ln-single">206</td><td>                }</td></tr>
+<tr class="lf-code-row" data-line="207"><td class="lf-ln lf-ln-single">207</td><td>                let env = source.restore(*options)?;</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="managym/recording.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/recording.py:171-197</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="171"><td class="lf-ln lf-ln-single">171</td><td>class GameInputs(BaseModel):</td></tr>
+<tr class="lf-code-row" data-line="172"><td class="lf-ln lf-ln-single">172</td><td>    stream: int = 0</td></tr>
+<tr class="lf-code-row" data-line="173"><td class="lf-ln lf-ln-single">173</td><td>    # Older evidence always captured; new disabled captures serialize False.</td></tr>
+<tr class="lf-code-row" data-line="174"><td class="lf-ln lf-ln-single">174</td><td>    decision_memory: bool = Field(default=True, exclude_if=lambda value: value)</td></tr>
+<tr class="lf-code-row" data-line="175"><td class="lf-ln lf-ln-single">175</td><td>    decision_memory_include_own: bool = Field(</td></tr>
+<tr class="lf-code-row" data-line="176"><td class="lf-ln lf-ln-single">176</td><td>        default=False, exclude_if=lambda value: not value</td></tr>
+<tr class="lf-code-row" data-line="177"><td class="lf-ln lf-ln-single">177</td><td>    )</td></tr>
+<tr class="lf-code-row" data-line="178"><td class="lf-ln lf-ln-single">178</td><td>    seed: int</td></tr>
+<tr class="lf-code-row" data-line="179"><td class="lf-ln lf-ln-single">179</td><td>    players: list[PlayerSetup]</td></tr>
+<tr class="lf-code-row" data-line="180"><td class="lf-ln lf-ln-single">180</td><td>    actions: list[int | str] = []</td></tr>
+<tr class="lf-code-row" data-line="181"><td class="lf-ln lf-ln-single">181</td><td>    interventions: list[Intervention] = Field(</td></tr>
+<tr class="lf-code-row" data-line="182"><td class="lf-ln lf-ln-single">182</td><td>        default_factory=list, exclude_if=lambda v: not v</td></tr>
+<tr class="lf-code-row" data-line="183"><td class="lf-ln lf-ln-single">183</td><td>    )</td></tr>
+<tr class="lf-code-row" data-line="184"><td class="lf-ln lf-ln-single">184</td><td>    # Fingerprints of issued frames that supplied object addresses to Commands.</td></tr>
+<tr class="lf-code-row" data-line="185"><td class="lf-ln lf-ln-single">185</td><td>    object_candidate_frames: list[str] = Field(</td></tr>
+<tr class="lf-code-row" data-line="186"><td class="lf-ln lf-ln-single">186</td><td>        default_factory=list, exclude_if=lambda v: not v</td></tr>
+<tr class="lf-code-row" data-line="187"><td class="lf-ln lf-ln-single">187</td><td>    )</td></tr>
+<tr class="lf-code-row" data-line="188"><td class="lf-ln lf-ln-single">188</td><td>    committed: int | None = Field(default=None, ge=0)</td></tr>
+<tr class="lf-code-row" data-line="189"><td class="lf-ln lf-ln-single">189</td><td>    digests: list[str] = []</td></tr>
+<tr class="lf-code-row" data-line="190"><td class="lf-ln lf-ln-single">190</td><td>    annotations: list[DecisionAnnotation | None] = []</td></tr>
+<tr class="lf-code-row" data-line="191"><td class="lf-ln lf-ln-single">191</td><td>    command_frame_hashes: list[str | None] = Field(</td></tr>
+<tr class="lf-code-row" data-line="192"><td class="lf-ln lf-ln-single">192</td><td>        default_factory=list, exclude_if=lambda value: not value</td></tr>
+<tr class="lf-code-row" data-line="193"><td class="lf-ln lf-ln-single">193</td><td>    )</td></tr>
+<tr class="lf-code-row" data-line="194"><td class="lf-ln lf-ln-single">194</td><td>    end: GameEnd | None = None</td></tr>
+<tr class="lf-code-row" data-line="195"><td class="lf-ln lf-ln-single">195</td><td>    actor: int | None = None</td></tr>
+<tr class="lf-code-row" data-line="196"><td class="lf-ln lf-ln-single">196</td><td>    frame: str | None = None</td></tr>
+<tr class="lf-code-row" data-line="197"><td class="lf-ln lf-ln-single">197</td><td></td></tr>
+</tbody></table></div></div>
+
+<p><strong>2. Where heuristic state is actually lost</strong> — <code>HeuristicPlayer</code> is already
+stateful; <code>agents.py:Heuristic</code> rebuilds it per decision and conflates native heuristic with
+registered <code>CodePlayer</code>s:</p>
+
+<div class="lf-codeblock" data-path="manabot/sim/heuristic.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/sim/heuristic.py:19-42</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="19"><td class="lf-ln lf-ln-single">19</td><td>def heuristic_source_paths() -&gt; list[Path]:</td></tr>
+<tr class="lf-code-row" data-line="20"><td class="lf-ln lf-ln-single">20</td><td>    &quot;&quot;&quot;Native rules and adapter bytes identifying newly registered opponents.&quot;&quot;&quot;</td></tr>
+<tr class="lf-code-row" data-line="21"><td class="lf-ln lf-ln-single">21</td><td>    root = Path(managym.__file__).resolve().parent</td></tr>
+<tr class="lf-code-row" data-line="22"><td class="lf-ln lf-ln-single">22</td><td>    return [</td></tr>
+<tr class="lf-code-row" data-line="23"><td class="lf-ln lf-ln-single">23</td><td>        Path(__file__).resolve(),</td></tr>
+<tr class="lf-code-row" data-line="24"><td class="lf-ln lf-ln-single">24</td><td>        root / &quot;src/agent/heuristic/mod.rs&quot;,</td></tr>
+<tr class="lf-code-row" data-line="25"><td class="lf-ln lf-ln-single">25</td><td>        root / &quot;src/agent/heuristic/knowledge.rs&quot;,</td></tr>
+<tr class="lf-code-row" data-line="26"><td class="lf-ln lf-ln-single">26</td><td>        root / &quot;src/python/heuristic_bindings.rs&quot;,</td></tr>
+<tr class="lf-code-row" data-line="27"><td class="lf-ln lf-ln-single">27</td><td>    ]</td></tr>
+<tr class="lf-code-row" data-line="28"><td class="lf-ln lf-ln-single">28</td><td></td></tr>
+<tr class="lf-code-row" data-line="29"><td class="lf-ln lf-ln-single">29</td><td></td></tr>
+<tr class="lf-code-row" data-line="30"><td class="lf-ln lf-ln-single">30</td><td>class HeuristicPlayer:</td></tr>
+<tr class="lf-code-row" data-line="31"><td class="lf-ln lf-ln-single">31</td><td>    &quot;&quot;&quot;Stateful adapter to the engine&#39;s viewer-safe heuristic selector.&quot;&quot;&quot;</td></tr>
+<tr class="lf-code-row" data-line="32"><td class="lf-ln lf-ln-single">32</td><td></td></tr>
+<tr class="lf-code-row" data-line="33"><td class="lf-ln lf-ln-single">33</td><td>    def __init__(self, *, max_actions: int | None = None) -&gt; None:</td></tr>
+<tr class="lf-code-row" data-line="34"><td class="lf-ln lf-ln-single">34</td><td>        if max_actions is not None and (</td></tr>
+<tr class="lf-code-row" data-line="35"><td class="lf-ln lf-ln-single">35</td><td>            type(max_actions) is not int or max_actions &lt; 1</td></tr>
+<tr class="lf-code-row" data-line="36"><td class="lf-ln lf-ln-single">36</td><td>        ):</td></tr>
+<tr class="lf-code-row" data-line="37"><td class="lf-ln lf-ln-single">37</td><td>            raise ValueError(&quot;heuristic max_actions must be a positive integer&quot;)</td></tr>
+<tr class="lf-code-row" data-line="38"><td class="lf-ln lf-ln-single">38</td><td>        self._native = managym.Heuristic(max_actions=max_actions)</td></tr>
+<tr class="lf-code-row" data-line="39"><td class="lf-ln lf-ln-single">39</td><td></td></tr>
+<tr class="lf-code-row" data-line="40"><td class="lf-ln lf-ln-single">40</td><td>    def act(self, env: Env, obs: ObservationBuffers) -&gt; int:</td></tr>
+<tr class="lf-code-row" data-line="41"><td class="lf-ln lf-ln-single">41</td><td>        del obs</td></tr>
+<tr class="lf-code-row" data-line="42"><td class="lf-ln lf-ln-single">42</td><td>        return self._native.select_action(env.last_raw_obs)</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="manabot/eval/agents.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/eval/agents.py:200-249</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="200"><td class="lf-ln lf-ln-single">200</td><td>@dataclass(frozen=True)</td></tr>
+<tr class="lf-code-row" data-line="201"><td class="lf-ln lf-ln-single">201</td><td>class Heuristic:</td></tr>
+<tr class="lf-code-row" data-line="202"><td class="lf-ln lf-ln-single">202</td><td>    factory: Callable[[int], CodePlayer]</td></tr>
+<tr class="lf-code-row" data-line="203"><td class="lf-ln lf-ln-single">203</td><td>    space: None = None</td></tr>
+<tr class="lf-code-row" data-line="204"><td class="lf-ln lf-ln-single">204</td><td></td></tr>
+<tr class="lf-code-row" data-line="205"><td class="lf-ln lf-ln-single">205</td><td>    def admit(self, match: MatchConfig) -&gt; None:</td></tr>
+<tr class="lf-code-row" data-line="206"><td class="lf-ln lf-ln-single">206</td><td>        pass</td></tr>
+<tr class="lf-code-row" data-line="207"><td class="lf-ln lf-ln-single">207</td><td></td></tr>
+<tr class="lf-code-row" data-line="208"><td class="lf-ln lf-ln-single">208</td><td>    def choose(self, env: Env, obs: ObservationBuffers, seed: int) -&gt; int:</td></tr>
+<tr class="lf-code-row" data-line="209"><td class="lf-ln lf-ln-single">209</td><td>        return self.factory(seed).act(env, obs)</td></tr>
+<tr class="lf-code-row" data-line="210"><td class="lf-ln lf-ln-single">210</td><td></td></tr>
+<tr class="lf-code-row" data-line="211"><td class="lf-ln lf-ln-single">211</td><td></td></tr>
+<tr class="lf-code-row" data-line="212"><td class="lf-ln lf-ln-single">212</td><td>def blank_decision_memory(player: CheckpointPlayer) -&gt; bool:</td></tr>
+<tr class="lf-code-row" data-line="213"><td class="lf-ln lf-ln-single">213</td><td>    &quot;&quot;&quot;Whether the seat declares the memory ablation; only a literal true enables it.&quot;&quot;&quot;</td></tr>
+<tr class="lf-code-row" data-line="214"><td class="lf-ln lf-ln-single">214</td><td>    blank = player.config.get(&quot;blank_decision_memory&quot;, False)</td></tr>
+<tr class="lf-code-row" data-line="215"><td class="lf-ln lf-ln-single">215</td><td>    if not isinstance(blank, bool):</td></tr>
+<tr class="lf-code-row" data-line="216"><td class="lf-ln lf-ln-single">216</td><td>        raise ValueError(&quot;blank_decision_memory must be a boolean&quot;)</td></tr>
+<tr class="lf-code-row" data-line="217"><td class="lf-ln lf-ln-single">217</td><td>    return blank</td></tr>
+<tr class="lf-code-row" data-line="218"><td class="lf-ln lf-ln-single">218</td><td></td></tr>
+<tr class="lf-code-row" data-line="219"><td class="lf-ln lf-ln-single">219</td><td></td></tr>
+<tr class="lf-code-row" data-line="220"><td class="lf-ln lf-ln-single">220</td><td>type Seat = Sampler | Heuristic</td></tr>
+<tr class="lf-code-row" data-line="221"><td class="lf-ln lf-ln-single">221</td><td></td></tr>
+<tr class="lf-code-row" data-line="222"><td class="lf-ln lf-ln-single">222</td><td></td></tr>
+<tr class="lf-code-row" data-line="223"><td class="lf-ln lf-ln-single">223</td><td>def build(player: object, leaves: Mapping[str, Forward]) -&gt; Seat:</td></tr>
+<tr class="lf-code-row" data-line="224"><td class="lf-ln lf-ln-single">224</td><td>    if isinstance(player, CheckpointPlayer):</td></tr>
+<tr class="lf-code-row" data-line="225"><td class="lf-ln lf-ln-single">225</td><td>        registration = player.config.get(&quot;registration&quot;, {})</td></tr>
+<tr class="lf-code-row" data-line="226"><td class="lf-ln lf-ln-single">226</td><td>        player_spec = (</td></tr>
+<tr class="lf-code-row" data-line="227"><td class="lf-ln lf-ln-single">227</td><td>            registration.get(&quot;player_spec&quot;, {})</td></tr>
+<tr class="lf-code-row" data-line="228"><td class="lf-ln lf-ln-single">228</td><td>            if isinstance(registration, dict)</td></tr>
+<tr class="lf-code-row" data-line="229"><td class="lf-ln lf-ln-single">229</td><td>            else {}</td></tr>
+<tr class="lf-code-row" data-line="230"><td class="lf-ln lf-ln-single">230</td><td>        )</td></tr>
+<tr class="lf-code-row" data-line="231"><td class="lf-ln lf-ln-single">231</td><td>        return Sampler(</td></tr>
+<tr class="lf-code-row" data-line="232"><td class="lf-ln lf-ln-single">232</td><td>            checkpoint_key=player.checkpoint.key,</td></tr>
+<tr class="lf-code-row" data-line="233"><td class="lf-ln lf-ln-single">233</td><td>            forward=leaves[player.checkpoint.key],</td></tr>
+<tr class="lf-code-row" data-line="234"><td class="lf-ln lf-ln-single">234</td><td>            deterministic=bool(player_spec.get(&quot;deterministic&quot;, False)),</td></tr>
+<tr class="lf-code-row" data-line="235"><td class="lf-ln lf-ln-single">235</td><td>            allow_deck_repetition=bool(player_spec.get(&quot;allow_deck_repetition&quot;, False)),</td></tr>
+<tr class="lf-code-row" data-line="236"><td class="lf-ln lf-ln-single">236</td><td>            blank_decision_memory=blank_decision_memory(player),</td></tr>
+<tr class="lf-code-row" data-line="237"><td class="lf-ln lf-ln-single">237</td><td>        )</td></tr>
+<tr class="lf-code-row" data-line="238"><td class="lf-ln lf-ln-single">238</td><td>    if isinstance(player, Code):</td></tr>
+<tr class="lf-code-row" data-line="239"><td class="lf-ln lf-ln-single">239</td><td>        if &quot;registration&quot; in player.config:</td></tr>
+<tr class="lf-code-row" data-line="240"><td class="lf-ln lf-ln-single">240</td><td>            registration = PlayerRegistration.model_validate(</td></tr>
+<tr class="lf-code-row" data-line="241"><td class="lf-ln lf-ln-single">241</td><td>                player.config[&quot;registration&quot;]</td></tr>
+<tr class="lf-code-row" data-line="242"><td class="lf-ln lf-ln-single">242</td><td>            )</td></tr>
+<tr class="lf-code-row" data-line="243"><td class="lf-ln lf-ln-single">243</td><td>            return Heuristic(lambda seed: build_code_player(registration, seed=seed))</td></tr>
+<tr class="lf-code-row" data-line="244"><td class="lf-ln lf-ln-single">244</td><td>        if player.name != &quot;heuristic&quot;:</td></tr>
+<tr class="lf-code-row" data-line="245"><td class="lf-ln lf-ln-single">245</td><td>            raise TypeError(f&quot;Code player {player.name} has no Manabot builder&quot;)</td></tr>
+<tr class="lf-code-row" data-line="246"><td class="lf-ln lf-ln-single">246</td><td>        maximum = player.config.get(&quot;max_actions&quot;)</td></tr>
+<tr class="lf-code-row" data-line="247"><td class="lf-ln lf-ln-single">247</td><td>        HeuristicPlayer(max_actions=maximum)  # refuse a bad cap here, not mid-game</td></tr>
+<tr class="lf-code-row" data-line="248"><td class="lf-ln lf-ln-single">248</td><td>        return Heuristic(lambda seed: HeuristicPlayer(max_actions=maximum))</td></tr>
+<tr class="lf-code-row" data-line="249"><td class="lf-ln lf-ln-single">249</td><td>    raise TypeError(f&quot;unsupported Manabot player {type(player).__name__}&quot;)</td></tr>
+</tbody></table></div></div>
+
+<p><strong>3. Duplicate frame/observation work on every vector round</strong> — <code>vector.py</code>
+fetches full <code>decision_observations</code>, <code>RecordedVectorEnv._step</code> calls
+<code>semantic_decision_frames_json(active)</code>, and <code>step_isolated_with_writer</code> serializes
+the semantic frame a second time (and records no acting seat on error):</p>
+
+<div class="lf-codeblock" data-path="managym/recording.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/recording.py:1848-1886</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="1848"><td class="lf-ln lf-ln-single">1848</td><td>        digests = (</td></tr>
+<tr class="lf-code-row" data-line="1849"><td class="lf-ln lf-ln-single">1849</td><td>            self.native.state_digests(selected_games)</td></tr>
+<tr class="lf-code-row" data-line="1850"><td class="lf-ln lf-ln-single">1850</td><td>            if any(selected_games)</td></tr>
+<tr class="lf-code-row" data-line="1851"><td class="lf-ln lf-ln-single">1851</td><td>            else [None] * len(self.games)</td></tr>
+<tr class="lf-code-row" data-line="1852"><td class="lf-ln lf-ln-single">1852</td><td>        )</td></tr>
+<tr class="lf-code-row" data-line="1853"><td class="lf-ln lf-ln-single">1853</td><td>        actors = self.native.current_agent_indices()</td></tr>
+<tr class="lf-code-row" data-line="1854"><td class="lf-ln lf-ln-single">1854</td><td>        frames = self.native.semantic_decision_frames_json(active)</td></tr>
+<tr class="lf-code-row" data-line="1855"><td class="lf-ln lf-ln-single">1855</td><td>        summaries = (</td></tr>
+<tr class="lf-code-row" data-line="1856"><td class="lf-ln lf-ln-single">1856</td><td>            self.native.current_action_summaries() if self._action_cutoff else []</td></tr>
+<tr class="lf-code-row" data-line="1857"><td class="lf-ln lf-ln-single">1857</td><td>        )</td></tr>
+<tr class="lf-code-row" data-line="1858"><td class="lf-ln lf-ln-single">1858</td><td>        hook_annotations: list[DecisionAnnotation | None] = []</td></tr>
+<tr class="lf-code-row" data-line="1859"><td class="lf-ln lf-ln-single">1859</td><td>        if self._reductions and self._reduction.error is None:</td></tr>
+<tr class="lf-code-row" data-line="1860"><td class="lf-ln lf-ln-single">1860</td><td>            hook_annotations = [</td></tr>
+<tr class="lf-code-row" data-line="1861"><td class="lf-ln lf-ln-single">1861</td><td>                None</td></tr>
+<tr class="lf-code-row" data-line="1862"><td class="lf-ln lf-ln-single">1862</td><td>                if annotation is None</td></tr>
+<tr class="lf-code-row" data-line="1863"><td class="lf-ln lf-ln-single">1863</td><td>                else DecisionAnnotation.model_validate(annotation)</td></tr>
+<tr class="lf-code-row" data-line="1864"><td class="lf-ln lf-ln-single">1864</td><td>                for annotation in (annotations or [None] * len(self.games))</td></tr>
+<tr class="lf-code-row" data-line="1865"><td class="lf-ln lf-ln-single">1865</td><td>            ]</td></tr>
+<tr class="lf-code-row" data-line="1866"><td class="lf-ln lf-ln-single">1866</td><td>        hook_observations = (</td></tr>
+<tr class="lf-code-row" data-line="1867"><td class="lf-ln lf-ln-single">1867</td><td>            self.native.decision_observations(</td></tr>
+<tr class="lf-code-row" data-line="1868"><td class="lf-ln lf-ln-single">1868</td><td>                [</td></tr>
+<tr class="lf-code-row" data-line="1869"><td class="lf-ln lf-ln-single">1869</td><td>                    on and active</td></tr>
+<tr class="lf-code-row" data-line="1870"><td class="lf-ln lf-ln-single">1870</td><td>                    for on, active in zip(enabled, self._analysis_active, strict=True)</td></tr>
+<tr class="lf-code-row" data-line="1871"><td class="lf-ln lf-ln-single">1871</td><td>                ]</td></tr>
+<tr class="lf-code-row" data-line="1872"><td class="lf-ln lf-ln-single">1872</td><td>            )</td></tr>
+<tr class="lf-code-row" data-line="1873"><td class="lf-ln lf-ln-single">1873</td><td>            if hook_annotations</td></tr>
+<tr class="lf-code-row" data-line="1874"><td class="lf-ln lf-ln-single">1874</td><td>            else []</td></tr>
+<tr class="lf-code-row" data-line="1875"><td class="lf-ln lf-ln-single">1875</td><td>        )</td></tr>
+<tr class="lf-code-row" data-line="1876"><td class="lf-ln lf-ln-single">1876</td><td>        attempted = []</td></tr>
+<tr class="lf-code-row" data-line="1877"><td class="lf-ln lf-ln-single">1877</td><td>        for index, (game, action, selected, actor, frame) in enumerate(</td></tr>
+<tr class="lf-code-row" data-line="1878"><td class="lf-ln lf-ln-single">1878</td><td>            zip(self.games, actions, enabled, actors, frames, strict=True)</td></tr>
+<tr class="lf-code-row" data-line="1879"><td class="lf-ln lf-ln-single">1879</td><td>        ):</td></tr>
+<tr class="lf-code-row" data-line="1880"><td class="lf-ln lf-ln-single">1880</td><td>            if selected:</td></tr>
+<tr class="lf-code-row" data-line="1881"><td class="lf-ln lf-ln-single">1881</td><td>                game.actor = actor</td></tr>
+<tr class="lf-code-row" data-line="1882"><td class="lf-ln lf-ln-single">1882</td><td>                game.frame = frame</td></tr>
+<tr class="lf-code-row" data-line="1883"><td class="lf-ln lf-ln-single">1883</td><td>                if self._action_cutoff is not None:</td></tr>
+<tr class="lf-code-row" data-line="1884"><td class="lf-ln lf-ln-single">1884</td><td>                    count, kind = summaries[index]</td></tr>
+<tr class="lf-code-row" data-line="1885"><td class="lf-ln lf-ln-single">1885</td><td>                    self.record_policy_actions(count, kind, self._action_cutoff, game)</td></tr>
+<tr class="lf-code-row" data-line="1886"><td class="lf-ln lf-ln-single">1886</td><td>                if selected_games[index]:</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="managym/src/agent/vector_env.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/agent/vector_env.rs:844-882</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="844"><td class="lf-ln lf-ln-single">844</td><td>        self.validate_step(actions, Some(active))?;</td></tr>
+<tr class="lf-code-row" data-line="845"><td class="lf-ln lf-ln-single">845</td><td>        actions</td></tr>
+<tr class="lf-code-row" data-line="846"><td class="lf-ln lf-ln-single">846</td><td>            .iter()</td></tr>
+<tr class="lf-code-row" data-line="847"><td class="lf-ln lf-ln-single">847</td><td>            .enumerate()</td></tr>
+<tr class="lf-code-row" data-line="848"><td class="lf-ln lf-ln-single">848</td><td>            .map(|(index, &amp;action)| {</td></tr>
+<tr class="lf-code-row" data-line="849"><td class="lf-ln lf-ln-single">849</td><td>                if !active[index] {</td></tr>
+<tr class="lf-code-row" data-line="850"><td class="lf-ln lf-ln-single">850</td><td>                    return Ok(InfoDict::new());</td></tr>
+<tr class="lf-code-row" data-line="851"><td class="lf-ln lf-ln-single">851</td><td>                }</td></tr>
+<tr class="lf-code-row" data-line="852"><td class="lf-ln lf-ln-single">852</td><td>                let frame = serde_json::to_string(&amp;self.envs[index].semantic_decision_frame()?)</td></tr>
+<tr class="lf-code-row" data-line="853"><td class="lf-ln lf-ln-single">853</td><td>                    .map_err(|error| AgentError(error.to_string()))?;</td></tr>
+<tr class="lf-code-row" data-line="854"><td class="lf-ln lf-ln-single">854</td><td>                // A Rust unwind is contained only around gameplay of a disposable</td></tr>
+<tr class="lf-code-row" data-line="855"><td class="lf-ln lf-ln-single">855</td><td>                // stream. Buffer errors and invalid setup must never be tolerated.</td></tr>
+<tr class="lf-code-row" data-line="856"><td class="lf-ln lf-ln-single">856</td><td>                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {</td></tr>
+<tr class="lf-code-row" data-line="857"><td class="lf-ln lf-ln-single">857</td><td>                    self.step_slot(index, action)</td></tr>
+<tr class="lf-code-row" data-line="858"><td class="lf-ln lf-ln-single">858</td><td>                }));</td></tr>
+<tr class="lf-code-row" data-line="859"><td class="lf-ln lf-ln-single">859</td><td>                let out = match result {</td></tr>
+<tr class="lf-code-row" data-line="860"><td class="lf-ln lf-ln-single">860</td><td>                    Ok(Ok(out)) =&gt; out,</td></tr>
+<tr class="lf-code-row" data-line="861"><td class="lf-ln lf-ln-single">861</td><td>                    Ok(Err(error)) =&gt; {</td></tr>
+<tr class="lf-code-row" data-line="862"><td class="lf-ln lf-ln-single">862</td><td>                        return Ok(self.slots[index].gameplay_failure(</td></tr>
+<tr class="lf-code-row" data-line="863"><td class="lf-ln lf-ln-single">863</td><td>                            &quot;AgentError&quot;,</td></tr>
+<tr class="lf-code-row" data-line="864"><td class="lf-ln lf-ln-single">864</td><td>                            error.to_string(),</td></tr>
+<tr class="lf-code-row" data-line="865"><td class="lf-ln lf-ln-single">865</td><td>                            frame,</td></tr>
+<tr class="lf-code-row" data-line="866"><td class="lf-ln lf-ln-single">866</td><td>                        ))</td></tr>
+<tr class="lf-code-row" data-line="867"><td class="lf-ln lf-ln-single">867</td><td>                    }</td></tr>
+<tr class="lf-code-row" data-line="868"><td class="lf-ln lf-ln-single">868</td><td>                    Err(payload) =&gt; {</td></tr>
+<tr class="lf-code-row" data-line="869"><td class="lf-ln lf-ln-single">869</td><td>                        let message = payload</td></tr>
+<tr class="lf-code-row" data-line="870"><td class="lf-ln lf-ln-single">870</td><td>                            .downcast_ref::&lt;String&gt;()</td></tr>
+<tr class="lf-code-row" data-line="871"><td class="lf-ln lf-ln-single">871</td><td>                            .cloned()</td></tr>
+<tr class="lf-code-row" data-line="872"><td class="lf-ln lf-ln-single">872</td><td>                            .or_else(|| payload.downcast_ref::&lt;&amp;str&gt;().map(|s| s.to_string()))</td></tr>
+<tr class="lf-code-row" data-line="873"><td class="lf-ln lf-ln-single">873</td><td>                            .unwrap_or_else(|| &quot;native gameplay panic&quot;.into());</td></tr>
+<tr class="lf-code-row" data-line="874"><td class="lf-ln lf-ln-single">874</td><td>                        return Ok(self.slots[index].gameplay_failure(</td></tr>
+<tr class="lf-code-row" data-line="875"><td class="lf-ln lf-ln-single">875</td><td>                            &quot;NativePanic&quot;,</td></tr>
+<tr class="lf-code-row" data-line="876"><td class="lf-ln lf-ln-single">876</td><td>                            message,</td></tr>
+<tr class="lf-code-row" data-line="877"><td class="lf-ln lf-ln-single">877</td><td>                            frame,</td></tr>
+<tr class="lf-code-row" data-line="878"><td class="lf-ln lf-ln-single">878</td><td>                        ));</td></tr>
+<tr class="lf-code-row" data-line="879"><td class="lf-ln lf-ln-single">879</td><td>                    }</td></tr>
+<tr class="lf-code-row" data-line="880"><td class="lf-ln lf-ln-single">880</td><td>                };</td></tr>
+<tr class="lf-code-row" data-line="881"><td class="lf-ln lf-ln-single">881</td><td>                match write(index, &amp;out.obs, out.reward, out.terminated, out.truncated) {</td></tr>
+<tr class="lf-code-row" data-line="882"><td class="lf-ln lf-ln-single">882</td><td>                    Ok(()) =&gt; Ok(out.info),</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="manabot/eval/vector.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">manabot/eval/vector.py:733-762</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="733"><td class="lf-ln lf-ln-single">733</td><td>            for slot, player_id in round_result.players.items():</td></tr>
+<tr class="lf-code-row" data-line="734"><td class="lf-ln lf-ln-single">734</td><td>                slot_state = slot_states[slot]</td></tr>
+<tr class="lf-code-row" data-line="735"><td class="lf-ln lf-ln-single">735</td><td>                assert slot_state is not None</td></tr>
+<tr class="lf-code-row" data-line="736"><td class="lf-ln lf-ln-single">736</td><td>                leg = slot_state.leg</td></tr>
+<tr class="lf-code-row" data-line="737"><td class="lf-ln lf-ln-single">737</td><td>                info = infos[slot] if slot &lt; len(infos) else {}</td></tr>
+<tr class="lf-code-row" data-line="738"><td class="lf-ln lf-ln-single">738</td><td></td></tr>
+<tr class="lf-code-row" data-line="739"><td class="lf-ln lf-ln-single">739</td><td>                if info.get(&quot;game_error&quot;):</td></tr>
+<tr class="lf-code-row" data-line="740"><td class="lf-ln lf-ln-single">740</td><td>                    error_class = str(info.get(&quot;game_error_class&quot;, &quot;AgentError&quot;))</td></tr>
+<tr class="lf-code-row" data-line="741"><td class="lf-ln lf-ln-single">741</td><td>                    error_msg = str(info[&quot;game_error&quot;])</td></tr>
+<tr class="lf-code-row" data-line="742"><td class="lf-ln lf-ln-single">742</td><td>                    if error_class == &quot;ObservationCapacity&quot;:</td></tr>
+<tr class="lf-code-row" data-line="743"><td class="lf-ln lf-ln-single">743</td><td>                        leg.game[&quot;integrity&quot;][&quot;truncations&quot;] += 1</td></tr>
+<tr class="lf-code-row" data-line="744"><td class="lf-ln lf-ln-single">744</td><td>                        failure_record(</td></tr>
+<tr class="lf-code-row" data-line="745"><td class="lf-ln lf-ln-single">745</td><td>                            leg.game,</td></tr>
+<tr class="lf-code-row" data-line="746"><td class="lf-ln lf-ln-single">746</td><td>                            &quot;truncated&quot;,</td></tr>
+<tr class="lf-code-row" data-line="747"><td class="lf-ln lf-ln-single">747</td><td>                            &quot;environment or observation truncated&quot;,</td></tr>
+<tr class="lf-code-row" data-line="748"><td class="lf-ln lf-ln-single">748</td><td>                            None,</td></tr>
+<tr class="lf-code-row" data-line="749"><td class="lf-ln lf-ln-single">749</td><td>                        )</td></tr>
+<tr class="lf-code-row" data-line="750"><td class="lf-ln lf-ln-single">750</td><td>                    else:</td></tr>
+<tr class="lf-code-row" data-line="751"><td class="lf-ln lf-ln-single">751</td><td>                        leg.game[&quot;error_class&quot;] = error_class</td></tr>
+<tr class="lf-code-row" data-line="752"><td class="lf-ln lf-ln-single">752</td><td>                        if info.get(&quot;game_error_trace&quot;):</td></tr>
+<tr class="lf-code-row" data-line="753"><td class="lf-ln lf-ln-single">753</td><td>                            leg.game[&quot;failure_trace&quot;] = str(info[&quot;game_error_trace&quot;])</td></tr>
+<tr class="lf-code-row" data-line="754"><td class="lf-ln lf-ln-single">754</td><td>                        failure_record(</td></tr>
+<tr class="lf-code-row" data-line="755"><td class="lf-ln lf-ln-single">755</td><td>                            leg.game,</td></tr>
+<tr class="lf-code-row" data-line="756"><td class="lf-ln lf-ln-single">756</td><td>                            &quot;crash&quot;,</td></tr>
+<tr class="lf-code-row" data-line="757"><td class="lf-ln lf-ln-single">757</td><td>                            f&quot;{error_class}: {error_msg}&quot;,</td></tr>
+<tr class="lf-code-row" data-line="758"><td class="lf-ln lf-ln-single">758</td><td>                            player_id,</td></tr>
+<tr class="lf-code-row" data-line="759"><td class="lf-ln lf-ln-single">759</td><td>                        )</td></tr>
+<tr class="lf-code-row" data-line="760"><td class="lf-ln lf-ln-single">760</td><td>                    complete_leg(slot_state, info=info)</td></tr>
+<tr class="lf-code-row" data-line="761"><td class="lf-ln lf-ln-single">761</td><td>                    continue</td></tr>
+<tr class="lf-code-row" data-line="762"><td class="lf-ln lf-ln-single">762</td><td></td></tr>
+</tbody></table></div></div>
+
+<p><strong>4. Replay invariant and GIL contention</strong> — <code>test_record_reducers.py</code> requires
+<code>walker.cards()</code> to exclude a post-transition mismatch, and <code>PyEnv::step</code> /
+<code>state_digest</code> never call <code>py.allow_threads</code>:</p>
+
+<div class="lf-codeblock" data-path="tests/env/test_record_reducers.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">tests/env/test_record_reducers.py:105-114</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="105"><td class="lf-ln lf-ln-single">105</td><td>    # A post-transition mismatch must leave native card facts at the verified</td></tr>
+<tr class="lf-code-row" data-line="106"><td class="lf-ln lf-ln-single">106</td><td>    # prefix too, rather than counting the rejected transition&#39;s choices/moves.</td></tr>
+<tr class="lf-code-row" data-line="107"><td class="lf-ln lf-ln-single">107</td><td>    altered = record.model_copy(deep=True)</td></tr>
+<tr class="lf-code-row" data-line="108"><td class="lf-ln lf-ln-single">108</td><td>    altered.games[0].digests[1] = &quot;0&quot; * 64</td></tr>
+<tr class="lf-code-row" data-line="109"><td class="lf-ln lf-ln-single">109</td><td>    prefix = walk(altered, capture_cards=True)</td></tr>
+<tr class="lf-code-row" data-line="110"><td class="lf-ln lf-ln-single">110</td><td>    assert list(prefix) == []</td></tr>
+<tr class="lf-code-row" data-line="111"><td class="lf-ln lf-ln-single">111</td><td>    assert prefix.stop.status == &quot;diverged&quot;</td></tr>
+<tr class="lf-code-row" data-line="112"><td class="lf-ln lf-ln-single">112</td><td>    assert not prefix.cards().capture.exposure.choices</td></tr>
+<tr class="lf-code-row" data-line="113"><td class="lf-ln lf-ln-single">113</td><td>    assert reduce([altered], [Choices()]) == [[0]]</td></tr>
+<tr class="lf-code-row" data-line="114"><td class="lf-ln lf-ln-single">114</td><td></td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="managym/src/python/bindings.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/python/bindings.rs:4191-4213</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="4191"><td class="lf-ln lf-ln-single">4191</td><td>    #[pyo3(signature = (action=None))]</td></tr>
+<tr class="lf-code-row" data-line="4192"><td class="lf-ln lf-ln-single">4192</td><td>    fn step(</td></tr>
+<tr class="lf-code-row" data-line="4193"><td class="lf-ln lf-ln-single">4193</td><td>        &amp;self,</td></tr>
+<tr class="lf-code-row" data-line="4194"><td class="lf-ln lf-ln-single">4194</td><td>        py: Python&lt;&#39;_&gt;,</td></tr>
+<tr class="lf-code-row" data-line="4195"><td class="lf-ln lf-ln-single">4195</td><td>        action: Option&lt;i64&gt;,</td></tr>
+<tr class="lf-code-row" data-line="4196"><td class="lf-ln lf-ln-single">4196</td><td>    ) -&gt; PyResult&lt;(PyObservation, f64, bool, bool, PyObject)&gt; {</td></tr>
+<tr class="lf-code-row" data-line="4197"><td class="lf-ln lf-ln-single">4197</td><td>        self.reject_guarded_mutation(&quot;Env.step(index)&quot;)?;</td></tr>
+<tr class="lf-code-row" data-line="4198"><td class="lf-ln lf-ln-single">4198</td><td>        let mut env = self</td></tr>
+<tr class="lf-code-row" data-line="4199"><td class="lf-ln lf-ln-single">4199</td><td>            .inner</td></tr>
+<tr class="lf-code-row" data-line="4200"><td class="lf-ln lf-ln-single">4200</td><td>            .lock()</td></tr>
+<tr class="lf-code-row" data-line="4201"><td class="lf-ln lf-ln-single">4201</td><td>            .map_err(|_| PyRuntimeError::new_err(&quot;env lock poisoned&quot;))?;</td></tr>
+<tr class="lf-code-row" data-line="4202"><td class="lf-ln lf-ln-single">4202</td><td></td></tr>
+<tr class="lf-code-row" data-line="4203"><td class="lf-ln lf-ln-single">4203</td><td>        let (obs, reward, terminated, truncated, info) =</td></tr>
+<tr class="lf-code-row" data-line="4204"><td class="lf-ln lf-ln-single">4204</td><td>            env.step(action.unwrap_or(-1)).map_err(map_agent_err)?;</td></tr>
+<tr class="lf-code-row" data-line="4205"><td class="lf-ln lf-ln-single">4205</td><td>        let py_dict = info_dict_to_pydict(py, &amp;info);</td></tr>
+<tr class="lf-code-row" data-line="4206"><td class="lf-ln lf-ln-single">4206</td><td>        Ok((</td></tr>
+<tr class="lf-code-row" data-line="4207"><td class="lf-ln lf-ln-single">4207</td><td>            PyObservation::from(obs),</td></tr>
+<tr class="lf-code-row" data-line="4208"><td class="lf-ln lf-ln-single">4208</td><td>            reward,</td></tr>
+<tr class="lf-code-row" data-line="4209"><td class="lf-ln lf-ln-single">4209</td><td>            terminated,</td></tr>
+<tr class="lf-code-row" data-line="4210"><td class="lf-ln lf-ln-single">4210</td><td>            truncated,</td></tr>
+<tr class="lf-code-row" data-line="4211"><td class="lf-ln lf-ln-single">4211</td><td>            py_dict.into_any().unbind(),</td></tr>
+<tr class="lf-code-row" data-line="4212"><td class="lf-ln lf-ln-single">4212</td><td>        ))</td></tr>
+<tr class="lf-code-row" data-line="4213"><td class="lf-ln lf-ln-single">4213</td><td>    }</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="managym/src/python/bindings.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/python/bindings.rs:4389-4396</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="4389"><td class="lf-ln lf-ln-single">4389</td><td>    /// Canonical full-engine digest for exact differential assertions.</td></tr>
+<tr class="lf-code-row" data-line="4390"><td class="lf-ln lf-ln-single">4390</td><td>    fn state_digest(&amp;self) -&gt; PyResult&lt;String&gt; {</td></tr>
+<tr class="lf-code-row" data-line="4391"><td class="lf-ln lf-ln-single">4391</td><td>        let env = self</td></tr>
+<tr class="lf-code-row" data-line="4392"><td class="lf-ln lf-ln-single">4392</td><td>            .inner</td></tr>
+<tr class="lf-code-row" data-line="4393"><td class="lf-ln lf-ln-single">4393</td><td>            .lock()</td></tr>
+<tr class="lf-code-row" data-line="4394"><td class="lf-ln lf-ln-single">4394</td><td>            .map_err(|_| PyRuntimeError::new_err(&quot;env lock poisoned&quot;))?;</td></tr>
+<tr class="lf-code-row" data-line="4395"><td class="lf-ln lf-ln-single">4395</td><td>        env.state_digest().map_err(map_agent_err)</td></tr>
+<tr class="lf-code-row" data-line="4396"><td class="lf-ln lf-ln-single">4396</td><td>    }</td></tr>
+</tbody></table></div></div>
+
+<p><strong>5. Unstated Academy Watch rejection and overlapping throughput math</strong>:</p>
+
+<div class="lf-codeblock" data-path="managym/academy/watch.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/academy/watch.py:484-490</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="484"><td class="lf-ln lf-ln-single">484</td><td>    if not record.skip_trivial:</td></tr>
+<tr class="lf-code-row" data-line="485"><td class="lf-ln lf-ln-single">485</td><td>        raise ValueError(&quot;Academy requires forced-decision skipping&quot;)</td></tr>
+<tr class="lf-code-row" data-line="486"><td class="lf-ln lf-ln-single">486</td><td>    if record.resolved_player_policies != (&quot;agent&quot;, &quot;agent&quot;):</td></tr>
+<tr class="lf-code-row" data-line="487"><td class="lf-ln lf-ln-single">487</td><td>        raise ValueError(</td></tr>
+<tr class="lf-code-row" data-line="488"><td class="lf-ln lf-ln-single">488</td><td>            &quot;Academy requires both seats&#39; surfaced decisions; native-seat records are not yet viewable&quot;</td></tr>
+<tr class="lf-code-row" data-line="489"><td class="lf-ln lf-ln-single">489</td><td>        )</td></tr>
+<tr class="lf-code-row" data-line="490"><td class="lf-ln lf-ln-single">490</td><td>    replay = walk(record)</td></tr>
+</tbody></table></div></div>
+<div class="lf-codeblock" data-path="experiments/eval_throughput.py"><div class="lf-codeblock-header"><span class="lf-codeblock-path">experiments/eval_throughput.py:230-239</span></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-code-row" data-line="230"><td class="lf-ln lf-ln-single">230</td><td>    replay_seconds = sum(</td></tr>
+<tr class="lf-code-row" data-line="231"><td class="lf-ln lf-ln-single">231</td><td>        json.loads((out / &quot;arena&quot; / match.key / &quot;replay.json&quot;).read_bytes())[&quot;seconds&quot;]</td></tr>
+<tr class="lf-code-row" data-line="232"><td class="lf-ln lf-ln-single">232</td><td>        for match in matches</td></tr>
+<tr class="lf-code-row" data-line="233"><td class="lf-ln lf-ln-single">233</td><td>    )</td></tr>
+<tr class="lf-code-row" data-line="234"><td class="lf-ln lf-ln-single">234</td><td>    stages = {</td></tr>
+<tr class="lf-code-row" data-line="235"><td class="lf-ln lf-ln-single">235</td><td>        &quot;forward&quot;: timing.seconds,</td></tr>
+<tr class="lf-code-row" data-line="236"><td class="lf-ln lf-ln-single">236</td><td>        &quot;replay&quot;: replay_seconds,</td></tr>
+<tr class="lf-code-row" data-line="237"><td class="lf-ln lf-ln-single">237</td><td>        &quot;other_arena&quot;: seconds - timing.seconds - replay_seconds,</td></tr>
+<tr class="lf-code-row" data-line="238"><td class="lf-ln lf-ln-single">238</td><td>    }</td></tr>
+<tr class="lf-code-row" data-line="239"><td class="lf-ln lf-ln-single">239</td><td>    summary = {</td></tr>
+</tbody></table></div></div>
+
+<h2>Findings</h2>
+
+<div class="lf-decision" data-decision-id="f1">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">Finish per-game player_policies across VectorEnv, GameInputs, PlayerPolicy serde, and agents.py</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>What breaks:</strong> Putting per-slot policies only in <code>take_slot_record</code> leaves
+  multi-slot failure snapshots/journals (<code>_snapshot()</code>, <code>_write_game()</code>,
+  <code>replay_failure_inputs()</code>) writing one vector-wide policy pair for swapped seats. In Rust,
+  <code>SlotLoad::Fresh</code> calls <code>previous.replacement_root()</code> (which would inherit the
+  previous leg's policies when policies are omitted), derived serde on
+  <code>PlayerPolicy::Heuristic { max_actions }</code> would break <code>GameProvenance</code>/<code>SnapshotReplay</code>
+  string encoding, and <code>env.rs:738,748</code> checks <code>contains(&amp;PlayerPolicy::Heuristic)</code>
+  which won't match a capped variant. In Python, <code>agents.py:Heuristic</code> conflates built-in
+  native heuristic with arbitrary <code>CodePlayer</code>s and rebuilds them on every <code>choose()</code>
+  because <code>GamePlayer</code> has no per-game lifecycle — while <code>sim/heuristic.py</code> is already stateful.</p>
+  <p><strong>Fix:</strong></p>
+  <ul>
+    <li>Custom string <code>Serialize</code>/<code>Deserialize</code>/<code>Display</code>/<code>FromStr</code> on <code>PlayerPolicy</code> (<code>"agent"</code>, <code>"random"</code>, <code>"heuristic"</code>, <code>"heuristic:64"</code>) and a <code>PlayerPolicy::is_heuristic()</code> helper in <code>env.rs</code>.</li>
+    <li><code>SlotLoad::Fresh</code> defaults omitted policies to <code>VectorEnv</code>'s default <code>self.player_policies</code>, not the slot's previous <code>Env</code>; <code>SlotLoad::Snapshot</code> restores its own policies.</li>
+    <li>Add optional <code>player_policies: tuple[str, str] | None = None</code> (excluded when <code>None</code>) on <code>GameInputs</code> so multi-slot snapshots and <code>replay_failure_inputs</code> preserve per-slot policies, while single-game records keep <code>GameRecord.player_policies</code> for backward compatibility.</li>
+    <li>Split <code>NativeHeuristic(max_actions)</code> from <code>CodeSeat(factory)</code> in <code>manabot/eval/agents.py</code>, and add a per-game lifecycle on <code>GamePlayer</code> (e.g., <code>open_game(seed)</code> or per-game reset) so both runners keep turn state for every stateful code player without editing <code>sim/heuristic.py</code> artificially.</li>
+    <li><strong>Identity warning (irreversible once published):</strong> Changing <code>heuristic_source_paths()</code> (e.g., adding <code>player_policy.rs</code> or bumping anchor version) changes BOTH Etude's <code>Code</code> player key and <code>EvaluationKey.anchor_cohort_sha256</code> → <code>derive_seed</code> for 100% of games, affecting stored <code>tla_trophies*</code> benchmarks. Decide explicitly in Q2 before Pass 1.</li>
+  </ul>
+</div>
+  <div data-choice="f1" data-label="Finish per-game player_policies across VectorEnv, GameInputs, PlayerPolicy serde, and agents.py">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f2">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">Isolate opening-turn native heuristic failures and report acting-seat attribution on crashes</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>What breaks:</strong> When the native heuristic sits in seat 0 (legs 1 and 2 of every deal),
+  <code>Env::reset</code> runs <code>settle_players</code> for all opening heuristic turns before the
+  checkpoint acts. Neither <code>reset_each_into_buffers</code> nor <code>load_slots_into_buffers</code>
+  isolates native <code>AgentError</code> or panics — one bad opening leg aborts the entire 64-slot batch.
+  And during mid-game <code>step_isolated_with_writer</code>, <code>vector.py:758</code> attributes any
+  <code>game_error</code> to <code>round_result.players[slot]</code> (always the checkpoint), even when the
+  error happened inside the heuristic's <code>settle_players</code> loop.</p>
+  <p><strong>Fix:</strong></p>
+  <ul>
+    <li>Return <code>game_error_seat</code> in isolated step receipts (captured from the active chooser in <code>step_once</code> vs <code>settle_players</code>) so <code>vector.py</code> attributes crashes to <code>leg.game["seat_players"][seat]</code> rather than blindly blaming candidate or opponent.</li>
+    <li>Isolate per-slot opening settlement (either an isolated mode on <code>load_slots_into_buffers</code>/<code>reset_each_into_buffers</code> or isolating <code>Env::reset</code>'s <code>settle_players</code> phase into <code>SlotState::Poisoned</code> + receipt) so a seat-0 heuristic error fails only that leg and frees the slot.</li>
+  </ul>
+</div>
+  <div data-choice="f2" data-label="Isolate opening-turn native heuristic failures and report acting-seat attribution on crashes">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f3">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">Drop redundant chosen_offer/action_space_kind from compact vector annotations and skip duplicate semantic frames</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>What breaks / wastes work:</strong> Dropping <code>frame_sha256</code> while keeping
+  <code>chosen_offer</code> and <code>action_space_kind</code> leaves <code>step_round</code> calling
+  <code>vector.decision_observations(active)</code> (64 full <code>PyObservation</code> clones/round) and
+  <code>describe_actions(raw)</code> live and in replay, even though no downstream consumer reads either field
+  from a <code>GameRecord</code> and <code>GameInputs.digests[i]</code> + <code>actions[i]</code> already
+  bind the exact offer set and choice. Meanwhile <code>RecordedVectorEnv._step</code> calls
+  <code>semantic_decision_frames_json(active)</code> every round even when <code>isolated=True</code>,
+  no journal is active, and no annotation carries <code>probabilities</code> — duplicating Rust's
+  <code>step_isolated_with_writer</code> frame capture.</p>
+  <p><strong>Fix:</strong></p>
+  <ul>
+    <li>In compact vector annotations, store only runner-owned facts that the engine cannot recompute (<code>actor</code>, <code>revision</code>, <code>player_id</code>, <code>player_seed</code>, <code>player_decision_ordinal</code>, <code>policy_rng_seed</code>, <code>latency_seconds</code>). Call <code>vector.decision_observations</code> only for slots with a custom Python <code>CodeSeat</code>.</li>
+    <li>In <code>audit_view</code>, derive <code>offer_id</code> from <code>inputs["actions"][index]</code> when <code>chosen_offer</code> is absent (falling back to <code>chosen_offer["id"]</code> for semantic Command strings). In <code>_replay_record</code>, verify <code>frame_sha256</code>, <code>chosen_offer</code>, and <code>action_space_kind</code> when present, and always verify <code>actor</code> + <code>player_id</code>.</li>
+    <li>In <code>RecordedVectorEnv._step</code>, skip <code>semantic_decision_frames_json(active)</code> when <code>isolated=True</code>, <code>_game_journal is None</code>, and no annotation has <code>probabilities</code>; on isolated <code>game_error</code>, copy <code>info.get("game_error_frame")</code> onto <code>game.frame</code> so <code>replay_failure</code> retains exact <code>matches_binding == True</code>.</li>
+  </ul>
+</div>
+  <div data-choice="f3" data-label="Drop redundant chosen_offer/action_space_kind from compact vector annotations and skip duplicate semantic frames">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f4">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">Keep RecordWalker.cards() divergence invariant via cold rewind, release the GIL in PyEnv, and fix eval_throughput stage math</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>What breaks:</strong></p>
+  <ul>
+    <li>Removing <code>clone_env()</code> from <code>RecordWalker.run()</code> mutates <code>self.env</code>'s card capture before detecting a post-transition digest mismatch, directly breaking <code>tests/env/test_record_reducers.py:105-113</code> and <code>RecordWalker.cards()</code>'s documented contract.</li>
+    <li><code>PyEnv::reset</code>, <code>PyEnv::step</code>, and <code>PyEnv::state_digest</code> (<code>managym/src/python/bindings.rs:4099-4396</code>) hold the Python GIL, so a 2-thread replay pool serializes on the GIL and stalls the asyncio stepping loop instead of running concurrently.</li>
+    <li><code>experiments/eval_throughput.py:237</code> computes <code>other_arena = seconds - timing.seconds - replay_seconds</code>, which becomes invalid (even negative) once replay overlaps with forwards.</li>
+  </ul>
+  <p><strong>Fix:</strong></p>
+  <ul>
+    <li>On the fast path (<code>apply is None</code>, integer action, no next-boundary interventions), step <code>self.env</code> directly and check <code>state_digest()</code> once (checking <code>digests[0]</code> once after reset; 0 clones, 1 digest per step). Only on the cold divergence path, if <code>self._capture_cards</code> is enabled, rebuild <code>self.env</code> through the verified prefix <code>0..index</code> before stopping so <code>cards()</code> stays exact without any new flag.</li>
+    <li>Wrap <code>PyEnv::reset</code>, <code>PyEnv::step</code>, and <code>PyEnv::state_digest</code> (including locking <code>self.inner</code>) in <code>py.allow_threads(...)</code> so background replay threads run genuinely in parallel with each other and with the stepping loop.</li>
+    <li>In <code>eval_throughput.py</code>, track main-loop wall stages separately from background replay thread time instead of subtracting overlapping worker seconds from total wall time.</li>
+  </ul>
+</div>
+  <div data-choice="f4" data-label="Keep RecordWalker.cards() divergence invariant via cold rewind, release the GIL in PyEnv, and fix eval_throughput stage math">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f5">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">Cache process-constant identities in provenance.py and use existing frozen_context in scalar capture</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>What's awkward:</strong> <code>manabot/infra/provenance.py:runtime_fingerprints</code> re-hashes
+  every <code>.rs</code> file and the ~40 MB <code>_managym</code> binary and constructs/resets a throwaway
+  <code>Env</code> on every call (2.1 s of the 2.3 s admission profile). Adding a per-run cache inside
+  <code>vector.py</code> leaves scalar play, admission, and registration paying the same cost. Similarly,
+  <code>manabot/sim/native_game.py:292</code> deep-copies immutable setup metadata 3×/decision when
+  <code>_Capture</code> already provides <code>frozen_context</code> (<code>managym/recording.py:630,853</code>).</p>
+  <p><strong>Fix:</strong> Factor and <code>@cache</code> the process-constant engine/source/content-manifest
+  fingerprints inside <code>manabot/infra/provenance.py</code> (matching
+  <code>managym/recording.py:runtime_identities</code>), and set <code>capture.frozen_context</code> once
+  setup completes in <code>execute_game</code> (refreshing only on integrity/failure changes).</p>
+</div>
+  <div data-choice="f5" data-label="Cache process-constant identities in provenance.py and use existing frozen_context in scalar capture">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<div class="lf-decision" data-decision-id="f6">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">Support native-seat GameRecords in Academy Watch</span>
+    <span class="lf-decision-rec">Recommended: File Task</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>Unstated consequence of Design item 1:</strong> Moving vector heuristic evaluations from
+  <code>("agent", "agent")</code> to <code>("agent", "heuristic:64")</code> /
+  <code>("heuristic:64", "agent")</code> means <code>managym/academy/watch.py:486</code> will reject every
+  new vector heuristic evaluation record with
+  <code>ValueError("Academy requires both seats' surfaced decisions; native-seat records are not yet viewable")</code>.
+  Because the game is fully deterministic from its record, Watch can reconstruct native-seat decisions on
+  import by walking the record with an <code>("agent", "agent")</code> view and replaying the heuristic's
+  choices, or surfacing native turns — that is a separate Academy Task, not vector eval throughput, but it
+  should be tracked explicitly rather than discovered when someone tries to inspect a trophy game.</p>
+</div>
+  <div data-choice="f6" data-label="Support native-seat GameRecords in Academy Watch">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<h2>Questions for review</h2>
+
+<div data-choice="q1" data-label="Compact vector decision annotations">
+  <p><strong>1. What should a compact vector <code>GameRecord</code> store per surfaced decision?</strong>
+  (Reversible for future runs; stored records keep their shape.)</p>
+  <button data-value="1a">1a. (Recommended) Runner-only facts (<code>actor</code>, <code>revision</code>, <code>player_id</code>, seeds, ordinal, latency) — drop <code>frame_sha256</code>, <code>chosen_offer</code>, and <code>action_space_kind</code>; skip <code>decision_observations</code> and <code>describe_actions</code> when playing native heuristic.</button>
+  <button data-value="1b">1b. Plan as written — drop <code>frame_sha256</code>, keep <code>chosen_offer</code> and <code>action_space_kind</code> (still clones <code>PyObservation</code> and runs <code>describe_actions</code> per decision).</button>
+  <button data-value="1c">1c. Keep full live viewer frames and <code>frame_sha256</code> on vector records (MTG-497 choice 1b; leaves ~52% of live host work and ~37% of replay).</button>
+</div>
+
+<div data-choice="q2" data-label="Heuristic statefulness and Etude opponent identity">
+  <p><strong>2. How should fixing per-game heuristic state update opponent identity?</strong>
+  (<strong>Irreversible once published to shared Etude tournaments</strong>: changing <code>heuristic_source_paths()</code> changes both the Etude <code>Code</code> player key and <code>EvaluationKey.anchor_cohort_sha256</code> → checkpoint RNG seeds on 100% of games, affecting stored <code>tla_trophies*</code> benchmarks.)</p>
+  <button data-value="2a">2a. (Recommended) Fix statefulness honestly in <code>GamePlayer</code>/<code>agents.py</code>, include <code>player_policy.rs</code> in <code>heuristic_source_paths()</code> (and bump anchor version to <code>native-v3</code>), and verify/pin how existing <code>tla_trophies*</code> benchmarks handle the new opponent identity.</button>
+  <button data-value="2b">2b. Fix statefulness in <code>GamePlayer</code>/<code>agents.py</code> without changing <code>heuristic_source_paths()</code> or anchor version (new games stay in existing benchmarks, mixing 16/7,155 changed heuristic decisions with stored matches).</button>
+  <button data-value="2c">2c. Reset native heuristic state per decision to stay byte-identical to stored managed-eval results (permanently diverges from training's stateful native heuristic).</button>
+</div>
+
+<div data-choice="q3" data-label="Native heuristic seats vs Academy Watch">
+  <p><strong>3. Is making vector heuristic evaluation records unviewable in Academy Watch acceptable until a follow-up Task lands?</strong></p>
+  <button data-value="3a">3a. (Recommended) Yes — ship native heuristic seats in MTG-506 and file a separate Task for Academy Watch native-seat import (F6).</button>
+  <button data-value="3b">3b. No — add native-seat import to Academy Watch in this Task so trophy records remain viewable day one.</button>
+</div>
+
+<div data-choice="q4" data-label="Opening-turn native heuristic failure isolation">
+  <p><strong>4. Should MTG-506 isolate seat-0 heuristic failures during opening settlement (<code>reset</code> / <code>load_slots</code>)?</strong></p>
+  <button data-value="4a">4a. (Recommended) Yes — isolate opening settlement per slot and return <code>game_error_seat</code> on isolated native errors (F2), so a seat-0 heuristic bug never aborts a 64-slot batch.</button>
+  <button data-value="4b">4b. Defer opening-settlement isolation to a follow-up Task; only add <code>game_error_seat</code> on <code>step_isolated_with_writer</code> here.</button>
+</div>
+</main>
+<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-506"},"directory":"/Users/jack/src/manabot.mtg-506-cut-game-side","base":"fb1580b472da86f03a6d675334af318055d1e1b5","head":"26cfa6c47f","path":"scratch/concept-review.html","build_id":"69c52b9c170aeecc","protocol":{"revision":11,"min_revision":10}}</script>
+<script>
+(function () {
+  "use strict";
+
+  const stampEl = document.getElementById("lf-page");
+  if (!stampEl) return;
+  let stamp;
+  try {
+    stamp = JSON.parse(stampEl.textContent || "{}");
+  } catch (_) {
+    return;
+  }
+
+  const pagePath = String(stamp.path || "scratch/page.html");
+  const buildId = String(stamp.build_id || "0");
+  const work = stamp.work || { kind: "repository" };
+  const directory = String(stamp.directory || "");
+  const protocol =
+    stamp.protocol && typeof stamp.protocol === "object" ? stamp.protocol : null;
+  const protocolRevision = Number(protocol && protocol.revision);
+  const protocolMinRevision = Number(protocol && protocol.min_revision);
+  const storageKey = "lf-page:" + pagePath + ":" + buildId;
+  const mainEl =
+    document.querySelector("main.lf-page") || document.querySelector("main") || document.body;
+
+  const desktopHandler =
+    window.webkit &&
+    window.webkit.messageHandlers &&
+    window.webkit.messageHandlers.loopflow;
+
+  let hostMode = desktopHandler ? "desktop" : "clipboard";
+  let socket = null;
+  let nextReqId = 1;
+  const pending = new Map();
+  const cancelledAction = Symbol("cancelled action");
+  let serverDisconnected = false;
+  let sendingReply = false;
+
+  // Draft & receipt state.
+  // Notes (prose & diff/file lines), choices, multiselects, questions, offline actions,
+  // and optional browser overall direction enter the reply queue.
+  // Executed direct `data-lf` receipts stay separate and only ride as a suffix on ⌘↩.
+  function emptyState() {
+    return {
+      notes: [],
+      choices: {},
+      multiselects: {},
+      questions: {},
+      offlineActions: [],
+      overall: "",
+      receipts: [],
+    };
+  }
+
+  let state = emptyState();
+
+  function oneLine(text) {
+    return String(text || "")
+      .replace(/[\r\n\t\x00-\x1f]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function buttonValue(btn) {
+    return btn.getAttribute("data-value") || oneLine(btn.textContent);
+  }
+
+  function resultTaskId(result) {
+    return result && ((result.task && result.task.identifier) || result.identifier);
+  }
+
+  function errorMessage(err) {
+    return String(err && err.message ? err.message : err);
+  }
+
+  function el(tag, opts, ...children) {
+    const node = document.createElement(tag);
+    if (typeof opts === "string") {
+      if (opts) node.className = opts;
+    } else if (opts) {
+      for (const [k, v] of Object.entries(opts)) {
+        if (v == null || v === false) continue;
+        if (k === "cls") node.className = v;
+        else if (k === "text") node.textContent = v;
+        else if (k === "on") {
+          for (const [ev, fn] of Object.entries(v)) node.addEventListener(ev, fn);
+        } else if (k === "attrs") {
+          for (const [ak, av] of Object.entries(v)) node.setAttribute(ak, av);
+        } else {
+          node[k] = v;
+        }
+      }
+    }
+    for (const child of children) {
+      if (child != null && child !== false) node.append(child);
+    }
+    return node;
+  }
+
+  function makeButton(label, onClick, className) {
+    return el("button", { type: "button", cls: className || "", text: label, on: { click: onClick } });
+  }
+
+  function setPressed(btn, active) {
+    btn.classList.toggle("is-selected", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+
+  function focusEnd(ta) {
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
+  function clearSelection() {
+    try {
+      window.getSelection().removeAllRanges();
+    } catch (_) {}
+  }
+
+  function randomId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    return "lf-" + Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+  }
+
+  function shortPath(path) {
+    const parts = String(path || "").split("/");
+    return parts[parts.length - 1] || path;
+  }
+
+  function truncate(text, max) {
+    const s = oneLine(text);
+    return s.length > max ? s.slice(0, max - 1) + "…" : s;
+  }
+
+  function nearestSection(node) {
+    let cur = node && node.nodeType === 1 ? node : node && node.parentElement;
+    while (cur && cur !== document.body) {
+      let prev = cur.previousElementSibling;
+      while (prev) {
+        if (/^H[1-4]$/.test(prev.tagName)) return oneLine(prev.textContent);
+        prev = prev.previousElementSibling;
+      }
+      cur = cur.parentElement;
+    }
+    const h1 = document.querySelector("h1");
+    return h1 ? oneLine(h1.textContent) : "Top";
+  }
+
+  function formatLineSpan(note) {
+    const start = Number(note.lineStart);
+    const end = Number(note.lineEnd || note.lineStart);
+    const span = start === end ? String(start) : start + "–" + end;
+    return note.side === "old" ? "old:" + span : span;
+  }
+
+  function formatLineAnchor(note) {
+    return oneLine(note.path) + ":" + formatLineSpan(note);
+  }
+
+  function formatNoteAnchorLabel(note) {
+    if (note.kind === "line") return formatLineAnchor(note);
+    return "§ " + oneLine(note.section) + ' · "' + truncate(note.quote, 46) + '"';
+  }
+
+  function pulseElement(target) {
+    if (!target) return;
+    try {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (_) {}
+    target.classList.add("lf-pulse-ring");
+    setTimeout(() => target.classList.remove("lf-pulse-ring"), 950);
+  }
+
+  function rowsForLineNote(note) {
+    const matched = [];
+    const attr = note.side === "old" ? "data-old-line" : "data-line";
+    const start = Number(note.lineStart);
+    const end = Number(note.lineEnd || note.lineStart);
+    for (const block of mainEl.querySelectorAll(".lf-codeblock[data-path]")) {
+      if (block.getAttribute("data-path") !== note.path) continue;
+      block.querySelectorAll("tr.lf-code-row[" + attr + "]").forEach((tr) => {
+        const ln = Number(tr.getAttribute(attr));
+        if (ln >= start && ln <= end) matched.push(tr);
+      });
+    }
+    return matched;
+  }
+
+  function noteAnchorElement(note) {
+    if (note.kind === "line") return rowsForLineNote(note)[0] || null;
+    return mainEl.querySelector('.lf-hl[data-lf-note-id="' + CSS.escape(note.id) + '"]');
+  }
+
+  function notesInDocumentOrder() {
+    if (state.notes.length <= 1) return state.notes.slice();
+    return state.notes
+      .map((note, idx) => ({ note, idx, el: noteAnchorElement(note) }))
+      .sort((a, b) => {
+        if (a.el && b.el && a.el !== b.el) {
+          const pos = a.el.compareDocumentPosition(b.el);
+          if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+          if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+        }
+        if (a.el !== b.el) return a.el ? -1 : 1;
+        return a.idx - b.idx;
+      })
+      .map((entry) => entry.note);
+  }
+
+  function deleteNote(id) {
+    state.notes = state.notes.filter((n) => n.id !== id);
+    if (sidebarEditingId === id) sidebarEditingId = null;
+    hideHoverCard();
+    refresh(true);
+  }
+
+  function editNote(id, text) {
+    state.notes = state.notes.map((note) => note.id === id ? { ...note, text } : note);
+    sidebarEditingId = null;
+    refresh(true);
+  }
+
+  function queueEntries() {
+    const entries = [];
+    for (const note of notesInDocumentOrder()) {
+      const text = oneLine(note.text);
+      const jump = () => pulseElement(noteAnchorElement(note));
+      const remove = () => deleteNote(note.id);
+      if (note.kind === "line") {
+        const anchor = formatLineAnchor(note);
+        entries.push({
+          tag: "lines",
+          summary: shortPath(note.path) + ":" + formatLineSpan(note) + " — " + text,
+          title: anchor + " — " + text,
+          ref: "`" + pagePath + "` § " + anchor + " — " + text,
+          jump,
+          remove,
+        });
+      } else {
+        const section = oneLine(note.section);
+        const quote = oneLine(note.quote);
+        entries.push({
+          tag: "note",
+          summary: '"' + truncate(quote, 26) + '" — ' + text,
+          title: section + ' › "' + quote + '" — ' + text,
+          ref: "`" + pagePath + "` § " + section + ' › "' + quote + '" ' + text,
+          jump,
+          remove,
+        });
+      }
+    }
+
+    function pushControl(tag, attr, key, label, val, remove) {
+      const summary = label + ": " + val;
+      entries.push({
+        tag,
+        summary,
+        title: summary,
+        ref: "`" + pagePath + "` § " + summary,
+        jump: () => pulseElement(document.querySelector("[" + attr + '="' + CSS.escape(key) + '"]')),
+        remove: () => {
+          remove();
+          refresh(true);
+        },
+      });
+    }
+
+    for (const [group, entry] of Object.entries(state.choices)) {
+      if (!entry || !entry.value) continue;
+      pushControl(
+        "choice",
+        "data-choice",
+        group,
+        oneLine(entry.label || group),
+        oneLine(entry.value),
+        () => delete state.choices[group]
+      );
+    }
+    for (const [group, entry] of Object.entries(state.multiselects)) {
+      if (!entry || !Array.isArray(entry.values) || entry.values.length === 0) continue;
+      pushControl(
+        "choice",
+        "data-multiselect",
+        group,
+        oneLine(entry.label || group),
+        entry.values.map(oneLine).join(", "),
+        () => delete state.multiselects[group]
+      );
+    }
+    for (const [qid, entry] of Object.entries(state.questions)) {
+      const ans = entry && oneLine(entry.answer);
+      if (!ans) continue;
+      pushControl(
+        "answer",
+        "data-question",
+        qid,
+        oneLine(entry.label || qid),
+        ans,
+        () => delete state.questions[qid]
+      );
+    }
+    for (const act of state.offlineActions) {
+      const summary = oneLine(act.summary);
+      entries.push({
+        tag: "run",
+        summary,
+        title: "Run: " + summary,
+        ref: "`" + pagePath + "` Run: " + summary,
+        jump: () => {
+          const found = actions.find((a) => a.key === act.key);
+          if (found) pulseElement(found.slot);
+        },
+        remove: () => {
+          state.offlineActions = state.offlineActions.filter((a) => a.id !== act.id);
+          refresh(true);
+        },
+      });
+    }
+    return entries;
+  }
+
+  function queueItems(entries) {
+    const items = (entries || queueEntries()).map((e) => e.ref);
+    const overall = oneLine(state.overall);
+    if (!desktopHandler && overall) {
+      items.push("`" + pagePath + "` Overall: " + overall);
+    }
+    return items;
+  }
+
+  function formatReplyMessage(items) {
+    if (!items.length) return "";
+    let message = items.map((ref, idx) => "(" + (idx + 1) + ") " + oneLine(ref)).join(" ");
+    const unreported = state.receipts.filter((r) => !r.reported);
+    if (unreported.length > 0) {
+      const ran = unreported
+        .map((r) => oneLine(r.kind + (r.summary ? " → " + r.summary : "")))
+        .join("; ");
+      message += " [already ran: " + ran + "]";
+    }
+    return oneLine(message);
+  }
+
+  function saveState() {
+    if (desktopHandler) {
+      try {
+        desktopHandler.postMessage({
+          type: "sync",
+          build_id: buildId,
+          state,
+          items: queueItems(),
+        });
+      } catch (_) {}
+      return;
+    }
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(state));
+    } catch (_) {}
+  }
+
+  function loadBrowserState() {
+    if (desktopHandler) return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") applyState(parsed);
+    } catch (_) {}
+  }
+
+  // `persist` marks an edit: the last send's sentence no longer describes the queue.
+  function refresh(persist) {
+    if (persist) setStatus("", "");
+    syncControlsFromState();
+    renderHighlights();
+    renderSidebar();
+    if (persist) saveState();
+    renderDock();
+  }
+
+  function applyState(loaded) {
+    if (!loaded || typeof loaded !== "object") {
+      state = emptyState();
+    } else {
+      state = {
+        notes: Array.isArray(loaded.notes) ? loaded.notes : [],
+        choices: loaded.choices && typeof loaded.choices === "object" ? loaded.choices : {},
+        multiselects:
+          loaded.multiselects && typeof loaded.multiselects === "object" ? loaded.multiselects : {},
+        questions: loaded.questions && typeof loaded.questions === "object" ? loaded.questions : {},
+        offlineActions: Array.isArray(loaded.offlineActions) ? loaded.offlineActions : [],
+        overall: typeof loaded.overall === "string" ? loaded.overall : "",
+        receipts: Array.isArray(loaded.receipts) ? loaded.receipts : [],
+      };
+    }
+    refresh(false);
+  }
+
+  // Desktop calls this with `null` after `ReviewComments.insert(into:)` sends the page's items;
+  // Swift has already updated its stored page state, so don't echo a redundant `sync` back.
+  window.__lfDesktopApplyState = function (loaded) {
+    if (loaded) applyState(loaded);
+    else clearDrafts({ markReported: true, persist: false });
+  };
+
+  // --- Loopback WebSocket carrier ---
+
+  function loopbackWsUrl() {
+    if (window.location.protocol !== "http:" || window.location.hostname !== "127.0.0.1") return null;
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    if (parts.length < 3 || parts[1] !== "f" || !/^[A-Za-z0-9_-]{43}$/.test(parts[0])) return null;
+    return "ws://" + window.location.host + "/" + parts[0] + "/machine";
+  }
+
+  function markDisconnected(reason) {
+    hostMode = "clipboard";
+    serverDisconnected = true;
+    showBanner(reason || "Loopflow server disconnected — run lf page open " + pagePath);
+    renderDock();
+  }
+
+  function connectLoopback() {
+    if (desktopHandler) return;
+    const url = loopbackWsUrl();
+    if (!url) return;
+    if (!Number.isInteger(protocolRevision) || !Number.isInteger(protocolMinRevision)) {
+      markDisconnected("Review page is missing server protocol version — rebuild with lf page build");
+      return;
+    }
+    let ws;
+    try {
+      ws = new WebSocket(url);
+    } catch (_) {
+      markDisconnected("");
+      return;
+    }
+    let handshakeError = "";
+    let closingForUnload = false;
+    ws.addEventListener("open", () => {
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          revision: protocolRevision,
+          min_revision: protocolMinRevision,
+          client: { kind: "page", platform: "browser", name: "review-page", version: "1" },
+        })
+      );
+    });
+    ws.addEventListener("message", (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch (_) {
+        return;
+      }
+      if (msg.type === "welcome") {
+        socket = ws;
+        hostMode = "loopback";
+        serverDisconnected = false;
+        hideBanner();
+        renderDock();
+        return;
+      }
+      if (msg.type === "error" && !msg.id) {
+        handshakeError = msg.message || msg.code || "Loopflow server rejected connection";
+        showBanner(handshakeError);
+        return;
+      }
+      if ((msg.type === "response" || msg.type === "error") && msg.id && pending.has(msg.id)) {
+        const entry = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.type === "response") entry.resolve(msg.result);
+        else entry.reject(new Error(msg.message || msg.code || "Server error"));
+      }
+    });
+    ws.addEventListener("close", () => {
+      if (socket === ws) socket = null;
+      for (const [, entry] of pending) entry.reject(new Error("Connection closed"));
+      pending.clear();
+      if (!closingForUnload) markDisconnected(handshakeError);
+    });
+    window.addEventListener("pagehide", () => {
+      closingForUnload = true;
+      try {
+        ws.close();
+      } catch (_) {}
+    });
+  }
+
+  function sendOperation(operation, requestId) {
+    if (desktopHandler) {
+      try {
+        return Promise.resolve(
+          desktopHandler.postMessage({
+            type: "operation",
+            operation,
+            request_id: requestId || null,
+          })
+        ).then((result) => {
+          if (result && result.error) throw new Error(result.error);
+          if (result && result.cancelled) return cancelledAction;
+          return result && result.result !== undefined ? result.result : result;
+        });
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error("Loopflow server is not connected"));
+    }
+    return new Promise((resolve, reject) => {
+      const id = "req-" + nextReqId++;
+      pending.set(id, { resolve, reject });
+      try {
+        socket.send(JSON.stringify({
+          type: "request",
+          id,
+          operation,
+          select: null,
+          sender: null,
+          request_id: requestId || null,
+        }));
+      } catch (error) {
+        pending.delete(id);
+        reject(error);
+      }
+    });
+  }
+
+  // --- Banner ---
+
+  let bannerEl = null;
+  function showBanner(text) {
+    if (!bannerEl) {
+      bannerEl = el("div", "lf-banner");
+      mainEl.insertBefore(bannerEl, mainEl.firstChild);
+    }
+    bannerEl.textContent = text;
+    bannerEl.hidden = false;
+  }
+
+  function hideBanner() {
+    if (bannerEl) bannerEl.hidden = true;
+  }
+
+  // --- Controls & direct `data-lf` actions ---
+
+  // Each `data-lf` button and the element now standing in its place.
+  const actions = [];
+
+  function showInSlot(action, node) {
+    if (action.slot !== node) action.slot.replaceWith(node);
+    action.slot = node;
+  }
+
+  function wireControls() {
+    document.querySelectorAll("[data-notes-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const block = btn.closest(".lf-codeblock");
+        if (!block) return;
+        const hidden = block.classList.toggle("lf-notes-hidden");
+        btn.textContent = hidden ? "Show line notes" : "Hide line notes";
+      });
+    });
+
+    document.querySelectorAll("[data-choice]").forEach((groupEl) => {
+      const group = groupEl.getAttribute("data-choice");
+      const label = groupEl.getAttribute("data-label") || group;
+      groupEl.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const value = buttonValue(btn);
+          if (state.choices[group] && state.choices[group].value === value) {
+            delete state.choices[group];
+          } else {
+            state.choices[group] = { label, value };
+          }
+          refresh(true);
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-multiselect]").forEach((groupEl) => {
+      const group = groupEl.getAttribute("data-multiselect");
+      const label = groupEl.getAttribute("data-label") || group;
+      groupEl.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const value = buttonValue(btn);
+          const current = (state.multiselects[group] && state.multiselects[group].values) || [];
+          const next = current.includes(value)
+            ? current.filter((v) => v !== value)
+            : current.concat([value]);
+          if (next.length === 0) delete state.multiselects[group];
+          else state.multiselects[group] = { label, values: next };
+          refresh(true);
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-question]").forEach((box) => {
+      const qid = box.getAttribute("data-question");
+      const label = box.getAttribute("data-label") || qid;
+      let input = box.querySelector("textarea, input");
+      if (!input) {
+        input = el("textarea", { rows: 2 });
+        box.append(input);
+      }
+      input.addEventListener("input", () => {
+        const answer = input.value;
+        if (!oneLine(answer)) delete state.questions[qid];
+        else state.questions[qid] = { label, answer };
+        setStatus("", "");
+        saveState();
+        renderDock();
+      });
+    });
+
+    document.querySelectorAll("[data-lf]").forEach((btn, idx) => {
+      let template;
+      try {
+        template = JSON.parse(btn.getAttribute("data-lf") || "{}");
+      } catch (_) {
+        return;
+      }
+      const action = {
+        key: btn.getAttribute("data-lf-id") || "action-" + idx,
+        btn,
+        template,
+        slot: btn,
+      };
+      actions.push(action);
+      btn.addEventListener("click", (event) => {
+        if (event.isTrusted) openActionConfirm(action);
+      });
+    });
+  }
+
+  // Receipts and offline-queued actions outlive reloads; an action with neither shows its button.
+  function syncActionsFromState() {
+    for (const action of actions) {
+      const receipt = state.receipts.find((r) => r.key === action.key);
+      const offline = state.offlineActions.find((a) => a.key === action.key);
+      if (receipt) {
+        showInSlot(action, el("span", { cls: "lf-action-receipt", text: receipt.text || receipt.summary }));
+      } else if (offline) {
+        showInSlot(action, el("span", { cls: "lf-action-summary", text: "Offline — added to reply" }));
+      } else if (
+        action.slot.classList.contains("lf-action-receipt") ||
+        action.slot.classList.contains("lf-action-summary")
+      ) {
+        showInSlot(action, action.btn);
+      }
+    }
+  }
+
+  function syncControlsFromState() {
+    syncActionsFromState();
+    document.querySelectorAll("[data-choice]").forEach((groupEl) => {
+      const selected =
+        state.choices[groupEl.getAttribute("data-choice")] &&
+        state.choices[groupEl.getAttribute("data-choice")].value;
+      groupEl.querySelectorAll("button").forEach((btn) => setPressed(btn, selected === buttonValue(btn)));
+    });
+    document.querySelectorAll("[data-multiselect]").forEach((groupEl) => {
+      const entry = state.multiselects[groupEl.getAttribute("data-multiselect")];
+      const values = (entry && entry.values) || [];
+      groupEl.querySelectorAll("button").forEach((btn) => setPressed(btn, values.includes(buttonValue(btn))));
+    });
+    document.querySelectorAll("[data-question]").forEach((box) => {
+      let input = box.querySelector("textarea, input");
+      if (!input) {
+        input = el("textarea", { rows: 2 });
+        box.append(input);
+      }
+      const entry = state.questions[box.getAttribute("data-question")];
+      const saved = entry ? entry.answer : "";
+      if (input.value !== saved) input.value = saved;
+    });
+  }
+
+  function summarizeOperation(op) {
+    const parts = [op.kind || "operation"];
+    for (const [k, v] of Object.entries(op)) {
+      if (k === "kind" || k === "directory" || k === "request_id" || v === null || v === false || v === "") {
+        continue;
+      }
+      if (Array.isArray(v) && v.length === 0) continue;
+      parts.push(k + "=" + (typeof v === "string" ? v : JSON.stringify(v)));
+    }
+    return parts.join(" ");
+  }
+
+  function materializeOperation(template, requestId) {
+    const copy = JSON.parse(JSON.stringify(template));
+    if (copy.request_id === "__LF_REQUEST_ID__") copy.request_id = requestId;
+    return copy;
+  }
+
+  function formatReceipt(kind, result) {
+    if (result && typeof result === "object") {
+      const taskId = resultTaskId(result);
+      if (kind === "task.create" && taskId) return "Filed " + taskId;
+      if (result.delivery && result.delivery.sentence) return result.delivery.sentence;
+      if (taskId) return kind + " → " + taskId;
+      if (result.sentence) return result.sentence;
+    }
+    return "Ran " + kind;
+  }
+
+  function openActionConfirm(action) {
+    const template = action.template;
+    if (hostMode === "clipboard") {
+      state.offlineActions.push({ id: randomId(), key: action.key, summary: summarizeOperation(template) });
+      refresh(true);
+      return;
+    }
+
+    const requestId = randomId();
+    if (desktopHandler) execute();
+    else {
+      showInSlot(action, el(
+        "span",
+        "lf-action-confirm",
+        el("span", { cls: "lf-action-summary", text: summarizeOperation(template) }),
+        makeButton("Run", execute, "lf-btn-accent"),
+        makeButton("Cancel", () => showInSlot(action, action.btn))
+      ));
+    }
+
+    function execute(event) {
+      if (event && !event.isTrusted) return;
+      showInSlot(action, el("span", { cls: "lf-action-confirm", text: "Running…" }));
+      const op = materializeOperation(template, requestId);
+      sendOperation(op, requestId).then(
+        (result) => {
+          if (result === cancelledAction) {
+            showInSlot(action, action.btn);
+            return;
+          }
+          const text = formatReceipt(op.kind, result);
+          state.receipts.push({ key: action.key, kind: op.kind, summary: resultTaskId(result) || text, text });
+          refresh(true);
+        },
+        (err) => {
+          showInSlot(
+            action,
+            el("span", "lf-action-error", el("span", { text: errorMessage(err) }), makeButton("Retry", execute))
+          );
+        }
+      );
+    }
+  }
+
+  // --- Cross-element prose highlight anchoring ---
+
+  const EXCLUDED_TEXT_SELECTOR =
+    "button, textarea, input, script, style, .lf-gutter-plus, .lf-ln, .lf-sign, " +
+    ".lf-float-pill, .lf-float-composer, .lf-hover-card, .lf-sidebar, .lf-dock, " +
+    ".lf-comments-toggle, .lf-banner, .lf-action-confirm, .lf-action-receipt, .lf-action-error";
+
+  const BLOCK_TAGS = new Set([
+    "P", "DIV", "LI", "TR", "TD", "TH", "H1", "H2", "H3", "H4", "H5", "H6",
+    "PRE", "BLOCKQUOTE", "SECTION", "ARTICLE", "ASIDE", "HEADER", "FOOTER", "DT", "DD",
+  ]);
+
+  function nearestBlock(node) {
+    let cur = node && node.nodeType === 1 ? node : node && node.parentElement;
+    while (cur && cur !== mainEl) {
+      if (BLOCK_TAGS.has(cur.tagName)) return cur;
+      cur = cur.parentElement;
+    }
+    return mainEl;
+  }
+
+  function isExcludedTextNode(node) {
+    const parent = node.parentElement;
+    return (
+      !parent ||
+      Boolean(parent.closest(EXCLUDED_TEXT_SELECTOR)) ||
+      Boolean(parent.closest("[hidden]")) ||
+      Boolean(parent.closest(".lf-notes-hidden .lf-line-note"))
+    );
+  }
+
+  function buildNormalizedIndex(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let flat = "";
+    const positions = [];
+    let lastWasSpace = true;
+    let lastBlock = null;
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue || isExcludedTextNode(node)) continue;
+      const block = nearestBlock(node);
+      if (lastBlock && block !== lastBlock && !lastWasSpace) {
+        flat += " ";
+        positions.push(null);
+        lastWasSpace = true;
+      }
+      lastBlock = block;
+      const val = node.nodeValue;
+      for (let i = 0; i < val.length; i++) {
+        const ch = val[i];
+        if (/\s/.test(ch)) {
+          if (!lastWasSpace) {
+            flat += " ";
+            positions.push({ node, offset: i });
+            lastWasSpace = true;
+          }
+        } else {
+          flat += ch;
+          positions.push({ node, offset: i });
+          lastWasSpace = false;
+        }
+      }
+    }
+    if (flat.endsWith(" ")) {
+      flat = flat.slice(0, -1);
+      positions.pop();
+    }
+    return { flat, positions };
+  }
+
+  function findOccurrenceForRange(range, needle) {
+    if (!needle) return 0;
+    const index = buildNormalizedIndex(mainEl);
+    let rangeFlatPos = -1;
+    for (let i = 0; i < index.positions.length; i++) {
+      const p = index.positions[i];
+      if (!p) continue;
+      try {
+        if (range.comparePoint(p.node, p.offset) === 0) {
+          rangeFlatPos = i;
+          break;
+        }
+      } catch (_) {}
+    }
+    if (rangeFlatPos < 0) return 0;
+    let count = 0;
+    let from = 0;
+    while (from < rangeFlatPos) {
+      const hit = index.flat.indexOf(needle, from);
+      if (hit < 0 || hit >= rangeFlatPos) break;
+      count++;
+      from = hit + 1;
+    }
+    return count;
+  }
+
+  function findNormalizedRange(needle, occurrence) {
+    if (!needle) return null;
+    const index = buildNormalizedIndex(mainEl);
+    let hit = -1;
+    let from = 0;
+    const targetOcc = Math.max(0, Number(occurrence) || 0);
+    for (let occ = 0; occ <= targetOcc; occ++) {
+      const next = index.flat.indexOf(needle, from);
+      if (next < 0) break;
+      hit = next;
+      from = next + 1;
+    }
+    if (hit < 0) return null;
+    let s = hit;
+    let e = hit + needle.length - 1;
+    while (s <= e && !index.positions[s]) s++;
+    while (e >= s && !index.positions[e]) e--;
+    if (s > e || !index.positions[s] || !index.positions[e]) return null;
+    try {
+      const range = document.createRange();
+      range.setStart(index.positions[s].node, index.positions[s].offset);
+      range.setEnd(index.positions[e].node, index.positions[e].offset + 1);
+      return range;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function wrapRange(range, noteId) {
+    const walker = document.createTreeWalker(mainEl, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue || isExcludedTextNode(node)) continue;
+      try {
+        if (!range.intersectsNode(node)) continue;
+      } catch (_) {
+        continue;
+      }
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.nodeValue.length;
+      if (end > start && node.nodeValue.slice(start, end).trim()) {
+        hits.push({ node, start, end });
+      }
+    }
+    for (let i = hits.length - 1; i >= 0; i--) {
+      const { node: tn, start, end } = hits[i];
+      const text = tn.nodeValue;
+      const frag = document.createDocumentFragment();
+      if (start > 0) frag.append(text.slice(0, start));
+      frag.append(el("span", { cls: "lf-hl", text: text.slice(start, end), attrs: { "data-lf-note-id": noteId } }));
+      if (end < text.length) frag.append(text.slice(end));
+      if (tn.parentNode) tn.parentNode.replaceChild(frag, tn);
+    }
+  }
+
+  function unwrapAllHighlights() {
+    const spans = Array.from(mainEl.querySelectorAll("span.lf-hl[data-lf-note-id]"));
+    const parents = new Set();
+    for (let i = spans.length - 1; i >= 0; i--) {
+      const span = spans[i];
+      const parent = span.parentNode;
+      if (!parent) continue;
+      parents.add(parent);
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    }
+    for (const parent of parents) {
+      if (parent.isConnected) parent.normalize();
+    }
+  }
+
+  let lastHighlightSig = "";
+
+  function renderHighlights() {
+    const sig = JSON.stringify(
+      state.notes.map((n) =>
+        n.kind === "line"
+          ? [n.id, "line", n.path, n.side, n.lineStart, n.lineEnd]
+          : [n.id, "prose", n.match || n.quote, n.occurrence || 0]
+      )
+    );
+    if (sig === lastHighlightSig) return;
+    lastHighlightSig = sig;
+
+    unwrapAllHighlights();
+    mainEl.querySelectorAll("tr.lf-code-row.lf-row-has-note").forEach((tr) => {
+      tr.classList.remove("lf-row-has-note");
+      tr.removeAttribute("data-lf-line-note-ids");
+    });
+
+    for (const note of state.notes) {
+      if (note.kind === "line") {
+        for (const tr of rowsForLineNote(note)) {
+          tr.classList.add("lf-row-has-note");
+          const existing = tr.getAttribute("data-lf-line-note-ids");
+          const list = existing ? existing.split(",") : [];
+          if (!list.includes(note.id)) list.push(note.id);
+          tr.setAttribute("data-lf-line-note-ids", list.join(","));
+        }
+      } else {
+        const range = findNormalizedRange(oneLine(note.match || note.quote), note.occurrence || 0);
+        if (range) wrapRange(range, note.id);
+      }
+    }
+  }
+
+  // --- Floating selection pill, composer, and hover cards (1c) ---
+
+  let floatPill = null;
+  let floatComposer = null;
+  let pendingSelection = null; // { range, rect, section, quote, match }
+  let hoverCardEl = null;
+  let hoverHideTimer = null;
+
+  function dismissFloatPill() {
+    if (floatPill) {
+      floatPill.remove();
+      floatPill = null;
+    }
+  }
+
+  function clearPendingSelection() {
+    pendingSelection = null;
+    dismissFloatPill();
+  }
+
+  function dismissFloatComposer() {
+    if (floatComposer) {
+      floatComposer.remove();
+      floatComposer = null;
+    }
+    mainEl.querySelectorAll("tr.lf-code-row.lf-row-selecting").forEach((tr) => {
+      tr.classList.remove("lf-row-selecting");
+    });
+  }
+
+  function dismissFloats() {
+    dismissFloatPill();
+    dismissFloatComposer();
+  }
+
+  function hideHoverCard() {
+    clearTimeout(hoverHideTimer);
+    if (hoverCardEl) {
+      hoverCardEl.remove();
+      hoverCardEl = null;
+    }
+  }
+
+  function clampFixedBox(box, rect, preferAbove) {
+    const w = box.offsetWidth;
+    const h = box.offsetHeight;
+    const dockAllowance = desktopHandler ? 12 : 96;
+    let top;
+    if (preferAbove) {
+      top = rect.top - h - 8;
+      if (top < 8) top = Math.min(window.innerHeight - h - dockAllowance, rect.bottom + 8);
+    } else {
+      top = rect.bottom + 8;
+      if (top + h > window.innerHeight - dockAllowance) {
+        top = Math.max(8, rect.top - h - 8);
+      }
+    }
+    top = Math.max(8, Math.min(window.innerHeight - h - 8, top));
+    const centered = preferAbove ? rect.left + rect.width / 2 - w / 2 : rect.left;
+    const left = Math.max(8, Math.min(window.innerWidth - w - 8, centered));
+    box.style.top = top + "px";
+    box.style.left = left + "px";
+  }
+
+  function buildNoteEditor({ initialText, placeholder, rows, onSave, onCancel, stopProp }) {
+    const ta = el("textarea", { rows: rows || 2, placeholder, value: initialText || "" });
+    const commit = () => {
+      const val = oneLine(ta.value);
+      if (val) onSave(val);
+    };
+    ta.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        commit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel();
+      }
+    });
+    const wrap = (fn) => (e) => {
+      if (stopProp) e.stopPropagation();
+      fn();
+    };
+    const actionsEl = el(
+      "div",
+      "lf-card-actions",
+      makeButton("Cancel", wrap(onCancel), "lf-btn-quiet"),
+      makeButton("Save ⌘↩", wrap(commit), "lf-btn-accent")
+    );
+    return { ta, actionsEl };
+  }
+
+  function showFloatPill(rect, buttons) {
+    dismissFloatPill();
+    floatPill = el("div", "lf-float-pill");
+    buttons.forEach((b, idx) => {
+      if (idx > 0) floatPill.append(el("span", "lf-float-pill-sep"));
+      floatPill.append(
+        el("button", {
+          type: "button",
+          text: b.label,
+          on: {
+            mousedown: (e) => e.preventDefault(),
+            click: () => {
+              dismissFloatPill();
+              b.onClick();
+            },
+          },
+        })
+      );
+    });
+    document.body.append(floatPill);
+    clampFixedBox(floatPill, rect, true);
+  }
+
+  function saveProseNote(selInfo, text) {
+    const needle = selInfo.match;
+    state.notes.push({
+      id: randomId(),
+      kind: "prose",
+      section: selInfo.section,
+      quote: selInfo.quote.slice(0, 140),
+      match: needle,
+      occurrence: findOccurrenceForRange(selInfo.range, needle),
+      text: oneLine(text),
+    });
+    pendingSelection = null;
+    clearSelection();
+    refresh(true);
+  }
+
+  function openProseComposer(selInfo) {
+    openFloatingComposer(selInfo.rect, {
+      anchorLabel: formatNoteAnchorLabel({ kind: "prose", section: selInfo.section, quote: selInfo.quote }),
+      onSave: (val) => saveProseNote(selInfo, val),
+    });
+  }
+
+  function openFloatingComposer(rect, opts) {
+    dismissFloats();
+    hideHoverCard();
+
+    if (opts.selectedRows) {
+      for (const tr of opts.selectedRows) tr.classList.add("lf-row-selecting");
+    }
+
+    const { ta, actionsEl } = buildNoteEditor({
+      initialText: opts.initialText,
+      placeholder: opts.placeholder || "Add comment… (⌘↩ to save)",
+      onSave: (val) => {
+        dismissFloatComposer();
+        opts.onSave(val);
+      },
+      onCancel: dismissFloatComposer,
+    });
+
+    floatComposer = el(
+      "div",
+      "lf-float-composer",
+      el("div", { cls: "lf-anchor-quote", text: opts.anchorLabel }),
+      ta,
+      actionsEl
+    );
+    document.body.append(floatComposer);
+    clampFixedBox(floatComposer, rect, false);
+    focusEnd(ta);
+  }
+
+  function showHoverCard(targetEl, note) {
+    if (floatComposer) return;
+    hideHoverCard();
+
+    const editBtn = makeButton("Edit", () => {
+      const r = targetEl.getBoundingClientRect();
+      hideHoverCard();
+      openFloatingComposer(r, {
+        anchorLabel: formatNoteAnchorLabel(note),
+        initialText: note.text,
+        onSave: (val) => editNote(note.id, val),
+      });
+    }, "lf-btn-quiet");
+
+    hoverCardEl = el(
+      "div",
+      {
+        cls: "lf-hover-card",
+        on: {
+          mouseenter: () => clearTimeout(hoverHideTimer),
+          mouseleave: () => {
+            hoverHideTimer = setTimeout(hideHoverCard, 200);
+          },
+        },
+      },
+      el("div", { cls: "lf-anchor-quote", text: formatNoteAnchorLabel(note) }),
+      el("div", { cls: "lf-card-body", text: note.text }),
+      el("div", "lf-card-actions", editBtn, makeButton("Delete", () => deleteNote(note.id), "lf-btn-quiet"))
+    );
+    document.body.append(hoverCardEl);
+    clampFixedBox(hoverCardEl, targetEl.getBoundingClientRect(), false);
+  }
+
+  function wireSelectionNotes() {
+    document.addEventListener("mouseup", (event) => {
+      if (
+        event.target.closest(
+          ".lf-float-pill, .lf-float-composer, .lf-hover-card, .lf-sidebar, .lf-dock, .lf-comments-toggle, button, textarea, input, .lf-action-confirm, td.lf-ln"
+        )
+      ) {
+        return;
+      }
+
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) return clearPendingSelection();
+      const quote = oneLine(sel.toString());
+      if (!quote) return clearPendingSelection();
+
+      const range = sel.getRangeAt(0).cloneRange();
+      const containerEl =
+        range.commonAncestorContainer.nodeType === 1
+          ? range.commonAncestorContainer
+          : range.commonAncestorContainer.parentElement;
+      if (!containerEl || !mainEl.contains(containerEl)) return clearPendingSelection();
+
+      const selInfo = {
+        range,
+        rect: range.getBoundingClientRect(),
+        section: nearestSection(containerEl),
+        quote: quote.slice(0, 140),
+        match: quote.slice(0, 240),
+      };
+      pendingSelection = selInfo;
+
+      showFloatPill(selInfo.rect, [
+        { label: "Comment (c)", onClick: () => openProseComposer(selInfo) },
+        { label: "Flag", onClick: () => saveProseNote(selInfo, "Flagged for follow-up") },
+        {
+          label: "Copy",
+          onClick: () => {
+            copyText(quote).catch(() => {});
+            pendingSelection = null;
+            clearSelection();
+          },
+        },
+      ]);
+    });
+
+    document.addEventListener("mousedown", (event) => {
+      if (
+        floatComposer &&
+        !floatComposer.contains(event.target) &&
+        !event.target.closest(".lf-float-pill, .lf-gutter-plus, td.lf-ln")
+      ) {
+        dismissFloatComposer();
+      }
+    });
+
+    mainEl.addEventListener("mouseover", (event) => {
+      const hl = event.target.closest(".lf-hl[data-lf-note-id]");
+      if (hl) {
+        const note = state.notes.find((n) => n.id === hl.getAttribute("data-lf-note-id"));
+        if (note) showHoverCard(hl, note);
+        return;
+      }
+      const lnCell = event.target.closest("tr.lf-code-row.lf-row-has-note td.lf-ln");
+      if (lnCell) {
+        const tr = lnCell.closest("tr.lf-code-row");
+        const firstId = (tr.getAttribute("data-lf-line-note-ids") || "").split(",")[0];
+        const note = firstId ? state.notes.find((n) => n.id === firstId) : null;
+        if (note) showHoverCard(lnCell, note);
+      }
+    });
+
+    mainEl.addEventListener("mouseout", (event) => {
+      if (event.target.closest(".lf-hl[data-lf-note-id], tr.lf-code-row.lf-row-has-note td.lf-ln")) {
+        hoverHideTimer = setTimeout(hideHoverCard, 220);
+      }
+    });
+
+    mainEl.addEventListener("click", (event) => {
+      const hl = event.target.closest(".lf-hl[data-lf-note-id]");
+      if (!hl) return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      openSidebar(hl.getAttribute("data-lf-note-id"));
+    });
+  }
+
+  // --- Diff & file gutter `+` and Shift+click line ranges (2a) ---
+
+  let lastGutterAnchor = null; // { block, newLine, oldLine }
+
+  function rowLineInfo(tr) {
+    const n = tr.getAttribute("data-line");
+    const o = tr.getAttribute("data-old-line");
+    const newLine = n !== null && n !== "" ? Number(n) : null;
+    const oldLine = o !== null && o !== "" ? Number(o) : null;
+    return newLine !== null || oldLine !== null ? { newLine, oldLine } : null;
+  }
+
+  function wireCodeBlocks() {
+    mainEl.querySelectorAll(".lf-codeblock[data-path]").forEach((block) => {
+      const path = block.getAttribute("data-path") || "";
+      if (!path) return;
+
+      block.querySelectorAll("tr.lf-code-row").forEach((tr) => {
+        const info = rowLineInfo(tr);
+        if (!info) return;
+        const firstLn = tr.querySelector("td.lf-ln");
+        if (!firstLn || firstLn.querySelector(".lf-gutter-plus")) return;
+        const label = info.newLine !== null ? "line " + info.newLine : "old line " + info.oldLine;
+        firstLn.insertBefore(
+          el("button", {
+            type: "button",
+            cls: "lf-gutter-plus",
+            text: "+",
+            title: "Comment on " + label + " (Shift+click for range)",
+            attrs: { "aria-label": "Comment on " + path + " " + label },
+          }),
+          firstLn.firstChild
+        );
+      });
+
+      block.addEventListener("mousedown", (event) => {
+        if (event.shiftKey && event.target.closest("td.lf-ln")) event.preventDefault();
+      });
+
+      block.addEventListener("click", (event) => {
+        const trigger = event.target.closest(".lf-gutter-plus, td.lf-ln");
+        if (!trigger) return;
+        const tr = trigger.closest("tr.lf-code-row");
+        const info = tr && rowLineInfo(tr);
+        if (!info) return;
+        event.preventDefault();
+        dismissFloatPill();
+        hideHoverCard();
+
+        let rangeSide = info.newLine !== null ? "new" : "old";
+        let lineStart = info.newLine !== null ? info.newLine : info.oldLine;
+        let lineEnd = lineStart;
+
+        if (event.shiftKey && lastGutterAnchor && lastGutterAnchor.block === block) {
+          if (lastGutterAnchor.newLine !== null && info.newLine !== null) {
+            rangeSide = "new";
+            lineStart = Math.min(lastGutterAnchor.newLine, info.newLine);
+            lineEnd = Math.max(lastGutterAnchor.newLine, info.newLine);
+          } else if (lastGutterAnchor.oldLine !== null && info.oldLine !== null) {
+            rangeSide = "old";
+            lineStart = Math.min(lastGutterAnchor.oldLine, info.oldLine);
+            lineEnd = Math.max(lastGutterAnchor.oldLine, info.oldLine);
+          }
+        }
+        lastGutterAnchor = { block, newLine: info.newLine, oldLine: info.oldLine };
+
+        const previewNote = { kind: "line", path, side: rangeSide, lineStart, lineEnd };
+        const selectedRows = rowsForLineNote(previewNote);
+        // Span the whole range so a composer that flips above it never covers it.
+        const firstRect = (selectedRows[0] || tr).getBoundingClientRect();
+        const anchorRow = selectedRows[selectedRows.length - 1] || tr;
+        const rowRect = anchorRow.getBoundingClientRect();
+        const codeCell = anchorRow.lastElementChild;
+        const codeLeft = codeCell ? codeCell.getBoundingClientRect().left : rowRect.left + 110;
+        const composerRect = {
+          top: firstRect.top,
+          bottom: rowRect.bottom,
+          left: codeLeft + 12,
+          right: rowRect.right,
+          width: Math.max(0, rowRect.right - codeLeft - 12),
+        };
+
+        openFloatingComposer(composerRect, {
+          anchorLabel: formatLineAnchor(previewNote),
+          placeholder:
+            lineStart === lineEnd
+              ? "Add comment… (Shift+click another line for range, ⌘↩ to save)"
+              : "Add comment… (⌘↩ to save)",
+          selectedRows: selectedRows.length ? selectedRows : [tr],
+          onSave: (val) => {
+            state.notes.push({
+              id: randomId(),
+              kind: "line",
+              path,
+              side: rangeSide,
+              lineStart,
+              lineEnd,
+              text: val,
+            });
+            refresh(true);
+          },
+        });
+      });
+    });
+  }
+
+  // --- Collapsible slide-over Comments sidebar (1c) ---
+
+  let commentsToggleBtn = null;
+  let commentsCountEl = null;
+  let sidebarEl = null;
+  let sidebarTitleEl = null;
+  let sidebarListEl = null;
+  let sidebarOpen = false;
+  let sidebarEditingId = null;
+
+  function closeSidebar() {
+    sidebarOpen = false;
+    sidebarEditingId = null;
+    renderSidebar();
+  }
+
+  function ensureSidebar() {
+    if (sidebarEl) return;
+
+    commentsCountEl = el("span", { cls: "lf-comments-count", hidden: true });
+    commentsToggleBtn = el(
+      "button",
+      {
+        type: "button",
+        cls: "lf-comments-toggle",
+        on: {
+          click: () => {
+            sidebarOpen = !sidebarOpen;
+            renderSidebar();
+          },
+        },
+      },
+      el("span", { text: "Comments" }),
+      commentsCountEl
+    );
+
+    sidebarTitleEl = el("span");
+    sidebarListEl = el("div", "lf-sidebar-list");
+    sidebarEl = el(
+      "aside",
+      { cls: "lf-sidebar", attrs: { "aria-label": "Comments sidebar" } },
+      el("div", "lf-sidebar-head", sidebarTitleEl, makeButton("Close", closeSidebar, "lf-btn-quiet")),
+      sidebarListEl
+    );
+    document.body.append(commentsToggleBtn, sidebarEl);
+  }
+
+  function openSidebar(focusNoteId) {
+    ensureSidebar();
+    sidebarOpen = true;
+    renderSidebar();
+    if (focusNoteId && sidebarListEl) {
+      const card = sidebarListEl.querySelector('[data-lf-sidebar-note="' + CSS.escape(focusNoteId) + '"]');
+      if (card) pulseElement(card);
+    }
+  }
+
+  function renderSidebar() {
+    ensureSidebar();
+    const ordered = notesInDocumentOrder();
+    const count = ordered.length;
+
+    commentsCountEl.textContent = String(count);
+    commentsCountEl.hidden = count === 0;
+    commentsToggleBtn.classList.toggle("has-notes", count > 0);
+    commentsToggleBtn.setAttribute("aria-expanded", sidebarOpen ? "true" : "false");
+
+    sidebarEl.classList.toggle("is-open", sidebarOpen);
+    sidebarTitleEl.textContent = count > 0 ? "Comments (" + count + ")" : "Comments";
+
+    sidebarListEl.innerHTML = "";
+    if (!count) {
+      sidebarListEl.append(
+        el("div", {
+          cls: "lf-sidebar-empty",
+          text: "No comments yet. Drag across text or click + on a code line to leave one.",
+        })
+      );
+      return;
+    }
+
+    for (const note of ordered) {
+      const item = el(
+        "div",
+        {
+          cls: "lf-sidebar-item",
+          attrs: { "data-lf-sidebar-note": note.id },
+          on: {
+            click: (e) => {
+              if (!e.target.closest("button, textarea")) pulseElement(noteAnchorElement(note));
+            },
+          },
+        },
+        el("div", { cls: "lf-anchor-quote", text: formatNoteAnchorLabel(note) })
+      );
+
+      if (sidebarEditingId === note.id) {
+        const { ta, actionsEl } = buildNoteEditor({
+          initialText: note.text,
+          placeholder: "Edit comment… (⌘↩ to save)",
+          stopProp: true,
+          onSave: (val) => editNote(note.id, val),
+          onCancel: () => {
+            sidebarEditingId = null;
+            renderSidebar();
+          },
+        });
+        item.append(ta, actionsEl);
+        setTimeout(() => focusEnd(ta), 0);
+      } else {
+        item.append(
+          el("div", { cls: "lf-card-body", text: note.text }),
+          el(
+            "div",
+            "lf-card-actions",
+            makeButton(
+              "Edit",
+              (e) => {
+                e.stopPropagation();
+                sidebarEditingId = note.id;
+                renderSidebar();
+              },
+              "lf-btn-quiet"
+            ),
+            makeButton(
+              "Delete",
+              (e) => {
+                e.stopPropagation();
+                deleteNote(note.id);
+              },
+              "lf-btn-quiet"
+            )
+          )
+        );
+      }
+      sidebarListEl.append(item);
+    }
+  }
+
+  // --- Browser T3 Code attached-chip composer dock (3b; hidden in Desktop) ---
+
+  let dockEl = null;
+  let dockChipsEl = null;
+  let dockPreviewEl = null;
+  let dockStatusEl = null;
+  let dockOverallInput = null;
+  let dockPreviewBtn = null;
+  let dockClearBtn = null;
+  let dockSendBtn = null;
+  let dockPreviewOpen = false;
+  let statusText = "";
+  let statusKind = "";
+
+  function setStatus(text, kind) {
+    statusText = text;
+    statusKind = kind || "";
+  }
+
+  function steerTargetLabel() {
+    if (work.kind === "task" && work.issue) return work.issue;
+    if (work.kind === "wave" && work.wave) return "wave " + work.wave;
+    if (work.kind === "session" && work.session) return "session";
+    return "repository";
+  }
+
+  function buildSteerOperation(message) {
+    if (work.kind === "task" && work.issue) {
+      return { kind: "task.steer", directory, issue: work.issue, message };
+    }
+    return {
+      kind: "session.steer",
+      directory,
+      session: work.kind === "session" ? work.session || null : null,
+      wave: work.kind === "wave" ? work.wave || null : null,
+      message,
+    };
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+      const ta = el("textarea", { value: text });
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.append(ta);
+      ta.select();
+      try {
+        if (document.execCommand("copy")) resolve();
+        else reject(new Error("Clipboard is unavailable"));
+      } catch (err) {
+        reject(err);
+      } finally {
+        ta.remove();
+      }
+    });
+  }
+
+  // Drop unsent drafts while keeping rendered receipts; mark receipts reported only after a reply is sent.
+  function clearDrafts(options) {
+    const markReported = Boolean(options && options.markReported);
+    const persist = !options || options.persist !== false;
+    const receipts = markReported
+      ? state.receipts.map((r) => Object.assign({}, r, { reported: true }))
+      : state.receipts.slice();
+    state = emptyState();
+    state.receipts = receipts;
+    sidebarEditingId = null;
+    hideHoverCard();
+    refresh(persist);
+  }
+
+  function submitReply() {
+    if (desktopHandler || sendingReply) return;
+    const items = queueItems();
+    if (!items.length) return;
+    const message = formatReplyMessage(items);
+
+    if (hostMode === "loopback") {
+      // Retain edits made after the send, including receipts from actions
+      // that finish while the steer is in flight.
+      const sent = {
+        notes: new Set(state.notes),
+        choices: { ...state.choices },
+        multiselects: { ...state.multiselects },
+        questions: { ...state.questions },
+        offlineActions: new Set(state.offlineActions),
+        overall: state.overall,
+        receipts: new Set(state.receipts),
+      };
+      sendingReply = true;
+      setStatus("Sending…", "");
+      renderDock();
+      sendOperation(buildSteerOperation(message), randomId()).then(
+        (result) => {
+          sendingReply = false;
+          state.notes = state.notes.filter((note) => !sent.notes.has(note));
+          state.offlineActions = state.offlineActions.filter((action) => !sent.offlineActions.has(action));
+          for (const group of ["choices", "multiselects", "questions"]) {
+            for (const [key, value] of Object.entries(sent[group])) {
+              if (state[group][key] === value) delete state[group][key];
+            }
+          }
+          if (state.overall === sent.overall) state.overall = "";
+          for (const receipt of state.receipts) {
+            if (sent.receipts.has(receipt)) receipt.reported = true;
+          }
+          setStatus(result?.delivery?.sentence || "Steer saved.", "ok");
+          saveState();
+          refresh(false);
+        },
+        (err) => {
+          sendingReply = false;
+          setStatus(errorMessage(err), "error");
+          renderDock();
+        }
+      );
+      return;
+    }
+
+    copyText(message).then(
+      () => {
+        setStatus(serverDisconnected ? "Copied reply (server disconnected)" : "Copied reply", "ok");
+        renderDock();
+      },
+      (err) => {
+        setStatus("Copy failed: " + errorMessage(err), "error");
+        renderDock();
+      }
+    );
+  }
+
+  function ensureDock() {
+    if (desktopHandler || dockEl) return;
+
+    dockChipsEl = el("div", "lf-dock-chips");
+    dockPreviewEl = el("div", { cls: "lf-dock-preview", hidden: true });
+    dockStatusEl = el("div", { cls: "lf-dock-status", hidden: true });
+
+    dockOverallInput = el("input", {
+      type: "text",
+      cls: "lf-dock-input",
+      placeholder: "Overall direction (optional)…",
+      attrs: { "aria-label": "Overall direction" },
+      on: {
+        input: () => {
+          state.overall = dockOverallInput.value;
+          setStatus("", "");
+          saveState();
+          updateDockMeta();
+        },
+      },
+    });
+
+    dockPreviewBtn = makeButton("Preview", () => {
+      dockPreviewOpen = !dockPreviewOpen;
+      updateDockMeta();
+    }, "lf-btn-quiet");
+    dockClearBtn = makeButton("Clear", () => clearDrafts({ markReported: false }), "lf-btn-quiet");
+    dockSendBtn = makeButton("", submitReply, "lf-btn-accent");
+
+    dockEl = el(
+      "div",
+      "lf-dock",
+      dockChipsEl,
+      dockPreviewEl,
+      dockStatusEl,
+      el("div", "lf-dock-row", dockOverallInput, el("div", "lf-dock-actions", dockPreviewBtn, dockClearBtn, dockSendBtn))
+    );
+    document.body.append(dockEl);
+    // Reserve the dock's height below the page so the last control stays reachable.
+    new ResizeObserver(() => {
+      document.documentElement.style.setProperty("--lf-dock-room", dockEl.offsetHeight + 40 + "px");
+    }).observe(dockEl);
+  }
+
+  function updateDockMeta(entries) {
+    if (desktopHandler || !dockEl) return;
+    const items = queueItems(entries);
+    const hasItems = items.length > 0;
+
+    if (dockOverallInput.value !== state.overall) dockOverallInput.value = state.overall;
+
+    dockPreviewBtn.hidden = !hasItems;
+    setPressed(dockPreviewBtn, dockPreviewOpen && hasItems);
+    dockClearBtn.hidden = !hasItems;
+
+    dockSendBtn.disabled = !hasItems || sendingReply;
+    dockSendBtn.textContent =
+      hostMode === "loopback" ? "Steer " + steerTargetLabel() + " ⌘↩" : "Copy reply ⌘↩";
+
+    dockPreviewEl.hidden = !(dockPreviewOpen && hasItems);
+    if (dockPreviewOpen && hasItems) dockPreviewEl.textContent = formatReplyMessage(items);
+
+    dockStatusEl.hidden = !statusText;
+    if (statusText) {
+      dockStatusEl.textContent = statusText;
+      dockStatusEl.className =
+        "lf-dock-status" + (statusKind === "error" ? " is-error" : statusKind === "ok" ? " is-ok" : "");
+    }
+  }
+
+  function renderDock() {
+    if (desktopHandler) return;
+    ensureDock();
+
+    const entries = queueEntries();
+    dockChipsEl.innerHTML = "";
+    dockChipsEl.hidden = entries.length === 0;
+    for (const entry of entries) {
+      dockChipsEl.append(
+        el(
+          "span",
+          { cls: "lf-chip", title: entry.title, on: { click: () => entry.jump() } },
+          el("span", { cls: "lf-chip-tag tag-" + entry.tag, text: entry.tag[0].toUpperCase() + entry.tag.slice(1) }),
+          el("span", { cls: "lf-chip-text", text: entry.summary }),
+          el("button", {
+            type: "button",
+            cls: "lf-chip-x",
+            text: "×",
+            title: "Remove",
+            attrs: { "aria-label": "Remove " + entry.tag },
+            on: {
+              click: (e) => {
+                e.stopPropagation();
+                entry.remove();
+              },
+            },
+          })
+        )
+      );
+    }
+
+    updateDockMeta(entries);
+  }
+
+  // --- Global keyboard shortcuts ---
+
+  document.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      if (floatComposer && floatComposer.contains(document.activeElement)) return;
+      if (sidebarEl && sidebarEl.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA") {
+        return;
+      }
+      if (!desktopHandler && queueItems().length > 0) {
+        event.preventDefault();
+        submitReply();
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (floatComposer || floatPill || hoverCardEl) {
+        dismissFloats();
+        hideHoverCard();
+      } else if (sidebarOpen) {
+        closeSidebar();
+      }
+      return;
+    }
+
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      event.key.toLowerCase() === "c" &&
+      pendingSelection &&
+      !(document.activeElement && document.activeElement.closest("input, textarea"))
+    ) {
+      event.preventDefault();
+      const selInfo = pendingSelection;
+      dismissFloatPill();
+      openProseComposer(selInfo);
+    }
+  });
+
+  wireControls();
+  wireCodeBlocks();
+  wireSelectionNotes();
+  renderSidebar();
+
+  if (desktopHandler) {
+    try {
+      const reply = desktopHandler.postMessage({
+        type: "ready",
+        build_id: buildId,
+      });
+      if (reply && typeof reply.then === "function") {
+        reply.then((loaded) => applyState(loaded), () => {});
+      }
+    } catch (_) {}
+  } else {
+    renderDock();
+    loadBrowserState();
+    connectLoopback();
+  }
+})();
+
+</script>
+</body>
+</html>
