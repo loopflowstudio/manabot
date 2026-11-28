@@ -5,6 +5,7 @@
 use crate::{
     flow::{
         game::Game,
+        mana::BoardArithmeticProfile,
         statics::{has_board_statics, CharacteristicDetails, Characteristics, LayerBoard},
     },
     state::{
@@ -457,7 +458,7 @@ pub(super) struct SourceSeed {
     nodes_reads: StateReads,
     pub(super) has_dynamic_activations: bool,
     pub(super) has_board_statics: bool,
-    pub(super) has_triggered_mana_abilities: bool,
+    pub(super) arithmetic: BoardArithmeticProfile,
 }
 
 /// Conservative reads used for both dependency pruning and cache invalidation.
@@ -627,6 +628,49 @@ impl ReadSet {
             _ => {}
         }
     }
+}
+
+pub(super) fn payment_predicate_reads(predicate: &CardPredicate) -> StateReads {
+    let mut reads = ReadSet::default();
+    reads.predicate(predicate);
+    reads.state
+}
+
+/// Reads by a mana ability are evaluated at its actual payment step, outside
+/// the layer plans that build its source's characteristics.
+pub(super) fn mana_ability_reads(ability: &ActivatedAbilityDefinition) -> StateReads {
+    fn output_reads(reads: &mut ReadSet, output: &Effect) {
+        match output {
+            Effect::If {
+                condition,
+                then,
+                otherwise,
+            } => {
+                reads.condition(condition);
+                for output in then.iter().chain(otherwise) {
+                    output_reads(reads, output);
+                }
+            }
+            Effect::AddMana { amount, .. } | Effect::AddOneColorManaValue { amount, .. } => {
+                reads.value(amount);
+            }
+            _ => {}
+        }
+    }
+    let mut reads = ReadSet::default();
+    if let Some((output, _)) = ability.mana_parts() {
+        if let Some(condition) = &ability.condition {
+            reads.condition(condition);
+        }
+        if let Some(tap) = &ability.tap_cost {
+            reads.predicate(&tap.predicate);
+        }
+        if let Some(reduction) = &ability.cost_reduction_per {
+            reads.predicate(reduction);
+        }
+        output_reads(&mut reads, output);
+    }
+    reads.state
 }
 
 impl SourcePlan {
@@ -1485,7 +1529,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
     }
     let has_dynamic_activations = view.has_dynamic_activations();
     let has_board_statics = has_board_statics(&view.static_abilities);
-    let has_triggered_mana_abilities = !view.triggered_mana_abilities.is_empty();
+    let arithmetic = BoardArithmeticProfile::of(&view, &source.replacement_effects);
     SourceSeed {
         source: source.clone(),
         incarnation: permanent.id,
@@ -1499,7 +1543,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         nodes_reads,
         has_dynamic_activations,
         has_board_statics,
-        has_triggered_mana_abilities,
+        arithmetic,
     }
 }
 
@@ -3143,11 +3187,31 @@ pub(super) fn matches_view(
     view: &Characteristics,
     source: Option<PredicateSource<'_>>,
 ) -> bool {
-    let Some(permanent) = game.state.permanents[id].as_ref() else {
-        return false;
-    };
+    live_predicate_view(game, id, view).is_some_and(|view| view.matches(p, source))
+}
+
+/// Test the tapped status a mana trigger will see. Layered characteristics
+/// still come from the given board.
+pub(super) fn matches_view_after_tap(
+    game: &Game,
+    id: PermanentId,
+    p: &CardPredicate,
+    view: &Characteristics,
+) -> bool {
+    live_predicate_view(game, id, view).is_some_and(|mut view| {
+        view.tapped = true;
+        view.matches(p, None)
+    })
+}
+
+fn live_predicate_view<'a>(
+    game: &'a Game,
+    id: PermanentId,
+    view: &'a Characteristics,
+) -> Option<CharacteristicView<'a>> {
+    let permanent = game.state.permanents[id].as_ref()?;
     let object = &game.state[permanent.object];
-    CharacteristicView {
+    Some(CharacteristicView {
         types: &view.types,
         subtypes: &view.subtypes,
         all_creature_types: view.has_all_creature_types(),
@@ -3167,8 +3231,7 @@ pub(super) fn matches_view(
             object: permanent.object,
         },
         counters: &permanent.counters,
-    }
-    .matches(p, source)
+    })
 }
 
 /// The characteristics and permanent status a battlefield predicate reads,

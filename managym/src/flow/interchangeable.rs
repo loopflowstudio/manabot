@@ -45,7 +45,10 @@ use crate::{
     state::{
         ability::{AbilitySet, Effect, GrantKey, LinkedAbilitySource},
         binding::ObjectBinding,
-        card::{AbilityGrant, CardDefId, CardType, SpellProfile, StaticAbility},
+        card::{
+            AbilityGrant, ActivatedAbilityDefinition, CardDefId, CardType, SpellProfile,
+            StaticAbility,
+        },
         effect::{Affected, ContinuousEffect, Modification},
         game_object::{CardId, ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId, Target},
         permanent::{Permanent, SpellEntry},
@@ -945,6 +948,7 @@ impl<'a> ReferenceCensus<'a> {
             player: _,
             source,
             ability_index: _,
+            ability,
             chosen,
             target_req_indices: _,
             target_divisions: _,
@@ -952,9 +956,17 @@ impl<'a> ReferenceCensus<'a> {
             x: _,
         } = targeting;
         self.walk_activation_source(*source);
+        self.walk_announced_ability(ability);
         for &target in chosen {
             self.mark_target(target);
         }
+    }
+
+    fn walk_announced_ability(&mut self, ability: &ActivatedAbilityDefinition) {
+        if let Some(AbilityGrant { grantor, index: _ }) = ability.granted_by {
+            self.mark_object(grantor);
+        }
+        self.mark_opt_grant_key(ability.acquired);
     }
 
     fn walk_spell_targeting(&mut self, targeting: &SpellTargeting) {
@@ -1001,7 +1013,11 @@ impl<'a> ReferenceCensus<'a> {
                 player: _,
                 permanent,
                 ability_index: _,
-            } => self.mark_permanent(*permanent),
+                ability,
+            } => {
+                self.mark_permanent(*permanent);
+                self.walk_announced_ability(ability);
+            }
             PendingChoice::DivideAmongTargets { player: _, spell } => {
                 self.walk_announced_spell(spell);
             }
@@ -1050,12 +1066,14 @@ impl<'a> ReferenceCensus<'a> {
             Operation::Activation {
                 source,
                 ability_index: _,
+                ability,
                 targets,
                 target_req_indices: _,
                 target_divisions: _,
                 x: _,
             } => {
                 self.walk_activation_source(*source);
+                self.walk_announced_ability(ability);
                 for &target in targets {
                     self.mark_target(target);
                 }

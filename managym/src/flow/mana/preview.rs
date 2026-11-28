@@ -118,18 +118,16 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> Vec<CostComponent> {
-        self.cost_components(
-            player,
-            &Operation::Spell(AnnouncedSpell {
-                object,
-                cast,
-                mode: None,
-                targets: Vec::new(),
-                target_req_indices: Vec::new(),
-                target_divisions: Vec::new(),
-                target_shares: Vec::new(),
-            }),
-        )
+        let operation: Operation = Operation::Spell(AnnouncedSpell {
+            object,
+            cast,
+            mode: None,
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+            target_divisions: Vec::new(),
+            target_shares: Vec::new(),
+        });
+        self.cost_components(player, &operation)
     }
 
     /// Query one legal action at its exact semantic authority address.
@@ -166,10 +164,18 @@ impl Game {
         // Whether convoke, improvise or delve may pay where mana cannot.
         let mut helped = false;
         // A deliberate tap in a payment previews its own production first.
-        let offered_tap = match action {
-            Action::TapForMana { permanent, .. } => Some(AutomaticTap::fixed(*permanent)),
-            _ => None,
-        };
+        if let Action::TapForMana { permanent, .. } = action {
+            let Some(source) = position
+                .to_mut()
+                .preview_tap(player, AutomaticTap::fixed(*permanent))
+            else {
+                return Ok(PaymentPreview::message(
+                    PaymentPreviewState::NeedsChoice,
+                    "Choose the bonus mana this tap produces.",
+                ));
+            };
+            sources.push(source);
+        }
         // A resolving instruction's offer (CR 608.2g) or a priority play;
         // front-face resolution offers are card selections.
         let offered_cast = match (action, self.state.suspended_decision.as_ref()) {
@@ -269,9 +275,6 @@ impl Game {
                 match suspended.decision {
                     Decision::Payment(payment) => match payment.owed.first().cloned() {
                         Some(CostComponent::Mana { cost, .. }) => {
-                            sources.extend(
-                                offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)),
-                            );
                             resolution = Some((payment, suspended.frame));
                             Some(cost)
                         }
@@ -286,8 +289,6 @@ impl Game {
                 }
                 Some(PendingChoice::Pay { payment, .. }) => {
                     helped = keyword_help(&payment.owed);
-                    sources
-                        .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
                     if payment.waterbends() {
                         position.to_mut().pending_choice = None;
                     }
@@ -315,14 +316,9 @@ impl Game {
                         "No automatic activation fee preview.",
                     ));
                 }
-                let operation = Operation::Activation {
-                    source: ActivationSource::Permanent(*permanent),
-                    ability_index: *ability_index,
-                    targets: Vec::new(),
-                    target_req_indices: Vec::new(),
-                    target_divisions: Vec::new(),
-                    x: 0,
-                };
+                let source = ActivationSource::Permanent(*permanent);
+                let operation =
+                    Operation::activation(source, *ability_index, Box::new(ability.clone()), 0);
                 let owed = self.cost_components(player, &operation);
                 if ability.mana_cost.x > 0 || will_owe_a_choice(&owed) {
                     return Ok(PaymentPreview::message(
@@ -365,10 +361,13 @@ impl Game {
             return Ok(preview);
         };
         let position = position.to_mut();
-        sources.extend(
-            taps.into_iter()
-                .map(|tap| position.preview_tap(player, tap)),
-        );
+        for tap in taps {
+            sources.push(
+                position
+                    .preview_tap(player, tap)
+                    .ok_or_else(automatic_bonus_choice)?,
+            );
+        }
         let pool = position.pooled_mana(player);
         if let Some((payment, frame)) = resolution {
             *position.state.suspended_decision_mut() = Some(SuspendedResolution {
@@ -411,7 +410,7 @@ impl Game {
     }
     /// Run only the selected production on the isolated preview position. Its
     /// pool delta includes triggered production, spend riders and expiry.
-    fn preview_tap(&mut self, player: PlayerId, tap: AutomaticTap) -> PaymentSourcePreview {
+    fn preview_tap(&mut self, player: PlayerId, tap: AutomaticTap) -> Option<PaymentSourcePreview> {
         let permanent = tap.permanent;
         let object = self.permanent_object(permanent).expect("planned source");
         let source = SubjectRef::Object {
@@ -422,7 +421,9 @@ impl Game {
         };
         let label = self.observed_object_name(object);
         let before = self.pooled_mana(player);
-        self.perform_automatic_tap(player, tap);
+        if self.produce_tap(player, tap, None).is_some() {
+            return None;
+        }
         let after = self.pooled_mana(player);
         let mut output = Mana {
             mana: std::array::from_fn(|i| after.mana[i] - before.mana[i]),
@@ -435,11 +436,11 @@ impl Game {
                 std::array::from_fn(|i| amounts[i] - previous[i]),
             ));
         }
-        PaymentSourcePreview {
+        Some(PaymentSourcePreview {
             source,
             label,
             output: PreviewPool::from(&output),
-        }
+        })
     }
 }
 

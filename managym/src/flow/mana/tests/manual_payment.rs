@@ -1,4 +1,6 @@
 //! Constructed positions for manual mana activations, their callers and their costs.
+mod coupled_boards;
+
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
@@ -6,22 +8,25 @@ use crate::{
             Decision, EffectFrame, ManaProduction, ManaUpfrontActivation, SuspendedResolution,
         },
         game::{ActivationSource, Game, PendingChoice},
-        mana::Obligation,
+        mana::{preview::PaymentPreviewState, Obligation},
         payment::{CostComponent, Operation, Payment, PaymentProgress},
         turn::StepKind,
     },
     state::{
-        ability::{Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector},
+        ability::{
+            Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec,
+        },
         card::{
             ActivatedAbilityDefinition, CardType, DamageRecipient, DamageSource, DamageTransform,
             Keyword, ManaAbility, ReplacementEffect, StaticAbility, StaticScope,
         },
         effect::{EffectDuration, Modification},
-        game_object::{PermanentId, PlayerId},
+        game_object::{PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost},
         permanent::{CounterKind, EntryChoice},
-        player::{ManaFloats, PlayerConfig},
+        player::{ManaFloats, ManaPayment, PlayerConfig},
         predicate::CardPredicate,
+        stack_object::StackObject,
         zone::ZoneType,
     },
     Env,
@@ -48,6 +53,7 @@ fn announce_activation(game: &mut Game, player: PlayerId, source: PermanentId) {
     let operation = Operation::Activation {
         source: ActivationSource::Permanent(source),
         ability_index: 0,
+        ability: Box::new(game.characteristics(source).activated_abilities[0].clone()),
         targets: vec![],
         target_req_indices: vec![],
         target_divisions: vec![],
@@ -76,7 +82,11 @@ fn step_action(game: &mut Game, action: Action) -> Result<bool, AgentError> {
     game.step(action_index(game, action))
 }
 
-fn cast_only_card(game: &mut Game, player: PlayerId, name: &str) {
+fn only_card_in_main(
+    game: &mut Game,
+    player: PlayerId,
+    name: &str,
+) -> crate::state::game_object::ObjectId {
     game.scenario_clear_hand(player);
     game.scenario_force_card_in_hand(player, name).unwrap();
     let spell = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
@@ -89,6 +99,11 @@ fn cast_only_card(game: &mut Game, player: PlayerId, name: &str) {
         step_action(game, Action::PassPriority { player: holder }).unwrap();
     }
     assert_eq!(game.state.turn.current_step_kind(), StepKind::Main);
+    spell
+}
+
+fn cast_only_card(game: &mut Game, player: PlayerId, name: &str) {
+    let spell = only_card_in_main(game, player, name);
     let cast = game
         .action_space()
         .unwrap()
@@ -97,6 +112,125 @@ fn cast_only_card(game: &mut Game, player: PlayerId, name: &str) {
         .position(|action| matches!(action, Action::CastSpell { object, .. } if *object == spell))
         .unwrap_or_else(|| panic!("missing cast for {name}"));
     game.step(cast).unwrap();
+}
+
+#[test]
+fn owned_activation_keeps_its_targets_and_effect_when_mana_ends_the_grant() {
+    let player = PlayerId(0);
+    let opponent = PlayerId(1);
+    for (announces_x, other_grant) in [(false, false), (false, true), (true, true)] {
+        let mut game = payment_game(343, [("Island", 38), ("Mountain", 1), ("Gray Ogre", 1)]);
+        game.keep_opening_hands();
+        game.mana_floats[player.0] = ManaFloats::All;
+        let source = game
+            .scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        let mountain = game
+            .scenario_force_battlefield(player, "Mountain", true)
+            .unwrap();
+        game.scenario_force_battlefield(player, "Island", true)
+            .unwrap();
+        let damage = Effect::deal_damage(
+            if announces_x {
+                EffectValue::X
+            } else {
+                2.into()
+            },
+            ObjectSelector::Target(TargetSpec::Player),
+        );
+        let scope = StaticScope::YouControl(CardPredicate {
+            named: Some("Gray Ogre".into()),
+            ..Default::default()
+        });
+        let grant = |condition, ability| {
+            StaticAbility::continuous(
+                scope.clone(),
+                condition,
+                vec![Modification::GrantActivated(Box::new(ability))],
+            )
+        };
+        let mut grants = vec![grant(
+            Some(Condition::Not(Box::new(Condition::SourceTapped))),
+            ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse(if announces_x { "{X}{R}" } else { "{R}" }),
+                effects: vec![damage.clone()],
+                ..Default::default()
+            },
+        )];
+        if other_grant {
+            grants.push(grant(
+                None,
+                ActivatedAbilityDefinition {
+                    effects: vec![Effect::gain_life(5)],
+                    ..Default::default()
+                },
+            ));
+        }
+        let mountain_object = game.permanent_object(mountain).unwrap();
+        game.state[mountain_object].statics = grants;
+        if announces_x {
+            game.state
+                .mana_pool_mut(player)
+                .add(&Mana::parse("1"), None);
+        }
+        game.tick().unwrap();
+        assert_eq!(
+            game.characteristics(source).activated_abilities[0]
+                .effects
+                .as_slice(),
+            std::slice::from_ref(&damage)
+        );
+        step_action(
+            &mut game,
+            Action::ActivateAbility {
+                player,
+                permanent: source,
+                ability_index: 0,
+            },
+        )
+        .unwrap();
+        if announces_x {
+            step_action(&mut game, Action::ChooseMode { player, mode: 1 }).unwrap();
+        }
+        let target = Target::Player(opponent);
+        step_action(&mut game, Action::ChooseTarget { player, target }).unwrap();
+        step_action(
+            &mut game,
+            Action::TapForMana {
+                player,
+                permanent: mountain,
+            },
+        )
+        .unwrap();
+        let view = game.characteristics(source);
+        if other_grant {
+            assert_eq!(view.activated_abilities[0].effects, [Effect::gain_life(5)]);
+        } else {
+            assert!(view.activated_abilities.is_empty());
+        }
+        if matches!(game.pending_choice, Some(PendingChoice::Pay { .. })) {
+            step_action(&mut game, Action::PayCost { player }).unwrap();
+        }
+        let Some(StackObject::ActivatedAbility(ability)) = game.state.stack_objects.last() else {
+            panic!(
+                "the announced ability must reach the stack with announces_x={announces_x}, +                 other_grant={other_grant}: {:?}",
+                game.action_space()
+            );
+        };
+        assert_eq!(ability.ability_index, 0);
+        assert_eq!(ability.effects, [damage]);
+        assert_eq!(ability.targets, [target]);
+        assert_eq!(ability.x, i32::from(announces_x));
+        for _ in 0..2 {
+            let holder = game.action_space().unwrap().player.unwrap();
+            step_action(&mut game, Action::PassPriority { player: holder }).unwrap();
+        }
+        assert_eq!(game.state.players[player.0].life, 20);
+        assert_eq!(
+            game.state.players[opponent.0].life,
+            if announces_x { 19 } else { 18 }
+        );
+    }
 }
 
 #[test]
@@ -308,34 +442,17 @@ fn fixed_mana_suffix_reads_life_through_damage_replacement() {
         ..Default::default()
     }];
     announce_activation(&mut game, player, source);
-    let delta = |game: &Game, permanent| {
-        game.payment_model(player, None)
-            .sources
-            .iter()
-            .find(|source| source.permanent == permanent)
-            .unwrap()
-            .abilities[0]
-            .life_delta
-    };
-    // Both root probes write only life. The replacement reads life gained
-    // this turn through the event path, outside the layer board's reads.
-    assert_eq!(delta(&game, citadel), -3);
-    assert_eq!(delta(&game, henge), 2);
     let activate = |permanent| Action::ActivateAbility {
         player,
         permanent,
         ability_index: 0,
     };
     game.tick().unwrap();
-    let mut henge_first = game.clone();
-    // The frozen estimate admits Henge first. That gain changes the
-    // Citadel's damage from 3 to 5, leaving only 1 life for the owed fee.
-    let error = step_action(&mut henge_first, activate(henge)).unwrap_err();
-    assert!(error.0.contains("empty non-terminal action space"));
-    assert_eq!(henge_first.state.players[0].life, 6);
-    assert_eq!(delta(&henge_first, citadel), -5);
+    let actions = &game.action_space().unwrap().actions;
+    assert!(actions.contains(&activate(citadel)));
+    assert!(!actions.contains(&activate(henge)));
+    assert!(game.payment_cache.borrow().coupled_searches > 0);
 
-    // The same costs complete if Citadel deals 3 before Henge gains 2.
     step_action(&mut game, activate(citadel)).unwrap();
     assert_eq!(game.state.players[0].life, 1);
     step_action(&mut game, Action::ChooseMode { player, mode: 3 }).unwrap();
@@ -399,17 +516,10 @@ fn mana_trigger_reads_keyword_changed_by_another_activation() {
     };
 
     game.tick().unwrap();
-    let mut counter_first = game.clone();
-    // The frozen witness counts Heartbeat's second {R} even after it has
-    // spent the counter that makes the Mountain match Heartbeat's predicate.
-    let error = step_action(&mut counter_first, remove_counter.clone()).unwrap_err();
-    assert!(error.0.contains("empty non-terminal action space"));
-    assert!(!counter_first
-        .characteristics(mountain)
-        .keywords
-        .has(Keyword::Trample));
+    let actions = &game.action_space().unwrap().actions;
+    assert!(actions.contains(&tap));
+    assert!(!actions.contains(&remove_counter));
 
-    // Tapping first keeps the trigger and funds the same announced activation.
     step_action(&mut game, tap).unwrap();
     assert_eq!(
         game.pending_payment(player).unwrap().receipt.mana().len(),
@@ -419,6 +529,121 @@ fn mana_trigger_reads_keyword_changed_by_another_activation() {
     step_action(&mut game, Action::ChooseMode { player, mode: 0 }).unwrap();
     assert!(game.pending_choice.is_none());
     assert_eq!(game.state.stack_objects.len(), 1);
+}
+
+#[test]
+fn coupled_payment_memoizes_citadel_orders() {
+    let player = PlayerId(0);
+    let mut game = payment_game(
+        349,
+        [
+            ("Forest", 36),
+            ("Tarnished Citadel", 2),
+            ("Angel of Vitality", 1),
+            ("Raucous Audience", 1),
+        ],
+    );
+    game.keep_opening_hands();
+    game.scenario_set_life(player, 28);
+    for name in [
+        "Tarnished Citadel",
+        "Tarnished Citadel",
+        "Angel of Vitality",
+        "Raucous Audience",
+    ] {
+        game.scenario_force_battlefield(player, name, true).unwrap();
+    }
+    assert!(!game.can_pay_with_mana_abilities(player, &ManaCost::parse("5"), None));
+    let cache = game.payment_cache.borrow();
+    assert_eq!(cache.coupled_searches, 1);
+    assert!(cache.coupled_states > 0);
+    assert!(cache.coupled_memo_hits > 0);
+}
+
+#[test]
+fn coupled_payment_bounds_rejection_with_ten_forests() {
+    let player = PlayerId(0);
+    let mut game = payment_game(
+        351,
+        [
+            ("Forest", 36),
+            ("Tarnished Citadel", 2),
+            ("Angel of Vitality", 1),
+            ("Raucous Audience", 1),
+        ],
+    );
+    game.keep_opening_hands();
+    game.scenario_set_life(player, 28);
+    for name in ["Forest"; 10].into_iter().chain([
+        "Tarnished Citadel",
+        "Tarnished Citadel",
+        "Angel of Vitality",
+        "Raucous Audience",
+    ]) {
+        game.scenario_force_battlefield(player, name, true).unwrap();
+    }
+    assert!(!game.can_pay_with_mana_abilities(player, &ManaCost::parse("15"), None));
+    let cache = game.payment_cache.borrow();
+    assert_eq!(cache.coupled_searches, 1);
+    assert_eq!(cache.coupled_states, 207);
+}
+
+#[test]
+fn ordinary_mana_boards_stay_on_the_pure_solver() {
+    let player = PlayerId(0);
+    for (first, second, cost) in [
+        ("Tarnished Citadel", "Heartbeat of Spring", "RR"),
+        ("Sunbaked Canyon", "Heartbeat of Spring", "RR"),
+        ("Badgermole Cub", "Forest", "GG"),
+        ("Air Nomad Legacy", "Forest", "GG"),
+        ("Raucous Audience", "Forest", "GG"),
+    ] {
+        let mut game = payment_game(350, [("Mountain", 38), (first, 1), (second, 1)]);
+        game.keep_opening_hands();
+        for name in [first, second] {
+            game.scenario_force_battlefield(player, name, true).unwrap();
+        }
+        if matches!(first, "Badgermole Cub" | "Air Nomad Legacy") {
+            let mut frame =
+                EffectFrame::new(player, vec![Effect::create_tokens("token.treasure", 1)]);
+            frame.completion = crate::flow::decision::FrameCompletion::Continue;
+            game.run_frame(frame);
+        }
+        assert!(
+            game.can_pay_with_mana_abilities(player, &ManaCost::parse(cost), None),
+            "{first}"
+        );
+        assert_eq!(game.payment_cache.borrow().coupled_searches, 0, "{first}");
+    }
+}
+
+#[test]
+fn coupled_exact_batch_keeps_the_completing_tap_order() {
+    let player = PlayerId(0);
+    let mut game = payment_game(351, [("Forest", 39), ("Mountain", 1)]);
+    game.keep_opening_hands();
+    let forest = game
+        .scenario_force_battlefield(player, "Forest", true)
+        .unwrap();
+    let mountain = game
+        .scenario_force_battlefield(player, "Mountain", true)
+        .unwrap();
+    let forest_object = game.permanent_object(forest).unwrap();
+    game.state[forest_object].statics = vec![StaticAbility::continuous(
+        StaticScope::All(CardPredicate {
+            named: Some("Mountain".into()),
+            ..Default::default()
+        }),
+        Some(Condition::SourceTapped),
+        vec![Modification::LoseAllAbilities],
+    )];
+
+    let cost = ManaCost::parse("RG");
+    assert!(game.can_pay_automatic_mana(player, &cost));
+    game.produce_mana(player, &cost).unwrap();
+    assert_eq!(game.pooled_mana(player), Mana::parse("RG"));
+    assert!(game.state.permanents[forest].as_ref().unwrap().tapped);
+    assert!(game.state.permanents[mountain].as_ref().unwrap().tapped);
 }
 
 #[test]
@@ -450,46 +675,139 @@ fn fixed_mana_tap_can_open_a_bonus_choice() {
         .predicate
         .tapped = true;
 
-    cast_only_card(&mut game, player, "Sokka, Bold Boomeranger");
-    action_index(
-        &game,
-        Action::TapForMana {
-            player,
-            permanent: mountain,
-        },
-    );
-
-    let model = game.payment_model(player, None);
-    let source = model
-        .sources
-        .iter()
-        .find(|source| source.permanent == mountain)
-        .unwrap();
-    let produced = Mana::parse("UR");
-    assert_eq!(source.fixed.as_ref(), Some(&produced));
-
-    // Follow production to the bonus boundary. The tap makes Heartbeat
-    // applicable, and the resolver returns a decision to retain.
-    let mut fork = game.clone();
-    assert!(fork.tap_permanent(mountain, true));
-    let origin = fork.mana_origin(mountain_object);
-    fork.state
-        .mana_pool_mut(player)
-        .add(&produced, Some(origin));
-    let tapped = fork.tapped_for_mana(mountain);
-    let bonuses = fork.production_bonuses(player, &tapped);
-    let decision =
-        fork.resolve_mana_bonuses(player, mountain_object, &produced, bonuses, None, None);
+    let mut automatic = game.clone();
+    automatic.mana_payment[player.0] = ManaPayment::Auto;
+    cast_only_card(&mut automatic, player, "Sokka, Bold Boomeranger");
+    assert!(automatic.pending_choice.is_none());
+    assert!(automatic.state.suspended_decision.is_none());
     assert!(matches!(
-        decision.as_deref(),
+        automatic.state.stack_objects.as_slice(),
+        [StackObject::Spell(_)]
+    ));
+
+    cast_only_card(&mut game, player, "Sokka, Bold Boomeranger");
+    let tap = Action::TapForMana {
+        player,
+        permanent: mountain,
+    };
+    let frame = game.semantic_decision_frame().unwrap();
+    let preview = game
+        .payment_preview(
+            player,
+            frame.revision,
+            &frame.fingerprint,
+            action_index(&game, tap.clone()),
+        )
+        .unwrap();
+    assert_eq!(preview.state, PaymentPreviewState::NeedsChoice);
+    assert!(preview.sources.is_empty());
+
+    step_action(&mut game, tap).unwrap();
+    assert_eq!(game.pooled_mana(player), Mana::parse("UR"));
+    assert!(game
+        .pending_payment(player)
+        .unwrap()
+        .receipt
+        .mana()
+        .is_empty());
+    let colors = [Mana::parse("U"), Mana::parse("R")];
+    assert!(matches!(
+        game.state.suspended_decision.as_ref().map(|s| &s.decision),
         Some(Decision::ManaChoice {
             player: chooser,
             choices,
             production: ManaProduction::Bonus { source, .. },
             ..
         }) if *chooser == player && *source == heartbeat_object
-            && choices == &[Mana::parse("U"), Mana::parse("R")]
+            && choices == &colors
     ));
+    for (mode, color) in colors.into_iter().enumerate() {
+        let mut fork = game.clone();
+        step_action(&mut fork, Action::ChooseMode { player, mode }).unwrap();
+        let [StackObject::Spell(spell)] = fork.state.stack_objects.as_slice() else {
+            panic!("Sokka should reach the stack after paying");
+        };
+        let base_origin = game.mana_origin(mountain_object);
+        assert_eq!(spell.spent.amounts(), Mana::parse("UR").mana);
+        assert!(spell
+            .spent
+            .mana()
+            .iter()
+            .all(|unit| unit.source == Some(base_origin)));
+        assert_eq!(fork.pooled_mana(player), color);
+        let surplus = fork
+            .state
+            .mana_pool_mut(player)
+            .spend_at(0, &Default::default());
+        assert_eq!(surplus.source, Some(game.mana_origin(heartbeat_object)));
+    }
+}
+
+#[test]
+fn fixed_mana_bonus_choice_resumes_upfront_payment() {
+    let player = PlayerId(0);
+    let mut game = payment_game(
+        348,
+        [
+            ("Island", 37),
+            ("Mountain", 1),
+            ("Heartbeat of Spring", 1),
+            ("Gray Ogre", 1),
+        ],
+    );
+    game.keep_opening_hands();
+    let mountain = game
+        .scenario_force_battlefield(player, "Mountain", true)
+        .unwrap();
+    let heartbeat = game
+        .scenario_force_battlefield(player, "Heartbeat of Spring", true)
+        .unwrap();
+    let ogre = game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let mountain_object = game.permanent_object(mountain).unwrap();
+    let heartbeat_object = game.permanent_object(heartbeat).unwrap();
+    let ogre_object = game.permanent_object(ogre).unwrap();
+    game.state[mountain_object].mana_abilities = vec![ManaAbility {
+        mana: Mana::parse("UR"),
+    }];
+    game.state[heartbeat_object].triggered_mana_abilities[0]
+        .predicate
+        .any_of = vec![CardPredicate {
+        tapped: true,
+        ..Default::default()
+    }];
+    game.state[ogre_object].activated_abilities = vec![ActivatedAbilityDefinition {
+        mana_cost: ManaCost::parse("UR"),
+        tap_source: true,
+        effects: vec![Effect::add_mana(Mana::parse("G"))],
+        ..Default::default()
+    }];
+    game.activate_mana_ability(player, ogre, 0).unwrap();
+    game.tick().unwrap();
+    step_action(
+        &mut game,
+        Action::TapForMana {
+            player,
+            permanent: mountain,
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        game.state.suspended_decision.as_ref().map(|s| &s.decision),
+        Some(Decision::ManaChoice {
+            production: ManaProduction::Bonus { .. },
+            resume: Some(resume),
+            ..
+        }) if matches!(resume.as_ref(), Decision::ManaUpfront { permanent, .. } if *permanent == ogre)
+    ));
+    step_action(&mut game, Action::ChooseMode { player, mode: 1 }).unwrap();
+    while game.state.suspended_decision.is_some() {
+        assert_eq!(game.action_space().unwrap().actions.len(), 1);
+        game.step(0).unwrap();
+    }
+    assert_eq!(game.pooled_mana(player), Mana::parse("RG"));
+    assert!(game.state.permanents[ogre].as_ref().unwrap().tapped);
 }
 
 #[test]

@@ -5,7 +5,7 @@
 // of direct-tap eligibility for casts, activations and payments made during
 // resolution: offers, labels and execution all read `help_taps`.
 //
-// A cost's help splits its generic mana into tiers (`help_obligations`):
+// The pure solver splits a helped cost's generic mana into tiers (`help_obligations`):
 // convoke and improvise taps may pay any of it, any artifact's or creature's
 // tap the announced waterbend part, and mana all of it. A convoking
 // creature may also tap to pay an owed pip of one of its colors.
@@ -18,9 +18,12 @@ impl Game {
     /// Mark what each untapped creature or artifact may pay by tapping
     /// under this cost's convoke or improvise permissions.
     pub(super) fn mark_help_taps(&self, model: &mut PaymentModel, help: Help) {
+        if !help.convoke && !help.improvise {
+            return;
+        }
         let tap_permissions = |source: &ManaSource| {
             let mut colors = ManaTypeSet::EMPTY;
-            if !source.waterbend || !(help.convoke || help.improvise) {
+            if !source.waterbend {
                 return (false, colors);
             }
             let view = self.characteristics(source.permanent);
@@ -47,36 +50,64 @@ impl Game {
         }
     }
 
-    pub(super) fn announced_obligations(
+    pub(super) fn announced_obligations<A>(
         &self,
         player: PlayerId,
-        payment: &Payment,
+        payment: &Payment<A>,
+        coupled: bool,
     ) -> Vec<Obligation> {
-        self.help_obligations(
+        self.cost_obligations(
             player,
             payment.mana().0,
             payment.mana_permissions(),
             payment.life(),
+            coupled,
         )
+    }
+
+    pub(super) fn cost_obligations(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+        permissions: CostPermissionContext,
+        life: u32,
+        coupled: bool,
+    ) -> Vec<Obligation> {
+        if coupled && (permissions.help != Help::default() || permissions.waterbend > 0) {
+            vec![Obligation::Helped(Box::new(HelpedCost {
+                cost: cost.clone(),
+                permissions,
+                life,
+            }))]
+        } else {
+            self.help_obligations(player, cost, permissions, life)
+        }
+    }
+
+    pub(super) fn cost_after_delve(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+        help: Help,
+    ) -> ManaCost {
+        let Some(spell) = help.delve else {
+            return cost.clone();
+        };
+        let cards = self.graveyard_payers(player, spell).len();
+        cost.reduced_generic(cards.min(usize::from(u8::MAX)) as u8)
     }
 
     /// `cost` as the payment model's obligations under `permissions`: delve
     /// pays as much generic as the graveyard holds, convoke and improvise taps
     /// may pay the rest of the generic, and mana pays everything.
-    fn help_obligations(
+    pub(super) fn help_obligations(
         &self,
         player: PlayerId,
         cost: &ManaCost,
         permissions: CostPermissionContext,
         life: u32,
     ) -> Vec<Obligation> {
-        let cost = match permissions.help.delve {
-            Some(spell) => {
-                let cards = self.graveyard_payers(player, spell).len();
-                cost.reduced_generic(cards.min(usize::from(u8::MAX)) as u8)
-            }
-            None => cost.clone(),
-        };
+        let cost = self.cost_after_delve(player, cost, permissions.help);
         let waterbend = permissions.waterbend.min(cost.generic());
         let keyword = if permissions.help.convoke || permissions.help.improvise {
             cost.generic() - waterbend
@@ -113,16 +144,52 @@ impl Game {
         permissions: CostPermissionContext,
         life: u32,
     ) -> bool {
-        let mut model = self.payment_model(player, None);
+        let help = permissions.help.for_remaining_cost(cost);
+        let mut model = self.payment_model_with_help(player, None, help);
         if let Some(permanent) = permissions.reserved_tap {
             model.reserve(SourceReservation::tap(permanent));
         }
-        self.mark_help_taps(&mut model, permissions.help);
         model.payable(
             pool.clone(),
-            self.help_obligations(player, cost, permissions, life),
+            self.cost_obligations(player, cost, permissions, life, model.coupled.is_some()),
             SourcePolicy::All,
         )
+    }
+
+    /// Graveyard cards whose exile leaves a payable announced cost.
+    pub(in crate::flow) fn delve_payment_objects(
+        &self,
+        player: PlayerId,
+        payment: &Payment,
+        selected: Option<ObjectId>,
+    ) -> Vec<ObjectId> {
+        let cost = payment.mana().0;
+        let Some(spell) = payment.help().delve.filter(|_| cost.generic() > 0) else {
+            return Vec::new();
+        };
+        let mut candidates = self.graveyard_payers(player, spell);
+        if let Some(selected) = selected {
+            candidates.retain(|&object| object == selected);
+        }
+        if candidates.is_empty() {
+            return candidates;
+        }
+        let model = self.payment_model(player, None);
+        if let Some(coupled) = &model.coupled {
+            let pool = self.pooled_mana(player);
+            let obligations = self.payment_obligations_for(player, &model);
+            candidates.retain(|&object| {
+                coupled
+                    .plan(
+                        pool.clone(),
+                        obligations.clone(),
+                        SourcePolicy::All,
+                        Some(PaymentCandidate::DelveExile(object)),
+                    )
+                    .is_some()
+            });
+        }
+        candidates
     }
 
     /// What tapping `tapped` may pay of `cost` under `permissions`, before
@@ -131,7 +198,7 @@ impl Game {
     /// `permissions.waterbend` is left. Each reason is its own payment, since
     /// the receipt keeps it: a creature that could convoke or waterbend {1}
     /// offers both.
-    fn tap_payments(
+    pub(super) fn tap_payments(
         &self,
         cost: &ManaCost,
         permissions: CostPermissionContext,
@@ -176,12 +243,12 @@ impl Game {
         candidates: &[PermanentId],
     ) -> Vec<(PermanentId, Vec<TapPayment>)> {
         let _scan = self.board_scan();
+        let help = permissions.help.for_remaining_cost(cost);
         let model_for = |tapped: Option<PermanentId>| {
-            let mut model = self.payment_model(player, None);
+            let mut model = self.payment_model_with_help(player, None, help);
             for permanent in permissions.reserved_tap.into_iter().chain(tapped) {
                 model.reserve(SourceReservation::tap(permanent));
             }
-            self.mark_help_taps(&mut model, permissions.help);
             model
         };
         let mut model = model_for(None);
@@ -209,6 +276,23 @@ impl Game {
                 let asked = self.tap_payments(cost, permissions, tapped);
                 if asked.is_empty() {
                     return None;
+                }
+                if let Some(coupled) = &model.coupled {
+                    let obligations = self.cost_obligations(player, cost, permissions, life, true);
+                    let options: Vec<_> = asked
+                        .into_iter()
+                        .filter(|&payment| {
+                            coupled
+                                .plan(
+                                    pool.clone(),
+                                    obligations.clone(),
+                                    SourcePolicy::All,
+                                    Some(PaymentCandidate::HelpTap(tapped, payment)),
+                                )
+                                .is_some()
+                        })
+                        .collect();
+                    return (!options.is_empty()).then_some((tapped, options));
                 }
                 // Tapped, the permanent is no longer a source of the model,
                 // so it pays its own pip and not a second one.

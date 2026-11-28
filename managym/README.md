@@ -510,10 +510,13 @@ waterbend {1}; the receipt's `Toward` keeps which. That choice's mode names
 the payment, the same in every decision (`TapPayment::mode`): 0-4 one
 {W}/{U}/{B}/{R}/{G} pip by convoke, 5 {1} by convoke, 6 {1} by improvise and 7
 {1} of the waterbend part. Only payable modes are offered, so they are sparse,
-and the choice focuses the permanent just tapped. The payment model splits
-a cost's generic mana into what those taps may pay (`help_obligations`), so
-castability, offers and execution agree. `AdditionalCost::{Convoke, Improvise, Delve}` give a
-spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
+and the choice focuses the permanent just tapped. The pure solver splits a
+cost's generic mana into what those taps may pay (`help_obligations`).
+Coupled payments keep the whole remaining cost and recalculate legal taps
+and Delve exiles after each step. An Improvise tap can enable a source to make
+the color a spell needs, and a creature can Convoke before being sacrificed
+for mana and exiled for Delve. `AdditionalCost::{Convoke, Improvise, Delve}` give
+a spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
 The same witness reserves a creature tapped for a colored pip, including
 while a nested mana ability is being paid. For example, Airship Engine Room
 can supply generic mana while a white creature remains available to convoke
@@ -626,7 +629,11 @@ counters and sacrifice through nested decisions. Its unpaid life fee
 follows its mana, including when a spending decision holds the announcement.
 Mana output reads the board after all activation costs and their replacements
 resolve. A sacrificed source keeps its entry choice for output that depends
-on its chosen color or type.
+on its chosen color or type. An announced non-mana activated ability likewise
+keeps its finalized definition through X selection, targeting and payment: if
+paying its mana cost ends a static effect that granted it or shifts ability
+indices on the permanent, the announced ability still goes on the stack (card
+activations still verify the card remains in its activation zone).
 
 Most payment questions never reach the search. With four untapped Islands and
 an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
@@ -706,6 +713,22 @@ caller obligations, source policy and the selected counted tap. Forks own
 independent FIFOs but share immutable entries, source lists, output alternatives
 and tap-candidate lists. Reservations detach source lists on writes. The cache
 stays outside hashes and observations; debug builds recompute every hit.
+
+A cached board profile identifies payments where one step can change a later
+cost or mana output. For those payments, `PaymentModel` tries activations,
+taps, Delve exiles and choices on game forks. Each fork uses its own mana pool
+and can finish with the pure solver once its remaining sources suffice. The
+search remembers failed payment states within the query. Its key includes the
+remaining obligations, board resources and continuation. Ordinary boards use
+the pure solver and its shared `PaymentCache`.
+
+For example, at 4 life with Tarnished Citadel, The Great Henge and a damage
+replacement that adds life gained this turn, only Citadel first lets the payer
+finish at 1 life. If paying opens `Decision::OrderReplacement`, the payer sees
+only orders that can complete the payment. An opponent keeps every choice,
+so the payment must succeed in every order the opponent can choose.
+`skip_trivial` takes a sole completing order. Outside a payment, all
+replacement orders remain available.
 
 Automatic-prefix searches start at the fewest taps whose largest fixed outputs
 or waterbend contributions could cover the pool shortfall, conservatively
@@ -1105,7 +1128,8 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
 - **What always stops.** Non-simple mana abilities (sacrifices such as
   Treasure, life payments such as pain lands, mana fees such as filter lands,
   counted taps, once-per-turn limits, non-mana side effects, or triggered mana
-  bonuses that alter a choice ability's output), extra taps under
+  bonuses that open a color choice on either a choice ability or a fixed-output
+  tap), extra taps under
   `mana_floats="usable"` or `"all"`, and costs needing help taps keep the
   payment open.
 - **Actions and wording.** When a payment stops, each class of
@@ -1133,13 +1157,21 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   sources: when only one outcome exists, turning a creature face up pays
   immediately and ward offers only pay or decline; when there is a real source
   choice, both fixed and simple choice taps are offered alongside pay (and
-  non-simple mana abilities such as Treasure remain explicit).
+  non-simple mana abilities such as Treasure remain explicit). On coupled
+  boards, completing choice taps stay available alongside Pay.
 
-Cast, activation and resolution payments use the same feasibility check for
-mana, life and help. Mana abilities can change the payer's life during payment.
-The check carries signed life through those steps and accounts for fixed
-self-damage and life gain when their replacements resolve without a further
-choice or other rules-state change. Paying zero life is always legal. Positive
+Cast, activation and resolution payments use the same feasibility check.
+Each offered payment step leaves a way to finish.
+The `fixed_mana_tap_can_open_a_bonus_choice` regression gives a Mountain
+`{U}{R}` production in a constructed position. Tapping it beside Heartbeat of
+Spring opens the blue/red bonus choice before committing the new mana. The
+automatic payer also completes through that choice. In an ordinary Academy
+game, Mountain makes `{R}`, and Heartbeat adds `{R}` without asking.
+A Delve exile that would weaken a needed mana source becomes available after
+the source produces its mana or another source can cover the cost.
+
+The check carries signed life through production, self-damage, life gain and
+their replacements. Paying zero life is always legal. Positive
 fees require a life total that can change and covers the fee (CR 119.4, 119.8).
 A life fee on the announced cost follows mana production, so life gained along
 the way can fund it. State-based loss for zero or less life is
@@ -1257,7 +1289,7 @@ from another offer set raises `managym.AgentError` and returns no plan.
 | `state` | Meaning |
 | --- | --- |
 | `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. |
-| `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost, or mana alone cannot pay a cost that taps or exiled cards may help pay. `explanation` names the choice; there are no sources. |
+| `needs_choice` | X, an optional, alternative or additional cost, an open target, or a triggered bonus mana choice on the hovered tap can still change the cost or output, or mana alone cannot pay a cost that taps or exiled cards may help pay. `explanation` names the choice; there are no sources. |
 | `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
 | `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability (whether it has a color choice or its own fee). |
 
@@ -1278,9 +1310,10 @@ exile.") until the payer's own taps and exiles leave a remainder mana covers.
 
 A cast offer, or the target that completes it, previews the spell's cost; a
 non-mana activated ability previews its fee; `PayCost` previews the pending
-payment. A fixed source-tap offer previews tapping that source and then paying automatically,
-with the chosen source first. Each source carries its object reference, name
-and output; pools carry the six amounts and the restriction, spend-effect and
+payment. A fixed source-tap offer previews tapping that source and then paying
+automatically, with the chosen source first; if tapping that source triggers a
+bonus mana choice, the preview reports `needs_choice`. Each source carries its
+object reference, name and output. Pools carry the six amounts and the restriction, spend-effect and
 combat-expiry classes of the mana in them.
 
 This is an inspection API for Academy and tools. It adds no action,

@@ -223,6 +223,9 @@ spell when a trigger still refers to it. A suspended repeated instruction
 records the remaining count in its resolution frame. Version 34 adds
 `CombatState.declined_attackers` and `declined_blockers` (for combat symmetry
 breaking across indistinguishable creatures) and `TurnState.graveyard_arrivals`.
+Version 35 stores pending announced mana activations, and version 36 stores
+announced non-mana activated ability definitions and their acquired grant keys
+across X selection, targeting and payment.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.
@@ -277,8 +280,10 @@ the action still identifies the same choice after sampling.
 
 The private snapshot replay reproduces the original setup, external actions and
 ordered interventions and verifies the resulting digest. Pending mana payments
-now store the announced activation, so the match-state digest moves from v34
-to v35. Restore v34 snapshot replays with the engine revision that wrote them.
+store the announced mana activation (v35), and pending non-mana activations
+retain their finalized ability definition across X selection, targeting and
+payment, moving the match-state digest from v35 to v36. Restore v35 and earlier
+snapshot replays with the engine revision that wrote them.
 The [Python snapshot guide](engine-python.md#save-and-restore-game-positions)
 covers the mode contracts, replay limits and Academy Watch import.
 

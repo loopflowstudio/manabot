@@ -363,6 +363,169 @@ mod tests {
     use std::thread;
 
     #[test]
+    fn owned_activation_replays_an_object_bound_target_and_pending_payment() {
+        use crate::{
+            agent::{action::Action, decision_surface::DecisionVerb},
+            decision::Command,
+            flow::payment::Operation,
+            state::{game_object::Target, stack_object::StackObject, zone::ZoneType},
+        };
+
+        let mut env = Env::new(42, false, false, false);
+        let boomerang = "Trusty Boomerang";
+        let creature = "Monastery Swiftspear";
+        let instant = "Lightning Bolt";
+        let deck = [
+            ("Mountain".into(), 20),
+            (creature.into(), 8),
+            (boomerang.into(), 6),
+            (instant.into(), 6),
+        ];
+        env.reset(GameSetup {
+            mana_floats: [ManaFloats::All, ManaFloats::Off],
+            ..vec![
+                PlayerConfig::new("a", BTreeMap::from(deck)),
+                PlayerConfig::new("b", BTreeMap::from([("Mountain".into(), 40)])),
+            ]
+            .into()
+        })
+        .unwrap();
+
+        let mut bound_target = None;
+        for _ in 0..120 {
+            let game = env.game.as_ref().unwrap();
+            let actions = &game.action_space().unwrap().actions;
+            let name = |permanent| &game.state[game.permanent_object(permanent).unwrap()].name;
+            let announce = actions.iter().any(|action| {
+                matches!(action, Action::CastSpell { object, .. } if game.state[*object].name == instant)
+            }) && game
+                .battlefield_permanents(PlayerId(0))
+                .into_iter()
+                .filter(|id| name(*id) == "Mountain" && !game.state.permanents[*id].as_ref().unwrap().tapped)
+                .take(2)
+                .count() == 2;
+            let single = |card| {
+                (card == creature || card == boomerang)
+                    && !game
+                        .battlefield_permanents(PlayerId(0))
+                        .into_iter()
+                        .any(|id| name(id) == card)
+            };
+            let (index, _) = actions
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, action)| match *action {
+                    Action::ActivateAbility { permanent, .. }
+                        if announce && name(*permanent) == creature =>
+                    {
+                        0
+                    }
+                    Action::ChooseMode { mode: 0, .. }
+                    | Action::PayCost { .. }
+                    | Action::ChooseTarget { .. }
+                    | Action::PlayLand { .. } => 1,
+                    Action::CastSpell { object, .. } if single(&game.state[*object].name) => 2,
+                    Action::ActivateAbility { permanent, .. }
+                        if name(*permanent) == boomerang
+                            && game.state.permanents[*permanent]
+                                .as_ref()
+                                .unwrap()
+                                .attached_to
+                                .is_none() =>
+                    {
+                        3
+                    }
+                    Action::PassPriority { .. }
+                    | Action::Decline { .. }
+                    | Action::DeclareAttacker { attack: None, .. } => 4,
+                    _ => 5,
+                })
+                .unwrap();
+            if let Action::ActivateAbility { permanent, .. } = actions[index] {
+                if name(permanent) == creature {
+                    let source = game.permanent_object(permanent).unwrap();
+                    // The instant's offer issues an exact binding for the creature.
+                    let frame = env.semantic_decision_frame().unwrap();
+                    let candidate = frame
+                        .object_candidates
+                        .into_iter()
+                        .find(|address| {
+                            game.semantic_object_candidates.borrow().get(address) == Some(&source)
+                        })
+                        .expect("Lightning Bolt offers the creature as a candidate");
+                    bound_target = Some((permanent, candidate));
+                }
+            }
+            env.step(index as i64).unwrap();
+            if bound_target.is_some() {
+                break;
+            }
+        }
+        let (target, candidate) = bound_target.expect("the creature announces its granted ability");
+        let frame = env.semantic_decision_frame().unwrap();
+        let offer = frame
+            .offers
+            .iter()
+            .find(|offer| offer.verb == DecisionVerb::ChooseTarget)
+            .expect("the activated ability can target its source");
+        let command = Command {
+            command_id: "boomerang-target".into(),
+            expected_revision: frame.revision,
+            offer_id: offer.id.0,
+            answers: vec![],
+            object_preconditions: vec![candidate],
+        };
+        env.execute_semantic_command(&command).unwrap();
+        let game = env.game.as_ref().unwrap();
+        assert!(matches!(
+            game.pending_choice,
+            Some(PendingChoice::Pay { .. })
+        ));
+        let snapshot = env.snapshot().unwrap();
+        let mut altered = env.snapshot().unwrap();
+        let Some(PendingChoice::Pay { payment, .. }) = &mut altered.pending_choice else {
+            unreachable!();
+        };
+        let Operation::Activation { ability, .. } = &mut payment.operation else {
+            unreachable!();
+        };
+        let grantor = ability.granted_by.unwrap().grantor;
+        assert!(ability.acquired.take().is_some());
+        assert_ne!(altered.state_digest(), snapshot.state_digest());
+        let raw = snapshot.to_replay_json().unwrap();
+        let rebuilt = GameSnapshot::from_replay_json(&raw).unwrap();
+        assert_eq!(rebuilt.state_digest(), snapshot.state_digest());
+        let mut restored = rebuilt.restore(Default::default()).unwrap();
+        for branch in [&mut env, &mut restored] {
+            // The grantor can leave while the already-announced payment is open.
+            let game = branch.fixture_game_mut();
+            assert_eq!(game.state[grantor].name, boomerang);
+            game.move_object(grantor, ZoneType::Graveyard);
+            game.tick().unwrap();
+            let game = branch.game.as_ref().unwrap();
+            let index = game
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|action| matches!(action, Action::PayCost { .. }))
+                .unwrap();
+            branch.step(index as i64).unwrap();
+            let game = branch.game.as_ref().unwrap();
+            let Some(StackObject::ActivatedAbility(ability)) = game.state.stack_objects.last()
+            else {
+                panic!("the paid ability must reach the stack");
+            };
+            assert_eq!(ability.targets, [Target::Permanent(target)]);
+            assert_eq!(ability.granted_by.unwrap().grantor, grantor);
+        }
+        assert_eq!(
+            restored.state_digest().unwrap(),
+            env.state_digest().unwrap()
+        );
+    }
+
+    #[test]
     fn every_materialized_branch_starts_a_new_incremental_memory_write() {
         use crate::agent::decision_memory::{encode_suffix, MemoryEncoding};
 

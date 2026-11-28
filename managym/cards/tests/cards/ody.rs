@@ -388,12 +388,15 @@ fn the_great_henge_funds_an_announced_life_fee_after_canyon() {
 
 #[test]
 fn tarnished_citadel_and_the_great_henge_change_another_mana_source() {
-    for (name, life, count, mode, before, produced) in [
-        ("Tarnished Citadel", 28, 2, 1, "GG", "UUG"),
-        ("The Great Henge", 22, 1, 0, "G", "GGGG"),
+    let player = PlayerId(0);
+    for (name, life, count) in [
+        ("Tarnished Citadel", 28, 2),
+        ("The Great Henge", 22, 1),
+        ("Sunbaked Canyon", 25, 1),
     ] {
         let mut s = five_color_unfunded_setup(&[
             name,
+            "Island",
             "Angel of Vitality",
             "Raucous Audience",
             "Solemn Simulacrum",
@@ -404,34 +407,53 @@ fn tarnished_citadel_and_the_great_henge_change_another_mana_source() {
         let audience = s.force_permanent_on_battlefield(0, "Raucous Audience");
         clear_summoning_sickness(&mut s, audience);
         s.force_permanent_on_battlefield(0, "Angel of Vitality");
-        s.game_mut().scenario_set_life(PlayerId(0), life);
+        let island =
+            (name == "Sunbaked Canyon").then(|| s.force_permanent_on_battlefield(0, "Island"));
+        s.game_mut().scenario_set_life(player, life);
         s.allow_priority_floats();
         let spell = move_to_hand(&mut s, "Solemn Simulacrum");
-        if count == 2 {
-            assert!(castable(&mut s, spell));
-        }
-
-        let audience_output = |game: &managym::flow::game::Game| {
-            game.characteristics(audience).activated_abilities[0]
-                .mana_choices()
-                .unwrap()
+        assert!(castable(&mut s, spell), "{name} at {life}");
+        cast_card(&mut s, spell);
+        let offered = |s: &_, source| {
+            has_action(s, |action| {
+                matches!(action, Action::ActivateAbility { permanent, ability_index: 0, .. }
+                if *permanent == source)
+            })
         };
-        let root = s.game().clone();
-        assert_eq!(audience_output(&root), [Mana::parse(before)]);
-        // At 28, either Citadel alone leaves Audience producing {G}{G}.
-        // Once the first damage lands, the second activation changes it.
-        for (index, source) in sources.into_iter().enumerate() {
-            activate(&mut s, source, 0);
-            let (life, output) = if index == 0 { (25, "GG") } else { (22, "G") };
-            assert_eq!(s.life(0), life);
-            assert_eq!(audience_output(s.game()), [Mana::parse(output)]);
-            choose_mode(&mut s, mode);
+        assert_eq!(offered(&s, audience), name != "The Great Henge");
+        assert_eq!(offered(&s, sources[0]), name != "Sunbaked Canyon");
+        match name {
+            "Tarnished Citadel" => {
+                activate(&mut s, sources[0], 0);
+                choose_mode(&mut s, 1);
+                assert!(!offered(&s, sources[1]));
+                activate(&mut s, audience, 0);
+                choose_mode(&mut s, 0);
+                activate(&mut s, sources[1], 0);
+                choose_mode(&mut s, 0);
+                assert_eq!(s.life(0), 22);
+            }
+            "The Great Henge" => {
+                activate(&mut s, sources[0], 0);
+                choose_mode(&mut s, 0);
+                activate(&mut s, audience, 0);
+                choose_mode(&mut s, 0);
+                assert_eq!(s.life(0), 25);
+            }
+            "Sunbaked Canyon" => {
+                activate(&mut s, audience, 0);
+                choose_mode(&mut s, 0);
+                activate(&mut s, sources[0], 0);
+                choose_mode(&mut s, 0);
+                let permanent = island.unwrap();
+                choose(&mut s, |action| {
+                    *action == Action::TapForMana { player, permanent }
+                });
+                assert_eq!(s.life(0), 24);
+            }
+            _ => unreachable!(),
         }
-        activate(&mut s, audience, 0);
-        choose_mode(&mut s, 0);
-        assert_eq!(s.game().state.players[0].mana_pool, Mana::parse(produced));
-        assert_eq!(audience_output(&root), [Mana::parse(before)]);
-        assert_eq!(castable(&mut s, spell), count == 1);
+        assert_eq!(top_spell(&s).object, now(&s, spell));
     }
 }
 

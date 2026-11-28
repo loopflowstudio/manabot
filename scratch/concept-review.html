@@ -1,0 +1,2935 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-508 Concept Review (Post-Pass 6) · Coupled mana payments, fixed-tap choices, and owned activations</title>
+<style>
+/* Default review page theme tokens (light and dark).
+ * Override per repository in `.lf/theme.css` (CSS custom properties only). */
+:root {
+  --lf-bg: #faf8f5;
+  --lf-surface: #fffdf9;
+  --lf-surface-muted: #f3eee7;
+  --lf-surface-element: #ece6dd;
+  --lf-border: #e6dfd6;
+  --lf-border-strong: #d6ccc0;
+  --lf-text: #2a2624;
+  --lf-text-secondary: #5f5752;
+  --lf-text-tertiary: #65605d;
+  --lf-accent: #722f37;
+  --lf-accent-hover: #5e2630;
+  --lf-accent-text: #faf8f5;
+  --lf-working-ink: #2f629f;
+  --lf-working-fill: #d5dde6;
+  --lf-warning-ink: #7f5a19;
+  --lf-warning-fill: #e4dccd;
+  --lf-failure-ink: #a64038;
+  --lf-failure-fill: #ecd9d5;
+  --lf-success-ink: #386c48;
+  --lf-success-fill: #d7dfd6;
+  --lf-highlight: rgba(114, 47, 55, 0.14);
+  --lf-highlight-active: rgba(114, 47, 55, 0.28);
+  --lf-highlight-line: rgba(114, 47, 55, 0.45);
+  --lf-shadow: 0 8px 26px rgba(42, 38, 36, 0.14);
+  --lf-shadow-sm: 0 3px 12px rgba(42, 38, 36, 0.08);
+  --lf-bubble-bg: #24201e;
+  --lf-bubble-text: #faf8f5;
+  --lf-bubble-border: #3a3430;
+  --lf-font-serif: "Old Standard TT", Georgia, "Times New Roman", serif;
+  --lf-font-sans: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --lf-font-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lf-bg: #181615;
+    --lf-surface: #201d1b;
+    --lf-surface-muted: #282422;
+    --lf-surface-element: #312c29;
+    --lf-border: #38322e;
+    --lf-border-strong: #4a423d;
+    --lf-text: #efeae4;
+    --lf-text-secondary: #b9afa6;
+    --lf-text-tertiary: #8f857d;
+    --lf-accent: #c96b76;
+    --lf-accent-hover: #d8838d;
+    --lf-accent-text: #181615;
+    --lf-working-ink: #7eb2f0;
+    --lf-working-fill: #203147;
+    --lf-warning-ink: #e0b25c;
+    --lf-warning-fill: #3d311c;
+    --lf-failure-ink: #e67c73;
+    --lf-failure-fill: #452422;
+    --lf-success-ink: #7cc490;
+    --lf-success-fill: #213828;
+    --lf-highlight: rgba(201, 107, 118, 0.22);
+    --lf-highlight-active: rgba(201, 107, 118, 0.38);
+    --lf-highlight-line: rgba(201, 107, 118, 0.65);
+    --lf-shadow: 0 10px 30px rgba(0, 0, 0, 0.44);
+    --lf-shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.30);
+    --lf-bubble-bg: #efeae4;
+    --lf-bubble-text: #181615;
+    --lf-bubble-border: #d6ccc0;
+  }
+}
+
+/* Base layout and component styles for compiled Loopflow review pages. */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+main.lf-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 44px 24px max(168px, var(--lf-dock-room, 0px));
+}
+
+h1 {
+  font-family: var(--lf-font-serif);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-variant-ligatures: no-common-ligatures;
+  margin: 0 0 12px;
+}
+
+h2 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 32px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--lf-border);
+}
+
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+}
+
+p { margin: 0 0 12px; }
+ul, ol { margin: 0 0 12px; padding-left: 22px; }
+li { margin-bottom: 4px; }
+
+code, pre {
+  font-family: var(--lf-font-mono);
+  font-size: 12.5px;
+}
+
+code {
+  background: var(--lf-surface-muted);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 16px;
+  font-size: 14px;
+}
+
+th, td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--lf-border);
+  vertical-align: top;
+}
+
+th {
+  color: var(--lf-text-secondary);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+/* Meta bar & server status banner */
+.lf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--lf-text-secondary);
+  font-size: 12.5px;
+  margin-bottom: 24px;
+}
+
+.lf-meta code { font-size: 12px; }
+
+.lf-banner {
+  background: var(--lf-warning-fill);
+  color: var(--lf-warning-ink);
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13.5px;
+}
+
+/* Diff and File blocks */
+.lf-codeblock {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  margin: 14px 0;
+  overflow: hidden;
+}
+
+.lf-codeblock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--lf-surface-muted);
+  border-bottom: 1px solid var(--lf-border);
+  font-size: 12.5px;
+}
+
+.lf-codeblock-path {
+  font-family: var(--lf-font-mono);
+  color: var(--lf-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lf-codeblock-scroll { overflow-x: auto; }
+
+.lf-code-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-family: var(--lf-font-mono);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.lf-code-table td {
+  border: 0;
+  padding: 0 8px;
+  white-space: pre;
+}
+
+.lf-code-table td.lf-ln {
+  width: 1%;
+  min-width: 38px;
+  text-align: right;
+  color: var(--lf-text-tertiary);
+  user-select: none;
+  border-right: 1px solid var(--lf-border);
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+
+.lf-code-table tr.lf-code-row td.lf-ln { cursor: pointer; }
+
+.lf-code-table tr.lf-code-row td.lf-ln-old,
+.lf-code-table tr.lf-code-row td.lf-ln-single {
+  min-width: 52px;
+  padding-left: 24px;
+}
+
+.lf-code-table .lf-gutter-plus {
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border-radius: 4px;
+  border: none;
+  background: var(--lf-accent);
+  color: var(--lf-accent-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.lf-code-table tr.lf-code-row:hover .lf-gutter-plus,
+.lf-code-table .lf-gutter-plus:focus-visible {
+  opacity: 1;
+}
+
+/* A noted row keeps its diff tint; only the gutter carries the note. */
+.lf-code-table tr.lf-code-row.lf-row-has-note td.lf-ln { background: var(--lf-highlight-active); }
+
+.lf-code-table tr.lf-code-row.lf-row-has-note td.lf-ln:first-child {
+  box-shadow: inset 3px 0 0 var(--lf-accent);
+}
+
+.lf-code-table tr.lf-code-row.lf-row-selecting td { background: var(--lf-working-fill); }
+
+.lf-code-table td.lf-sign {
+  width: 18px;
+  text-align: center;
+  user-select: none;
+  padding: 0 2px;
+}
+
+.lf-code-table tr.lf-add { background: var(--lf-success-fill); }
+.lf-code-table tr.lf-add td.lf-sign { color: var(--lf-success-ink); }
+.lf-code-table tr.lf-del { background: var(--lf-failure-fill); }
+.lf-code-table tr.lf-del td.lf-sign { color: var(--lf-failure-ink); }
+.lf-code-table tr.lf-hunk td {
+  background: var(--lf-surface-muted);
+  color: var(--lf-text-secondary);
+  padding: 3px 10px;
+}
+
+.lf-code-table tr.lf-line-note td {
+  white-space: normal;
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  background: var(--lf-surface-element);
+  color: var(--lf-text);
+  padding: 6px 12px;
+  border-top: 1px solid var(--lf-border);
+  border-bottom: 1px solid var(--lf-border);
+}
+
+.lf-codeblock.lf-notes-hidden tr.lf-line-note { display: none; }
+
+/* Builtin components */
+.lf-decision {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+
+.lf-decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lf-decision-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.lf-decision-rec {
+  font-size: 12px;
+  color: var(--lf-text-secondary);
+}
+
+.lf-before-after {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.lf-before-after-pane {
+  border: 1px solid var(--lf-border);
+  border-radius: 8px;
+  background: var(--lf-surface);
+  padding: 12px 14px;
+}
+
+.lf-before-after-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lf-text-secondary);
+  margin-bottom: 8px;
+}
+
+/* Controls: choices, questions, direct actions */
+[data-choice], [data-multiselect] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Draw `data-label` as a heading only when the control has no selectable prompt child;
+   a decision card shows its title instead. */
+:is([data-choice], [data-multiselect], [data-question])[data-label]:not(:has(> p, > label, > h3, > h4, > legend))::before {
+  content: attr(data-label);
+  display: block;
+  flex-basis: 100%;
+  margin: 10px 0 2px;
+  font-weight: 600;
+}
+
+:is([data-choice], [data-multiselect]) > :is(p, label, h3, h4, legend) {
+  flex-basis: 100%;
+  margin: 10px 0 2px;
+}
+
+.lf-decision [data-choice][data-label]::before { content: none; }
+
+button {
+  appearance: none;
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 6px 11px;
+  border-radius: 4px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  cursor: pointer;
+}
+
+button:hover { background: var(--lf-surface-muted); }
+
+button.is-selected,
+button[aria-pressed="true"],
+button.lf-btn-accent {
+  background: var(--lf-accent);
+  border-color: var(--lf-accent);
+  color: var(--lf-accent-text);
+}
+
+button.lf-btn-accent:hover {
+  background: var(--lf-accent-hover);
+  border-color: var(--lf-accent-hover);
+}
+
+button.lf-btn-quiet {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-color: var(--lf-border);
+  color: var(--lf-text-secondary);
+}
+
+button.lf-btn-quiet.is-selected,
+button.lf-btn-quiet[aria-pressed="true"] {
+  background: var(--lf-accent);
+  border-color: var(--lf-accent);
+  color: var(--lf-accent-text);
+}
+
+[data-question] { margin: 14px 0; }
+
+[data-question] textarea, [data-question] input[type="text"] {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 4px;
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 14px;
+  resize: vertical;
+}
+
+/* Direct action confirmation & receipt */
+.lf-action-confirm,
+.lf-action-receipt,
+.lf-action-error {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  border-radius: 4px;
+}
+
+.lf-action-confirm,
+.lf-action-error {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lf-action-confirm {
+  padding: 6px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 6px;
+  background: var(--lf-surface-muted);
+}
+
+.lf-action-summary {
+  font-family: var(--lf-font-mono);
+  font-size: 12px;
+  color: var(--lf-text-secondary);
+}
+
+.lf-action-receipt {
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--lf-success-fill);
+  color: var(--lf-success-ink);
+  font-weight: 600;
+}
+
+.lf-action-error {
+  padding: 5px 10px;
+  background: var(--lf-failure-fill);
+  color: var(--lf-failure-ink);
+}
+
+/* Warm-underlined cross-element note highlights */
+.lf-hl {
+  background: var(--lf-highlight);
+  border-bottom: 2px solid var(--lf-highlight-line, var(--lf-accent));
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.lf-hl:hover { background: var(--lf-highlight-active, var(--lf-highlight)); }
+
+.lf-pulse-ring {
+  outline: 2px solid var(--lf-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Notion-style floating selection bubble */
+.lf-float-pill {
+  position: fixed;
+  z-index: 960;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px;
+  border-radius: 8px;
+  background: var(--lf-bubble-bg, var(--lf-text));
+  color: var(--lf-bubble-text, var(--lf-bg));
+  border: 1px solid var(--lf-bubble-border, var(--lf-border-strong));
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.2));
+  font-size: 12px;
+}
+
+.lf-float-pill button {
+  background: transparent;
+  border: none;
+  color: var(--lf-bubble-text, var(--lf-bg));
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lf-float-pill button:hover { background: rgba(128, 128, 128, 0.24); }
+
+.lf-float-pill-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(128, 128, 128, 0.35);
+}
+
+/* Floating comment composer & hover cards */
+.lf-float-composer,
+.lf-hover-card {
+  position: fixed;
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border-strong);
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.18));
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.lf-float-composer {
+  z-index: 970;
+  width: min(320px, calc(100vw - 16px));
+  padding: 10px;
+  border-radius: 9px;
+}
+
+.lf-hover-card {
+  z-index: 950;
+  width: min(290px, calc(100vw - 16px));
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.lf-anchor-quote {
+  font-size: 11.5px;
+  color: var(--lf-text-secondary);
+  border-left: 2px solid var(--lf-border-strong);
+  padding-left: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lf-card-body {
+  color: var(--lf-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lf-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.lf-float-composer textarea,
+.lf-sidebar-item textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 5px;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13px;
+  resize: vertical;
+}
+
+.lf-sidebar-item textarea { background: var(--lf-surface); }
+
+/* Top-right Comments toggle + collapsible slide-over sidebar */
+.lf-comments-toggle {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 920;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-surface);
+  color: var(--lf-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: var(--lf-shadow-sm, 0 3px 12px rgba(0, 0, 0, 0.08));
+}
+
+.lf-comments-toggle.has-notes { border-color: var(--lf-accent); }
+
+.lf-comments-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--lf-accent);
+  color: var(--lf-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.lf-comments-count[hidden] { display: none; }
+
+.lf-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(340px, 92vw);
+  z-index: 940;
+  background: var(--lf-surface);
+  border-left: 1px solid var(--lf-border-strong);
+  box-shadow: var(--lf-shadow, 0 8px 26px rgba(0, 0, 0, 0.18));
+  display: flex;
+  flex-direction: column;
+  transform: translateX(104%);
+  transition: transform 0.18s ease;
+}
+
+.lf-sidebar.is-open { transform: translateX(0); }
+
+.lf-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--lf-border);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.lf-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lf-sidebar-empty {
+  font-size: 13px;
+  color: var(--lf-text-tertiary);
+  padding: 6px 2px;
+}
+
+.lf-sidebar-item {
+  padding: 9px 11px;
+  border: 1px solid var(--lf-border);
+  border-radius: 7px;
+  background: var(--lf-bg);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lf-sidebar-item:hover { border-color: var(--lf-accent); }
+
+/* Fixed T3 Code-style attached-chip composer dock (hidden in Loopflow Desktop) */
+.lf-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: min(820px, calc(100vw - 24px));
+  padding: 9px 12px;
+  background: var(--lf-surface);
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 11px;
+  box-shadow: var(--lf-shadow, 0 8px 28px rgba(0, 0, 0, 0.16));
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lf-dock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-height: 92px;
+  overflow-y: auto;
+}
+
+.lf-dock[hidden],
+.lf-dock-chips[hidden] { display: none; }
+
+.lf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--lf-border-strong);
+  background: var(--lf-bg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lf-chip:hover { border-color: var(--lf-accent); }
+
+.lf-chip-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--lf-surface-element);
+  color: var(--lf-text-secondary);
+  flex-shrink: 0;
+}
+
+.lf-chip-tag.tag-note { background: var(--lf-highlight); color: var(--lf-accent); }
+.lf-chip-tag.tag-lines { background: var(--lf-working-fill); color: var(--lf-working-ink); }
+.lf-chip-tag.tag-choice { background: var(--lf-success-fill); color: var(--lf-success-ink); }
+.lf-chip-tag.tag-answer { background: var(--lf-warning-fill); color: var(--lf-warning-ink); }
+.lf-chip-tag.tag-run { background: var(--lf-failure-fill); color: var(--lf-failure-ink); }
+
+.lf-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.lf-chip-x {
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--lf-text-tertiary);
+}
+
+.lf-chip-x:hover {
+  background: transparent;
+  color: var(--lf-failure-ink);
+}
+
+.lf-dock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lf-dock-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--lf-border-strong);
+  border-radius: 6px;
+  background: var(--lf-bg);
+  color: var(--lf-text);
+  font-family: var(--lf-font-sans);
+  font-size: 13.5px;
+}
+
+.lf-dock-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.lf-dock-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.lf-dock-preview {
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: var(--lf-bg);
+  border: 1px solid var(--lf-border);
+  font-family: var(--lf-font-mono);
+  font-size: 11.5px;
+  color: var(--lf-text-secondary);
+  word-break: break-word;
+  max-height: 84px;
+  overflow-y: auto;
+}
+
+.lf-dock-status {
+  font-size: 12.5px;
+  color: var(--lf-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lf-dock-status.is-error { color: var(--lf-failure-ink); }
+.lf-dock-status.is-ok { color: var(--lf-success-ink); }
+
+</style>
+</head>
+<body>
+<main class="lf-page">
+<h1>MTG-508 Concept Review (Post-Pass 6) · Coupled mana payments, fixed-tap choices, and owned activations</h1>
+
+<p><strong>Area reviewed:</strong> Mana payment feasibility, execution, preview, and announced non-mana activation lifecycle across
+  <code>managym/src/flow/mana.rs</code>, <code>managym/src/flow/mana/{coupled,profile,help,preview,autotapper}.rs</code>,
+  <code>managym/src/flow/decision.rs</code>, <code>managym/src/flow/payment.rs</code>, <code>managym/src/flow/play.rs</code>,
+  <code>managym/src/flow/action.rs</code>, <code>managym/src/flow/game.rs</code>, <code>managym/src/flow/{layers,statics}.rs</code>,
+  <code>managym/src/flow/interchangeable.rs</code>, <code>managym/src/agent/continuation.rs</code>, <code>managym/src/agent/env/snapshot.rs</code>,
+  and <code>managym/src/state/hash.rs</code>.
+  This reviews the full six-pass branch at <code>f3779cb5b2</code> against base <code>bc4d2ac17f</code>
+  (freshly fetched <code>origin/main</code> at <code>606e79e90a</code> is already merged into this branch with MTG-500 landed and
+  <code>MATCH_STATE_HASH_VERSION = 35</code> vs. <code>36</code> on <code>HEAD</code>; no sync is needed).
+</p>
+
+<p><strong>Overall assessment:</strong> All domain concepts and built code concepts now align—<strong>zero conceptual mismatches remain</strong>.
+  Pass 6 (<code>d6ba796903</code>) closed the sole remaining mismatch from Pass 5 by replacing the split
+  <code>tap_obligations</code> + <code>DelveCost</code> side-channel with a single <code>Obligation::Helped(Box&lt;HelpedCost&gt;)</code>
+  carried directly inside the ordered obligations list and lowered via <code>help_obligations</code> only for the pure solver
+  and pure handoff. Every reachable caller—announced payments, mandatory resolution payments, upfront mana spending,
+  <code>help_taps</code>, <code>delve_payment_objects</code>, <code>useful_payment_taps</code>, <code>tap_activation_payment_possible</code>,
+  and <code>activation_x_payable</code>—routes through the same unified obligation model, while ordinary uncoupled boards keep
+  zero-fork pure solving. Only human confirmation of the irreversible hash v36 bump and headless design choices remains
+  before delivery.
+</p>
+
+<h2>Domain concepts vs. code concepts</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Domain concept (player / CR)</th>
+      <th>Built code concept (<code>HEAD</code> <code>f3779cb5b2</code>)</th>
+      <th>Aligned?</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Helped mana cost on a coupled board</strong> (Convoke, Improvise, Waterbend, Delve): one remaining mana cost + help permissions where any legal tap or Delve exile can interleave in any order with mana activations, and spending pays the remaining mana cost as a whole.</td>
+      <td><code>Obligation::Helped(Box&lt;HelpedCost&gt;)</code> constructed by <code>cost_obligations</code> (<code>help.rs:68</code>) and <code>payment_obligations_for</code> (<code>mana.rs:3685</code>), stepped natively in <code>CoupledSearch::pay_helped</code> (<code>coupled.rs:784</code>) and <code>PaymentCandidate::{HelpTap, DelveExile}</code> (<code>coupled.rs:413</code>), lowered to <code>help_obligations</code> only for pure handoff (<code>coupled.rs:629</code>) and to <code>mana_and_life</code> for <code>SourcePolicy::FixedOnly</code> (<code>coupled.rs:177</code>).</td>
+      <td><strong>Yes</strong></td>
+      <td>Resolved Pass 5's biggest mismatch. Removed <code>DelveCost</code>, <code>CoupledPayment.delve</code>, suffix matching, and <code>paying_delve_cost</code> / <code>saved_delve</code> flags. <code>HelpedCost</code> carries exact remaining cost, permissions, and life in the obligation queue, hashes <code>(cost, waterbend, life)</code> in <code>CoupledMemoKey</code>, and feeds <code>PurposeProjection::for_model</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Coupling roles &amp; ordinary-board fast path</strong> (Engine Budget): classify once per <code>PaymentModel</code> from a closed whitelist; uncoupled boards stay on pure <code>PaymentModel</code> + <code>PaymentCache</code> with zero forks.</td>
+      <td><code>BoardArithmeticProfile</code> (<code>mana/profile.rs</code>) + <code>CoupledPayment::new</code> returning <code>Option&lt;Self&gt;</code> + <code>coupling()</code> with <code>loses_rules</code> + <code>mana_ability_reads()</code> (<code>layers.rs</code>).</td>
+      <td><strong>Yes</strong></td>
+      <td><code>model.coupled()</code> is O(1) (<code>self.coupled.as_ref()</code>), <code>mutating_caller</code> is computed once per model, non-tapping abilities promote on <code>writes_non_pt || loses_rules</code>, <code>cost_reduction_per</code> is scanned, and pure handoff clears <code>Mutator</code> tap/help flags.</td>
+    </tr>
+    <tr>
+      <td><strong>Manual payment offers on a coupled board</strong>: every completing fixed tap, simple choice tap, activated mana ability, help tap, or Delve exile is offered across announced and resolution payments; stranding steps are omitted.</td>
+      <td><code>compute_announced_mana_actions</code>, <code>resolution_mana_actions</code>, <code>useful_payment_taps</code>, <code>help_taps</code>, and <code>delve_payment_objects</code> routing through <code>PaymentModel</code> / <code>CoupledPayment</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Every offer and execution surface passes coupled obligations (<code>payment_obligations_for</code> / <code>cost_obligations</code>) and structured <code>PaymentCandidate</code> steps; uncoupled callers retain the fast pure path untouched.</td>
+    </tr>
+    <tr>
+      <td><strong>In-flight mana spending for an upfront fee</strong> (<code>Decision::ManaSpend</code> with <code>SpendCompletion::Upfront</code>): spending must leave the activation's own life cost, source presence, and enclosing callers (including helped spells) payable.</td>
+      <td><code>mana_spend_choices</code> (<code>mana.rs:6120</code>) → <code>PaymentCandidate::Spend</code> and <code>fund_upfront</code> sharing <code>complete_upfront</code> (<code>coupled.rs:905</code>); <code>native_mana_obligations</code> drains only native upfront prefix so outer <code>Obligation::Helped</code> survives.</td>
+      <td><strong>Yes</strong></td>
+      <td>One shared helper guards permanent presence and <code>life_budget(player).can_pay(life_cost)</code> before <code>complete_mana_upfront</code>; nested upfront spending over a helped spell preserves the enclosing <code>Obligation::Helped</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Equivalent payment states reached in different orders</strong> (transposition memoization + single mana pool).</td>
+      <td><code>CoupledMemoKey</code> (<code>coupled.rs:278</code>) + live <code>fork.state.players[player].mana_pool</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Structural equality and hash exclude event logs, priority, and <code>id_gen</code>; <code>obligations</code> directly carries <code>Obligation::Helped</code> with sound <code>Hash</code>/<code>Eq</code> (<code>cost</code>, <code>waterbend</code>, <code>life</code>); single live pool keeps <code>Condition::UnspentManaAtLeast</code> exact.</td>
+    </tr>
+    <tr>
+      <td><strong>Fixed-mana tap whose triggered bonus opens a color choice</strong> (CR 106.12a / 605.4a).</td>
+      <td><code>source.fixed: Option&lt;Mana&gt;</code> for exact taps; <code>ManaActivationKind::FixedTap</code> (<code>automatic: false</code>) + <code>produce_fixed_tap</code> + <code>PaymentPreviewState::NeedsChoice</code> + <code>matches_view_after_tap</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Cleanly separates deterministic batch taps from choice-opening fixed taps across manual play, automatic play, upfront fees, receipts, and hover preview.</td>
+    </tr>
+    <tr>
+      <td><strong>Payer vs. opponent replacement ordering during payment</strong> (CR 616.1).</td>
+      <td><code>Decision::OrderReplacement</code> filtered by <code>replacement_order_payable</code>; payer OR / opponent AND in <code>CoupledSearch::expand</code>.</td>
+      <td><strong>Yes</strong></td>
+      <td>Payer orders that strand a committed payment are omitted and rejected on execution; optional resolution payments and opponent orders remain unfiltered; opponent orders require every branch to complete.</td>
+    </tr>
+    <tr>
+      <td><strong>Announced non-mana activation</strong> keeping priced cost, rules text, and acquired grant key through X, targeting, and payment (CR 602.2b).</td>
+      <td><code>Operation&lt;A = Box&lt;ActivatedAbilityDefinition&gt;&gt;</code>, <code>ActivatedTargeting&lt;A&gt;</code>, <code>PendingChoice::ActivationX</code>, <code>serialize_announced_ability</code>, <code>ReferenceCensus::walk_announced_ability</code>, hash v36.</td>
+      <td><strong>Yes</strong></td>
+      <td>Consistent across all three announcement stages, zero-clone priority scans via <code>Borrow</code>, explicit zone check retained for card activations, and hash v36 cleanly extends merged <code>origin/main</code> v35.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Concrete interaction walk: normal path, failure, and recovery</h2>
+
+<p>Walking the coupled helped-cost interactions and boundary cases through <code>HEAD</code> (<code>f3779cb5b2</code>):</p>
+
+<ol>
+  <li><strong>Improvise / Waterbend / off-color Convoke tap before a <code>tapped</code>-reading mana source:</strong>
+    Casting a <code>{1}{G}</code> Improvise spell with an untapped artifact and a source that makes <code>{G}</code> only if you control a tapped artifact.
+    <code>cost_obligations</code> emits <code>[Obligation::Helped({1}{G}, improvise)]</code>. Pure handoff strips <code>Mutator</code> taps and returns <code>None</code>; the production loop tries the mana source first (produces <code>{C}</code>, fails); <code>pay_helped</code> queries <code>game.tap_payments(&amp;helped.cost, helped.permissions, source.permanent)</code> directly on the whole remaining cost, taps the artifact via <code>PaymentCandidate::HelpTap</code>, shrinks <code>helped.cost</code> to <code>{G}</code>, and the child fork taps the now-enabled source for <code>{G}</code> and completes. Only the completing Improvise tap is offered first.
+  </li>
+  <li><strong>Convoke before sacrificing for mana and exiling for Delve:</strong>
+    Casting a <code>{2}{R}{R}</code> Convoke + Delve spell with an empty graveyard, a Mountain, and a red creature with <code>Sacrifice this creature: Add {R}</code>.
+    <code>CoupledPayment::new</code> enters coupled mode via <code>facts.sacrifices &amp;&amp; help.delve.is_some()</code> (<code>stateful_delve() == false</code>). Sacrificing first strands; <code>pay_helped</code> convokes the red creature (shrinking <code>helped.cost</code> to <code>{2}{R}</code> while keeping <code>helped.permissions.help.delve = Some(spell)</code> intact); the child fork sacrifices the tapped creature for <code>{R}</code> (putting 1 card in graveyard), taps the Mountain for <code>{R}</code>, and <code>cost_after_delve</code> reduces <code>{2}{R}</code> to <code>{1}{R}</code>, which the pool pays.
+  </li>
+  <li><strong>Improvise before Delve removes the artifact type (failure &amp; recovery):</strong>
+    A Mountain that is an Artifact only while graveyard &ge; 1, 1 card in graveyard, <code>{G}{G}</code> in pool, casting <code>{2}{G}{G}</code> Delve + Improvise.
+    <code>delve_payment_objects</code> probes <code>PaymentCandidate::DelveExile(graveyard)</code>: on the post-exile fork, <code>pure_payment_model</code> rebuilds <code>payment_sources</code> from current characteristics, the Mountain is no longer an artifact (<code>waterbend == false</code>), and the branch fails—so exiling first is pruned. Probing <code>PaymentCandidate::HelpTap(helper, Improvise)</code> leaves the graveyard intact, then exiles the graveyard card and spends <code>{G}{G}</code>. Only the Improvise tap is offered first, then only the Delve exile, then <code>PayCost</code>.
+  </li>
+  <li><strong>Nested upfront mana fee and <code>FixedOnly</code> boundary:</strong>
+    When activating a mana ability with an upfront mana fee while paying a helped spell, <code>payment_obligations_for</code> produces <code>[upfront_fee, Output, Obligation::Helped(spell)]</code>; <code>coupled.plan</code> drains only <code>native_mana_obligations</code> (the upfront fee and output), keeping <code>Obligation::Helped(spell)</code> for the continuation after <code>complete_upfront</code>. Conversely, <code>automatic_payability</code> and <code>automatic_taps</code> use <code>SourcePolicy::FixedOnly</code>, which lowers any <code>Obligation::Helped</code> to plain <code>Obligation::mana_and_life</code> so automatic mana-only routes never alias help taps or Delve.
+  </li>
+</ol>
+
+<h2>Pass 6 resolution: unifying helped costs into <code>Obligation::Helped</code></h2>
+
+<p>Pass 6 moved the whole helped-cost contract onto one variant in <code>Obligation</code> and one native step handler in <code>coupled.rs</code>:</p>
+
+<div class="lf-codeblock" data-path="managym/src/flow/mana.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana.rs:638-646</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -631,6 +640,8 @@ enum Obligation&lt;C = ManaChoices&gt; {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="631" data-line="640"><td class="lf-ln lf-ln-old">631</td><td class="lf-ln lf-ln-new">640</td><td class="lf-sign"> </td><td>        cost: ManaCost,</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="632" data-line="641"><td class="lf-ln lf-ln-old">632</td><td class="lf-ln lf-ln-new">641</td><td class="lf-sign"> </td><td>        taps: Taps,</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="633" data-line="642"><td class="lf-ln lf-ln-old">633</td><td class="lf-ln lf-ln-new">642</td><td class="lf-sign"> </td><td>    },</td></tr>
+<tr class="lf-add lf-code-row" data-line="643"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">643</td><td class="lf-sign">+</td><td>    /// Native help steps can change each other&#39;s eligibility and output.</td></tr>
+<tr class="lf-add lf-code-row" data-line="644"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">644</td><td class="lf-sign">+</td><td>    Helped(Box&lt;HelpedCost&gt;),</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">One unsplit <code>Obligation::Helped(Box&lt;HelpedCost&gt;)</code> carries remaining cost, permissions, and life in the ordered obligation list.</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="634" data-line="645"><td class="lf-ln lf-ln-old">634</td><td class="lf-ln lf-ln-new">645</td><td class="lf-sign"> </td><td>    Output {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="635" data-line="646"><td class="lf-ln lf-ln-old">635</td><td class="lf-ln lf-ln-new">646</td><td class="lf-sign"> </td><td>        // Alternatives and candidate sets are immutable query payloads. Branches</td></tr>
+</tbody></table></div></div>
+
+<div class="lf-codeblock" data-path="managym/src/flow/mana/help.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/help.rs:68-85</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -47,36 +50,64 @@ impl Game {</td></tr>
+<tr class="lf-add lf-code-row" data-line="68"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">68</td><td class="lf-sign">+</td><td>    pub(super) fn cost_obligations(</td></tr>
+<tr class="lf-add lf-code-row" data-line="69"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">69</td><td class="lf-sign">+</td><td>        &amp;self,</td></tr>
+<tr class="lf-add lf-code-row" data-line="70"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">70</td><td class="lf-sign">+</td><td>        player: PlayerId,</td></tr>
+<tr class="lf-add lf-code-row" data-line="71"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">71</td><td class="lf-sign">+</td><td>        cost: &amp;ManaCost,</td></tr>
+<tr class="lf-add lf-code-row" data-line="72"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">72</td><td class="lf-sign">+</td><td>        permissions: CostPermissionContext,</td></tr>
+<tr class="lf-add lf-code-row" data-line="73"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">73</td><td class="lf-sign">+</td><td>        life: u32,</td></tr>
+<tr class="lf-add lf-code-row" data-line="74"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">74</td><td class="lf-sign">+</td><td>        coupled: bool,</td></tr>
+<tr class="lf-add lf-code-row" data-line="75"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">75</td><td class="lf-sign">+</td><td>    ) -&gt; Vec&lt;Obligation&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="76"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">76</td><td class="lf-sign">+</td><td>        if coupled &amp;&amp; (permissions.help != Help::default() || permissions.waterbend &gt; 0) {</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Coupled queries emit <code>Obligation::Helped</code> directly; uncoupled queries keep the pure tier split in <code>help_obligations</code>.</td></tr>
+<tr class="lf-add lf-code-row" data-line="77"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">77</td><td class="lf-sign">+</td><td>            vec![Obligation::Helped(Box::new(HelpedCost {</td></tr>
+<tr class="lf-add lf-code-row" data-line="78"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">78</td><td class="lf-sign">+</td><td>                cost: cost.clone(),</td></tr>
+<tr class="lf-add lf-code-row" data-line="79"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">79</td><td class="lf-sign">+</td><td>                permissions,</td></tr>
+<tr class="lf-add lf-code-row" data-line="80"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">80</td><td class="lf-sign">+</td><td>                life,</td></tr>
+<tr class="lf-add lf-code-row" data-line="81"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">81</td><td class="lf-sign">+</td><td>            }))]</td></tr>
+<tr class="lf-add lf-code-row" data-line="82"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">82</td><td class="lf-sign">+</td><td>        } else {</td></tr>
+<tr class="lf-add lf-code-row" data-line="83"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">83</td><td class="lf-sign">+</td><td>            self.help_obligations(player, cost, permissions, life)</td></tr>
+<tr class="lf-add lf-code-row" data-line="84"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">84</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="85"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">85</td><td class="lf-sign">+</td><td>    }</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="68" data-line="105"><td class="lf-ln lf-ln-old">68</td><td class="lf-ln lf-ln-new">105</td><td class="lf-sign"> </td><td>        player: PlayerId,</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="69" data-line="106"><td class="lf-ln lf-ln-old">69</td><td class="lf-ln lf-ln-new">106</td><td class="lf-sign"> </td><td>        cost: &amp;ManaCost,</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="70" data-line="107"><td class="lf-ln lf-ln-old">70</td><td class="lf-ln lf-ln-new">107</td><td class="lf-sign"> </td><td>        permissions: CostPermissionContext,</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="71" data-line="108"><td class="lf-ln lf-ln-old">71</td><td class="lf-ln lf-ln-new">108</td><td class="lf-sign"> </td><td>        life: u32,</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="72" data-line="109"><td class="lf-ln lf-ln-old">72</td><td class="lf-ln lf-ln-new">109</td><td class="lf-sign"> </td><td>    ) -&gt; Vec&lt;Obligation&gt; {</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="73"><td class="lf-ln lf-ln-old">73</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>        let cost = match permissions.help.delve {</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="74"><td class="lf-ln lf-ln-old">74</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>            Some(spell) =&gt; {</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="75"><td class="lf-ln lf-ln-old">75</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                let cards = self.graveyard_payers(player, spell).len();</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="76"><td class="lf-ln lf-ln-old">76</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>                cost.reduced_generic(cards.min(usize::from(u8::MAX)) as u8)</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="77"><td class="lf-ln lf-ln-old">77</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>            }</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="78"><td class="lf-ln lf-ln-old">78</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>            None =&gt; cost.clone(),</td></tr>
+<tr class="lf-del lf-code-row" data-old-line="79"><td class="lf-ln lf-ln-old">79</td><td class="lf-ln lf-ln-new"></td><td class="lf-sign">-</td><td>        };</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="80" data-line="111"><td class="lf-ln lf-ln-old">80</td><td class="lf-ln lf-ln-new">111</td><td class="lf-sign"> </td><td>        let waterbend = permissions.waterbend.min(cost.generic());</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="81" data-line="112"><td class="lf-ln lf-ln-old">81</td><td class="lf-ln lf-ln-new">112</td><td class="lf-sign"> </td><td>        let keyword = if permissions.help.convoke || permissions.help.improvise {</td></tr>
+<tr class="lf-ctx lf-code-row" data-old-line="82" data-line="113"><td class="lf-ln lf-ln-old">82</td><td class="lf-ln lf-ln-new">113</td><td class="lf-sign"> </td><td>            cost.generic() - waterbend</td></tr>
+</tbody></table></div></div>
+
+<div class="lf-codeblock" data-path="managym/src/flow/mana/coupled.rs"><div class="lf-codeblock-header"><span class="lf-codeblock-path">managym/src/flow/mana/coupled.rs:784-846</span><button type="button" class="lf-btn-quiet" data-notes-toggle>Hide line notes</button></div><div class="lf-codeblock-scroll"><table class="lf-code-table"><tbody>
+<tr class="lf-hunk"><td colspan="4">@@ -0,0 +1,928 @@</td></tr>
+<tr class="lf-add lf-code-row" data-line="784"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">784</td><td class="lf-sign">+</td><td>    fn pay_helped(</td></tr>
+<tr class="lf-add lf-code-row" data-line="785"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">785</td><td class="lf-sign">+</td><td>        &amp;mut self,</td></tr>
+<tr class="lf-add lf-code-row" data-line="786"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">786</td><td class="lf-sign">+</td><td>        game: &amp;Game,</td></tr>
+<tr class="lf-add lf-code-row" data-line="787"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">787</td><td class="lf-sign">+</td><td>        model: &amp;PaymentModel&lt;&#39;_&gt;,</td></tr>
+<tr class="lf-add lf-code-row" data-line="788"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">788</td><td class="lf-sign">+</td><td>        profile: BoardArithmeticProfile,</td></tr>
+<tr class="lf-add lf-code-row" data-line="789"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">789</td><td class="lf-sign">+</td><td>        helped: &amp;HelpedCost,</td></tr>
+<tr class="lf-add lf-code-row" data-line="790"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">790</td><td class="lf-sign">+</td><td>        tail: &amp;[Obligation],</td></tr>
+<tr class="lf-add lf-code-row" data-line="791"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">791</td><td class="lf-sign">+</td><td>    ) -&gt; Option&lt;Vec&lt;PaymentStep&gt;&gt; {</td></tr>
+<tr class="lf-add lf-code-row" data-line="792"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">792</td><td class="lf-sign">+</td><td>        let player = self.payment.player;</td></tr>
+<tr class="lf-add lf-code-row" data-line="793"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">793</td><td class="lf-sign">+</td><td>        let remaining = || {</td></tr>
+<tr class="lf-add lf-code-row" data-line="794"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">794</td><td class="lf-sign">+</td><td>            let mut obligations = vec![Obligation::Helped(Box::new(helped.clone()))];</td></tr>
+<tr class="lf-add lf-code-row" data-line="795"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">795</td><td class="lf-sign">+</td><td>            obligations.extend_from_slice(tail);</td></tr>
+<tr class="lf-add lf-code-row" data-line="796"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">796</td><td class="lf-sign">+</td><td>            obligations</td></tr>
+<tr class="lf-add lf-code-row" data-line="797"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">797</td><td class="lf-sign">+</td><td>        };</td></tr>
+<tr class="lf-add lf-code-row" data-line="798"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">798</td><td class="lf-sign">+</td><td>        if profile.stateful_delve() &amp;&amp; helped.cost.generic() &gt; 0 {</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Delve exiles fork natively on <code>stateful_delve()</code> boards; otherwise <code>cost_after_delve</code> folds graveyard cards into the full-cost spend.</td></tr>
+<tr class="lf-add lf-code-row" data-line="799"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">799</td><td class="lf-sign">+</td><td>            if let Some(spell) = helped.permissions.help.delve {</td></tr>
+<tr class="lf-add lf-code-row" data-line="800"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">800</td><td class="lf-sign">+</td><td>                for object in game.graveyard_payers(player, spell) {</td></tr>
+<tr class="lf-add lf-code-row" data-line="801"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">801</td><td class="lf-sign">+</td><td>                    if let Some(path) = self.run(</td></tr>
+<tr class="lf-add lf-code-row" data-line="802"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">802</td><td class="lf-sign">+</td><td>                        game.clone(),</td></tr>
+<tr class="lf-add lf-code-row" data-line="803"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">803</td><td class="lf-sign">+</td><td>                        remaining(),</td></tr>
+<tr class="lf-add lf-code-row" data-line="804"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">804</td><td class="lf-sign">+</td><td>                        Some(PaymentCandidate::DelveExile(object)),</td></tr>
+<tr class="lf-add lf-code-row" data-line="805"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">805</td><td class="lf-sign">+</td><td>                    ) {</td></tr>
+<tr class="lf-add lf-code-row" data-line="806"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">806</td><td class="lf-sign">+</td><td>                        return Some(prepend(PaymentStep::DelveExile(object), path));</td></tr>
+<tr class="lf-add lf-code-row" data-line="807"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">807</td><td class="lf-sign">+</td><td>                    }</td></tr>
+<tr class="lf-add lf-code-row" data-line="808"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">808</td><td class="lf-sign">+</td><td>                }</td></tr>
+<tr class="lf-add lf-code-row" data-line="809"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">809</td><td class="lf-sign">+</td><td>            }</td></tr>
+<tr class="lf-add lf-code-row" data-line="810"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">810</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="811"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">811</td><td class="lf-sign">+</td><td>        let cost = if profile.stateful_delve() {</td></tr>
+<tr class="lf-add lf-code-row" data-line="812"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">812</td><td class="lf-sign">+</td><td>            helped.cost.clone()</td></tr>
+<tr class="lf-add lf-code-row" data-line="813"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">813</td><td class="lf-sign">+</td><td>        } else {</td></tr>
+<tr class="lf-add lf-code-row" data-line="814"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">814</td><td class="lf-sign">+</td><td>            game.cost_after_delve(player, &amp;helped.cost, helped.permissions.help)</td></tr>
+<tr class="lf-add lf-code-row" data-line="815"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">815</td><td class="lf-sign">+</td><td>        };</td></tr>
+<tr class="lf-add lf-code-row" data-line="816"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">816</td><td class="lf-sign">+</td><td>        if game.pooled_mana(player).can_pay(&amp;cost) {</td></tr>
+<tr class="lf-add lf-code-row" data-line="817"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">817</td><td class="lf-sign">+</td><td>            let mut after_spend: Vec&lt;_&gt; = Obligation::life(helped.life).into_iter().collect();</td></tr>
+<tr class="lf-add lf-code-row" data-line="818"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">818</td><td class="lf-sign">+</td><td>            after_spend.extend_from_slice(tail);</td></tr>
+<tr class="lf-add lf-code-row" data-line="819"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">819</td><td class="lf-sign">+</td><td>            if let Some(path) = self.spend(game.clone(), cost, &amp;mut |search, game| {</td></tr>
+<tr class="lf-add lf-code-row" data-line="820"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">820</td><td class="lf-sign">+</td><td>                search.visit(game, after_spend.clone())</td></tr>
+<tr class="lf-add lf-code-row" data-line="821"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">821</td><td class="lf-sign">+</td><td>            }) {</td></tr>
+<tr class="lf-add lf-code-row" data-line="822"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">822</td><td class="lf-sign">+</td><td>                return Some(prepend(PaymentStep::Spend, path));</td></tr>
+<tr class="lf-add lf-code-row" data-line="823"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">823</td><td class="lf-sign">+</td><td>            }</td></tr>
+<tr class="lf-add lf-code-row" data-line="824"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">824</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="825"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">825</td><td class="lf-sign">+</td><td>        for source in model</td></tr>
+<tr class="lf-line-note" data-notes><td colspan="4">Help taps query <code>game.tap_payments</code> against the unsplit <code>helped.cost</code> on every fork, keeping Convoke, Improvise, Waterbend, and Delve composable in any order.</td></tr>
+<tr class="lf-add lf-code-row" data-line="826"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">826</td><td class="lf-sign">+</td><td>            .sources</td></tr>
+<tr class="lf-add lf-code-row" data-line="827"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">827</td><td class="lf-sign">+</td><td>            .iter()</td></tr>
+<tr class="lf-add lf-code-row" data-line="828"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">828</td><td class="lf-sign">+</td><td>            .filter(|source| source.untapped &amp;&amp; source.waterbend)</td></tr>
+<tr class="lf-add lf-code-row" data-line="829"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">829</td><td class="lf-sign">+</td><td>        {</td></tr>
+<tr class="lf-add lf-code-row" data-line="830"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">830</td><td class="lf-sign">+</td><td>            for payment in game.tap_payments(&amp;helped.cost, helped.permissions, source.permanent) {</td></tr>
+<tr class="lf-add lf-code-row" data-line="831"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">831</td><td class="lf-sign">+</td><td>                let step = if payment.toward == Toward::Waterbend {</td></tr>
+<tr class="lf-add lf-code-row" data-line="832"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">832</td><td class="lf-sign">+</td><td>                    PaymentStep::Waterbend(source.permanent)</td></tr>
+<tr class="lf-add lf-code-row" data-line="833"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">833</td><td class="lf-sign">+</td><td>                } else {</td></tr>
+<tr class="lf-add lf-code-row" data-line="834"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">834</td><td class="lf-sign">+</td><td>                    PaymentStep::Convoke(source.permanent)</td></tr>
+<tr class="lf-add lf-code-row" data-line="835"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">835</td><td class="lf-sign">+</td><td>                };</td></tr>
+<tr class="lf-add lf-code-row" data-line="836"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">836</td><td class="lf-sign">+</td><td>                if let Some(path) = self.run(</td></tr>
+<tr class="lf-add lf-code-row" data-line="837"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">837</td><td class="lf-sign">+</td><td>                    game.clone(),</td></tr>
+<tr class="lf-add lf-code-row" data-line="838"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">838</td><td class="lf-sign">+</td><td>                    remaining(),</td></tr>
+<tr class="lf-add lf-code-row" data-line="839"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">839</td><td class="lf-sign">+</td><td>                    Some(PaymentCandidate::HelpTap(source.permanent, payment)),</td></tr>
+<tr class="lf-add lf-code-row" data-line="840"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">840</td><td class="lf-sign">+</td><td>                ) {</td></tr>
+<tr class="lf-add lf-code-row" data-line="841"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">841</td><td class="lf-sign">+</td><td>                    return Some(prepend(step, path));</td></tr>
+<tr class="lf-add lf-code-row" data-line="842"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">842</td><td class="lf-sign">+</td><td>                }</td></tr>
+<tr class="lf-add lf-code-row" data-line="843"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">843</td><td class="lf-sign">+</td><td>            }</td></tr>
+<tr class="lf-add lf-code-row" data-line="844"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">844</td><td class="lf-sign">+</td><td>        }</td></tr>
+<tr class="lf-add lf-code-row" data-line="845"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">845</td><td class="lf-sign">+</td><td>        None</td></tr>
+<tr class="lf-add lf-code-row" data-line="846"><td class="lf-ln lf-ln-old"></td><td class="lf-ln lf-ln-new">846</td><td class="lf-sign">+</td><td>    }</td></tr>
+</tbody></table></div></div>
+
+<div class="lf-before-after">
+  <div class="lf-before-after-pane">
+    <div class="lf-before-after-label">Before</div>
+
+    <h4>Before Pass 6 (<code>52fb812008</code>)</h4>
+    <ul>
+      <li><code>CoupledPayment.delve: Option&lt;DelveCost&gt;</code> tracked only Delve beside pre-flattened <code>tap_obligations</code> tiers recovered by suffix matching.</li>
+      <li><code>try_help_taps</code> checked only <code>obligations.first()</code>, hiding generic Improvise, Waterbend, and off-color Convoke taps behind colored pips.</li>
+      <li><code>next_delve</code> was gated on <code>stateful_delve()</code>, dropping Delve after a Convoke tap on sacrifice-coupled boards.</li>
+      <li>Partial-tier spends set <code>saved_delve = None</code>, stripping Delve from the generic tail.</li>
+    </ul>
+
+  </div>
+  <div class="lf-before-after-pane">
+    <div class="lf-before-after-label">After</div>
+
+    <h4>After Pass 6 (<code>f3779cb5b2</code>)</h4>
+    <ul>
+      <li><code>Obligation::Helped(Box&lt;HelpedCost&gt;)</code> sits directly in the ordered obligations list; no side-channel or suffix matching exists.</li>
+      <li><code>pay_helped</code> evaluates Delve exiles, full-cost spending, and every legal Convoke / Improvise / Waterbend tap directly against the unsplit <code>HelpedCost</code> on each fork.</li>
+      <li><code>help_obligations</code> lowers <code>Obligation::Helped</code> only for pure handoff and uncoupled queries; <code>FixedOnly</code> lowers it to plain <code>mana_and_life</code>.</li>
+      <li><code>CoupledMemoKey</code> hashes <code>obligations</code> directly (including <code>cost</code>, <code>waterbend</code>, and <code>life</code>), and <code>PurposeProjection</code> reads <code>&amp;helped.cost</code>.</li>
+    </ul>
+
+  </div>
+</div>
+
+
+<h2>Findings</h2>
+
+<div class="lf-decision" data-decision-id="f1">
+  <div class="lf-decision-head">
+    <span class="lf-decision-title">F1 · Confirm hash v36 and headless design choices before merge (Irreversible once released)</span>
+    <span class="lf-decision-rec">Recommended: Fix here</span>
+  </div>
+  <div class="lf-decision-body">
+  <p><strong>Scope:</strong> This work (release/merge confirmation; no code defect found).</p>
+  <p><strong>Context:</strong> All conceptual gaps from Passes 1–5 are closed on <code>HEAD</code> (<code>f3779cb5b2</code>). Pre-implementation choices (1a–5a), post-Pass-4 choices (1a–3a), and post-Pass-5 choice (1a: unified <code>Obligation::Helped</code>) were adopted headless and have not yet had human sign-off. One choice is irreversible once shipped:</p>
+  <ul>
+    <li><code>MATCH_STATE_HASH_VERSION</code> moved <code>35 → 36</code> (<code>managym/src/state/hash.rs:29</code>) to serialize finalized <code>ActivatedAbilityDefinition</code> and <code>acquired: Option&lt;GrantKey&gt;</code> in <code>PendingChoice::ActivationX</code>, <code>ActivatedTargeting</code>, and <code>Operation::Activation</code>. Because <code>origin/main</code> (<code>606e79e90a</code>) is already at v35, v36 is required; delivery refreshes Academy fixtures and records the v36 Engine Budget baseline.</li>
+  </ul>
+</div>
+  <div data-choice="f1" data-label="F1 · Confirm hash v36 and headless design choices before merge (Irreversible once released)">
+    <button type="button" data-value="Fix here">Fix here</button>
+    <button type="button" data-value="File Task">File Task</button>
+    <button type="button" data-value="Drop">Drop</button>
+  </div>
+</div>
+
+
+<h2>Questions</h2>
+
+<div data-choice="q1" data-label="1 · Confirm hash v36 and headless choices (F1)">
+  <h3>1. Confirm keeping <code>MATCH_STATE_HASH_VERSION = 36</code> and the headless choices adopted across Passes 1–6?</h3>
+  <button data-value="1a">1a · (Recommended) Confirm v36 and the implemented coupled-search / unified <code>Obligation::Helped</code> / fixed-tap / owned-activation model</button>
+  <button data-value="1b">1b · Revisit one of the adopted designs before delivery (note which below)</button>
+</div>
+</main>
+<script type="application/json" id="lf-page">{"work":{"kind":"task","issue":"MTG-508"},"directory":"/Users/jack/src/manabot.mtg-508-support-coupled-mana","base":"bc4d2ac17fba8cb2ae582b2f67de450024369b80","head":"f3779cb5b2","path":"scratch/concept-review.html","build_id":"64736770de05b780","protocol":{"revision":11,"min_revision":10}}</script>
+<script>
+(function () {
+  "use strict";
+
+  const stampEl = document.getElementById("lf-page");
+  if (!stampEl) return;
+  let stamp;
+  try {
+    stamp = JSON.parse(stampEl.textContent || "{}");
+  } catch (_) {
+    return;
+  }
+
+  const pagePath = String(stamp.path || "scratch/page.html");
+  const buildId = String(stamp.build_id || "0");
+  const work = stamp.work || { kind: "repository" };
+  const directory = String(stamp.directory || "");
+  const protocol =
+    stamp.protocol && typeof stamp.protocol === "object" ? stamp.protocol : null;
+  const protocolRevision = Number(protocol && protocol.revision);
+  const protocolMinRevision = Number(protocol && protocol.min_revision);
+  const storageKey = "lf-page:" + pagePath + ":" + buildId;
+  const mainEl =
+    document.querySelector("main.lf-page") || document.querySelector("main") || document.body;
+
+  const desktopHandler =
+    window.webkit &&
+    window.webkit.messageHandlers &&
+    window.webkit.messageHandlers.loopflow;
+
+  let hostMode = desktopHandler ? "desktop" : "clipboard";
+  let socket = null;
+  let nextReqId = 1;
+  const pending = new Map();
+  const cancelledAction = Symbol("cancelled action");
+  let serverDisconnected = false;
+  let sendingReply = false;
+
+  // Draft & receipt state.
+  // Notes (prose & diff/file lines), choices, multiselects, questions, offline actions,
+  // and optional browser overall direction enter the reply queue.
+  // Executed direct `data-lf` receipts stay separate and only ride as a suffix on ⌘↩.
+  function emptyState() {
+    return {
+      notes: [],
+      choices: {},
+      multiselects: {},
+      questions: {},
+      offlineActions: [],
+      overall: "",
+      receipts: [],
+    };
+  }
+
+  let state = emptyState();
+
+  function oneLine(text) {
+    return String(text || "")
+      .replace(/[\r\n\t\x00-\x1f]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function buttonValue(btn) {
+    return btn.getAttribute("data-value") || oneLine(btn.textContent);
+  }
+
+  function resultTaskId(result) {
+    return result && ((result.task && result.task.identifier) || result.identifier);
+  }
+
+  function errorMessage(err) {
+    return String(err && err.message ? err.message : err);
+  }
+
+  function el(tag, opts, ...children) {
+    const node = document.createElement(tag);
+    if (typeof opts === "string") {
+      if (opts) node.className = opts;
+    } else if (opts) {
+      for (const [k, v] of Object.entries(opts)) {
+        if (v == null || v === false) continue;
+        if (k === "cls") node.className = v;
+        else if (k === "text") node.textContent = v;
+        else if (k === "on") {
+          for (const [ev, fn] of Object.entries(v)) node.addEventListener(ev, fn);
+        } else if (k === "attrs") {
+          for (const [ak, av] of Object.entries(v)) node.setAttribute(ak, av);
+        } else {
+          node[k] = v;
+        }
+      }
+    }
+    for (const child of children) {
+      if (child != null && child !== false) node.append(child);
+    }
+    return node;
+  }
+
+  function makeButton(label, onClick, className) {
+    return el("button", { type: "button", cls: className || "", text: label, on: { click: onClick } });
+  }
+
+  function setPressed(btn, active) {
+    btn.classList.toggle("is-selected", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+
+  function focusEnd(ta) {
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
+  function clearSelection() {
+    try {
+      window.getSelection().removeAllRanges();
+    } catch (_) {}
+  }
+
+  function randomId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    return "lf-" + Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+  }
+
+  function shortPath(path) {
+    const parts = String(path || "").split("/");
+    return parts[parts.length - 1] || path;
+  }
+
+  function truncate(text, max) {
+    const s = oneLine(text);
+    return s.length > max ? s.slice(0, max - 1) + "…" : s;
+  }
+
+  function nearestSection(node) {
+    let cur = node && node.nodeType === 1 ? node : node && node.parentElement;
+    while (cur && cur !== document.body) {
+      let prev = cur.previousElementSibling;
+      while (prev) {
+        if (/^H[1-4]$/.test(prev.tagName)) return oneLine(prev.textContent);
+        prev = prev.previousElementSibling;
+      }
+      cur = cur.parentElement;
+    }
+    const h1 = document.querySelector("h1");
+    return h1 ? oneLine(h1.textContent) : "Top";
+  }
+
+  function formatLineSpan(note) {
+    const start = Number(note.lineStart);
+    const end = Number(note.lineEnd || note.lineStart);
+    const span = start === end ? String(start) : start + "–" + end;
+    return note.side === "old" ? "old:" + span : span;
+  }
+
+  function formatLineAnchor(note) {
+    return oneLine(note.path) + ":" + formatLineSpan(note);
+  }
+
+  function formatNoteAnchorLabel(note) {
+    if (note.kind === "line") return formatLineAnchor(note);
+    return "§ " + oneLine(note.section) + ' · "' + truncate(note.quote, 46) + '"';
+  }
+
+  function pulseElement(target) {
+    if (!target) return;
+    try {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (_) {}
+    target.classList.add("lf-pulse-ring");
+    setTimeout(() => target.classList.remove("lf-pulse-ring"), 950);
+  }
+
+  function rowsForLineNote(note) {
+    const matched = [];
+    const attr = note.side === "old" ? "data-old-line" : "data-line";
+    const start = Number(note.lineStart);
+    const end = Number(note.lineEnd || note.lineStart);
+    for (const block of mainEl.querySelectorAll(".lf-codeblock[data-path]")) {
+      if (block.getAttribute("data-path") !== note.path) continue;
+      block.querySelectorAll("tr.lf-code-row[" + attr + "]").forEach((tr) => {
+        const ln = Number(tr.getAttribute(attr));
+        if (ln >= start && ln <= end) matched.push(tr);
+      });
+    }
+    return matched;
+  }
+
+  function noteAnchorElement(note) {
+    if (note.kind === "line") return rowsForLineNote(note)[0] || null;
+    return mainEl.querySelector('.lf-hl[data-lf-note-id="' + CSS.escape(note.id) + '"]');
+  }
+
+  function notesInDocumentOrder() {
+    if (state.notes.length <= 1) return state.notes.slice();
+    return state.notes
+      .map((note, idx) => ({ note, idx, el: noteAnchorElement(note) }))
+      .sort((a, b) => {
+        if (a.el && b.el && a.el !== b.el) {
+          const pos = a.el.compareDocumentPosition(b.el);
+          if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+          if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+        }
+        if (a.el !== b.el) return a.el ? -1 : 1;
+        return a.idx - b.idx;
+      })
+      .map((entry) => entry.note);
+  }
+
+  function deleteNote(id) {
+    state.notes = state.notes.filter((n) => n.id !== id);
+    if (sidebarEditingId === id) sidebarEditingId = null;
+    hideHoverCard();
+    refresh(true);
+  }
+
+  function editNote(id, text) {
+    state.notes = state.notes.map((note) => note.id === id ? { ...note, text } : note);
+    sidebarEditingId = null;
+    refresh(true);
+  }
+
+  function queueEntries() {
+    const entries = [];
+    for (const note of notesInDocumentOrder()) {
+      const text = oneLine(note.text);
+      const jump = () => pulseElement(noteAnchorElement(note));
+      const remove = () => deleteNote(note.id);
+      if (note.kind === "line") {
+        const anchor = formatLineAnchor(note);
+        entries.push({
+          tag: "lines",
+          summary: shortPath(note.path) + ":" + formatLineSpan(note) + " — " + text,
+          title: anchor + " — " + text,
+          ref: "`" + pagePath + "` § " + anchor + " — " + text,
+          jump,
+          remove,
+        });
+      } else {
+        const section = oneLine(note.section);
+        const quote = oneLine(note.quote);
+        entries.push({
+          tag: "note",
+          summary: '"' + truncate(quote, 26) + '" — ' + text,
+          title: section + ' › "' + quote + '" — ' + text,
+          ref: "`" + pagePath + "` § " + section + ' › "' + quote + '" ' + text,
+          jump,
+          remove,
+        });
+      }
+    }
+
+    function pushControl(tag, attr, key, label, val, remove) {
+      const summary = label + ": " + val;
+      entries.push({
+        tag,
+        summary,
+        title: summary,
+        ref: "`" + pagePath + "` § " + summary,
+        jump: () => pulseElement(document.querySelector("[" + attr + '="' + CSS.escape(key) + '"]')),
+        remove: () => {
+          remove();
+          refresh(true);
+        },
+      });
+    }
+
+    for (const [group, entry] of Object.entries(state.choices)) {
+      if (!entry || !entry.value) continue;
+      pushControl(
+        "choice",
+        "data-choice",
+        group,
+        oneLine(entry.label || group),
+        oneLine(entry.value),
+        () => delete state.choices[group]
+      );
+    }
+    for (const [group, entry] of Object.entries(state.multiselects)) {
+      if (!entry || !Array.isArray(entry.values) || entry.values.length === 0) continue;
+      pushControl(
+        "choice",
+        "data-multiselect",
+        group,
+        oneLine(entry.label || group),
+        entry.values.map(oneLine).join(", "),
+        () => delete state.multiselects[group]
+      );
+    }
+    for (const [qid, entry] of Object.entries(state.questions)) {
+      const ans = entry && oneLine(entry.answer);
+      if (!ans) continue;
+      pushControl(
+        "answer",
+        "data-question",
+        qid,
+        oneLine(entry.label || qid),
+        ans,
+        () => delete state.questions[qid]
+      );
+    }
+    for (const act of state.offlineActions) {
+      const summary = oneLine(act.summary);
+      entries.push({
+        tag: "run",
+        summary,
+        title: "Run: " + summary,
+        ref: "`" + pagePath + "` Run: " + summary,
+        jump: () => {
+          const found = actions.find((a) => a.key === act.key);
+          if (found) pulseElement(found.slot);
+        },
+        remove: () => {
+          state.offlineActions = state.offlineActions.filter((a) => a.id !== act.id);
+          refresh(true);
+        },
+      });
+    }
+    return entries;
+  }
+
+  function queueItems(entries) {
+    const items = (entries || queueEntries()).map((e) => e.ref);
+    const overall = oneLine(state.overall);
+    if (!desktopHandler && overall) {
+      items.push("`" + pagePath + "` Overall: " + overall);
+    }
+    return items;
+  }
+
+  function formatReplyMessage(items) {
+    if (!items.length) return "";
+    let message = items.map((ref, idx) => "(" + (idx + 1) + ") " + oneLine(ref)).join(" ");
+    const unreported = state.receipts.filter((r) => !r.reported);
+    if (unreported.length > 0) {
+      const ran = unreported
+        .map((r) => oneLine(r.kind + (r.summary ? " → " + r.summary : "")))
+        .join("; ");
+      message += " [already ran: " + ran + "]";
+    }
+    return oneLine(message);
+  }
+
+  function saveState() {
+    if (desktopHandler) {
+      try {
+        desktopHandler.postMessage({
+          type: "sync",
+          build_id: buildId,
+          state,
+          items: queueItems(),
+        });
+      } catch (_) {}
+      return;
+    }
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(state));
+    } catch (_) {}
+  }
+
+  function loadBrowserState() {
+    if (desktopHandler) return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") applyState(parsed);
+    } catch (_) {}
+  }
+
+  // `persist` marks an edit: the last send's sentence no longer describes the queue.
+  function refresh(persist) {
+    if (persist) setStatus("", "");
+    syncControlsFromState();
+    renderHighlights();
+    renderSidebar();
+    if (persist) saveState();
+    renderDock();
+  }
+
+  function applyState(loaded) {
+    if (!loaded || typeof loaded !== "object") {
+      state = emptyState();
+    } else {
+      state = {
+        notes: Array.isArray(loaded.notes) ? loaded.notes : [],
+        choices: loaded.choices && typeof loaded.choices === "object" ? loaded.choices : {},
+        multiselects:
+          loaded.multiselects && typeof loaded.multiselects === "object" ? loaded.multiselects : {},
+        questions: loaded.questions && typeof loaded.questions === "object" ? loaded.questions : {},
+        offlineActions: Array.isArray(loaded.offlineActions) ? loaded.offlineActions : [],
+        overall: typeof loaded.overall === "string" ? loaded.overall : "",
+        receipts: Array.isArray(loaded.receipts) ? loaded.receipts : [],
+      };
+    }
+    refresh(false);
+  }
+
+  // Desktop calls this with `null` after `ReviewComments.insert(into:)` sends the page's items;
+  // Swift has already updated its stored page state, so don't echo a redundant `sync` back.
+  window.__lfDesktopApplyState = function (loaded) {
+    if (loaded) applyState(loaded);
+    else clearDrafts({ markReported: true, persist: false });
+  };
+
+  // --- Loopback WebSocket carrier ---
+
+  function loopbackWsUrl() {
+    if (window.location.protocol !== "http:" || window.location.hostname !== "127.0.0.1") return null;
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    if (parts.length < 3 || parts[1] !== "f" || !/^[A-Za-z0-9_-]{43}$/.test(parts[0])) return null;
+    return "ws://" + window.location.host + "/" + parts[0] + "/machine";
+  }
+
+  function markDisconnected(reason) {
+    hostMode = "clipboard";
+    serverDisconnected = true;
+    showBanner(reason || "Loopflow server disconnected — run lf page open " + pagePath);
+    renderDock();
+  }
+
+  function connectLoopback() {
+    if (desktopHandler) return;
+    const url = loopbackWsUrl();
+    if (!url) return;
+    if (!Number.isInteger(protocolRevision) || !Number.isInteger(protocolMinRevision)) {
+      markDisconnected("Review page is missing server protocol version — rebuild with lf page build");
+      return;
+    }
+    let ws;
+    try {
+      ws = new WebSocket(url);
+    } catch (_) {
+      markDisconnected("");
+      return;
+    }
+    let handshakeError = "";
+    let closingForUnload = false;
+    ws.addEventListener("open", () => {
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          revision: protocolRevision,
+          min_revision: protocolMinRevision,
+          client: { kind: "page", platform: "browser", name: "review-page", version: "1" },
+        })
+      );
+    });
+    ws.addEventListener("message", (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch (_) {
+        return;
+      }
+      if (msg.type === "welcome") {
+        socket = ws;
+        hostMode = "loopback";
+        serverDisconnected = false;
+        hideBanner();
+        renderDock();
+        return;
+      }
+      if (msg.type === "error" && !msg.id) {
+        handshakeError = msg.message || msg.code || "Loopflow server rejected connection";
+        showBanner(handshakeError);
+        return;
+      }
+      if ((msg.type === "response" || msg.type === "error") && msg.id && pending.has(msg.id)) {
+        const entry = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.type === "response") entry.resolve(msg.result);
+        else entry.reject(new Error(msg.message || msg.code || "Server error"));
+      }
+    });
+    ws.addEventListener("close", () => {
+      if (socket === ws) socket = null;
+      for (const [, entry] of pending) entry.reject(new Error("Connection closed"));
+      pending.clear();
+      if (!closingForUnload) markDisconnected(handshakeError);
+    });
+    window.addEventListener("pagehide", () => {
+      closingForUnload = true;
+      try {
+        ws.close();
+      } catch (_) {}
+    });
+  }
+
+  function sendOperation(operation, requestId) {
+    if (desktopHandler) {
+      try {
+        return Promise.resolve(
+          desktopHandler.postMessage({
+            type: "operation",
+            operation,
+            request_id: requestId || null,
+          })
+        ).then((result) => {
+          if (result && result.error) throw new Error(result.error);
+          if (result && result.cancelled) return cancelledAction;
+          return result && result.result !== undefined ? result.result : result;
+        });
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error("Loopflow server is not connected"));
+    }
+    return new Promise((resolve, reject) => {
+      const id = "req-" + nextReqId++;
+      pending.set(id, { resolve, reject });
+      try {
+        socket.send(JSON.stringify({
+          type: "request",
+          id,
+          operation,
+          select: null,
+          sender: null,
+          request_id: requestId || null,
+        }));
+      } catch (error) {
+        pending.delete(id);
+        reject(error);
+      }
+    });
+  }
+
+  // --- Banner ---
+
+  let bannerEl = null;
+  function showBanner(text) {
+    if (!bannerEl) {
+      bannerEl = el("div", "lf-banner");
+      mainEl.insertBefore(bannerEl, mainEl.firstChild);
+    }
+    bannerEl.textContent = text;
+    bannerEl.hidden = false;
+  }
+
+  function hideBanner() {
+    if (bannerEl) bannerEl.hidden = true;
+  }
+
+  // --- Controls & direct `data-lf` actions ---
+
+  // Each `data-lf` button and the element now standing in its place.
+  const actions = [];
+
+  function showInSlot(action, node) {
+    if (action.slot !== node) action.slot.replaceWith(node);
+    action.slot = node;
+  }
+
+  function wireControls() {
+    document.querySelectorAll("[data-notes-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const block = btn.closest(".lf-codeblock");
+        if (!block) return;
+        const hidden = block.classList.toggle("lf-notes-hidden");
+        btn.textContent = hidden ? "Show line notes" : "Hide line notes";
+      });
+    });
+
+    document.querySelectorAll("[data-choice]").forEach((groupEl) => {
+      const group = groupEl.getAttribute("data-choice");
+      const label = groupEl.getAttribute("data-label") || group;
+      groupEl.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const value = buttonValue(btn);
+          if (state.choices[group] && state.choices[group].value === value) {
+            delete state.choices[group];
+          } else {
+            state.choices[group] = { label, value };
+          }
+          refresh(true);
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-multiselect]").forEach((groupEl) => {
+      const group = groupEl.getAttribute("data-multiselect");
+      const label = groupEl.getAttribute("data-label") || group;
+      groupEl.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const value = buttonValue(btn);
+          const current = (state.multiselects[group] && state.multiselects[group].values) || [];
+          const next = current.includes(value)
+            ? current.filter((v) => v !== value)
+            : current.concat([value]);
+          if (next.length === 0) delete state.multiselects[group];
+          else state.multiselects[group] = { label, values: next };
+          refresh(true);
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-question]").forEach((box) => {
+      const qid = box.getAttribute("data-question");
+      const label = box.getAttribute("data-label") || qid;
+      let input = box.querySelector("textarea, input");
+      if (!input) {
+        input = el("textarea", { rows: 2 });
+        box.append(input);
+      }
+      input.addEventListener("input", () => {
+        const answer = input.value;
+        if (!oneLine(answer)) delete state.questions[qid];
+        else state.questions[qid] = { label, answer };
+        setStatus("", "");
+        saveState();
+        renderDock();
+      });
+    });
+
+    document.querySelectorAll("[data-lf]").forEach((btn, idx) => {
+      let template;
+      try {
+        template = JSON.parse(btn.getAttribute("data-lf") || "{}");
+      } catch (_) {
+        return;
+      }
+      const action = {
+        key: btn.getAttribute("data-lf-id") || "action-" + idx,
+        btn,
+        template,
+        slot: btn,
+      };
+      actions.push(action);
+      btn.addEventListener("click", (event) => {
+        if (event.isTrusted) openActionConfirm(action);
+      });
+    });
+  }
+
+  // Receipts and offline-queued actions outlive reloads; an action with neither shows its button.
+  function syncActionsFromState() {
+    for (const action of actions) {
+      const receipt = state.receipts.find((r) => r.key === action.key);
+      const offline = state.offlineActions.find((a) => a.key === action.key);
+      if (receipt) {
+        showInSlot(action, el("span", { cls: "lf-action-receipt", text: receipt.text || receipt.summary }));
+      } else if (offline) {
+        showInSlot(action, el("span", { cls: "lf-action-summary", text: "Offline — added to reply" }));
+      } else if (
+        action.slot.classList.contains("lf-action-receipt") ||
+        action.slot.classList.contains("lf-action-summary")
+      ) {
+        showInSlot(action, action.btn);
+      }
+    }
+  }
+
+  function syncControlsFromState() {
+    syncActionsFromState();
+    document.querySelectorAll("[data-choice]").forEach((groupEl) => {
+      const selected =
+        state.choices[groupEl.getAttribute("data-choice")] &&
+        state.choices[groupEl.getAttribute("data-choice")].value;
+      groupEl.querySelectorAll("button").forEach((btn) => setPressed(btn, selected === buttonValue(btn)));
+    });
+    document.querySelectorAll("[data-multiselect]").forEach((groupEl) => {
+      const entry = state.multiselects[groupEl.getAttribute("data-multiselect")];
+      const values = (entry && entry.values) || [];
+      groupEl.querySelectorAll("button").forEach((btn) => setPressed(btn, values.includes(buttonValue(btn))));
+    });
+    document.querySelectorAll("[data-question]").forEach((box) => {
+      let input = box.querySelector("textarea, input");
+      if (!input) {
+        input = el("textarea", { rows: 2 });
+        box.append(input);
+      }
+      const entry = state.questions[box.getAttribute("data-question")];
+      const saved = entry ? entry.answer : "";
+      if (input.value !== saved) input.value = saved;
+    });
+  }
+
+  function summarizeOperation(op) {
+    const parts = [op.kind || "operation"];
+    for (const [k, v] of Object.entries(op)) {
+      if (k === "kind" || k === "directory" || k === "request_id" || v === null || v === false || v === "") {
+        continue;
+      }
+      if (Array.isArray(v) && v.length === 0) continue;
+      parts.push(k + "=" + (typeof v === "string" ? v : JSON.stringify(v)));
+    }
+    return parts.join(" ");
+  }
+
+  function materializeOperation(template, requestId) {
+    const copy = JSON.parse(JSON.stringify(template));
+    if (copy.request_id === "__LF_REQUEST_ID__") copy.request_id = requestId;
+    return copy;
+  }
+
+  function formatReceipt(kind, result) {
+    if (result && typeof result === "object") {
+      const taskId = resultTaskId(result);
+      if (kind === "task.create" && taskId) return "Filed " + taskId;
+      if (result.delivery && result.delivery.sentence) return result.delivery.sentence;
+      if (taskId) return kind + " → " + taskId;
+      if (result.sentence) return result.sentence;
+    }
+    return "Ran " + kind;
+  }
+
+  function openActionConfirm(action) {
+    const template = action.template;
+    if (hostMode === "clipboard") {
+      state.offlineActions.push({ id: randomId(), key: action.key, summary: summarizeOperation(template) });
+      refresh(true);
+      return;
+    }
+
+    const requestId = randomId();
+    if (desktopHandler) execute();
+    else {
+      showInSlot(action, el(
+        "span",
+        "lf-action-confirm",
+        el("span", { cls: "lf-action-summary", text: summarizeOperation(template) }),
+        makeButton("Run", execute, "lf-btn-accent"),
+        makeButton("Cancel", () => showInSlot(action, action.btn))
+      ));
+    }
+
+    function execute(event) {
+      if (event && !event.isTrusted) return;
+      showInSlot(action, el("span", { cls: "lf-action-confirm", text: "Running…" }));
+      const op = materializeOperation(template, requestId);
+      sendOperation(op, requestId).then(
+        (result) => {
+          if (result === cancelledAction) {
+            showInSlot(action, action.btn);
+            return;
+          }
+          const text = formatReceipt(op.kind, result);
+          state.receipts.push({ key: action.key, kind: op.kind, summary: resultTaskId(result) || text, text });
+          refresh(true);
+        },
+        (err) => {
+          showInSlot(
+            action,
+            el("span", "lf-action-error", el("span", { text: errorMessage(err) }), makeButton("Retry", execute))
+          );
+        }
+      );
+    }
+  }
+
+  // --- Cross-element prose highlight anchoring ---
+
+  const EXCLUDED_TEXT_SELECTOR =
+    "button, textarea, input, script, style, .lf-gutter-plus, .lf-ln, .lf-sign, " +
+    ".lf-float-pill, .lf-float-composer, .lf-hover-card, .lf-sidebar, .lf-dock, " +
+    ".lf-comments-toggle, .lf-banner, .lf-action-confirm, .lf-action-receipt, .lf-action-error";
+
+  const BLOCK_TAGS = new Set([
+    "P", "DIV", "LI", "TR", "TD", "TH", "H1", "H2", "H3", "H4", "H5", "H6",
+    "PRE", "BLOCKQUOTE", "SECTION", "ARTICLE", "ASIDE", "HEADER", "FOOTER", "DT", "DD",
+  ]);
+
+  function nearestBlock(node) {
+    let cur = node && node.nodeType === 1 ? node : node && node.parentElement;
+    while (cur && cur !== mainEl) {
+      if (BLOCK_TAGS.has(cur.tagName)) return cur;
+      cur = cur.parentElement;
+    }
+    return mainEl;
+  }
+
+  function isExcludedTextNode(node) {
+    const parent = node.parentElement;
+    return (
+      !parent ||
+      Boolean(parent.closest(EXCLUDED_TEXT_SELECTOR)) ||
+      Boolean(parent.closest("[hidden]")) ||
+      Boolean(parent.closest(".lf-notes-hidden .lf-line-note"))
+    );
+  }
+
+  function buildNormalizedIndex(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let flat = "";
+    const positions = [];
+    let lastWasSpace = true;
+    let lastBlock = null;
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue || isExcludedTextNode(node)) continue;
+      const block = nearestBlock(node);
+      if (lastBlock && block !== lastBlock && !lastWasSpace) {
+        flat += " ";
+        positions.push(null);
+        lastWasSpace = true;
+      }
+      lastBlock = block;
+      const val = node.nodeValue;
+      for (let i = 0; i < val.length; i++) {
+        const ch = val[i];
+        if (/\s/.test(ch)) {
+          if (!lastWasSpace) {
+            flat += " ";
+            positions.push({ node, offset: i });
+            lastWasSpace = true;
+          }
+        } else {
+          flat += ch;
+          positions.push({ node, offset: i });
+          lastWasSpace = false;
+        }
+      }
+    }
+    if (flat.endsWith(" ")) {
+      flat = flat.slice(0, -1);
+      positions.pop();
+    }
+    return { flat, positions };
+  }
+
+  function findOccurrenceForRange(range, needle) {
+    if (!needle) return 0;
+    const index = buildNormalizedIndex(mainEl);
+    let rangeFlatPos = -1;
+    for (let i = 0; i < index.positions.length; i++) {
+      const p = index.positions[i];
+      if (!p) continue;
+      try {
+        if (range.comparePoint(p.node, p.offset) === 0) {
+          rangeFlatPos = i;
+          break;
+        }
+      } catch (_) {}
+    }
+    if (rangeFlatPos < 0) return 0;
+    let count = 0;
+    let from = 0;
+    while (from < rangeFlatPos) {
+      const hit = index.flat.indexOf(needle, from);
+      if (hit < 0 || hit >= rangeFlatPos) break;
+      count++;
+      from = hit + 1;
+    }
+    return count;
+  }
+
+  function findNormalizedRange(needle, occurrence) {
+    if (!needle) return null;
+    const index = buildNormalizedIndex(mainEl);
+    let hit = -1;
+    let from = 0;
+    const targetOcc = Math.max(0, Number(occurrence) || 0);
+    for (let occ = 0; occ <= targetOcc; occ++) {
+      const next = index.flat.indexOf(needle, from);
+      if (next < 0) break;
+      hit = next;
+      from = next + 1;
+    }
+    if (hit < 0) return null;
+    let s = hit;
+    let e = hit + needle.length - 1;
+    while (s <= e && !index.positions[s]) s++;
+    while (e >= s && !index.positions[e]) e--;
+    if (s > e || !index.positions[s] || !index.positions[e]) return null;
+    try {
+      const range = document.createRange();
+      range.setStart(index.positions[s].node, index.positions[s].offset);
+      range.setEnd(index.positions[e].node, index.positions[e].offset + 1);
+      return range;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function wrapRange(range, noteId) {
+    const walker = document.createTreeWalker(mainEl, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue || isExcludedTextNode(node)) continue;
+      try {
+        if (!range.intersectsNode(node)) continue;
+      } catch (_) {
+        continue;
+      }
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.nodeValue.length;
+      if (end > start && node.nodeValue.slice(start, end).trim()) {
+        hits.push({ node, start, end });
+      }
+    }
+    for (let i = hits.length - 1; i >= 0; i--) {
+      const { node: tn, start, end } = hits[i];
+      const text = tn.nodeValue;
+      const frag = document.createDocumentFragment();
+      if (start > 0) frag.append(text.slice(0, start));
+      frag.append(el("span", { cls: "lf-hl", text: text.slice(start, end), attrs: { "data-lf-note-id": noteId } }));
+      if (end < text.length) frag.append(text.slice(end));
+      if (tn.parentNode) tn.parentNode.replaceChild(frag, tn);
+    }
+  }
+
+  function unwrapAllHighlights() {
+    const spans = Array.from(mainEl.querySelectorAll("span.lf-hl[data-lf-note-id]"));
+    const parents = new Set();
+    for (let i = spans.length - 1; i >= 0; i--) {
+      const span = spans[i];
+      const parent = span.parentNode;
+      if (!parent) continue;
+      parents.add(parent);
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    }
+    for (const parent of parents) {
+      if (parent.isConnected) parent.normalize();
+    }
+  }
+
+  let lastHighlightSig = "";
+
+  function renderHighlights() {
+    const sig = JSON.stringify(
+      state.notes.map((n) =>
+        n.kind === "line"
+          ? [n.id, "line", n.path, n.side, n.lineStart, n.lineEnd]
+          : [n.id, "prose", n.match || n.quote, n.occurrence || 0]
+      )
+    );
+    if (sig === lastHighlightSig) return;
+    lastHighlightSig = sig;
+
+    unwrapAllHighlights();
+    mainEl.querySelectorAll("tr.lf-code-row.lf-row-has-note").forEach((tr) => {
+      tr.classList.remove("lf-row-has-note");
+      tr.removeAttribute("data-lf-line-note-ids");
+    });
+
+    for (const note of state.notes) {
+      if (note.kind === "line") {
+        for (const tr of rowsForLineNote(note)) {
+          tr.classList.add("lf-row-has-note");
+          const existing = tr.getAttribute("data-lf-line-note-ids");
+          const list = existing ? existing.split(",") : [];
+          if (!list.includes(note.id)) list.push(note.id);
+          tr.setAttribute("data-lf-line-note-ids", list.join(","));
+        }
+      } else {
+        const range = findNormalizedRange(oneLine(note.match || note.quote), note.occurrence || 0);
+        if (range) wrapRange(range, note.id);
+      }
+    }
+  }
+
+  // --- Floating selection pill, composer, and hover cards (1c) ---
+
+  let floatPill = null;
+  let floatComposer = null;
+  let pendingSelection = null; // { range, rect, section, quote, match }
+  let hoverCardEl = null;
+  let hoverHideTimer = null;
+
+  function dismissFloatPill() {
+    if (floatPill) {
+      floatPill.remove();
+      floatPill = null;
+    }
+  }
+
+  function clearPendingSelection() {
+    pendingSelection = null;
+    dismissFloatPill();
+  }
+
+  function dismissFloatComposer() {
+    if (floatComposer) {
+      floatComposer.remove();
+      floatComposer = null;
+    }
+    mainEl.querySelectorAll("tr.lf-code-row.lf-row-selecting").forEach((tr) => {
+      tr.classList.remove("lf-row-selecting");
+    });
+  }
+
+  function dismissFloats() {
+    dismissFloatPill();
+    dismissFloatComposer();
+  }
+
+  function hideHoverCard() {
+    clearTimeout(hoverHideTimer);
+    if (hoverCardEl) {
+      hoverCardEl.remove();
+      hoverCardEl = null;
+    }
+  }
+
+  function clampFixedBox(box, rect, preferAbove) {
+    const w = box.offsetWidth;
+    const h = box.offsetHeight;
+    const dockAllowance = desktopHandler ? 12 : 96;
+    let top;
+    if (preferAbove) {
+      top = rect.top - h - 8;
+      if (top < 8) top = Math.min(window.innerHeight - h - dockAllowance, rect.bottom + 8);
+    } else {
+      top = rect.bottom + 8;
+      if (top + h > window.innerHeight - dockAllowance) {
+        top = Math.max(8, rect.top - h - 8);
+      }
+    }
+    top = Math.max(8, Math.min(window.innerHeight - h - 8, top));
+    const centered = preferAbove ? rect.left + rect.width / 2 - w / 2 : rect.left;
+    const left = Math.max(8, Math.min(window.innerWidth - w - 8, centered));
+    box.style.top = top + "px";
+    box.style.left = left + "px";
+  }
+
+  function buildNoteEditor({ initialText, placeholder, rows, onSave, onCancel, stopProp }) {
+    const ta = el("textarea", { rows: rows || 2, placeholder, value: initialText || "" });
+    const commit = () => {
+      const val = oneLine(ta.value);
+      if (val) onSave(val);
+    };
+    ta.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        commit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel();
+      }
+    });
+    const wrap = (fn) => (e) => {
+      if (stopProp) e.stopPropagation();
+      fn();
+    };
+    const actionsEl = el(
+      "div",
+      "lf-card-actions",
+      makeButton("Cancel", wrap(onCancel), "lf-btn-quiet"),
+      makeButton("Save ⌘↩", wrap(commit), "lf-btn-accent")
+    );
+    return { ta, actionsEl };
+  }
+
+  function showFloatPill(rect, buttons) {
+    dismissFloatPill();
+    floatPill = el("div", "lf-float-pill");
+    buttons.forEach((b, idx) => {
+      if (idx > 0) floatPill.append(el("span", "lf-float-pill-sep"));
+      floatPill.append(
+        el("button", {
+          type: "button",
+          text: b.label,
+          on: {
+            mousedown: (e) => e.preventDefault(),
+            click: () => {
+              dismissFloatPill();
+              b.onClick();
+            },
+          },
+        })
+      );
+    });
+    document.body.append(floatPill);
+    clampFixedBox(floatPill, rect, true);
+  }
+
+  function saveProseNote(selInfo, text) {
+    const needle = selInfo.match;
+    state.notes.push({
+      id: randomId(),
+      kind: "prose",
+      section: selInfo.section,
+      quote: selInfo.quote.slice(0, 140),
+      match: needle,
+      occurrence: findOccurrenceForRange(selInfo.range, needle),
+      text: oneLine(text),
+    });
+    pendingSelection = null;
+    clearSelection();
+    refresh(true);
+  }
+
+  function openProseComposer(selInfo) {
+    openFloatingComposer(selInfo.rect, {
+      anchorLabel: formatNoteAnchorLabel({ kind: "prose", section: selInfo.section, quote: selInfo.quote }),
+      onSave: (val) => saveProseNote(selInfo, val),
+    });
+  }
+
+  function openFloatingComposer(rect, opts) {
+    dismissFloats();
+    hideHoverCard();
+
+    if (opts.selectedRows) {
+      for (const tr of opts.selectedRows) tr.classList.add("lf-row-selecting");
+    }
+
+    const { ta, actionsEl } = buildNoteEditor({
+      initialText: opts.initialText,
+      placeholder: opts.placeholder || "Add comment… (⌘↩ to save)",
+      onSave: (val) => {
+        dismissFloatComposer();
+        opts.onSave(val);
+      },
+      onCancel: dismissFloatComposer,
+    });
+
+    floatComposer = el(
+      "div",
+      "lf-float-composer",
+      el("div", { cls: "lf-anchor-quote", text: opts.anchorLabel }),
+      ta,
+      actionsEl
+    );
+    document.body.append(floatComposer);
+    clampFixedBox(floatComposer, rect, false);
+    focusEnd(ta);
+  }
+
+  function showHoverCard(targetEl, note) {
+    if (floatComposer) return;
+    hideHoverCard();
+
+    const editBtn = makeButton("Edit", () => {
+      const r = targetEl.getBoundingClientRect();
+      hideHoverCard();
+      openFloatingComposer(r, {
+        anchorLabel: formatNoteAnchorLabel(note),
+        initialText: note.text,
+        onSave: (val) => editNote(note.id, val),
+      });
+    }, "lf-btn-quiet");
+
+    hoverCardEl = el(
+      "div",
+      {
+        cls: "lf-hover-card",
+        on: {
+          mouseenter: () => clearTimeout(hoverHideTimer),
+          mouseleave: () => {
+            hoverHideTimer = setTimeout(hideHoverCard, 200);
+          },
+        },
+      },
+      el("div", { cls: "lf-anchor-quote", text: formatNoteAnchorLabel(note) }),
+      el("div", { cls: "lf-card-body", text: note.text }),
+      el("div", "lf-card-actions", editBtn, makeButton("Delete", () => deleteNote(note.id), "lf-btn-quiet"))
+    );
+    document.body.append(hoverCardEl);
+    clampFixedBox(hoverCardEl, targetEl.getBoundingClientRect(), false);
+  }
+
+  function wireSelectionNotes() {
+    document.addEventListener("mouseup", (event) => {
+      if (
+        event.target.closest(
+          ".lf-float-pill, .lf-float-composer, .lf-hover-card, .lf-sidebar, .lf-dock, .lf-comments-toggle, button, textarea, input, .lf-action-confirm, td.lf-ln"
+        )
+      ) {
+        return;
+      }
+
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) return clearPendingSelection();
+      const quote = oneLine(sel.toString());
+      if (!quote) return clearPendingSelection();
+
+      const range = sel.getRangeAt(0).cloneRange();
+      const containerEl =
+        range.commonAncestorContainer.nodeType === 1
+          ? range.commonAncestorContainer
+          : range.commonAncestorContainer.parentElement;
+      if (!containerEl || !mainEl.contains(containerEl)) return clearPendingSelection();
+
+      const selInfo = {
+        range,
+        rect: range.getBoundingClientRect(),
+        section: nearestSection(containerEl),
+        quote: quote.slice(0, 140),
+        match: quote.slice(0, 240),
+      };
+      pendingSelection = selInfo;
+
+      showFloatPill(selInfo.rect, [
+        { label: "Comment (c)", onClick: () => openProseComposer(selInfo) },
+        { label: "Flag", onClick: () => saveProseNote(selInfo, "Flagged for follow-up") },
+        {
+          label: "Copy",
+          onClick: () => {
+            copyText(quote).catch(() => {});
+            pendingSelection = null;
+            clearSelection();
+          },
+        },
+      ]);
+    });
+
+    document.addEventListener("mousedown", (event) => {
+      if (
+        floatComposer &&
+        !floatComposer.contains(event.target) &&
+        !event.target.closest(".lf-float-pill, .lf-gutter-plus, td.lf-ln")
+      ) {
+        dismissFloatComposer();
+      }
+    });
+
+    mainEl.addEventListener("mouseover", (event) => {
+      const hl = event.target.closest(".lf-hl[data-lf-note-id]");
+      if (hl) {
+        const note = state.notes.find((n) => n.id === hl.getAttribute("data-lf-note-id"));
+        if (note) showHoverCard(hl, note);
+        return;
+      }
+      const lnCell = event.target.closest("tr.lf-code-row.lf-row-has-note td.lf-ln");
+      if (lnCell) {
+        const tr = lnCell.closest("tr.lf-code-row");
+        const firstId = (tr.getAttribute("data-lf-line-note-ids") || "").split(",")[0];
+        const note = firstId ? state.notes.find((n) => n.id === firstId) : null;
+        if (note) showHoverCard(lnCell, note);
+      }
+    });
+
+    mainEl.addEventListener("mouseout", (event) => {
+      if (event.target.closest(".lf-hl[data-lf-note-id], tr.lf-code-row.lf-row-has-note td.lf-ln")) {
+        hoverHideTimer = setTimeout(hideHoverCard, 220);
+      }
+    });
+
+    mainEl.addEventListener("click", (event) => {
+      const hl = event.target.closest(".lf-hl[data-lf-note-id]");
+      if (!hl) return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      openSidebar(hl.getAttribute("data-lf-note-id"));
+    });
+  }
+
+  // --- Diff & file gutter `+` and Shift+click line ranges (2a) ---
+
+  let lastGutterAnchor = null; // { block, newLine, oldLine }
+
+  function rowLineInfo(tr) {
+    const n = tr.getAttribute("data-line");
+    const o = tr.getAttribute("data-old-line");
+    const newLine = n !== null && n !== "" ? Number(n) : null;
+    const oldLine = o !== null && o !== "" ? Number(o) : null;
+    return newLine !== null || oldLine !== null ? { newLine, oldLine } : null;
+  }
+
+  function wireCodeBlocks() {
+    mainEl.querySelectorAll(".lf-codeblock[data-path]").forEach((block) => {
+      const path = block.getAttribute("data-path") || "";
+      if (!path) return;
+
+      block.querySelectorAll("tr.lf-code-row").forEach((tr) => {
+        const info = rowLineInfo(tr);
+        if (!info) return;
+        const firstLn = tr.querySelector("td.lf-ln");
+        if (!firstLn || firstLn.querySelector(".lf-gutter-plus")) return;
+        const label = info.newLine !== null ? "line " + info.newLine : "old line " + info.oldLine;
+        firstLn.insertBefore(
+          el("button", {
+            type: "button",
+            cls: "lf-gutter-plus",
+            text: "+",
+            title: "Comment on " + label + " (Shift+click for range)",
+            attrs: { "aria-label": "Comment on " + path + " " + label },
+          }),
+          firstLn.firstChild
+        );
+      });
+
+      block.addEventListener("mousedown", (event) => {
+        if (event.shiftKey && event.target.closest("td.lf-ln")) event.preventDefault();
+      });
+
+      block.addEventListener("click", (event) => {
+        const trigger = event.target.closest(".lf-gutter-plus, td.lf-ln");
+        if (!trigger) return;
+        const tr = trigger.closest("tr.lf-code-row");
+        const info = tr && rowLineInfo(tr);
+        if (!info) return;
+        event.preventDefault();
+        dismissFloatPill();
+        hideHoverCard();
+
+        let rangeSide = info.newLine !== null ? "new" : "old";
+        let lineStart = info.newLine !== null ? info.newLine : info.oldLine;
+        let lineEnd = lineStart;
+
+        if (event.shiftKey && lastGutterAnchor && lastGutterAnchor.block === block) {
+          if (lastGutterAnchor.newLine !== null && info.newLine !== null) {
+            rangeSide = "new";
+            lineStart = Math.min(lastGutterAnchor.newLine, info.newLine);
+            lineEnd = Math.max(lastGutterAnchor.newLine, info.newLine);
+          } else if (lastGutterAnchor.oldLine !== null && info.oldLine !== null) {
+            rangeSide = "old";
+            lineStart = Math.min(lastGutterAnchor.oldLine, info.oldLine);
+            lineEnd = Math.max(lastGutterAnchor.oldLine, info.oldLine);
+          }
+        }
+        lastGutterAnchor = { block, newLine: info.newLine, oldLine: info.oldLine };
+
+        const previewNote = { kind: "line", path, side: rangeSide, lineStart, lineEnd };
+        const selectedRows = rowsForLineNote(previewNote);
+        // Span the whole range so a composer that flips above it never covers it.
+        const firstRect = (selectedRows[0] || tr).getBoundingClientRect();
+        const anchorRow = selectedRows[selectedRows.length - 1] || tr;
+        const rowRect = anchorRow.getBoundingClientRect();
+        const codeCell = anchorRow.lastElementChild;
+        const codeLeft = codeCell ? codeCell.getBoundingClientRect().left : rowRect.left + 110;
+        const composerRect = {
+          top: firstRect.top,
+          bottom: rowRect.bottom,
+          left: codeLeft + 12,
+          right: rowRect.right,
+          width: Math.max(0, rowRect.right - codeLeft - 12),
+        };
+
+        openFloatingComposer(composerRect, {
+          anchorLabel: formatLineAnchor(previewNote),
+          placeholder:
+            lineStart === lineEnd
+              ? "Add comment… (Shift+click another line for range, ⌘↩ to save)"
+              : "Add comment… (⌘↩ to save)",
+          selectedRows: selectedRows.length ? selectedRows : [tr],
+          onSave: (val) => {
+            state.notes.push({
+              id: randomId(),
+              kind: "line",
+              path,
+              side: rangeSide,
+              lineStart,
+              lineEnd,
+              text: val,
+            });
+            refresh(true);
+          },
+        });
+      });
+    });
+  }
+
+  // --- Collapsible slide-over Comments sidebar (1c) ---
+
+  let commentsToggleBtn = null;
+  let commentsCountEl = null;
+  let sidebarEl = null;
+  let sidebarTitleEl = null;
+  let sidebarListEl = null;
+  let sidebarOpen = false;
+  let sidebarEditingId = null;
+
+  function closeSidebar() {
+    sidebarOpen = false;
+    sidebarEditingId = null;
+    renderSidebar();
+  }
+
+  function ensureSidebar() {
+    if (sidebarEl) return;
+
+    commentsCountEl = el("span", { cls: "lf-comments-count", hidden: true });
+    commentsToggleBtn = el(
+      "button",
+      {
+        type: "button",
+        cls: "lf-comments-toggle",
+        on: {
+          click: () => {
+            sidebarOpen = !sidebarOpen;
+            renderSidebar();
+          },
+        },
+      },
+      el("span", { text: "Comments" }),
+      commentsCountEl
+    );
+
+    sidebarTitleEl = el("span");
+    sidebarListEl = el("div", "lf-sidebar-list");
+    sidebarEl = el(
+      "aside",
+      { cls: "lf-sidebar", attrs: { "aria-label": "Comments sidebar" } },
+      el("div", "lf-sidebar-head", sidebarTitleEl, makeButton("Close", closeSidebar, "lf-btn-quiet")),
+      sidebarListEl
+    );
+    document.body.append(commentsToggleBtn, sidebarEl);
+  }
+
+  function openSidebar(focusNoteId) {
+    ensureSidebar();
+    sidebarOpen = true;
+    renderSidebar();
+    if (focusNoteId && sidebarListEl) {
+      const card = sidebarListEl.querySelector('[data-lf-sidebar-note="' + CSS.escape(focusNoteId) + '"]');
+      if (card) pulseElement(card);
+    }
+  }
+
+  function renderSidebar() {
+    ensureSidebar();
+    const ordered = notesInDocumentOrder();
+    const count = ordered.length;
+
+    commentsCountEl.textContent = String(count);
+    commentsCountEl.hidden = count === 0;
+    commentsToggleBtn.classList.toggle("has-notes", count > 0);
+    commentsToggleBtn.setAttribute("aria-expanded", sidebarOpen ? "true" : "false");
+
+    sidebarEl.classList.toggle("is-open", sidebarOpen);
+    sidebarTitleEl.textContent = count > 0 ? "Comments (" + count + ")" : "Comments";
+
+    sidebarListEl.innerHTML = "";
+    if (!count) {
+      sidebarListEl.append(
+        el("div", {
+          cls: "lf-sidebar-empty",
+          text: "No comments yet. Drag across text or click + on a code line to leave one.",
+        })
+      );
+      return;
+    }
+
+    for (const note of ordered) {
+      const item = el(
+        "div",
+        {
+          cls: "lf-sidebar-item",
+          attrs: { "data-lf-sidebar-note": note.id },
+          on: {
+            click: (e) => {
+              if (!e.target.closest("button, textarea")) pulseElement(noteAnchorElement(note));
+            },
+          },
+        },
+        el("div", { cls: "lf-anchor-quote", text: formatNoteAnchorLabel(note) })
+      );
+
+      if (sidebarEditingId === note.id) {
+        const { ta, actionsEl } = buildNoteEditor({
+          initialText: note.text,
+          placeholder: "Edit comment… (⌘↩ to save)",
+          stopProp: true,
+          onSave: (val) => editNote(note.id, val),
+          onCancel: () => {
+            sidebarEditingId = null;
+            renderSidebar();
+          },
+        });
+        item.append(ta, actionsEl);
+        setTimeout(() => focusEnd(ta), 0);
+      } else {
+        item.append(
+          el("div", { cls: "lf-card-body", text: note.text }),
+          el(
+            "div",
+            "lf-card-actions",
+            makeButton(
+              "Edit",
+              (e) => {
+                e.stopPropagation();
+                sidebarEditingId = note.id;
+                renderSidebar();
+              },
+              "lf-btn-quiet"
+            ),
+            makeButton(
+              "Delete",
+              (e) => {
+                e.stopPropagation();
+                deleteNote(note.id);
+              },
+              "lf-btn-quiet"
+            )
+          )
+        );
+      }
+      sidebarListEl.append(item);
+    }
+  }
+
+  // --- Browser T3 Code attached-chip composer dock (3b; hidden in Desktop) ---
+
+  let dockEl = null;
+  let dockChipsEl = null;
+  let dockPreviewEl = null;
+  let dockStatusEl = null;
+  let dockOverallInput = null;
+  let dockPreviewBtn = null;
+  let dockClearBtn = null;
+  let dockSendBtn = null;
+  let dockPreviewOpen = false;
+  let statusText = "";
+  let statusKind = "";
+
+  function setStatus(text, kind) {
+    statusText = text;
+    statusKind = kind || "";
+  }
+
+  function steerTargetLabel() {
+    if (work.kind === "task" && work.issue) return work.issue;
+    if (work.kind === "wave" && work.wave) return "wave " + work.wave;
+    if (work.kind === "session" && work.session) return "session";
+    return "repository";
+  }
+
+  function buildSteerOperation(message) {
+    if (work.kind === "task" && work.issue) {
+      return { kind: "task.steer", directory, issue: work.issue, message };
+    }
+    return {
+      kind: "session.steer",
+      directory,
+      session: work.kind === "session" ? work.session || null : null,
+      wave: work.kind === "wave" ? work.wave || null : null,
+      message,
+    };
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+      const ta = el("textarea", { value: text });
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.append(ta);
+      ta.select();
+      try {
+        if (document.execCommand("copy")) resolve();
+        else reject(new Error("Clipboard is unavailable"));
+      } catch (err) {
+        reject(err);
+      } finally {
+        ta.remove();
+      }
+    });
+  }
+
+  // Drop unsent drafts while keeping rendered receipts; mark receipts reported only after a reply is sent.
+  function clearDrafts(options) {
+    const markReported = Boolean(options && options.markReported);
+    const persist = !options || options.persist !== false;
+    const receipts = markReported
+      ? state.receipts.map((r) => Object.assign({}, r, { reported: true }))
+      : state.receipts.slice();
+    state = emptyState();
+    state.receipts = receipts;
+    sidebarEditingId = null;
+    hideHoverCard();
+    refresh(persist);
+  }
+
+  function submitReply() {
+    if (desktopHandler || sendingReply) return;
+    const items = queueItems();
+    if (!items.length) return;
+    const message = formatReplyMessage(items);
+
+    if (hostMode === "loopback") {
+      // Retain edits made after the send, including receipts from actions
+      // that finish while the steer is in flight.
+      const sent = {
+        notes: new Set(state.notes),
+        choices: { ...state.choices },
+        multiselects: { ...state.multiselects },
+        questions: { ...state.questions },
+        offlineActions: new Set(state.offlineActions),
+        overall: state.overall,
+        receipts: new Set(state.receipts),
+      };
+      sendingReply = true;
+      setStatus("Sending…", "");
+      renderDock();
+      sendOperation(buildSteerOperation(message), randomId()).then(
+        (result) => {
+          sendingReply = false;
+          state.notes = state.notes.filter((note) => !sent.notes.has(note));
+          state.offlineActions = state.offlineActions.filter((action) => !sent.offlineActions.has(action));
+          for (const group of ["choices", "multiselects", "questions"]) {
+            for (const [key, value] of Object.entries(sent[group])) {
+              if (state[group][key] === value) delete state[group][key];
+            }
+          }
+          if (state.overall === sent.overall) state.overall = "";
+          for (const receipt of state.receipts) {
+            if (sent.receipts.has(receipt)) receipt.reported = true;
+          }
+          setStatus(result?.delivery?.sentence || "Steer saved.", "ok");
+          saveState();
+          refresh(false);
+        },
+        (err) => {
+          sendingReply = false;
+          setStatus(errorMessage(err), "error");
+          renderDock();
+        }
+      );
+      return;
+    }
+
+    copyText(message).then(
+      () => {
+        setStatus(serverDisconnected ? "Copied reply (server disconnected)" : "Copied reply", "ok");
+        renderDock();
+      },
+      (err) => {
+        setStatus("Copy failed: " + errorMessage(err), "error");
+        renderDock();
+      }
+    );
+  }
+
+  function ensureDock() {
+    if (desktopHandler || dockEl) return;
+
+    dockChipsEl = el("div", "lf-dock-chips");
+    dockPreviewEl = el("div", { cls: "lf-dock-preview", hidden: true });
+    dockStatusEl = el("div", { cls: "lf-dock-status", hidden: true });
+
+    dockOverallInput = el("input", {
+      type: "text",
+      cls: "lf-dock-input",
+      placeholder: "Overall direction (optional)…",
+      attrs: { "aria-label": "Overall direction" },
+      on: {
+        input: () => {
+          state.overall = dockOverallInput.value;
+          setStatus("", "");
+          saveState();
+          updateDockMeta();
+        },
+      },
+    });
+
+    dockPreviewBtn = makeButton("Preview", () => {
+      dockPreviewOpen = !dockPreviewOpen;
+      updateDockMeta();
+    }, "lf-btn-quiet");
+    dockClearBtn = makeButton("Clear", () => clearDrafts({ markReported: false }), "lf-btn-quiet");
+    dockSendBtn = makeButton("", submitReply, "lf-btn-accent");
+
+    dockEl = el(
+      "div",
+      "lf-dock",
+      dockChipsEl,
+      dockPreviewEl,
+      dockStatusEl,
+      el("div", "lf-dock-row", dockOverallInput, el("div", "lf-dock-actions", dockPreviewBtn, dockClearBtn, dockSendBtn))
+    );
+    document.body.append(dockEl);
+    // Reserve the dock's height below the page so the last control stays reachable.
+    new ResizeObserver(() => {
+      document.documentElement.style.setProperty("--lf-dock-room", dockEl.offsetHeight + 40 + "px");
+    }).observe(dockEl);
+  }
+
+  function updateDockMeta(entries) {
+    if (desktopHandler || !dockEl) return;
+    const items = queueItems(entries);
+    const hasItems = items.length > 0;
+
+    if (dockOverallInput.value !== state.overall) dockOverallInput.value = state.overall;
+
+    dockPreviewBtn.hidden = !hasItems;
+    setPressed(dockPreviewBtn, dockPreviewOpen && hasItems);
+    dockClearBtn.hidden = !hasItems;
+
+    dockSendBtn.disabled = !hasItems || sendingReply;
+    dockSendBtn.textContent =
+      hostMode === "loopback" ? "Steer " + steerTargetLabel() + " ⌘↩" : "Copy reply ⌘↩";
+
+    dockPreviewEl.hidden = !(dockPreviewOpen && hasItems);
+    if (dockPreviewOpen && hasItems) dockPreviewEl.textContent = formatReplyMessage(items);
+
+    dockStatusEl.hidden = !statusText;
+    if (statusText) {
+      dockStatusEl.textContent = statusText;
+      dockStatusEl.className =
+        "lf-dock-status" + (statusKind === "error" ? " is-error" : statusKind === "ok" ? " is-ok" : "");
+    }
+  }
+
+  function renderDock() {
+    if (desktopHandler) return;
+    ensureDock();
+
+    const entries = queueEntries();
+    dockChipsEl.innerHTML = "";
+    dockChipsEl.hidden = entries.length === 0;
+    for (const entry of entries) {
+      dockChipsEl.append(
+        el(
+          "span",
+          { cls: "lf-chip", title: entry.title, on: { click: () => entry.jump() } },
+          el("span", { cls: "lf-chip-tag tag-" + entry.tag, text: entry.tag[0].toUpperCase() + entry.tag.slice(1) }),
+          el("span", { cls: "lf-chip-text", text: entry.summary }),
+          el("button", {
+            type: "button",
+            cls: "lf-chip-x",
+            text: "×",
+            title: "Remove",
+            attrs: { "aria-label": "Remove " + entry.tag },
+            on: {
+              click: (e) => {
+                e.stopPropagation();
+                entry.remove();
+              },
+            },
+          })
+        )
+      );
+    }
+
+    updateDockMeta(entries);
+  }
+
+  // --- Global keyboard shortcuts ---
+
+  document.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      if (floatComposer && floatComposer.contains(document.activeElement)) return;
+      if (sidebarEl && sidebarEl.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA") {
+        return;
+      }
+      if (!desktopHandler && queueItems().length > 0) {
+        event.preventDefault();
+        submitReply();
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (floatComposer || floatPill || hoverCardEl) {
+        dismissFloats();
+        hideHoverCard();
+      } else if (sidebarOpen) {
+        closeSidebar();
+      }
+      return;
+    }
+
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      event.key.toLowerCase() === "c" &&
+      pendingSelection &&
+      !(document.activeElement && document.activeElement.closest("input, textarea"))
+    ) {
+      event.preventDefault();
+      const selInfo = pendingSelection;
+      dismissFloatPill();
+      openProseComposer(selInfo);
+    }
+  });
+
+  wireControls();
+  wireCodeBlocks();
+  wireSelectionNotes();
+  renderSidebar();
+
+  if (desktopHandler) {
+    try {
+      const reply = desktopHandler.postMessage({
+        type: "ready",
+        build_id: buildId,
+      });
+      if (reply && typeof reply.then === "function") {
+        reply.then((loaded) => applyState(loaded), () => {});
+      }
+    } catch (_) {}
+  } else {
+    renderDock();
+    loadBrowserState();
+    connectLoopback();
+  }
+})();
+
+</script>
+</body>
+</html>

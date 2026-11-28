@@ -846,6 +846,7 @@ mod tests {
 
     fn lands(outputs: &[&str]) -> PaymentModel<'static> {
         PaymentModel {
+            coupled: None,
             sources: outputs
                 .iter()
                 .enumerate()
@@ -1449,6 +1450,7 @@ mod tests {
             12,
             None,
             vec![ManaActivation {
+                facts: Default::default(),
                 cost: ManaCost::parse("1"),
                 life_cost: 1,
                 ..tapping_ability(vec![Mana::parse("UU")])
@@ -1458,6 +1460,7 @@ mod tests {
             13,
             None,
             vec![ManaActivation {
+                facts: Default::default(),
                 tap_source: false,
                 tap_count: 2,
                 tap_candidates: (6..12).map(PermanentId).collect::<Vec<_>>().into(),
